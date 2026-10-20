@@ -10,6 +10,4 @@ plugins:
   - id: core.sessions
     name: "@pigcode/host/services/sessions"
   - id: core.providers
-    name: "@pigcode/host/services/providers"
-  - id: provider.fake
-    name: "@pigcode/host/providers/fake"
+    name: "@pigcode/host/providers/registry"
