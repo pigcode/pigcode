@@ -39,6 +39,7 @@ export const commandSchemas = {
     cursor: z.number().int().nonnegative().default(0),
   }),
   "plugin.list": z.object({}),
+  "plugin.install": z.object({ spec: z.string().min(1) }),
   "plugin.installLocal": z.object({ sourceDir: z.string().min(1) }),
   "plugin.enable": z.object({ id: z.string().min(1) }),
   "plugin.disable": z.object({ id: z.string().min(1) }),

@@ -1,13 +1,25 @@
-/** 本地插件安装、启停与 boot graph 构建；M0 只支持本地目录。 */
+/** 插件安装（本地目录 / npm / tarball）、启停与 boot graph 构建。 */
+import { execFile } from "node:child_process"
 import { createHash } from "node:crypto"
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
+import { promisify } from "node:util"
 import { parse, stringify } from "yaml"
 import {
   checkPluginCompatibility,
   pluginManifestSchema,
   type PluginManifest,
 } from "@pigcode/plugin-sdk"
+
+/** npm 安装通过 pnpm 执行；单测注入 fake runner，不联网。 */
+export type PnpmRunner = (args: string[]) => Promise<void>
+
+const execFileAsync = promisify(execFile)
+
+/** 默认 pnpm runner；PIGCODE_PNPM 可覆盖可执行文件路径。 */
+const defaultPnpmRunner: PnpmRunner = async (args) => {
+  await execFileAsync(process.env.PIGCODE_PNPM ?? "pnpm", args)
+}
 
 /** profile 中记录的单条已安装插件。 */
 export interface InstalledPluginEntry {
@@ -110,18 +122,11 @@ async function ensureProfilePackage(profileDir: string): Promise<void> {
   }
 }
 
-/** 校验并复制本地插件到 profile，随后写入启用的条目。 */
-export async function installLocalPlugin(
+/** 把 manifest 对应的条目写入 profile；同 id 条目原位替换，避免重复。 */
+async function addProfileEntry(
   profileDir: string,
-  sourceDir: string,
+  manifest: PluginManifest,
 ): Promise<InstalledPluginEntry> {
-  const manifest = pluginManifestSchema.parse(
-    JSON.parse(await readFile(join(sourceDir, "package.json"), "utf8")),
-  )
-  const target = join(profileDir, "node_modules", manifest.name)
-  await rm(target, { recursive: true, force: true })
-  await mkdir(dirname(target), { recursive: true })
-  await cp(sourceDir, target, { recursive: true })
   const entry: InstalledPluginEntry = {
     id: `${manifest.pigcode.kind}.${manifest.name}`,
     name: manifest.name,
@@ -133,6 +138,93 @@ export async function installLocalPlugin(
   await ensureProfilePackage(profileDir)
   await writeProfile(profileDir, profile)
   return entry
+}
+
+/** 读取 profile 的 package.json；文件缺失或不可解析时视为空。 */
+async function readProfilePackage(
+  profileDir: string,
+): Promise<{ dependencies?: Record<string, string> }> {
+  try {
+    return JSON.parse(await readFile(join(profileDir, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>
+    }
+  } catch {
+    return {}
+  }
+}
+
+/** tarball 交给 pnpm 解包；只有普通本地目录才直接复制。 */
+function isTarballPath(path: string): boolean {
+  return /\.(?:tgz|tar\.gz)$/i.test(path)
+}
+
+/** 从 npm spec 中去掉版本得到包名；scoped 包保留 @scope/ 前缀。 */
+function packageNameFromSpec(spec: string): string | null {
+  const value = spec.replace(/^file:/, "")
+  // 路径与 tarball 无法从字面推断包名，交给依赖差异识别。
+  if (value.startsWith(".") || value.startsWith("/") || isTarballPath(value)) return null
+  const separator = value.lastIndexOf("@")
+  return separator > 0 ? value.slice(0, separator) : value
+}
+
+/**
+ * 找出本次安装的包名：
+ * 1. 优先取新增的依赖，避免 pnpm 按字母排序时误选已有的最后一个包；
+ * 2. 重复安装没有新增依赖时，回退到从 spec 解析出的包名。
+ */
+function resolveInstalledName(
+  spec: string,
+  before: Record<string, string>,
+  after: Record<string, string>,
+): string {
+  const lastAdded = Object.keys(after)
+    .filter((name) => !(name in before))
+    .at(-1)
+  if (lastAdded) return lastAdded
+  const fromSpec = packageNameFromSpec(spec)
+  if (fromSpec && fromSpec in after) return fromSpec
+  throw new Error("installed package not found in profile dependencies")
+}
+
+/** 校验并复制本地插件目录到 profile，随后写入启用的条目。 */
+export async function installLocalPlugin(
+  profileDir: string,
+  sourceDir: string,
+): Promise<InstalledPluginEntry> {
+  const manifest = pluginManifestSchema.parse(
+    JSON.parse(await readFile(join(sourceDir, "package.json"), "utf8")),
+  )
+  const target = join(profileDir, "node_modules", manifest.name)
+  await rm(target, { recursive: true, force: true })
+  await mkdir(dirname(target), { recursive: true })
+  await cp(sourceDir, target, { recursive: true })
+  return addProfileEntry(profileDir, manifest)
+}
+
+/**
+ * 安装插件：本地目录复制进 profile，其余 spec（npm 包名/版本、tarball）交给
+ * `pnpm add`。runner 由调用方注入，测试不联网。
+ */
+export async function installPlugin(
+  profileDir: string,
+  spec: string,
+  runPnpm: PnpmRunner = defaultPnpmRunner,
+): Promise<InstalledPluginEntry> {
+  const localPath = spec.startsWith("file:") ? spec.slice("file:".length) : spec
+  const isLocal = spec.startsWith(".") || spec.startsWith("/") || spec.startsWith("file:")
+  if (isLocal && !isTarballPath(localPath)) {
+    return installLocalPlugin(profileDir, localPath)
+  }
+  // pnpm add 需要 profile 中已有 package.json 作为安装作用域。
+  await ensureProfilePackage(profileDir)
+  const before = await readProfilePackage(profileDir)
+  await runPnpm(["add", spec, "--dir", profileDir])
+  const after = await readProfilePackage(profileDir)
+  const name = resolveInstalledName(spec, before.dependencies ?? {}, after.dependencies ?? {})
+  const manifest = pluginManifestSchema.parse(
+    JSON.parse(await readFile(join(profileDir, "node_modules", name, "package.json"), "utf8")),
+  )
+  return addProfileEntry(profileDir, manifest)
 }
 
 /**

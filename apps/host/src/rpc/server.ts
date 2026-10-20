@@ -146,6 +146,8 @@ export class RpcServer {
         return this.ctx.providers.models((parsed as { providerId: string }).providerId)
       case "plugin.list":
         return this.ctx.plugins.list()
+      case "plugin.install":
+        return this.ctx.plugins.install((parsed as { spec: string }).spec)
       case "plugin.installLocal":
         return this.ctx.plugins.installLocal((parsed as { sourceDir: string }).sourceDir)
       case "plugin.enable":

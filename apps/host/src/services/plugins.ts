@@ -12,6 +12,7 @@ import { writeBootGraph } from "../kernel/boot"
 import {
   buildBootGraph,
   installLocalPlugin,
+  installPlugin,
   listPlugins,
   setPluginEnabled,
   type BootGraphEntry,
@@ -24,9 +25,10 @@ export interface PluginsConfig {
   profileDir: string
 }
 
-/** Host 侧插件管理服务；M0 只接受本地目录安装。 */
+/** Host 侧插件管理服务；支持本地目录、npm 包名/版本与 tarball 安装。 */
 export interface PluginsService {
   list(): Promise<PluginSummary[]>
+  install(spec: string): Promise<InstalledPluginEntry>
   installLocal(sourceDir: string): Promise<InstalledPluginEntry>
   enable(id: string): Promise<void>
   disable(id: string): Promise<void>
@@ -148,6 +150,12 @@ export const apply: PluginsPlugin = (ctx, config) => {
         // manifest 错误优先；加载错误只在没有其他错误时展示。
         return loadError && !summary.error ? { ...summary, error: loadError } : summary
       })
+    },
+    install: async (spec) => {
+      const entry = await installPlugin(profileDir, spec)
+      await loadEntry(entry)
+      await writeBootGraph(profileDir)
+      return entry
     },
     installLocal: async (sourceDir) => {
       const entry = await installLocalPlugin(profileDir, sourceDir)
