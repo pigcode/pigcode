@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "real:claude": "node scripts/real-claude-smoke.mjs"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.14",

@@ -211,6 +211,9 @@ function mapPermissionMode(mode: string): NonNullable<Options["permissionMode"]>
       return "bypassPermissions"
     case "plan":
       return "plan"
+    case "dontAsk":
+      // 真实冒烟使用 dontAsk：不弹权限提示，未预授权的工具直接拒绝。
+      return "dontAsk"
     default:
       return "default"
   }
