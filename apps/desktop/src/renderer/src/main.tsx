@@ -18,7 +18,9 @@ if (savedLocale === "zh-CN" || savedLocale === "en-US") locale.setLocale(savedLo
 const connection = new Connection({
   onEvent: (event) => store.addEvent(event),
   onDelta: (delta) => {
-    if (delta.event.type === "message.delta") store.appendDelta("stream", delta.event.text)
+    if (delta.event.type === "message.delta") {
+      store.appendDelta(delta.threadId, delta.event.text)
+    }
   },
   onStatus: (status) => store.update({ status }),
 })

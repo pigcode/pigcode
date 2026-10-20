@@ -3,6 +3,19 @@ import { useSyncExternalStore } from "react"
 import type { Project, ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
 import type { ConnectionStatus } from "./connection"
 
+/** 单个线程在 Renderer 中的运行状态。 */
+export type ThreadViewStatus =
+  "idle" | "queued" | "running" | "waiting-approval" | "completed" | "failed" | "interrupted"
+
+/** 每个打开线程独立维护的事件、流式文本与运行状态。 */
+export interface ThreadViewState {
+  events: ThreadEvent[]
+  streamingText: string
+  status: ThreadViewStatus
+  pendingApprovals: number
+  lastError: string | null
+}
+
 /** Renderer 全局状态快照。 */
 export interface AppState {
   status: ConnectionStatus
@@ -10,7 +23,9 @@ export interface AppState {
   threads: Thread[]
   activeProjectId: string | null
   activeThreadId: string | null
+  /** 活动线程的事件镜像；多线程状态以 threadStates 为准。 */
   events: ThreadEvent[]
+  /** 活动线程的流式文本镜像；多线程状态以 threadStates 为准。 */
   streamingText: string
   error: string | null
   /** 首次连接后是否发生过 Host 重连；供界面显示重连提示。 */
@@ -21,6 +36,48 @@ export interface AppState {
   providerModels: string[]
   /** 插件启停后递增，通知依赖 provider 列表的界面重新拉取。 */
   providerRevision: number
+  /** 按 threadId 索引的线程视图状态。 */
+  threadStates: Record<string, ThreadViewState>
+  /** 当前以 tab 打开并订阅的线程顺序。 */
+  openThreadIds: string[]
+}
+
+/** 线程事件的默认视图状态。 */
+function emptyThreadState(): ThreadViewState {
+  return {
+    events: [],
+    streamingText: "",
+    status: "idle",
+    pendingApprovals: 0,
+    lastError: null,
+  }
+}
+
+/** 事件类型到线程状态的映射；未知事件保持原状态。 */
+const STATUS_AFTER_EVENT: Record<string, ThreadViewStatus> = {
+  "run.queued": "queued",
+  "run.started": "running",
+  "approval.requested": "waiting-approval",
+  "approval.resolved": "running",
+  "run.completed": "completed",
+  "run.failed": "failed",
+  "run.interrupted": "interrupted",
+}
+
+/** 从事件 payload 中提取可展示的错误文本。 */
+function errorFromPayload(payload: unknown): string | null {
+  if (typeof payload === "object" && payload !== null && "message" in payload) {
+    const message = (payload as { message?: unknown }).message
+    return typeof message === "string" ? message : null
+  }
+  return null
+}
+
+/** 应用一条事件后的审批计数。 */
+function pendingApprovalsAfter(previous: ThreadViewState, event: ThreadEvent): number {
+  if (event.type === "approval.requested") return previous.pendingApprovals + 1
+  if (event.type === "approval.resolved") return Math.max(0, previous.pendingApprovals - 1)
+  return previous.pendingApprovals
 }
 
 const initialState: AppState = {
@@ -36,6 +93,8 @@ const initialState: AppState = {
   providerCapabilities: null,
   providerModels: [],
   providerRevision: 0,
+  threadStates: {},
+  openThreadIds: [],
 }
 
 /** 不可变状态容器；每次变更都替换快照并通知订阅者。 */
@@ -55,17 +114,137 @@ export class AppStore {
     this.emit()
   }
 
-  addEvent(event: ThreadEvent): void {
-    if (this.state.events.some((item) => item.seq === event.seq)) return
-    const next: AppState = { ...this.state, events: [...this.state.events, event] }
-    if (event.type === "message.completed") next.streamingText = ""
-    this.state = next
+  /** 打开线程：初始化独立状态并加入打开列表。 */
+  openThread(threadId: string): void {
+    const threadStates = { ...this.state.threadStates }
+    if (!threadStates[threadId]) threadStates[threadId] = emptyThreadState()
+    const openThreadIds = this.state.openThreadIds.includes(threadId)
+      ? this.state.openThreadIds
+      : [...this.state.openThreadIds, threadId]
+    this.state = { ...this.state, threadStates, openThreadIds }
     this.emit()
   }
 
-  appendDelta(_runId: string, text: string): void {
-    this.state = { ...this.state, streamingText: this.state.streamingText + text }
+  /** 关闭线程：删除状态；若关闭的是活动线程，则激活相邻线程。 */
+  closeThread(threadId: string): void {
+    const index = this.state.openThreadIds.indexOf(threadId)
+    const threadStates = { ...this.state.threadStates }
+    delete threadStates[threadId]
+    const openThreadIds = this.state.openThreadIds.filter((id) => id !== threadId)
+
+    let activeThreadId = this.state.activeThreadId
+    if (activeThreadId === threadId) {
+      const nextIndex = Math.min(Math.max(index, 0), openThreadIds.length - 1)
+      activeThreadId = openThreadIds[nextIndex] ?? null
+    }
+    this.state = {
+      ...this.state,
+      threadStates,
+      openThreadIds,
+      activeThreadId,
+      events: this.eventsFor(threadStates, activeThreadId),
+      streamingText: this.streamingFor(threadStates, activeThreadId),
+    }
     this.emit()
+  }
+
+  /** 切换活动线程，并同步活动镜像。 */
+  setActiveThread(threadId: string): void {
+    this.state = {
+      ...this.state,
+      activeThreadId: threadId,
+      events: this.eventsFor(this.state.threadStates, threadId),
+      streamingText: this.streamingFor(this.state.threadStates, threadId),
+    }
+    this.emit()
+  }
+
+  /** 直接设置线程状态；供命令结果或本地交互使用。 */
+  setThreadStatus(threadId: string, status: ThreadViewStatus): void {
+    const previous = this.state.threadStates[threadId] ?? emptyThreadState()
+    this.writeThreadState(threadId, { ...previous, status })
+  }
+
+  /** 设置线程错误文本；null 表示清除。 */
+  setThreadError(threadId: string, lastError: string | null): void {
+    const previous = this.state.threadStates[threadId] ?? emptyThreadState()
+    this.writeThreadState(threadId, { ...previous, lastError })
+  }
+
+  /** 按 threadId 写入事件，并在活动线程时同步旧的顶层镜像。 */
+  addEvent(event: ThreadEvent): void {
+    const previous = this.state.threadStates[event.threadId] ?? emptyThreadState()
+    const events = previous.events.some((item) => item.seq === event.seq)
+      ? previous.events
+      : [...previous.events, event]
+    const next: ThreadViewState = {
+      ...previous,
+      events,
+      streamingText: event.type === "message.completed" ? "" : previous.streamingText,
+      status: STATUS_AFTER_EVENT[event.type] ?? previous.status,
+      pendingApprovals: pendingApprovalsAfter(previous, event),
+      lastError:
+        event.type === "run.failed"
+          ? (errorFromPayload(event.payload) ?? previous.lastError)
+          : previous.lastError,
+    }
+    const threadStates = { ...this.state.threadStates, [event.threadId]: next }
+    const mirrorActive =
+      this.state.activeThreadId === null || this.state.activeThreadId === event.threadId
+    this.state = {
+      ...this.state,
+      threadStates,
+      events: mirrorActive ? events : this.state.events,
+      streamingText:
+        mirrorActive && event.type === "message.completed" ? "" : this.state.streamingText,
+    }
+    this.emit()
+  }
+
+  /**
+   * 累加某线程的流式文本。未知 threadId（例如旧调用方传入的占位符）只更新活动镜像，
+   * 保持与单线程调用方兼容。
+   */
+  appendDelta(threadId: string, text: string): void {
+    const previous = this.state.threadStates[threadId]
+    if (!previous) {
+      this.state = { ...this.state, streamingText: this.state.streamingText + text }
+      this.emit()
+      return
+    }
+    const threadStates = {
+      ...this.state.threadStates,
+      [threadId]: { ...previous, streamingText: previous.streamingText + text },
+    }
+    const mirrorActive = this.state.activeThreadId === threadId
+    this.state = {
+      ...this.state,
+      threadStates,
+      streamingText: mirrorActive ? this.state.streamingText + text : this.state.streamingText,
+    }
+    this.emit()
+  }
+
+  /** 写入单个线程状态并通知订阅者。 */
+  private writeThreadState(threadId: string, value: ThreadViewState): void {
+    this.state = { ...this.state, threadStates: { ...this.state.threadStates, [threadId]: value } }
+    this.emit()
+  }
+
+  /** 读取活动线程的事件镜像；线程不存在时为空。 */
+  private eventsFor(
+    threadStates: Record<string, ThreadViewState>,
+    threadId: string | null,
+  ): ThreadEvent[] {
+    return threadId ? (threadStates[threadId]?.events ?? []) : []
+  }
+
+  /** 读取活动线程的流式文本镜像；线程不存在时为空。 */
+  private streamingFor(
+    threadStates: Record<string, ThreadViewState>,
+    threadId: string | null,
+  ): string {
+    return threadId ? (threadStates[threadId]?.streamingText ?? "") : ""
   }
 
   private emit(): void {

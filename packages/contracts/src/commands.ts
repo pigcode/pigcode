@@ -38,6 +38,7 @@ export const commandSchemas = {
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),
   }),
+  "thread.unsubscribe": z.object({ threadId: z.string().min(1) }),
   "plugin.list": z.object({}),
   "plugin.install": z.object({ spec: z.string().min(1) }),
   "plugin.installLocal": z.object({ sourceDir: z.string().min(1) }),

@@ -1,4 +1,4 @@
-/** 管理 MessagePort 连接、线程订阅、cursor 与 RPC 命令。 */
+/** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
 import type { ProviderEvent, TerminalOutput, ThreadEvent } from "@pigcode/contracts"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
@@ -13,35 +13,48 @@ export interface ConnectionHandlers {
   onStatus(status: ConnectionStatus): void
 }
 
-/** 基于 RpcClient 的线程连接，负责断线重订阅与事件游标维护。 */
+/** `thread.subscribe` 的响应结构；Host 尚未返回事件时 events 为空。 */
+interface SubscribeResult {
+  cursor?: number
+  events: ThreadEvent[]
+}
+
+/** 基于 RpcClient 的连接，负责多线程订阅、断线重订阅与事件游标维护。 */
 export class Connection {
   private client: RpcClient | undefined
-  private threadId: string | undefined
-  private cursor = 0
+  private readonly subscriptions = new Map<string, number>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
-  /** 绑定新的传输层；已有线程时从 cursor 重订阅。 */
+  /** 绑定新的传输层；已有线程时逐个从各自 cursor 重订阅。 */
   async attach(transport: HostTransport): Promise<void> {
     this.handlers.onStatus(this.client ? "reconnecting" : "connecting")
     this.client = new RpcClient(transport)
     this.client.onNotification((message) => this.handleNotification(message))
-    if (this.threadId) await this.subscribe(this.threadId, this.cursor)
+    for (const [threadId, cursor] of [...this.subscriptions]) {
+      await this.subscribe(threadId, cursor)
+    }
     this.handlers.onStatus("connected")
   }
 
-  /** 打开线程并订阅 snapshot + cursor。 */
+  /** 打开线程并订阅 snapshot + cursor；重复打开会从 0 重新同步。 */
   async openThread(threadId: string): Promise<void> {
-    this.threadId = threadId
-    this.cursor = 0
+    if (!this.client) throw new Error("host not connected")
+    this.subscriptions.set(threadId, 0)
     await this.subscribe(threadId, 0)
   }
 
-  /** 发送用户消息。 */
-  async startRun(text: string): Promise<void> {
-    if (!this.client || !this.threadId) throw new Error("thread not open")
-    await this.client.call("run.start", { threadId: this.threadId, text })
+  /** 关闭线程：释放 Host 监听器并忘记 cursor。 */
+  async closeThread(threadId: string): Promise<void> {
+    this.subscriptions.delete(threadId)
+    if (this.client) await this.client.call("thread.unsubscribe", { threadId })
+  }
+
+  /** 在指定线程发送用户消息。 */
+  async startRun(threadId: string, text: string): Promise<void> {
+    if (!this.client) throw new Error("host not connected")
+    await this.client.call("run.start", { threadId, text })
   }
 
   /** 透传一次 RPC 调用，供项目/线程/插件命令使用。 */
@@ -58,14 +71,17 @@ export class Connection {
     }
   }
 
-  /** 订阅线程并回放 cursor 之后的事件。 */
+  /** 订阅线程并回放 cursor 之后的事件，随后更新该线程的 cursor。 */
   private async subscribe(threadId: string, cursor: number): Promise<void> {
     if (!this.client) throw new Error("host not connected")
-    const result = (await this.client.call("thread.subscribe", { threadId, cursor })) as {
-      events: ThreadEvent[]
-    }
+    const result = (await this.client.call("thread.subscribe", {
+      threadId,
+      cursor,
+    })) as SubscribeResult
     for (const event of result.events) this.handlers.onEvent(event)
-    this.cursor = Math.max(this.cursor, ...result.events.map((event) => event.seq))
+    const lastSeq = result.events.reduce((max, event) => Math.max(max, event.seq), cursor)
+    const nextCursor = Math.max(cursor, result.cursor ?? 0, lastSeq)
+    this.subscriptions.set(threadId, nextCursor)
   }
 
   /** 分发服务端推送的线程事件与 provider delta。 */
@@ -89,7 +105,10 @@ export class Connection {
     }
     if (value.method === "thread.event" && value.params) {
       const event = value.params as unknown as ThreadEvent
-      this.cursor = Math.max(this.cursor, event.seq)
+      const current = this.subscriptions.get(event.threadId)
+      if (current !== undefined) {
+        this.subscriptions.set(event.threadId, Math.max(current, event.seq))
+      }
       this.handlers.onEvent(event)
       return
     }

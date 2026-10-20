@@ -12,6 +12,8 @@ import type { CommandMethod } from "@pigcode/contracts"
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
 export class RpcServer {
   private disposers: Array<() => void> = []
+  /** 每个线程只保留一个实时监听器；重复订阅先释放旧的。 */
+  private readonly subscriptions = new Map<string, () => void>()
 
   constructor(
     private readonly ctx: Context,
@@ -29,6 +31,8 @@ export class RpcServer {
 
   /** 停止监听并释放所有订阅。 */
   stop(): void {
+    for (const unsubscribe of this.subscriptions.values()) unsubscribe()
+    this.subscriptions.clear()
     for (const dispose of this.disposers) dispose()
     this.disposers = []
   }
@@ -83,10 +87,11 @@ export class RpcServer {
       case "thread.subscribe": {
         const value = parsed as { threadId: string; cursor: number }
         const events = this.ctx.sessions.read(value.threadId, value.cursor)
+        this.subscriptions.get(value.threadId)?.()
         const unsubscribe = this.ctx.sessions.subscribe(value.threadId, (event) => {
           this.transport.send({ jsonrpc: "2.0", method: "thread.event", params: event })
         })
-        this.disposers.push(unsubscribe)
+        this.subscriptions.set(value.threadId, unsubscribe)
         return {
           snapshot: {
             thread: this.ctx.threads.get(value.threadId) ?? null,
@@ -97,6 +102,12 @@ export class RpcServer {
           cursor: events.at(-1)?.seq ?? value.cursor,
           events,
         }
+      }
+      case "thread.unsubscribe": {
+        const value = parsed as { threadId: string }
+        this.subscriptions.get(value.threadId)?.()
+        this.subscriptions.delete(value.threadId)
+        return { ok: true }
       }
       case "thread.switchProvider": {
         const value = parsed as { threadId: string; providerId: string; modelId?: string | null }

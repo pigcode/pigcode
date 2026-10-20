@@ -176,8 +176,9 @@ export function ChatViewContainer({
         providers={providerOptions}
         {...(project ? { cwd: project.rootPath } : {})}
         onStart={(text) => {
+          if (!state.activeThreadId) return
           void deps.connection
-            .startRun(text)
+            .startRun(state.activeThreadId, text)
             .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
         }}
         onInterrupt={interrupt}
