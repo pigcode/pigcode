@@ -8,6 +8,13 @@ The right panel provides files, per-run diffs, an embedded PTY terminal, checkpo
 and git worktrees. Checkpoints are stored under
 `refs/pigcode/checkpoints/<thread>/<run>/<phase>` and never add commits to your branch.
 
+After a clean install, rebuild the native PTY helper for Electron before running the
+workbench E2E:
+
+```bash
+pnpm --dir apps/desktop rebuild:native
+```
+
 ## Real Claude smoke
 
 Set `PIGCODE_REAL_CLAUDE=1` and run:
