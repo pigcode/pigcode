@@ -30,6 +30,8 @@ interface CodexApprovalResponse {
 export class CodexDriver implements ProviderDriver {
   readonly id = "codex"
   readonly displayName = "Codex"
+  // M2 只桥接审批、计划、用量与 resume；questions/fork/rollback/checkpoint/subagents/mcp
+  // 尚未实现，对应能力位必须保持 false，UI 才能据此隐藏控件。
   readonly capabilities: ProviderCapabilities = {
     streaming: true,
     approvals: true,
