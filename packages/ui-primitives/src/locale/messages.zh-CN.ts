@@ -115,6 +115,7 @@ export const zhCN = {
   "chat.environment.cwd": "工作目录",
   "chat.environment.model": "模型",
   "chat.environment.permission": "权限模式",
+  "chat.provider.next": "下一次消息将使用",
   "chat.environment.unknown": "—",
   "chat.permission.readOnly": "只读",
   "chat.permission.workspaceWrite": "工作区可写",

@@ -100,8 +100,10 @@ export class ClaudeDriver implements ProviderDriver {
     state.interruptRequested = false
 
     const normalizeState = createNormalizeState()
+    // 切换 provider 后，handoff 放在用户文本之前，保持上下文连续。
+    const prompt = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
     const queryStream = this.queryFn({
-      prompt: input.text,
+      prompt,
       options: {
         cwd: session.cwd,
         ...(session.nativeSessionId ? { resume: session.nativeSessionId } : {}),

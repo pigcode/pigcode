@@ -13,11 +13,6 @@ import { CodexRpcClient } from "./client"
 import { normalizeCodexNotification } from "./normalize"
 import { StdioCodexTransport, type CodexTransport } from "./transport"
 
-/** Codex 的用户输入；handoff 是切换 provider 时注入的上下文。 */
-export interface CodexUserInput extends UserInput {
-  handoff?: string
-}
-
 /** 单个 session 的 app-server 状态。 */
 interface CodexSessionState {
   client: CodexRpcClient
@@ -99,7 +94,7 @@ export class CodexDriver implements ProviderDriver {
   /** 发起一个 turn，消费该 turn 的全部通知直到终态或中断。 */
   async send(
     session: ProviderSessionHandle,
-    input: CodexUserInput,
+    input: UserInput,
     runtime: ProviderRuntime,
   ): Promise<void> {
     const state = this.stateFor(session)

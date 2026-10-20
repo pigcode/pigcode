@@ -8,6 +8,8 @@ export interface ThreadsService {
   create(projectId: string, title: string, providerId: string): Thread
   list(projectId?: string): Thread[]
   get(threadId: string): Thread | undefined
+  /** 记录线程最近选择的 provider/model，切换后下一次 run 生效。 */
+  updateSelection(threadId: string, providerId: string, modelId: string | null): void
 }
 
 declare module "cordis" {
@@ -75,6 +77,14 @@ export const apply: ThreadsPlugin = (ctx) => {
     get(threadId) {
       const row = ctx.storage.db.prepare(`SELECT * FROM threads WHERE id = ?`).get(threadId)
       return row ? mapThread(row) : undefined
+    },
+    updateSelection(threadId, providerId, modelId) {
+      ctx.storage.db
+        .prepare(
+          `UPDATE threads SET last_provider_id = ?, last_model_id = ?, updated_at = ?
+           WHERE id = ?`,
+        )
+        .run(providerId, modelId, new Date().toISOString(), threadId)
     },
   }
   ctx.provide("threads", service)

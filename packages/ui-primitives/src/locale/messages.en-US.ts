@@ -119,6 +119,7 @@ export const enUS = {
   "chat.environment.cwd": "Working directory",
   "chat.environment.model": "Model",
   "chat.environment.permission": "Permission mode",
+  "chat.provider.next": "Next message will use",
   "chat.environment.unknown": "—",
   "chat.permission.readOnly": "Read only",
   "chat.permission.workspaceWrite": "Workspace write",

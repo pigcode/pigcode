@@ -98,6 +98,14 @@ export class RpcServer {
           events,
         }
       }
+      case "thread.switchProvider": {
+        const value = parsed as { threadId: string; providerId: string; modelId?: string | null }
+        return this.ctx.providers.switchProvider(
+          value.threadId,
+          value.providerId,
+          value.modelId ?? null,
+        )
+      }
       case "run.start": {
         const value = parsed as { threadId: string; text: string }
         const { runId } = await this.ctx.providers.startRun(value.threadId, value.text, (event) => {

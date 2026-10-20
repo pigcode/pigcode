@@ -34,9 +34,10 @@ export interface CreateSessionInput {
   model?: string | null
 }
 
-/** 用户发送给 provider 的一条输入。 */
+/** 用户发送给 provider 的一条输入；handoff 在切换 provider 后注入一次。 */
 export interface UserInput {
   text: string
+  handoff?: string
 }
 
 /** 单次 run 交给 driver 的运行时能力：取消信号、事件出口与审批回调。 */

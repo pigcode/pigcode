@@ -62,6 +62,16 @@ export class ProviderSessionStore {
       .run(nativeSessionId, sessionId)
   }
 
+  /** 把线程所有活跃会话标记为 stopped；切换 provider 时调用。 */
+  stopActive(threadId: string, at: string): number {
+    return this.db
+      .prepare(
+        `UPDATE provider_sessions SET status = 'stopped', stopped_at = ?
+         WHERE thread_id = ? AND status = 'active'`,
+      )
+      .run(at, threadId).changes
+  }
+
   /** 读取线程的全部会话记录，按创建时间升序。 */
   listByThread(threadId: string): ProviderSession[] {
     const rows = this.db

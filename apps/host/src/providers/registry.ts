@@ -23,7 +23,10 @@ import type { ClaudeDetection } from "./claude/detect"
 import { ClaudeDriver } from "./claude/driver"
 import { detectCodex } from "./codex/detect"
 import type { CodexDetection } from "./codex/detect"
+import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
+import { defaultProvider, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
+import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
@@ -61,6 +64,8 @@ export interface ProvidersService {
   models(providerId: string): Promise<CodexModelInfo[]>
   /** 选择新线程默认 provider：显式 env 优先，否则 Claude 已安装且登录时用 Claude。 */
   defaultProvider(): Promise<string>
+  /** 切换线程 provider/model，并把 handoff 写入事件日志。 */
+  switchProvider(threadId: string, providerId: string, modelId?: string | null): Promise<Switch>
   startRun(
     threadId: string,
     text: string,
@@ -125,6 +130,7 @@ export function apply(ctx: Context): void {
   drivers.set(fake.id, fake)
   const claude = new ClaudeDriver()
   drivers.set(claude.id, claude)
+  drivers.set("codex", new CodexDriver())
 
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
@@ -350,18 +356,21 @@ export function apply(ctx: Context): void {
       if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
       return []
     },
-    async defaultProvider() {
-      const forced = process.env.PIGCODE_PROVIDER
-      if (forced === "claude" || forced === "fake") return forced
-      const claude = await detectClaude()
-      return claude.installed && claude.loggedIn ? "claude" : "fake"
+    defaultProvider() {
+      return defaultProvider()
+    },
+    async switchProvider(threadId, providerId, modelId) {
+      if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
+      return switchProvider(ctx, providerSessions, threadId, providerId, modelId ?? null)
     },
     async startRun(threadId, text, emitLive) {
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
-      const driver = drivers.get(thread.defaultProviderId)
-      if (!driver) throw new Error(`provider not found: ${thread.defaultProviderId}`)
+      // 切换后使用线程最近选择的 provider，未切换过时回退到创建时的默认值。
+      const providerId = thread.lastProviderId ?? thread.defaultProviderId
+      const driver = drivers.get(providerId)
+      if (!driver) throw new Error(`provider not found: ${providerId}`)
 
       activeThreads.add(threadId)
       try {
@@ -369,7 +378,7 @@ export function apply(ctx: Context): void {
         const activeSession = providerSessions.findActive(threadId, driver.id)
         const draft = await driver.createSession({
           threadId,
-          cwd: resolveCwd(ctx, thread.projectId),
+          cwd: resolveProjectCwd(ctx, thread.projectId),
           nativeSessionId: activeSession?.nativeSessionId ?? null,
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
@@ -388,6 +397,8 @@ export function apply(ctx: Context): void {
           startedAt,
         })
 
+        // 切换 provider 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
+        const handoff = pendingHandoff(ctx, threadId)
         append(threadId, runId, "message.completed", { role: "user", text })
         append(threadId, runId, "run.started", {
           providerId: driver.id,
@@ -411,7 +422,7 @@ export function apply(ctx: Context): void {
           approvals: new Set(),
         }
         activeRuns.set(runId, run)
-        void execute(run, { text })
+        void execute(run, handoff === null ? { text } : { text, handoff })
         return { runId, done }
       } catch (error) {
         activeThreads.delete(threadId)
@@ -485,11 +496,3 @@ export function apply(ctx: Context): void {
 }
 
 apply.inject = inject
-
-/** 读取线程所属项目的根目录作为 provider cwd。 */
-function resolveCwd(ctx: Context, projectId: string): string {
-  const row = ctx.storage.db
-    .prepare(`SELECT root_path FROM projects WHERE id = ?`)
-    .get(projectId) as { root_path: string } | undefined
-  return row?.root_path ?? process.cwd()
-}

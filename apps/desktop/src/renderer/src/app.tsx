@@ -153,6 +153,8 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
   const thread = state.threads.find((item) => item.id === state.activeThreadId) ?? null
   const project = state.projects.find((item) => item.id === thread?.projectId)
   const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([])
+  const { t } = useLocale()
+  const [providerNotice, setProviderNotice] = useState<string | null>(null)
 
   // provider 列表只用于线程头切换入口；失败时保持为空，不影响聊天。
   useEffect(() => {
@@ -211,6 +213,9 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
               : item,
           )
         deps.store.update({ threads })
+        const name = providerOptions.find((provider) => provider.id === providerId)?.displayName
+        setProviderNotice(`${t("chat.provider.next")} ${name ?? providerId}`)
+        setTimeout(() => setProviderNotice(null), 4000)
       })
       .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
   }
@@ -235,24 +240,31 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
   }
 
   return (
-    <ChatView
-      thread={thread}
-      events={state.events}
-      streamingText={state.streamingText}
-      capabilities={state.providerCapabilities}
-      models={state.providerModels}
-      providers={providerOptions}
-      {...(project ? { cwd: project.rootPath } : {})}
-      onStart={(text) => {
-        void deps.connection
-          .startRun(text)
-          .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
-      }}
-      onInterrupt={interrupt}
-      onApproval={respondApproval}
-      onSwitchProvider={switchProvider}
-      onSwitchModel={switchModel}
-    />
+    <>
+      {providerNotice ? (
+        <div className="toast-stack" role="status" aria-live="polite">
+          <div className="toast">{providerNotice}</div>
+        </div>
+      ) : null}
+      <ChatView
+        thread={thread}
+        events={state.events}
+        streamingText={state.streamingText}
+        capabilities={state.providerCapabilities}
+        models={state.providerModels}
+        providers={providerOptions}
+        {...(project ? { cwd: project.rootPath } : {})}
+        onStart={(text) => {
+          void deps.connection
+            .startRun(text)
+            .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
+        }}
+        onInterrupt={interrupt}
+        onApproval={respondApproval}
+        onSwitchProvider={switchProvider}
+        onSwitchModel={switchModel}
+      />
+    </>
   )
 }
 

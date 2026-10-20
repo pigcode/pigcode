@@ -11,6 +11,11 @@ export const commandSchemas = {
     providerId: z.string().min(1).default("fake"),
   }),
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
+  "thread.switchProvider": z.object({
+    threadId: z.string().min(1),
+    providerId: z.string().min(1),
+    modelId: z.string().min(1).nullish(),
+  }),
   "run.start": z.object({ threadId: z.string().min(1), text: z.string().min(1) }),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),
   "run.respondApproval": z.object({
