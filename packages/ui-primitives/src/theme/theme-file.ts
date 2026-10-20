@@ -3,7 +3,7 @@ import type { ModeOverrides } from "./appearance-settings"
 import { parseHex } from "./color-math"
 import type { ThemeColors, ThemeDefinition } from "./theme-presets"
 
-const SCHEMA = "pigclaude-theme/1"
+const SCHEMA = "pigcode-theme/1"
 
 /** 导入结果：成功带主题，失败带可直接展示给用户的原因。 */
 export type ThemeFileResult = { ok: true; theme: ThemeDefinition } | { ok: false; reason: string }
@@ -38,7 +38,7 @@ export function parseThemeFile(text: string, existingNames: readonly string[]): 
     return { ok: false, reason: "不是有效的 JSON，请检查内容是否完整" }
   }
   if (!isRecord(data) || data.schema !== SCHEMA) {
-    return { ok: false, reason: `不是 pigclaude 主题文件格式（需要 schema 为 ${SCHEMA}）` }
+    return { ok: false, reason: `不是 pigcode 主题文件格式（需要 schema 为 ${SCHEMA}）` }
   }
   const name = typeof data.name === "string" ? data.name.trim() : ""
   if (!name) return { ok: false, reason: "主题缺少名字" }

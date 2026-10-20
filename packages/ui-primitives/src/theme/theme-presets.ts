@@ -28,9 +28,9 @@ function preset(
   }
 }
 
-/** 内置主题，顺序固定：pigclaude、chatgpt、claude、linear、github、dracula、nord、solarized。 */
+/** 内置主题，顺序固定：pigcode、chatgpt、claude、linear、github、dracula、nord、solarized。 */
 export const builtInThemes: readonly [ThemeDefinition, ...ThemeDefinition[]] = [
-  { id: "pigclaude", name: "pigclaude", builtIn: true, light: null, dark: null },
+  { id: "pigcode", name: "pigcode", builtIn: true, light: null, dark: null },
   preset(
     "chatgpt",
     "ChatGPT",
@@ -55,7 +55,7 @@ export const builtInThemes: readonly [ThemeDefinition, ...ThemeDefinition[]] = [
   ),
 ]
 
-/** 先在自定义主题里找、再在内置主题里找；都找不到时保证返回 pigclaude。 */
+/** 先在自定义主题里找、再在内置主题里找；都找不到时保证返回 pigcode。 */
 export function findTheme(id: string, custom: readonly ThemeDefinition[]): ThemeDefinition {
   return (
     custom.find((theme) => theme.id === id) ??

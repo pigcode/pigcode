@@ -47,7 +47,7 @@ export type AppearanceSettings = {
   advancedOpen: boolean
 }
 
-const defaultSlot: ThemeSlot = { themeId: "pigclaude", accentMode: "default", uiFont: "system" }
+const defaultSlot: ThemeSlot = { themeId: "pigcode", accentMode: "default", uiFont: "system" }
 
 /** 默认外观设置：与引入外观设置前的界面一致。 */
 export const defaultAppearance: AppearanceSettings = {

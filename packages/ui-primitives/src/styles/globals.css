@@ -1456,7 +1456,8 @@ kbd {
     transform var(--t-fast) var(--ease);
 }
 /* Base UI 的 Positioner 负责浮层定位，浮层自身保持文档流 */
-.popover.is-open {
+.popover.is-open,
+.popover[data-open] {
   opacity: 1;
   transform: none;
   pointer-events: auto;
@@ -1521,29 +1522,47 @@ kbd {
   pointer-events: none;
   transition: opacity var(--t-med) var(--ease);
 }
-.scrim.is-open {
-  opacity: 1;
-  pointer-events: auto;
-}
-.scrim[data-state="open"] {
+.scrim.is-open,
+.scrim[data-open] {
   opacity: 1;
   pointer-events: auto;
 }
 .dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 81;
   width: min(420px, 100%);
   max-height: calc(100vh - 48px);
   overflow: auto;
   background: var(--popover);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-pop);
-  transform: translateY(4px) scale(0.99);
+  transform: translate(-50%, -50%) translateY(4px) scale(0.99);
   transition: transform var(--t-med) var(--ease);
 }
-.scrim.is-open .dialog {
-  transform: none;
+.scrim.is-open .dialog,
+.scrim[data-open] + .dialog {
+  transform: translate(-50%, -50%);
 }
-.scrim[data-state="open"] + .dialog {
-  transform: none;
+.dialog.sheet {
+  top: 0;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  transform: translateY(0);
+}
+.dialog.sheet-right {
+  left: auto;
+  right: 0;
+}
+.dialog.sheet-left {
+  left: 0;
+  right: auto;
+}
+.dialog.sheet-right[data-open],
+.dialog.sheet-left[data-open] {
+  transform: translateY(0);
 }
 .dialog.wide {
   width: min(540px, 100%);
