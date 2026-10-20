@@ -1,4 +1,4 @@
-// 插件管理视图：刷新按钮、本地安装表单和插件列表。
+// 插件管理视图：刷新按钮、安装表单和插件列表。
 import { useState } from "react"
 import { Button, useLocale } from "@pigcode/ui-primitives"
 import { InstallForm } from "./install-form"
@@ -7,7 +7,7 @@ import { PluginList, type PluginSummary } from "./plugin-list"
 /** 插件管理视图需要的状态与事件。 */
 export interface PluginManagerViewProps {
   plugins: PluginSummary[]
-  onInstall: (sourceDir: string) => Promise<void>
+  onInstall: (spec: string) => Promise<void>
   onEnable: (id: string) => Promise<void>
   onDisable: (id: string) => Promise<void>
   onRefresh: () => Promise<void>

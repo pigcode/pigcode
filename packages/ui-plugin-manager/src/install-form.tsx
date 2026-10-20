@@ -1,31 +1,31 @@
-// 本地插件安装表单：输入插件目录并调用 onInstall(path)。
+// 插件安装表单：接受本地目录或 npm 包 spec，并提示插件以 Host 权限运行。
 import { useState, type FormEvent } from "react"
 import { Button, Input, useLocale } from "@pigcode/ui-primitives"
 
-/** 安装表单需要的回调。 */
+/** 安装表单需要的回调；spec 可以是本地目录、tarball 或 npm 包名/版本。 */
 export interface InstallFormProps {
-  onInstall: (sourceDir: string) => Promise<void>
+  onInstall: (spec: string) => Promise<void>
 }
 
-/** 渲染本地插件目录输入；成功后清空输入，失败时显示本地化错误。 */
+/** 渲染安装来源输入；成功后清空输入，失败时显示本地化错误。 */
 export function InstallForm({ onInstall }: InstallFormProps) {
   const { t } = useLocale()
-  const [sourceDir, setSourceDir] = useState("")
+  const [spec, setSpec] = useState("")
   const [installing, setInstalling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault()
-    const path = sourceDir.trim()
-    if (!path) {
+    const value = spec.trim()
+    if (!value) {
       setError(t("plugins.required"))
       return
     }
     setInstalling(true)
     setError(null)
     try {
-      await onInstall(path)
-      setSourceDir("")
+      await onInstall(value)
+      setSpec("")
     } catch {
       setError(t("plugins.installFailed"))
     } finally {
@@ -41,18 +41,19 @@ export function InstallForm({ onInstall }: InstallFormProps) {
       <div className="group">
         <div className="item">
           <div className="main">
-            <label className="label" htmlFor="plugin-source-dir">
-              {t("plugins.directory")}
+            <label className="label" htmlFor="plugin-install-spec">
+              {t("plugins.installSpec")}
             </label>
-            <div className="hint">{t("plugins.directory.hint")}</div>
+            <div className="hint">{t("plugins.installSpecHint")}</div>
             <Input
-              id="plugin-source-dir"
-              value={sourceDir}
-              placeholder={t("plugins.directory.placeholder")}
+              id="plugin-install-spec"
+              value={spec}
+              placeholder={t("plugins.installSpecPlaceholder")}
               autoComplete="off"
               spellCheck={false}
-              onChange={(event) => setSourceDir(event.target.value)}
+              onChange={(event) => setSpec(event.target.value)}
             />
+            <div className="hint">{t("plugins.trustWarning")}</div>
             {error ? (
               <p className="error-text" role="alert">
                 {error}

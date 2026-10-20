@@ -19,6 +19,8 @@ export interface AppState {
   providerCapabilities: ProviderCapabilities | null
   /** 当前 provider 可选的模型 id 列表；未知时为空。 */
   providerModels: string[]
+  /** 插件启停后递增，通知依赖 provider 列表的界面重新拉取。 */
+  providerRevision: number
 }
 
 const initialState: AppState = {
@@ -33,6 +35,7 @@ const initialState: AppState = {
   reconnected: false,
   providerCapabilities: null,
   providerModels: [],
+  providerRevision: 0,
 }
 
 /** 不可变状态容器；每次变更都替换快照并通知订阅者。 */

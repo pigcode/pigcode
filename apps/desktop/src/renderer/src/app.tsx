@@ -77,7 +77,7 @@ export function ChatViewContainer({
   const { t } = useLocale()
   const [providerNotice, setProviderNotice] = useState<string | null>(null)
 
-  // provider 列表只用于线程头切换入口；失败时保持为空，不影响聊天。
+  // provider 列表只用于线程头切换入口；插件启停后按 revision 重新拉取。
   useEffect(() => {
     let cancelled = false
     void listProviders(deps.connection)
@@ -92,7 +92,7 @@ export function ChatViewContainer({
     return () => {
       cancelled = true
     }
-  }, [deps.connection])
+  }, [deps.connection, state.providerRevision])
 
   function interrupt(): void {
     const runId = [...state.events].reverse().find((event) => event.runId !== null)?.runId
@@ -191,7 +191,7 @@ export function ChatViewContainer({
   )
 }
 
-/** 插件管理容器：列表来自 Host，安装/启停后同步重载 client bundle。 */
+/** 插件管理容器：列表来自 Host，安装/启停后同步刷新 provider 与 client bundle。 */
 function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
   const [plugins, setPlugins] = useState<PluginSummary[]>([])
 
@@ -200,6 +200,36 @@ function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
     setPlugins(list)
   }, [deps.connection])
 
+  /**
+   * 启停插件会改变 provider 集合：重新拉取列表与检测结果，刷新当前线程的能力/模型，
+   * 并递增 providerRevision 让线程头菜单重新读取 provider 列表。
+   */
+  const refreshProviders = useCallback(async (): Promise<void> => {
+    try {
+      const [providers] = await Promise.all([
+        listProviders(deps.connection),
+        deps.connection.call("provider.detect", {}),
+      ])
+      const snapshot = deps.store.getSnapshot()
+      const thread = snapshot.threads.find((item) => item.id === snapshot.activeThreadId)
+      if (thread) {
+        const providerId = thread.lastProviderId ?? thread.defaultProviderId
+        deps.store.update({
+          providerCapabilities:
+            providers.find((provider) => provider.id === providerId)?.capabilities ?? null,
+        })
+        try {
+          await loadProviderModels(deps.connection, deps.store, providerId)
+        } catch {
+          deps.store.update({ providerModels: [] })
+        }
+      }
+      deps.store.update({ providerRevision: deps.store.getSnapshot().providerRevision + 1 })
+    } catch {
+      // provider 刷新失败不影响插件操作本身；列表仍会照常刷新。
+    }
+  }, [deps.connection, deps.store])
+
   useEffect(() => {
     void refresh().catch(() => setPlugins([]))
   }, [refresh])
@@ -207,15 +237,14 @@ function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
   async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
     await action()
     await refresh()
+    await refreshProviders()
     await deps.plugins.reload()
   }
 
   return (
     <PluginManagerView
       plugins={plugins}
-      onInstall={(sourceDir) =>
-        applyAndReload(() => deps.connection.call("plugin.installLocal", { sourceDir }))
-      }
+      onInstall={(spec) => applyAndReload(() => deps.connection.call("plugin.install", { spec }))}
       onEnable={(id) => applyAndReload(() => deps.connection.call("plugin.enable", { id }))}
       onDisable={(id) => applyAndReload(() => deps.connection.call("plugin.disable", { id }))}
       onRefresh={() => applyAndReload(async () => undefined)}
