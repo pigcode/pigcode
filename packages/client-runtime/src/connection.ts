@@ -1,5 +1,5 @@
 /** 管理 MessagePort 连接、线程订阅、cursor 与 RPC 命令。 */
-import type { ProviderEvent, ThreadEvent } from "@pigcode/contracts"
+import type { ProviderEvent, TerminalOutput, ThreadEvent } from "@pigcode/contracts"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
 
@@ -18,6 +18,7 @@ export class Connection {
   private client: RpcClient | undefined
   private threadId: string | undefined
   private cursor = 0
+  private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
@@ -49,6 +50,14 @@ export class Connection {
     return this.client.call(method, params)
   }
 
+  /** 订阅终端输出通知；右栏关闭时调用返回的函数释放订阅。 */
+  onTerminalOutput(listener: (output: TerminalOutput) => void): () => void {
+    this.terminalListeners.add(listener)
+    return () => {
+      this.terminalListeners.delete(listener)
+    }
+  }
+
   /** 订阅线程并回放 cursor 之后的事件。 */
   private async subscribe(threadId: string, cursor: number): Promise<void> {
     if (!this.client) throw new Error("host not connected")
@@ -63,7 +72,20 @@ export class Connection {
   private handleNotification(message: unknown): void {
     const value = message as {
       method?: string
-      params?: { seq?: number; threadId?: string; event?: ProviderEvent }
+      params?: {
+        seq?: number
+        threadId?: string
+        event?: ProviderEvent
+        terminalId?: unknown
+        data?: unknown
+      }
+    }
+    if (value.method === "terminal.output" && value.params) {
+      const { terminalId, data } = value.params
+      if (typeof terminalId === "string" && typeof data === "string") {
+        for (const listener of [...this.terminalListeners]) listener({ terminalId, data })
+      }
+      return
     }
     if (value.method === "thread.event" && value.params) {
       const event = value.params as unknown as ThreadEvent

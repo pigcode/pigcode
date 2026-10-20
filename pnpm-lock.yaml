@@ -80,6 +80,9 @@ importers:
       '@pigcode/ui-shell':
         specifier: workspace:*
         version: link:../../packages/ui-shell
+      '@pigcode/ui-workbench':
+        specifier: workspace:*
+        version: link:../../packages/ui-workbench
       '@tiptap/extension-placeholder':
         specifier: 3.32.0
         version: 3.32.0(@tiptap/extensions@3.32.0(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))

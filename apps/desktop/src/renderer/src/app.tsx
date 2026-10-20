@@ -21,12 +21,28 @@ import { SettingsView, type ProviderDetection, type ProviderStatus } from "@pigc
 import type { SettingsSection, ShellView } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
+import { ConnectionBanner } from "./connection-banner"
+import {
+  listProviders,
+  loadProviderContext,
+  loadProviderModels,
+  pickProviderId,
+  toProviderStatus,
+  type CodexDetection,
+} from "./providers"
+import { WorkbenchPanel } from "./workbench"
 
 /** 核心容器共享的依赖。 */
 export interface CoreDeps {
   connection: Connection
   store: AppStore
   plugins: ClientPluginController
+}
+
+/** chat.view slot 传入聊天容器的右栏控制；第三方聊天视图可以忽略。 */
+export interface ChatSlotProps {
+  rightOpen?: boolean
+  onToggleRight?: () => void
 }
 
 /** settings.section slot 传给核心设置视图的属性。 */
@@ -48,107 +64,12 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** provider.list 返回的一项；能力描述用于驱动 UI。 */
-interface ProviderInfo {
-  id: string
-  displayName: string
-  capabilities: ProviderCapabilities
-}
-
-/** provider.models 返回的模型条目；M2 只消费 id。 */
-interface ProviderModelInfo {
-  id: string
-}
-
-/** provider.detect 返回的 Codex 检测字段；authMethod 由 UI 层补空。 */
-interface CodexDetection {
-  installed: boolean
-  version: string | null
-  loggedIn: boolean
-  command: string
-  error: string | null
-}
-
-/** 读取 provider 列表。 */
-async function listProviders(connection: Connection): Promise<ProviderInfo[]> {
-  return (await connection.call("provider.list", {})) as ProviderInfo[]
-}
-
-/** 读取某个 provider 的模型目录并写入全局状态。 */
-async function loadProviderModels(
-  connection: Connection,
-  store: AppStore,
-  providerId: string,
-): Promise<void> {
-  const models = (await connection.call("provider.models", { providerId })) as ProviderModelInfo[]
-  store.update({
-    providerModels: models.flatMap((model) =>
-      typeof model.id === "string" && model.id.length > 0 ? [model.id] : [],
-    ),
-  })
-}
-
-/** 按线程当前 provider 刷新能力与模型列表。 */
-async function loadProviderContext(
-  connection: Connection,
-  store: AppStore,
-  thread: Thread,
-): Promise<void> {
-  const providerId = thread.lastProviderId ?? thread.defaultProviderId
-  // 切换线程时先清空上一线程的能力，避免短暂显示错误的控件。
-  store.update({ providerCapabilities: null, providerModels: [] })
-  const providers = await listProviders(connection)
-  const capabilities = providers.find((provider) => provider.id === providerId)?.capabilities
-  store.update({ providerCapabilities: capabilities ?? null })
-  try {
-    await loadProviderModels(connection, store, providerId)
-  } catch {
-    // 模型目录不可用时保留空列表，不阻塞聊天。
-    store.update({ providerModels: [] })
-  }
-}
-
-/** 把检测结果归一化为设置页的 provider 分区。 */
-function toProviderStatus(
-  id: string,
-  displayName: string,
-  detection: ProviderDetection,
-  capabilities: ProviderCapabilities | undefined,
-): ProviderStatus {
-  return {
-    id,
-    displayName,
-    installed: detection.installed,
-    version: detection.version,
-    loggedIn: detection.loggedIn,
-    authMethod: detection.authMethod,
-    subscriptionType: detection.subscriptionType ?? null,
-    command: detection.command ?? null,
-    error: detection.error ?? null,
-    ...(capabilities ? { capabilities } : {}),
-  }
-}
-
-/** 询问 Host 当前默认 provider；失败时回退到 fake。 */
-async function pickProviderId(connection: Connection): Promise<string> {
-  const result = (await connection.call("provider.default", {})) as { id?: unknown }
-  return typeof result.id === "string" && result.id.length > 0 ? result.id : "fake"
-}
-
-/** 连接恢复后显示一条短提示；Host 被杀后由 main 重新转交端口触发。 */
-function ConnectionBanner({ store }: { store: AppStore }) {
-  const state = useAppStore(store)
-  const { t } = useLocale()
-  if (!state.reconnected) return null
-  return (
-    <div className="toast-stack" role="status" aria-live="polite">
-      <div className="toast">{t("status.reconnected")}</div>
-    </div>
-  )
-}
-
 /** 聊天页容器：从 store 读取线程与事件，把操作交给 connection。 */
-export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
+export function ChatViewContainer({
+  deps,
+  rightOpen = false,
+  onToggleRight,
+}: { deps: CoreDeps } & ChatSlotProps) {
   const state = useAppStore(deps.store)
   const thread = state.threads.find((item) => item.id === state.activeThreadId) ?? null
   const project = state.projects.find((item) => item.id === thread?.projectId)
@@ -263,6 +184,8 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
         onApproval={respondApproval}
         onSwitchProvider={switchProvider}
         onSwitchModel={switchModel}
+        rightOpen={rightOpen}
+        {...(onToggleRight ? { onToggleRight } : {})}
       />
     </>
   )
@@ -381,6 +304,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   const appearance = useAppearance()
   const [view, setView] = useState<ShellView>("chat")
   const [section, setSection] = useState<SettingsSection>("general")
+  const [rightOpen, setRightOpen] = useState(false)
   const initialLoadDone = useRef(false)
 
   // 首次连上 Host 后拉取项目与线程；重连时保留当前界面状态。
@@ -473,10 +397,26 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       onNewThread={(projectId) => void createThread(projectId)}
       onOpenThread={openThread}
       sidebarExtra={<PluginPanels controller={plugins} />}
+      rightOpen={rightOpen}
+      rightPanel={
+        view === "chat" && state.activeThreadId ? (
+          <WorkbenchPanel
+            key={state.activeThreadId}
+            connection={connection}
+            threadId={state.activeThreadId}
+            onClose={() => setRightOpen(false)}
+            onError={(message) => store.update({ error: message })}
+          />
+        ) : undefined
+      }
     >
       <ConnectionBanner store={store} />
       {view === "chat" ? (
-        <SlotHost registry={slots} name="chat.view" />
+        <SlotHost<ChatSlotProps>
+          registry={slots}
+          name="chat.view"
+          props={{ rightOpen, onToggleRight: () => setRightOpen((value) => !value) }}
+        />
       ) : (
         <SlotHost<SettingsSlotProps>
           registry={slots}

@@ -219,7 +219,7 @@ a.item,
   --controls-w: 170px;
   position: relative;
   display: grid;
-  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) 0;
   height: 100vh;
   overflow: hidden;
   transition: grid-template-columns var(--t-med) var(--ease);
@@ -229,7 +229,21 @@ a.item,
   --controls-w: 176px;
 }
 .app.is-collapsed {
-  grid-template-columns: 0 minmax(0, 1fr);
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}
+.app.has-right {
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) minmax(320px, 38%);
+}
+.app.has-right.is-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) minmax(320px, 38%);
+}
+.right-panel-slot {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: var(--hair) solid var(--border);
+  background: var(--bg);
 }
 .app.is-collapsed .sidebar {
   visibility: hidden;
@@ -2266,6 +2280,296 @@ kbd {
   }
 }
 
+/* ─── 工作台右栏 ───────────────────────────────────────── */
+.workbench {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.workbench-worktrees {
+  flex: none;
+  padding: 8px 10px;
+  border-bottom: var(--hair) solid var(--border);
+}
+.workbench .right-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.right-panel-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: var(--hair) solid var(--border);
+}
+.right-panel-tabs {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.right-panel-tab {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.right-panel-tab:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.right-panel-tab-active {
+  background: var(--active);
+  color: var(--fg);
+}
+.right-panel-close {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.right-panel-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.right-panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+}
+.workbench-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 2px 8px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.workbench-empty,
+.workbench-error {
+  padding: 12px 4px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.workbench-error {
+  color: var(--bad-text);
+}
+.file-tree,
+.file-tree-group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.file-tree-item,
+.file-tree-dir {
+  display: block;
+  width: 100%;
+  padding: 3px 6px;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-tree-item:hover,
+.file-tree-dir:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.file-tree-item-active {
+  background: var(--active);
+  color: var(--fg);
+}
+.file-tree-caret {
+  display: inline-block;
+  width: 12px;
+  color: var(--faint);
+}
+.file-preview {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: var(--hair) solid var(--border);
+}
+.file-preview-header {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-preview-text {
+  max-height: 40vh;
+  margin: 6px 0 0;
+  padding: 8px;
+  overflow: auto;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.file-preview-note {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.diff-view {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+.diff-file + .diff-file {
+  margin-top: 10px;
+}
+.diff-file-header {
+  padding: 4px 2px;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+}
+.diff-hunk-header {
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  background: var(--hover);
+  color: var(--muted);
+}
+.diff-line {
+  display: flex;
+  gap: 6px;
+  padding: 0 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-line-add {
+  background: color-mix(in oklch, var(--ok) 16%, transparent);
+}
+.diff-line-remove {
+  background: color-mix(in oklch, var(--bad) 16%, transparent);
+}
+.diff-line-no {
+  min-width: 26px;
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+}
+.diff-line-sign {
+  width: 10px;
+  color: var(--muted);
+  user-select: none;
+}
+.diff-line-text {
+  flex: 1;
+  min-width: 0;
+}
+.checkpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checkpoint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: var(--hair) solid var(--border);
+  border-radius: var(--r-md);
+}
+.checkpoint-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+}
+.checkpoint-phase {
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  background: var(--active);
+  color: var(--fg-2);
+  font-size: var(--fs-xs);
+}
+.checkpoint-label {
+  color: var(--fg);
+}
+.checkpoint-time {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.checkpoint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+}
+.checkpoint-confirm {
+  color: var(--muted);
+}
+.worktree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.worktree-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: var(--hair) solid var(--border);
+  border-radius: var(--r-md);
+}
+.worktree-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.worktree-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.worktree-branch,
+.worktree-active,
+.worktree-confirm {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.worktree-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.terminal-view {
+  flex: 1;
+  min-height: 0;
+  padding: 6px;
+}
+
 /* 外观设置把减少动态效果设为「关闭」时写 data-motion="full"，此时不跟随系统偏好 */
 @media (prefers-reduced-motion: reduce) {
   :root:not([data-motion="full"]),
@@ -2285,6 +2589,17 @@ kbd {
   }
   .app.is-collapsed {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* 窄窗口下右栏浮在内容区上方，避免挤压聊天宽度。 */
+  .app.has-right,
+  .app.has-right.is-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app.has-right .right-panel-slot {
+    position: fixed;
+    inset: 40px 0 0;
+    z-index: 60;
+    border-left: none;
   }
   .sidebar,
   .app.is-collapsed .sidebar {

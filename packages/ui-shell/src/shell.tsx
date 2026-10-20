@@ -18,6 +18,12 @@ export interface ShellProps {
   activeThreadId: string | null
   expandedProjects?: Record<string, boolean>
   sidebarOpen?: boolean
+  /** 右栏内容；由调用方按当前线程组装。 */
+  rightPanel?: ReactNode
+  /** 右栏是否展开；缺省视为展开。 */
+  rightOpen?: boolean
+  /** 右栏折叠切换；供调用方接入快捷键或头部按钮。 */
+  onToggleRight?: () => void
   canGoBack?: boolean
   canGoForward?: boolean
   settingsSection?: SettingsSection
@@ -66,6 +72,8 @@ export function Shell({
   activeThreadId,
   expandedProjects,
   sidebarOpen,
+  rightPanel,
+  rightOpen = true,
   canGoBack = false,
   canGoForward = false,
   settingsSection,
@@ -114,7 +122,10 @@ export function Shell({
     onView(next === "plugins" ? "plugins" : "settings")
   }
 
-  const appClass = ["app", open ? "" : "is-collapsed"].filter(Boolean).join(" ")
+  const showRight = rightPanel !== undefined && rightOpen
+  const appClass = ["app", open ? "" : "is-collapsed", showRight ? "has-right" : ""]
+    .filter(Boolean)
+    .join(" ")
 
   return (
     <div
@@ -155,6 +166,7 @@ export function Shell({
         </div>
       </aside>
       <main className="panel">{children}</main>
+      {showRight ? <div className="right-panel-slot">{rightPanel}</div> : null}
       <AddProjectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}

@@ -28,4 +28,29 @@ describe("Connection", () => {
     await pending
     expect(events).toEqual([2])
   })
+
+  it("dispatches terminal output until unsubscribed", async () => {
+    const transport = new MemoryTransport()
+    const outputs: Array<{ terminalId: string; data: string }> = []
+    const connection = new Connection({
+      onEvent: () => {},
+      onDelta: () => {},
+      onStatus: () => {},
+    })
+    await connection.attach(transport.client)
+    const off = connection.onTerminalOutput((output) => outputs.push(output))
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "terminal.output",
+      params: { terminalId: "term_1", data: "hello" },
+    })
+    expect(outputs).toEqual([{ terminalId: "term_1", data: "hello" }])
+    off()
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "terminal.output",
+      params: { terminalId: "term_1", data: "ignored" },
+    })
+    expect(outputs).toHaveLength(1)
+  })
 })
