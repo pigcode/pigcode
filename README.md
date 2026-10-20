@@ -23,3 +23,9 @@ pnpm real:codex
 
 The test uses the installed and authenticated Codex CLI with a minimal prompt.
 It never logs in and never reads credential files.
+
+If the default model is at capacity, override it:
+
+```bash
+PIGCODE_REAL_CODEX=1 PIGCODE_CODEX_MODEL=gpt-6-astra pnpm real:codex
+```
