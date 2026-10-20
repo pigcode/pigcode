@@ -44,6 +44,13 @@ class ScriptedTransport extends ReplayCodexTransport {
       this.push({ id: message.id, result: { thread: { id } } })
       return
     }
+    if (message.method === "model/list") {
+      this.push({
+        id: message.id,
+        result: { data: [{ id: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", isDefault: true }] },
+      })
+      return
+    }
     if (message.method === "turn/start") {
       this.script.onTurnStart?.(message, this)
       return
@@ -352,6 +359,18 @@ describe("CodexDriver", () => {
     expect(transport.closed).toBe(true)
 
     await driver.dispose(session)
+    expect(transport.closed).toBe(true)
+  })
+
+  it("lists models from the app server and closes the temporary transport", async () => {
+    const transport = new ScriptedTransport({ nativeThreadId: "th_native" })
+    const driver = new CodexDriver({ transportFactory: () => transport })
+
+    const models = await driver.listModels()
+
+    expect(models).toEqual([
+      { id: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", isDefault: true },
+    ])
     expect(transport.closed).toBe(true)
   })
 })

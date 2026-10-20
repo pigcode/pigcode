@@ -32,7 +32,7 @@ it.skipIf(!enabled)(
     }
 
     const completed = events.find((event) => event.type === "message.completed")
-    expect(completed?.type).toBe("message.completed")
+    expect(completed, JSON.stringify(events)).toBeDefined()
     if (completed?.type === "message.completed") {
       expect(completed.text).toContain("OK")
     }

@@ -47,6 +47,18 @@ export interface ProviderRuntime {
   requestApproval(request: ApprovalRequest): Promise<ApprovalDecision>
 }
 
+/** provider 暴露的模型条目；不同 CLI 的目录统一成这个形状。 */
+export interface ProviderModelInfo {
+  id: string
+  displayName: string
+  isDefault: boolean
+}
+
+/** provider 插件运行配置；maxConcurrentRuns 默认 4。 */
+export interface ProviderRunConfig {
+  maxConcurrentRuns?: number
+}
+
 /** Provider adapter 需要实现的完整契约。 */
 export interface ProviderDriver {
   readonly id: string
@@ -56,4 +68,6 @@ export interface ProviderDriver {
   send(session: ProviderSessionHandle, input: UserInput, runtime: ProviderRuntime): Promise<void>
   interrupt(session: ProviderSessionHandle): Promise<void>
   dispose(session: ProviderSessionHandle): Promise<void>
+  /** 可选：支持动态模型目录的 provider 实现。 */
+  listModels?(): Promise<ProviderModelInfo[]>
 }

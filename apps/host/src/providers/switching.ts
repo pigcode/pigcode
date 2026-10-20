@@ -2,6 +2,15 @@
 import type { Context } from "cordis"
 import { detectClaude } from "./claude/detect"
 import type { ProviderSessionStore } from "./claude/session-store"
+import type { ProviderDriver, ProviderModelInfo } from "./driver"
+
+/** 取 driver 的模型目录；不支持动态目录的 provider 返回空数组。 */
+export async function listProviderModels(
+  driver: ProviderDriver | undefined,
+): Promise<ProviderModelInfo[]> {
+  if (!driver) throw new Error("provider not found")
+  return driver.listModels ? driver.listModels() : []
+}
 
 /** 切换结果；handoff 是写给下一个 provider 的上下文。 */
 export interface Switch {

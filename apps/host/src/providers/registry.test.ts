@@ -150,4 +150,36 @@ describe("providers.startRun", () => {
       await ctx.fiber.dispose()
     }
   })
+
+  it("persists plan updates and interrupted runs", async () => {
+    const { ctx, thread } = await setup()
+    ctx.providers.register({
+      id: "test",
+      displayName: "Test",
+      capabilities: new FakeProviderDriver().capabilities,
+      createSession: async (input) => ({
+        id: "ps_test",
+        threadId: input.threadId,
+        cwd: input.cwd,
+        nativeSessionId: null,
+        permissionMode: "workspace-write",
+        model: null,
+      }),
+      send: async (_session, _input, runtime) => {
+        runtime.emit({ type: "plan.updated", plan: { steps: [] }, explanation: null })
+        runtime.emit({ type: "run.interrupted" })
+      },
+      interrupt: async () => undefined,
+      dispose: async () => undefined,
+    })
+    const testThread = ctx.threads.create(thread.projectId, "Plan", "test")
+    const { runId, done } = await ctx.providers.startRun(testThread.id, "plan")
+    await done
+
+    const events = ctx.sessions.read(testThread.id, 0)
+    expect(events.some((event) => event.type === "plan.updated")).toBe(true)
+    expect(events.some((event) => event.type === "run.interrupted")).toBe(true)
+    expect(ctx.providers.getRunStatus(runId)).toBe("interrupted")
+    await ctx.fiber.dispose()
+  })
 })

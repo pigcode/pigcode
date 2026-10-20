@@ -13,6 +13,7 @@ import type {
   ApprovalDecision,
   ApprovalRequest,
   ProviderDriver,
+  ProviderRunConfig,
   ProviderRuntime,
   ProviderSessionHandle,
   UserInput,
@@ -26,7 +27,7 @@ import type { CodexDetection } from "./codex/detect"
 import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
 import { RunAlreadyActiveError, TooManyActiveRunsError } from "./errors"
-import { defaultProvider, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
+import { defaultProvider, listProviderModels, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
 import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
@@ -99,14 +100,7 @@ declare module "cordis" {
 
 /** providers 插件依赖的线程、事件与存储服务。 */
 export const inject = ["threads", "sessions", "storage"]
-
 export { RunAlreadyActiveError, TooManyActiveRunsError }
-
-/** providers 插件配置；maxConcurrentRuns 为全局活跃 run 上限，默认 4。 */
-export interface ProvidersConfig {
-  maxConcurrentRuns?: number
-}
-
 /** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
 interface ActiveRun {
   runId: string
@@ -122,7 +116,7 @@ interface ActiveRun {
 }
 
 /** 注册 provider driver，并把一次 run 的规范化事件映射为线程事件。 */
-export function apply(ctx: Context, config: ProvidersConfig = {}): void {
+export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const maxConcurrentRuns = config.maxConcurrentRuns ?? 4
   const drivers = new Map<string, ProviderDriver>()
   const fake = new FakeProviderDriver()
@@ -235,6 +229,15 @@ export function apply(ctx: Context, config: ProvidersConfig = {}): void {
         return
       case "usage.updated":
         append(run.threadId, run.runId, "usage.updated", { usage: event.usage })
+        return
+      case "plan.updated":
+        append(run.threadId, run.runId, "plan.updated", {
+          plan: event.plan,
+          explanation: event.explanation,
+        })
+        return
+      case "run.interrupted":
+        finishRun(run, "interrupted", "run.interrupted", {})
         return
       case "run.completed":
         finishRun(run, "completed", "run.completed", {})
@@ -351,9 +354,7 @@ export function apply(ctx: Context, config: ProvidersConfig = {}): void {
       return { claude, codex, fake: { installed: true } }
     },
     async models(providerId) {
-      // Codex 的 model/list 需要 app-server 连接（Task 4 接入）；当前返回空目录。
-      if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
-      return []
+      return listProviderModels(drivers.get(providerId))
     },
     defaultProvider() {
       return defaultProvider()

@@ -5,11 +5,13 @@ import type {
   ApprovalDecision,
   CreateSessionInput,
   ProviderDriver,
+  ProviderModelInfo,
   ProviderRuntime,
   ProviderSessionHandle,
   UserInput,
 } from "../driver"
 import { CodexRpcClient } from "./client"
+import { parseCodexModels } from "./models"
 import { normalizeCodexNotification } from "./normalize"
 import { StdioCodexTransport, type CodexTransport } from "./transport"
 
@@ -151,6 +153,22 @@ export class CodexDriver implements ProviderDriver {
     }
   }
 
+  /** 临时启动 app-server 拉取模型目录；失败时返回空目录，不影响设置页。 */
+  async listModels(): Promise<ProviderModelInfo[]> {
+    const transport = this.transportFactory?.() ?? new StdioCodexTransport()
+    const client = new CodexRpcClient(transport)
+    try {
+      await client.request("initialize", {
+        clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
+      })
+      return parseCodexModels(await client.request("model/list", {}))
+    } catch {
+      return []
+    } finally {
+      client.close()
+    }
+  }
+
   /** 中断该 session 当前活跃的 turn；没有活跃 turn 时为空操作。 */
   async interrupt(session: ProviderSessionHandle): Promise<void> {
     const state = this.stateFor(session)
@@ -186,11 +204,12 @@ function createThreadParams(input: CreateSessionInput): Record<string, unknown> 
       : permissionMode === "danger-full-access"
         ? "danger-full-access"
         : "workspace-write"
+  const model = input.model ?? process.env.PIGCODE_CODEX_MODEL
   return {
     cwd: input.cwd,
     approvalPolicy: permissionMode === "danger-full-access" ? "never" : "on-request",
     sandbox,
-    ...(input.model ? { model: input.model } : {}),
+    ...(model ? { model } : {}),
   }
 }
 
