@@ -1,0 +1,9 @@
+{"method":"item/started","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_cmd","type":"commandExecution","command":"echo hi","status":"inProgress"}}}
+{"method":"item/completed","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_cmd","type":"commandExecution","command":"echo hi","aggregatedOutput":"hi","exitCode":0,"status":"completed"}}}
+{"method":"item/started","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_patch","type":"fileChange","changes":[{"path":"a.txt","kind":"add"}],"status":"inProgress"}}}
+{"method":"item/completed","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_patch","type":"fileChange","changes":[{"path":"a.txt","kind":"add"}],"status":"completed"}}}
+{"method":"item/agentMessage/delta","params":{"threadId":"th_native","turnId":"turn_1","itemId":"item_msg","delta":"OK"}}
+{"method":"item/completed","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_msg","type":"agentMessage","text":"OK"}}}
+{"method":"turn/plan/updated","params":{"threadId":"th_native","turnId":"turn_1","explanation":"Plan","plan":[{"step":"do it","status":"completed"}]}}
+{"method":"thread/tokenUsage/updated","params":{"threadId":"th_native","turnId":"turn_1","tokenUsage":{"inputTokens":10,"outputTokens":5}}}
+{"method":"turn/completed","params":{"threadId":"th_native","turn":{"id":"turn_1","status":"completed"}}}

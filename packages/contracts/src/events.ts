@@ -57,8 +57,14 @@ export const providerEventSchema = z.discriminatedUnion("type", [
     isError: z.boolean(),
   }),
   z.object({ type: z.literal("usage.updated"), usage: z.unknown() }),
+  z.object({
+    type: z.literal("plan.updated"),
+    plan: z.unknown(),
+    explanation: z.string().nullable(),
+  }),
   z.object({ type: z.literal("run.completed") }),
   z.object({ type: z.literal("run.failed"), message: z.string() }),
+  z.object({ type: z.literal("run.interrupted") }),
 ])
 
 /** 线程订阅快照，包含线程、运行、条目与待处理请求。 */
