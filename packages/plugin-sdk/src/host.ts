@@ -1,8 +1,17 @@
 /** Host 侧插件的稳定入口类型；插件不直接依赖 Cordis 内部实现。 */
+import type { ThreadEvent } from "@pigcode/contracts"
 import type { ProviderPluginDriver } from "./provider"
+
+/** capability 插件可用的只读会话视图；Host 的 sessions 服务结构上满足该契约。 */
+export interface PluginSessions {
+  /** 读取指定线程从 cursor 开始的事件；只读，不允许插件改写事件日志。 */
+  read(threadId: string, cursor: number): readonly ThreadEvent[]
+}
 
 /** Host 插件可用的最小上下文；只暴露稳定契约，不暴露 Host 内部服务。 */
 export interface PluginHostContext {
+  /** 只读会话访问；未在 manifest.inject 声明 sessions 时不可用。 */
+  readonly sessions: PluginSessions
   /** 注册一个供其他插件或 Host 使用的能力。 */
   provide(name: string, value: unknown): void
   /** 注册随插件卸载执行的清理逻辑。 */

@@ -1,4 +1,5 @@
 /** 示例 capability 插件：暴露当前线程事件数量。 */
+export const name = "capability-session-info"
 export const inject = ["sessions"]
 
 export function apply(ctx) {
@@ -7,4 +8,5 @@ export function apply(ctx) {
       return ctx.sessions.read(threadId, 0).length
     },
   })
+  ctx.effect(() => () => {})
 }
