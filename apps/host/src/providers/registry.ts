@@ -1,8 +1,10 @@
 /** 注册 provider driver，并把一次 run 的规范化事件映射为线程事件。 */
 import type { Context } from "cordis"
 import type {
+  PendingRequest,
   ProviderCapabilities,
   ProviderEvent,
+  ProviderSession,
   RunStatus,
   ThreadEvent,
 } from "@pigcode/contracts"
@@ -19,6 +21,7 @@ import { FakeProviderDriver } from "./fake"
 import { detectClaude } from "./claude/detect"
 import type { ClaudeDetection } from "./claude/detect"
 import { ApprovalBridge } from "./claude/permissions"
+import { ProviderSessionStore } from "./claude/session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
 
@@ -32,6 +35,13 @@ export interface StartRunResult {
 export interface ApprovalHandle {
   requestId: string
   decision: Promise<ApprovalDecision>
+}
+
+/** Host 重启恢复时处理的行数。 */
+export interface RestartRecovery {
+  orphanedRequests: number
+  interruptedRuns: number
+  orphanedSessions: number
 }
 
 /** provider 注册表与运行生命周期入口。 */
@@ -53,6 +63,12 @@ export interface ProvidersService {
   ): void
   getRunStatus(runId: string): RunStatus | null
   cancelRun(runId: string): boolean
+  /** 读取线程的 provider 会话记录，用于验证 native session 复用。 */
+  listSessions(threadId: string): ProviderSession[]
+  /** 读取线程仍未处理的审批/提问请求。 */
+  listPendingRequests(threadId: string): PendingRequest[]
+  /** Host 启动后清理上一个进程遗留的 run、session 与 pending 请求。 */
+  recoverAfterRestart(): RestartRecovery
 }
 
 declare module "cordis" {
@@ -96,9 +112,8 @@ export function apply(ctx: Context): void {
 
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
+  const providerSessions = new ProviderSessionStore(ctx.storage.db)
   const approvals = new ApprovalBridge()
-  // Host 重启后，上一个进程遗留的待审批请求统一标记为 orphaned。
-  pendingRequests.orphanAll()
   const activeRuns = new Map<string, ActiveRun>()
   const activeThreads = new Set<string>()
 
@@ -132,7 +147,6 @@ export function apply(ctx: Context): void {
     runs.setStatus(run.runId, status, error)
     append(run.threadId, run.runId, type, payload)
     settlePending(run)
-    markSessionStopped(run.session.id)
     activeRuns.delete(run.runId)
     activeThreads.delete(run.threadId)
     run.resolveDone()
@@ -155,16 +169,7 @@ export function apply(ctx: Context): void {
 
   /** provider 回报原生会话 id 后更新会话行。 */
   function updateSessionNativeId(sessionId: string, nativeSessionId: string): void {
-    ctx.storage.db
-      .prepare(`UPDATE provider_sessions SET native_session_id = ? WHERE id = ?`)
-      .run(nativeSessionId, sessionId)
-  }
-
-  /** run 进入终态后把 provider 会话标记为已停止。 */
-  function markSessionStopped(sessionId: string): void {
-    ctx.storage.db
-      .prepare(`UPDATE provider_sessions SET status = 'stopped', stopped_at = ? WHERE id = ?`)
-      .run(new Date().toISOString(), sessionId)
+    providerSessions.updateNativeSessionId(sessionId, nativeSessionId)
   }
 
   /** 把 provider 事件映射为持久线程事件；delta 只走实时通道。 */
@@ -318,14 +323,21 @@ export function apply(ctx: Context): void {
 
       activeThreads.add(threadId)
       try {
-        const session = await driver.createSession({
+        const startedAt = new Date().toISOString()
+        const activeSession = providerSessions.findActive(threadId, driver.id)
+        const draft = await driver.createSession({
           threadId,
           cwd: resolveCwd(ctx, thread.projectId),
+          nativeSessionId: activeSession?.nativeSessionId ?? null,
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
         })
+        const session = providerSessions.reuseOrCreate({
+          draft,
+          providerId: driver.id,
+          createdAt: startedAt,
+        })
         const runId = `run_${randomUUID()}`
-        const startedAt = new Date().toISOString()
         runs.create({
           id: runId,
           threadId,
@@ -333,7 +345,6 @@ export function apply(ctx: Context): void {
           status: "running",
           startedAt,
         })
-        insertSession(ctx, session, driver.id, startedAt)
 
         append(threadId, runId, "message.completed", { role: "user", text })
         append(threadId, runId, "run.started", {
@@ -402,6 +413,25 @@ export function apply(ctx: Context): void {
       finishRun(run, "interrupted", "run.interrupted", {})
       return true
     },
+    listSessions(threadId) {
+      return providerSessions.listByThread(threadId)
+    },
+    listPendingRequests(threadId) {
+      return pendingRequests.listPending(threadId)
+    },
+    recoverAfterRestart() {
+      // 上一个 Host 进程退出后，未决审批、运行中的 run 与活跃会话都不再有效。
+      const now = new Date().toISOString()
+      const orphanedRequests = pendingRequests.orphanAll()
+      const interruptedRuns = ctx.storage.db
+        .prepare(
+          `UPDATE runs SET status = 'interrupted', completed_at = ?
+           WHERE status IN ('running', 'waiting-approval')`,
+        )
+        .run(now).changes
+      const orphanedSessions = providerSessions.orphanActive(now)
+      return { orphanedRequests, interruptedRuns, orphanedSessions }
+    },
   }
 
   ctx.provide("providers", service)
@@ -424,20 +454,4 @@ function resolveCwd(ctx: Context, projectId: string): string {
     .prepare(`SELECT root_path FROM projects WHERE id = ?`)
     .get(projectId) as { root_path: string } | undefined
   return row?.root_path ?? process.cwd()
-}
-
-/** 写入 provider_sessions 行，记录原生会话与创建时的权限配置。 */
-function insertSession(
-  ctx: Context,
-  session: ProviderSessionHandle,
-  providerId: string,
-  createdAt: string,
-): void {
-  ctx.storage.db
-    .prepare(
-      `INSERT INTO provider_sessions
-       (id, thread_id, provider_id, native_session_id, cwd, status, created_at, stopped_at)
-       VALUES (?, ?, ?, ?, ?, 'active', ?, NULL)`,
-    )
-    .run(session.id, session.threadId, providerId, session.nativeSessionId, session.cwd, createdAt)
 }

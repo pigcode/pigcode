@@ -93,7 +93,7 @@ describe("approval bridge", () => {
     await ctx.fiber.dispose()
   })
 
-  it("marks leftover pending requests orphaned when the registry starts", async () => {
+  it("marks leftover pending requests orphaned when the host recovers", async () => {
     const ctx = new Context()
     await ctx.plugin(storage, { path: ":memory:" })
     await ctx.plugin(projects)
@@ -117,6 +117,8 @@ describe("approval bridge", () => {
 
     await ctx.plugin(sessions)
     await ctx.plugin(providers)
+    // 重启恢复由 entry 在 createHostApp 之后显式触发。
+    ctx.providers.recoverAfterRestart()
 
     const row = ctx.storage.db
       .prepare(`SELECT status FROM pending_requests WHERE id = ?`)

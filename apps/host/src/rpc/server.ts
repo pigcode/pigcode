@@ -92,7 +92,7 @@ export class RpcServer {
             thread: this.ctx.threads.get(value.threadId) ?? null,
             runs: [],
             items: [],
-            pendingRequests: [],
+            pendingRequests: this.ctx.providers.listPendingRequests(value.threadId),
           },
           cursor: events.at(-1)?.seq ?? value.cursor,
           events,

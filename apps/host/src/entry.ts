@@ -34,6 +34,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
   const ctx = await createHostApp({ profileDir, profileName: "desktop" })
+  // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
+  ctx.providers.recoverAfterRestart()
   await ctx.plugin(pluginsPlugin, { profileDir })
   await writeBootGraph(profileDir)
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()
