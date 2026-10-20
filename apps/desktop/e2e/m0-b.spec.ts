@@ -16,6 +16,7 @@ test("chat, plugin panel, and reconnect", async () => {
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await page.getByRole("textbox").fill("hello")
   await page.keyboard.press("Enter")
+  await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
   await expect(page.getByText("Hello from fake provider")).toBeVisible()
 
   await page.getByRole("button", { name: "设置", exact: true }).click()

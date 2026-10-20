@@ -55,6 +55,15 @@ export function apply(ctx: Context): void {
       ctx.sessions.append({
         threadId,
         runId,
+        type: "message.completed",
+        payload: { role: "user", text },
+        schemaVersion: 1,
+        createdAt,
+      })
+
+      ctx.sessions.append({
+        threadId,
+        runId,
         type: "run.started",
         payload: { providerId: driver.id, providerSessionId: session.id },
         schemaVersion: 1,
