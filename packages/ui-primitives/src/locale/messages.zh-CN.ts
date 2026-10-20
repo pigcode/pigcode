@@ -1,0 +1,22 @@
+/** 简体中文消息目录；新增 key 时先加在这里。 */
+export const zhCN = {
+  "nav.newThread": "新会话",
+  "nav.search": "搜索",
+  "nav.projects": "项目",
+  "settings.title": "设置",
+  "settings.general": "通用",
+  "settings.appearance": "外观",
+  "settings.providers": "服务提供方",
+  "settings.plugins": "插件",
+  "composer.placeholder": "让 Claude 做点什么，@ 引用文件，/ 使用命令",
+  "chat.send": "发送",
+  "chat.interrupt": "中断",
+  "chat.approval.allowOnce": "允许一次",
+  "chat.approval.allowSession": "本会话内允许",
+  "chat.approval.deny": "拒绝",
+  "plugins.install": "安装本地插件",
+  "plugins.enable": "启用",
+  "plugins.disable": "停用",
+  "plugins.empty": "还没有安装插件",
+  "status.reconnected": "已重新连接",
+} as const

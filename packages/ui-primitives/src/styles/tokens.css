@@ -1,0 +1,207 @@
+/*
+  pigclaude 设计系统 · tokens（v4：桌面原生质感）
+  所有颜色只在本文件定义。页面与组件只引用语义变量，不写死色值。
+  质感来自四件事：毛玻璃侧栏、0.5px 细线、极轻的控件投影、紧凑而清楚的字号。
+  悬停、选中、细线一律用带透明度的黑或白，叠在任何底色上都成立。
+*/
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* 窗口与表面 */
+  --window: oklch(95.6% 0.0012 270);
+  --wall-1: oklch(91.5% 0.004 255 / 0.85);
+  --wall-2: oklch(99.5% 0 0 / 0.9);
+  --sidebar: oklch(94.6% 0.0015 270 / 0.62);
+  --bg: oklch(96.9% 0.0008 270);
+  --surface: oklch(100% 0 0);
+  --panel: oklch(20% 0.01 270 / 0.042);
+  --hover: oklch(20% 0.01 270 / 0.05);
+  --active: oklch(20% 0.01 270 / 0.085);
+  --popover: oklch(99.5% 0 0);
+  --scrim: oklch(20% 0.005 270 / 0.2);
+
+  /* 文字与细线 */
+  --fg: oklch(20% 0.004 270);
+  --fg-2: oklch(38% 0.004 270);
+  --muted: oklch(54% 0.004 270);
+  --faint: oklch(69% 0.003 270);
+  --border: oklch(20% 0.01 270 / 0.08);
+  --border-strong: oklch(20% 0.01 270 / 0.15);
+  --divider: oklch(20% 0.01 270 / 0.075);
+  --border-focus: oklch(20% 0.01 270 / 0.38);
+  --field: oklch(20% 0.01 270 / 0.055);
+  --popover-glass: oklch(99% 0 0 / 0.84);
+  --scroll-thumb: oklch(20% 0.01 270 / 0.22);
+  --tl-glyph: oklch(0% 0 0 / 0.5);
+
+  /* 操作：主按钮黑底白字；开关是原生的深绿；链接是系统蓝；焦点只把边框加深 */
+  --primary: oklch(19% 0.004 270);
+  --primary-hover: oklch(31% 0.004 270);
+  --on-primary: oklch(99% 0 0);
+  --switch-on: oklch(56% 0.13 152);
+  --link: oklch(52% 0.16 256);
+
+  /* 状态 */
+  --ok: oklch(62% 0.14 152);
+  --warn: oklch(74% 0.15 72);
+  --bad: oklch(59% 0.2 27);
+  --info: oklch(60% 0.14 256);
+  --ok-text: oklch(46% 0.12 152);
+  --warn-text: oklch(52% 0.12 62);
+  --bad-text: oklch(50% 0.18 27);
+  --on-bad: oklch(99% 0 0);
+
+  /* 数据 */
+  --quota: oklch(32% 0.004 270);
+  --track: oklch(20% 0.01 270 / 0.08);
+  --chart-1: oklch(60% 0.15 256);
+  --chart-2: oklch(80% 0.07 256);
+  --chart-3: oklch(76% 0.003 270);
+  --chart-4: oklch(87% 0.002 270);
+  --avatar: oklch(88.5% 0.002 270);
+
+  --tl-close: oklch(68% 0.2 27);
+  --tl-min: oklch(83% 0.16 85);
+  --tl-max: oklch(74% 0.18 145);
+
+  --field-hl: oklch(100% 0 0 / 0.5);
+  --tl-edge: oklch(0% 0 0 / 0.12);
+  --knob: oklch(100% 0 0);
+  --shadow-knob: 0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 1px 2px oklch(0% 0 0 / 0.22);
+  --shadow-btn: 0 0.5px 1px oklch(0% 0 0 / 0.08);
+  --shadow-soft:
+    0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 2px 6px oklch(0% 0 0 / 0.03),
+    0 8px 28px oklch(0% 0 0 / 0.05);
+  --shadow-pop: 0 0 0 0.5px oklch(0% 0 0 / 0.1), 0 10px 32px oklch(0% 0 0 / 0.13);
+  --composer-ring: oklch(20% 0.01 270 / 0.13);
+  --composer-ring-focus: oklch(20% 0.01 270 / 0.22);
+  --shadow-composer: 0 1px 2px oklch(0% 0 0 / 0.03), 0 6px 20px oklch(0% 0 0 / 0.04);
+  --shadow-composer-focus: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 26px oklch(0% 0 0 / 0.07);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --window: oklch(17% 0.002 270);
+  --wall-1: oklch(24% 0.006 255 / 0.85);
+  --wall-2: oklch(13% 0.002 270 / 0.9);
+  --sidebar: oklch(20% 0.003 270 / 0.55);
+  --bg: oklch(18.2% 0.002 270);
+  --surface: oklch(22% 0.0025 270);
+  --panel: oklch(100% 0 0 / 0.035);
+  --hover: oklch(100% 0 0 / 0.055);
+  --active: oklch(100% 0 0 / 0.09);
+  --popover: oklch(23% 0.003 270);
+  --scrim: oklch(0% 0 0 / 0.45);
+
+  --fg: oklch(94% 0.002 270);
+  --fg-2: oklch(80% 0.003 270);
+  --muted: oklch(64% 0.004 270);
+  --faint: oklch(47% 0.004 270);
+  --border: oklch(100% 0 0 / 0.08);
+  --border-strong: oklch(100% 0 0 / 0.14);
+  --divider: oklch(100% 0 0 / 0.075);
+  --border-focus: oklch(100% 0 0 / 0.34);
+  --field: oklch(100% 0 0 / 0.06);
+  --popover-glass: oklch(24% 0.003 270 / 0.84);
+  --scroll-thumb: oklch(100% 0 0 / 0.22);
+  --tl-glyph: oklch(0% 0 0 / 0.55);
+
+  --primary: oklch(94% 0.002 270);
+  --primary-hover: oklch(85% 0.002 270);
+  --on-primary: oklch(17% 0.002 270);
+  --switch-on: oklch(62% 0.13 152);
+  --link: oklch(74% 0.11 256);
+
+  --ok: oklch(72% 0.14 152);
+  --warn: oklch(79% 0.14 75);
+  --bad: oklch(67% 0.18 27);
+  --info: oklch(72% 0.11 256);
+  --ok-text: oklch(78% 0.12 152);
+  --warn-text: oklch(83% 0.11 78);
+  --bad-text: oklch(75% 0.14 27);
+  --on-bad: oklch(99% 0 0);
+
+  --quota: oklch(84% 0.003 270);
+  --track: oklch(100% 0 0 / 0.09);
+  --chart-1: oklch(68% 0.13 256);
+  --chart-2: oklch(48% 0.08 256);
+  --chart-3: oklch(52% 0.004 270);
+  --chart-4: oklch(36% 0.004 270);
+  --avatar: oklch(30% 0.003 270);
+
+  --field-hl: oklch(100% 0 0 / 0);
+  --tl-edge: oklch(0% 0 0 / 0.3);
+  --knob: oklch(97% 0 0);
+  --shadow-knob: 0 1px 2px oklch(0% 0 0 / 0.4);
+  --shadow-btn: 0 0.5px 1px oklch(0% 0 0 / 0.3);
+  --shadow-soft: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 8px 28px oklch(0% 0 0 / 0.3);
+  --shadow-pop: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 12px 36px oklch(0% 0 0 / 0.45);
+  --composer-ring: oklch(100% 0 0 / 0.1);
+  --composer-ring-focus: oklch(100% 0 0 / 0.18);
+  --shadow-composer: 0 6px 22px oklch(0% 0 0 / 0.25);
+  --shadow-composer-focus: 0 8px 28px oklch(0% 0 0 / 0.32);
+}
+
+:root {
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB",
+    "Segoe UI Variable Text", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+  --font-display:
+    "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI Variable Display",
+    "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
+  --font-mono:
+    "SF Mono", ui-monospace, "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  /* 对话正文字体，默认与界面字体相同；字重由外观设置覆盖 */
+  --font-content: var(--font-ui);
+  --font-weight-ui: 400;
+  --font-weight-content: 400;
+  --font-weight-code: 400;
+
+  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 对话 13.5 / 页面标题 15，随「界面字号」整体缩放 */
+  --ui-scale: 1;
+  --fs-xs: calc(var(--ui-scale) * 11.5px);
+  --fs-sm: calc(var(--ui-scale) * 12px);
+  --fs-md: calc(var(--ui-scale) * 13px);
+  --fs-lg: calc(var(--ui-scale) * 13.5px);
+  --fs-title: calc(var(--ui-scale) * 15px);
+  /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
+  --fs-content: 13.5px;
+  --fs-code: 11.5px;
+
+  /* 圆角：控件 6 / 分组与卡片 9 / 输入区与对话框 12 */
+  --r-sm: 5px;
+  --r-md: 6px;
+  --r-lg: 9px;
+  --r-xl: 12px;
+  --r-full: 999px;
+
+  --hair: 0.5px;
+  --sidebar-w: 252px;
+  --col: 720px;
+  --col-narrow: 620px;
+  --gap: 0px;
+
+  /* 颜色选择器的色域：白到透明、黑到透明、色相彩虹和拖柄白圈，与主题无关 */
+  --picker-white: oklch(100% 0 0);
+  --picker-black: oklch(0% 0 0);
+  --picker-edge: oklch(0% 0 0 / 0.14);
+  --picker-hue: linear-gradient(
+    to right,
+    #ff0000,
+    #ffff00,
+    #00ff00,
+    #00ffff,
+    #0000ff,
+    #ff00ff,
+    #ff0000
+  );
+  --picker-knob-shadow:
+    0 0 0 2px var(--picker-white), 0 0 0 2.5px oklch(0% 0 0 / 0.18), 0 1px 4px oklch(0% 0 0 / 0.3);
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t-fast: 90ms;
+  --t-med: 150ms;
+}

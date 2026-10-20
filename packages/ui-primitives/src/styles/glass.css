@@ -1,0 +1,80 @@
+/*
+  pigclaude 设计系统 · 磨砂玻璃（桌面端）
+  做法参照 Cursor 的 glass 模式：窗口本身是系统磨砂材质（macOS vibrancy / Windows mica），
+  页面不再画任何不透明的底，所有表面都换成半透明的白或黑，让桌面颜色从每一层透出来。
+  只在 [data-glass="true"] 下生效；浏览器里仍使用 tokens.css 的不透明配色。
+*/
+
+[data-glass="true"] {
+  /* 整窗只叠一层很薄的色调，侧栏直接露出系统材质 */
+  --glass-tint: oklch(100% 0 0 / 0.16);
+  --window: transparent;
+  --wall-1: transparent;
+  --wall-2: transparent;
+  --sidebar: transparent;
+  --bg: oklch(100% 0 0 / 0.3);
+
+  /* 抬起的表面：卡片、输入框、按钮底、分组 */
+  --surface: oklch(100% 0 0 / 0.62);
+  --panel: oklch(100% 0 0 / 0.4);
+  --popover: oklch(99% 0 0 / 0.78);
+  --popover-glass: oklch(99% 0 0 / 0.68);
+  --avatar: oklch(20% 0.01 270 / 0.08);
+  --field: oklch(20% 0.01 270 / 0.05);
+  --field-hl: transparent;
+
+  /* 半透明底上细线要略深一点才看得见 */
+  --divider: oklch(20% 0.01 270 / 0.09);
+  --border: oklch(20% 0.01 270 / 0.1);
+
+  --glass-blur: blur(28px) saturate(1.7);
+}
+
+[data-glass="true"][data-theme="dark"] {
+  --glass-tint: oklch(0% 0 0 / 0.42);
+  --bg: oklch(0% 0 0 / 0.14);
+
+  --surface: oklch(100% 0 0 / 0.07);
+  --panel: oklch(100% 0 0 / 0.045);
+  --popover: oklch(24% 0.003 270 / 0.82);
+  --popover-glass: oklch(24% 0.003 270 / 0.72);
+  --avatar: oklch(100% 0 0 / 0.1);
+  --field: oklch(100% 0 0 / 0.06);
+
+  --divider: oklch(100% 0 0 / 0.08);
+  --border: oklch(100% 0 0 / 0.09);
+}
+
+[data-glass="true"] body {
+  background: var(--glass-tint);
+}
+
+/* 侧栏底下就是系统材质，不需要再在页面里模糊 */
+[data-glass="true"] .sidebar {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* 盖在内容上的层自己做一次模糊，避免透出下面的文字 */
+[data-glass="true"] .dialog,
+[data-glass="true"] .drawer,
+[data-glass="true"] .composer,
+[data-glass="true"] .side-notice,
+[data-glass="true"] [data-tip]:hover::after {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+[data-glass="true"] .dialog,
+[data-glass="true"] .drawer {
+  background: var(--popover-glass);
+}
+
+@media (max-width: 960px) {
+  [data-glass="true"] .sidebar,
+  [data-glass="true"] .app.is-collapsed .sidebar {
+    background: var(--popover-glass);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+  }
+}
