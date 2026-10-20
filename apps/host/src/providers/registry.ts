@@ -56,6 +56,8 @@ export interface RestartRecovery {
 /** provider 注册表与运行生命周期入口。 */
 export interface ProvidersService {
   register(driver: ProviderDriver): void
+  /** 移除插件注册的 driver；插件卸载时由其 effect 清理调用。 */
+  unregister(driverId: string): void
   list(): Array<{ id: string; displayName: string; capabilities: ProviderCapabilities }>
   detect(): Promise<{
     claude: ClaudeDetection
@@ -338,6 +340,9 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const service: ProvidersService = {
     register(driver) {
       drivers.set(driver.id, driver)
+    },
+    unregister(driverId) {
+      drivers.delete(driverId)
     },
     list() {
       return [...drivers.values()].map((driver) => ({

@@ -93,6 +93,23 @@ async function writeProfile(
   await writeFile(join(profileDir, PROFILE_FILE), stringify(profile), "utf8")
 }
 
+/**
+ * profile 目录本身就是插件包的解析作用域。
+ * pnpm 安装会生成 package.json；本地目录安装也要补一个最小文件，loader 才能按包名加载。
+ */
+async function ensureProfilePackage(profileDir: string): Promise<void> {
+  try {
+    await writeFile(
+      join(profileDir, "package.json"),
+      JSON.stringify({ name: "pigcode-profile", version: "0.0.0", private: true }, null, 2),
+      { flag: "wx" },
+    )
+  } catch (error) {
+    // 已存在时保持不变，避免覆盖 pnpm 维护的依赖列表。
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+  }
+}
+
 /** 校验并复制本地插件到 profile，随后写入启用的条目。 */
 export async function installLocalPlugin(
   profileDir: string,
@@ -113,6 +130,7 @@ export async function installLocalPlugin(
   }
   const profile = await readProfile(profileDir)
   profile.plugins = [...profile.plugins.filter((item) => item.id !== entry.id), entry]
+  await ensureProfilePackage(profileDir)
   await writeProfile(profileDir, profile)
   return entry
 }
@@ -160,12 +178,13 @@ function describeConflict(provides: Map<string, string[]>, capabilities: string[
 /**
  * 切换插件的 disabled 标记。
  * 启用前先按“当前启用集合 + 目标插件”计算 provides，重复时拒绝写入 profile。
+ * 返回更新后的条目，供调用方立即加载/卸载。
  */
 export async function setPluginEnabled(
   profileDir: string,
   id: string,
   enabled: boolean,
-): Promise<void> {
+): Promise<InstalledPluginEntry> {
   const profile = await readProfile(profileDir)
   const entry = profile.plugins.find((item) => item.id === id)
   if (!entry) throw new Error(`plugin not found: ${id}`)
@@ -178,6 +197,7 @@ export async function setPluginEnabled(
   }
   entry.disabled = !enabled
   await writeProfile(profileDir, profile)
+  return entry
 }
 
 /**
