@@ -1,2 +1,5 @@
-/** Pigcode 共享协议与领域类型的入口。 */
+/** Pigcode 共享协议、领域类型与命令入口。 */
 export * from "./protocol"
+export * from "./domain"
+export * from "./events"
+export * from "./commands"
