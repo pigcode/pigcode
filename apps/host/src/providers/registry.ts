@@ -25,6 +25,7 @@ import { detectCodex } from "./codex/detect"
 import type { CodexDetection } from "./codex/detect"
 import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
+import { RunAlreadyActiveError, TooManyActiveRunsError } from "./errors"
 import { defaultProvider, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
 import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
@@ -99,14 +100,11 @@ declare module "cordis" {
 /** providers 插件依赖的线程、事件与存储服务。 */
 export const inject = ["threads", "sessions", "storage"]
 
-/** 同一 thread 已有活跃 run 时抛出的错误。 */
-export class RunAlreadyActiveError extends Error {
-  readonly code = "RUN_ALREADY_ACTIVE"
+export { RunAlreadyActiveError, TooManyActiveRunsError }
 
-  constructor(threadId: string) {
-    super(`RUN_ALREADY_ACTIVE: thread ${threadId} already has an active run`)
-    this.name = "RunAlreadyActiveError"
-  }
+/** providers 插件配置；maxConcurrentRuns 为全局活跃 run 上限，默认 4。 */
+export interface ProvidersConfig {
+  maxConcurrentRuns?: number
 }
 
 /** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
@@ -124,7 +122,8 @@ interface ActiveRun {
 }
 
 /** 注册 provider driver，并把一次 run 的规范化事件映射为线程事件。 */
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: ProvidersConfig = {}): void {
+  const maxConcurrentRuns = config.maxConcurrentRuns ?? 4
   const drivers = new Map<string, ProviderDriver>()
   const fake = new FakeProviderDriver()
   drivers.set(fake.id, fake)
@@ -371,6 +370,8 @@ export function apply(ctx: Context): void {
       const providerId = thread.lastProviderId ?? thread.defaultProviderId
       const driver = drivers.get(providerId)
       if (!driver) throw new Error(`provider not found: ${providerId}`)
+      // activeThreads 只约束同一 thread；全局并发由 maxConcurrentRuns 保护。
+      if (activeRuns.size >= maxConcurrentRuns) throw new TooManyActiveRunsError(maxConcurrentRuns)
 
       activeThreads.add(threadId)
       try {
