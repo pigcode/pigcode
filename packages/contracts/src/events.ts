@@ -67,6 +67,12 @@ export const providerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.interrupted") }),
 ])
 
+/** 终端输出通知；只走实时通道，不写入事件日志。 */
+export const terminalOutputSchema = z.object({
+  terminalId: z.string().min(1),
+  data: z.string(),
+})
+
 /** 线程订阅快照，包含线程、运行、条目与待处理请求。 */
 export const threadSnapshotSchema = z.object({
   thread: z.object({}).passthrough(),
@@ -81,3 +87,5 @@ export type ThreadEvent = z.infer<typeof threadEventSchema>
 export type ProviderEvent = z.infer<typeof providerEventSchema>
 /** 线程订阅快照的类型。 */
 export type ThreadSnapshot = z.infer<typeof threadSnapshotSchema>
+/** 终端输出通知的类型。 */
+export type TerminalOutput = z.infer<typeof terminalOutputSchema>

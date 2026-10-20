@@ -43,6 +43,37 @@ export const commandSchemas = {
   "plugin.enable": z.object({ id: z.string().min(1) }),
   "plugin.disable": z.object({ id: z.string().min(1) }),
   "plugin.bootGraph": z.object({}),
+  "workspace.tree": z.object({ threadId: z.string().min(1) }),
+  "workspace.readFile": z.object({ threadId: z.string().min(1), path: z.string().min(1) }),
+  "workspace.search": z.object({
+    threadId: z.string().min(1),
+    query: z.string().min(1),
+    glob: z.string().optional(),
+  }),
+  "git.status": z.object({ threadId: z.string().min(1) }),
+  "git.diff": z.object({
+    threadId: z.string().min(1),
+    base: z.string().min(1),
+    head: z.string().min(1),
+  }),
+  "checkpoint.list": z.object({ threadId: z.string().min(1) }),
+  "checkpoint.create": z.object({ threadId: z.string().min(1), label: z.string().optional() }),
+  "checkpoint.restore": z.object({ threadId: z.string().min(1), checkpointId: z.string().min(1) }),
+  "worktree.create": z.object({ threadId: z.string().min(1) }),
+  "worktree.switch": z.object({ threadId: z.string().min(1), path: z.string().min(1) }),
+  "worktree.remove": z.object({ threadId: z.string().min(1) }),
+  "terminal.open": z.object({
+    threadId: z.string().min(1),
+    cols: z.number().int().positive(),
+    rows: z.number().int().positive(),
+  }),
+  "terminal.write": z.object({ terminalId: z.string().min(1), data: z.string() }),
+  "terminal.resize": z.object({
+    terminalId: z.string().min(1),
+    cols: z.number().int().positive(),
+    rows: z.number().int().positive(),
+  }),
+  "terminal.close": z.object({ terminalId: z.string().min(1) }),
 } as const
 
 /** 所有命令方法名的联合类型。 */

@@ -82,6 +82,32 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_pending_requests_thread_status
     ON pending_requests(thread_id, status);
   `,
+  `
+  CREATE TABLE IF NOT EXISTS checkpoints (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES threads(id),
+    run_id TEXT,
+    phase TEXT NOT NULL,
+    git_ref TEXT NOT NULL,
+    commit_sha TEXT,
+    label TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_checkpoints_thread_created
+    ON checkpoints(thread_id, created_at);
+
+  CREATE TABLE IF NOT EXISTS worktrees (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    thread_id TEXT NOT NULL REFERENCES threads(id),
+    path TEXT NOT NULL UNIQUE,
+    branch TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    removed_at TEXT
+  );
+  `,
 ]
 
 /** 按 user_version 执行缺失迁移。 */

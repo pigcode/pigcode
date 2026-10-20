@@ -11,7 +11,8 @@ describe("migration v2", () => {
     const names = tables.map((row) => row.name)
     expect(names).toContain("provider_sessions")
     expect(names).toContain("pending_requests")
-    expect(db.pragma("user_version", { simple: true })).toBe(2)
+    // schema 版本随后续迁移继续前进，这里只确认 migration 2 已被应用。
+    expect(db.pragma("user_version", { simple: true })).toBeGreaterThanOrEqual(2)
     db.close()
   })
 })
