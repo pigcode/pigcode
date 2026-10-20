@@ -201,7 +201,7 @@ async function runGitOrNull(cwd: string, args: string[]): Promise<string | null>
 }
 
 /** 当前分支名；unborn 分支也能返回名称，detached HEAD 返回 null。 */
-async function currentBranch(cwd: string): Promise<string | null> {
+export async function currentBranch(cwd: string): Promise<string | null> {
   const output = await runGitOrNull(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
   return output === null ? null : output.trim() || null
 }

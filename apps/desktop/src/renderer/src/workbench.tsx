@@ -1,17 +1,20 @@
-/** 工作台容器：把右栏的文件、Diff、终端与 checkpoint 面板接到 Host RPC。 */
+/** 工作台容器：把右栏的文件、Diff、终端、checkpoint 与 PR 面板接到 Host RPC。 */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { Connection } from "@pigcode/client-runtime"
+import type { PullRequestInfo } from "@pigcode/contracts"
 import { Button, useLocale } from "@pigcode/ui-primitives"
 import {
   CheckpointPanel,
   DiffView,
   FilePreview,
   FileTree,
+  PrPanel,
   RightPanel,
   TerminalView,
   WorktreePicker,
   type CheckpointPhase,
   type FilePreviewFile,
+  type PrCreateInput,
   type RightPanelTab,
   type TerminalHandle,
 } from "@pigcode/ui-workbench"
@@ -89,6 +92,10 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
   const [worktrees, setWorktrees] = useState<WorktreeRecord[]>([])
   const [activeWorktree, setActiveWorktree] = useState<string | null>(null)
   const [worktreeBusy, setWorktreeBusy] = useState(false)
+  const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null)
+  const [prLoading, setPrLoading] = useState(false)
+  const [prCreating, setPrCreating] = useState(false)
+  const [prError, setPrError] = useState<string | null>(null)
   const terminalHandle = useRef<TerminalHandle | null>(null)
 
   // 文件树：每次进入 Files tab 都重新读取，反映终端或外部编辑后的状态。
@@ -190,6 +197,30 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
     }
   }, [tab, threadId, connection, baseSha, headSha])
 
+  // PR：进入 tab 时查询当前分支；没有 PR 与 gh 错误都作为面板状态展示。
+  useEffect(() => {
+    if (tab !== "pr") return undefined
+    let cancelled = false
+    setPrLoading(true)
+    setPrError(null)
+    void callRpc<PullRequestInfo | null>(connection, "pr.status", { threadId })
+      .then((info) => {
+        if (!cancelled) setPullRequest(info)
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setPullRequest(null)
+          setPrError(messageOf(error))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPrLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [tab, threadId, connection])
+
   // 终端：进入 Terminal tab 时打开 PTY；离开 tab 或卸载时关闭并释放订阅。
   useEffect(() => {
     if (tab !== "terminal") return undefined
@@ -274,6 +305,22 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
     }
   }
 
+  /** 创建 PR；成功后替换状态卡，失败时把错误交给面板展示。 */
+  async function createPullRequest(input: PrCreateInput): Promise<void> {
+    setPrCreating(true)
+    setPrError(null)
+    try {
+      setPullRequest(
+        await callRpc<PullRequestInfo>(connection, "pr.create", { threadId, ...input }),
+      )
+    } catch (error) {
+      setPrError(messageOf(error))
+      throw error
+    } finally {
+      setPrCreating(false)
+    }
+  }
+
   /** worktree 列表没有 list RPC；这里只保留本次会话内创建过的记录。 */
   async function createWorktree(): Promise<void> {
     setWorktreeBusy(true)
@@ -324,6 +371,20 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
     diff: t("workbench.diff"),
     terminal: t("workbench.terminal"),
     checkpoint: t("workbench.checkpoint"),
+    pr: t("workbench.pr"),
+  }
+
+  const prLabels = {
+    empty: t("pr.empty"),
+    loading: t("pr.loading"),
+    title: t("pr.title"),
+    titlePlaceholder: t("pr.titlePlaceholder"),
+    body: t("pr.body"),
+    bodyPlaceholder: t("pr.bodyPlaceholder"),
+    base: t("pr.base"),
+    basePlaceholder: t("pr.basePlaceholder"),
+    create: t("pr.create"),
+    creating: t("pr.creating"),
   }
 
   const tabs: Record<RightPanelTab, ReactNode> = {
@@ -399,6 +460,16 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
           restoring={checkpointBusy}
         />
       </div>
+    ),
+    pr: (
+      <PrPanel
+        pullRequest={pullRequest}
+        loading={prLoading}
+        creating={prCreating}
+        error={prError}
+        onCreate={createPullRequest}
+        labels={prLabels}
+      />
     ),
   }
 

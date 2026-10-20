@@ -185,6 +185,21 @@ export class RpcServer {
         const value = parsed as { threadId: string; base: string; head: string }
         return this.ctx.git.diff(value.threadId, value.base, value.head)
       }
+      case "pr.status":
+        return this.ctx.github.status((parsed as { threadId: string }).threadId)
+      case "pr.create": {
+        const value = parsed as {
+          threadId: string
+          title: string
+          body?: string
+          base?: string
+        }
+        return this.ctx.github.create(value.threadId, {
+          title: value.title,
+          ...(value.body === undefined ? {} : { body: value.body }),
+          ...(value.base === undefined ? {} : { base: value.base }),
+        })
+      }
       case "checkpoint.list":
         return this.ctx.checkpoints.list((parsed as { threadId: string }).threadId)
       case "checkpoint.create": {

@@ -122,6 +122,19 @@ export const pendingRequestSchema = z.object({
   resolvedAt: z.string().datetime().nullable(),
 })
 
+/** GitHub PR 状态；gh CLI 只返回这三种大写状态。 */
+export const pullRequestStateSchema = z.enum(["OPEN", "CLOSED", "MERGED"])
+
+/** GitHub PR 摘要，供工作台 PR 面板展示。 */
+export const pullRequestInfoSchema = z.object({
+  number: z.number().int().positive(),
+  url: z.string().min(1),
+  state: pullRequestStateSchema,
+  title: z.string(),
+  headRefName: z.string().min(1),
+  baseRefName: z.string().min(1),
+})
+
 /** provider 能力集合的类型。 */
 export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>
 /** 权限模式的类型。 */
@@ -140,3 +153,7 @@ export type ExecutionItem = z.infer<typeof executionItemSchema>
 export type ProviderSession = z.infer<typeof providerSessionSchema>
 /** 待审批/待回答请求的类型。 */
 export type PendingRequest = z.infer<typeof pendingRequestSchema>
+/** GitHub PR 状态的类型。 */
+export type PullRequestState = z.infer<typeof pullRequestStateSchema>
+/** GitHub PR 摘要的类型。 */
+export type PullRequestInfo = z.infer<typeof pullRequestInfoSchema>

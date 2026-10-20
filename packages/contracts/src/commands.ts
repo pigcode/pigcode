@@ -59,6 +59,13 @@ export const commandSchemas = {
     base: z.string().min(1),
     head: z.string().min(1),
   }),
+  "pr.status": z.object({ threadId: z.string().min(1) }),
+  "pr.create": z.object({
+    threadId: z.string().min(1),
+    title: z.string().min(1),
+    body: z.string().optional(),
+    base: z.string().min(1).optional(),
+  }),
   "checkpoint.list": z.object({ threadId: z.string().min(1) }),
   "checkpoint.create": z.object({ threadId: z.string().min(1), label: z.string().optional() }),
   "checkpoint.restore": z.object({ threadId: z.string().min(1), checkpointId: z.string().min(1) }),

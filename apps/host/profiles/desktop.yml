@@ -15,6 +15,8 @@ plugins:
     name: "@pigcode/host/services/workspace"
   - id: core.git
     name: "@pigcode/host/services/git"
+  - id: core.github
+    name: "@pigcode/host/services/github"
   - id: core.worktrees
     name: "@pigcode/host/services/worktrees"
   - id: core.checkpoints
