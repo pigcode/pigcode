@@ -133,8 +133,6 @@ describe("normalizeSdkMessage", () => {
     expect(events.map((event) => event.type)).toEqual([
       "session.started",
       "message.delta",
-      "tool.started",
-      "tool.completed",
       "message.completed",
       "usage.updated",
       "run.completed",
