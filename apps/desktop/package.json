@@ -12,9 +12,11 @@
   },
   "dependencies": {
     "@pigcode/client-runtime": "workspace:*",
-    "@pigcode/contracts": "workspace:*"
+    "@pigcode/contracts": "workspace:*",
+    "better-sqlite3": "13.0.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "electron": "43.4.1",
     "electron-vite": "5.0.0",
     "esbuild": "^0.28.2",

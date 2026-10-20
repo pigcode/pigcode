@@ -1,13 +1,19 @@
-/** M0-A 调试渲染器：验证 MessagePort、项目/线程、fake 流和插件面板。 */
+/** M0-A 调试渲染器：验证 MessagePort、项目/线程、fake 流、重连和插件面板。 */
 import { RpcClient, type HostTransport } from "@pigcode/client-runtime"
 
-const state: { projectId?: string; threadId?: string } = {}
+/** 当前项目、线程与线程事件游标；重连时从 cursor 继续订阅。 */
+const state: { projectId?: string; threadId?: string; cursor: number } = { cursor: 0 }
 let client: RpcClient | undefined
 
-window.addEventListener("message", async (event) => {
+window.addEventListener("message", (event) => {
   if (event.data?.type !== "pigcode:port") return
   const port = event.ports[0]
   if (!port) return
+  void connect(port)
+})
+
+/** 用新端口建立 RPC 连接；已有线程时从 cursor 重订阅并标记重连。 */
+async function connect(port: MessagePort): Promise<void> {
   port.start()
   const transport: HostTransport = {
     send: (message: unknown) => port.postMessage(message),
@@ -19,8 +25,27 @@ window.addEventListener("message", async (event) => {
     close: () => port.close(),
   }
   client = new RpcClient(transport)
+  client.onNotification((message) => {
+    const value = message as { method?: string; params?: { seq?: number } }
+    if (value.method === "thread.delta") {
+      renderEvents([value.params])
+      return
+    }
+    if (value.method === "thread.event" && value.params) {
+      state.cursor = Math.max(state.cursor, value.params.seq ?? state.cursor)
+      renderEvents([value.params])
+    }
+  })
+  if (state.threadId) {
+    const subscription = await call("thread.subscribe", {
+      threadId: state.threadId,
+      cursor: state.cursor,
+    })
+    renderStoredEvents((subscription as { events: unknown[] }).events)
+    appendStatus("reconnected")
+  }
   await loadPlugins()
-})
+}
 
 /** 读取 boot.json，并应用每个插件的 client 入口；失败不影响核心调试界面。 */
 async function loadPlugins(): Promise<void> {
@@ -57,6 +82,7 @@ async function loadPlugins(): Promise<void> {
   }
 }
 
+/** 通过当前连接发起 RPC 调用；连接建立前显式失败。 */
 async function call(method: string, params: unknown): Promise<unknown> {
   if (!client) throw new Error("host not connected")
   return client.call(method, params)
@@ -76,14 +102,9 @@ document.querySelector("#new")!.addEventListener("click", async () => {
     providerId: "fake",
   })) as { id: string }
   state.threadId = thread.id
+  state.cursor = 0
   const subscription = await call("thread.subscribe", { threadId: thread.id, cursor: 0 })
-  renderEvents((subscription as { events: unknown[] }).events)
-  client?.onNotification((message) => {
-    const value = message as { method?: string; params?: unknown }
-    if (value.method === "thread.event" || value.method === "thread.delta") {
-      renderEvents([value.params])
-    }
-  })
+  renderStoredEvents((subscription as { events: unknown[] }).events)
 })
 
 document.querySelector("#send")!.addEventListener("click", async () => {
@@ -91,6 +112,23 @@ document.querySelector("#send")!.addEventListener("click", async () => {
   const text = (document.querySelector("#text") as HTMLInputElement).value
   await call("run.start", { threadId: state.threadId, text })
 })
+
+/** 把已持久化事件渲染到消息区，并把 cursor 推进到最大 seq。 */
+function renderStoredEvents(events: unknown[]): void {
+  for (const event of events) {
+    const seq = (event as { seq?: number }).seq
+    if (typeof seq === "number") state.cursor = Math.max(state.cursor, seq)
+  }
+  renderEvents(events)
+}
+
+/** 在消息区追加一条连接状态。 */
+function appendStatus(text: string): void {
+  const row = document.createElement("div")
+  row.className = "event"
+  row.textContent = text
+  document.querySelector("#messages")!.append(row)
+}
 
 /** 把 RPC 事件按行渲染到消息区。 */
 function renderEvents(events: unknown[]): void {

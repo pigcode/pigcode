@@ -24,7 +24,9 @@ function startHost(): HostProcess {
   next.child.on("exit", () => {
     if (quitting) return
     host = startHost()
-    if (mainWindow) mainWindow.webContents.postMessage("pigcode:port", null, [host.appPort])
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.postMessage("pigcode:port", null, [host.appPort])
+    }
   })
   return next
 }

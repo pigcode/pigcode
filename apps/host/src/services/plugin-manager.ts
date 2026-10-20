@@ -86,8 +86,8 @@ export async function buildBootGraph(profileDir: string): Promise<{ entries: Boo
   const entries: BootGraphEntry[] = []
   for (const entry of profile.plugins) {
     if (entry.disabled) continue
-    const manifest = await readManifest(profileDir, entry)
-    if (!manifest.pigcode.client) continue
+    const manifest = await readInstalledManifest(profileDir, entry)
+    if (!manifest?.pigcode.client) continue
     const clientPath = join(profileDir, "node_modules", manifest.name, manifest.pigcode.client)
     const revision = createHash("sha256")
       .update(await readFile(clientPath))
@@ -103,11 +103,15 @@ export async function buildBootGraph(profileDir: string): Promise<{ entries: Boo
   return { entries }
 }
 
-/** 读取已安装插件目录中的 manifest 并校验。 */
-async function readManifest(
+/** 读取已安装插件目录中的 manifest；核心 profile 条目没有对应包时返回 null。 */
+async function readInstalledManifest(
   profileDir: string,
   entry: InstalledPluginEntry,
-): Promise<PluginManifest> {
+): Promise<PluginManifest | null> {
   const path = join(profileDir, "node_modules", entry.name, "package.json")
-  return pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8")))
+  try {
+    return pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8")))
+  } catch {
+    return null
+  }
 }

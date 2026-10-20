@@ -2,5 +2,7 @@ node_modules/
 dist/
 out/
 coverage/
+test-results/
+playwright-report/
 *.log
 .DS_Store

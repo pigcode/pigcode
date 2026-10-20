@@ -29,8 +29,14 @@ export function resolveInside(root: string, requestPath: string): string {
 /** 必须在 app ready 之前调用。 */
 export function registerPrivilegedSchemes(): void {
   protocol.registerSchemesAsPrivileged([
-    { scheme: "pigcode", privileges: { standard: true, secure: true, supportFetchAPI: true } },
-    { scheme: "pigcode-plugin", privileges: { standard: true, secure: true, supportFetchAPI: true } },
+    {
+      scheme: "pigcode",
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+    },
+    {
+      scheme: "pigcode-plugin",
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+    },
   ])
 }
 

@@ -1,13 +1,13 @@
 /** Host utilityProcess 入口：接收 main 转交的端口并启动 RPC。 */
-import type { MessagePort } from "node:worker_threads"
 import { createHostApp } from "./kernel/app"
-import { MessagePortTransport } from "./rpc/message-port-transport"
+import { writeBootGraph } from "./kernel/boot"
+import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { RpcServer } from "./rpc/server"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
 interface ParentPortMessageEvent {
   data?: { type?: string }
-  ports: MessagePort[]
+  ports: HostMessagePort[]
 }
 
 /** parentPort 的最小接口，避免 Host 依赖 Electron 类型。 */
@@ -33,6 +33,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
   const ctx = await createHostApp({ profileDir, profileName: "desktop" })
+  await writeBootGraph(profileDir)
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()
   control?.on("message", () => {})
 }

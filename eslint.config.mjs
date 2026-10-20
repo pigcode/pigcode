@@ -1,7 +1,16 @@
 import tseslint from "typescript-eslint"
 
 export default tseslint.config(
-  { ignores: ["**/dist/**", "**/out/**", "**/node_modules/**", "**/target/**"] },
+  {
+    ignores: [
+      "**/dist/**",
+      "**/out/**",
+      "**/node_modules/**",
+      "**/target/**",
+      "**/test-results/**",
+      "**/playwright-report/**",
+    ],
+  },
   ...tseslint.configs.recommended,
   {
     rules: {

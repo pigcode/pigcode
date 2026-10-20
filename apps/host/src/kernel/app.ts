@@ -1,6 +1,7 @@
 /** 创建 Host Cordis 插件树；profile 负责组合，kernel 只做启动和 teardown。 */
 import { Context } from "cordis"
 import Loader, { type EntryOptions } from "@cordisjs/plugin-loader"
+import { pathToFileURL } from "node:url"
 import { loadProfile } from "./profile"
 
 /** 创建 Host kernel 所需的 profile 位置。 */
@@ -29,7 +30,9 @@ type LoaderCreateOptions = Omit<EntryOptions, "id"> & { id?: string }
 export async function createHostApp(options: CreateHostAppOptions): Promise<Context> {
   const ctx = new Context()
   const profile = await loadProfile(options.profileDir, options.profileName)
-  await ctx.plugin(Loader, { baseUrl: profile.profileDir })
+  const base = pathToFileURL(profile.profileDir).href
+  const baseUrl = base.endsWith("/") ? base : `${base}/`
+  await ctx.plugin(Loader, { baseUrl })
 
   for (const entry of profile.plugins) {
     const createOptions: LoaderCreateOptions = {
@@ -40,6 +43,7 @@ export async function createHostApp(options: CreateHostAppOptions): Promise<Cont
     }
     await ctx.loader.create(createOptions)
   }
+  await ctx.loader.await()
   return ctx
 }
 

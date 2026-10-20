@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.base.json","compilerOptions":{"noEmit":true,"types":["node"],"lib":["ES2022","DOM","DOM.Iterable"]},"include":["src/**/*.ts","electron.vite.config.ts"]}
+{"extends":"../../tsconfig.base.json","compilerOptions":{"noEmit":true,"types":["node"],"lib":["ES2022","DOM","DOM.Iterable"]},"include":["src/**/*.ts","e2e/**/*.ts","electron.vite.config.ts","playwright.config.ts"]}
