@@ -22,7 +22,7 @@ const claudeCapabilities: ProviderCapabilities = {
   nativeSessionId: true,
 }
 
-/** Codex 在 M2 的完整能力快照；未实现的特性必须保持 false。 */
+/** Codex 的完整能力快照；未实现的特性必须保持 false。 */
 const codexCapabilities: ProviderCapabilities = {
   streaming: true,
   approvals: true,
@@ -33,7 +33,7 @@ const codexCapabilities: ProviderCapabilities = {
   rollback: false,
   checkpoint: false,
   subagents: false,
-  mcp: false,
+  mcp: true,
   images: false,
   usage: true,
   modelCatalog: true,
@@ -56,8 +56,8 @@ describe("provider capabilities", () => {
     expect(codex.fork).toBe(false)
     expect(codex.rollback).toBe(false)
     expect(codex.checkpoint).toBe(false)
-    // M2 明确不提供 subagents 与 MCP 注入，能力位不得提前打开。
+    // M5 起 Codex 通过 config.mcp_servers 注入插件工具；subagents 仍未实现。
     expect(codex.subagents).toBe(false)
-    expect(codex.mcp).toBe(false)
+    expect(codex.mcp).toBe(true)
   })
 })

@@ -1,6 +1,7 @@
 /** Claude Code adapter；SDK 负责进程、流式与权限回调。 */
 import {
   query,
+  type McpServerConfig,
   type Options,
   type PermissionResult,
   type PermissionUpdate,
@@ -17,6 +18,7 @@ import type {
   ProviderDriver,
   ProviderRuntime,
   ProviderSessionHandle,
+  SessionMcp,
   UserInput,
 } from "../driver"
 import { createNormalizeState, normalizeSdkMessage } from "./normalize"
@@ -35,6 +37,8 @@ interface DriverSessionState {
   controller: AbortController
   query: Query | null
   interruptRequested: boolean
+  /** 创建会话时注入的插件 MCP server；每次 send 复用同一实例。 */
+  mcp?: SessionMcp
 }
 
 /** 基于 @anthropic-ai/claude-agent-sdk 的 Claude Code provider。 */
@@ -76,6 +80,7 @@ export class ClaudeDriver implements ProviderDriver {
       controller: new AbortController(),
       query: null,
       interruptRequested: false,
+      ...(input.mcp ? { mcp: input.mcp } : {}),
     })
     return {
       id,
@@ -111,6 +116,10 @@ export class ClaudeDriver implements ProviderDriver {
         // 子 agent 的文本/思考块也作为带 parent_tool_use_id 的消息转发，供时间线归组。
         forwardSubagentText: true,
         ...(this.executable ? { pathToClaudeCodeExecutable: this.executable } : {}),
+        // 插件工具以进程内 SDK MCP server 暴露，生命周期跟随本次会话。
+        ...(state.mcp?.claudeServer
+          ? { mcpServers: { pigcode: state.mcp.claudeServer as McpServerConfig } }
+          : {}),
         permissionMode: mapPermissionMode(session.permissionMode),
         ...(session.permissionMode === "danger-full-access"
           ? { allowDangerouslySkipPermissions: true }

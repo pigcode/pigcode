@@ -71,6 +71,34 @@ describe("ClaudeDriver", () => {
     expect(captured?.forwardSubagentText).toBe(true)
   })
 
+  it("injects the thread MCP server into query options", async () => {
+    let captured: Options | undefined
+    const replay = replayQuery("fixtures/simple.jsonl")
+    const driver = new ClaudeDriver({
+      queryFn: (params) => {
+        captured = params.options
+        return replay(params)
+      },
+    })
+    const claudeServer = { type: "sdk" as const, name: "pigcode", instance: {} }
+    const session = await driver.createSession({
+      threadId: "t5",
+      cwd: "/tmp",
+      mcp: { claudeServer },
+    })
+    await driver.send(
+      session,
+      { text: "hello" },
+      {
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        requestApproval: async () => "allow-once",
+      },
+    )
+    // 插件工具以进程内 MCP server 形式挂到 SDK 的 mcpServers 上。
+    expect(captured?.mcpServers).toEqual({ pigcode: claudeServer })
+  })
+
   it("passes dontAsk permission mode through to the SDK", async () => {
     let captured: Options | undefined
     const replay = replayQuery("fixtures/simple.jsonl")

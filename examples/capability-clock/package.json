@@ -1,0 +1,11 @@
+{
+  "name": "pigcode-capability-clock",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./index.mjs",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "capability",
+    "host": "./index.mjs"
+  }
+}

@@ -32,8 +32,8 @@ interface CodexApprovalResponse {
 export class CodexDriver implements ProviderDriver {
   readonly id = "codex"
   readonly displayName = "Codex"
-  // M2 只桥接审批、计划、用量与 resume；questions/fork/rollback/checkpoint/subagents/mcp
-  // 尚未实现，对应能力位必须保持 false，UI 才能据此隐藏控件。
+  // M2 桥接审批、计划、用量与 resume；M5 起通过 `config.mcp_servers` 注入插件工具。
+  // questions/fork/rollback/checkpoint/subagents 尚未实现，对应能力位保持 false。
   readonly capabilities: ProviderCapabilities = {
     streaming: true,
     approvals: true,
@@ -44,7 +44,7 @@ export class CodexDriver implements ProviderDriver {
     rollback: false,
     checkpoint: false,
     subagents: false,
-    mcp: false,
+    mcp: true,
     images: false,
     usage: true,
     modelCatalog: true,
@@ -210,6 +210,8 @@ function createThreadParams(input: CreateSessionInput): Record<string, unknown> 
     approvalPolicy: permissionMode === "danger-full-access" ? "never" : "on-request",
     sandbox,
     ...(model ? { model } : {}),
+    // 插件 MCP server 由 app-server 按 config.mcp_servers 启动。
+    ...(input.mcp?.codexConfig ? { config: input.mcp.codexConfig } : {}),
   }
 }
 

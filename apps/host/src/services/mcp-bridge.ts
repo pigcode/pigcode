@@ -12,6 +12,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { z } from "zod"
+import type { SessionMcp } from "../providers/driver"
 
 /** 已注册工具及其处理函数。 */
 interface RegisteredTool {
@@ -37,6 +38,8 @@ export interface McpBridgeService extends McpBridgeApi {
   claudeServer(threadId: string): McpSdkServerConfigWithInstance | null
   /** 生成 Codex `config.mcp_servers` 片段；没有工具时返回 null。 */
   codexConfig(threadId: string): Record<string, unknown> | null
+  /** 汇总一次会话需要的注入参数；没有工具时返回 undefined。 */
+  sessionMcp(threadId: string): SessionMcp | undefined
 }
 
 declare module "cordis" {
@@ -281,6 +284,11 @@ export function apply(ctx: Context): void {
     createSocketServer: () => ensureSocketServer(),
     claudeServer,
     codexConfig,
+    sessionMcp(threadId) {
+      const claude = claudeServer(threadId)
+      const codex = codexConfig(threadId)
+      return claude || codex ? { claudeServer: claude, codexConfig: codex } : undefined
+    },
   }
 
   ctx.provide("mcpBridge", service)

@@ -365,6 +365,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           nativeSessionId: activeSession?.nativeSessionId ?? null,
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
+          mcp: ctx.reflect.get("mcpBridge")?.sessionMcp(threadId), // 无插件工具时为 undefined
         })
         // 创建会话可能等待子进程，判定要放在 await 之后；此后到入队之间没有 await。
         const shouldQueue = activeRuns.size >= maxConcurrentRuns
@@ -496,5 +497,4 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     approvals.rejectAll(new Error("host disposed"))
   })
 }
-
 apply.inject = inject

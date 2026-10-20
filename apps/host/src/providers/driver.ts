@@ -25,6 +25,14 @@ export interface ProviderSessionHandle {
   model: string | null
 }
 
+/** 本次会话可用的插件 MCP 能力；由 registry 按线程从 mcpBridge 生成。 */
+export interface SessionMcp {
+  /** Claude Agent SDK 的进程内 MCP server；没有插件工具时为 null。 */
+  claudeServer?: unknown
+  /** Codex `config` 片段（含 mcp_servers）；没有插件工具时为 null。 */
+  codexConfig?: Record<string, unknown> | null
+}
+
 /** 创建 provider 会话所需的输入。 */
 export interface CreateSessionInput {
   threadId: string
@@ -32,6 +40,8 @@ export interface CreateSessionInput {
   nativeSessionId?: string | null
   permissionMode?: string
   model?: string | null
+  /** 线程作用域的插件工具；不支持 MCP 的 driver 可以忽略。 */
+  mcp?: SessionMcp | undefined
 }
 
 /** 用户发送给 provider 的一条输入；handoff 在切换 provider 后注入一次。 */

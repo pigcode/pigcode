@@ -177,6 +177,33 @@ describe("CodexDriver", () => {
     expect(session.nativeSessionId).toBe("th_existing")
   })
 
+  it("injects MCP config into thread/start and thread/resume", async () => {
+    const config = {
+      mcp_servers: { pigcode: { command: "node", args: ["stdio-bridge.mjs"] } },
+    }
+
+    const started = setup()
+    await started.driver.createSession({
+      threadId: "t1",
+      cwd: "/tmp",
+      mcp: { codexConfig: config },
+    })
+    expect(messageOf(started.transport, "thread/start")?.params).toMatchObject({ config })
+
+    // resume 走同一份共享参数，MCP 配置同样要带上。
+    const resumed = setup()
+    await resumed.driver.createSession({
+      threadId: "t2",
+      cwd: "/tmp",
+      nativeSessionId: "th_existing",
+      mcp: { codexConfig: config },
+    })
+    expect(messageOf(resumed.transport, "thread/resume")?.params).toMatchObject({
+      threadId: "th_existing",
+      config,
+    })
+  })
+
   it("normalizes a replayed turn into provider events", async () => {
     const frames = readFrames("fixtures/simple.jsonl")
     const { driver, transport } = setup({
