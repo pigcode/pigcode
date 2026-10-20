@@ -32,6 +32,9 @@ importers:
       '@cordisjs/plugin-loader':
         specifier: 1.0.0-rc.8
         version: 1.0.0-rc.8(cordis@4.0.0-rc.11)
+      '@pigcode/client-runtime':
+        specifier: workspace:*
+        version: link:../../packages/client-runtime
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -54,6 +57,19 @@ importers:
       '@types/better-sqlite3':
         specifier: 7.6.13
         version: 7.6.13
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.16
+        version: 4.0.16(@types/node@24.10.1)(yaml@2.8.1)
+
+  packages/client-runtime:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
       typescript:
         specifier: 5.9.3
         version: 5.9.3

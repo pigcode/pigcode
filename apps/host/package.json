@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@cordisjs/plugin-loader": "1.0.0-rc.8",
+    "@pigcode/client-runtime": "workspace:*",
     "@pigcode/contracts": "workspace:*",
     "@pigcode/plugin-sdk": "workspace:*",
     "better-sqlite3": "13.0.3",
