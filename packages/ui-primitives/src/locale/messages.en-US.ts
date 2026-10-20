@@ -133,6 +133,7 @@ export const enUS = {
   "workbench.terminal": "Terminal",
   "workbench.checkpoint": "Checkpoints",
   "workbench.createCheckpoint": "Create checkpoint",
+  "workbench.terminalOpening": "Opening terminal…",
   "workbench.diffBase": "Diff base",
   "workbench.loadFailed": "Failed to load",
   "chat.tool.running": "Running",

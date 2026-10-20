@@ -129,6 +129,7 @@ export const zhCN = {
   "workbench.terminal": "终端",
   "workbench.checkpoint": "检查点",
   "workbench.createCheckpoint": "创建检查点",
+  "workbench.terminalOpening": "正在打开终端…",
   "workbench.diffBase": "Diff 基准",
   "workbench.loadFailed": "加载失败",
   "chat.tool.running": "运行中",

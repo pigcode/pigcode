@@ -365,12 +365,18 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
     ),
     terminal: (
       <div className="workbench-terminal">
-        {terminalError ? <p className="workbench-error">{terminalError}</p> : null}
-        <TerminalView
-          onData={sendTerminalData}
-          onResize={resizeTerminal}
-          onReady={handleTerminalReady}
-        />
+        {terminalError ? (
+          <p className="workbench-error">{terminalError}</p>
+        ) : terminalId ? (
+          <TerminalView
+            onData={sendTerminalData}
+            onResize={resizeTerminal}
+            onReady={handleTerminalReady}
+          />
+        ) : (
+          // terminal.open 是异步 RPC；会话就绪前不挂载 xterm，避免输入被静默丢弃。
+          <p className="workbench-empty">{t("workbench.terminalOpening")}</p>
+        )}
       </div>
     ),
     checkpoint: (
