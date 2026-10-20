@@ -20,6 +20,7 @@ import type {
 import { FakeProviderDriver } from "./fake"
 import { detectClaude } from "./claude/detect"
 import type { ClaudeDetection } from "./claude/detect"
+import { ClaudeDriver } from "./claude/driver"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
@@ -106,11 +107,16 @@ interface ActiveRun {
   approvals: Set<string>
 }
 
-/** 注册 fake provider 并提供 run 生命周期服务。 */
+/** 注册 provider driver，并把一次 run 的规范化事件映射为线程事件。 */
 export function apply(ctx: Context): void {
   const drivers = new Map<string, ProviderDriver>()
   const fake = new FakeProviderDriver()
   drivers.set(fake.id, fake)
+  // 真实 Claude 只在显式开启时注册：默认开发与 E2E 仍使用确定性 fake provider。
+  if (process.env.PIGCODE_REAL_CLAUDE === "1") {
+    const claude = new ClaudeDriver()
+    drivers.set(claude.id, claude)
+  }
 
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)

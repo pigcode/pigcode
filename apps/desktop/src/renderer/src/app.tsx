@@ -48,6 +48,12 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** 选择 Host 已注册的真实 provider；未开启时回退 fake，保持离线开发可用。 */
+async function pickProviderId(connection: Connection): Promise<string> {
+  const providers = (await connection.call("provider.list", {})) as Array<{ id: string }>
+  return providers.some((provider) => provider.id === "claude") ? "claude" : "fake"
+}
+
 /** 连接恢复后显示一条短提示；Host 被杀后由 main 重新转交端口触发。 */
 function ConnectionBanner({ store }: { store: AppStore }) {
   const state = useAppStore(store)
@@ -223,10 +229,11 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       : snapshot.projects[0]
     if (!project) return
     try {
+      const providerId = await pickProviderId(connection)
       const thread = (await connection.call("thread.create", {
         projectId: project.id,
         title: locale === "en-US" ? "New thread" : "新会话",
-        providerId: "fake",
+        providerId,
       })) as Thread
       store.update({
         threads: [thread, ...store.getSnapshot().threads],

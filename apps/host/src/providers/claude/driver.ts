@@ -7,7 +7,9 @@ import {
   type Query,
 } from "@anthropic-ai/claude-agent-sdk"
 import type { ProviderCapabilities } from "@pigcode/contracts"
+import { existsSync } from "node:fs"
 import { randomUUID } from "node:crypto"
+import { delimiter, join } from "node:path"
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -62,7 +64,9 @@ export class ClaudeDriver implements ProviderDriver {
 
   constructor(options: ClaudeDriverOptions = {}) {
     this.queryFn = options.queryFn ?? query
-    this.executable = options.executable
+    // 打包后的 Host 不再位于 SDK 包内，SDK 无法按自身路径找到原生二进制；
+    // 默认从 PATH 解析已安装的 Claude Code CLI。
+    this.executable = options.executable ?? resolveClaudeExecutable()
   }
 
   /** 创建内存句柄；原生会话在首次 send 后由 SDK init 消息补充。 */
@@ -235,4 +239,21 @@ function toPermissionResult(
     }
   }
   return { behavior: "allow" }
+}
+
+/** 从 PIGCODE_CLAUDE_PATH 或 PATH 解析 Claude Code 可执行文件。 */
+function resolveClaudeExecutable(): string | undefined {
+  const configured = process.env.PIGCODE_CLAUDE_PATH
+  if (configured) return configured
+  const searchPath = process.env.PATH
+  if (!searchPath) return undefined
+  const names = process.platform === "win32" ? ["claude.exe", "claude.cmd", "claude"] : ["claude"]
+  for (const dir of searchPath.split(delimiter)) {
+    if (!dir) continue
+    for (const name of names) {
+      const candidate = join(dir, name)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+  return undefined
 }

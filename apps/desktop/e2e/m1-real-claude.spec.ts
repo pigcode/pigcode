@@ -1,0 +1,36 @@
+/** 真实 Claude 端到端：新建线程、发 OK、看到流式与完成。 */
+import { mkdirSync } from "node:fs"
+import { _electron as electron, expect, test } from "@playwright/test"
+
+test.skip(process.env.PIGCODE_REAL_CLAUDE !== "1", "set PIGCODE_REAL_CLAUDE=1")
+
+/** 过滤 undefined，得到 Electron launch 要求的字符串环境变量表。 */
+function launchEnv(): Record<string, string> {
+  const entries = Object.entries(process.env).filter(
+    (entry): entry is [string, string] => entry[1] !== undefined,
+  )
+  return { ...Object.fromEntries(entries), PIGCODE_REAL_CLAUDE: "1" }
+}
+
+test("real claude answers OK", async () => {
+  // Claude CLI 以项目根目录作为 cwd，目录必须存在才能启动。
+  mkdirSync("/tmp/pigcode-m1-e2e", { recursive: true })
+  const app = await electron.launch({ args: ["."], env: launchEnv() })
+  try {
+    const page = await app.firstWindow()
+    await page.getByRole("button", { name: "添加项目" }).first().click()
+    await page.getByLabel("项目路径").fill("/tmp/pigcode-m1-e2e")
+    await page.getByRole("button", { name: "添加", exact: true }).click()
+    await expect(page.getByText("pigcode-m1-e2e", { exact: true })).toBeVisible()
+    await page.getByRole("button", { name: "新会话" }).first().click()
+    await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+    await page.getByRole("textbox").fill("Reply with exactly OK")
+    await page.keyboard.press("Enter")
+    await expect(
+      page.locator(".msg-user").filter({ hasText: "Reply with exactly OK" }),
+    ).toBeVisible()
+    await expect(page.getByText("OK", { exact: true })).toBeVisible({ timeout: 120_000 })
+  } finally {
+    await app.close()
+  }
+})
