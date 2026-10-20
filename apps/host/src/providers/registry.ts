@@ -18,6 +18,7 @@ import type {
 import { FakeProviderDriver } from "./fake"
 import { detectClaude } from "./claude/detect"
 import type { ClaudeDetection } from "./claude/detect"
+import { ApprovalBridge } from "./claude/permissions"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
 
@@ -25,6 +26,12 @@ import { RunStore } from "../storage/run-store"
 export interface StartRunResult {
   runId: string
   done: Promise<void>
+}
+
+/** 一次审批请求的句柄；decision 在 UI 决议后 resolve。 */
+export interface ApprovalHandle {
+  requestId: string
+  decision: Promise<ApprovalDecision>
 }
 
 /** provider 注册表与运行生命周期入口。 */
@@ -37,6 +44,7 @@ export interface ProvidersService {
     text: string,
     emitLive?: (event: ProviderEvent) => void,
   ): Promise<StartRunResult>
+  requestApproval(threadId: string, runId: string, request: ApprovalRequest): ApprovalHandle
   respondApproval(
     threadId: string,
     runId: string,
@@ -77,7 +85,7 @@ interface ActiveRun {
   status: RunStatus
   done: Promise<void>
   resolveDone: () => void
-  pending: Map<string, (decision: ApprovalDecision) => void>
+  approvals: Set<string>
 }
 
 /** 注册 fake provider 并提供 run 生命周期服务。 */
@@ -88,6 +96,7 @@ export function apply(ctx: Context): void {
 
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
+  const approvals = new ApprovalBridge()
   // Host 重启后，上一个进程遗留的待审批请求统一标记为 orphaned。
   pendingRequests.orphanAll()
   const activeRuns = new Map<string, ActiveRun>()
@@ -108,12 +117,6 @@ export function apply(ctx: Context): void {
       schemaVersion: 1,
       createdAt: new Date().toISOString(),
     })
-  }
-
-  /** 同步内存与 runs 表中的状态。 */
-  function setStatus(run: ActiveRun, status: RunStatus): void {
-    run.status = status
-    runs.setStatus(run.runId, status)
   }
 
   /** 结束 run：写终态事件、处理未决审批并释放内存状态。 */
@@ -137,7 +140,8 @@ export function apply(ctx: Context): void {
 
   /** 把 run 的未决审批以 deny 结束，避免 driver 永久等待。 */
   function settlePending(run: ActiveRun): void {
-    for (const [requestId, resolve] of run.pending) {
+    for (const requestId of run.approvals) {
+      if (!approvals.resolve(requestId, "deny")) continue
       pendingRequests.resolve(requestId)
       append(run.threadId, run.runId, "approval.resolved", {
         requestId,
@@ -145,9 +149,8 @@ export function apply(ctx: Context): void {
         decision: "deny",
         reason: "run-ended",
       })
-      resolve("deny")
     }
-    run.pending.clear()
+    run.approvals.clear()
   }
 
   /** provider 回报原生会话 id 后更新会话行。 */
@@ -224,28 +227,39 @@ export function apply(ctx: Context): void {
     }
   }
 
-  /** 发起审批：持久化 pending 行、写事件并把 run 置为 waiting-approval。 */
-  function requestApproval(run: ActiveRun, request: ApprovalRequest): Promise<ApprovalDecision> {
-    if (activeRuns.get(run.runId) !== run) return Promise.resolve("deny")
+  /** 发起审批：持久化 pending 行、写事件、置为 waiting-approval 并等待 UI 决议。 */
+  function requestApproval(
+    threadId: string,
+    runId: string,
+    request: ApprovalRequest,
+  ): ApprovalHandle {
+    const runRow = ctx.storage.db.prepare(`SELECT thread_id FROM runs WHERE id = ?`).get(runId) as
+      { thread_id: string } | undefined
+    if (!runRow || runRow.thread_id !== threadId) throw new Error(`run not found: ${runId}`)
+
     const requestId = `req_${randomUUID()}`
     pendingRequests.create({
       id: requestId,
-      threadId: run.threadId,
-      runId: run.runId,
+      threadId,
+      runId,
       kind: "approval",
       providerRequestId: null,
       payload: request,
       createdAt: new Date().toISOString(),
     })
-    append(run.threadId, run.runId, "approval.requested", {
+    append(threadId, runId, "approval.requested", {
       requestId,
       id: requestId,
       ...request,
     })
-    setStatus(run, "waiting-approval")
-    return new Promise<ApprovalDecision>((resolve) => {
-      run.pending.set(requestId, resolve)
-    })
+    runs.setStatus(runId, "waiting-approval")
+    const active = activeRuns.get(runId)
+    if (active) {
+      active.status = "waiting-approval"
+      active.approvals.add(requestId)
+    }
+    const decision = approvals.wait(requestId, { threadId, runId })
+    return { requestId, decision }
   }
 
   /** 异步执行 driver.send；异常统一转成 run.failed。 */
@@ -253,7 +267,10 @@ export function apply(ctx: Context): void {
     const runtime: ProviderRuntime = {
       signal: run.controller.signal,
       emit: (event) => handleProviderEvent(run, event),
-      requestApproval: (request) => requestApproval(run, request),
+      requestApproval: (request) => {
+        if (activeRuns.get(run.runId) !== run) return Promise.resolve<ApprovalDecision>("deny")
+        return requestApproval(run.threadId, run.runId, request).decision
+      },
     }
     try {
       await run.driver.send(run.session, input, runtime)
@@ -338,7 +355,7 @@ export function apply(ctx: Context): void {
           status: "running",
           done,
           resolveDone,
-          pending: new Map(),
+          approvals: new Set(),
         }
         activeRuns.set(runId, run)
         void execute(run, { text })
@@ -348,16 +365,27 @@ export function apply(ctx: Context): void {
         throw error
       }
     },
+    requestApproval(threadId, runId, request) {
+      return requestApproval(threadId, runId, request)
+    },
     respondApproval(threadId, runId, requestId, decision) {
-      const run = activeRuns.get(runId)
-      if (!run || run.threadId !== threadId) throw new Error(`run not active: ${runId}`)
-      const resolver = run.pending.get(requestId)
-      if (!resolver) throw new Error(`approval not pending: ${requestId}`)
-      run.pending.delete(requestId)
+      const row = ctx.storage.db
+        .prepare(`SELECT thread_id, run_id, status FROM pending_requests WHERE id = ?`)
+        .get(requestId) as { thread_id: string; run_id: string; status: string } | undefined
+      if (!row || row.thread_id !== threadId || row.run_id !== runId || row.status !== "pending") {
+        throw new Error(`approval not pending: ${requestId}`)
+      }
+      if (!approvals.resolve(requestId, decision)) {
+        throw new Error(`approval not pending: ${requestId}`)
+      }
       pendingRequests.resolve(requestId)
       append(threadId, runId, "approval.resolved", { requestId, id: requestId, decision })
-      setStatus(run, "running")
-      resolver(decision)
+      runs.setStatus(runId, "running")
+      const run = activeRuns.get(runId)
+      if (run) {
+        run.status = "running"
+        run.approvals.delete(requestId)
+      }
     },
     getRunStatus(runId) {
       const active = activeRuns.get(runId)
@@ -384,6 +412,7 @@ export function apply(ctx: Context): void {
     }
     activeRuns.clear()
     activeThreads.clear()
+    approvals.rejectAll(new Error("host disposed"))
   })
 }
 
