@@ -31,8 +31,8 @@ test("chat, plugin panel, and reconnect", async () => {
   // 窗口侧栏与设置页各自有一套分区导航，取窗口侧栏的入口。
   await page.getByRole("button", { name: "插件", exact: true }).first().click()
   const samplePlugin = new URL("../../../examples/ui-debug-panel", import.meta.url).pathname
-  await page.getByLabel("插件目录").fill(samplePlugin)
-  await page.getByRole("button", { name: "安装本地插件" }).click()
+  await page.getByLabel("插件目录或 npm 包").fill(samplePlugin)
+  await page.getByRole("button", { name: "安装插件" }).click()
   await expect(page.getByText("Debug Panel")).toBeVisible()
 
   // 核心 profile 条目也会出现在插件列表里，按插件名定位到示例插件所在行。

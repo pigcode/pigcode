@@ -355,7 +355,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       return listProviderModels(drivers.get(providerId))
     },
     defaultProvider() {
-      return defaultProvider()
+      return defaultProvider((id) => drivers.has(id)) // 只接受已注册 driver。
     },
     async switchProvider(threadId, providerId, modelId) {
       if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)

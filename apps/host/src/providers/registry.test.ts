@@ -151,6 +151,33 @@ describe("providers.startRun", () => {
     }
   })
 
+  it("honors a forced provider registered by a plugin", async () => {
+    const { ctx } = await setup()
+    ctx.providers.register({
+      id: "echo",
+      displayName: "Echo",
+      capabilities: new FakeProviderDriver().capabilities,
+      createSession: async (input) => ({
+        id: "ps_echo",
+        threadId: input.threadId,
+        cwd: input.cwd,
+        nativeSessionId: null,
+        permissionMode: "workspace-write",
+        model: null,
+      }),
+      send: async () => undefined,
+      interrupt: async () => undefined,
+      dispose: async () => undefined,
+    })
+    process.env.PIGCODE_PROVIDER = "echo"
+    try {
+      await expect(ctx.providers.defaultProvider()).resolves.toBe("echo")
+    } finally {
+      delete process.env.PIGCODE_PROVIDER
+      await ctx.fiber.dispose()
+    }
+  })
+
   it("persists plan updates and interrupted runs", async () => {
     const { ctx, thread } = await setup()
     ctx.providers.register({
