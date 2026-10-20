@@ -1,0 +1,71 @@
+// 设置页的通用外框：标题栏、可滚动内容列、分组与设置行。
+import type { ReactNode } from "react"
+
+/** 设置页容器：标题加居中内容列。 */
+export function SettingPage({
+  title,
+  sub,
+  actions,
+  children,
+}: {
+  title: string
+  sub?: string | undefined
+  actions?: ReactNode | undefined
+  children: ReactNode
+}) {
+  return (
+    <div className="page narrow settings-page">
+      <header className="page-head">
+        <div>
+          <h1>{title}</h1>
+          {sub ? <p className="sub">{sub}</p> : null}
+        </div>
+        {actions ? <div className="actions">{actions}</div> : null}
+      </header>
+      {children}
+    </div>
+  )
+}
+
+/** 设置分组；不给标题时作为页面的第一组直接显示。 */
+export function SettingSection({
+  title,
+  children,
+}: {
+  title?: string | undefined
+  children: ReactNode
+}) {
+  return (
+    <section className="section">
+      {title ? (
+        <div className="section-head">
+          <h2>{title}</h2>
+        </div>
+      ) : null}
+      <div className="group">{children}</div>
+    </section>
+  )
+}
+
+/** 设置单行：左侧标题和说明，右侧是控件或只读值。 */
+export function SettingRow({
+  title,
+  description,
+  value,
+  children,
+}: {
+  title: ReactNode
+  description?: ReactNode | undefined
+  value?: ReactNode | undefined
+  children?: ReactNode | undefined
+}) {
+  return (
+    <div className="item">
+      <div className="main">
+        <div className="ttl">{title}</div>
+        {description ? <div className="desc">{description}</div> : null}
+      </div>
+      {children ? <div className="trail">{children}</div> : <span className="val">{value}</span>}
+    </div>
+  )
+}

@@ -284,6 +284,34 @@ importers:
         specifier: 4.0.16
         version: 4.0.16(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
 
+  packages/ui-plugin-manager:
+    dependencies:
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../ui-primitives
+      react:
+        specifier: ^19
+        version: 19.2.3
+      react-dom:
+        specifier: ^19
+        version: 19.2.3(react@19.2.3)
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: 19.2.2
+        version: 19.2.2(@types/react@19.2.2)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.16
+        version: 4.0.16(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
+
   packages/ui-primitives:
     dependencies:
       '@base-ui/react':
@@ -310,6 +338,37 @@ importers:
       tailwind-merge:
         specifier: 3.4.0
         version: 3.4.0
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: 19.2.2
+        version: 19.2.2(@types/react@19.2.2)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.16
+        version: 4.0.16(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
+
+  packages/ui-settings:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../ui-primitives
+      react:
+        specifier: ^19
+        version: 19.2.3
+      react-dom:
+        specifier: ^19
+        version: 19.2.3(react@19.2.3)
     devDependencies:
       '@types/react':
         specifier: 19.2.2
