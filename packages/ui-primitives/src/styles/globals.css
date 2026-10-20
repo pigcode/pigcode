@@ -1455,10 +1455,7 @@ kbd {
     opacity var(--t-fast) var(--ease),
     transform var(--t-fast) var(--ease);
 }
-/* Radix 用外层包装定位；浮层自身留在文档流里，包装才能量到高度并向上翻转 */
-[data-radix-popper-content-wrapper] > .popover {
-  position: relative;
-}
+/* Base UI 的 Positioner 负责浮层定位，浮层自身保持文档流 */
 .popover.is-open {
   opacity: 1;
   transform: none;

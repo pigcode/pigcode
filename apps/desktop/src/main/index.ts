@@ -1,8 +1,9 @@
-/** Electron main：单实例、窗口、Host utilityProcess 与端口转交。 */
-import { app, BrowserWindow } from "electron"
+/** Electron main：单实例、窗口、Host utilityProcess、原生桥与端口转交。 */
+import { app, BrowserWindow, ipcMain, nativeTheme } from "electron"
 import { join } from "node:path"
 import { startHostProcess, type HostProcess } from "./host-process"
 import { registerAppProtocol, registerPluginProtocol, registerPrivilegedSchemes } from "./protocol"
+import { createMainWindowOptions, readThemeSource } from "./window-options"
 
 registerPrivilegedSchemes()
 
@@ -19,6 +20,28 @@ function profileDir(): string {
   return process.env.PIGCODE_PROFILE_DIR ?? join(app.getPath("userData"), "profiles", "desktop")
 }
 
+/** 注册主题与窗口控制 IPC；只接受已知的动作和外观值。 */
+function registerNativeBridge(): void {
+  ipcMain.handle("pigcode:set-theme", (_event, value: unknown) => {
+    const source = readThemeSource(value)
+    if (source) nativeTheme.themeSource = source
+  })
+  ipcMain.handle("pigcode:window", (event, action: unknown) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return
+    if (action === "minimize") window.minimize()
+    else if (action === "maximize") {
+      if (window.isMaximized()) window.unmaximize()
+      else window.maximize()
+    } else if (action === "close") window.close()
+  })
+  ipcMain.handle("pigcode:is-maximized", (event) => {
+    return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
+  })
+}
+
+registerNativeBridge()
+
 function startHost(): HostProcess {
   const next = startHostProcess(resolveAppPath("out/host/index.mjs"), profileDir())
   next.child.on("exit", () => {
@@ -33,16 +56,14 @@ function startHost(): HostProcess {
 
 /** 创建调试窗口，并在页面加载后把 Host 的 MessagePort 交给渲染进程。 */
 export async function createWindow(): Promise<BrowserWindow> {
-  const window = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    webPreferences: {
-      preload: resolveAppPath("out/preload/index.cjs"),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-    },
-  })
+  const window = new BrowserWindow(
+    createMainWindowOptions({
+      platform: process.platform,
+      preloadPath: resolveAppPath("out/preload/index.cjs"),
+      isPackaged: app.isPackaged,
+    }),
+  )
+  window.once("ready-to-show", () => window.show())
   window.webContents.on("did-finish-load", () => {
     if (host) window.webContents.postMessage("pigcode:port", null, [host.appPort])
   })
