@@ -12,3 +12,14 @@ pnpm real:claude
 
 The test uses the installed and authenticated Claude Code CLI with a minimal
 prompt. It never logs in and never reads credential files.
+
+## Real Codex smoke
+
+Set `PIGCODE_REAL_CODEX=1` and run:
+
+```bash
+pnpm real:codex
+```
+
+The test uses the installed and authenticated Codex CLI with a minimal prompt.
+It never logs in and never reads credential files.
