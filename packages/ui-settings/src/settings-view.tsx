@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { useLocale, type AppearanceController } from "@pigcode/ui-primitives"
 import { AppearancePage } from "./appearance-page"
 import { GeneralPage } from "./general-page"
-import { ProviderPage, type ProviderSummary } from "./provider-page"
+import { ProviderPage, type ProviderDetection, type ProviderSummary } from "./provider-page"
 import { SettingsNav, type SettingsSection } from "./settings-nav"
 
 /** 设置视图需要的状态与事件。 */
@@ -17,6 +17,10 @@ export interface SettingsViewProps {
   pluginManager?: ReactNode | undefined
   /** provider 摘要；不传时展示 fake provider。 */
   providers?: ProviderSummary[] | undefined
+  /** Claude Code 检测结果；由应用容器注入。 */
+  detection?: ProviderDetection | null | undefined
+  /** 重新运行只读检测。 */
+  onDetect?: (() => void | Promise<void>) | undefined
 }
 
 /** 按分区渲染设置内容。 */
@@ -27,6 +31,8 @@ export function SettingsView({
   appearance,
   pluginManager,
   providers,
+  detection,
+  onDetect,
 }: SettingsViewProps) {
   const { t } = useLocale()
   return (
@@ -35,7 +41,9 @@ export function SettingsView({
       <div className="panel-scroll">
         {section === "general" ? <GeneralPage /> : null}
         {section === "appearance" ? <AppearancePage appearance={appearance} /> : null}
-        {section === "providers" ? <ProviderPage providers={providers} /> : null}
+        {section === "providers" ? (
+          <ProviderPage providers={providers} detection={detection} onDetect={onDetect} />
+        ) : null}
         {section === "plugins" ? pluginManager : null}
       </div>
     </section>

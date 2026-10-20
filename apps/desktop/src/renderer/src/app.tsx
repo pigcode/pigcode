@@ -15,9 +15,9 @@ import {
   type AppearanceController,
   type Locale,
 } from "@pigcode/ui-primitives"
-import { ChatView } from "@pigcode/ui-chat"
+import { ChatView, type ApprovalDecision } from "@pigcode/ui-chat"
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
-import { SettingsView, fakeProvider } from "@pigcode/ui-settings"
+import { SettingsView, fakeProvider, type ProviderDetection } from "@pigcode/ui-settings"
 import type { SettingsSection, ShellView } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
@@ -74,6 +74,20 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
       .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
   }
 
+  /** 把审批决议提交给 Host；runId 取最近一条带 runId 的事件。 */
+  function respondApproval(requestId: string, decision: ApprovalDecision): void {
+    const runId = [...state.events].reverse().find((event) => event.runId !== null)?.runId
+    if (!runId || !state.activeThreadId) return
+    void deps.connection
+      .call("run.respondApproval", {
+        threadId: state.activeThreadId,
+        runId,
+        requestId,
+        decision,
+      })
+      .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
+  }
+
   return (
     <ChatView
       thread={thread}
@@ -86,7 +100,7 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
           .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
       }}
       onInterrupt={interrupt}
-      onApproval={() => undefined}
+      onApproval={respondApproval}
     />
   )
 }
@@ -131,6 +145,25 @@ export function SettingsContainer({
   onClose,
   appearance,
 }: SettingsSlotProps & { deps: CoreDeps }) {
+  const [detection, setDetection] = useState<ProviderDetection | null>(null)
+
+  /** 拉取 Claude Code 只读检测结果；失败时写入全局错误。 */
+  const detect = useCallback(async (): Promise<void> => {
+    try {
+      const result = (await deps.connection.call("provider.detect", {})) as {
+        claude: ProviderDetection
+      }
+      setDetection(result.claude)
+    } catch (error) {
+      deps.store.update({ error: messageOf(error) })
+    }
+  }, [deps.connection, deps.store])
+
+  // 进入设置页时检测一次；用户也可以点击按钮重新检测。
+  useEffect(() => {
+    void detect()
+  }, [detect])
+
   return (
     <SettingsView
       section={section}
@@ -138,6 +171,8 @@ export function SettingsContainer({
       onClose={onClose}
       appearance={appearance}
       providers={[fakeProvider]}
+      detection={detection}
+      onDetect={detect}
       pluginManager={<PluginManagerContainer deps={deps} />}
     />
   )
