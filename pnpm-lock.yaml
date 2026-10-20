@@ -152,7 +152,13 @@ importers:
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../contracts
+      react:
+        specifier: ^19
+        version: 19.2.3
     devDependencies:
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
