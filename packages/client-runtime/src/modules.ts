@@ -23,7 +23,8 @@ export interface ClientModule {
 export interface LoadClientPluginsOptions {
   boot: BootGraph
   load: (url: string) => Promise<ClientModule>
-  context: () => ClientPluginContext
+  /** 传入当前条目，宿主可据此把注册行为归属到具体插件。 */
+  context: (entry: BootEntry) => ClientPluginContext
 }
 
 /** 按 boot graph 顺序应用插件；返回统一卸载函数（逆序执行）。 */
@@ -33,7 +34,7 @@ export async function loadClientPlugins(
   const disposers: Array<() => void> = []
   for (const entry of options.boot.entries) {
     const module = await options.load(entry.url)
-    const result = module.apply?.(options.context())
+    const result = module.apply?.(options.context(entry))
     if (typeof result === "function") disposers.push(result)
   }
   let disposed = false

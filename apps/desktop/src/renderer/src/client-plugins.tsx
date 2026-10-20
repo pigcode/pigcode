@@ -32,25 +32,40 @@ export interface PanelRegistry {
   subscribe(listener: () => void): () => void
 }
 
+/** slot 注册冲突等插件错误；id 用作快照内的稳定 key。 */
+export interface PluginError {
+  id: string
+  pluginId: string
+  message: string
+}
+
+/** 插件错误的只读快照与订阅入口。 */
+export interface PluginErrorRegistry {
+  get(): PluginError[]
+  subscribe(listener: () => void): () => void
+}
+
 /** Renderer 持有的第三方插件控制器。 */
 export interface ClientPluginController {
   panels: PanelRegistry
+  /** 加载/注册时被跳过的错误，供插件管理界面按需展示。 */
+  errors: PluginErrorRegistry
   reload(): Promise<void>
   dispose(): void
 }
 
-/** 创建面板注册表；快照在注册项变化时才替换，满足 useSyncExternalStore。 */
-function createPanelRegistry(): {
-  registry: PanelRegistry
-  add(panel: ClientPanel): () => void
+/** 创建按 key 去重的只读快照注册表；快照变化时才替换，满足 useSyncExternalStore。 */
+function createSnapshotRegistry<T>(keyOf: (item: T) => string): {
+  registry: { get(): T[]; subscribe(listener: () => void): () => void }
+  add(item: T): () => void
   clear(): void
 } {
-  const panels = new Map<string, ClientPanel>()
+  const items = new Map<string, T>()
   const listeners = new Set<() => void>()
-  let snapshot: ClientPanel[] = []
+  let snapshot: T[] = []
 
   function emit(): void {
-    snapshot = [...panels.values()]
+    snapshot = [...items.values()]
     for (const listener of listeners) listener()
   }
 
@@ -64,17 +79,17 @@ function createPanelRegistry(): {
         }
       },
     },
-    add(panel) {
-      panels.set(panel.id, panel)
+    add(item) {
+      items.set(keyOf(item), item)
       emit()
       return () => {
-        if (!panels.delete(panel.id)) return
+        if (!items.delete(keyOf(item))) return
         emit()
       }
     },
     clear() {
-      if (panels.size === 0) return
-      panels.clear()
+      if (items.size === 0) return
+      items.clear()
       emit()
     },
   }
@@ -88,7 +103,18 @@ export function createClientPluginController(deps: {
   slots: SlotRegistry
   connection: Connection
 }): ClientPluginController {
-  const { registry: panels, add, clear } = createPanelRegistry()
+  const {
+    registry: panels,
+    add: addPanel,
+    clear: clearPanels,
+  } = createSnapshotRegistry<ClientPanel>((panel) => panel.id)
+  const {
+    registry: errors,
+    add: addError,
+    clear: clearErrors,
+  } = createSnapshotRegistry<PluginError>((error) => error.id)
+  /** slot 条目归属：key 为 `slot:id`，用于拒绝重复注册并记录冲突双方。 */
+  const slotOwners = new Map<string, { pluginId: string; token: symbol }>()
   let generation = 0
   let disposers: Array<() => void> = []
   let cleanups: Array<() => void> = []
@@ -100,25 +126,48 @@ export function createClientPluginController(deps: {
     cleanups = []
   }
 
-  function createContext(bucket: Array<() => void>): ClientPluginContext {
+  function reportError(pluginId: string, message: string): void {
+    // 同样内容只保留一条；console.error 带上插件 id 便于定位。
+    addError({ id: `${pluginId}:${message}`, pluginId, message })
+    console.error(`[plugin:${pluginId}] ${message}`)
+  }
+
+  function createContext(pluginId: string, bucket: Array<() => void>): ClientPluginContext {
     return {
       slots: {
         register(name, entry) {
           if (!isSlotName(name)) return () => undefined
+          const key = `${name}:${entry.id}`
+          const owner = slotOwners.get(key)
+          if (owner) {
+            reportError(pluginId, `SLOT_CONFLICT: ${key} already registered by ${owner.pluginId}`)
+            return () => undefined
+          }
+          const token = Symbol(key)
+          slotOwners.set(key, { pluginId, token })
           const dispose = deps.slots.register(name, {
             id: entry.id,
             order: entry.order ?? 0,
             render: (props: never) => entry.render(props) as ReactNode,
           })
-          bucket.push(dispose)
-          return dispose
+          let active = true
+          // 只释放本次注册；旧 generation 的清理不能误删新注册的归属。
+          const release = () => {
+            if (!active) return
+            active = false
+            if (slotOwners.get(key)?.token !== token) return
+            slotOwners.delete(key)
+            dispose()
+          }
+          bucket.push(release)
+          return release
         },
       },
       host: {
         call: (method, params) => deps.connection.call(method, params),
       },
       registerPanel(panel) {
-        const dispose = add(panel)
+        const dispose = addPanel(panel)
         bucket.push(dispose)
         return dispose
       },
@@ -128,7 +177,8 @@ export function createClientPluginController(deps: {
   async function reload(): Promise<void> {
     const current = ++generation
     clearCurrent()
-    clear()
+    clearPanels()
+    clearErrors()
 
     let boot: BootGraph
     try {
@@ -152,7 +202,7 @@ export function createClientPluginController(deps: {
             return {}
           }
         },
-        context: () => createContext(bucket),
+        context: (entry) => createContext(entry.id, bucket),
       })
       if (current !== generation) {
         loaded.dispose()
@@ -168,11 +218,13 @@ export function createClientPluginController(deps: {
 
   return {
     panels,
+    errors,
     reload,
     dispose() {
       generation += 1
       clearCurrent()
-      clear()
+      clearPanels()
+      clearErrors()
     },
   }
 }

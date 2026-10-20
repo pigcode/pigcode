@@ -7,6 +7,7 @@ describe("loadClientPlugins", () => {
     const dispose = vi.fn()
     const applied = vi.fn(() => dispose)
     const load = vi.fn(async () => ({ apply: applied }))
+    const contextIds: string[] = []
     const result = await loadClientPlugins({
       boot: {
         entries: [
@@ -14,13 +15,17 @@ describe("loadClientPlugins", () => {
         ],
       },
       load,
-      context: () => ({
-        slots: { register: () => () => {} },
-        host: { call: async () => undefined },
-        registerPanel: () => () => {},
-      }),
+      context: (entry) => {
+        contextIds.push(entry.id)
+        return {
+          slots: { register: () => () => {} },
+          host: { call: async () => undefined },
+          registerPanel: () => () => {},
+        }
+      },
     })
     expect(applied).toHaveBeenCalledOnce()
+    expect(contextIds).toEqual(["demo"])
     result.dispose()
     expect(dispose).toHaveBeenCalledOnce()
   })

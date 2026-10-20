@@ -45,6 +45,22 @@ export interface PluginSummary {
   error: string | null
 }
 
+/** provides 冲突；code 供 RPC 调用方与界面识别，message 直接展示给用户。 */
+export class PluginConflictError extends Error {
+  readonly code = "PROVIDES_CONFLICT"
+  /** 发生重复的能力标识。 */
+  readonly capability: string
+  /** 声明了同一能力的插件 id，按 profile 顺序排列。 */
+  readonly pluginIds: string[]
+
+  constructor(capability: string, pluginIds: string[]) {
+    super(`PROVIDES_CONFLICT: ${capability} is provided by ${pluginIds.join(", ")}`)
+    this.name = "PluginConflictError"
+    this.capability = capability
+    this.pluginIds = pluginIds
+  }
+}
+
 /** 合法的插件种类，用于 manifest 缺失时从 id 前缀推断。 */
 const PLUGIN_KINDS: readonly PluginSummary["kind"][] = ["provider", "capability", "ui", "bundle"]
 
@@ -101,7 +117,50 @@ export async function installLocalPlugin(
   return entry
 }
 
-/** 切换插件的 disabled 标记。 */
+/**
+ * 汇总启用插件的 provides：能力标识 -> 声明它的插件 id。
+ * manifest 不可用的条目没有可读声明，不参与冲突计算。
+ */
+export async function collectProvides(
+  profileDir: string,
+  profile: { plugins: InstalledPluginEntry[] },
+): Promise<Map<string, string[]>> {
+  const provides = new Map<string, string[]>()
+  for (const entry of profile.plugins) {
+    if (entry.disabled) continue
+    const manifest = await readInstalledManifest(profileDir, entry)
+    for (const capability of manifest?.pigcode.provides ?? []) {
+      const owners = provides.get(capability) ?? []
+      owners.push(entry.id)
+      provides.set(capability, owners)
+    }
+  }
+  return provides
+}
+
+/** 返回第一组重复的 provides；没有冲突时返回 null。 */
+function findProvidesConflict(
+  provides: Map<string, string[]>,
+): { capability: string; pluginIds: string[] } | null {
+  for (const [capability, pluginIds] of provides) {
+    if (pluginIds.length > 1) return { capability, pluginIds }
+  }
+  return null
+}
+
+/** 生成可展示给用户的冲突描述；插件自身的 provides 重复同样会命中。 */
+function describeConflict(provides: Map<string, string[]>, capabilities: string[]): string | null {
+  const conflicts = capabilities
+    .map((capability) => [capability, provides.get(capability) ?? []] as const)
+    .filter(([, pluginIds]) => pluginIds.length > 1)
+    .map(([capability, pluginIds]) => `${capability} is provided by ${pluginIds.join(", ")}`)
+  return conflicts.length > 0 ? `PROVIDES_CONFLICT: ${conflicts.join("; ")}` : null
+}
+
+/**
+ * 切换插件的 disabled 标记。
+ * 启用前先按“当前启用集合 + 目标插件”计算 provides，重复时拒绝写入 profile。
+ */
 export async function setPluginEnabled(
   profileDir: string,
   id: string,
@@ -110,6 +169,13 @@ export async function setPluginEnabled(
   const profile = await readProfile(profileDir)
   const entry = profile.plugins.find((item) => item.id === id)
   if (!entry) throw new Error(`plugin not found: ${id}`)
+  if (enabled) {
+    const effective = profile.plugins.map((item) =>
+      item.id === id ? { ...item, disabled: false } : item,
+    )
+    const conflict = findProvidesConflict(await collectProvides(profileDir, { plugins: effective }))
+    if (conflict) throw new PluginConflictError(conflict.capability, conflict.pluginIds)
+  }
   entry.disabled = !enabled
   await writeProfile(profileDir, profile)
 }
@@ -120,12 +186,12 @@ export async function setPluginEnabled(
  */
 export async function listPlugins(profileDir: string): Promise<PluginSummary[]> {
   const profile = await readProfile(profileDir)
+  const provides = await collectProvides(profileDir, profile)
   const summaries: PluginSummary[] = []
   for (const entry of profile.plugins) {
     if (entry.id.startsWith("core.")) continue
     const { manifest, error } = await readManifestState(profileDir, entry)
-    // Task 2 会在这里填入 provides 冲突；当前先保持 null。
-    const conflict: string | null = null
+    const conflict = describeConflict(provides, manifest?.pigcode.provides ?? [])
     summaries.push({
       id: entry.id,
       name: manifest?.name ?? entry.name,
