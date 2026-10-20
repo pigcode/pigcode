@@ -92,6 +92,10 @@ importers:
         specifier: 4.0.16
         version: 4.0.16(@types/node@24.10.1)(yaml@2.8.1)
 
+  examples/capability-session-info: {}
+
+  examples/ui-debug-panel: {}
+
   packages/client-runtime:
     dependencies:
       '@pigcode/contracts':

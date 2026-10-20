@@ -1,0 +1,10 @@
+{
+  "name": "pigcode-ui-debug-panel",
+  "version": "0.0.0",
+  "type": "module",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "ui",
+    "client": "./client.mjs"
+  }
+}

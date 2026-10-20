@@ -1,0 +1,11 @@
+{
+  "name": "pigcode-capability-session-info",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.mjs",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "capability",
+    "host": "./index.mjs"
+  }
+}
