@@ -15,6 +15,14 @@ workbench E2E:
 pnpm --dir apps/desktop rebuild:native
 ```
 
+## Plugins
+
+Plugins are ordinary npm packages with a `pigcode` manifest field. Install a local
+directory or npm spec from Settings → Plugins. Provider, capability, and UI plugins
+load and unload without restarting the app.
+
+See [docs/plugin-authoring.md](docs/plugin-authoring.md).
+
 ## Real Claude smoke
 
 Set `PIGCODE_REAL_CLAUDE=1` and run:
