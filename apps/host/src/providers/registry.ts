@@ -63,6 +63,8 @@ export interface ProvidersService {
   ): void
   getRunStatus(runId: string): RunStatus | null
   cancelRun(runId: string): boolean
+  /** Host 退出时中断所有活跃 run。 */
+  cancelAll(): void
   /** 读取线程的 provider 会话记录，用于验证 native session 复用。 */
   listSessions(threadId: string): ProviderSession[]
   /** 读取线程仍未处理的审批/提问请求。 */
@@ -298,6 +300,21 @@ export function apply(ctx: Context): void {
     }
   }
 
+  /** 中断单个活跃 run 并写入 run.interrupted；未知 run 返回 false。 */
+  function interruptRun(runId: string): boolean {
+    const run = activeRuns.get(runId)
+    if (!run) return false
+    run.controller.abort()
+    void run.driver.interrupt(run.session).catch(() => undefined)
+    finishRun(run, "interrupted", "run.interrupted", {})
+    return true
+  }
+
+  /** 中断所有活跃 run；先复制 id，finishRun 会从 activeRuns 删除元素。 */
+  function interruptAll(): void {
+    for (const runId of [...activeRuns.keys()]) interruptRun(runId)
+  }
+
   const service: ProvidersService = {
     register(driver) {
       drivers.set(driver.id, driver)
@@ -406,12 +423,10 @@ export function apply(ctx: Context): void {
       return row?.status ?? null
     },
     cancelRun(runId) {
-      const run = activeRuns.get(runId)
-      if (!run) return false
-      run.controller.abort()
-      void run.driver.interrupt(run.session).catch(() => undefined)
-      finishRun(run, "interrupted", "run.interrupted", {})
-      return true
+      return interruptRun(runId)
+    },
+    cancelAll() {
+      interruptAll()
     },
     listSessions(threadId) {
       return providerSessions.listByThread(threadId)
@@ -436,10 +451,8 @@ export function apply(ctx: Context): void {
 
   ctx.provide("providers", service)
   ctx.effect(() => () => {
-    for (const run of activeRuns.values()) {
-      run.controller.abort()
-      run.resolveDone()
-    }
+    // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。
+    interruptAll()
     activeRuns.clear()
     activeThreads.clear()
     approvals.rejectAll(new Error("host disposed"))

@@ -12,6 +12,9 @@ import type {
 /** fake provider 固定输出的文本分片。 */
 const CHUNKS = ["Hello", " from", " fake", " provider"]
 
+/** 长跑输入的标记；用于验证 run 中断与进程清理。 */
+export const FAKE_LONG_RUN_TEXT = "long"
+
 /** 不依赖外部进程的确定性 provider 实现。 */
 export class FakeProviderDriver implements ProviderDriver {
   readonly id = "fake"
@@ -45,13 +48,17 @@ export class FakeProviderDriver implements ProviderDriver {
     }
   }
 
-  /** 依次推送开始、分片、完成事件，保证事件顺序可预测。 */
+  /** 依次推送开始、分片、完成事件；`long` 输入持续输出直到被 abort。 */
   async send(
     _session: ProviderSessionHandle,
-    _input: UserInput,
+    input: UserInput,
     runtime: ProviderRuntime,
   ): Promise<void> {
     runtime.emit({ type: "run.started" })
+    if (input.text === FAKE_LONG_RUN_TEXT) {
+      await runUntilAborted(runtime)
+      return
+    }
     for (const text of CHUNKS) runtime.emit({ type: "message.delta", text })
     runtime.emit({ type: "message.completed", text: CHUNKS.join("") })
     runtime.emit({ type: "run.completed" })
@@ -62,4 +69,12 @@ export class FakeProviderDriver implements ProviderDriver {
 
   /** fake provider 没有需要释放的资源。 */
   async dispose(): Promise<void> {}
+}
+
+/** 循环推送增量直到 run 的取消信号到达；中断后不再 emit。 */
+async function runUntilAborted(runtime: ProviderRuntime): Promise<void> {
+  while (!runtime.signal.aborted) {
+    runtime.emit({ type: "message.delta", text: "." })
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
 }
