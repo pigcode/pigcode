@@ -1,6 +1,7 @@
 /** Provider 切换：停止旧会话、更新线程选择并生成一次性 handoff。 */
 import type { Context } from "cordis"
 import type { ProviderSession } from "@pigcode/contracts"
+import { activeWorktreePath } from "../services/worktrees"
 import { detectClaude } from "./claude/detect"
 import type { ProviderSessionStore } from "./claude/session-store"
 import type { ProviderDriver, ProviderModelInfo } from "./driver"
@@ -117,8 +118,10 @@ export async function switchProvider(
   return { providerId, modelId, handoff }
 }
 
-/** 读取线程所属项目的根目录作为 provider cwd。 */
-export function resolveProjectCwd(ctx: Context, projectId: string): string {
+/** 解析线程的 provider cwd：优先活动 worktree，没有时回退到项目根目录。 */
+export function resolveThreadCwd(ctx: Context, threadId: string, projectId: string): string {
+  const worktree = activeWorktreePath(ctx.storage.db, threadId)
+  if (worktree) return worktree
   const row = ctx.storage.db
     .prepare(`SELECT root_path FROM projects WHERE id = ?`)
     .get(projectId) as { root_path: string } | undefined

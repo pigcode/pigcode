@@ -27,7 +27,7 @@ import type { CodexDetection } from "./codex/detect"
 import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
 import { RunAlreadyActiveError, TooManyActiveRunsError } from "./errors"
-import { defaultProvider, disposeSession, listProviderModels, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
+import { defaultProvider, disposeSession, listProviderModels, pendingHandoff, resolveThreadCwd, switchProvider } from "./switching"
 import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
@@ -380,7 +380,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
         const activeSession = providerSessions.findActive(threadId, driver.id)
         const draft = await driver.createSession({
           threadId,
-          cwd: resolveProjectCwd(ctx, thread.projectId),
+          cwd: resolveThreadCwd(ctx, thread.id, thread.projectId),
           nativeSessionId: activeSession?.nativeSessionId ?? null,
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
