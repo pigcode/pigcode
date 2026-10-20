@@ -2,6 +2,7 @@
 import { useEffect, useRef } from "react"
 import { FitAddon } from "@xterm/addon-fit"
 import { Terminal, type ITheme } from "@xterm/xterm"
+import "@xterm/xterm/css/xterm.css"
 
 /** 父组件持有的终端句柄；用于写入 PTY 输出和主动聚焦。 */
 export interface TerminalHandle {
@@ -38,7 +39,7 @@ export function TerminalView({ onData, onResize, onReady, className, theme }: Te
     const terminal = new Terminal({
       convertEol: true,
       cursorBlink: true,
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       ...(themeRef.current ? { theme: themeRef.current } : {}),
     })
