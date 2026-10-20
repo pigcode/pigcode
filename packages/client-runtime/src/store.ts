@@ -13,6 +13,8 @@ export interface AppState {
   events: ThreadEvent[]
   streamingText: string
   error: string | null
+  /** 首次连接后是否发生过 Host 重连；供界面显示重连提示。 */
+  reconnected: boolean
 }
 
 const initialState: AppState = {
@@ -24,6 +26,7 @@ const initialState: AppState = {
   events: [],
   streamingText: "",
   error: null,
+  reconnected: false,
 }
 
 /** 不可变状态容器；每次变更都替换快照并通知订阅者。 */

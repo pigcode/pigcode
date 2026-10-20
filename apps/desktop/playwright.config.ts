@@ -10,11 +10,14 @@ process.env.PIGCODE_E2E = "1"
 process.env.PIGCODE_PROFILE_DIR = join(repoRoot, "apps/desktop/out/host/profile")
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: ".",
+  testMatch: ["e2e/**/*.spec.ts", "visual/**/*.spec.ts"],
   timeout: 60_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
   workers: 1,
   reporter: "line",
   globalSetup: "./e2e/global-setup.ts",
+  // 截图基线放在 visual/__screenshots__，不随平台名分裂。
+  snapshotPathTemplate: "{testFileDir}/__screenshots__/{arg}{ext}",
 })

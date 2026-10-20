@@ -100,11 +100,15 @@ export async function setPluginEnabled(
   await writeProfile(profileDir, profile)
 }
 
-/** 列出 profile 中的插件摘要；manifest 读取失败时保留错误信息。 */
+/**
+ * 列出用户安装的插件摘要；manifest 读取失败时保留错误信息。
+ * core.* 是 Host 内部服务入口，不属于 UI 可管理的插件，不在这里展示。
+ */
 export async function listPlugins(profileDir: string): Promise<PluginSummary[]> {
   const profile = await readProfile(profileDir)
   const summaries: PluginSummary[] = []
   for (const entry of profile.plugins) {
+    if (entry.id.startsWith("core.")) continue
     const { manifest, error } = await readManifestState(profileDir, entry)
     summaries.push({
       id: entry.id,

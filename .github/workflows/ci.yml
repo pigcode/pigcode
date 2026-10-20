@@ -14,4 +14,19 @@ jobs:
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm typecheck
       - run: pnpm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.28.2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      # Electron 需要虚拟显示；globalSetup 会先构建 main/preload/renderer 与 Host。
+      - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test e2e/m0-b.spec.ts
+        env:
+          PIGCODE_E2E: "1"

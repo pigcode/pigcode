@@ -59,9 +59,27 @@ importers:
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@pigcode/ui-chat':
+        specifier: workspace:*
+        version: link:../../packages/ui-chat
+      '@pigcode/ui-composer':
+        specifier: workspace:*
+        version: link:../../packages/ui-composer
+      '@pigcode/ui-plugin-manager':
+        specifier: workspace:*
+        version: link:../../packages/ui-plugin-manager
       '@pigcode/ui-primitives':
         specifier: workspace:*
         version: link:../../packages/ui-primitives
+      '@pigcode/ui-settings':
+        specifier: workspace:*
+        version: link:../../packages/ui-settings
+      '@pigcode/ui-shell':
+        specifier: workspace:*
+        version: link:../../packages/ui-shell
       '@tiptap/extension-placeholder':
         specifier: 3.32.0
         version: 3.32.0(@tiptap/extensions@3.32.0(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0))
@@ -87,6 +105,12 @@ importers:
       '@playwright/test':
         specifier: 1.64.1
         version: 1.64.1
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: 19.2.2
+        version: 19.2.2(@types/react@19.2.2)
       electron:
         specifier: 43.4.1
         version: 43.4.1

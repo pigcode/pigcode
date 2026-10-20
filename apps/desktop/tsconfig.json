@@ -6,5 +6,12 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*.ts", "e2e/**/*.ts", "electron.vite.config.ts", "playwright.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "e2e/**/*.ts",
+    "visual/**/*.ts",
+    "electron.vite.config.ts",
+    "playwright.config.ts"
+  ]
 }

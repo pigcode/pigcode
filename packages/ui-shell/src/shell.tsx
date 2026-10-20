@@ -30,6 +30,8 @@ export interface ShellProps {
   onToggleProject?: (projectId: string, expanded: boolean) => void
   onNewThread: (projectId?: string) => void
   onOpenThread: (threadId: string) => void
+  /** 侧栏底部扩展区，用于宿主渲染第三方 UI 插件面板。 */
+  sidebarExtra?: ReactNode
   children?: ReactNode
 }
 
@@ -76,6 +78,7 @@ export function Shell({
   onToggleProject,
   onNewThread,
   onOpenThread,
+  sidebarExtra,
   children,
 }: ShellProps) {
   const { t } = useLocale()
@@ -148,6 +151,7 @@ export function Shell({
               onOpenSettings={() => onView("settings")}
             />
           )}
+          {sidebarExtra}
         </div>
       </aside>
       <main className="panel">{children}</main>
