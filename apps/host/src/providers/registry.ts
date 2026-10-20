@@ -98,6 +98,8 @@ export function apply(ctx: Context): void {
           })
           return
         }
+        // session/tool/usage 事件在 Task 2 的 runtime 中统一映射，当前占位忽略。
+        if (event.type !== "run.failed") return
         ctx.sessions.append({
           threadId,
           runId,

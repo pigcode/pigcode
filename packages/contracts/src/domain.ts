@@ -97,6 +97,31 @@ export const executionItemSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
+/** 一个 provider 原生会话的持久记录。 */
+export const providerSessionSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  providerId: z.string().min(1),
+  nativeSessionId: z.string().nullable(),
+  cwd: z.string().min(1),
+  status: z.enum(["active", "stopped", "orphaned"]),
+  createdAt: z.string().datetime(),
+  stoppedAt: z.string().datetime().nullable(),
+})
+
+/** 待审批/待回答请求的持久状态。 */
+export const pendingRequestSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  runId: z.string().min(1),
+  kind: z.enum(["approval", "question"]),
+  providerRequestId: z.string().nullable(),
+  payload: z.unknown(),
+  status: z.enum(["pending", "resolved", "orphaned"]),
+  createdAt: z.string().datetime(),
+  resolvedAt: z.string().datetime().nullable(),
+})
+
 /** provider 能力集合的类型。 */
 export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>
 /** 权限模式的类型。 */
@@ -111,3 +136,7 @@ export type Run = z.infer<typeof runSchema>
 export type RunStatus = z.infer<typeof runStatusSchema>
 /** 执行条目的类型。 */
 export type ExecutionItem = z.infer<typeof executionItemSchema>
+/** provider 原生会话记录的类型。 */
+export type ProviderSession = z.infer<typeof providerSessionSchema>
+/** 待审批/待回答请求的类型。 */
+export type PendingRequest = z.infer<typeof pendingRequestSchema>

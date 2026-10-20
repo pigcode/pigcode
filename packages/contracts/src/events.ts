@@ -5,9 +5,11 @@ import { z } from "zod"
 export const threadEventTypeSchema = z.enum([
   "thread.created",
   "thread.updated",
+  "session.started",
   "run.started",
   "run.completed",
   "run.failed",
+  "run.interrupted",
   "message.completed",
   "tool.started",
   "tool.completed",
@@ -38,8 +40,23 @@ export const threadEventSchema = z.object({
 /** provider 适配器输出的规范化事件。 */
 export const providerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.started") }),
+  z.object({ type: z.literal("session.started"), nativeSessionId: z.string() }),
   z.object({ type: z.literal("message.delta"), text: z.string() }),
   z.object({ type: z.literal("message.completed"), text: z.string() }),
+  z.object({
+    type: z.literal("tool.started"),
+    toolCallId: z.string(),
+    name: z.string(),
+    input: z.unknown(),
+  }),
+  z.object({
+    type: z.literal("tool.completed"),
+    toolCallId: z.string(),
+    name: z.string(),
+    output: z.unknown(),
+    isError: z.boolean(),
+  }),
+  z.object({ type: z.literal("usage.updated"), usage: z.unknown() }),
   z.object({ type: z.literal("run.completed") }),
   z.object({ type: z.literal("run.failed"), message: z.string() }),
 ])

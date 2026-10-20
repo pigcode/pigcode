@@ -55,6 +55,33 @@ const MIGRATIONS: string[] = [
     created_at TEXT NOT NULL
   );
   `,
+  `
+  CREATE TABLE IF NOT EXISTS provider_sessions (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES threads(id),
+    provider_id TEXT NOT NULL,
+    native_session_id TEXT,
+    cwd TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    stopped_at TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS pending_requests (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES threads(id),
+    run_id TEXT NOT NULL REFERENCES runs(id),
+    kind TEXT NOT NULL,
+    provider_request_id TEXT,
+    payload_json TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_pending_requests_thread_status
+    ON pending_requests(thread_id, status);
+  `,
 ]
 
 /** 按 user_version 执行缺失迁移。 */

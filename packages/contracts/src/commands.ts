@@ -13,6 +13,20 @@ export const commandSchemas = {
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
   "run.start": z.object({ threadId: z.string().min(1), text: z.string().min(1) }),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),
+  "run.respondApproval": z.object({
+    threadId: z.string().min(1),
+    runId: z.string().min(1),
+    requestId: z.string().min(1),
+    decision: z.enum(["allow-once", "allow-for-session", "deny"]),
+  }),
+  "run.answerQuestion": z.object({
+    threadId: z.string().min(1),
+    runId: z.string().min(1),
+    requestId: z.string().min(1),
+    answers: z.array(z.string()),
+  }),
+  "provider.detect": z.object({}),
+  "provider.list": z.object({}),
   "thread.subscribe": z.object({
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),
