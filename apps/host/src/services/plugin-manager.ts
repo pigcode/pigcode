@@ -21,6 +21,26 @@ export interface BootGraphEntry {
   inject: string[]
 }
 
+/** 插件管理界面展示的单条插件摘要。 */
+export interface PluginSummary {
+  id: string
+  name: string
+  version: string
+  kind: "provider" | "capability" | "ui" | "bundle"
+  enabled: boolean
+  error: string | null
+}
+
+/** 合法的插件种类，用于 manifest 缺失时从 id 前缀推断。 */
+const PLUGIN_KINDS: readonly PluginSummary["kind"][] = ["provider", "capability", "ui", "bundle"]
+
+/** 从 `<kind>.<name>` 形式的 id 推断插件种类；无法识别时按 bundle 处理。 */
+function kindFromId(id: string): PluginSummary["kind"] {
+  const separator = id.indexOf(".")
+  const prefix = separator === -1 ? id : id.slice(0, separator)
+  return PLUGIN_KINDS.find((kind) => kind === prefix) ?? "bundle"
+}
+
 /** profile 文件名；与 kernel 的 profile 加载约定保持一致。 */
 const PROFILE_FILE = "desktop.yml"
 
@@ -80,6 +100,24 @@ export async function setPluginEnabled(
   await writeProfile(profileDir, profile)
 }
 
+/** 列出 profile 中的插件摘要；manifest 读取失败时保留错误信息。 */
+export async function listPlugins(profileDir: string): Promise<PluginSummary[]> {
+  const profile = await readProfile(profileDir)
+  const summaries: PluginSummary[] = []
+  for (const entry of profile.plugins) {
+    const { manifest, error } = await readManifestState(profileDir, entry)
+    summaries.push({
+      id: entry.id,
+      name: manifest?.name ?? entry.name,
+      version: manifest?.version ?? "0.0.0",
+      kind: manifest?.pigcode.kind ?? kindFromId(entry.id),
+      enabled: !entry.disabled,
+      error,
+    })
+  }
+  return summaries
+}
+
 /** 为已启用且带 client 入口的插件生成启动图。 */
 export async function buildBootGraph(profileDir: string): Promise<{ entries: BootGraphEntry[] }> {
   const profile = await readProfile(profileDir)
@@ -109,10 +147,24 @@ async function readInstalledManifest(
   profileDir: string,
   entry: InstalledPluginEntry,
 ): Promise<PluginManifest | null> {
+  return (await readManifestState(profileDir, entry)).manifest
+}
+
+/** 读取 manifest 并保留失败原因，供插件摘要展示。 */
+async function readManifestState(
+  profileDir: string,
+  entry: InstalledPluginEntry,
+): Promise<{ manifest: PluginManifest | null; error: string | null }> {
   const path = join(profileDir, "node_modules", entry.name, "package.json")
   try {
-    return pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8")))
-  } catch {
-    return null
+    return {
+      manifest: pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8"))),
+      error: null,
+    }
+  } catch (error) {
+    return {
+      manifest: null,
+      error: error instanceof Error ? error.message : "manifest unavailable",
+    }
   }
 }

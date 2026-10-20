@@ -17,6 +17,11 @@ export const commandSchemas = {
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),
   }),
+  "plugin.list": z.object({}),
+  "plugin.installLocal": z.object({ sourceDir: z.string().min(1) }),
+  "plugin.enable": z.object({ id: z.string().min(1) }),
+  "plugin.disable": z.object({ id: z.string().min(1) }),
+  "plugin.bootGraph": z.object({}),
 } as const
 
 /** 所有命令方法名的联合类型。 */

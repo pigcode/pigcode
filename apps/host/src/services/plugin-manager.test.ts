@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { buildBootGraph, installLocalPlugin, setPluginEnabled } from "./plugin-manager"
+import { buildBootGraph, installLocalPlugin, listPlugins, setPluginEnabled } from "./plugin-manager"
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "pigcode-plugin-"))
@@ -34,5 +34,13 @@ describe("plugin manager", () => {
     await setPluginEnabled(root, entry.id, false)
     const graph = await buildBootGraph(root)
     expect(graph.entries).toHaveLength(0)
+  })
+
+  it("lists installed plugins with enabled state", async () => {
+    const { root, source } = await fixture()
+    await installLocalPlugin(root, source)
+    const plugins = await listPlugins(root)
+    expect(plugins).toHaveLength(1)
+    expect(plugins[0]?.enabled).toBe(true)
   })
 })

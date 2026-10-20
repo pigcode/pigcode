@@ -110,6 +110,16 @@ export class RpcServer {
       }
       case "run.interrupt":
         return { interrupted: true }
+      case "plugin.list":
+        return this.ctx.plugins.list()
+      case "plugin.installLocal":
+        return this.ctx.plugins.installLocal((parsed as { sourceDir: string }).sourceDir)
+      case "plugin.enable":
+        return this.ctx.plugins.enable((parsed as { id: string }).id)
+      case "plugin.disable":
+        return this.ctx.plugins.disable((parsed as { id: string }).id)
+      case "plugin.bootGraph":
+        return this.ctx.plugins.bootGraph()
       default:
         throw new Error(`unsupported method: ${method}`)
     }

@@ -3,6 +3,7 @@ import { createHostApp } from "./kernel/app"
 import { writeBootGraph } from "./kernel/boot"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { RpcServer } from "./rpc/server"
+import { apply as pluginsPlugin } from "./services/plugins"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
 interface ParentPortMessageEvent {
@@ -33,6 +34,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
   const ctx = await createHostApp({ profileDir, profileName: "desktop" })
+  await ctx.plugin(pluginsPlugin, { profileDir })
   await writeBootGraph(profileDir)
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()
   control?.on("message", () => {})
