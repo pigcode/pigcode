@@ -24,4 +24,27 @@ describe("ProviderPage", () => {
     expect(screen.getByText(/2\.1\.304/)).toBeTruthy()
     expect(screen.getByText(/claude\.ai/)).toBeTruthy()
   })
+
+  /** Codex 检测结果应该出现在独立的 provider 分区里。 */
+  it("shows Codex detection", () => {
+    render(
+      <LocaleProvider locale="zh-CN">
+        <ProviderPage
+          providers={[
+            {
+              id: "codex",
+              displayName: "Codex",
+              installed: true,
+              version: "codex-cli 0.163.0",
+              loggedIn: true,
+              authMethod: "ChatGPT",
+            },
+          ]}
+          onDetect={async () => {}}
+        />
+      </LocaleProvider>,
+    )
+    expect(screen.getByText("Codex")).toBeTruthy()
+    expect(screen.getByText(/0\.163\.0/)).toBeTruthy()
+  })
 })

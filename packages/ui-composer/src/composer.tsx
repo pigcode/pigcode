@@ -58,6 +58,10 @@ export interface ComposerProps {
   onModel?: (model: string) => void
   permissionMode?: PermissionMode
   onPermissionMode?: (mode: PermissionMode) => void
+  /** provider 不支持计划模式时隐藏该权限选项。 */
+  canPlan?: boolean
+  /** provider 不支持中断时隐藏停止按钮。 */
+  canInterrupt?: boolean
   depth?: ThinkingDepth
   onDepth?: (depth: ThinkingDepth) => void
   /** 是否启用智能标点；默认开启。 */
@@ -78,6 +82,8 @@ export function Composer({
   onModel,
   permissionMode = "ask",
   onPermissionMode,
+  canPlan = true,
+  canInterrupt = true,
   depth = "medium",
   onDepth,
   smartPunctuation = true,
@@ -145,6 +151,9 @@ export function Composer({
   const permissionLabel = t(permissionKeys[permissionMode].label)
   const depthLabel = t(depthKeys[depth])
   const showModel = Boolean(model) && models.length > 0
+  const availablePermissionModes = canPlan
+    ? permissionModes
+    : permissionModes.filter((id) => id !== "plan")
 
   function submit(): void {
     if (disabled) return
@@ -180,7 +189,7 @@ export function Composer({
                 sideOffset={6}
               >
                 <Menu.Popup className="menu-popup">
-                  {permissionModes.map((id) => (
+                  {availablePermissionModes.map((id) => (
                     <Menu.Item
                       key={id}
                       className="menu-item"
@@ -255,7 +264,7 @@ export function Composer({
               </Menu.Positioner>
             </Menu.Portal>
           </Menu.Root>
-          {running ? (
+          {running && canInterrupt ? (
             <Button
               variant="plain"
               className="send"
@@ -266,7 +275,7 @@ export function Composer({
             >
               <Square className="ic" aria-hidden="true" />
             </Button>
-          ) : (
+          ) : running ? null : (
             <Button
               variant="plain"
               className="send"

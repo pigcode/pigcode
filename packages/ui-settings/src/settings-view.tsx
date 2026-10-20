@@ -3,7 +3,7 @@ import type { ReactNode } from "react"
 import { useLocale, type AppearanceController } from "@pigcode/ui-primitives"
 import { AppearancePage } from "./appearance-page"
 import { GeneralPage } from "./general-page"
-import { ProviderPage, type ProviderDetection, type ProviderSummary } from "./provider-page"
+import { ProviderPage, type ProviderDetection, type ProviderStatus } from "./provider-page"
 import { SettingsNav, type SettingsSection } from "./settings-nav"
 
 /** 设置视图需要的状态与事件。 */
@@ -15,9 +15,9 @@ export interface SettingsViewProps {
   appearance?: AppearanceController | undefined
   /** 插件分区的内容由插件管理包注入。 */
   pluginManager?: ReactNode | undefined
-  /** provider 摘要；不传时展示 fake provider。 */
-  providers?: ProviderSummary[] | undefined
-  /** Claude Code 检测结果；由应用容器注入。 */
+  /** Claude/Codex 检测结果；由应用容器注入。 */
+  providers?: ProviderStatus[] | undefined
+  /** 兼容旧的单 provider 检测结果。 */
   detection?: ProviderDetection | null | undefined
   /** 重新运行只读检测。 */
   onDetect?: (() => void | Promise<void>) | undefined

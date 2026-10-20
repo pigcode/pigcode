@@ -1,6 +1,6 @@
 /** Renderer 的应用状态；组件通过 useSyncExternalStore 订阅。 */
 import { useSyncExternalStore } from "react"
-import type { Project, Thread, ThreadEvent } from "@pigcode/contracts"
+import type { Project, ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
 import type { ConnectionStatus } from "./connection"
 
 /** Renderer 全局状态快照。 */
@@ -15,6 +15,10 @@ export interface AppState {
   error: string | null
   /** 首次连接后是否发生过 Host 重连；供界面显示重连提示。 */
   reconnected: boolean
+  /** 当前线程 provider 的能力描述；尚未加载时为 null。 */
+  providerCapabilities: ProviderCapabilities | null
+  /** 当前 provider 可选的模型 id 列表；未知时为空。 */
+  providerModels: string[]
 }
 
 const initialState: AppState = {
@@ -27,6 +31,8 @@ const initialState: AppState = {
   streamingText: "",
   error: null,
   reconnected: false,
+  providerCapabilities: null,
+  providerModels: [],
 }
 
 /** 不可变状态容器；每次变更都替换快照并通知订阅者。 */

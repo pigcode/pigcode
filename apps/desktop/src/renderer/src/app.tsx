@@ -1,6 +1,6 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { Project, Thread } from "@pigcode/contracts"
+import type { Project, ProviderCapabilities, Thread } from "@pigcode/contracts"
 import {
   AppRenderer,
   SlotHost,
@@ -15,9 +15,9 @@ import {
   type AppearanceController,
   type Locale,
 } from "@pigcode/ui-primitives"
-import { ChatView, type ApprovalDecision } from "@pigcode/ui-chat"
+import { ChatView, type ApprovalDecision, type ProviderOption } from "@pigcode/ui-chat"
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
-import { SettingsView, fakeProvider, type ProviderDetection } from "@pigcode/ui-settings"
+import { SettingsView, type ProviderDetection, type ProviderStatus } from "@pigcode/ui-settings"
 import type { SettingsSection, ShellView } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
@@ -48,10 +48,91 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** 询问 Host 当前默认 provider；Claude 未安装/未登录时 Host 返回 fake。 */
+/** provider.list 返回的一项；能力描述用于驱动 UI。 */
+interface ProviderInfo {
+  id: string
+  displayName: string
+  capabilities: ProviderCapabilities
+}
+
+/** provider.models 返回的模型条目；M2 只消费 id。 */
+interface ProviderModelInfo {
+  id: string
+}
+
+/** provider.detect 返回的 Codex 检测字段；authMethod 由 UI 层补空。 */
+interface CodexDetection {
+  installed: boolean
+  version: string | null
+  loggedIn: boolean
+  command: string
+  error: string | null
+}
+
+/** 读取 provider 列表。 */
+async function listProviders(connection: Connection): Promise<ProviderInfo[]> {
+  return (await connection.call("provider.list", {})) as ProviderInfo[]
+}
+
+/** 读取某个 provider 的模型目录并写入全局状态。 */
+async function loadProviderModels(
+  connection: Connection,
+  store: AppStore,
+  providerId: string,
+): Promise<void> {
+  const models = (await connection.call("provider.models", { providerId })) as ProviderModelInfo[]
+  store.update({
+    providerModels: models.flatMap((model) =>
+      typeof model.id === "string" && model.id.length > 0 ? [model.id] : [],
+    ),
+  })
+}
+
+/** 按线程当前 provider 刷新能力与模型列表。 */
+async function loadProviderContext(
+  connection: Connection,
+  store: AppStore,
+  thread: Thread,
+): Promise<void> {
+  const providerId = thread.lastProviderId ?? thread.defaultProviderId
+  // 切换线程时先清空上一线程的能力，避免短暂显示错误的控件。
+  store.update({ providerCapabilities: null, providerModels: [] })
+  const providers = await listProviders(connection)
+  const capabilities = providers.find((provider) => provider.id === providerId)?.capabilities
+  store.update({ providerCapabilities: capabilities ?? null })
+  try {
+    await loadProviderModels(connection, store, providerId)
+  } catch {
+    // 模型目录不可用时保留空列表，不阻塞聊天。
+    store.update({ providerModels: [] })
+  }
+}
+
+/** 把检测结果归一化为设置页的 provider 分区。 */
+function toProviderStatus(
+  id: string,
+  displayName: string,
+  detection: ProviderDetection,
+  capabilities: ProviderCapabilities | undefined,
+): ProviderStatus {
+  return {
+    id,
+    displayName,
+    installed: detection.installed,
+    version: detection.version,
+    loggedIn: detection.loggedIn,
+    authMethod: detection.authMethod,
+    subscriptionType: detection.subscriptionType ?? null,
+    command: detection.command ?? null,
+    error: detection.error ?? null,
+    ...(capabilities ? { capabilities } : {}),
+  }
+}
+
+/** 询问 Host 当前默认 provider；失败时回退到 fake。 */
 async function pickProviderId(connection: Connection): Promise<string> {
-  const result = (await connection.call("provider.default", {})) as { id?: string }
-  return result.id === "claude" ? "claude" : "fake"
+  const result = (await connection.call("provider.default", {})) as { id?: unknown }
+  return typeof result.id === "string" && result.id.length > 0 ? result.id : "fake"
 }
 
 /** 连接恢复后显示一条短提示；Host 被杀后由 main 重新转交端口触发。 */
@@ -71,6 +152,24 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
   const state = useAppStore(deps.store)
   const thread = state.threads.find((item) => item.id === state.activeThreadId) ?? null
   const project = state.projects.find((item) => item.id === thread?.projectId)
+  const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([])
+
+  // provider 列表只用于线程头切换入口；失败时保持为空，不影响聊天。
+  useEffect(() => {
+    let cancelled = false
+    void listProviders(deps.connection)
+      .then((providers) => {
+        if (!cancelled) {
+          setProviderOptions(
+            providers.map((provider) => ({ id: provider.id, displayName: provider.displayName })),
+          )
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [deps.connection])
 
   function interrupt(): void {
     const runId = [...state.events].reverse().find((event) => event.runId !== null)?.runId
@@ -94,11 +193,55 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
       .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
   }
 
+  /** 切换 provider；Host 端语义由 Task 6 的 thread.switchProvider 落地。 */
+  function switchProvider(providerId: string): void {
+    if (!thread) return
+    void deps.connection
+      .call("thread.switchProvider", {
+        threadId: thread.id,
+        providerId,
+        modelId: null,
+      })
+      .then(() => {
+        const threads = deps.store
+          .getSnapshot()
+          .threads.map((item) =>
+            item.id === thread.id
+              ? { ...item, lastProviderId: providerId, lastModelId: null }
+              : item,
+          )
+        deps.store.update({ threads })
+      })
+      .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
+  }
+
+  /** 切换模型；通过同一个 thread.switchProvider 命令交给 Host。 */
+  function switchModel(modelId: string): void {
+    if (!thread) return
+    const providerId = thread.lastProviderId ?? thread.defaultProviderId
+    void deps.connection
+      .call("thread.switchProvider", {
+        threadId: thread.id,
+        providerId,
+        modelId,
+      })
+      .then(() => {
+        const threads = deps.store
+          .getSnapshot()
+          .threads.map((item) => (item.id === thread.id ? { ...item, lastModelId: modelId } : item))
+        deps.store.update({ threads })
+      })
+      .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
+  }
+
   return (
     <ChatView
       thread={thread}
       events={state.events}
       streamingText={state.streamingText}
+      capabilities={state.providerCapabilities}
+      models={state.providerModels}
+      providers={providerOptions}
       {...(project ? { cwd: project.rootPath } : {})}
       onStart={(text) => {
         void deps.connection
@@ -107,6 +250,8 @@ export function ChatViewContainer({ deps }: { deps: CoreDeps }) {
       }}
       onInterrupt={interrupt}
       onApproval={respondApproval}
+      onSwitchProvider={switchProvider}
+      onSwitchModel={switchModel}
     />
   )
 }
@@ -151,15 +296,50 @@ export function SettingsContainer({
   onClose,
   appearance,
 }: SettingsSlotProps & { deps: CoreDeps }) {
-  const [detection, setDetection] = useState<ProviderDetection | null>(null)
+  const [providers, setProviders] = useState<ProviderStatus[]>([])
 
-  /** 拉取 Claude Code 只读检测结果；失败时写入全局错误。 */
+  /** 拉取 Claude/Codex 只读检测结果与能力，并刷新模型列表。 */
   const detect = useCallback(async (): Promise<void> => {
     try {
-      const result = (await deps.connection.call("provider.detect", {})) as {
-        claude: ProviderDetection
-      }
-      setDetection(result.claude)
+      const [detection, list] = await Promise.all([
+        deps.connection.call("provider.detect", {}) as Promise<{
+          claude: ProviderDetection
+          codex: CodexDetection
+        }>,
+        listProviders(deps.connection),
+      ])
+      const capabilityOf = (id: string): ProviderCapabilities | undefined =>
+        list.find((provider) => provider.id === id)?.capabilities
+      const displayNameOf = (id: string, fallback: string): string =>
+        list.find((provider) => provider.id === id)?.displayName ?? fallback
+
+      setProviders([
+        toProviderStatus(
+          "claude",
+          displayNameOf("claude", "Claude Code"),
+          detection.claude,
+          capabilityOf("claude"),
+        ),
+        toProviderStatus(
+          "codex",
+          displayNameOf("codex", "Codex"),
+          {
+            installed: detection.codex.installed,
+            version: detection.codex.version,
+            loggedIn: detection.codex.loggedIn,
+            authMethod: null,
+            command: detection.codex.command,
+            error: detection.codex.error,
+          },
+          capabilityOf("codex"),
+        ),
+      ])
+
+      // 用当前线程 provider 的模型目录填充 composer 的模型列表。
+      const snapshot = deps.store.getSnapshot()
+      const thread = snapshot.threads.find((item) => item.id === snapshot.activeThreadId)
+      const providerId = thread?.lastProviderId ?? thread?.defaultProviderId
+      if (providerId) await loadProviderModels(deps.connection, deps.store, providerId)
     } catch (error) {
       deps.store.update({ error: messageOf(error) })
     }
@@ -176,8 +356,7 @@ export function SettingsContainer({
       onSection={onSection}
       onClose={onClose}
       appearance={appearance}
-      providers={[fakeProvider]}
-      detection={detection}
+      providers={providers}
       onDetect={detect}
       pluginManager={<PluginManagerContainer deps={deps} />}
     />
@@ -207,6 +386,16 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       }
     })()
   }, [state.status, connection, store])
+
+  // 当前线程变化时刷新能力与模型列表，驱动按 capability 隐藏控件。
+  useEffect(() => {
+    if (state.status !== "connected") return
+    const thread = state.threads.find((item) => item.id === state.activeThreadId)
+    if (!thread) return
+    void loadProviderContext(connection, store, thread).catch((error: unknown) =>
+      store.update({ error: messageOf(error) }),
+    )
+  }, [state.status, state.activeThreadId, state.threads, connection, store])
 
   async function addProject(path: string): Promise<void> {
     try {
