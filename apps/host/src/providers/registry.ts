@@ -21,6 +21,9 @@ import { FakeProviderDriver } from "./fake"
 import { detectClaude } from "./claude/detect"
 import type { ClaudeDetection } from "./claude/detect"
 import { ClaudeDriver } from "./claude/driver"
+import { detectCodex } from "./codex/detect"
+import type { CodexDetection } from "./codex/detect"
+import type { CodexModelInfo } from "./codex/models"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
@@ -49,7 +52,13 @@ export interface RestartRecovery {
 export interface ProvidersService {
   register(driver: ProviderDriver): void
   list(): Array<{ id: string; displayName: string; capabilities: ProviderCapabilities }>
-  detect(): Promise<{ claude: ClaudeDetection; fake: { installed: true } }>
+  detect(): Promise<{
+    claude: ClaudeDetection
+    codex: CodexDetection
+    fake: { installed: true }
+  }>
+  /** 读取 provider 的模型目录；M2 只有 Codex 最终会返回真实列表。 */
+  models(providerId: string): Promise<CodexModelInfo[]>
   /** 选择新线程默认 provider：显式 env 优先，否则 Claude 已安装且登录时用 Claude。 */
   defaultProvider(): Promise<string>
   startRun(
@@ -332,9 +341,14 @@ export function apply(ctx: Context): void {
       }))
     },
     async detect() {
-      // Claude 只做只读探测；fake 永远可用，保证离线也能开发。
-      const claude = await detectClaude()
-      return { claude, fake: { installed: true } }
+      // Codex 与 Claude 都只做只读探测；fake 永远可用，保证离线也能开发。
+      const [claude, codex] = await Promise.all([detectClaude(), detectCodex()])
+      return { claude, codex, fake: { installed: true } }
+    },
+    async models(providerId) {
+      // Codex 的 model/list 需要 app-server 连接（Task 4 接入）；当前返回空目录。
+      if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
+      return []
     },
     async defaultProvider() {
       const forced = process.env.PIGCODE_PROVIDER
