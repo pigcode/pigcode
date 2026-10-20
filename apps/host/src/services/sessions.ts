@@ -9,6 +9,8 @@ export interface SessionsService {
   read(threadId: string, cursor: number): ThreadEvent[]
   latestSeq(threadId: string): number
   subscribe(threadId: string, listener: (event: ThreadEvent) => void): () => void
+  /** 监听所有线程的事件，供 checkpoint 等跨线程服务使用。 */
+  subscribeAll(listener: (event: ThreadEvent) => void): () => void
 }
 
 declare module "cordis" {
@@ -29,10 +31,13 @@ export interface SessionsPlugin {
 /** 注册 sessions 服务；追加事件后通知该线程的订阅者。 */
 export const apply: SessionsPlugin = (ctx) => {
   const listeners = new Map<string, Set<(event: ThreadEvent) => void>>()
+  const globalListeners = new Set<(event: ThreadEvent) => void>()
   const service: SessionsService = {
     append(event) {
       const stored = ctx.storage.events.append(event)
-      for (const listener of listeners.get(event.threadId) ?? []) listener(stored)
+      // 复制监听器集合，允许回调在广播期间追加事件或取消订阅。
+      for (const listener of [...(listeners.get(event.threadId) ?? [])]) listener(stored)
+      for (const listener of [...globalListeners]) listener(stored)
       return stored
     },
     read(threadId, cursor) {
@@ -51,9 +56,18 @@ export const apply: SessionsPlugin = (ctx) => {
         if (set.size === 0) listeners.delete(threadId)
       }
     },
+    subscribeAll(listener) {
+      globalListeners.add(listener)
+      return () => {
+        globalListeners.delete(listener)
+      }
+    },
   }
   ctx.provide("sessions", service)
-  ctx.effect(() => () => listeners.clear())
+  ctx.effect(() => () => {
+    listeners.clear()
+    globalListeners.clear()
+  })
 }
 
 apply.inject = inject
