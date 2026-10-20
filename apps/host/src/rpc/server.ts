@@ -1,6 +1,6 @@
 /** 把 RPC 请求分发给 Host 服务，并把线程事件推送给订阅者。 */
 import type { Context } from "cordis"
-import type { HostTransport } from "@pigcode/client-runtime"
+import type { HostTransport } from "@pigcode/client-runtime/transport"
 import {
   commandSchemas,
   parseRpcRequest,

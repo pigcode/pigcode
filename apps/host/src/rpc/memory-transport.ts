@@ -1,5 +1,5 @@
 /** 一对内存双工传输，用于 Host 与 Renderer 的集成测试。 */
-import type { HostTransport } from "@pigcode/client-runtime"
+import type { HostTransport } from "@pigcode/client-runtime/transport"
 
 /** 双工传输的一端；发送时把消息投递给对端。 */
 class Side implements HostTransport {

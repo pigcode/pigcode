@@ -1,5 +1,5 @@
 /** 把 Electron utilityProcess 收到的 MessagePort 适配成 HostTransport。 */
-import type { HostTransport } from "@pigcode/client-runtime"
+import type { HostTransport } from "@pigcode/client-runtime/transport"
 
 /** Host 侧端口的最小接口；Electron 与 Node 的 message 事件形状不同。 */
 export interface HostMessagePort {

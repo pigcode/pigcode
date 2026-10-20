@@ -4,18 +4,23 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./transport": "./src/transport.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pigcode/contracts": "workspace:*"
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*",
+    "@pigcode/ui-primitives": "workspace:*",
+    "@pigcode/ui-shell": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19"
   },
   "devDependencies": {
+    "@testing-library/react": "16.3.0",
     "@types/react": "19.2.2",
     "typescript": "5.9.3",
     "vitest": "4.0.16"
