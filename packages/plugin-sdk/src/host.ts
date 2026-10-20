@@ -8,6 +8,29 @@ export interface PluginSessions {
   read(threadId: string, cursor: number): readonly ThreadEvent[]
 }
 
+/** 插件通过 MCP 暴露给模型的工具定义；inputSchema 使用 JSON Schema。 */
+export interface McpToolDefinition {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
+/** 工具调用发生时的线程上下文；插件据此区分并行会话。 */
+export interface McpToolCallContext {
+  threadId: string
+}
+
+/** 工具处理函数；返回值会被序列化后交给模型。 */
+export type McpToolHandler = (input: unknown, context: McpToolCallContext) => Promise<unknown>
+
+/** 插件可用的 MCP 工具注册接口；由 Host 的 mcpBridge 服务提供。 */
+export interface McpBridgeApi {
+  /** 注册工具并返回注销函数；插件卸载时 Host 也会统一清理。 */
+  registerTool(pluginId: string, tool: McpToolDefinition, handler: McpToolHandler): () => void
+  /** 列出当前所有已注册工具。 */
+  listTools(): McpToolDefinition[]
+}
+
 /** Host 插件可用的最小上下文；只暴露稳定契约，不暴露 Host 内部服务。 */
 export interface PluginHostContext {
   /** 只读会话访问；未在 manifest.inject 声明 sessions 时不可用。 */
@@ -20,6 +43,8 @@ export interface PluginHostContext {
     register(driver: ProviderPluginDriver): void
     unregister(id: string): void
   }
+  /** MCP 工具注册；Host 以 Cordis 服务 `mcp` 提供。 */
+  readonly mcp: McpBridgeApi
 }
 
 export type HostPlugin = (ctx: PluginHostContext, config: unknown) => void | Promise<void>

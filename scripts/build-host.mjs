@@ -1,5 +1,5 @@
 /** 把 Host utilityProcess 入口与核心服务打成可加载的 ESM bundle。 */
-import { mkdir, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -34,6 +34,7 @@ const coreEntries = {
   projects: join(root, "apps/host/src/services/projects.ts"),
   threads: join(root, "apps/host/src/services/threads.ts"),
   sessions: join(root, "apps/host/src/services/sessions.ts"),
+  "mcp-bridge": join(root, "apps/host/src/services/mcp-bridge.ts"),
   providers: join(root, "apps/host/src/providers/registry.ts"),
   workspace: join(root, "apps/host/src/services/workspace.ts"),
   git: join(root, "apps/host/src/services/git.ts"),
@@ -48,6 +49,14 @@ await build({
   ...shared,
 })
 await build({ entryPoints: coreEntries, outdir: join(outDir, "core"), ...shared })
+
+// stdio 桥由 Codex/Claude 以 node 子进程启动；它不属于 bundle，原样复制即可。
+const mcpDir = join(outDir, "mcp")
+await mkdir(mcpDir, { recursive: true })
+await copyFile(
+  join(root, "apps/host/src/mcp/stdio-bridge.mjs"),
+  join(mcpDir, "stdio-bridge.mjs"),
+)
 
 /** 与 core bundle 对应的默认 profile；相对 entry 由 loader 按 baseUrl 解析。 */
 const profileDir = join(outDir, "profile")
@@ -66,6 +75,8 @@ await writeFile(
     "    name: ../core/threads.mjs",
     "  - id: core.sessions",
     "    name: ../core/sessions.mjs",
+    "  - id: core.mcp-bridge",
+    "    name: ../core/mcp-bridge.mjs",
     "  - id: core.providers",
     "    name: ../core/providers.mjs",
     "  - id: core.workspace",
