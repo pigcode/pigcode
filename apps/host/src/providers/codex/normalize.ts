@@ -87,7 +87,63 @@ function normalizeItem(value: unknown, started: boolean): ProviderEvent[] {
     ]
   }
 
+  if (type === "subAgentActivity") {
+    return normalizeSubagentActivity(item, id)
+  }
+
+  if (type === "collabAgentToolCall" || type === "collabToolCall") {
+    return normalizeCollabToolCall(item, id)
+  }
+
   return []
+}
+
+/** 映射 subAgentActivity：started → 开始，completed/interrupted → 结束。 */
+function normalizeSubagentActivity(item: UnknownRecord, id: string): ProviderEvent[] {
+  const kind = asString(item.kind)
+  if (kind === "started") {
+    const model = asString(item.model)
+    const name = asString(item.agentPath) ?? asString(item.agentThreadId) ?? "subagent"
+    return [
+      {
+        type: "subagent.started",
+        toolCallId: id,
+        name,
+        ...(model === undefined ? {} : { model }),
+      },
+    ]
+  }
+  if (kind === "completed" || kind === "interrupted") {
+    return [
+      {
+        type: "subagent.completed",
+        toolCallId: id,
+        isError: false,
+        status: kind,
+      },
+    ]
+  }
+  return []
+}
+
+/** 映射 collab 工具调用：每个 receiver thread 产生一张子 agent 卡片。 */
+function normalizeCollabToolCall(item: UnknownRecord, id: string): ProviderEvent[] {
+  const receivers = Array.isArray(item.receiverThreadIds) ? item.receiverThreadIds : []
+  const name = asString(item.tool) ?? "subagent"
+  const description = asString(item.prompt)
+  const model = asString(item.model)
+  const events: ProviderEvent[] = []
+  for (const receiver of receivers) {
+    if (typeof receiver !== "string" || receiver.length === 0) continue
+    events.push({
+      type: "subagent.started",
+      toolCallId: `${id}:${receiver}`,
+      name,
+      ...(description === undefined ? {} : { description }),
+      ...(model === undefined ? {} : { model }),
+    })
+  }
+  return events
 }
 
 /** 判断工具条目是否以错误结束；有 exitCode 时以退出码为准。 */

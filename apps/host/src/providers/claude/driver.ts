@@ -108,6 +108,8 @@ export class ClaudeDriver implements ProviderDriver {
         cwd: session.cwd,
         ...(session.nativeSessionId ? { resume: session.nativeSessionId } : {}),
         includePartialMessages: true,
+        // 子 agent 的文本/思考块也作为带 parent_tool_use_id 的消息转发，供时间线归组。
+        forwardSubagentText: true,
         ...(this.executable ? { pathToClaudeCodeExecutable: this.executable } : {}),
         permissionMode: mapPermissionMode(session.permissionMode),
         ...(session.permissionMode === "danger-full-access"

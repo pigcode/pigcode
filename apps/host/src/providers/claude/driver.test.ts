@@ -49,6 +49,28 @@ describe("ClaudeDriver", () => {
     expect(approvalCalls).toBe(0)
   })
 
+  it("forwards subagent text to the SDK", async () => {
+    let captured: Options | undefined
+    const replay = replayQuery("fixtures/simple.jsonl")
+    const driver = new ClaudeDriver({
+      queryFn: (params) => {
+        captured = params.options
+        return replay(params)
+      },
+    })
+    const session = await driver.createSession({ threadId: "t4", cwd: "/tmp" })
+    await driver.send(
+      session,
+      { text: "hello" },
+      {
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        requestApproval: async () => "allow-once",
+      },
+    )
+    expect(captured?.forwardSubagentText).toBe(true)
+  })
+
   it("passes dontAsk permission mode through to the SDK", async () => {
     let captured: Options | undefined
     const replay = replayQuery("fixtures/simple.jsonl")

@@ -76,6 +76,89 @@ describe("providers.startRun", () => {
     await ctx.fiber.dispose()
   })
 
+  it("persists subagent events and parent attribution", async () => {
+    const { ctx, thread } = await setup("subagents")
+    const driver: ProviderDriver = {
+      id: "subagents",
+      displayName: "Subagents",
+      capabilities: new FakeProviderDriver().capabilities,
+      createSession: async (input) => ({
+        id: "ps_subagents",
+        threadId: input.threadId,
+        cwd: input.cwd,
+        nativeSessionId: null,
+        permissionMode: "workspace-write",
+        model: null,
+      }),
+      send: async (_session, _input, runtime) => {
+        runtime.emit({
+          type: "subagent.started",
+          toolCallId: "task_1",
+          name: "Explore",
+          description: "Find the entry point",
+          model: "haiku",
+        })
+        runtime.emit({
+          type: "message.completed",
+          text: "child reply",
+          parentToolUseId: "task_1",
+        })
+        runtime.emit({
+          type: "tool.started",
+          toolCallId: "read_1",
+          name: "Read",
+          input: { file_path: "a.ts" },
+          parentToolUseId: "task_1",
+        })
+        runtime.emit({
+          type: "tool.completed",
+          toolCallId: "read_1",
+          name: "Read",
+          output: "body",
+          isError: false,
+          parentToolUseId: "task_1",
+        })
+        runtime.emit({
+          type: "subagent.completed",
+          toolCallId: "task_1",
+          output: "report",
+          isError: false,
+          status: "completed",
+        })
+        runtime.emit({ type: "run.completed" })
+      },
+      interrupt: async () => undefined,
+      dispose: async () => undefined,
+    }
+    ctx.providers.register(driver)
+
+    const { done } = await ctx.providers.startRun(thread.id, "spawn a subagent")
+    await done
+    const events = ctx.sessions.read(thread.id, 0)
+
+    expect(events.filter((event) => event.type === "run.completed")).toHaveLength(1)
+    expect(events.find((event) => event.type === "subagent.started")?.payload).toMatchObject({
+      toolCallId: "task_1",
+      name: "Explore",
+      description: "Find the entry point",
+      model: "haiku",
+    })
+    expect(
+      events.find(
+        (event) =>
+          event.type === "message.completed" &&
+          (event.payload as { parentToolUseId?: string } | null)?.parentToolUseId === "task_1",
+      )?.payload,
+    ).toMatchObject({ text: "child reply", parentToolUseId: "task_1" })
+    expect(events.find((event) => event.type === "subagent.completed")?.payload).toMatchObject({
+      toolCallId: "task_1",
+      output: "report",
+      isError: false,
+      status: "completed",
+    })
+    await ctx.fiber.dispose()
+  })
+
   it("rejects a second run while the thread has an active run", async () => {
     const { ctx, thread } = await setup("blocking")
     const blocking = blockingDriver()

@@ -21,6 +21,11 @@ export interface RunEventHooks {
   ) => void
 }
 
+/** 只有存在父 tool_use id 时才写入 payload，保持其余事件形状不变。 */
+function parentField(parentToolUseId: string | undefined): { parentToolUseId?: string } {
+  return parentToolUseId === undefined ? {} : { parentToolUseId }
+}
+
 /** 映射一条 provider 事件；run 已结束时丢弃迟到的消息。 */
 export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: RunEventHooks): void {
   if (!hooks.isActive(run)) return
@@ -35,12 +40,15 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
       })
       return
     case "message.delta":
-      run.emitLive?.(event)
+      // 子 agent 的流式增量不混入主时间线的 streamingText；其完整文本在
+      // message.completed 中带 parentToolUseId 持久化。
+      if (event.parentToolUseId === undefined) run.emitLive?.(event)
       return
     case "message.completed":
       hooks.append(run.threadId, run.runId, "message.completed", {
         role: "assistant",
         text: event.text,
+        ...parentField(event.parentToolUseId),
       })
       return
     case "tool.started":
@@ -49,6 +57,7 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
         toolCallId: event.toolCallId,
         name: event.name,
         input: event.input,
+        ...parentField(event.parentToolUseId),
       })
       return
     case "tool.completed":
@@ -59,6 +68,26 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
         output: event.output,
         isError: event.isError,
         status: event.isError ? "failed" : "completed",
+        ...parentField(event.parentToolUseId),
+      })
+      return
+    case "subagent.started":
+      hooks.append(run.threadId, run.runId, "subagent.started", {
+        toolCallId: event.toolCallId,
+        id: event.toolCallId,
+        name: event.name,
+        ...(event.description === undefined ? {} : { description: event.description }),
+        ...(event.model === undefined ? {} : { model: event.model }),
+        ...parentField(event.parentToolUseId),
+      })
+      return
+    case "subagent.completed":
+      hooks.append(run.threadId, run.runId, "subagent.completed", {
+        toolCallId: event.toolCallId,
+        id: event.toolCallId,
+        ...(event.output === undefined ? {} : { output: event.output }),
+        isError: event.isError,
+        status: event.status,
       })
       return
     case "usage.updated":

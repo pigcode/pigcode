@@ -42,13 +42,23 @@ export const threadEventSchema = z.object({
 export const providerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.started") }),
   z.object({ type: z.literal("session.started"), nativeSessionId: z.string() }),
-  z.object({ type: z.literal("message.delta"), text: z.string() }),
-  z.object({ type: z.literal("message.completed"), text: z.string() }),
+  z.object({
+    type: z.literal("message.delta"),
+    text: z.string(),
+    /** 子 agent 产生的文本携带父 tool_use id，主时间线据此跳过。 */
+    parentToolUseId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("message.completed"),
+    text: z.string(),
+    parentToolUseId: z.string().optional(),
+  }),
   z.object({
     type: z.literal("tool.started"),
     toolCallId: z.string(),
     name: z.string(),
     input: z.unknown(),
+    parentToolUseId: z.string().optional(),
   }),
   z.object({
     type: z.literal("tool.completed"),
@@ -56,6 +66,22 @@ export const providerEventSchema = z.discriminatedUnion("type", [
     name: z.string(),
     output: z.unknown(),
     isError: z.boolean(),
+    parentToolUseId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("subagent.started"),
+    toolCallId: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    model: z.string().optional(),
+    parentToolUseId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("subagent.completed"),
+    toolCallId: z.string(),
+    output: z.unknown().optional(),
+    isError: z.boolean(),
+    status: z.enum(["completed", "failed", "interrupted"]),
   }),
   z.object({ type: z.literal("usage.updated"), usage: z.unknown() }),
   z.object({

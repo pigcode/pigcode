@@ -123,6 +123,228 @@ describe("normalizeSdkMessage", () => {
     expect(events).toEqual([{ type: "run.failed", message: "error_during_execution" }])
   })
 
+  it("maps Task tool use and result to subagent lifecycle events", () => {
+    const state = createNormalizeState()
+    const started = normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "task_1",
+              name: "Task",
+              input: {
+                description: "Explore the repo",
+                subagent_type: "Explore",
+                model: "haiku",
+              },
+            },
+          ],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u1",
+      } as never,
+      state,
+    )
+    expect(started).toEqual([
+      {
+        type: "subagent.started",
+        toolCallId: "task_1",
+        name: "Explore",
+        description: "Explore the repo",
+        model: "haiku",
+      },
+    ])
+
+    const completed = normalizeSdkMessage(
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "task_1",
+              content: "report body",
+              is_error: false,
+            },
+          ],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u2",
+      } as never,
+      state,
+    )
+    expect(completed).toEqual([
+      {
+        type: "subagent.completed",
+        toolCallId: "task_1",
+        output: "report body",
+        isError: false,
+        status: "completed",
+      },
+    ])
+  })
+
+  it("treats Agent tool use as a subagent as well", () => {
+    const events = normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "agent_1", name: "Agent", input: {} }],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u1",
+      } as never,
+      createNormalizeState(),
+    )
+    expect(events).toContainEqual({
+      type: "subagent.started",
+      toolCallId: "agent_1",
+      name: "Agent",
+    })
+  })
+
+  it("tags subagent messages and tools with parentToolUseId", () => {
+    const state = createNormalizeState()
+    normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "task_1", name: "Task", input: {} }],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u1",
+      } as never,
+      state,
+    )
+
+    const delta = normalizeSdkMessage(
+      {
+        type: "stream_event",
+        event: { type: "content_block_delta", delta: { type: "text_delta", text: "working" } },
+        parent_tool_use_id: "task_1",
+        session_id: "s1",
+        uuid: "u2",
+      } as never,
+      state,
+    )
+    expect(delta).toEqual([{ type: "message.delta", text: "working", parentToolUseId: "task_1" }])
+
+    const text = normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Found it" }] },
+        parent_tool_use_id: "task_1",
+        session_id: "s1",
+        uuid: "u3",
+      } as never,
+      state,
+    )
+    expect(text).toEqual([
+      { type: "message.completed", text: "Found it", parentToolUseId: "task_1" },
+    ])
+
+    const tool = normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "read_1", name: "Read", input: { file_path: "a.ts" } }],
+        },
+        parent_tool_use_id: "task_1",
+        session_id: "s1",
+        uuid: "u4",
+      } as never,
+      state,
+    )
+    expect(tool).toEqual([
+      {
+        type: "tool.started",
+        toolCallId: "read_1",
+        name: "Read",
+        input: { file_path: "a.ts" },
+        parentToolUseId: "task_1",
+      },
+    ])
+
+    const result = normalizeSdkMessage(
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "read_1",
+              content: "body",
+              is_error: true,
+            },
+          ],
+        },
+        parent_tool_use_id: "task_1",
+        session_id: "s1",
+        uuid: "u5",
+      } as never,
+      state,
+    )
+    expect(result).toEqual([
+      {
+        type: "tool.completed",
+        toolCallId: "read_1",
+        name: "Read",
+        output: "body",
+        isError: true,
+        parentToolUseId: "task_1",
+      },
+    ])
+  })
+
+  it("emits run.completed only once when a subagent finishes first", () => {
+    const state = createNormalizeState()
+    normalizeSdkMessage(
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "tool_use", id: "task_1", name: "Task", input: {} }],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u1",
+      } as never,
+      state,
+    )
+    normalizeSdkMessage(
+      {
+        type: "user",
+        message: {
+          content: [{ type: "tool_result", tool_use_id: "task_1", content: "ok", is_error: false }],
+        },
+        parent_tool_use_id: null,
+        session_id: "s1",
+        uuid: "u2",
+      } as never,
+      state,
+    )
+    const events = normalizeSdkMessage(
+      {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        result: "done",
+        session_id: "s1",
+        uuid: "u3",
+        total_cost_usd: 0,
+        modelUsage: {},
+      } as never,
+      state,
+    )
+    expect(events.filter((event) => event.type === "run.completed")).toHaveLength(1)
+    expect(events).toContainEqual({ type: "message.completed", text: "done" })
+  })
+
   it("normalizes the simple replay fixture in order", () => {
     const path = fileURLToPath(new URL("./fixtures/simple.jsonl", import.meta.url))
     const lines = readFileSync(path, "utf8")

@@ -131,6 +131,106 @@ describe("normalizeCodexNotification", () => {
     ).toContainEqual({ type: "run.failed", message: "boom" })
   })
 
+  it("maps subAgentActivity items to subagent lifecycle events", () => {
+    const started = normalizeCodexNotification("item/started", {
+      item: {
+        id: "sa1",
+        type: "subAgentActivity",
+        kind: "started",
+        agentThreadId: "agent-1",
+        agentPath: "/root/explorer",
+        model: "gpt-5",
+      },
+    })
+    expect(started).toEqual([
+      {
+        type: "subagent.started",
+        toolCallId: "sa1",
+        name: "/root/explorer",
+        model: "gpt-5",
+      },
+    ])
+
+    const completed = normalizeCodexNotification("item/completed", {
+      item: {
+        id: "sa1",
+        type: "subAgentActivity",
+        kind: "completed",
+        agentThreadId: "agent-1",
+        agentPath: "/root/explorer",
+      },
+    })
+    expect(completed).toEqual([
+      {
+        type: "subagent.completed",
+        toolCallId: "sa1",
+        isError: false,
+        status: "completed",
+      },
+    ])
+
+    const interrupted = normalizeCodexNotification("item/completed", {
+      item: {
+        id: "sa2",
+        type: "subAgentActivity",
+        kind: "interrupted",
+        agentThreadId: "agent-2",
+        agentPath: "/root/worker",
+      },
+    })
+    expect(interrupted).toEqual([
+      {
+        type: "subagent.completed",
+        toolCallId: "sa2",
+        isError: false,
+        status: "interrupted",
+      },
+    ])
+
+    expect(
+      normalizeCodexNotification("item/started", {
+        item: {
+          id: "sa3",
+          type: "subAgentActivity",
+          kind: "interacted",
+          agentThreadId: "agent-3",
+          agentPath: "/root/other",
+        },
+      }),
+    ).toEqual([])
+  })
+
+  it("maps collab agent tool calls to one subagent per receiver", () => {
+    const events = normalizeCodexNotification("item/started", {
+      item: {
+        id: "collab1",
+        type: "collabAgentToolCall",
+        tool: "spawnAgent",
+        status: "inProgress",
+        senderThreadId: "main",
+        receiverThreadIds: ["agent-a", "agent-b"],
+        prompt: "inspect the repo",
+        model: "gpt-5",
+      },
+    })
+    expect(events).toEqual([
+      {
+        type: "subagent.started",
+        toolCallId: "collab1:agent-a",
+        name: "spawnAgent",
+        description: "inspect the repo",
+        model: "gpt-5",
+      },
+      {
+        type: "subagent.started",
+        toolCallId: "collab1:agent-b",
+        name: "spawnAgent",
+        description: "inspect the repo",
+        model: "gpt-5",
+      },
+    ])
+  })
+
   it("ignores unknown methods and malformed payloads", () => {
     expect(normalizeCodexNotification("thread/started", {})).toEqual([])
     expect(normalizeCodexNotification("item/completed", null)).toEqual([])

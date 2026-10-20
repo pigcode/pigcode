@@ -7,6 +7,7 @@ import { ApprovalCard, type ApprovalDecision, type ApprovalRequest } from "./app
 import { DiffSummary, type DiffFile, type FileChangeSummary } from "./diff-summary"
 import { AssistantMessage, MessageText, UserMessage } from "./message-item"
 import { PlanCard, type PlanStep, type PlanStepStatus, type PlanUpdate } from "./plan-card"
+import { SubagentCard, type SubagentCall, type SubagentStatus } from "./subagent-card"
 import { ToolCard, type ToolCall, type ToolStatus } from "./tool-card"
 
 /** 消息列表需要的线程事件与交互回调。 */
@@ -244,6 +245,65 @@ function diffFromEvent(event: ThreadEvent): FileChangeSummary | undefined {
   return { files, additions, deletions }
 }
 
+/** 解析子 agent 完成状态；缺失时按 isError 推导。 */
+function asSubagentStatus(value: unknown, isError: boolean): SubagentStatus {
+  switch (value) {
+    case "running":
+    case "completed":
+    case "failed":
+    case "interrupted":
+      return value
+    default:
+      return isError ? "failed" : "completed"
+  }
+}
+
+/** 判断事件是否属于某个子 agent；这类事件只在卡片内部展示。 */
+function isParentScoped(type: ThreadEvent["type"]): boolean {
+  return type === "message.completed" || type === "tool.started" || type === "tool.completed"
+}
+
+/** 收集子 agent 卡片及其内部事件。 */
+function collectSubagents(events: ThreadEvent[]): Map<string, SubagentCall> {
+  const children = new Map<string, ThreadEvent[]>()
+  for (const event of events) {
+    if (!isParentScoped(event.type)) continue
+    const payload = asRecord(event.payload)
+    const parent = asText(payload?.parentToolUseId)
+    if (!parent) continue
+    const list = children.get(parent) ?? []
+    list.push(event)
+    children.set(parent, list)
+  }
+
+  const subagents = new Map<string, SubagentCall>()
+  for (const event of [...events].sort((left, right) => left.seq - right.seq)) {
+    const payload = asRecord(event.payload)
+    if (!payload) continue
+    const id = asText(payload.toolCallId) ?? asText(payload.id)
+    if (!id) continue
+    if (event.type === "subagent.started") {
+      const entry: SubagentCall = {
+        id,
+        name: asText(payload.name) ?? id,
+        status: "running",
+        events: children.get(id) ?? [],
+      }
+      const description = asText(payload.description)
+      if (description) entry.description = description
+      const model = asText(payload.model)
+      if (model) entry.model = model
+      subagents.set(id, entry)
+      continue
+    }
+    if (event.type === "subagent.completed") {
+      const entry = subagents.get(id)
+      if (entry) entry.status = asSubagentStatus(payload.status, payload.isError === true)
+    }
+  }
+  return subagents
+}
+
 /** 判断线程是否还有未处理的审批请求。 */
 export function hasPendingApproval(events: ThreadEvent[]): boolean {
   const resolved = collectResolved(events)
@@ -266,13 +326,27 @@ export function MessageList({
   const { t } = useLocale()
   const tools = collectTools(events)
   const resolved = collectResolved(events)
+  const subagents = collectSubagents(events)
   const sorted = [...events].sort((left, right) => left.seq - right.seq)
   const nodes: ReactNode[] = []
   const renderedTools = new Set<string>()
+  const renderedSubagents = new Set<string>()
 
   for (const event of sorted) {
     const key = `${event.seq}-${event.type}`
     const payload = asRecord(event.payload)
+    // 子 agent 的消息与工具已在卡片内部按 seq 渲染，跳过顶层重复展示。
+    if (isParentScoped(event.type) && asText(payload?.parentToolUseId)) continue
+    if (event.type === "subagent.started") {
+      const id = asText(payload?.toolCallId) ?? asText(payload?.id)
+      const subagent = id ? subagents.get(id) : undefined
+      if (subagent && !renderedSubagents.has(subagent.id)) {
+        renderedSubagents.add(subagent.id)
+        nodes.push(<SubagentCard key={`subagent-${subagent.id}`} subagent={subagent} />)
+      }
+      continue
+    }
+    if (event.type === "subagent.completed") continue
     if (event.type === "run.started") {
       const text = asText(payload?.text)
       if (text) nodes.push(<UserMessage key={key} text={text} />)
