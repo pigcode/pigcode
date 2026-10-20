@@ -13,7 +13,8 @@ export interface Switch {
 /** 选择新线程默认 provider：显式 env 优先，否则 Claude 已安装且登录时用 Claude。 */
 export async function defaultProvider(): Promise<string> {
   const forced = process.env.PIGCODE_PROVIDER
-  if (forced === "claude" || forced === "fake") return forced
+  // codex 同样允许强制指定，供真实 E2E 与手动冒烟使用。
+  if (forced === "claude" || forced === "codex" || forced === "fake") return forced
   const claude = await detectClaude()
   return claude.installed && claude.loggedIn ? "claude" : "fake"
 }
