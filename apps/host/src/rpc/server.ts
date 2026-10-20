@@ -128,6 +128,10 @@ export class RpcServer {
         )
         return { ok: true }
       }
+      case "provider.detect":
+        return this.ctx.providers.detect()
+      case "provider.list":
+        return this.ctx.providers.list()
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.installLocal":

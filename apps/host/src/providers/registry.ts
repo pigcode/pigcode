@@ -16,6 +16,8 @@ import type {
   UserInput,
 } from "./driver"
 import { FakeProviderDriver } from "./fake"
+import { detectClaude } from "./claude/detect"
+import type { ClaudeDetection } from "./claude/detect"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
 
@@ -29,6 +31,7 @@ export interface StartRunResult {
 export interface ProvidersService {
   register(driver: ProviderDriver): void
   list(): Array<{ id: string; displayName: string; capabilities: ProviderCapabilities }>
+  detect(): Promise<{ claude: ClaudeDetection; fake: { installed: true } }>
   startRun(
     threadId: string,
     text: string,
@@ -283,6 +286,11 @@ export function apply(ctx: Context): void {
         displayName: driver.displayName,
         capabilities: driver.capabilities,
       }))
+    },
+    async detect() {
+      // Claude 只做只读探测；fake 永远可用，保证离线也能开发。
+      const claude = await detectClaude()
+      return { claude, fake: { installed: true } }
     },
     async startRun(threadId, text, emitLive) {
       const thread = ctx.threads.get(threadId)
