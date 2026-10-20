@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pigcode</title>
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; display: grid; grid-template-columns: 260px 1fr; height: 100vh; }
+      aside { border-right: 1px solid #ddd; padding: 12px; overflow: auto; }
+      main { padding: 12px; overflow: auto; }
+      button, input { font: inherit; }
+      .event { padding: 4px 0; border-bottom: 1px solid #eee; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <h3>Pigcode M0-A</h3>
+      <input id="root" placeholder="/path/to/project" />
+      <button id="add">Add project</button>
+      <button id="new">New thread</button>
+      <ul id="threads"></ul>
+      <div id="plugin-panels"></div>
+    </aside>
+    <main>
+      <div id="messages"></div>
+      <input id="text" placeholder="Message" />
+      <button id="send">Send</button>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

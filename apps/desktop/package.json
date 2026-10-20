@@ -1,0 +1,25 @@
+{
+  "name": "@pigcode/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pigcode/client-runtime": "workspace:*",
+    "@pigcode/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "43.4.1",
+    "electron-vite": "5.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "5.9.3",
+    "vite": "7.1.12",
+    "vitest": "4.0.16"
+  }
+}
