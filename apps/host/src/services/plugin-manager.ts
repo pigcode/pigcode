@@ -93,10 +93,11 @@ export async function buildBootGraph(profileDir: string): Promise<{ entries: Boo
       .update(await readFile(clientPath))
       .digest("hex")
       .slice(0, 12)
+    const clientEntry = manifest.pigcode.client.replace(/^\.\//, "")
     entries.push({
       id: entry.id,
       revision,
-      url: `pigcode-plugin://plugins/${encodeURIComponent(manifest.name)}/client.js?rev=${revision}`,
+      url: `pigcode-plugin://plugins/${encodeURIComponent(manifest.name)}/${clientEntry}?rev=${revision}`,
       inject: manifest.pigcode.inject,
     })
   }

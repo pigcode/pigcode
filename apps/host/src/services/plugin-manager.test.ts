@@ -26,6 +26,11 @@ describe("plugin manager", () => {
     const { root, source } = await fixture()
     const entry = await installLocalPlugin(root, source)
     expect(entry.id).toContain("pigcode-ui-debug-panel")
+
+    const enabledGraph = await buildBootGraph(root)
+    expect(enabledGraph.entries).toHaveLength(1)
+    expect(enabledGraph.entries[0]?.url).toContain("/client.mjs?rev=")
+
     await setPluginEnabled(root, entry.id, false)
     const graph = await buildBootGraph(root)
     expect(graph.entries).toHaveLength(0)
