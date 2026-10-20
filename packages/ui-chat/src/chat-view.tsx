@@ -2,6 +2,7 @@
 import { useState } from "react"
 import type { Thread, ThreadEvent } from "@pigcode/contracts"
 import { Folder, PanelRight, Square } from "lucide-react"
+import { Composer } from "@pigcode/ui-composer"
 import { Button, useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
 import type { FileChangeSummary } from "./diff-summary"
@@ -16,7 +17,7 @@ export interface ChatViewProps {
   streamingText?: string
   /** 当前工作目录；Task 12 的容器可以传入项目根目录。 */
   cwd?: string
-  /** 发送消息；composer 由 Task 9 接入，这里先保留占位。 */
+  /** 发送消息；交给 composer 提交。 */
   onStart?: (text: string) => void
   /** 兼容计划接口里的 onSubmit 命名。 */
   onSubmit?: (text: string) => void
@@ -42,11 +43,14 @@ export function ChatView({
   events,
   streamingText = "",
   cwd,
+  onStart,
+  onSubmit,
   onInterrupt,
   onApproval,
   onViewTool,
   onViewDiff,
 }: ChatViewProps) {
+  const submit = onSubmit ?? onStart
   const { t } = useLocale()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const pendingApproval = hasPendingApproval(events)
@@ -106,9 +110,12 @@ export function ChatView({
         />
       </div>
       <div className="composer-wrap">
-        <div className="composer-placeholder" role="note">
-          {t("chat.composerPlaceholder")}
-        </div>
+        <Composer
+          onSubmit={(text) => submit?.(text)}
+          onStop={onInterrupt ?? (() => undefined)}
+          running={running}
+          disabled={!thread}
+        />
       </div>
       <EnvironmentDrawer
         open={drawerOpen}
