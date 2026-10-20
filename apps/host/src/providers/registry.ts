@@ -27,7 +27,7 @@ import type { CodexDetection } from "./codex/detect"
 import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
 import { RunAlreadyActiveError, TooManyActiveRunsError } from "./errors"
-import { defaultProvider, listProviderModels, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
+import { defaultProvider, disposeSession, listProviderModels, pendingHandoff, resolveProjectCwd, switchProvider } from "./switching"
 import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
@@ -91,13 +91,11 @@ export interface ProvidersService {
   /** Host 启动后清理上一个进程遗留的 run、session 与 pending 请求。 */
   recoverAfterRestart(): RestartRecovery
 }
-
 declare module "cordis" {
   interface Context {
     providers: ProvidersService
   }
 }
-
 /** providers 插件依赖的线程、事件与存储服务。 */
 export const inject = ["threads", "sessions", "storage"]
 export { RunAlreadyActiveError, TooManyActiveRunsError }
@@ -361,7 +359,9 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     },
     async switchProvider(threadId, providerId, modelId) {
       if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
-      return switchProvider(ctx, providerSessions, threadId, providerId, modelId ?? null)
+      return switchProvider(ctx, providerSessions, threadId, providerId, modelId ?? null, (session) =>
+        disposeSession(drivers, session),
+      )
     },
     async startRun(threadId, text, emitLive) {
       const thread = ctx.threads.get(threadId)

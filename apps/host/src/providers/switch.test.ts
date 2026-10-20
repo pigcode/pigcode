@@ -13,9 +13,14 @@ import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 
-/** 记录每次 send 的输入，用来观察 handoff 是否注入及是否只注入一次。 */
-function recordingDriver(id: string): { driver: ProviderDriver; inputs: UserInput[] } {
+/** 记录每次 send 的输入与 dispose 调用，用来观察 handoff 与旧会话清理。 */
+function recordingDriver(id: string): {
+  driver: ProviderDriver
+  inputs: UserInput[]
+  disposed: ProviderSessionHandle[]
+} {
   const inputs: UserInput[] = []
+  const disposed: ProviderSessionHandle[] = []
   const driver: ProviderDriver = {
     id,
     displayName: id,
@@ -36,9 +41,11 @@ function recordingDriver(id: string): { driver: ProviderDriver; inputs: UserInpu
       runtime.emit({ type: "run.completed" })
     },
     interrupt: async () => undefined,
-    dispose: async () => undefined,
+    async dispose(session) {
+      disposed.push(session)
+    },
   }
-  return { driver, inputs }
+  return { driver, inputs, disposed }
 }
 
 /** 建立内存 Host；claude 用记录型 driver 覆盖，避免测试启动真实进程。 */
@@ -151,6 +158,19 @@ describe("provider switching", () => {
     await expect(ctx.providers.switchProvider(thread.id, "missing")).rejects.toThrow(
       "provider not found",
     )
+    await ctx.fiber.dispose()
+  })
+
+  it("disposes the previous provider session before switching", async () => {
+    const { ctx, thread } = await setup()
+    const fake = recordingDriver("fake")
+    ctx.providers.register(fake.driver)
+
+    const first = await ctx.providers.startRun(thread.id, "one")
+    await first.done
+    await ctx.providers.switchProvider(thread.id, "claude", null)
+
+    expect(fake.disposed).toHaveLength(1)
     await ctx.fiber.dispose()
   })
 })

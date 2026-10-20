@@ -1,5 +1,6 @@
 /** Provider 切换：停止旧会话、更新线程选择并生成一次性 handoff。 */
 import type { Context } from "cordis"
+import type { ProviderSession } from "@pigcode/contracts"
 import { detectClaude } from "./claude/detect"
 import type { ProviderSessionStore } from "./claude/session-store"
 import type { ProviderDriver, ProviderModelInfo } from "./driver"
@@ -10,6 +11,23 @@ export async function listProviderModels(
 ): Promise<ProviderModelInfo[]> {
   if (!driver) throw new Error("provider not found")
   return driver.listModels ? driver.listModels() : []
+}
+
+/** 切换前关闭旧 provider 的 session，避免 app-server 子进程泄漏。 */
+export async function disposeSession(
+  drivers: Map<string, ProviderDriver>,
+  session: ProviderSession,
+): Promise<void> {
+  const driver = drivers.get(session.providerId)
+  if (!driver) return
+  await driver.dispose({
+    id: session.id,
+    threadId: session.threadId,
+    cwd: session.cwd,
+    nativeSessionId: session.nativeSessionId,
+    permissionMode: "workspace-write",
+    model: null,
+  })
 }
 
 /** 切换结果；handoff 是写给下一个 provider 的上下文。 */
@@ -73,16 +91,19 @@ export function pendingHandoff(ctx: Context, threadId: string): string | null {
 }
 
 /** 更新线程选择、停止旧会话并追加 thread.updated；provider 是否存在由 registry 校验。 */
-export function switchProvider(
+export async function switchProvider(
   ctx: Context,
   sessions: ProviderSessionStore,
   threadId: string,
   providerId: string,
   modelId: string | null,
-): Switch {
+  disposeActive?: (session: ProviderSession) => Promise<void>,
+): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const handoff = buildHandoff(ctx, threadId)
   const now = new Date().toISOString()
+  const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
+  for (const session of active) await disposeActive?.(session)
   ctx.threads.updateSelection(threadId, providerId, modelId)
   sessions.stopActive(threadId, now)
   ctx.sessions.append({
