@@ -313,6 +313,83 @@ a.item,
   padding: 0 10px 0 16px;
   -webkit-app-region: drag;
 }
+/* 多会话 tab 栏：位于聊天面板顶栏上方，可横向滚动，状态点沿用状态色。 */
+.thread-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px 0 12px;
+  overflow-x: auto;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.thread-tabs > * {
+  -webkit-app-region: no-drag;
+}
+.thread-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  height: 28px;
+  padding: 0 5px 0 10px;
+  border-radius: var(--r-md);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  cursor: default;
+  flex: none;
+}
+.thread-tab:hover {
+  background: var(--hover);
+}
+.thread-tab.is-active {
+  background: var(--active);
+  color: var(--fg);
+}
+.thread-tab .tab-title {
+  min-width: 0;
+}
+.thread-tab .tab-status {
+  --dot: var(--faint);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dot);
+  flex: none;
+}
+.thread-tab .tab-status[data-status="running"] {
+  --dot: var(--ok);
+}
+.thread-tab .tab-status[data-status="queued"],
+.thread-tab .tab-status[data-status="waiting-approval"] {
+  --dot: var(--warn);
+}
+.thread-tab .tab-status[data-status="failed"] {
+  --dot: var(--bad);
+}
+.thread-tab .tab-status[data-status="completed"] {
+  --dot: var(--ok-text);
+}
+.thread-tab .tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+}
+.thread-tab .tab-close:hover {
+  background: var(--active);
+  color: var(--fg);
+}
 .panel-top > * {
   -webkit-app-region: no-drag;
 }

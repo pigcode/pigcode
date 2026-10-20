@@ -1,5 +1,5 @@
 /** 聊天主视图：标题、运行状态、消息时间线、composer 占位与环境抽屉。 */
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import type { ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
 import { Check, ChevronDown, Folder, PanelRight, PanelRightOpen, Square } from "lucide-react"
 import { Composer } from "@pigcode/ui-composer"
@@ -45,6 +45,8 @@ export interface ChatViewProps {
   rightOpen?: boolean
   /** 切换右栏；由容器维护展开状态。 */
   onToggleRight?: () => void
+  /** 多会话 tab 栏；渲染在面板顶栏上方。 */
+  tabs?: ReactNode
 }
 
 /** 线程头下拉菜单；provider 与模型切换共用。 */
@@ -114,6 +116,7 @@ export function ChatView({
   onViewDiff,
   rightOpen = false,
   onToggleRight,
+  tabs,
 }: ChatViewProps) {
   const submit = onSubmit ?? onStart
   const { t } = useLocale()
@@ -151,6 +154,7 @@ export function ChatView({
 
   return (
     <section className="view">
+      {tabs}
       <div className="panel-top">
         <div className="title">
           <Folder className="ic muted" aria-hidden="true" />

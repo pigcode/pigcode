@@ -19,6 +19,7 @@ import { ChatView, type ApprovalDecision, type ProviderOption } from "@pigcode/u
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
 import { SettingsView, type ProviderDetection, type ProviderStatus } from "@pigcode/ui-settings"
 import type { SettingsSection, ShellView } from "@pigcode/ui-shell"
+import { ThreadTabs, type ThreadTabStatus } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
 import { ConnectionBanner } from "./connection-banner"
@@ -160,6 +161,31 @@ export function ChatViewContainer({
       .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
   }
 
+  // 多会话 tab 栏：标题来自线程列表，状态来自每个线程独立的 ThreadViewState。
+  const openThreads = state.openThreadIds
+    .map((id) => state.threads.find((item) => item.id === id))
+    .filter((item): item is Thread => item !== undefined)
+  const statusByThread: Record<string, ThreadTabStatus> = {}
+  for (const id of state.openThreadIds) {
+    statusByThread[id] = state.threadStates[id]?.status ?? "idle"
+  }
+  const tabs =
+    openThreads.length > 0 ? (
+      <ThreadTabs
+        threads={openThreads}
+        openThreadIds={state.openThreadIds}
+        activeThreadId={state.activeThreadId}
+        statusByThread={statusByThread}
+        onActivate={(threadId) => deps.store.setActiveThread(threadId)}
+        onClose={(threadId) => {
+          deps.store.closeThread(threadId)
+          void deps.connection
+            .closeThread(threadId)
+            .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
+        }}
+      />
+    ) : undefined
+
   return (
     <>
       {providerNotice ? (
@@ -171,6 +197,7 @@ export function ChatViewContainer({
         thread={thread}
         events={state.events}
         streamingText={state.streamingText}
+        tabs={tabs}
         capabilities={state.providerCapabilities}
         models={state.providerModels}
         providers={providerOptions}
@@ -393,11 +420,11 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       store.update({
         threads: [thread, ...store.getSnapshot().threads],
         activeProjectId: project.id,
-        activeThreadId: thread.id,
-        events: [],
-        streamingText: "",
         error: null,
       })
+      // 新线程立即成为 tab 与活动会话，再向 Host 订阅事件。
+      store.openThread(thread.id)
+      store.setActiveThread(thread.id)
       await connection.openThread(thread.id)
     } catch (error) {
       store.update({ error: messageOf(error) })
@@ -405,7 +432,8 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   }
 
   function openThread(threadId: string): void {
-    store.update({ activeThreadId: threadId, events: [], streamingText: "", error: null })
+    store.openThread(threadId)
+    store.setActiveThread(threadId)
     void connection
       .openThread(threadId)
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
