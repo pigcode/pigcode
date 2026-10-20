@@ -1,0 +1,21 @@
+{
+  "name": "pigcode-provider-echo",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./index.mjs",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "provider",
+    "displayName": "Echo",
+    "host": "./index.mjs",
+    "provides": [
+      "provider:echo"
+    ],
+    "permissions": [],
+    "contributes": {
+      "provider": {
+        "id": "echo"
+      }
+    }
+  }
+}

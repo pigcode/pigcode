@@ -184,6 +184,8 @@ importers:
 
   examples/capability-session-info: {}
 
+  examples/provider-echo: {}
+
   examples/ui-debug-panel: {}
 
   packages/client-runtime:
