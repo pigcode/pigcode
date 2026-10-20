@@ -1,0 +1,30 @@
+{
+  "name": "@pigcode/host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./kernel/*": "./src/kernel/*.ts",
+    "./services/*": "./src/services/*.ts",
+    "./providers/*": "./src/providers/*.ts",
+    "./rpc/*": "./src/rpc/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cordisjs/plugin-loader": "1.0.0-rc.8",
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*",
+    "better-sqlite3": "13.0.3",
+    "cordis": "4.0.0-rc.11",
+    "yaml": "2.8.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
+  }
+}

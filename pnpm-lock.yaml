@@ -25,7 +25,41 @@ importers:
         version: 8.71.2(eslint@9.39.5)(typescript@5.9.3)
       vitest:
         specifier: 4.0.16
-        version: 4.0.16(@types/node@24.10.1)
+        version: 4.0.16(@types/node@24.10.1)(yaml@2.8.1)
+
+  apps/host:
+    dependencies:
+      '@cordisjs/plugin-loader':
+        specifier: 1.0.0-rc.8
+        version: 1.0.0-rc.8(cordis@4.0.0-rc.11)
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      cordis:
+        specifier: 4.0.0-rc.11
+        version: 4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8)
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 7.6.13
+        version: 7.6.13
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.0.16
+        version: 4.0.16(@types/node@24.10.1)(yaml@2.8.1)
 
   packages/contracts:
     dependencies:
@@ -44,7 +78,7 @@ importers:
         version: link:../contracts
       cordis:
         specifier: 4.0.0-rc.11
-        version: 4.0.0-rc.11
+        version: 4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -54,6 +88,15 @@ importers:
         version: 5.9.3
 
 packages:
+
+  '@cordisjs/plugin-loader@1.0.0-rc.8':
+    resolution: {integrity: sha512-KK/tN3OjkK0VJjL1aEQCVK2e2+pqW1F3KHtU5XPZbzZ99HN/kz3yHNTTxSjOGn33WjnL9wdMPHHXQfuHzVeG/A==}
+    peerDependencies:
+      cordis: ^4.0.0-rc.11
+      node-addon-require-builtin: ^0.1.0
+    peerDependenciesMeta:
+      node-addon-require-builtin:
+        optional: true
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -420,6 +463,9 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
+  '@types/better-sqlite3@7.6.13':
+    resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
+
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
@@ -553,6 +599,10 @@ packages:
   balanced-match@4.0.4:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
+
+  better-sqlite3@13.0.3:
+    resolution: {integrity: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==}
+    engines: {node: '>=22'}
 
   brace-expansion@1.1.21:
     resolution: {integrity: sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==}
@@ -805,6 +855,10 @@ packages:
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha512-VijLXbi3UACN69I0JVXJsX4tjACjNoQDgv2gTF6sx2wWEi8tkSg2eX8p5gSIFi8z2+DL3oHmY6OyKce38SDolg==}
+    engines: {node: ^18 || ^20 || >= 21}
+
   obug@2.2.1:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
     engines: {node: '>=12.20.0'}
@@ -1034,6 +1088,11 @@ packages:
     resolution: {integrity: sha512-BN22B5eaMMI9UMtjrGd5g5eCYPpCPDUy0FJXbYsaT5zYxjFOckS53SQDE3pWkVoWpHXVb3BrYcEN4Twa55B5cA==}
     engines: {node: '>=0.10.0'}
 
+  yaml@2.8.1:
+    resolution: {integrity: sha512-lcYcMxX2PO9XMGvAJkJ3OsNMw+/7FKes7/hgerGUYWIoWu5j/+YQqcZr5JnPZWzOsEBgMbSbiSTn/dv/69Mkpw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -1042,6 +1101,11 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@cordisjs/plugin-loader@1.0.0-rc.8(cordis@4.0.0-rc.11)':
+    dependencies:
+      cordis: 4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8)
+      cosmokit: 1.8.1
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
@@ -1265,6 +1329,10 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@types/better-sqlite3@7.6.13':
+    dependencies:
+      '@types/node': 24.10.1
+
   '@types/chai@5.2.3':
     dependencies:
       '@types/deep-eql': 4.0.2
@@ -1380,13 +1448,13 @@ snapshots:
       chai: 6.3.0
       tinyrainbow: 3.2.0
 
-  '@vitest/mocker@4.0.16(vite@7.3.7(@types/node@24.10.1))':
+  '@vitest/mocker@4.0.16(vite@7.3.7(@types/node@24.10.1)(yaml@2.8.1))':
     dependencies:
       '@vitest/spy': 4.0.16
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 7.3.7(@types/node@24.10.1)
+      vite: 7.3.7(@types/node@24.10.1)(yaml@2.8.1)
 
   '@vitest/pretty-format@4.0.16':
     dependencies:
@@ -1435,6 +1503,10 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
+  better-sqlite3@13.0.3:
+    dependencies:
+      node-addon-api: 8.9.2
+
   brace-expansion@1.1.21:
     dependencies:
       balanced-match: 1.0.2
@@ -1461,10 +1533,12 @@ snapshots:
 
   concat-map@0.0.1: {}
 
-  cordis@4.0.0-rc.11:
+  cordis@4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8):
     dependencies:
       '@standard-schema/spec': 1.1.0
       cosmokit: 1.8.1
+    optionalDependencies:
+      '@cordisjs/plugin-loader': 1.0.0-rc.8(cordis@4.0.0-rc.11)
 
   cosmokit@1.8.1: {}
 
@@ -1686,6 +1760,8 @@ snapshots:
 
   natural-compare@1.4.0: {}
 
+  node-addon-api@8.9.2: {}
+
   obug@2.2.1: {}
 
   optionator@0.9.4:
@@ -1825,7 +1901,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  vite@7.3.7(@types/node@24.10.1):
+  vite@7.3.7(@types/node@24.10.1)(yaml@2.8.1):
     dependencies:
       esbuild: 0.28.2
       fdir: 6.5.0(picomatch@4.0.7)
@@ -1836,11 +1912,12 @@ snapshots:
     optionalDependencies:
       '@types/node': 24.10.1
       fsevents: 2.3.3
+      yaml: 2.8.1
 
-  vitest@4.0.16(@types/node@24.10.1):
+  vitest@4.0.16(@types/node@24.10.1)(yaml@2.8.1):
     dependencies:
       '@vitest/expect': 4.0.16
-      '@vitest/mocker': 4.0.16(vite@7.3.7(@types/node@24.10.1))
+      '@vitest/mocker': 4.0.16(vite@7.3.7(@types/node@24.10.1)(yaml@2.8.1))
       '@vitest/pretty-format': 4.0.16
       '@vitest/runner': 4.0.16
       '@vitest/snapshot': 4.0.16
@@ -1857,7 +1934,7 @@ snapshots:
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyrainbow: 3.2.0
-      vite: 7.3.7(@types/node@24.10.1)
+      vite: 7.3.7(@types/node@24.10.1)(yaml@2.8.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.1
@@ -1884,6 +1961,8 @@ snapshots:
       stackback: 0.0.2
 
   word-wrap@1.2.5: {}
+
+  yaml@2.8.1: {}
 
   yocto-queue@0.1.0: {}
 
