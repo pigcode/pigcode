@@ -66,7 +66,10 @@ describe("plugin provides conflict", () => {
     await installLocalPlugin(profileDir, await writeProvider(profileDir, "a", ["provider:echo"]))
     await installLocalPlugin(profileDir, await writeProvider(profileDir, "b", ["provider:other"]))
 
-    await expect(setPluginEnabled(profileDir, "provider.b", true)).resolves.toBeUndefined()
+    await expect(setPluginEnabled(profileDir, "provider.b", true)).resolves.toMatchObject({
+      id: "provider.b",
+      disabled: false,
+    })
     const plugins = await listPlugins(profileDir)
     expect(plugins.every((plugin) => plugin.conflict === null)).toBe(true)
   })

@@ -182,11 +182,6 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     run.approvals.clear()
   }
 
-  /** provider 回报原生会话 id 后更新会话行。 */
-  function updateSessionNativeId(sessionId: string, nativeSessionId: string): void {
-    providerSessions.updateNativeSessionId(sessionId, nativeSessionId)
-  }
-
   /** 把 provider 事件映射为持久线程事件；delta 只走实时通道。 */
   function handleProviderEvent(run: ActiveRun, event: ProviderEvent): void {
     if (activeRuns.get(run.runId) !== run) return
@@ -195,7 +190,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
         return
       case "session.started":
         run.session.nativeSessionId = event.nativeSessionId
-        updateSessionNativeId(run.session.id, event.nativeSessionId)
+        providerSessions.updateNativeSessionId(run.session.id, event.nativeSessionId)
         append(run.threadId, run.runId, "session.started", {
           nativeSessionId: event.nativeSessionId,
         })
