@@ -2,7 +2,15 @@
 import { _electron as electron, expect, test } from "@playwright/test"
 
 test("chat, plugin panel, and reconnect", async () => {
-  const app = await electron.launch({ args: ["."] })
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry): entry is [string, string] => entry[1] !== undefined,
+    ),
+  )
+  const app = await electron.launch({
+    args: ["."],
+    env: { ...env, PIGCODE_PROVIDER: "fake" },
+  })
   const page = await app.firstWindow()
   // 侧栏同时渲染图标按钮和空状态按钮，取第一个即可。
   await page.getByRole("button", { name: "添加项目" }).first().click()

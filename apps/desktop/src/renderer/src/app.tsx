@@ -48,10 +48,10 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** 选择 Host 已注册的真实 provider；未开启时回退 fake，保持离线开发可用。 */
+/** 询问 Host 当前默认 provider；Claude 未安装/未登录时 Host 返回 fake。 */
 async function pickProviderId(connection: Connection): Promise<string> {
-  const providers = (await connection.call("provider.list", {})) as Array<{ id: string }>
-  return providers.some((provider) => provider.id === "claude") ? "claude" : "fake"
+  const result = (await connection.call("provider.default", {})) as { id?: string }
+  return result.id === "claude" ? "claude" : "fake"
 }
 
 /** 连接恢复后显示一条短提示；Host 被杀后由 main 重新转交端口触发。 */

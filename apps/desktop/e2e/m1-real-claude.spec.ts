@@ -9,7 +9,7 @@ function launchEnv(): Record<string, string> {
   const entries = Object.entries(process.env).filter(
     (entry): entry is [string, string] => entry[1] !== undefined,
   )
-  return { ...Object.fromEntries(entries), PIGCODE_REAL_CLAUDE: "1" }
+  return { ...Object.fromEntries(entries), PIGCODE_REAL_CLAUDE: "1", PIGCODE_PROVIDER: "claude" }
 }
 
 test("real claude answers OK", async () => {

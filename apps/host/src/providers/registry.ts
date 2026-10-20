@@ -50,6 +50,8 @@ export interface ProvidersService {
   register(driver: ProviderDriver): void
   list(): Array<{ id: string; displayName: string; capabilities: ProviderCapabilities }>
   detect(): Promise<{ claude: ClaudeDetection; fake: { installed: true } }>
+  /** 选择新线程默认 provider：显式 env 优先，否则 Claude 已安装且登录时用 Claude。 */
+  defaultProvider(): Promise<string>
   startRun(
     threadId: string,
     text: string,
@@ -112,11 +114,8 @@ export function apply(ctx: Context): void {
   const drivers = new Map<string, ProviderDriver>()
   const fake = new FakeProviderDriver()
   drivers.set(fake.id, fake)
-  // 真实 Claude 只在显式开启时注册：默认开发与 E2E 仍使用确定性 fake provider。
-  if (process.env.PIGCODE_REAL_CLAUDE === "1") {
-    const claude = new ClaudeDriver()
-    drivers.set(claude.id, claude)
-  }
+  const claude = new ClaudeDriver()
+  drivers.set(claude.id, claude)
 
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
@@ -336,6 +335,12 @@ export function apply(ctx: Context): void {
       // Claude 只做只读探测；fake 永远可用，保证离线也能开发。
       const claude = await detectClaude()
       return { claude, fake: { installed: true } }
+    },
+    async defaultProvider() {
+      const forced = process.env.PIGCODE_PROVIDER
+      if (forced === "claude" || forced === "fake") return forced
+      const claude = await detectClaude()
+      return claude.installed && claude.loggedIn ? "claude" : "fake"
     },
     async startRun(threadId, text, emitLive) {
       const thread = ctx.threads.get(threadId)

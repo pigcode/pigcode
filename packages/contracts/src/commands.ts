@@ -27,6 +27,7 @@ export const commandSchemas = {
   }),
   "provider.detect": z.object({}),
   "provider.list": z.object({}),
+  "provider.default": z.object({}),
   "thread.subscribe": z.object({
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),

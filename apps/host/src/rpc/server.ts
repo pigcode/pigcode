@@ -132,6 +132,8 @@ export class RpcServer {
         return this.ctx.providers.detect()
       case "provider.list":
         return this.ctx.providers.list()
+      case "provider.default":
+        return { id: await this.ctx.providers.defaultProvider() }
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.installLocal":

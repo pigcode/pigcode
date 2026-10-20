@@ -139,4 +139,15 @@ describe("providers.startRun", () => {
     expect(pending.status).toBe("resolved")
     await ctx.fiber.dispose()
   })
+
+  it("honors the forced provider env", async () => {
+    process.env.PIGCODE_PROVIDER = "claude"
+    const { ctx } = await setup()
+    try {
+      await expect(ctx.providers.defaultProvider()).resolves.toBe("claude")
+    } finally {
+      delete process.env.PIGCODE_PROVIDER
+      await ctx.fiber.dispose()
+    }
+  })
 })
