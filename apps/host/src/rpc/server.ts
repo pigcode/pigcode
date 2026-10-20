@@ -100,16 +100,34 @@ export class RpcServer {
       }
       case "run.start": {
         const value = parsed as { threadId: string; text: string }
-        return this.ctx.providers.startRun(value.threadId, value.text, (event) => {
+        const { runId } = await this.ctx.providers.startRun(value.threadId, value.text, (event) => {
           this.transport.send({
             jsonrpc: "2.0",
             method: "thread.delta",
             params: { threadId: value.threadId, event },
           })
         })
+        return { runId }
       }
-      case "run.interrupt":
-        return { interrupted: true }
+      case "run.interrupt": {
+        const value = parsed as { runId: string }
+        return { interrupted: this.ctx.providers.cancelRun(value.runId) }
+      }
+      case "run.respondApproval": {
+        const value = parsed as {
+          threadId: string
+          runId: string
+          requestId: string
+          decision: "allow-once" | "allow-for-session" | "deny"
+        }
+        this.ctx.providers.respondApproval(
+          value.threadId,
+          value.runId,
+          value.requestId,
+          value.decision,
+        )
+        return { ok: true }
+      }
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.installLocal":

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import type {
   CreateSessionInput,
   ProviderDriver,
-  ProviderEmit,
+  ProviderRuntime,
   ProviderSessionHandle,
   UserInput,
 } from "./driver"
@@ -39,7 +39,9 @@ export class FakeProviderDriver implements ProviderDriver {
       id: `ps_${randomUUID()}`,
       threadId: input.threadId,
       cwd: input.cwd,
-      nativeSessionId: null,
+      nativeSessionId: input.nativeSessionId ?? null,
+      permissionMode: input.permissionMode ?? "workspace-write",
+      model: input.model ?? null,
     }
   }
 
@@ -47,12 +49,12 @@ export class FakeProviderDriver implements ProviderDriver {
   async send(
     _session: ProviderSessionHandle,
     _input: UserInput,
-    emit: ProviderEmit,
+    runtime: ProviderRuntime,
   ): Promise<void> {
-    emit({ type: "run.started" })
-    for (const text of CHUNKS) emit({ type: "message.delta", text })
-    emit({ type: "message.completed", text: CHUNKS.join("") })
-    emit({ type: "run.completed" })
+    runtime.emit({ type: "run.started" })
+    for (const text of CHUNKS) runtime.emit({ type: "message.delta", text })
+    runtime.emit({ type: "message.completed", text: CHUNKS.join("") })
+    runtime.emit({ type: "run.completed" })
   }
 
   /** fake provider 没有可中断的工作。 */
