@@ -3,7 +3,11 @@ import { createHash } from "node:crypto"
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { parse, stringify } from "yaml"
-import { pluginManifestSchema, type PluginManifest } from "@pigcode/plugin-sdk"
+import {
+  checkPluginCompatibility,
+  pluginManifestSchema,
+  type PluginManifest,
+} from "@pigcode/plugin-sdk"
 
 /** profile 中记录的单条已安装插件。 */
 export interface InstalledPluginEntry {
@@ -28,6 +32,16 @@ export interface PluginSummary {
   version: string
   kind: "provider" | "capability" | "ui" | "bundle"
   enabled: boolean
+  /** manifest 声明的 API 版本；manifest 不可用时为 0。 */
+  apiVersion: number
+  /** 安装时需要展示给用户的权限列表。 */
+  permissions: string[]
+  /** 插件声明提供的能力标识，用于冲突检测与展示。 */
+  provides: string[]
+  /** 插件声明的贡献点，原样透传给 UI 展示。 */
+  contributes: Record<string, unknown>
+  /** provides 冲突原因；无冲突时为 null。 */
+  conflict: string | null
   error: string | null
 }
 
@@ -110,13 +124,21 @@ export async function listPlugins(profileDir: string): Promise<PluginSummary[]> 
   for (const entry of profile.plugins) {
     if (entry.id.startsWith("core.")) continue
     const { manifest, error } = await readManifestState(profileDir, entry)
+    // Task 2 会在这里填入 provides 冲突；当前先保持 null。
+    const conflict: string | null = null
     summaries.push({
       id: entry.id,
       name: manifest?.name ?? entry.name,
       version: manifest?.version ?? "0.0.0",
       kind: manifest?.pigcode.kind ?? kindFromId(entry.id),
       enabled: !entry.disabled,
-      error,
+      apiVersion: manifest?.pigcode.apiVersion ?? 0,
+      permissions: manifest?.pigcode.permissions ?? [],
+      provides: manifest?.pigcode.provides ?? [],
+      contributes: manifest?.pigcode.contributes ?? {},
+      conflict,
+      // manifest/compat 错误优先展示，其次才是冲突。
+      error: error ?? conflict,
     })
   }
   return summaries
@@ -161,10 +183,9 @@ async function readManifestState(
 ): Promise<{ manifest: PluginManifest | null; error: string | null }> {
   const path = join(profileDir, "node_modules", entry.name, "package.json")
   try {
-    return {
-      manifest: pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8"))),
-      error: null,
-    }
+    const manifest = pluginManifestSchema.parse(JSON.parse(await readFile(path, "utf8")))
+    // 不兼容时仍返回 manifest 供界面展示版本与权限，但把原因写进 error。
+    return { manifest, error: checkPluginCompatibility(manifest) }
   } catch (error) {
     return {
       manifest: null,

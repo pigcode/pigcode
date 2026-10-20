@@ -1,5 +1,6 @@
+/** 验证 manifest 结构与 apiVersion/engines 兼容性。 */
 import { describe, expect, it } from "vitest"
-import { pluginManifestSchema } from "./manifest"
+import { checkPluginCompatibility, pluginManifestSchema } from "./manifest"
 
 const base = {
   name: "@pigcode/provider-fake",
@@ -37,5 +38,26 @@ describe("plugin manifest", () => {
         pigcode: { ...base.pigcode, apiVersion: 2 },
       }),
     ).toThrow()
+  })
+})
+
+describe("plugin compatibility", () => {
+  const compatibleBase = {
+    name: "demo",
+    version: "1.0.0",
+    engines: { pigcode: ">=0.1.0" },
+    pigcode: { apiVersion: 1 as const, kind: "ui" as const, client: "./client.js" },
+  }
+
+  it("accepts the current API and engine range", () => {
+    expect(checkPluginCompatibility(pluginManifestSchema.parse(compatibleBase))).toBeNull()
+  })
+
+  it("rejects an unsupported engine range", () => {
+    const manifest = pluginManifestSchema.parse({
+      ...compatibleBase,
+      engines: { pigcode: ">=99.0.0" },
+    })
+    expect(checkPluginCompatibility(manifest)).toContain("engines")
   })
 })

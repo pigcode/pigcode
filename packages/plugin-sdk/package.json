@@ -12,9 +12,11 @@
   "dependencies": {
     "@pigcode/contracts": "workspace:*",
     "cordis": "4.0.0-rc.11",
+    "semver": "7.7.2",
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@types/semver": "7.7.1",
     "typescript": "5.9.3"
   }
 }

@@ -235,10 +235,16 @@ importers:
       cordis:
         specifier: 4.0.0-rc.11
         version: 4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8)
+      semver:
+        specifier: 7.7.2
+        version: 7.7.2
       zod:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/semver':
+        specifier: 7.7.1
+        version: 7.7.1
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -1640,6 +1646,9 @@ packages:
   '@types/react@19.2.2':
     resolution: {integrity: sha512-6mDvHUFSjyT2B2yeNx2nUgMxh9LtOWvkhIU3uePn2I2oyNymUAX1NIsdgviM4CH+JSrp2D2hsMvJOkxY+0wNRA==}
 
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
+
   '@types/use-sync-external-store@0.0.6':
     resolution: {integrity: sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg==}
 
@@ -2778,6 +2787,11 @@ packages:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
 
+  semver@7.7.2:
+    resolution: {integrity: sha512-RF0Fw+rO5AMf9MAyaRXI4AV0Ulj5lMHqVxxdSgiVbixSCXoEmmX/jk0CuJw4+3SqroYO9VoUh+HcuJivvtJemA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   semver@7.8.5:
     resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
@@ -3360,7 +3374,7 @@ snapshots:
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
-      semver: 7.8.5
+      semver: 7.7.2
       sumchecker: 3.0.1
     optionalDependencies:
       undici: 7.30.1
@@ -4082,6 +4096,8 @@ snapshots:
   '@types/react@19.2.2':
     dependencies:
       csstype: 3.2.3
+
+  '@types/semver@7.7.1': {}
 
   '@types/use-sync-external-store@0.0.6': {}
 
@@ -4997,7 +5013,7 @@ snapshots:
 
   node-abi@4.38.0:
     dependencies:
-      semver: 7.8.5
+      semver: 7.7.2
 
   node-addon-api@7.1.1: {}
 
@@ -5005,7 +5021,7 @@ snapshots:
 
   node-api-version@0.2.1:
     dependencies:
-      semver: 7.8.5
+      semver: 7.7.2
 
   node-gyp@12.4.0:
     dependencies:
@@ -5014,7 +5030,7 @@ snapshots:
       graceful-fs: 4.2.11
       nopt: 9.0.0
       proc-log: 6.1.0
-      semver: 7.8.5
+      semver: 7.7.2
       tar: 7.5.22
       tinyglobby: 0.2.17
       undici: 6.29.1
@@ -5288,6 +5304,8 @@ snapshots:
   scheduler@0.27.0: {}
 
   semver@6.3.1: {}
+
+  semver@7.7.2: {}
 
   semver@7.8.5: {}
 
