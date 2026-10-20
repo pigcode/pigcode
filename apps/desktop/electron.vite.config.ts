@@ -1,4 +1,6 @@
-/** Electron 构建配置：main/preload/renderer 分开输出。 */
+/** Electron 构建配置：renderer 使用 React 与 Tailwind。 */
+import react from "@vitejs/plugin-react"
+import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "electron-vite"
 
 export default defineConfig({
@@ -10,5 +12,9 @@ export default defineConfig({
       rollupOptions: { output: { format: "cjs", entryFileNames: "index.cjs" } },
     },
   },
-  renderer: { root: "src/renderer", build: { outDir: "out/renderer" } },
+  renderer: {
+    root: "src/renderer",
+    plugins: [react(), tailwindcss()],
+    build: { outDir: "out/renderer" },
+  },
 })

@@ -11,9 +11,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@base-ui/react": "1.9.0",
     "@pigcode/client-runtime": "workspace:*",
     "@pigcode/contracts": "workspace:*",
-    "better-sqlite3": "13.0.3"
+    "@pigcode/ui-primitives": "workspace:*",
+    "@tiptap/extension-placeholder": "3.32.0",
+    "@tiptap/extension-typography": "3.32.0",
+    "@tiptap/react": "3.32.0",
+    "@tiptap/starter-kit": "3.32.0",
+    "better-sqlite3": "13.0.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
