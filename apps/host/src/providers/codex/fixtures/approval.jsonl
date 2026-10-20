@@ -1,0 +1,6 @@
+{"method":"item/started","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_cmd","type":"commandExecution","command":"echo hi","status":"inProgress"}}}
+{"id":"srv_1","method":"item/commandExecution/requestApproval","params":{"threadId":"th_native","turnId":"turn_1","itemId":"item_cmd","command":"echo hi"}}
+{"method":"item/completed","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_cmd","type":"commandExecution","command":"echo hi","aggregatedOutput":"hi","exitCode":0,"status":"completed"}}}
+{"method":"item/agentMessage/delta","params":{"threadId":"th_native","turnId":"turn_1","itemId":"item_msg","delta":"done"}}
+{"method":"item/completed","params":{"threadId":"th_native","turnId":"turn_1","item":{"id":"item_msg","type":"agentMessage","text":"done"}}}
+{"method":"turn/completed","params":{"threadId":"th_native","turn":{"id":"turn_1","status":"completed"}}}
