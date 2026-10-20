@@ -21,6 +21,7 @@
     "@pigcode/plugin-sdk": "workspace:*",
     "better-sqlite3": "13.0.3",
     "cordis": "4.0.0-rc.11",
+    "node-pty": "1.1.0",
     "yaml": "2.8.1",
     "zod": "4.4.3"
   },

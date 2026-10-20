@@ -1,0 +1,201 @@
+/** 终端服务：真实实现用 node-pty，测试注入 fake factory，避免加载原生模块。 */
+import type { Context } from "cordis"
+import { randomUUID } from "node:crypto"
+import { realpath, stat } from "node:fs/promises"
+import { createRequire } from "node:module"
+import { activeWorktreePath } from "./worktrees"
+
+/** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
+export interface PtyLike {
+  onData(listener: (data: string) => void): void
+  onExit(listener: (event: { exitCode: number }) => void): void
+  write(data: string): void
+  resize(cols: number, rows: number): void
+  kill(): void
+}
+
+/** spawn 所需的参数；cwd 由服务解析和校验，不接受调用方传入。 */
+export interface PtySpawnInput {
+  cwd: string
+  cols: number
+  rows: number
+  shell: string
+}
+
+/** PTY 工厂；单测注入 fake，生产使用 realPtyFactory。 */
+export interface PtyFactory {
+  spawn(input: PtySpawnInput): PtyLike
+}
+
+/** 打开的终端会话；id 用于后续 write/resize/close/subscribe。 */
+export interface TerminalSession {
+  id: string
+  threadId: string
+  cols: number
+  rows: number
+}
+
+/** 终端服务入口；同一线程同时最多一个终端。 */
+export interface TerminalService {
+  open(threadId: string, cols: number, rows: number): Promise<TerminalSession>
+  write(id: string, data: string): void
+  resize(id: string, cols: number, rows: number): void
+  close(id: string): void
+  subscribe(id: string, listener: (data: string) => void): () => void
+}
+
+declare module "cordis" {
+  interface Context {
+    terminal: TerminalService
+  }
+}
+
+/** terminal 插件依赖的服务；worktree 路径直接从 storage 表读取。 */
+export const inject = ["projects", "threads", "storage"]
+
+/** terminal 插件配置；测试通过 ptyFactory 注入 fake。 */
+export interface TerminalConfig {
+  ptyFactory?: PtyFactory
+}
+
+/** terminal 插件函数，携带 Cordis 需要的 inject 元数据。 */
+export interface TerminalPlugin {
+  (ctx: Context, config?: TerminalConfig): void
+  inject: string[]
+}
+
+/** 内部终端记录：会话、PTY 与当前订阅者。 */
+interface TerminalEntry {
+  session: TerminalSession
+  pty: PtyLike
+  subscribers: Set<(data: string) => void>
+}
+
+/** 注册 terminal 服务；Host 卸载时终止所有 PTY，终端不跨重启保留。 */
+export const apply: TerminalPlugin = (ctx, config = {}) => {
+  const factory = config.ptyFactory ?? realPtyFactory()
+  const terminals = new Map<string, TerminalEntry>()
+  const byThread = new Map<string, string>()
+
+  /** 按 id 取记录；未知 id 一律报错，避免静默丢弃输入。 */
+  function entry(id: string): TerminalEntry {
+    const found = terminals.get(id)
+    if (!found) throw new Error(`terminal not found: ${id}`)
+    return found
+  }
+
+  /** 从索引移除并清空订阅者；是否 kill 由调用方决定。 */
+  function detach(id: string): TerminalEntry | undefined {
+    const found = terminals.get(id)
+    if (!found) return undefined
+    const { threadId } = found.session
+    terminals.delete(id)
+    if (byThread.get(threadId) === id) byThread.delete(threadId)
+    found.subscribers.clear()
+    return found
+  }
+
+  /** 关闭终端；重复 close 会报错，便于 RPC 层发现过期 id。 */
+  function close(id: string): void {
+    const found = detach(id)
+    if (!found) throw new Error(`terminal not found: ${id}`)
+    found.pty.kill()
+  }
+
+  const service: TerminalService = {
+    async open(threadId, cols, rows) {
+      validateSize(cols, rows)
+      const cwd = await resolveTerminalCwd(ctx, threadId)
+      // 等待 cwd 解析后再检查旧终端，保证并发 open 也最多保留一个。
+      const previous = byThread.get(threadId)
+      if (previous) close(previous)
+      const id = `term_${randomUUID()}`
+      const pty = factory.spawn({ cwd, cols, rows, shell: defaultShell() })
+      const session: TerminalSession = { id, threadId, cols, rows }
+      const current: TerminalEntry = { session, pty, subscribers: new Set() }
+      terminals.set(id, current)
+      byThread.set(threadId, id)
+      // 输出只广播给当前订阅者；M3 不发 exit 通知，退出后由 UI 重新 open。
+      pty.onData((data) => {
+        for (const listener of [...current.subscribers]) listener(data)
+      })
+      pty.onExit(() => {
+        detach(id)
+      })
+      return session
+    },
+    write(id, data) {
+      entry(id).pty.write(data)
+    },
+    resize(id, cols, rows) {
+      validateSize(cols, rows)
+      entry(id).pty.resize(cols, rows)
+    },
+    close,
+    subscribe(id, listener) {
+      const found = entry(id)
+      found.subscribers.add(listener)
+      return () => {
+        found.subscribers.delete(listener)
+      }
+    },
+  }
+
+  ctx.provide("terminal", service)
+  ctx.effect(() => () => {
+    for (const found of terminals.values()) found.pty.kill()
+    terminals.clear()
+    byThread.clear()
+  })
+}
+
+apply.inject = inject
+
+/** 解析终端 cwd：优先活动 worktree，否则项目根；realpath 消除符号链接。 */
+async function resolveTerminalCwd(ctx: Context, threadId: string): Promise<string> {
+  const thread = ctx.threads.get(threadId)
+  if (!thread) throw new Error(`thread not found: ${threadId}`)
+  const project = ctx.projects.list().find((item) => item.id === thread.projectId)
+  if (!project) throw new Error(`project not found: ${thread.projectId}`)
+
+  // cwd 只来自数据库中的项目根或服务创建的 worktree，不接受用户传入的相对路径。
+  const cwd = activeWorktreePath(ctx.storage.db, threadId) ?? project.rootPath
+  let resolved: string
+  try {
+    resolved = await realpath(cwd)
+  } catch {
+    throw new Error(`terminal cwd not found: ${cwd}`)
+  }
+  const info = await stat(resolved)
+  if (!info.isDirectory()) throw new Error(`terminal cwd is not a directory: ${cwd}`)
+  return resolved
+}
+
+/** 终端尺寸必须是正整数，避免把非法值传给原生 PTY。 */
+function validateSize(cols: number, rows: number): void {
+  if (!Number.isInteger(cols) || cols <= 0 || !Number.isInteger(rows) || rows <= 0) {
+    throw new Error(`invalid terminal size: ${cols}x${rows}`)
+  }
+}
+
+/** 当前平台的默认 shell；Windows 使用 ConPTY 对应的 COMSPEC。 */
+export function defaultShell(): string {
+  if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe"
+  return process.env.SHELL ?? "/bin/zsh"
+}
+
+/** 真实 PTY 工厂；node-pty 是 CJS，用 createRequire 避免 ESM 默认导入问题。 */
+export function realPtyFactory(): PtyFactory {
+  return {
+    spawn(input) {
+      const require = createRequire(import.meta.url)
+      const pty = require("node-pty") as typeof import("node-pty")
+      return pty.spawn(input.shell, [], {
+        cwd: input.cwd,
+        cols: input.cols,
+        rows: input.rows,
+        env: process.env as Record<string, string>,
+      })
+    },
+  }
+}
