@@ -154,6 +154,64 @@ export class RpcServer {
         return this.ctx.plugins.disable((parsed as { id: string }).id)
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
+      case "workspace.tree":
+        return this.ctx.workspace.tree((parsed as { threadId: string }).threadId)
+      case "workspace.readFile": {
+        const value = parsed as { threadId: string; path: string }
+        return this.ctx.workspace.readFile(value.threadId, value.path)
+      }
+      case "workspace.search": {
+        const value = parsed as { threadId: string; query: string; glob?: string }
+        return this.ctx.workspace.search(value.threadId, value.query, value.glob)
+      }
+      case "git.status":
+        return this.ctx.git.status((parsed as { threadId: string }).threadId)
+      case "git.diff": {
+        const value = parsed as { threadId: string; base: string; head: string }
+        return this.ctx.git.diff(value.threadId, value.base, value.head)
+      }
+      case "checkpoint.list":
+        return this.ctx.checkpoints.list((parsed as { threadId: string }).threadId)
+      case "checkpoint.create": {
+        const value = parsed as { threadId: string; label?: string }
+        return this.ctx.checkpoints.create(value.threadId, value.label)
+      }
+      case "checkpoint.restore": {
+        const value = parsed as { threadId: string; checkpointId: string }
+        return this.ctx.checkpoints.restore(value.threadId, value.checkpointId)
+      }
+      case "worktree.create":
+        return this.ctx.worktrees.create((parsed as { threadId: string }).threadId)
+      case "worktree.switch": {
+        const value = parsed as { threadId: string; path: string }
+        return this.ctx.worktrees.switch(value.threadId, value.path)
+      }
+      case "worktree.remove":
+        return this.ctx.worktrees.remove((parsed as { threadId: string }).threadId)
+      case "terminal.open": {
+        const value = parsed as { threadId: string; cols: number; rows: number }
+        const terminal = await this.ctx.terminal.open(value.threadId, value.cols, value.rows)
+        this.disposers.push(
+          this.ctx.terminal.subscribe(terminal.id, (data) => {
+            this.transport.send({
+              jsonrpc: "2.0",
+              method: "terminal.output",
+              params: { terminalId: terminal.id, data },
+            })
+          }),
+        )
+        return terminal
+      }
+      case "terminal.write": {
+        const value = parsed as { terminalId: string; data: string }
+        return this.ctx.terminal.write(value.terminalId, value.data)
+      }
+      case "terminal.resize": {
+        const value = parsed as { terminalId: string; cols: number; rows: number }
+        return this.ctx.terminal.resize(value.terminalId, value.cols, value.rows)
+      }
+      case "terminal.close":
+        return this.ctx.terminal.close((parsed as { terminalId: string }).terminalId)
       default:
         throw new Error(`unsupported method: ${method}`)
     }

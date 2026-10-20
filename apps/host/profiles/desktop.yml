@@ -11,3 +11,13 @@ plugins:
     name: "@pigcode/host/services/sessions"
   - id: core.providers
     name: "@pigcode/host/providers/registry"
+  - id: core.workspace
+    name: "@pigcode/host/services/workspace"
+  - id: core.git
+    name: "@pigcode/host/services/git"
+  - id: core.worktrees
+    name: "@pigcode/host/services/worktrees"
+  - id: core.checkpoints
+    name: "@pigcode/host/services/checkpoints"
+  - id: core.terminal
+    name: "@pigcode/host/services/terminal"

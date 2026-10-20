@@ -19,7 +19,8 @@ const shared = {
   platform: "node",
   format: "esm",
   target: "node22",
-  external: ["better-sqlite3"],
+  // node-pty 含原生二进制，交给打包阶段处理，不能打进 bundle。
+  external: ["better-sqlite3", "node-pty"],
   sourcemap: true,
   outExtension: { ".js": ".mjs" },
   banner: {
@@ -34,6 +35,11 @@ const coreEntries = {
   threads: join(root, "apps/host/src/services/threads.ts"),
   sessions: join(root, "apps/host/src/services/sessions.ts"),
   providers: join(root, "apps/host/src/providers/registry.ts"),
+  workspace: join(root, "apps/host/src/services/workspace.ts"),
+  git: join(root, "apps/host/src/services/git.ts"),
+  worktrees: join(root, "apps/host/src/services/worktrees.ts"),
+  checkpoints: join(root, "apps/host/src/services/checkpoints.ts"),
+  terminal: join(root, "apps/host/src/services/terminal.ts"),
 }
 
 await build({
@@ -62,6 +68,16 @@ await writeFile(
     "    name: ../core/sessions.mjs",
     "  - id: core.providers",
     "    name: ../core/providers.mjs",
+    "  - id: core.workspace",
+    "    name: ../core/workspace.mjs",
+    "  - id: core.git",
+    "    name: ../core/git.mjs",
+    "  - id: core.worktrees",
+    "    name: ../core/worktrees.mjs",
+    "  - id: core.checkpoints",
+    "    name: ../core/checkpoints.mjs",
+    "  - id: core.terminal",
+    "    name: ../core/terminal.mjs",
     "",
   ].join("\n"),
   "utf8",

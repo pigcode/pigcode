@@ -1,0 +1,3 @@
+# node-pty 携带原生二进制，留在 asar 内无法加载，打包时必须解包。
+asarUnpack:
+  - node_modules/node-pty/**
