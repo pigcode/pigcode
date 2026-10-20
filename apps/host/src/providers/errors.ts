@@ -19,3 +19,13 @@ export class TooManyActiveRunsError extends Error {
     this.name = "TooManyActiveRunsError"
   }
 }
+
+/** 排队 run 达到上限时抛出的错误；活跃 run 会进入队列而不是直接失败。 */
+export class RunQueueFullError extends Error {
+  readonly code = "RUN_QUEUE_FULL"
+
+  constructor(limit: number) {
+    super(`RUN_QUEUE_FULL: at most ${limit} runs may be queued`)
+    this.name = "RunQueueFullError"
+  }
+}

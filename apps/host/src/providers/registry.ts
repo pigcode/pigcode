@@ -15,19 +15,25 @@ import type {
   ProviderDriver,
   ProviderRunConfig,
   ProviderRuntime,
-  ProviderSessionHandle,
   UserInput,
 } from "./driver"
 import { FakeProviderDriver } from "./fake"
-import { detectClaude } from "./claude/detect"
-import type { ClaudeDetection } from "./claude/detect"
+import { detectClaude, type ClaudeDetection } from "./claude/detect"
 import { ClaudeDriver } from "./claude/driver"
-import { detectCodex } from "./codex/detect"
-import type { CodexDetection } from "./codex/detect"
+import { detectCodex, type CodexDetection } from "./codex/detect"
 import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
-import { RunAlreadyActiveError, TooManyActiveRunsError } from "./errors"
-import { defaultProvider, disposeSession, listProviderModels, pendingHandoff, resolveThreadCwd, switchProvider } from "./switching"
+import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from "./errors"
+import { RunQueue, type ActiveRun, type QueuedRun, type RunSummary } from "./run-queue"
+import { mapProviderEvent, type RunEventHooks } from "./run-events"
+import {
+  defaultProvider,
+  disposeSession,
+  listProviderModels,
+  pendingHandoff,
+  resolveThreadCwd,
+  switchProvider,
+} from "./switching"
 import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
@@ -84,7 +90,9 @@ export interface ProvidersService {
   ): void
   getRunStatus(runId: string): RunStatus | null
   cancelRun(runId: string): boolean
-  /** Host 退出时中断所有活跃 run。 */
+  /** 列出运行中与排队中的 run，供 run.list 查询。 */
+  listRuns(): RunSummary[]
+  /** Host 退出时中断所有活跃与排队中的 run。 */
   cancelAll(): void
   /** 读取线程的 provider 会话记录，用于验证 native session 复用。 */
   listSessions(threadId: string): ProviderSession[]
@@ -100,24 +108,12 @@ declare module "cordis" {
 }
 /** providers 插件依赖的线程、事件与存储服务。 */
 export const inject = ["threads", "sessions", "storage"]
-export { RunAlreadyActiveError, TooManyActiveRunsError }
-/** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
-interface ActiveRun {
-  runId: string
-  threadId: string
-  session: ProviderSessionHandle
-  driver: ProviderDriver
-  controller: AbortController
-  emitLive: ((event: ProviderEvent) => void) | undefined
-  status: RunStatus
-  done: Promise<void>
-  resolveDone: () => void
-  approvals: Set<string>
-}
+export { RunAlreadyActiveError, TooManyActiveRunsError, RunQueueFullError }
 
 /** 注册 provider driver，并把一次 run 的规范化事件映射为线程事件。 */
 export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const maxConcurrentRuns = config.maxConcurrentRuns ?? 4
+  const maxQueuedRuns = config.maxQueuedRuns ?? 32
   const drivers = new Map<string, ProviderDriver>()
   const fake = new FakeProviderDriver()
   drivers.set(fake.id, fake)
@@ -131,6 +127,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const approvals = new ApprovalBridge()
   const activeRuns = new Map<string, ActiveRun>()
   const activeThreads = new Set<string>()
+  const queue = new RunQueue<QueuedRun>(maxQueuedRuns)
 
   /** 追加一条线程事件并触发实时订阅者。 */
   function append(
@@ -165,6 +162,8 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     activeRuns.delete(run.runId)
     activeThreads.delete(run.threadId)
     run.resolveDone()
+    // 终态释放了并发空位，按 FIFO 启动排队中的 run。
+    pump()
   }
 
   /** 把 run 的未决审批以 deny 结束，避免 driver 永久等待。 */
@@ -182,73 +181,13 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     run.approvals.clear()
   }
 
-  /** 把 provider 事件映射为持久线程事件；delta 只走实时通道。 */
-  function handleProviderEvent(run: ActiveRun, event: ProviderEvent): void {
-    if (activeRuns.get(run.runId) !== run) return
-    switch (event.type) {
-      case "run.started":
-        return
-      case "session.started":
-        run.session.nativeSessionId = event.nativeSessionId
-        providerSessions.updateNativeSessionId(run.session.id, event.nativeSessionId)
-        append(run.threadId, run.runId, "session.started", {
-          nativeSessionId: event.nativeSessionId,
-        })
-        return
-      case "message.delta":
-        run.emitLive?.(event)
-        return
-      case "message.completed":
-        append(run.threadId, run.runId, "message.completed", {
-          role: "assistant",
-          text: event.text,
-        })
-        return
-      case "tool.started":
-        append(run.threadId, run.runId, "tool.started", {
-          id: event.toolCallId,
-          toolCallId: event.toolCallId,
-          name: event.name,
-          input: event.input,
-        })
-        return
-      case "tool.completed":
-        append(run.threadId, run.runId, "tool.completed", {
-          id: event.toolCallId,
-          toolCallId: event.toolCallId,
-          name: event.name,
-          output: event.output,
-          isError: event.isError,
-          status: event.isError ? "failed" : "completed",
-        })
-        return
-      case "usage.updated":
-        append(run.threadId, run.runId, "usage.updated", { usage: event.usage })
-        return
-      case "plan.updated":
-        append(run.threadId, run.runId, "plan.updated", {
-          plan: event.plan,
-          explanation: event.explanation,
-        })
-        return
-      case "run.interrupted":
-        finishRun(run, "interrupted", "run.interrupted", {})
-        return
-      case "run.completed":
-        finishRun(run, "completed", "run.completed", {})
-        return
-      case "run.failed":
-        finishRun(
-          run,
-          "failed",
-          "run.failed",
-          { message: event.message },
-          {
-            code: "RUN_FAILED",
-            message: event.message,
-          },
-        )
-    }
+  /** provider 事件映射所需的 Host 回调。 */
+  const runEventHooks: RunEventHooks = {
+    isActive: (run) => activeRuns.get(run.runId) === run,
+    append,
+    updateNativeSessionId: (sessionId, nativeSessionId) =>
+      providerSessions.updateNativeSessionId(sessionId, nativeSessionId),
+    finish: finishRun,
   }
 
   /** 发起审批：持久化 pending 行、写事件、置为 waiting-approval 并等待 UI 决议。 */
@@ -286,11 +225,34 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     return { requestId, decision }
   }
 
+  /** 启动已创建的 run：写 run.started、放入活跃表并执行 driver。 */
+  function launchRun(run: ActiveRun, input: UserInput): void {
+    // 切换 provider 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
+    const handoff = pendingHandoff(ctx, run.threadId)
+    run.status = "running"
+    runs.setStatus(run.runId, "running")
+    append(run.threadId, run.runId, "run.started", {
+      providerId: run.driver.id,
+      providerSessionId: run.session.id,
+    })
+    activeRuns.set(run.runId, run)
+    void execute(run, handoff === null ? input : { ...input, handoff })
+  }
+
+  /** 在并发空位出现时按 FIFO 启动排队 run。 */
+  function pump(): void {
+    while (activeRuns.size < maxConcurrentRuns) {
+      const entry = queue.shift()
+      if (!entry) return
+      launchRun(entry.run, entry.input)
+    }
+  }
+
   /** 异步执行 driver.send；异常统一转成 run.failed。 */
   async function execute(run: ActiveRun, input: UserInput): Promise<void> {
     const runtime: ProviderRuntime = {
       signal: run.controller.signal,
-      emit: (event) => handleProviderEvent(run, event),
+      emit: (event) => mapProviderEvent(run, event, runEventHooks),
       requestApproval: (request) => {
         if (activeRuns.get(run.runId) !== run) return Promise.resolve<ApprovalDecision>("deny")
         return requestApproval(run.threadId, run.runId, request).decision
@@ -317,8 +279,22 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     }
   }
 
-  /** 中断单个活跃 run 并写入 run.interrupted；未知 run 返回 false。 */
+  /** 取消排队中的 run；不存在时返回 false。 */
+  function cancelQueuedRun(runId: string): boolean {
+    const entry = queue.remove((item) => item.run.runId === runId)
+    if (!entry) return false
+    const { run } = entry
+    run.status = "interrupted"
+    runs.setStatus(run.runId, "interrupted")
+    append(run.threadId, run.runId, "run.interrupted", {})
+    activeThreads.delete(run.threadId)
+    run.resolveDone()
+    return true
+  }
+
+  /** 中断单个活跃或排队中的 run；未知 run 返回 false。 */
   function interruptRun(runId: string): boolean {
+    if (cancelQueuedRun(runId)) return true
     const run = activeRuns.get(runId)
     if (!run) return false
     run.controller.abort()
@@ -327,8 +303,9 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     return true
   }
 
-  /** 中断所有活跃 run；先复制 id，finishRun 会从 activeRuns 删除元素。 */
+  /** 中断所有排队与活跃 run；先复制 id，取消过程会修改集合。 */
   function interruptAll(): void {
+    for (const entry of [...queue.values()]) cancelQueuedRun(entry.run.runId)
     for (const runId of [...activeRuns.keys()]) interruptRun(runId)
   }
 
@@ -359,8 +336,13 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     },
     async switchProvider(threadId, providerId, modelId) {
       if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
-      return switchProvider(ctx, providerSessions, threadId, providerId, modelId ?? null, (session) =>
-        disposeSession(drivers, session),
+      return switchProvider(
+        ctx,
+        providerSessions,
+        threadId,
+        providerId,
+        modelId ?? null,
+        (session) => disposeSession(drivers, session),
       )
     },
     async startRun(threadId, text, emitLive) {
@@ -371,9 +353,8 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       const providerId = thread.lastProviderId ?? thread.defaultProviderId
       const driver = drivers.get(providerId)
       if (!driver) throw new Error(`provider not found: ${providerId}`)
-      // activeThreads 只约束同一 thread；全局并发由 maxConcurrentRuns 保护。
-      if (activeRuns.size >= maxConcurrentRuns) throw new TooManyActiveRunsError(maxConcurrentRuns)
 
+      // activeThreads 同时覆盖运行中与排队中的线程，保证同一线程只有一个 run。
       activeThreads.add(threadId)
       try {
         const startedAt = new Date().toISOString()
@@ -385,6 +366,12 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
         })
+        // 创建会话可能等待子进程，判定要放在 await 之后；此后到入队之间没有 await。
+        const shouldQueue = activeRuns.size >= maxConcurrentRuns
+        if (shouldQueue && queue.size >= maxQueuedRuns) {
+          await driver.dispose(draft).catch(() => undefined)
+          throw new RunQueueFullError(maxQueuedRuns)
+        }
         const session = providerSessions.reuseOrCreate({
           draft,
           providerId: driver.id,
@@ -395,17 +382,10 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           id: runId,
           threadId,
           providerSessionId: session.id,
-          status: "running",
+          status: shouldQueue ? "queued" : "running",
           startedAt,
         })
-
-        // 切换 provider 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
-        const handoff = pendingHandoff(ctx, threadId)
         append(threadId, runId, "message.completed", { role: "user", text })
-        append(threadId, runId, "run.started", {
-          providerId: driver.id,
-          providerSessionId: session.id,
-        })
 
         let resolveDone: () => void = () => undefined
         const done = new Promise<void>((resolve) => {
@@ -418,13 +398,17 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           driver,
           controller: new AbortController(),
           emitLive,
-          status: "running",
+          status: shouldQueue ? "queued" : "running",
           done,
           resolveDone,
           approvals: new Set(),
         }
-        activeRuns.set(runId, run)
-        void execute(run, handoff === null ? { text } : { text, handoff })
+        if (shouldQueue) {
+          append(threadId, runId, "run.queued", { queuedAt: startedAt })
+          queue.push({ run, input: { text }, queuedAt: startedAt })
+          return { runId, done }
+        }
+        launchRun(run, { text })
         return { runId, done }
       } catch (error) {
         activeThreads.delete(threadId)
@@ -463,6 +447,21 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     cancelRun(runId) {
       return interruptRun(runId)
     },
+    listRuns() {
+      return [
+        ...[...activeRuns.values()].map((run) => ({
+          runId: run.runId,
+          threadId: run.threadId,
+          status: run.status,
+        })),
+        ...queue.values().map((entry) => ({
+          runId: entry.run.runId,
+          threadId: entry.run.threadId,
+          status: "queued" as const,
+          queuedAt: entry.queuedAt,
+        })),
+      ]
+    },
     cancelAll() {
       interruptAll()
     },
@@ -479,7 +478,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       const interruptedRuns = ctx.storage.db
         .prepare(
           `UPDATE runs SET status = 'interrupted', completed_at = ?
-           WHERE status IN ('running', 'waiting-approval')`,
+           WHERE status IN ('running', 'waiting-approval', 'queued')`,
         )
         .run(now).changes
       const orphanedSessions = providerSessions.orphanActive(now)
@@ -491,6 +490,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   ctx.effect(() => () => {
     // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。
     interruptAll()
+    queue.clear()
     activeRuns.clear()
     activeThreads.clear()
     approvals.rejectAll(new Error("host disposed"))

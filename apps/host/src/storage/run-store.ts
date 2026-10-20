@@ -31,7 +31,9 @@ export class RunStore {
       )
       .run(
         status,
-        status === "running" || status === "waiting-approval" ? null : new Date().toISOString(),
+        status === "running" || status === "waiting-approval" || status === "queued"
+          ? null
+          : new Date().toISOString(),
         error?.code ?? null,
         error?.message ?? null,
         runId,

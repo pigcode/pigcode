@@ -17,6 +17,7 @@ export const commandSchemas = {
     modelId: z.string().min(1).nullish(),
   }),
   "run.start": z.object({ threadId: z.string().min(1), text: z.string().min(1) }),
+  "run.list": z.object({}),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),
   "run.respondApproval": z.object({
     threadId: z.string().min(1),

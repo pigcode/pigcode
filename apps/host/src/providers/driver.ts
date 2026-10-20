@@ -54,9 +54,10 @@ export interface ProviderModelInfo {
   isDefault: boolean
 }
 
-/** provider 插件运行配置；maxConcurrentRuns 默认 4。 */
+/** provider 插件运行配置；并发默认 4，排队上限默认 32。 */
 export interface ProviderRunConfig {
   maxConcurrentRuns?: number
+  maxQueuedRuns?: number
 }
 
 /** Provider adapter 需要实现的完整契约。 */

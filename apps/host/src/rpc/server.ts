@@ -128,6 +128,8 @@ export class RpcServer {
         })
         return { runId }
       }
+      case "run.list":
+        return { runs: this.ctx.providers.listRuns() }
       case "run.interrupt": {
         const value = parsed as { runId: string }
         return { interrupted: this.ctx.providers.cancelRun(value.runId) }

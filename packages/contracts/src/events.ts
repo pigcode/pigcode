@@ -6,6 +6,7 @@ export const threadEventTypeSchema = z.enum([
   "thread.created",
   "thread.updated",
   "session.started",
+  "run.queued",
   "run.started",
   "run.completed",
   "run.failed",

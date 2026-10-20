@@ -178,7 +178,7 @@ describe("parallel runs", () => {
     await ctx.fiber.dispose()
   })
 
-  it("rejects a new run when the global limit is reached", async () => {
+  it("queues a new run when the global limit is reached", async () => {
     const ctx = await setupContext()
     const project = ctx.projects.add("/tmp/pigcode-m2")
     const running: Array<{ runId: string; done: Promise<void> }> = []
@@ -188,30 +188,33 @@ describe("parallel runs", () => {
     }
     const extra = ctx.threads.create(project.id, "Fake 4", "fake")
 
-    await expect(ctx.providers.startRun(extra.id, "long")).rejects.toThrow("TOO_MANY_ACTIVE_RUNS")
+    const queued = await ctx.providers.startRun(extra.id, "long")
+    expect(ctx.providers.getRunStatus(queued.runId)).toBe("queued")
+    expect(ctx.sessions.read(extra.id, 0).some((event) => event.type === "run.queued")).toBe(true)
 
     ctx.providers.cancelAll()
-    await Promise.all(running.map((run) => run.done))
+    await Promise.all([...running.map((run) => run.done), queued.done])
     for (const run of running) {
       expect(ctx.providers.getRunStatus(run.runId)).toBe("interrupted")
     }
+    expect(ctx.providers.getRunStatus(queued.runId)).toBe("interrupted")
     await ctx.fiber.dispose()
   })
 
-  it("honors a configured global limit", async () => {
+  it("honors a configured global limit by queueing", async () => {
     const ctx = await setupContext({ maxConcurrentRuns: 1 })
     const project = ctx.projects.add("/tmp/pigcode-m2")
     const firstThread = ctx.threads.create(project.id, "First", "fake")
     const secondThread = ctx.threads.create(project.id, "Second", "fake")
 
     const first = await ctx.providers.startRun(firstThread.id, "long")
-    await expect(ctx.providers.startRun(secondThread.id, "long")).rejects.toThrow(
-      "TOO_MANY_ACTIVE_RUNS",
-    )
+    const second = await ctx.providers.startRun(secondThread.id, "long")
+    expect(ctx.providers.getRunStatus(second.runId)).toBe("queued")
 
     ctx.providers.cancelAll()
-    await first.done
+    await Promise.all([first.done, second.done])
     expect(ctx.providers.getRunStatus(first.runId)).toBe("interrupted")
+    expect(ctx.providers.getRunStatus(second.runId)).toBe("interrupted")
     await ctx.fiber.dispose()
   })
 })
