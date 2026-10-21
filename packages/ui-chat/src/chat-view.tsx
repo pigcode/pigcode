@@ -270,6 +270,7 @@ export function ChatView({
           onStop={onInterrupt ?? (() => undefined)}
           running={running}
           disabled={!thread}
+          autoFocus={Boolean(thread) && visibleEvents.length === 0 && !running}
           {...(modelId ? { model: modelId } : {})}
           models={canSelectModel ? models : []}
           {...(onSwitchModel ? { onModel: onSwitchModel } : {})}

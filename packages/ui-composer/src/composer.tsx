@@ -66,6 +66,8 @@ export interface ComposerProps {
   onDepth?: (depth: ThinkingDepth) => void
   /** 是否启用智能标点；默认开启。 */
   smartPunctuation?: boolean
+  /** 空会话首次出现时自动聚焦输入区。 */
+  autoFocus?: boolean
 }
 
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
@@ -87,6 +89,7 @@ export function Composer({
   depth = "medium",
   onDepth,
   smartPunctuation = true,
+  autoFocus = false,
 }: ComposerProps) {
   const { t } = useLocale()
   const label = placeholder ?? t("composer.placeholder")
@@ -141,6 +144,10 @@ export function Composer({
   useEffect(() => {
     editor?.setEditable(!disabled)
   }, [editor, disabled])
+
+  useEffect(() => {
+    if (autoFocus && !disabled) editor?.commands.focus()
+  }, [autoFocus, disabled, editor])
 
   const empty =
     useEditorState({

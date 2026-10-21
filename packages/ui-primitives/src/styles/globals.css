@@ -3487,6 +3487,24 @@ body.is-resizing {
   flex-direction: column;
   min-height: 100%;
 }
+.page select {
+  appearance: none;
+  height: 28px;
+  padding: 0 26px 0 8px;
+  border: var(--hair) solid var(--border-strong);
+  border-radius: 7px;
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.page select:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+}
 
 /* Command palette */
 .palette-scrim {
