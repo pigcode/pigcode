@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   windowControl: (action: "minimize" | "maximize" | "close") =>
     ipcRenderer.invoke("pigcode:window", action),
   isMaximized: () => ipcRenderer.invoke("pigcode:is-maximized"),
+  previewOpen: (url: string): Promise<{ id: string }> =>
+    ipcRenderer.invoke("pigcode:preview-open", url),
+  previewClose: (id?: string): void => {
+    void ipcRenderer.invoke("pigcode:preview-close", id).catch(() => undefined)
+  },
 })
 
 ipcRenderer.on("pigcode:port", (event) => {

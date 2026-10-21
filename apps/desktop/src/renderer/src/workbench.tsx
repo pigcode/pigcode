@@ -1,4 +1,4 @@
-/** 工作台容器：把右栏的文件、Diff、终端、checkpoint 与 PR 面板接到 Host RPC。 */
+/** 工作台容器：把右栏的文件、Diff、终端、checkpoint、PR 与预览面板接到 Host RPC。 */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import type { Connection } from "@pigcode/client-runtime"
 import type { PullRequestInfo } from "@pigcode/contracts"
@@ -9,6 +9,7 @@ import {
   FilePreview,
   FileTree,
   PrPanel,
+  PreviewPanel,
   RightPanel,
   TerminalView,
   WorktreePicker,
@@ -18,6 +19,7 @@ import {
   type RightPanelTab,
   type TerminalHandle,
 } from "@pigcode/ui-workbench"
+import { prPanelLabels, previewPanelLabels, tabLabels } from "./workbench-labels"
 
 /** 工作台属性；线程切换时由父组件用 key 重新挂载以释放终端。 */
 export interface WorkbenchPanelProps {
@@ -366,26 +368,9 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
     }
   }
 
-  const labels: Record<RightPanelTab, string> = {
-    files: t("workbench.files"),
-    diff: t("workbench.diff"),
-    terminal: t("workbench.terminal"),
-    checkpoint: t("workbench.checkpoint"),
-    pr: t("workbench.pr"),
-  }
-
-  const prLabels = {
-    empty: t("pr.empty"),
-    loading: t("pr.loading"),
-    title: t("pr.title"),
-    titlePlaceholder: t("pr.titlePlaceholder"),
-    body: t("pr.body"),
-    bodyPlaceholder: t("pr.bodyPlaceholder"),
-    base: t("pr.base"),
-    basePlaceholder: t("pr.basePlaceholder"),
-    create: t("pr.create"),
-    creating: t("pr.creating"),
-  }
+  const labels = tabLabels(t)
+  const prLabels = prPanelLabels(t)
+  const previewLabels = previewPanelLabels(t)
 
   const tabs: Record<RightPanelTab, ReactNode> = {
     files: (
@@ -471,6 +456,7 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
         labels={prLabels}
       />
     ),
+    preview: <PreviewPanel labels={previewLabels} />,
   }
 
   return (

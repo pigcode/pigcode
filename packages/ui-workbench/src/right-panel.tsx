@@ -1,8 +1,15 @@
-/** 右栏容器：Files/Diff/Terminal/Checkpoint/PR 五个 tab、内容区与关闭按钮。 */
+/** 右栏容器：Files/Diff/Terminal/Checkpoint/PR/Preview 六个 tab、内容区与关闭按钮。 */
 import type { ReactNode } from "react"
 
 /** 右栏 tab 的固定顺序。 */
-export const RIGHT_PANEL_TABS = ["files", "diff", "terminal", "checkpoint", "pr"] as const
+export const RIGHT_PANEL_TABS = [
+  "files",
+  "diff",
+  "terminal",
+  "checkpoint",
+  "pr",
+  "preview",
+] as const
 
 /** 右栏 tab 标识。 */
 export type RightPanelTab = (typeof RIGHT_PANEL_TABS)[number]
@@ -24,6 +31,7 @@ const DEFAULT_LABELS: Record<RightPanelTab, string> = {
   terminal: "Terminal",
   checkpoint: "Checkpoint",
   pr: "PR",
+  preview: "Preview",
 }
 
 /** 右栏入口；tab 状态完全受控，关闭按钮仅在传入 onClose 时显示。 */

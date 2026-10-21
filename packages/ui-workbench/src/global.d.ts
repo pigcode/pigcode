@@ -5,6 +5,8 @@ interface Window {
     setThemeSource(source: "light" | "dark" | "system"): Promise<void>
     windowControl(action: "minimize" | "maximize" | "close"): Promise<void>
     isMaximized(): Promise<boolean>
+    previewOpen(url: string): Promise<{ id: string }>
+    previewClose(id?: string): void
   }
 }
 

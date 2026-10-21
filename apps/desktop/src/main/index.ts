@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme } from "electron"
 import { join } from "node:path"
 import { startHostProcess, type HostProcess } from "./host-process"
 import { registerAppProtocol, registerPluginProtocol, registerPrivilegedSchemes } from "./protocol"
+import { closePreview, openPreview } from "./preview"
 import { createMainWindowOptions, readThemeSource } from "./window-options"
 
 registerPrivilegedSchemes()
@@ -37,6 +38,15 @@ function registerNativeBridge(): void {
   })
   ipcMain.handle("pigcode:is-maximized", (event) => {
     return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
+  })
+  // 预览窗口：URL 合法性由 preview.ts 统一校验，IPC 只做类型收敛。
+  ipcMain.handle("pigcode:preview-open", (_event, url: unknown) => {
+    if (typeof url !== "string") throw new Error("PREVIEW_URL_NOT_ALLOWED")
+    return openPreview(url)
+  })
+  ipcMain.handle("pigcode:preview-close", (_event, id: unknown) => {
+    if (typeof id === "string") closePreview(id)
+    else if (id === undefined || id === null) closePreview()
   })
 }
 
