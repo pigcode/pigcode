@@ -23,6 +23,7 @@ import { ThreadTabs, type ThreadTabStatus } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
 import { ConnectionBanner } from "./connection-banner"
+import { SchedulesContainer } from "./schedules"
 import {
   listProviders,
   loadProviderContext,
@@ -351,6 +352,7 @@ export function SettingsContainer({
       providers={providers}
       onDetect={detect}
       pluginManager={<PluginManagerContainer deps={deps} />}
+      schedulesPage={<SchedulesContainer deps={deps} />}
     />
   )
 }

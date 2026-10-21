@@ -3,8 +3,8 @@ import { useState } from "react"
 import { Button, Input, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
-/** M0-B 设置页的分区。 */
-export type SettingsSection = "general" | "appearance" | "providers" | "plugins"
+/** 设置页的分区。 */
+export type SettingsSection = "general" | "appearance" | "providers" | "schedules" | "plugins"
 
 interface SettingsNavItem {
   id: SettingsSection
@@ -17,6 +17,7 @@ const settingsNav: SettingsNavItem[] = [
   { id: "general", icon: "toggle", labelKey: "settings.general" },
   { id: "appearance", icon: "contrast", labelKey: "settings.appearance" },
   { id: "providers", icon: "server", labelKey: "settings.providers" },
+  { id: "schedules", icon: "clock", labelKey: "settings.schedules" },
   { id: "plugins", icon: "cube", labelKey: "settings.plugins" },
 ]
 

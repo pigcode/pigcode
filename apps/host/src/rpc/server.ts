@@ -200,6 +200,32 @@ export class RpcServer {
           ...(value.base === undefined ? {} : { base: value.base }),
         })
       }
+      case "schedule.list":
+        return this.ctx.schedules.list()
+      case "schedule.create": {
+        const value = parsed as {
+          threadId: string
+          prompt: string
+          intervalSeconds: number
+          enabled: boolean
+        }
+        return this.ctx.schedules.create(value)
+      }
+      case "schedule.update": {
+        const value = parsed as {
+          id: string
+          prompt?: string
+          intervalSeconds?: number
+          enabled?: boolean
+        }
+        return this.ctx.schedules.update(value.id, value)
+      }
+      case "schedule.delete": {
+        const value = parsed as { id: string }
+        return { deleted: this.ctx.schedules.delete(value.id) }
+      }
+      case "schedule.runNow":
+        return this.ctx.schedules.runNow((parsed as { id: string }).id)
       case "checkpoint.list":
         return this.ctx.checkpoints.list((parsed as { threadId: string }).threadId)
       case "checkpoint.create": {

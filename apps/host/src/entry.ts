@@ -36,6 +36,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const ctx = await createHostApp({ profileDir, profileName: "desktop" })
   // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
   ctx.providers.recoverAfterRestart()
+  // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
+  ctx.get("schedules")?.start()
   await ctx.plugin(pluginsPlugin, { profileDir })
   await writeBootGraph(profileDir)
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()

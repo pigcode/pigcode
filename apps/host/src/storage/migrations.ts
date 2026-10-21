@@ -108,6 +108,22 @@ const MIGRATIONS: string[] = [
     removed_at TEXT
   );
   `,
+  `
+  CREATE TABLE IF NOT EXISTS schedules (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES threads(id),
+    prompt TEXT NOT NULL,
+    interval_seconds INTEGER NOT NULL,
+    enabled INTEGER NOT NULL,
+    next_run_at TEXT NOT NULL,
+    last_run_at TEXT,
+    last_run_id TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_schedules_next_run
+    ON schedules(enabled, next_run_at);
+  `,
 ]
 
 /** 按 user_version 执行缺失迁移。 */

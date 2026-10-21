@@ -135,6 +135,19 @@ export const pullRequestInfoSchema = z.object({
   baseRefName: z.string().min(1),
 })
 
+/** 固定间隔的定时任务；nextRunAt 在 Host 重启后继续生效。 */
+export const scheduleSchema = z.object({
+  id: z.string().min(1),
+  threadId: z.string().min(1),
+  prompt: z.string().min(1),
+  intervalSeconds: z.number().int().positive(),
+  enabled: z.boolean(),
+  nextRunAt: z.string().datetime(),
+  lastRunAt: z.string().datetime().nullable(),
+  lastRunId: z.string().nullable(),
+  createdAt: z.string().datetime(),
+})
+
 /** provider 能力集合的类型。 */
 export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>
 /** 权限模式的类型。 */
@@ -157,3 +170,5 @@ export type PendingRequest = z.infer<typeof pendingRequestSchema>
 export type PullRequestState = z.infer<typeof pullRequestStateSchema>
 /** GitHub PR 摘要的类型。 */
 export type PullRequestInfo = z.infer<typeof pullRequestInfoSchema>
+/** 定时任务的类型。 */
+export type Schedule = z.infer<typeof scheduleSchema>

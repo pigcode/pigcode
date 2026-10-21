@@ -15,6 +15,8 @@ export interface SettingsViewProps {
   appearance?: AppearanceController | undefined
   /** 插件分区的内容由插件管理包注入。 */
   pluginManager?: ReactNode | undefined
+  /** 定时任务分区的内容由应用容器注入（需要 RPC 连接）。 */
+  schedulesPage?: ReactNode | undefined
   /** Claude/Codex 检测结果；由应用容器注入。 */
   providers?: ProviderStatus[] | undefined
   /** 兼容旧的单 provider 检测结果。 */
@@ -30,6 +32,7 @@ export function SettingsView({
   onClose,
   appearance,
   pluginManager,
+  schedulesPage,
   providers,
   detection,
   onDetect,
@@ -44,6 +47,7 @@ export function SettingsView({
         {section === "providers" ? (
           <ProviderPage providers={providers} detection={detection} onDetect={onDetect} />
         ) : null}
+        {section === "schedules" ? schedulesPage : null}
         {section === "plugins" ? pluginManager : null}
       </div>
     </section>

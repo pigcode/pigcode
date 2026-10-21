@@ -42,6 +42,7 @@ const coreEntries = {
   worktrees: join(root, "apps/host/src/services/worktrees.ts"),
   checkpoints: join(root, "apps/host/src/services/checkpoints.ts"),
   terminal: join(root, "apps/host/src/services/terminal.ts"),
+  schedules: join(root, "apps/host/src/services/schedules.ts"),
 }
 
 await build({
@@ -92,6 +93,8 @@ await writeFile(
     "    name: ../core/checkpoints.mjs",
     "  - id: core.terminal",
     "    name: ../core/terminal.mjs",
+    "  - id: core.schedules",
+    "    name: ../core/schedules.mjs",
     "",
   ].join("\n"),
   "utf8",

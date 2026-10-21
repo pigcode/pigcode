@@ -23,3 +23,5 @@ plugins:
     name: "@pigcode/host/services/checkpoints"
   - id: core.terminal
     name: "@pigcode/host/services/terminal"
+  - id: core.schedules
+    name: "@pigcode/host/services/schedules"

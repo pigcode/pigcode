@@ -1,8 +1,8 @@
 // 设置页分区导航：返回应用、分区标题与 M0-B 的四个设置分区。
 import { Button, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 
-/** M0-B 设置页的分区；插件分区由插件管理视图单独渲染。 */
-export type SettingsSection = "general" | "appearance" | "providers" | "plugins"
+/** 设置页的分区；插件分区由插件管理视图单独渲染。 */
+export type SettingsSection = "general" | "appearance" | "providers" | "schedules" | "plugins"
 
 /** 一个导航条目；文案全部来自 locale。 */
 export interface SettingsNavItem {
@@ -15,6 +15,7 @@ export const settingsNavItems: readonly SettingsNavItem[] = [
   { id: "general", labelKey: "settings.general" },
   { id: "appearance", labelKey: "settings.appearance" },
   { id: "providers", labelKey: "settings.providers" },
+  { id: "schedules", labelKey: "settings.schedules" },
   { id: "plugins", labelKey: "settings.plugins" },
 ]
 
