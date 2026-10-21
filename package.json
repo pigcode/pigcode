@@ -15,6 +15,7 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "real:claude": "node scripts/real-claude-smoke.mjs",
     "real:codex": "node scripts/real-codex-smoke.mjs",
+    "real:codex:multi": "node scripts/real-codex-multi.mjs",
     "create-plugin": "node scripts/create-plugin.mjs"
   },
   "devDependencies": {
