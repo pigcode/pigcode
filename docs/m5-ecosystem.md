@@ -166,6 +166,8 @@ RPC：
 
 定时任务以固定间隔（秒）重复运行，不支持 cron 表达式。
 
+- 间隔必须是正整数且不超过 `2_147_483` 秒（约 24.8 天）；更大的值会超过
+  Node `setTimeout` 的 32 位上限并被截断成 1ms。
 - 任务持久化在 SQLite 的 `schedules` 表（migration 4），包含线程、prompt、
   间隔、启用状态、`next_run_at`、`last_run_at` 和 `last_run_id`。
 - 创建时 `next_run_at = now + intervalSeconds`；每次触发后从当前时间重新计算下一次。
