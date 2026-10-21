@@ -1,7 +1,7 @@
 /** 验证 thread.switchProvider 的会话停止、handoff 生成与下一次 run 注入。 */
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
-import type { ProviderDriver, ProviderSessionHandle, UserInput } from "./driver"
+import type { CreateSessionInput, ProviderDriver, ProviderSessionHandle, UserInput } from "./driver"
 import { ClaudeDriver } from "./claude/driver"
 import { replayQuery } from "./claude/replay"
 import { FakeProviderDriver } from "./fake"
@@ -13,21 +13,27 @@ import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 
-/** 记录每次 send 的输入与 dispose 调用，用来观察 handoff 与旧会话清理。 */
-function recordingDriver(id: string): {
+/** 记录 createSession/send 入参与 dispose 调用，用来观察 fork、handoff 与旧会话清理。 */
+function recordingDriver(
+  id: string,
+  options: { nativeSessionId?: string; tools?: string[] } = {},
+): {
   driver: ProviderDriver
   inputs: UserInput[]
+  created: CreateSessionInput[]
   disposed: ProviderSessionHandle[]
 } {
   const inputs: UserInput[] = []
+  const created: CreateSessionInput[] = []
   const disposed: ProviderSessionHandle[] = []
   const driver: ProviderDriver = {
     id,
     displayName: id,
     capabilities: new FakeProviderDriver().capabilities,
     async createSession(input) {
+      created.push(input)
       return {
-        id: `ps_${id}_${inputs.length}`,
+        id: `ps_${id}_${created.length}`,
         threadId: input.threadId,
         cwd: input.cwd,
         nativeSessionId: input.nativeSessionId ?? null,
@@ -37,6 +43,18 @@ function recordingDriver(id: string): {
     },
     async send(_session: ProviderSessionHandle, input, runtime) {
       inputs.push(input)
+      if (options.nativeSessionId) {
+        runtime.emit({ type: "session.started", nativeSessionId: options.nativeSessionId })
+      }
+      for (const name of options.tools ?? []) {
+        runtime.emit({
+          type: "tool.completed",
+          toolCallId: `tool_${name}`,
+          name,
+          output: "",
+          isError: false,
+        })
+      }
       runtime.emit({ type: "message.completed", text: `${id} reply` })
       runtime.emit({ type: "run.completed" })
     },
@@ -45,11 +63,11 @@ function recordingDriver(id: string): {
       disposed.push(session)
     },
   }
-  return { driver, inputs, disposed }
+  return { driver, inputs, created, disposed }
 }
 
 /** 建立内存 Host；claude 用记录型 driver 覆盖，避免测试启动真实进程。 */
-async function setup() {
+async function setup(providerId = "fake") {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
   await ctx.plugin(projects)
@@ -59,7 +77,7 @@ async function setup() {
   const claude = recordingDriver("claude")
   ctx.providers.register(claude.driver)
   const project = ctx.projects.add("/tmp/pigcode-m2")
-  const thread = ctx.threads.create(project.id, "M2", "fake")
+  const thread = ctx.threads.create(project.id, "M2", providerId)
   return { ctx, thread, claude }
 }
 
@@ -72,6 +90,7 @@ describe("provider switching", () => {
     const switched = await ctx.providers.switchProvider(thread.id, "claude", "claude-sonnet")
     expect(switched.providerId).toBe("claude")
     expect(switched.modelId).toBe("claude-sonnet")
+    expect(switched.forkFromNativeSessionId).toBeNull()
 
     const events = ctx.sessions.read(thread.id, 0)
     const handoffEvent = events.find((event) => event.type === "thread.updated")
@@ -83,11 +102,14 @@ describe("provider switching", () => {
     expect(handoff).toBe(
       [
         "Previous provider: fake",
-        "Last user request: build the login page",
-        "Last assistant summary: Hello from fake provider",
+        "Recent conversation:",
+        "- user: build the login page",
+        "- assistant: Hello from fake provider",
+        "Recent tools: (none)",
         "Continue from here. Do not repeat completed work.",
       ].join("\n"),
     )
+    expect(switched.handoff).toBe(handoff)
 
     const updated = ctx.threads.get(thread.id)
     expect(updated?.lastProviderId).toBe("claude")
@@ -102,11 +124,84 @@ describe("provider switching", () => {
     const next = await ctx.providers.startRun(thread.id, "continue")
     await next.done
     expect(claude.inputs[0]).toEqual({ text: "continue", handoff })
+    // 跨 provider 切换没有可 fork 的原生会话，createSession 不携带 fork 源。
+    expect(claude.created[0]?.forkFromNativeSessionId).toBeUndefined()
 
     // handoff 只作用于切换后的第一次消息，避免后续每轮重复注入。
     const third = await ctx.providers.startRun(thread.id, "again")
     await third.done
     expect(claude.inputs[1]).toEqual({ text: "again" })
+    await ctx.fiber.dispose()
+  })
+
+  it("forks the same provider's active native session instead of using handoff", async () => {
+    const { ctx, thread } = await setup("claude")
+    const claude = recordingDriver("claude", { nativeSessionId: "native_parent" })
+    ctx.providers.register(claude.driver)
+
+    const first = await ctx.providers.startRun(thread.id, "build the login page")
+    await first.done
+    expect(ctx.providers.listSessions(thread.id)[0]?.nativeSessionId).toBe("native_parent")
+
+    // 同一 provider 且存在 active 原生会话：切换时记录 fork 源，而不是生成 handoff。
+    const switched = await ctx.providers.switchProvider(thread.id, "claude", "claude-sonnet")
+    expect(switched).toMatchObject({
+      providerId: "claude",
+      modelId: "claude-sonnet",
+      handoff: null,
+      forkFromNativeSessionId: "native_parent",
+    })
+
+    const updated = ctx.sessions
+      .read(thread.id, 0)
+      .filter((event) => event.type === "thread.updated")
+      .at(-1)
+    expect(updated?.payload).toMatchObject({
+      providerId: "claude",
+      modelId: "claude-sonnet",
+      forkFromNativeSessionId: "native_parent",
+    })
+    expect((updated?.payload as { handoff?: unknown }).handoff).toBeUndefined()
+
+    const next = await ctx.providers.startRun(thread.id, "continue")
+    await next.done
+    expect(claude.created.at(-1)).toMatchObject({
+      threadId: thread.id,
+      nativeSessionId: null,
+      forkFromNativeSessionId: "native_parent",
+    })
+    // fork 复用原生上下文，不再额外注入 handoff。
+    expect(claude.inputs.at(-1)).toEqual({ text: "continue" })
+
+    // fork 只作用于切换后的第一次 run，后续 run 恢复新的活跃会话。
+    const third = await ctx.providers.startRun(thread.id, "again")
+    await third.done
+    expect(claude.created.at(-1)?.forkFromNativeSessionId).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
+  it("includes recent messages and tool names in a cross-provider handoff", async () => {
+    const { ctx, thread } = await setup()
+    const fake = recordingDriver("fake", { tools: ["Bash", "ApplyPatch"] })
+    ctx.providers.register(fake.driver)
+
+    const first = await ctx.providers.startRun(thread.id, "first")
+    await first.done
+    const second = await ctx.providers.startRun(thread.id, "second")
+    await second.done
+
+    const switched = await ctx.providers.switchProvider(thread.id, "claude", null)
+    expect(switched.handoff).toBe(
+      [
+        "Previous provider: fake",
+        "Recent conversation:",
+        "- assistant: fake reply",
+        "- user: second",
+        "- assistant: fake reply",
+        "Recent tools: Bash, ApplyPatch",
+        "Continue from here. Do not repeat completed work.",
+      ].join("\n"),
+    )
     await ctx.fiber.dispose()
   })
 

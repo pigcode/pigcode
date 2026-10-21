@@ -67,13 +67,21 @@ export class CodexDriver implements ProviderDriver {
         clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
       })
       const params = createThreadParams(input)
-      const response = input.nativeSessionId
-        ? ((await client.request("thread/resume", {
-            threadId: input.nativeSessionId,
+      // 同一 provider 切换优先原生 fork；fork 返回的新 thread id 用于后续 turn。
+      const forkFrom = input.forkFromNativeSessionId
+      const response = forkFrom
+        ? ((await client.request("thread/fork", {
+            threadId: forkFrom,
             ...params,
           })) as { thread?: { id?: string } })
-        : ((await client.request("thread/start", params)) as { thread?: { id?: string } })
-      const nativeThreadId = response.thread?.id ?? input.nativeSessionId ?? null
+        : input.nativeSessionId
+          ? ((await client.request("thread/resume", {
+              threadId: input.nativeSessionId,
+              ...params,
+            })) as { thread?: { id?: string } })
+          : ((await client.request("thread/start", params)) as { thread?: { id?: string } })
+      const nativeThreadId =
+        response.thread?.id ?? (forkFrom ? null : (input.nativeSessionId ?? null))
       this.sessions.set(nativeThreadId ?? input.threadId, {
         client,
         nativeThreadId,

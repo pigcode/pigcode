@@ -37,6 +37,8 @@ interface DriverSessionState {
   controller: AbortController
   query: Query | null
   interruptRequested: boolean
+  /** 下一次 send 需要从该原生会话 fork；首次成功启动 Query 后清空。 */
+  forkFromNativeSessionId: string | null
   /** 创建会话时注入的插件 MCP server；每次 send 复用同一实例。 */
   mcp?: SessionMcp
 }
@@ -80,13 +82,15 @@ export class ClaudeDriver implements ProviderDriver {
       controller: new AbortController(),
       query: null,
       interruptRequested: false,
+      forkFromNativeSessionId: input.forkFromNativeSessionId ?? null,
       ...(input.mcp ? { mcp: input.mcp } : {}),
     })
     return {
       id,
       threadId: input.threadId,
       cwd: input.cwd,
-      nativeSessionId: input.nativeSessionId ?? null,
+      // fork 会产生新的原生会话，创建时还不知道其 id，不能沿用父会话 id。
+      nativeSessionId: input.forkFromNativeSessionId ? null : (input.nativeSessionId ?? null),
       permissionMode: input.permissionMode ?? "workspace-write",
       model: input.model ?? null,
     }
@@ -107,11 +111,15 @@ export class ClaudeDriver implements ProviderDriver {
     const normalizeState = createNormalizeState()
     // 切换 provider 后，handoff 放在用户文本之前，保持上下文连续。
     const prompt = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
+    // 同一 provider 切换优先原生 fork：resume 父会话并 forkSession，得到新的会话 id。
+    const forkFromNativeSessionId = state.forkFromNativeSessionId
+    const resumeId = forkFromNativeSessionId ?? session.nativeSessionId
     const queryStream = this.queryFn({
       prompt,
       options: {
         cwd: session.cwd,
-        ...(session.nativeSessionId ? { resume: session.nativeSessionId } : {}),
+        ...(resumeId ? { resume: resumeId } : {}),
+        ...(forkFromNativeSessionId ? { forkSession: true } : {}),
         includePartialMessages: true,
         // 子 agent 的文本/思考块也作为带 parent_tool_use_id 的消息转发，供时间线归组。
         forwardSubagentText: true,
@@ -137,6 +145,8 @@ export class ClaudeDriver implements ProviderDriver {
       },
     })
     state.query = queryStream
+    // fork 只作用于切换后的第一次 send；后续 send 由 init 消息更新出的原生 id 恢复。
+    state.forkFromNativeSessionId = null
 
     // run 的取消信号到达时中断 SDK Query；即使 SDK 不结束流也停止消费。
     const onAbort = (): void => this.abortState(state)
@@ -193,6 +203,7 @@ export class ClaudeDriver implements ProviderDriver {
       controller: new AbortController(),
       query: null,
       interruptRequested: false,
+      forkFromNativeSessionId: null,
     }
     this.sessionStates.set(sessionId, state)
     return state

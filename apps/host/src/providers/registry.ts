@@ -30,11 +30,12 @@ import {
   defaultProvider,
   disposeSession,
   listProviderModels,
+  pendingForkFromNativeSessionId,
   pendingHandoff,
   resolveThreadCwd,
   switchProvider,
+  type Switch,
 } from "./switching"
-import type { Switch } from "./switching"
 import { ApprovalBridge } from "./claude/permissions"
 import { ProviderSessionStore } from "./claude/session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
@@ -74,7 +75,7 @@ export interface ProvidersService {
   models(providerId: string): Promise<CodexModelInfo[]>
   /** 选择新线程默认 provider：显式 env 优先，否则 Claude 已安装且登录时用 Claude。 */
   defaultProvider(): Promise<string>
-  /** 切换线程 provider/model，并把 handoff 写入事件日志。 */
+  /** 切换线程 provider/model；同 provider 写 fork 源，跨 provider 写 handoff。 */
   switchProvider(threadId: string, providerId: string, modelId?: string | null): Promise<Switch>
   startRun(
     threadId: string,
@@ -120,7 +121,6 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const claude = new ClaudeDriver()
   drivers.set(claude.id, claude)
   drivers.set("codex", new CodexDriver())
-
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
   const providerSessions = new ProviderSessionStore(ctx.storage.db)
@@ -128,7 +128,6 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const activeRuns = new Map<string, ActiveRun>()
   const activeThreads = new Set<string>()
   const queue = new RunQueue<QueuedRun>(maxQueuedRuns)
-
   /** 追加一条线程事件并触发实时订阅者。 */
   function append(
     threadId: string,
@@ -353,16 +352,17 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       const providerId = thread.lastProviderId ?? thread.defaultProviderId
       const driver = drivers.get(providerId)
       if (!driver) throw new Error(`provider not found: ${providerId}`)
-
       // activeThreads 同时覆盖运行中与排队中的线程，保证同一线程只有一个 run。
       activeThreads.add(threadId)
       try {
         const startedAt = new Date().toISOString()
         const activeSession = providerSessions.findActive(threadId, driver.id)
+        const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
         const draft = await driver.createSession({
           threadId,
           cwd: resolveThreadCwd(ctx, thread.id, thread.projectId),
-          nativeSessionId: activeSession?.nativeSessionId ?? null,
+          nativeSessionId: forkFrom ? null : (activeSession?.nativeSessionId ?? null),
+          ...(forkFrom ? { forkFromNativeSessionId: forkFrom } : {}),
           permissionMode: thread.permissionMode,
           model: thread.lastModelId,
           mcp: ctx.reflect.get("mcpBridge")?.sessionMcp(threadId), // 无插件工具时为 undefined

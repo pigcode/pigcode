@@ -38,6 +38,8 @@ export interface CreateSessionInput {
   threadId: string
   cwd: string
   nativeSessionId?: string | null
+  /** 原生 fork 的源会话；与 nativeSessionId 互斥，支持 fork 的 driver 会创建新会话。 */
+  forkFromNativeSessionId?: string
   permissionMode?: string
   model?: string | null
   /** 线程作用域的插件工具；不支持 MCP 的 driver 可以忽略。 */

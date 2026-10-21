@@ -19,6 +19,8 @@ interface SentMessage {
 /** 服务端应答脚本；在收到客户端消息时推入响应。 */
 interface ReplayScript {
   nativeThreadId: string
+  /** thread/fork 返回的新 thread id；未指定时使用固定值。 */
+  forkedThreadId?: string
   onTurnStart?: (message: SentMessage, transport: ScriptedTransport) => void
   onTurnInterrupt?: (message: SentMessage, transport: ScriptedTransport) => void
 }
@@ -36,6 +38,13 @@ class ScriptedTransport extends ReplayCodexTransport {
     const message = JSON.parse(line) as SentMessage
     if (message.method === "initialize") {
       this.push({ id: message.id, result: {} })
+      return
+    }
+    if (message.method === "thread/fork") {
+      this.push({
+        id: message.id,
+        result: { thread: { id: this.script.forkedThreadId ?? "th_forked" } },
+      })
       return
     }
     if (message.method === "thread/start" || message.method === "thread/resume") {
@@ -175,6 +184,29 @@ describe("CodexDriver", () => {
     })
     expect(messageOf(transport, "thread/start")).toBeUndefined()
     expect(session.nativeSessionId).toBe("th_existing")
+  })
+
+  it("forks a native thread instead of resuming it", async () => {
+    const { driver, transport } = setup({
+      nativeThreadId: "th_parent",
+      forkedThreadId: "th_forked",
+    })
+    const session = await driver.createSession({
+      threadId: "t1",
+      cwd: "/tmp",
+      nativeSessionId: "th_parent",
+      forkFromNativeSessionId: "th_parent",
+    })
+
+    // fork 请求带上父 thread id 与共享参数，响应中的新 thread id 成为会话标识。
+    expect(messageOf(transport, "thread/fork")?.params).toMatchObject({
+      threadId: "th_parent",
+      cwd: "/tmp",
+      sandbox: "workspace-write",
+    })
+    expect(messageOf(transport, "thread/resume")).toBeUndefined()
+    expect(messageOf(transport, "thread/start")).toBeUndefined()
+    expect(session.nativeSessionId).toBe("th_forked")
   })
 
   it("injects MCP config into thread/start and thread/resume", async () => {

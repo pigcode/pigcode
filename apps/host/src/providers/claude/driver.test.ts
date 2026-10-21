@@ -99,6 +99,37 @@ describe("ClaudeDriver", () => {
     expect(captured?.mcpServers).toEqual({ pigcode: claudeServer })
   })
 
+  it("forks the native session instead of continuing it", async () => {
+    let captured: Options | undefined
+    const replay = replayQuery("fixtures/simple.jsonl")
+    const driver = new ClaudeDriver({
+      queryFn: (params) => {
+        captured = params.options
+        return replay(params)
+      },
+    })
+    const session = await driver.createSession({
+      threadId: "t6",
+      cwd: "/tmp",
+      nativeSessionId: "session_parent",
+      forkFromNativeSessionId: "session_parent",
+    })
+    // fork 会生成新的原生会话，创建时不能沿用父会话 id。
+    expect(session.nativeSessionId).toBeNull()
+
+    await driver.send(
+      session,
+      { text: "hello" },
+      {
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        requestApproval: async () => "allow-once",
+      },
+    )
+
+    expect(captured).toMatchObject({ resume: "session_parent", forkSession: true })
+  })
+
   it("passes dontAsk permission mode through to the SDK", async () => {
     let captured: Options | undefined
     const replay = replayQuery("fixtures/simple.jsonl")
