@@ -1,6 +1,11 @@
 /** 全局运行队列、排队条目与内存中的 run 句柄。 */
 import type { ProviderEvent, RunStatus } from "@pigcode/contracts"
-import type { ProviderDriver, ProviderSessionHandle, UserInput } from "./driver"
+import type {
+  ProviderDriver,
+  ProviderSessionHandle,
+  SessionMcp,
+  UserInput,
+} from "./driver"
 
 /** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
 export interface ActiveRun {
@@ -16,11 +21,28 @@ export interface ActiveRun {
   approvals: Set<string>
 }
 
-/** 排队中的 run：保留原始输入与排队时间，等待并发空位。 */
+/**
+ * 排队中的 run：此时还没有 provider 会话，避免为尚未开始的 run 提前启动
+ * Codex app-server 或 Claude Query。会话在真正启动时创建。
+ */
 export interface QueuedRun {
-  run: ActiveRun
+  runId: string
+  threadId: string
+  driver: ProviderDriver
   input: UserInput
+  emitLive: ((event: ProviderEvent) => void) | undefined
+  controller: AbortController
+  done: Promise<void>
+  resolveDone: () => void
   queuedAt: string
+  cwd: string
+  permissionMode: string
+  model: string | null
+  nativeSessionId: string | null
+  forkFromNativeSessionId?: string
+  /** 复用已有 provider_sessions 行时传入，保证 driver 内部 state 使用同一个 id。 */
+  sessionId?: string
+  mcp?: SessionMcp
 }
 
 /** run.list 返回的运行概要；queuedAt 只对排队中的 run 存在。 */
@@ -42,7 +64,7 @@ export class RunQueue<T> {
   }
 
   values(): readonly T[] {
-    return this.items
+    return [...this.items]
   }
 
   push(item: T): boolean {

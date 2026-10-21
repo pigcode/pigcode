@@ -22,6 +22,13 @@ export class RunStore {
       .run(input.id, input.threadId, input.providerSessionId, input.status, input.startedAt)
   }
 
+  /** 会话在 run 真正启动时才创建；排队阶段先写占位值。 */
+  setProviderSessionId(runId: string, providerSessionId: string): void {
+    this.db
+      .prepare(`UPDATE runs SET provider_session_id = ? WHERE id = ?`)
+      .run(providerSessionId, runId)
+  }
+
   /** 更新 run 状态；离开运行态时写入完成时间与错误信息。 */
   setStatus(runId: string, status: RunStatus, error?: { code: string; message: string }): void {
     this.db

@@ -73,7 +73,8 @@ export function SchedulesPage({
     threadId.length > 0 &&
     trimmedPrompt.length > 0 &&
     Number.isInteger(intervalSeconds) &&
-    intervalSeconds > 0
+    intervalSeconds > 0 &&
+    intervalSeconds <= 2_147_483
 
   /** 提交创建表单；失败时保留输入，错误由父容器展示。 */
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {

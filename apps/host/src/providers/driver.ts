@@ -37,6 +37,8 @@ export interface SessionMcp {
 export interface CreateSessionInput {
   threadId: string
   cwd: string
+  /** 复用已有 provider_sessions 行时传入，driver 用它作为内部 state 的 key。 */
+  sessionId?: string
   nativeSessionId?: string | null
   /** 原生 fork 的源会话；与 nativeSessionId 互斥，支持 fork 的 driver 会创建新会话。 */
   forkFromNativeSessionId?: string

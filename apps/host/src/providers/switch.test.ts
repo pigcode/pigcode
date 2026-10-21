@@ -256,6 +256,39 @@ describe("provider switching", () => {
     await ctx.fiber.dispose()
   })
 
+  it("rejects switching while a run is active", async () => {
+    const { ctx, thread } = await setup()
+    const slow: ProviderDriver = {
+      id: "slow",
+      displayName: "Slow",
+      capabilities: new FakeProviderDriver().capabilities,
+      async createSession(input) {
+        return {
+          id: "ps_slow",
+          threadId: input.threadId,
+          cwd: input.cwd,
+          nativeSessionId: null,
+          permissionMode: "workspace-write",
+          model: null,
+        }
+      },
+      send: () => new Promise<void>(() => undefined),
+      interrupt: async () => undefined,
+      dispose: async () => undefined,
+    }
+    ctx.providers.register(slow)
+    ctx.threads.updateSelection(thread.id, "slow", null)
+
+    const run = await ctx.providers.startRun(thread.id, "long")
+    await expect(ctx.providers.switchProvider(thread.id, "claude", null)).rejects.toThrow(
+      "RUN_ALREADY_ACTIVE",
+    )
+
+    ctx.providers.cancelRun(run.runId)
+    await run.done
+    await ctx.fiber.dispose()
+  })
+
   it("disposes the previous provider session before switching", async () => {
     const { ctx, thread } = await setup()
     const fake = recordingDriver("fake")

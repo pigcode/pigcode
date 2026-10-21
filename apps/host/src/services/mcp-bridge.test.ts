@@ -149,6 +149,33 @@ describe("mcp bridge", () => {
     expect(ctx.mcpBridge.listTools("thread-1")).toEqual([])
   })
 
+  it("rejects duplicate tool names across plugins", async () => {
+    const ctx = await setup()
+    const dispose = ctx.mcp.registerTool("plugin.a", ECHO_TOOL, async () => ({}))
+    expect(() => ctx.mcp.registerTool("plugin.b", ECHO_TOOL, async () => ({}))).toThrow(
+      "MCP_TOOL_CONFLICT",
+    )
+    dispose()
+  })
+
+  it("only creates the MCP server or Codex config for built-in providers", async () => {
+    const ctx = await setup()
+    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
+
+    const claude = ctx.mcpBridge.sessionMcp("thread-1", "claude")
+    expect(claude?.claudeServer).toBeTruthy()
+    expect(claude?.codexConfig).toBeUndefined()
+
+    const codex = ctx.mcpBridge.sessionMcp("thread-1", "codex")
+    expect(codex?.codexConfig).toBeTruthy()
+    expect(codex?.claudeServer).toBeUndefined()
+
+    // 第三方 provider 可能接受任一格式，保留两者兼容。
+    const custom = ctx.mcpBridge.sessionMcp("thread-1", "custom")
+    expect(custom?.claudeServer).toBeTruthy()
+    expect(custom?.codexConfig).toBeTruthy()
+  })
+
   it("rejects unknown tools", async () => {
     const ctx = await setup()
     await expect(ctx.mcpBridge.callTool("thread-1", "missing", {})).rejects.toThrow(
@@ -254,6 +281,24 @@ describe("mcp bridge", () => {
 
     const unknown = await bridge.request(5, "unknown/method")
     expect(unknown).toMatchObject({ id: 5, error: { code: -32601 } })
+  })
+
+  it("exits when stdin closes", async () => {
+    const ctx = await setup()
+    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
+    await ctx.mcpBridge.createSocketServer()
+    const config = codexServer(ctx, "thread-stdio-close")
+    const bridge = startBridge({
+      PIGCODE_MCP_SOCKET: config.env.PIGCODE_MCP_SOCKET!,
+      PIGCODE_MCP_TOKEN: config.env.PIGCODE_MCP_TOKEN!,
+    })
+
+    bridge.child.stdin.end()
+    const code = await new Promise<number | null>((resolve) => {
+      bridge.child.once("exit", (exitCode) => resolve(exitCode))
+    })
+
+    expect(code).toBe(0)
   })
 
   it("exits with a readable error when the socket env is missing", async () => {

@@ -64,6 +64,16 @@ const STATUS_AFTER_EVENT: Record<string, ThreadViewStatus> = {
   "run.interrupted": "interrupted",
 }
 
+/** 进入终态后，迟到的审批事件不能再把状态改回运行中。 */
+const TERMINAL_STATUSES = new Set<ThreadViewStatus>(["completed", "failed", "interrupted"])
+
+/** 子 agent 的完成消息带有 parentToolUseId，不能清空主线程的流式文本。 */
+function isSubagentMessage(event: ThreadEvent): boolean {
+  if (typeof event.payload !== "object" || event.payload === null) return false
+  const parent = (event.payload as { parentToolUseId?: unknown }).parentToolUseId
+  return typeof parent === "string" && parent.length > 0
+}
+
 /** 从事件 payload 中提取可展示的错误文本。 */
 function errorFromPayload(payload: unknown): string | null {
   if (typeof payload === "object" && payload !== null && "message" in payload) {
@@ -177,11 +187,17 @@ export class AppStore {
     const events = previous.events.some((item) => item.seq === event.seq)
       ? previous.events
       : [...previous.events, event]
+    const mapped = STATUS_AFTER_EVENT[event.type]
+    const status =
+      mapped && !(event.type === "approval.resolved" && TERMINAL_STATUSES.has(previous.status))
+        ? mapped
+        : previous.status
+    const subagent = isSubagentMessage(event)
     const next: ThreadViewState = {
       ...previous,
       events,
-      streamingText: event.type === "message.completed" ? "" : previous.streamingText,
-      status: STATUS_AFTER_EVENT[event.type] ?? previous.status,
+      streamingText: event.type === "message.completed" && !subagent ? "" : previous.streamingText,
+      status,
       pendingApprovals: pendingApprovalsAfter(previous, event),
       lastError:
         event.type === "run.failed"
@@ -196,22 +212,20 @@ export class AppStore {
       threadStates,
       events: mirrorActive ? events : this.state.events,
       streamingText:
-        mirrorActive && event.type === "message.completed" ? "" : this.state.streamingText,
+        mirrorActive && event.type === "message.completed" && !subagent
+          ? ""
+          : this.state.streamingText,
     }
     this.emit()
   }
 
   /**
-   * 累加某线程的流式文本。未知 threadId（例如旧调用方传入的占位符）只更新活动镜像，
-   * 保持与单线程调用方兼容。
+   * 累加某线程的流式文本；已关闭的线程没有状态，直接忽略迟到 delta，
+   * 避免后台 run 的文本串到当前活动线程。
    */
   appendDelta(threadId: string, text: string): void {
     const previous = this.state.threadStates[threadId]
-    if (!previous) {
-      this.state = { ...this.state, streamingText: this.state.streamingText + text }
-      this.emit()
-      return
-    }
+    if (!previous) return
     const threadStates = {
       ...this.state.threadStates,
       [threadId]: { ...previous, streamingText: previous.streamingText + text },

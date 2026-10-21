@@ -30,6 +30,19 @@ export function openPreview(url: string): { id: string } {
     height: 800,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   })
+  // 初始 URL 之外的跳转也必须留在 loopback；302 与脚本导航都走这里。
+  window.webContents.on("will-navigate", (event, target) => {
+    if (!isAllowedPreviewUrl(target)) event.preventDefault()
+  })
+  window.webContents.on("will-redirect", (event, target) => {
+    if (!isAllowedPreviewUrl(target)) event.preventDefault()
+  })
+  window.webContents.setWindowOpenHandler(({ url: target }) =>
+    isAllowedPreviewUrl(target) ? { action: "allow" } : { action: "deny" },
+  )
+  window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => {
+    callback(false)
+  })
   void window.loadURL(url)
   windows.set(id, window)
   window.on("closed", () => windows.delete(id))

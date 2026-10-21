@@ -31,9 +31,58 @@ describe("AppStore", () => {
 
   it("accumulates streaming text", () => {
     const store = new AppStore()
-    store.appendDelta("run_1", "hello")
-    store.appendDelta("run_1", " world")
+    store.openThread("th_1")
+    store.setActiveThread("th_1")
+    store.appendDelta("th_1", "hello")
+    store.appendDelta("th_1", " world")
     expect(store.getSnapshot().streamingText).toBe("hello world")
+  })
+
+  it("ignores late deltas for a closed thread", () => {
+    const store = new AppStore()
+    store.openThread("th_1")
+    store.openThread("th_2")
+    store.setActiveThread("th_2")
+    store.closeThread("th_1")
+
+    store.appendDelta("th_1", "late background text")
+
+    expect(store.getSnapshot().streamingText).toBe("")
+    expect(store.getSnapshot().threadStates["th_1"]).toBeUndefined()
+  })
+
+  it("keeps streaming text when a subagent message completes", () => {
+    const store = new AppStore()
+    store.openThread("th_1")
+    store.setActiveThread("th_1")
+    store.appendDelta("th_1", "main answer")
+
+    store.addEvent(
+      threadEvent("th_1", 1, "message.completed", {
+        role: "assistant",
+        text: "child answer",
+        parentToolUseId: "tool_1",
+      }),
+    )
+
+    expect(store.getSnapshot().threadStates["th_1"]?.streamingText).toBe("main answer")
+    expect(store.getSnapshot().streamingText).toBe("main answer")
+  })
+
+  it("does not let a late approval resolution revive a terminal run", () => {
+    const store = new AppStore()
+    store.openThread("th_1")
+    store.setActiveThread("th_1")
+
+    store.addEvent(threadEvent("th_1", 1, "run.started"))
+    store.addEvent(threadEvent("th_1", 2, "approval.requested"))
+    store.addEvent(threadEvent("th_1", 3, "run.interrupted"))
+    store.addEvent(threadEvent("th_1", 4, "approval.resolved", { decision: "deny" }))
+
+    expect(store.getSnapshot().threadStates["th_1"]).toMatchObject({
+      status: "interrupted",
+      pendingApprovals: 0,
+    })
   })
 
   it("keeps events and streaming text per thread and mirrors the active one", () => {

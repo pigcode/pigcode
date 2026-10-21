@@ -75,16 +75,23 @@ export class ClaudeDriver implements ProviderDriver {
     this.executable = options.executable ?? resolveClaudeExecutable()
   }
 
-  /** 创建内存句柄；原生会话在首次 send 后由 SDK init 消息补充。 */
+  /** 创建或复用会话状态；复用时会刷新 MCP 工具表，插件启停对下一次 run 生效。 */
   async createSession(input: CreateSessionInput): Promise<ProviderSessionHandle> {
-    const id = `claude_${randomUUID()}`
-    this.sessionStates.set(id, {
-      controller: new AbortController(),
-      query: null,
-      interruptRequested: false,
-      forkFromNativeSessionId: input.forkFromNativeSessionId ?? null,
-      ...(input.mcp ? { mcp: input.mcp } : {}),
-    })
+    const id = input.sessionId ?? `claude_${randomUUID()}`
+    const existing = this.sessionStates.get(id)
+    if (existing) {
+      existing.forkFromNativeSessionId = input.forkFromNativeSessionId ?? null
+      if (input.mcp) existing.mcp = input.mcp
+      else delete existing.mcp
+    } else {
+      this.sessionStates.set(id, {
+        controller: new AbortController(),
+        query: null,
+        interruptRequested: false,
+        forkFromNativeSessionId: input.forkFromNativeSessionId ?? null,
+        ...(input.mcp ? { mcp: input.mcp } : {}),
+      })
+    }
     return {
       id,
       threadId: input.threadId,

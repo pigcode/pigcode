@@ -71,10 +71,16 @@ function mapSchedule(row: ScheduleRow): Schedule {
   }
 }
 
-/** 校验间隔必须是正整数秒。 */
+/** Node setTimeout 的 32 位上限约 24.86 天；超过会被截断成 1ms。 */
+export const MAX_INTERVAL_SECONDS = 2_147_483
+
+/** 校验间隔必须是正整数秒，且不能超过 setTimeout 上限。 */
 function assertInterval(intervalSeconds: number): void {
   if (!Number.isInteger(intervalSeconds) || intervalSeconds <= 0) {
     throw new Error("intervalSeconds must be a positive integer")
+  }
+  if (intervalSeconds > MAX_INTERVAL_SECONDS) {
+    throw new Error(`intervalSeconds must be <= ${MAX_INTERVAL_SECONDS}`)
   }
 }
 

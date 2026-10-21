@@ -38,8 +38,8 @@ export interface McpBridgeService extends McpBridgeApi {
   claudeServer(threadId: string): McpSdkServerConfigWithInstance | null
   /** 生成 Codex `config.mcp_servers` 片段；没有工具时返回 null。 */
   codexConfig(threadId: string): Record<string, unknown> | null
-  /** 汇总一次会话需要的注入参数；没有工具时返回 undefined。 */
-  sessionMcp(threadId: string): SessionMcp | undefined
+  /** 汇总一次会话需要的注入参数；只生成当前 provider 需要的部分。 */
+  sessionMcp(threadId: string, providerId: string): SessionMcp | undefined
 }
 
 declare module "cordis" {
@@ -60,6 +60,8 @@ export function apply(ctx: Context): void {
   const plugins = new Map<string, Map<string, RegisteredTool>>()
   /** hello token → threadId。 */
   const tokens = new Map<string, string>()
+  /** threadId → token；同一会话复用同一个 token，避免每次 run 增长。 */
+  const threadTokens = new Map<string, string>()
   /** 同一进程可能有多个 bridge（测试/多 profile）；socket 名带实例后缀避免冲突。 */
   const instanceId = randomUUID().slice(0, 8)
   const address = socketAddress(instanceId)
@@ -67,7 +69,7 @@ export function apply(ctx: Context): void {
   let server: net.Server | null = null
   let starting: Promise<SocketServerHandle> | null = null
 
-  /** 查找工具；同名工具后注册者覆盖先注册者。 */
+  /** 查找工具；注册阶段已保证跨插件工具名唯一。 */
   function findTool(name: string): RegisteredTool | undefined {
     for (const byName of plugins.values()) {
       const entry = byName.get(name)
@@ -87,6 +89,10 @@ export function apply(ctx: Context): void {
     tool: McpToolDefinition,
     handler: McpToolHandler,
   ): () => void {
+    const owner = findTool(tool.name)
+    if (owner && owner !== plugins.get(pluginId)?.get(tool.name)) {
+      throw new Error(`MCP_TOOL_CONFLICT: ${tool.name}`)
+    }
     const byName = plugins.get(pluginId) ?? new Map<string, RegisteredTool>()
     plugins.set(pluginId, byName)
     const registered: RegisteredTool = { tool, handler }
@@ -139,8 +145,12 @@ export function apply(ctx: Context): void {
   /** 为 Codex 生成 stdio server 配置；token 在 hello 时映射回线程。 */
   function codexConfig(threadId: string): Record<string, unknown> | null {
     if (listTools().length === 0) return null
-    const token = randomUUID()
-    tokens.set(token, threadId)
+    let token = threadTokens.get(threadId)
+    if (!token) {
+      token = randomUUID()
+      threadTokens.set(threadId, token)
+      tokens.set(token, threadId)
+    }
     // 配置是同步返回的；socket 监听在后台启动，子进程连接时已就绪。
     void ensureSocketServer().catch(() => undefined)
     return {
@@ -197,6 +207,7 @@ export function apply(ctx: Context): void {
         for (const socket of connections) socket.destroy()
         connections.clear()
         tokens.clear()
+        threadTokens.clear()
         if (instance) {
           await new Promise<void>((resolve) => instance.close(() => resolve()))
         }
@@ -284,7 +295,16 @@ export function apply(ctx: Context): void {
     createSocketServer: () => ensureSocketServer(),
     claudeServer,
     codexConfig,
-    sessionMcp(threadId) {
+    sessionMcp(threadId, providerId) {
+      if (providerId === "claude") {
+        const claude = claudeServer(threadId)
+        return claude ? { claudeServer: claude } : undefined
+      }
+      if (providerId === "codex") {
+        const codex = codexConfig(threadId)
+        return codex ? { codexConfig: codex } : undefined
+      }
+      // 第三方 provider 由插件自行决定使用哪种注入格式；保留两边的兼容行为。
       const claude = claudeServer(threadId)
       const codex = codexConfig(threadId)
       return claude || codex ? { claudeServer: claude, codexConfig: codex } : undefined
@@ -296,6 +316,7 @@ export function apply(ctx: Context): void {
   ctx.provide("mcp", service)
   ctx.effect(() => () => {
     tokens.clear()
+    threadTokens.clear()
     for (const socket of connections) socket.destroy()
     connections.clear()
     const instance = server

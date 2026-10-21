@@ -106,13 +106,14 @@ export class Connection {
     if (value.method === "thread.event" && value.params) {
       const event = value.params as unknown as ThreadEvent
       const current = this.subscriptions.get(event.threadId)
-      if (current !== undefined) {
-        this.subscriptions.set(event.threadId, Math.max(current, event.seq))
-      }
+      // 已关闭的 tab 不再接收事件；Host 的退订与网络竞态都可能留下迟到消息。
+      if (current === undefined) return
+      this.subscriptions.set(event.threadId, Math.max(current, event.seq))
       this.handlers.onEvent(event)
       return
     }
     if (value.method === "thread.delta" && value.params?.threadId && value.params.event) {
+      if (!this.subscriptions.has(value.params.threadId)) return
       this.handlers.onDelta({ threadId: value.params.threadId, event: value.params.event })
     }
   }

@@ -25,13 +25,14 @@ import { CodexDriver } from "./codex/driver"
 import type { CodexModelInfo } from "./codex/models"
 import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from "./errors"
 import { RunQueue, type ActiveRun, type QueuedRun, type RunSummary } from "./run-queue"
+import { launchRun, type LaunchDeps } from "./run-launch"
+import { recoverAfterRestart, type RestartRecovery } from "./restart"
 import { mapProviderEvent, type RunEventHooks } from "./run-events"
 import {
   defaultProvider,
   disposeSession,
   listProviderModels,
   pendingForkFromNativeSessionId,
-  pendingHandoff,
   resolveThreadCwd,
   switchProvider,
   type Switch,
@@ -51,13 +52,6 @@ export interface StartRunResult {
 export interface ApprovalHandle {
   requestId: string
   decision: Promise<ApprovalDecision>
-}
-
-/** Host 重启恢复时处理的行数。 */
-export interface RestartRecovery {
-  orphanedRequests: number
-  interruptedRuns: number
-  orphanedSessions: number
 }
 
 /** provider 注册表与运行生命周期入口。 */
@@ -128,6 +122,8 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const activeRuns = new Map<string, ActiveRun>()
   const activeThreads = new Set<string>()
   const queue = new RunQueue<QueuedRun>(maxQueuedRuns)
+  /** 正在异步创建 provider 会话的 run 数；用于避免并发空位被重复占用。 */
+  let launching = 0
   /** 追加一条线程事件并触发实时订阅者。 */
   function append(
     threadId: string,
@@ -156,8 +152,9 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     if (activeRuns.get(run.runId) !== run) return
     run.status = status
     runs.setStatus(run.runId, status, error)
-    append(run.threadId, run.runId, type, payload)
+    // 未决审批必须先于终态事件写入，否则 UI 会把 approval.resolved 当成 run 仍在运行。
     settlePending(run)
+    append(run.threadId, run.runId, type, payload)
     activeRuns.delete(run.runId)
     activeThreads.delete(run.threadId)
     run.resolveDone()
@@ -224,26 +221,17 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     return { requestId, decision }
   }
 
-  /** 启动已创建的 run：写 run.started、放入活跃表并执行 driver。 */
-  function launchRun(run: ActiveRun, input: UserInput): void {
-    // 切换 provider 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
-    const handoff = pendingHandoff(ctx, run.threadId)
-    run.status = "running"
-    runs.setStatus(run.runId, "running")
-    append(run.threadId, run.runId, "run.started", {
-      providerId: run.driver.id,
-      providerSessionId: run.session.id,
-    })
-    activeRuns.set(run.runId, run)
-    void execute(run, handoff === null ? input : { ...input, handoff })
-  }
-
-  /** 在并发空位出现时按 FIFO 启动排队 run。 */
+  /** 启动排队 run：此时才创建 provider 会话，避免为未开始的 run 提前启动子进程。 */
+  /** 在并发空位出现时按 FIFO 启动排队 run；launching 计入正在创建会话的 run。 */
   function pump(): void {
-    while (activeRuns.size < maxConcurrentRuns) {
+    while (activeRuns.size + launching < maxConcurrentRuns) {
       const entry = queue.shift()
       if (!entry) return
-      launchRun(entry.run, entry.input)
+      launching += 1
+      void launchRun(entry, launchDeps).finally(() => {
+        launching -= 1
+        pump()
+      })
     }
   }
 
@@ -278,16 +266,25 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
     }
   }
 
-  /** 取消排队中的 run；不存在时返回 false。 */
+  /** launchRun 所需的 Host 闭包；放在 execute 之后以便引用。 */
+  const launchDeps: LaunchDeps = {
+    ctx,
+    providerSessions,
+    runs,
+    activeRuns,
+    activeThreads,
+    append,
+    execute,
+  }
+
+  /** 取消排队中的 run；此时尚未创建 provider 会话，只需写终态并释放线程。 */
   function cancelQueuedRun(runId: string): boolean {
-    const entry = queue.remove((item) => item.run.runId === runId)
+    const entry = queue.remove((item) => item.runId === runId)
     if (!entry) return false
-    const { run } = entry
-    run.status = "interrupted"
-    runs.setStatus(run.runId, "interrupted")
-    append(run.threadId, run.runId, "run.interrupted", {})
-    activeThreads.delete(run.threadId)
-    run.resolveDone()
+    runs.setStatus(entry.runId, "interrupted")
+    append(entry.threadId, entry.runId, "run.interrupted", {})
+    activeThreads.delete(entry.threadId)
+    entry.resolveDone()
     return true
   }
 
@@ -304,7 +301,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
 
   /** 中断所有排队与活跃 run；先复制 id，取消过程会修改集合。 */
   function interruptAll(): void {
-    for (const entry of [...queue.values()]) cancelQueuedRun(entry.run.runId)
+    for (const entry of [...queue.values()]) cancelQueuedRun(entry.runId)
     for (const runId of [...activeRuns.keys()]) interruptRun(runId)
   }
 
@@ -334,6 +331,8 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       return defaultProvider((id) => drivers.has(id)) // 只接受已注册 driver。
     },
     async switchProvider(threadId, providerId, modelId) {
+      // 运行中或排队中的线程不能切换：否则旧会话被 dispose，正在跑的 run 会失去驱动。
+      if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
       if (!drivers.has(providerId)) throw new Error(`provider not found: ${providerId}`)
       return switchProvider(
         ctx,
@@ -352,37 +351,23 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       const providerId = thread.lastProviderId ?? thread.defaultProviderId
       const driver = drivers.get(providerId)
       if (!driver) throw new Error(`provider not found: ${providerId}`)
+      const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
+      if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
+
       // activeThreads 同时覆盖运行中与排队中的线程，保证同一线程只有一个 run。
       activeThreads.add(threadId)
+      const reserved = !shouldQueue
+      if (reserved) launching += 1
       try {
         const startedAt = new Date().toISOString()
         const activeSession = providerSessions.findActive(threadId, driver.id)
         const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
-        const draft = await driver.createSession({
-          threadId,
-          cwd: resolveThreadCwd(ctx, thread.id, thread.projectId),
-          nativeSessionId: forkFrom ? null : (activeSession?.nativeSessionId ?? null),
-          ...(forkFrom ? { forkFromNativeSessionId: forkFrom } : {}),
-          permissionMode: thread.permissionMode,
-          model: thread.lastModelId,
-          mcp: ctx.reflect.get("mcpBridge")?.sessionMcp(threadId), // 无插件工具时为 undefined
-        })
-        // 创建会话可能等待子进程，判定要放在 await 之后；此后到入队之间没有 await。
-        const shouldQueue = activeRuns.size >= maxConcurrentRuns
-        if (shouldQueue && queue.size >= maxQueuedRuns) {
-          await driver.dispose(draft).catch(() => undefined)
-          throw new RunQueueFullError(maxQueuedRuns)
-        }
-        const session = providerSessions.reuseOrCreate({
-          draft,
-          providerId: driver.id,
-          createdAt: startedAt,
-        })
         const runId = `run_${randomUUID()}`
+        // 会话在 launchRun 中创建；排队阶段不启动 Codex app-server/Claude Query。
         runs.create({
           id: runId,
           threadId,
-          providerSessionId: session.id,
+          providerSessionId: "pending",
           status: shouldQueue ? "queued" : "running",
           startedAt,
         })
@@ -392,28 +377,37 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
         const done = new Promise<void>((resolve) => {
           resolveDone = resolve
         })
-        const run: ActiveRun = {
+        const mcp = ctx.reflect.get("mcpBridge")?.sessionMcp(threadId, driver.id)
+        const entry: QueuedRun = {
           runId,
           threadId,
-          session,
           driver,
-          controller: new AbortController(),
+          input: { text },
           emitLive,
-          status: shouldQueue ? "queued" : "running",
+          controller: new AbortController(),
           done,
           resolveDone,
-          approvals: new Set(),
+          queuedAt: startedAt,
+          cwd: resolveThreadCwd(ctx, thread.id, thread.projectId),
+          permissionMode: thread.permissionMode,
+          model: thread.lastModelId,
+          nativeSessionId: forkFrom ? null : (activeSession?.nativeSessionId ?? null),
+          ...(forkFrom ? { forkFromNativeSessionId: forkFrom } : {}),
+          ...(activeSession ? { sessionId: activeSession.id } : {}),
+          ...(mcp ? { mcp } : {}),
         }
         if (shouldQueue) {
           append(threadId, runId, "run.queued", { queuedAt: startedAt })
-          queue.push({ run, input: { text }, queuedAt: startedAt })
+          if (!queue.push(entry)) throw new RunQueueFullError(maxQueuedRuns)
           return { runId, done }
         }
-        launchRun(run, { text })
+        await launchRun(entry, launchDeps)
         return { runId, done }
       } catch (error) {
         activeThreads.delete(threadId)
         throw error
+      } finally {
+        if (reserved) launching -= 1
       }
     },
     requestApproval(threadId, runId, request) {
@@ -456,8 +450,8 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           status: run.status,
         })),
         ...queue.values().map((entry) => ({
-          runId: entry.run.runId,
-          threadId: entry.run.threadId,
+          runId: entry.runId,
+          threadId: entry.threadId,
           status: "queued" as const,
           queuedAt: entry.queuedAt,
         })),
@@ -473,17 +467,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
       return pendingRequests.listPending(threadId)
     },
     recoverAfterRestart() {
-      // 上一个 Host 进程退出后，未决审批、运行中的 run 与活跃会话都不再有效。
-      const now = new Date().toISOString()
-      const orphanedRequests = pendingRequests.orphanAll()
-      const interruptedRuns = ctx.storage.db
-        .prepare(
-          `UPDATE runs SET status = 'interrupted', completed_at = ?
-           WHERE status IN ('running', 'waiting-approval', 'queued')`,
-        )
-        .run(now).changes
-      const orphanedSessions = providerSessions.orphanActive(now)
-      return { orphanedRequests, interruptedRuns, orphanedSessions }
+      return recoverAfterRestart(ctx, pendingRequests, providerSessions, append)
     },
   }
 

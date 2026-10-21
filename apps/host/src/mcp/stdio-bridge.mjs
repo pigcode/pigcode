@@ -164,6 +164,19 @@ function write(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`)
 }
 
-createInterface({ input: process.stdin }).on("line", (line) => {
+const input = createInterface({ input: process.stdin })
+input.on("line", (line) => {
   void handleLine(line)
 })
+// MCP host 通过关闭 stdin/SIGTERM 结束 bridge；主动退出，避免 socket 让进程悬挂。
+let closing = false
+function shutdown() {
+  if (closing) return
+  closing = true
+  input.close()
+  socket.end()
+  process.exit(0)
+}
+input.on("close", shutdown)
+process.on("SIGTERM", shutdown)
+process.on("SIGINT", shutdown)

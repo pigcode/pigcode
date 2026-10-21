@@ -60,6 +60,23 @@ export class CodexDriver implements ProviderDriver {
 
   /** 启动 app-server 并创建或恢复原生 thread。 */
   async createSession(input: CreateSessionInput): Promise<ProviderSessionHandle> {
+    // 复用仍在运行的 app-server：同一原生 thread 的后续 run 不需要重新初始化。
+    const reusable = input.forkFromNativeSessionId
+      ? undefined
+      : input.nativeSessionId
+        ? this.sessions.get(input.nativeSessionId)
+        : undefined
+    if (reusable?.nativeThreadId) {
+      return {
+        id: input.sessionId ?? `codex_${randomUUID()}`,
+        threadId: input.threadId,
+        cwd: input.cwd,
+        nativeSessionId: reusable.nativeThreadId,
+        permissionMode: input.permissionMode ?? "workspace-write",
+        model: input.model ?? null,
+      }
+    }
+
     const transport = this.transportFactory?.() ?? new StdioCodexTransport()
     const client = new CodexRpcClient(transport)
     try {
@@ -82,14 +99,21 @@ export class CodexDriver implements ProviderDriver {
           : ((await client.request("thread/start", params)) as { thread?: { id?: string } })
       const nativeThreadId =
         response.thread?.id ?? (forkFrom ? null : (input.nativeSessionId ?? null))
-      this.sessions.set(nativeThreadId ?? input.threadId, {
+      const key = nativeThreadId ?? input.threadId
+      // 同一 key 的旧 state 必须先关闭，否则会遗留一个 app-server 子进程。
+      const previous = this.sessions.get(key)
+      if (previous) {
+        previous.client.close()
+        this.sessions.delete(key)
+      }
+      this.sessions.set(key, {
         client,
         nativeThreadId,
         turnId: null,
         interruptRequested: false,
       })
       return {
-        id: `codex_${randomUUID()}`,
+        id: input.sessionId ?? `codex_${randomUUID()}`,
         threadId: input.threadId,
         cwd: input.cwd,
         nativeSessionId: nativeThreadId,

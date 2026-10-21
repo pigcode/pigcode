@@ -5,7 +5,12 @@ import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
-import type { ProviderRuntime, ProviderSessionHandle, UserInput } from "./driver"
+import type {
+  CreateSessionInput,
+  ProviderRuntime,
+  ProviderSessionHandle,
+  UserInput,
+} from "./driver"
 import { FakeProviderDriver } from "./fake"
 import { apply as providers } from "./registry"
 
@@ -21,9 +26,15 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 /** 记录 send 文本，并在闸门放行后才完成 turn 的 fake driver。 */
 class GatedFakeDriver extends FakeProviderDriver {
   readonly sent: string[] = []
+  readonly created: string[] = []
 
   constructor(private readonly gate: Promise<void>) {
     super()
+  }
+
+  override async createSession(input: CreateSessionInput): Promise<ProviderSessionHandle> {
+    this.created.push(input.threadId)
+    return super.createSession(input)
   }
 
   override async send(
@@ -77,8 +88,9 @@ describe("run queue", () => {
         queuedAt: expect.any(String),
       },
     ])
-    // 排队中的 run 不应调用 driver.send。
+    // 排队中的 run 不应调用 driver.send，也不应提前创建 provider 会话。
     expect(driver.sent).toEqual(["first"])
+    expect(driver.created).toEqual([firstThread.id])
 
     gate.resolve()
     await Promise.all([first.done, second.done])
@@ -86,6 +98,7 @@ describe("run queue", () => {
     expect(ctx.providers.getRunStatus(first.runId)).toBe("completed")
     expect(ctx.providers.getRunStatus(second.runId)).toBe("completed")
     expect(driver.sent).toEqual(["first", "second"])
+    expect(driver.created).toEqual([firstThread.id, secondThread.id])
     expect(
       ctx.sessions.read(secondThread.id, 0).some((event) => event.type === "run.started"),
     ).toBe(true)
@@ -125,6 +138,7 @@ describe("run queue", () => {
       ctx.sessions.read(secondThread.id, 0).some((event) => event.type === "run.interrupted"),
     ).toBe(true)
     expect(driver.sent).toEqual(["first"])
+    expect(driver.created).toEqual([firstThread.id])
     expect(ctx.providers.listRuns()).toEqual([
       { runId: first.runId, threadId: firstThread.id, status: "running" },
     ])

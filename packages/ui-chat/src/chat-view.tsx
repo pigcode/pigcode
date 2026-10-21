@@ -162,7 +162,7 @@ export function ChatView({
         </div>
         <span className="spacer" />
         <span className={`status ${statusClass}`.trim()}>{status}</span>
-        {thread && providers.length > 0 && onSwitchProvider ? (
+        {!running && thread && providers.length > 0 && onSwitchProvider ? (
           <HeaderMenu
             label={providerName}
             title={t("chat.environment.provider")}
@@ -174,7 +174,7 @@ export function ChatView({
             onSelect={onSwitchProvider}
           />
         ) : null}
-        {thread && canSelectModel && models.length > 0 && onSwitchModel ? (
+        {!running && thread && canSelectModel && models.length > 0 && onSwitchModel ? (
           <HeaderMenu
             label={modelId ?? t("chat.environment.model")}
             title={t("chat.environment.model")}

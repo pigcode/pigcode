@@ -149,6 +149,39 @@ describe("Connection", () => {
     expect(deltas).toEqual([{ threadId: "th_2", type: "message.delta" }])
   })
 
+  it("ignores events and deltas after a thread is closed", async () => {
+    const transport = new MemoryTransport()
+    const events: ThreadEvent[] = []
+    const deltas: string[] = []
+    const connection = new Connection({
+      onEvent: (event) => events.push(event),
+      onDelta: (delta) => deltas.push(delta.threadId),
+      onStatus: () => {},
+    })
+    await connection.attach(transport.client)
+    await open(connection, transport, "th_1")
+
+    const closing = connection.closeThread("th_1")
+    const unsubscribe = await nextRequest(transport)
+    expect(unsubscribe.method).toBe("thread.unsubscribe")
+    respond(transport, unsubscribe, {})
+    await closing
+
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "thread.event",
+      params: threadEvent("th_1", 2, "message.completed"),
+    })
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "thread.delta",
+      params: { threadId: "th_1", event: { type: "message.delta", text: "late" } },
+    })
+
+    expect(events).toEqual([])
+    expect(deltas).toEqual([])
+  })
+
   it("resumes every thread cursor after reconnect", async () => {
     const transport = new MemoryTransport()
     const connection = new Connection({

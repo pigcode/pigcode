@@ -56,6 +56,19 @@ describe("SchedulesService", () => {
     await ctx.fiber.dispose()
   })
 
+  it("rejects intervals beyond the setTimeout 32-bit range", async () => {
+    const { ctx, thread, service } = await setup()
+    expect(() =>
+      service.create({
+        threadId: thread.id,
+        prompt: "too long",
+        intervalSeconds: 2_147_484,
+        enabled: true,
+      }),
+    ).toThrow("intervalSeconds must be <= 2147483")
+    await ctx.fiber.dispose()
+  })
+
   it("skips a busy thread and only moves next_run_at", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-10-20T00:00:00.000Z"))

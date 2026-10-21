@@ -421,6 +421,28 @@ describe("CodexDriver", () => {
     expect(transport.closed).toBe(true)
   })
 
+  it("reuses a live app-server for the same native thread", async () => {
+    let created = 0
+    const driver = new CodexDriver({
+      transportFactory: () => {
+        created += 1
+        return new ScriptedTransport({ nativeThreadId: "th_native" })
+      },
+    })
+
+    const first = await driver.createSession({ threadId: "t1", cwd: "/tmp", sessionId: "ps_1" })
+    const second = await driver.createSession({
+      threadId: "t1",
+      cwd: "/tmp",
+      sessionId: "ps_1",
+      nativeSessionId: first.nativeSessionId,
+    })
+
+    expect(second.id).toBe("ps_1")
+    expect(created).toBe(1)
+    await driver.dispose(second)
+  })
+
   it("lists models from the app server and closes the temporary transport", async () => {
     const transport = new ScriptedTransport({ nativeThreadId: "th_native" })
     const driver = new CodexDriver({ transportFactory: () => transport })

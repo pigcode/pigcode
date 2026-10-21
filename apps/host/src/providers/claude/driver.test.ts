@@ -99,6 +99,44 @@ describe("ClaudeDriver", () => {
     expect(captured?.mcpServers).toEqual({ pigcode: claudeServer })
   })
 
+  it("refreshes MCP tools when a session id is reused", async () => {
+    let captured: Options | undefined
+    const replay = replayQuery("fixtures/simple.jsonl")
+    const driver = new ClaudeDriver({
+      queryFn: (params) => {
+        captured = params.options
+        return replay(params)
+      },
+    })
+    const firstServer = { type: "sdk" as const, name: "pigcode", instance: { first: true } }
+    const secondServer = { type: "sdk" as const, name: "pigcode", instance: { second: true } }
+
+    await driver.createSession({
+      threadId: "t6",
+      cwd: "/tmp",
+      sessionId: "ps_1",
+      mcp: { claudeServer: firstServer },
+    })
+    const session = await driver.createSession({
+      threadId: "t6",
+      cwd: "/tmp",
+      sessionId: "ps_1",
+      mcp: { claudeServer: secondServer },
+    })
+    await driver.send(
+      session,
+      { text: "hello" },
+      {
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        requestApproval: async () => "allow-once",
+      },
+    )
+
+    expect(session.id).toBe("ps_1")
+    expect(captured?.mcpServers).toEqual({ pigcode: secondServer })
+  })
+
   it("forks the native session instead of continuing it", async () => {
     let captured: Options | undefined
     const replay = replayQuery("fixtures/simple.jsonl")

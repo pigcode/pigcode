@@ -3,10 +3,57 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 /** 用最小 BrowserWindow 替身捕获构造参数、加载 URL 与关闭动作。 */
 const { FakeBrowserWindow } = vi.hoisted(() => {
+  interface FakeNavigationEvent {
+    preventDefault(): void
+  }
+
+  class FakeSession {
+    permissionHandler: ((callback: (allowed: boolean) => void) => void) | null = null
+
+    setPermissionRequestHandler(
+      handler: (
+        _contents: unknown,
+        _permission: unknown,
+        callback: (allowed: boolean) => void,
+      ) => void,
+    ): this {
+      this.permissionHandler = (callback) => handler(undefined, undefined, callback)
+      return this
+    }
+  }
+
+  class FakeWebContents {
+    private readonly listeners = new Map<
+      string,
+      (event: FakeNavigationEvent, url: string) => void
+    >()
+    openHandler: ((details: { url: string }) => { action: "allow" | "deny" }) | null = null
+    readonly session = new FakeSession()
+
+    on(event: string, listener: (event: FakeNavigationEvent, url: string) => void): this {
+      this.listeners.set(event, listener)
+      return this
+    }
+
+    setWindowOpenHandler(
+      handler: (details: { url: string }) => { action: "allow" | "deny" },
+    ): this {
+      this.openHandler = handler
+      return this
+    }
+
+    emitNavigation(event: string, url: string): boolean {
+      let prevented = false
+      this.listeners.get(event)?.({ preventDefault: () => (prevented = true) }, url)
+      return prevented
+    }
+  }
+
   class FakeBrowserWindow {
     static instances: FakeBrowserWindow[] = []
 
     readonly options: unknown
+    readonly webContents = new FakeWebContents()
     url: string | null = null
     closed = false
     private readonly listeners = new Map<string, () => void>()
@@ -80,6 +127,18 @@ describe("openPreview", () => {
       height: 800,
       webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
     })
+  })
+
+  it("blocks navigation and popups that leave loopback", () => {
+    openPreview("http://localhost:3000")
+    const [window] = FakeBrowserWindow.instances
+    const contents = window?.webContents
+
+    expect(contents?.emitNavigation("will-navigate", "https://example.com")).toBe(true)
+    expect(contents?.emitNavigation("will-redirect", "https://example.com")).toBe(true)
+    expect(contents?.emitNavigation("will-navigate", "http://127.0.0.1:5173")).toBe(false)
+    expect(contents?.openHandler?.({ url: "https://example.com" })).toEqual({ action: "deny" })
+    expect(contents?.openHandler?.({ url: "http://localhost:5173" })).toEqual({ action: "allow" })
   })
 
   it("throws PREVIEW_URL_NOT_ALLOWED for non-loopback urls", () => {

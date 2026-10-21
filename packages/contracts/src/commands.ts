@@ -70,13 +70,13 @@ export const commandSchemas = {
   "schedule.create": z.object({
     threadId: z.string().min(1),
     prompt: z.string().min(1),
-    intervalSeconds: z.number().int().positive(),
+    intervalSeconds: z.number().int().positive().max(2_147_483),
     enabled: z.boolean().default(true),
   }),
   "schedule.update": z.object({
     id: z.string().min(1),
     prompt: z.string().min(1).optional(),
-    intervalSeconds: z.number().int().positive().optional(),
+    intervalSeconds: z.number().int().positive().max(2_147_483).optional(),
     enabled: z.boolean().optional(),
   }),
   "schedule.delete": z.object({ id: z.string().min(1) }),

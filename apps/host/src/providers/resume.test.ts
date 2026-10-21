@@ -105,6 +105,11 @@ describe("session resume", () => {
       interruptedRuns: 1,
       orphanedSessions: 1,
     })
+    expect(
+      ctx.sessions
+        .read(thread.id, 0)
+        .some((event) => event.type === "run.interrupted" && event.runId === "run-stale"),
+    ).toBe(true)
 
     const request = ctx.storage.db
       .prepare(`SELECT status FROM pending_requests WHERE id = ?`)
