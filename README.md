@@ -15,6 +15,17 @@ workbench E2E:
 pnpm --dir apps/desktop rebuild:native
 ```
 
+## Multi-session and ecosystem
+
+Threads open in tabs and keep running in the background when you switch away. Runs beyond
+the concurrency limit enter a FIFO queue (`run.list` / `run.queued`), and every tab shows
+its own queued, running, waiting-approval, completed, failed, or interrupted state.
+
+M5 also adds subagent timelines, thread-scoped MCP tools from capability plugins, GitHub
+PR creation through the `gh` CLI, loopback-only browser previews, and interval schedules
+persisted in SQLite. See [docs/m5-ecosystem.md](docs/m5-ecosystem.md) for commands,
+limits, and prerequisites.
+
 ## Plugins
 
 Plugins are ordinary npm packages with a `pigcode` manifest field. Install a local
@@ -50,3 +61,14 @@ If the default model is at capacity, override it:
 ```bash
 PIGCODE_REAL_CODEX=1 PIGCODE_CODEX_MODEL=gpt-6-astra pnpm real:codex
 ```
+
+## Real Codex multi-session
+
+The M5 acceptance test runs two real Codex threads in parallel and expects `OK-1` and
+`OK-2`. It defaults to `gpt-6.1-sol`:
+
+```bash
+PIGCODE_REAL_CODEX=1 PIGCODE_CODEX_MODEL=gpt-6.1-sol pnpm real:codex:multi
+```
+
+It is skipped unless `PIGCODE_REAL_CODEX=1`, so it never consumes quota by default.

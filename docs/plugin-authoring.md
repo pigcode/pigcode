@@ -183,6 +183,49 @@ export function apply(ctx) {
 - `ctx.provide(name, value)`：注册一个供其他插件或 Host 使用的能力。
 - `ctx.effect(setup)`：注册随插件卸载执行的清理逻辑。
 - `ctx.providers.register` / `ctx.providers.unregister`：注册或移除 provider driver。
+- `ctx.mcp.registerTool`：把工具暴露给 Claude / Codex 模型；需要 `inject: ["mcp"]`。
+
+## 通过 MCP 暴露工具
+
+capability 插件可以用 `ctx.mcp.registerTool` 注册工具；Host 会把它注入当前线程的
+Claude 或 Codex 会话。完整示例见
+[`examples/capability-clock`](../examples/capability-clock)：
+
+```js
+/** 示例 capability：通过 MCP 向模型暴露当前时间。 */
+export const name = "capability-clock"
+export const inject = ["mcp"]
+
+export function apply(ctx) {
+  // ctx.effect 保证插件停用/卸载时注销工具；工具随插件一起消失。
+  ctx.effect(() =>
+    ctx.mcp.registerTool(
+      "pigcode-capability-clock",
+      {
+        name: "clock_now",
+        description: "Return the current ISO time",
+        inputSchema: { type: "object", properties: {} },
+      },
+      async (_input, { threadId }) => {
+        return { now: new Date().toISOString(), threadId }
+      },
+    ),
+  )
+}
+```
+
+规则：
+
+- `registerTool(pluginId, tool, handler)` 返回注销函数；用 `ctx.effect` 包住它，
+  插件停用时工具会从后续会话中消失。
+- `tool.name` 是模型看到的工具名；`inputSchema` 使用 JSON Schema，Host 会转换成
+  对应 provider 需要的形状。返回值必须可 JSON 序列化。
+- handler 的第二个参数是 `{ threadId }`，表示发起本次 run 的线程。工具注册表是
+  Host 全局的，但每次调用都带线程作用域，因此并行会话不会共享可变调用状态。
+- Claude 使用进程内 MCP server（`mcpServers.pigcode`）；Codex 使用 stdio bridge
+  加 Unix domain socket / 命名管道，并在 hello 时用一次性 token 绑定线程。
+  Host 不监听 TCP 端口。
+- 没有任何已注册工具时，Host 不会注入空 MCP 配置。
 
 ## UI 插件
 
