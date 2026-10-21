@@ -29,6 +29,16 @@ export interface ThreadTabsProps {
   statusByThread: Record<string, ThreadTabStatus>
   onActivate: (threadId: string) => void
   onClose: (threadId: string) => void
+  /** 新建会话；传入时在 tab 末尾显示 +。 */
+  onNew?: () => void
+}
+
+/** 把 provider id 缩成 tab 上的短标记。 */
+function providerMark(thread: Thread): string {
+  const id = thread.lastProviderId ?? thread.defaultProviderId
+  if (id === "claude") return "CL"
+  if (id === "codex") return "CX"
+  return id.slice(0, 2).toUpperCase()
 }
 
 /** 渲染多会话 tab 栏；没有打开线程时不占用布局。 */
@@ -39,6 +49,7 @@ export function ThreadTabs({
   statusByThread,
   onActivate,
   onClose,
+  onNew,
 }: ThreadTabsProps) {
   const { t } = useLocale()
   const tabs = openThreadIds
@@ -71,6 +82,9 @@ export function ThreadTabs({
             onClick={() => onActivate(thread.id)}
             onKeyDown={(event) => onKeyDown(event, thread.id)}
           >
+            <span className="tab-provider" aria-hidden="true">
+              {providerMark(thread)}
+            </span>
             <span className="tab-title truncate">{thread.title}</span>
             {statusText ? (
               <span
@@ -98,6 +112,17 @@ export function ThreadTabs({
           </div>
         )
       })}
+      {onNew ? (
+        <button
+          type="button"
+          className="tab-new"
+          aria-label={t("nav.newThread")}
+          title={`${t("nav.newThread")} ⌘N`}
+          onClick={onNew}
+        >
+          +
+        </button>
+      ) : null}
     </div>
   )
 }

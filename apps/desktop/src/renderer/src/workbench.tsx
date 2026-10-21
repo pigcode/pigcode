@@ -375,6 +375,17 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
   const tabs: Record<RightPanelTab, ReactNode> = {
     files: (
       <div className="workbench-files">
+        <div className="workbench-worktree-compact">
+          <WorktreePicker
+            worktrees={worktrees}
+            activePath={activeWorktree}
+            onCreate={createWorktree}
+            onSwitch={switchWorktree}
+            onRemove={removeWorktree}
+            busy={worktreeBusy}
+            compact
+          />
+        </div>
         {treeError ? (
           <p className="workbench-error">{treeError}</p>
         ) : (
@@ -461,16 +472,6 @@ export function WorkbenchPanel({ connection, threadId, onClose, onError }: Workb
 
   return (
     <div className="workbench">
-      <div className="workbench-worktrees">
-        <WorktreePicker
-          worktrees={worktrees}
-          activePath={activeWorktree}
-          onCreate={createWorktree}
-          onSwitch={switchWorktree}
-          onRemove={removeWorktree}
-          busy={worktreeBusy}
-        />
-      </div>
       <RightPanel
         threadId={threadId}
         tabs={tabs}

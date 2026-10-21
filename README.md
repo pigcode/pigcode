@@ -2,6 +2,16 @@
 
 Pigcode 桌面端的 pnpm monorepo，包含 `apps/`（desktop、host）与 `packages/`（contracts、client-runtime、UI 包等）。
 
+## UI and shortcuts
+
+- `⌘K` opens the command palette for actions, thread switching, and projects.
+- `⌘N` creates a new session; `⌘B` toggles the sidebar; `⌘J` toggles the workbench;
+  `⌘,` opens settings.
+- New sessions are automatically titled from the first user message.
+- The workbench width is draggable; double-click the divider to reset it.
+- Running, queued, waiting-approval, completed, failed, and interrupted states are shown
+  on both tabs and the sidebar.
+
 ## Workbench
 
 The right panel provides files, per-run diffs, an embedded PTY terminal, checkpoints,

@@ -1,6 +1,6 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
-import { useCallback, useEffect, useRef, useState } from "react"
-import type { Project, ProviderCapabilities, Thread } from "@pigcode/contracts"
+import { useEffect, useRef, useState } from "react"
+import type { Project, Thread } from "@pigcode/contracts"
 import {
   AppRenderer,
   SlotHost,
@@ -16,22 +16,12 @@ import {
   type Locale,
 } from "@pigcode/ui-primitives"
 import { ChatView, type ApprovalDecision, type ProviderOption } from "@pigcode/ui-chat"
-import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
-import { SettingsView, type ProviderDetection, type ProviderStatus } from "@pigcode/ui-settings"
 import type { SettingsSection, ShellView } from "@pigcode/ui-shell"
 import { ThreadTabs, type ThreadTabStatus } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { PluginPanels } from "./client-plugins"
 import { ConnectionBanner } from "./connection-banner"
-import { SchedulesContainer } from "./schedules"
-import {
-  listProviders,
-  loadProviderContext,
-  loadProviderModels,
-  pickProviderId,
-  toProviderStatus,
-  type CodexDetection,
-} from "./providers"
+import { listProviders, loadProviderContext, pickProviderId } from "./providers"
 import { WorkbenchPanel } from "./workbench"
 
 /** 核心容器共享的依赖。 */
@@ -45,6 +35,7 @@ export interface CoreDeps {
 export interface ChatSlotProps {
   rightOpen?: boolean
   onToggleRight?: () => void
+  onNewThread?: () => void
 }
 
 /** settings.section slot 传给核心设置视图的属性。 */
@@ -71,6 +62,7 @@ export function ChatViewContainer({
   deps,
   rightOpen = false,
   onToggleRight,
+  onNewThread,
 }: { deps: CoreDeps } & ChatSlotProps) {
   const state = useAppStore(deps.store)
   const thread = state.threads.find((item) => item.id === state.activeThreadId) ?? null
@@ -163,13 +155,12 @@ export function ChatViewContainer({
   }
 
   // 多会话 tab 栏：标题来自线程列表，状态来自每个线程独立的 ThreadViewState。
-  const openThreads = state.openThreadIds
-    .map((id) => state.threads.find((item) => item.id === id))
-    .filter((item): item is Thread => item !== undefined)
-  const statusByThread: Record<string, ThreadTabStatus> = {}
-  for (const id of state.openThreadIds) {
-    statusByThread[id] = state.threadStates[id]?.status ?? "idle"
-  }
+  const openThreads = state.openThreadIds.flatMap(
+    (id) => state.threads.find((item) => item.id === id) ?? [],
+  )
+  const statusByThread = Object.fromEntries(
+    state.openThreadIds.map((id) => [id, state.threadStates[id]?.status ?? "idle"]),
+  ) as Record<string, ThreadTabStatus>
   const tabs =
     openThreads.length > 0 ? (
       <ThreadTabs
@@ -184,6 +175,7 @@ export function ChatViewContainer({
             .closeThread(threadId)
             .catch((error: unknown) => deps.store.update({ error: messageOf(error) }))
         }}
+        {...(onNewThread ? { onNew: onNewThread } : {})}
       />
     ) : undefined
 
@@ -220,142 +212,6 @@ export function ChatViewContainer({
   )
 }
 
-/** 插件管理容器：列表来自 Host，安装/启停后同步刷新 provider 与 client bundle。 */
-function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
-  const [plugins, setPlugins] = useState<PluginSummary[]>([])
-
-  const refresh = useCallback(async (): Promise<void> => {
-    const list = (await deps.connection.call("plugin.list", {})) as PluginSummary[]
-    setPlugins(list)
-  }, [deps.connection])
-
-  /**
-   * 启停插件会改变 provider 集合：重新拉取列表与检测结果，刷新当前线程的能力/模型，
-   * 并递增 providerRevision 让线程头菜单重新读取 provider 列表。
-   */
-  const refreshProviders = useCallback(async (): Promise<void> => {
-    try {
-      const [providers] = await Promise.all([
-        listProviders(deps.connection),
-        deps.connection.call("provider.detect", {}),
-      ])
-      const snapshot = deps.store.getSnapshot()
-      const thread = snapshot.threads.find((item) => item.id === snapshot.activeThreadId)
-      if (thread) {
-        const providerId = thread.lastProviderId ?? thread.defaultProviderId
-        deps.store.update({
-          providerCapabilities:
-            providers.find((provider) => provider.id === providerId)?.capabilities ?? null,
-        })
-        try {
-          await loadProviderModels(deps.connection, deps.store, providerId)
-        } catch {
-          deps.store.update({ providerModels: [] })
-        }
-      }
-      deps.store.update({ providerRevision: deps.store.getSnapshot().providerRevision + 1 })
-    } catch {
-      // provider 刷新失败不影响插件操作本身；列表仍会照常刷新。
-    }
-  }, [deps.connection, deps.store])
-
-  useEffect(() => {
-    void refresh().catch(() => setPlugins([]))
-  }, [refresh])
-
-  async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
-    await action()
-    await refresh()
-    await refreshProviders()
-    await deps.plugins.reload()
-  }
-
-  return (
-    <PluginManagerView
-      plugins={plugins}
-      onInstall={(spec) => applyAndReload(() => deps.connection.call("plugin.install", { spec }))}
-      onEnable={(id) => applyAndReload(() => deps.connection.call("plugin.enable", { id }))}
-      onDisable={(id) => applyAndReload(() => deps.connection.call("plugin.disable", { id }))}
-      onRefresh={() => applyAndReload(async () => undefined)}
-    />
-  )
-}
-
-/** 设置容器：插件分区复用同一个插件管理视图。 */
-export function SettingsContainer({
-  deps,
-  section,
-  onSection,
-  onClose,
-  appearance,
-}: SettingsSlotProps & { deps: CoreDeps }) {
-  const [providers, setProviders] = useState<ProviderStatus[]>([])
-
-  /** 拉取 Claude/Codex 只读检测结果与能力，并刷新模型列表。 */
-  const detect = useCallback(async (): Promise<void> => {
-    try {
-      const [detection, list] = await Promise.all([
-        deps.connection.call("provider.detect", {}) as Promise<{
-          claude: ProviderDetection
-          codex: CodexDetection
-        }>,
-        listProviders(deps.connection),
-      ])
-      const capabilityOf = (id: string): ProviderCapabilities | undefined =>
-        list.find((provider) => provider.id === id)?.capabilities
-      const displayNameOf = (id: string, fallback: string): string =>
-        list.find((provider) => provider.id === id)?.displayName ?? fallback
-
-      setProviders([
-        toProviderStatus(
-          "claude",
-          displayNameOf("claude", "Claude Code"),
-          detection.claude,
-          capabilityOf("claude"),
-        ),
-        toProviderStatus(
-          "codex",
-          displayNameOf("codex", "Codex"),
-          {
-            installed: detection.codex.installed,
-            version: detection.codex.version,
-            loggedIn: detection.codex.loggedIn,
-            authMethod: null,
-            command: detection.codex.command,
-            error: detection.codex.error,
-          },
-          capabilityOf("codex"),
-        ),
-      ])
-
-      // 用当前线程 provider 的模型目录填充 composer 的模型列表。
-      const snapshot = deps.store.getSnapshot()
-      const thread = snapshot.threads.find((item) => item.id === snapshot.activeThreadId)
-      const providerId = thread?.lastProviderId ?? thread?.defaultProviderId
-      if (providerId) await loadProviderModels(deps.connection, deps.store, providerId)
-    } catch (error) {
-      deps.store.update({ error: messageOf(error) })
-    }
-  }, [deps.connection, deps.store])
-
-  // 进入设置页时检测一次；用户也可以点击按钮重新检测。
-  useEffect(() => {
-    void detect()
-  }, [detect])
-
-  return (
-    <SettingsView
-      section={section}
-      onSection={onSection}
-      onClose={onClose}
-      appearance={appearance}
-      providers={providers}
-      onDetect={detect}
-      pluginManager={<PluginManagerContainer deps={deps} />}
-      schedulesPage={<SchedulesContainer deps={deps} />}
-    />
-  )
-}
 
 /** 应用根组件。 */
 export function App({ store, slots, connection, plugins, locale }: AppProps) {
@@ -442,6 +298,10 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   }
 
   const effectiveSection: SettingsSection = view === "plugins" ? "plugins" : section
+  const threadStatus: Record<string, ThreadTabStatus> = {}
+  for (const [threadId, viewState] of Object.entries(state.threadStates)) {
+    threadStatus[threadId] = viewState.status
+  }
 
   return (
     <AppRenderer
@@ -450,6 +310,8 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       projects={state.projects}
       threads={state.threads}
       activeThreadId={state.activeThreadId}
+      threadStatus={threadStatus}
+      onToggleRight={() => setRightOpen((value) => !value)}
       settingsSection={effectiveSection}
       onView={setView}
       onSettingsSection={setSection}
@@ -475,7 +337,11 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
         <SlotHost<ChatSlotProps>
           registry={slots}
           name="chat.view"
-          props={{ rightOpen, onToggleRight: () => setRightOpen((value) => !value) }}
+          props={{
+            rightOpen,
+            onToggleRight: () => setRightOpen((value) => !value),
+            onNewThread: () => void createThread(),
+          }}
         />
       ) : (
         <SlotHost<SettingsSlotProps>

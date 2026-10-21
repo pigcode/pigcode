@@ -276,17 +276,20 @@ export function Composer({
               <Square className="ic" aria-hidden="true" />
             </Button>
           ) : running ? null : (
-            <Button
-              variant="plain"
-              className="send"
-              type="button"
-              aria-label={t("chat.send")}
-              title={t("chat.send")}
-              aria-disabled={empty || disabled ? true : undefined}
-              onClick={submit}
-            >
-              <ArrowUp className="ic" aria-hidden="true" />
-            </Button>
+            <>
+              <span className="composer-hint">{t("chat.sendHint")}</span>
+              <Button
+                variant="plain"
+                className="send"
+                type="button"
+                aria-label={t("chat.send")}
+                title={t("chat.send")}
+                aria-disabled={empty || disabled ? true : undefined}
+                onClick={submit}
+              >
+                <ArrowUp className="ic" aria-hidden="true" />
+              </Button>
+            </>
           )}
         </div>
       </div>

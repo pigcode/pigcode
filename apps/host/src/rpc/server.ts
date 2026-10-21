@@ -71,6 +71,20 @@ export class RpcServer {
         return this.ctx.projects.add((parsed as { rootPath: string }).rootPath)
       case "thread.list":
         return this.ctx.threads.list((parsed as { projectId?: string }).projectId)
+      case "thread.rename": {
+        const value = parsed as { threadId: string; title: string }
+        const thread = this.ctx.threads.rename(value.threadId, value.title)
+        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
+        this.ctx.sessions.append({
+          threadId: thread.id,
+          runId: null,
+          type: "thread.updated",
+          payload: { title: thread.title },
+          schemaVersion: 1,
+          createdAt: new Date().toISOString(),
+        })
+        return thread
+      }
       case "thread.create": {
         const value = parsed as { projectId: string; title: string; providerId: string }
         const thread = this.ctx.threads.create(value.projectId, value.title, value.providerId)

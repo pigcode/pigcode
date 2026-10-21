@@ -2,11 +2,11 @@
 import type { SlotRegistry } from "@pigcode/client-runtime"
 import {
   ChatViewContainer,
-  SettingsContainer,
   type ChatSlotProps,
   type CoreDeps,
   type SettingsSlotProps,
 } from "./app"
+import { SettingsContainer } from "./settings-container"
 
 /** 注册核心视图；第三方插件也通过同一入口挂载。 */
 export function registerCorePlugins(registry: SlotRegistry, deps: CoreDeps): void {

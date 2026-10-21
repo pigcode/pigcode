@@ -27,6 +27,7 @@ import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from
 import { RunQueue, type ActiveRun, type QueuedRun, type RunSummary } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart, type RestartRecovery } from "./restart"
+import { maybeAutoTitle } from "./title"
 import { mapProviderEvent, type RunEventHooks } from "./run-events"
 import {
   defaultProvider,
@@ -125,8 +126,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   /** 正在异步创建 provider 会话的 run 数；用于避免并发空位被重复占用。 */
   let launching = 0
   /** 追加一条线程事件并触发实时订阅者。 */
-  function append(
-    threadId: string,
+  function append(    threadId: string,
     runId: string | null,
     type: ThreadEvent["type"],
     payload: unknown,
@@ -371,6 +371,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
           status: shouldQueue ? "queued" : "running",
           startedAt,
         })
+        maybeAutoTitle(ctx, thread, text, runId, append)
         append(threadId, runId, "message.completed", { role: "user", text })
 
         let resolveDone: () => void = () => undefined

@@ -8,6 +8,8 @@ export interface ThreadsService {
   create(projectId: string, title: string, providerId: string): Thread
   list(projectId?: string): Thread[]
   get(threadId: string): Thread | undefined
+  /** 重命名线程；返回更新后的记录。 */
+  rename(threadId: string, title: string): Thread | undefined
   /** 记录线程最近选择的 provider/model，切换后下一次 run 生效。 */
   updateSelection(threadId: string, providerId: string, modelId: string | null): void
 }
@@ -77,6 +79,13 @@ export const apply: ThreadsPlugin = (ctx) => {
     get(threadId) {
       const row = ctx.storage.db.prepare(`SELECT * FROM threads WHERE id = ?`).get(threadId)
       return row ? mapThread(row) : undefined
+    },
+    rename(threadId, title) {
+      const updatedAt = new Date().toISOString()
+      ctx.storage.db
+        .prepare(`UPDATE threads SET title = ?, updated_at = ? WHERE id = ?`)
+        .run(title, updatedAt, threadId)
+      return service.get(threadId)
     },
     updateSelection(threadId, providerId, modelId) {
       ctx.storage.db

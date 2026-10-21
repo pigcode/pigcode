@@ -74,6 +74,13 @@ function isSubagentMessage(event: ThreadEvent): boolean {
   return typeof parent === "string" && parent.length > 0
 }
 
+/** 从 thread.updated 的 payload 中读取标题；没有标题时返回 null。 */
+function titleFromEvent(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null
+  const title = (payload as { title?: unknown }).title
+  return typeof title === "string" && title.trim().length > 0 ? title : null
+}
+
 /** 从事件 payload 中提取可展示的错误文本。 */
 function errorFromPayload(payload: unknown): string | null {
   if (typeof payload === "object" && payload !== null && "message" in payload) {
@@ -205,10 +212,19 @@ export class AppStore {
           : previous.lastError,
     }
     const threadStates = { ...this.state.threadStates, [event.threadId]: next }
+    const title = event.type === "thread.updated" ? titleFromEvent(event.payload) : null
+    const threads = title
+      ? this.state.threads.map((thread) =>
+          thread.id === event.threadId
+            ? { ...thread, title, updatedAt: event.createdAt }
+            : thread,
+        )
+      : this.state.threads
     const mirrorActive =
       this.state.activeThreadId === null || this.state.activeThreadId === event.threadId
     this.state = {
       ...this.state,
+      threads,
       threadStates,
       events: mirrorActive ? events : this.state.events,
       streamingText:

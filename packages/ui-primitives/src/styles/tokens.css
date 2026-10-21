@@ -42,6 +42,14 @@
   --on-primary: oklch(99% 0 0);
   --switch-on: oklch(56% 0.13 152);
   --link: oklch(52% 0.16 256);
+  /* 品牌强调色：只用于主操作、活动 tab、选中线程和焦点 */
+  --accent: oklch(57% 0.15 256);
+  --accent-strong: oklch(49% 0.16 256);
+  --accent-soft: oklch(57% 0.15 256 / 0.12);
+  --accent-soft-strong: oklch(57% 0.15 256 / 0.18);
+  --on-accent: oklch(99% 0 0);
+  --surface-raised: oklch(100% 0 0);
+  --surface-sunken: oklch(20% 0.01 270 / 0.035);
 
   /* 状态 */
   --ok: oklch(62% 0.14 152);
@@ -75,6 +83,8 @@
     0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 2px 6px oklch(0% 0 0 / 0.03),
     0 8px 28px oklch(0% 0 0 / 0.05);
   --shadow-pop: 0 0 0 0.5px oklch(0% 0 0 / 0.1), 0 10px 32px oklch(0% 0 0 / 0.13);
+  --shadow-raised: 0 0 0 0.5px oklch(0% 0 0 / 0.07), 0 2px 8px oklch(0% 0 0 / 0.05);
+  --shadow-modal: 0 0 0 0.5px oklch(0% 0 0 / 0.1), 0 24px 70px oklch(0% 0 0 / 0.2);
   --composer-ring: oklch(20% 0.01 270 / 0.13);
   --composer-ring-focus: oklch(20% 0.01 270 / 0.22);
   --shadow-composer: 0 1px 2px oklch(0% 0 0 / 0.03), 0 6px 20px oklch(0% 0 0 / 0.04);
@@ -114,6 +124,13 @@
   --on-primary: oklch(17% 0.002 270);
   --switch-on: oklch(62% 0.13 152);
   --link: oklch(74% 0.11 256);
+  --accent: oklch(72% 0.12 256);
+  --accent-strong: oklch(80% 0.1 256);
+  --accent-soft: oklch(72% 0.12 256 / 0.16);
+  --accent-soft-strong: oklch(72% 0.12 256 / 0.24);
+  --on-accent: oklch(17% 0.002 270);
+  --surface-raised: oklch(25% 0.004 270);
+  --surface-sunken: oklch(0% 0 0 / 0.16);
 
   --ok: oklch(72% 0.14 152);
   --warn: oklch(79% 0.14 75);
@@ -139,6 +156,8 @@
   --shadow-btn: 0 0.5px 1px oklch(0% 0 0 / 0.3);
   --shadow-soft: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 8px 28px oklch(0% 0 0 / 0.3);
   --shadow-pop: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 12px 36px oklch(0% 0 0 / 0.45);
+  --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 4px 14px oklch(0% 0 0 / 0.22);
+  --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 28px 80px oklch(0% 0 0 / 0.55);
   --composer-ring: oklch(100% 0 0 / 0.1);
   --composer-ring-focus: oklch(100% 0 0 / 0.18);
   --shadow-composer: 0 6px 22px oklch(0% 0 0 / 0.25);

@@ -14,6 +14,9 @@ import { ToolCard, type ToolCall, type ToolStatus } from "./tool-card"
 export interface MessageListProps {
   events: ThreadEvent[]
   streamingText?: string
+  /** 当前 provider 的展示名与头像首字母。 */
+  assistantName?: string
+  assistantInitial?: string
   onApproval: (requestId: string, decision: ApprovalDecision) => void
   onViewTool?: ((tool: ToolCall) => void) | undefined
   onViewDiff?: ((summary: FileChangeSummary) => void) | undefined
@@ -319,6 +322,8 @@ export function hasPendingApproval(events: ThreadEvent[]): boolean {
 export function MessageList({
   events,
   streamingText = "",
+  assistantName = "Assistant",
+  assistantInitial = "AI",
   onApproval,
   onViewTool,
   onViewDiff,
@@ -359,7 +364,7 @@ export function MessageList({
         asText(payload?.role) === "user" ? (
           <UserMessage key={key} text={text} />
         ) : (
-          <AssistantMessage key={key}>
+          <AssistantMessage key={key} name={assistantName} initial={assistantInitial}>
             <MessageText text={text} />
           </AssistantMessage>
         ),
@@ -406,7 +411,7 @@ export function MessageList({
     }
     if (event.type === "run.failed") {
       nodes.push(
-        <AssistantMessage key={key}>
+        <AssistantMessage key={key} name={assistantName} initial={assistantInitial}>
           <div className="event-line t-bad">
             <AlertTriangle className="ic ic-sm" aria-hidden="true" />
             {asText(payload?.message) ?? t("chat.error")}
@@ -418,7 +423,7 @@ export function MessageList({
 
   if (streamingText) {
     nodes.push(
-      <AssistantMessage key="streaming">
+      <AssistantMessage key="streaming" name={assistantName} initial={assistantInitial}>
         <MessageText text={streamingText} />
         <span className="stream-cursor" aria-label={t("chat.streaming")} />
       </AssistantMessage>,
@@ -428,7 +433,23 @@ export function MessageList({
   if (nodes.length === 0) {
     return (
       <div className="msgs">
-        <div className="chat-empty">{t("chat.empty")}</div>
+        <div className="chat-empty">
+          <span className="empty-mark" aria-hidden="true">
+            ✦
+          </span>
+          <h2>{t("chat.empty.title")}</h2>
+          <p>{t("chat.empty.hint")}</p>
+          <div className="empty-hints">
+            <span>
+              <kbd>⌘K</kbd>
+              {t("chat.empty.command")}
+            </span>
+            <span>
+              <kbd>⌘N</kbd>
+              {t("chat.empty.newThread")}
+            </span>
+          </div>
+        </div>
       </div>
     )
   }

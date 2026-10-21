@@ -1,7 +1,7 @@
 /** 聊天主视图：标题、运行状态、消息时间线、composer 占位与环境抽屉。 */
-import { useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import type { ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
-import { Check, ChevronDown, Folder, PanelRight, PanelRightOpen, Square } from "lucide-react"
+import { ArrowDown, Check, ChevronDown, Folder, PanelRight, PanelRightOpen, Square } from "lucide-react"
 import { Composer } from "@pigcode/ui-composer"
 import { Button, Menu, useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
@@ -121,6 +121,8 @@ export function ChatView({
   const submit = onSubmit ?? onStart
   const { t } = useLocale()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const threadRef = useRef<HTMLDivElement>(null)
+  const [pinned, setPinned] = useState(true)
   // capability 为 false 时隐藏对应控件；未加载能力时保持旧行为。
   const canInterrupt = capabilities?.streaming ?? true
   const canPlan = capabilities?.plan ?? true
@@ -151,6 +153,31 @@ export function ChatView({
     modelId,
     permissionMode: thread?.permissionMode ?? "workspace-write",
   }
+  const assistantInitial =
+    providerId === "claude" ? "CL" : providerId === "codex" ? "CX" : providerName.slice(0, 2).toUpperCase()
+  const projectName = cwd?.split(/[\\/]/).filter(Boolean).at(-1)
+
+  useEffect(() => {
+    setPinned(true)
+  }, [thread?.id])
+
+  useEffect(() => {
+    if (!pinned) return
+    const element = threadRef.current
+    if (element) element.scrollTop = element.scrollHeight
+  }, [events, streamingText, pinned])
+
+  function handleScroll(): void {
+    const element = threadRef.current
+    if (!element) return
+    setPinned(element.scrollHeight - element.scrollTop - element.clientHeight < 64)
+  }
+
+  function jumpToLatest(): void {
+    setPinned(true)
+    const element = threadRef.current
+    element?.scrollTo({ top: element.scrollHeight, behavior: "smooth" })
+  }
 
   return (
     <section className="view">
@@ -158,10 +185,13 @@ export function ChatView({
       <div className="panel-top">
         <div className="title">
           <Folder className="ic muted" aria-hidden="true" />
-          <span className="truncate">{thread?.title ?? t("nav.newThread")}</span>
+          <span className="title-copy">
+            <span className="truncate">{thread?.title ?? t("nav.newThread")}</span>
+            {projectName ? <small className="truncate">{projectName}</small> : null}
+          </span>
         </div>
         <span className="spacer" />
-        <span className={`status ${statusClass}`.trim()}>{status}</span>
+        <span className={`status status-pill ${statusClass}`.trim()}>{status}</span>
         {!running && thread && providers.length > 0 && onSwitchProvider ? (
           <HeaderMenu
             label={providerName}
@@ -217,15 +247,23 @@ export function ChatView({
           <PanelRight className="ic" aria-hidden="true" />
         </Button>
       </div>
-      <div className="thread">
+      <div className="thread" ref={threadRef} onScroll={handleScroll}>
         <MessageList
           events={visibleEvents}
           streamingText={streamingText}
+          assistantName={providerName}
+          assistantInitial={assistantInitial}
           onApproval={onApproval ?? (() => undefined)}
           onViewTool={onViewTool}
           onViewDiff={onViewDiff}
         />
       </div>
+      {!pinned ? (
+        <button type="button" className="jump-latest" onClick={jumpToLatest}>
+          <ArrowDown className="ic ic-sm" aria-hidden="true" />
+          {t("chat.jumpLatest")}
+        </button>
+      ) : null}
       <div className="composer-wrap">
         <Composer
           onSubmit={(text) => submit?.(text)}

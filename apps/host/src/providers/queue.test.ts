@@ -105,6 +105,27 @@ describe("run queue", () => {
     await ctx.fiber.dispose()
   })
 
+  it("auto-titles a default thread from the first user message", async () => {
+    const { ctx, gate, project } = await setup()
+    const thread = ctx.threads.create(project.id, "新会话", "fake")
+
+    const run = await ctx.providers.startRun(thread.id, "帮我检查登录流程。再补充测试。")
+    gate.resolve()
+    await run.done
+
+    expect(ctx.threads.get(thread.id)?.title).toBe("帮我检查登录流程")
+    expect(
+      ctx.sessions
+        .read(thread.id, 0)
+        .some(
+          (event) =>
+            event.type === "thread.updated" &&
+            (event.payload as { title?: string }).title === "帮我检查登录流程",
+        ),
+    ).toBe(true)
+    await ctx.fiber.dispose()
+  })
+
   it("still rejects a second run for a thread whose run is queued", async () => {
     const { ctx, gate, project } = await setup({ maxConcurrentRuns: 1 })
     const firstThread = ctx.threads.create(project.id, "First", "fake")

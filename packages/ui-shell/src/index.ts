@@ -1,5 +1,6 @@
 /** Pigcode 窗口外壳与原生桥相关组件的公开入口。 */
 export * from "./add-project-dialog"
+export * from "./command-palette"
 export * from "./icon"
 export * from "./plugin-panel"
 export * from "./settings-sidebar"

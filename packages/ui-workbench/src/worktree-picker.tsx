@@ -17,6 +17,8 @@ export interface WorktreePickerProps {
   onSwitch: (path: string) => void | Promise<void>
   onRemove: () => void | Promise<void>
   busy?: boolean
+  /** 紧凑模式：用于工作台文件 tab 顶部的一行工具条。 */
+  compact?: boolean
 }
 
 /** Worktree 选择器入口；删除只针对当前活动 worktree，并要求二次确认。 */
@@ -27,6 +29,7 @@ export function WorktreePicker({
   onSwitch,
   onRemove,
   busy = false,
+  compact = false,
 }: WorktreePickerProps) {
   const [pending, setPending] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -44,21 +47,66 @@ export function WorktreePicker({
     }
   }
 
+  if (compact) {
+    return (
+      <div className="worktree-compact">
+        <span className="worktree-compact-label">工作树</span>
+        <select
+          className="worktree-compact-select"
+          aria-label="工作树"
+          value={activePath ?? ""}
+          disabled={disabled}
+          onChange={(event) => {
+            if (event.target.value) void run(() => onSwitch(event.target.value))
+          }}
+        >
+          <option value="">项目根目录</option>
+          {worktrees.map((worktree) => (
+            <option key={worktree.id} value={worktree.path}>
+              {worktree.branch ?? worktree.path}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          onClick={() => void run(onCreate)}
+        >
+          新建
+        </Button>
+        {activePath ? (
+          <Button
+            variant={confirmRemove ? "danger" : "ghost"}
+            size="sm"
+            disabled={disabled}
+            onClick={() => {
+              if (confirmRemove) void run(onRemove)
+              else setConfirmRemove(true)
+            }}
+          >
+            {confirmRemove ? "确认移除" : "移除"}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div className="worktree-picker">
       <header className="workbench-section-header">
-        <span>Worktrees</span>
+        <span>工作树</span>
         <Button
           variant="secondary"
           size="sm"
           disabled={disabled}
           onClick={() => void run(onCreate)}
         >
-          新建 worktree
+          新建工作树
         </Button>
       </header>
       {worktrees.length === 0 ? (
-        <p className="workbench-empty">尚未创建 worktree，当前使用项目根目录。</p>
+        <p className="workbench-empty">尚未创建工作树，当前使用项目根目录。</p>
       ) : (
         <ul className="worktree-list">
           {worktrees.map((worktree) => {

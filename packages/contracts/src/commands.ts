@@ -11,6 +11,10 @@ export const commandSchemas = {
     providerId: z.string().min(1).default("fake"),
   }),
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
+  "thread.rename": z.object({
+    threadId: z.string().min(1),
+    title: z.string().min(1).max(120),
+  }),
   "thread.switchProvider": z.object({
     threadId: z.string().min(1),
     providerId: z.string().min(1),

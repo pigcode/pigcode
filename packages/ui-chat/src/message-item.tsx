@@ -6,9 +6,27 @@ export function UserMessage({ text }: { text: string }) {
   return <div className="msg-user">{text}</div>
 }
 
-/** 助手消息纵向内容容器。 */
-export function AssistantMessage({ children }: { children: ReactNode }) {
-  return <div className="msg-ai">{children}</div>
+/** 助手消息：小头像 + 名称 + 内容，让时间线有明确归属。 */
+export function AssistantMessage({
+  children,
+  name = "Assistant",
+  initial = "AI",
+}: {
+  children: ReactNode
+  name?: string
+  initial?: string
+}) {
+  return (
+    <div className="msg-ai">
+      <div className="msg-ai-head">
+        <span className="msg-avatar" aria-hidden="true">
+          {initial}
+        </span>
+        <span className="msg-ai-name">{name}</span>
+      </div>
+      <div className="msg-ai-body">{children}</div>
+    </div>
+  )
 }
 
 /** 把多段文本拆成段落；单段内的换行由 CSS 保留。 */

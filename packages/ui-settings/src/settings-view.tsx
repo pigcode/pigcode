@@ -23,6 +23,8 @@ export interface SettingsViewProps {
   detection?: ProviderDetection | null | undefined
   /** 重新运行只读检测。 */
   onDetect?: (() => void | Promise<void>) | undefined
+  /** 外壳侧栏已经提供分区导航时传 false，避免出现两套设置导航。 */
+  showNav?: boolean
 }
 
 /** 按分区渲染设置内容。 */
@@ -36,11 +38,12 @@ export function SettingsView({
   providers,
   detection,
   onDetect,
+  showNav = true,
 }: SettingsViewProps) {
   const { t } = useLocale()
   return (
     <section className="view" style={{ flexDirection: "row" }} aria-label={t("settings.title")}>
-      <SettingsNav section={section} onSection={onSection} onClose={onClose} />
+      {showNav ? <SettingsNav section={section} onSection={onSection} onClose={onClose} /> : null}
       <div className="panel-scroll">
         {section === "general" ? <GeneralPage /> : null}
         {section === "appearance" ? <AppearancePage appearance={appearance} /> : null}
