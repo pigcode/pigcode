@@ -7,6 +7,7 @@ export default defineConfig({
       "packages/**/*.test.tsx",
       "apps/**/*.test.ts",
       "apps/**/*.test.tsx",
+      "scripts/**/*.test.ts",
     ],
     environment: "node",
     setupFiles: ["./vitest.setup.ts"],

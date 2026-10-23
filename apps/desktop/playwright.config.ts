@@ -7,7 +7,10 @@ import { defineConfig } from "@playwright/test"
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url))
 
 process.env.PIGCODE_E2E = "1"
-process.env.PIGCODE_PROFILE_DIR = join(repoRoot, "apps/desktop/out/host/profile")
+// 用户 profile（安装的插件、设置）放在构建产物之外，globalSetup 每次清空；
+// 数据库留在内存里，每次启动都是干净的项目与会话。
+process.env.PIGCODE_PROFILE_DIR = join(repoRoot, "apps/desktop/out-e2e/profile")
+process.env.PIGCODE_DB_PATH = ":memory:"
 
 /** 真实 provider 需要等待模型响应，超时单独放宽；其余 E2E 保持原有上限。 */
 const realProvider =

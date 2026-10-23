@@ -1,17 +1,16 @@
 /** Provider 切换：同 provider 优先原生 fork，跨 provider 回退到一次性 handoff。 */
 import type { Context } from "cordis"
 import type { ProviderSession } from "@pigcode/contracts"
-import { activeWorktreePath } from "../services/worktrees"
-import { detectClaude } from "./claude/detect"
-import type { ProviderSessionStore } from "./claude/session-store"
-import type { ProviderDriver, ProviderModelInfo } from "./driver"
+import type { ProviderSessionStore } from "./session-store"
+import type { ProviderDriver, ProviderModelInfo, ProviderSettingsValues } from "./driver"
 
 /** 取 driver 的模型目录；不支持动态目录的 provider 返回空数组。 */
 export async function listProviderModels(
   driver: ProviderDriver | undefined,
+  settings: ProviderSettingsValues = {},
 ): Promise<ProviderModelInfo[]> {
   if (!driver) throw new Error("provider not found")
-  return driver.listModels ? driver.listModels() : []
+  return driver.listModels ? driver.listModels(settings) : []
 }
 
 /** 切换前关闭旧 provider 的 session，避免 app-server 子进程泄漏。 */
@@ -41,26 +40,15 @@ export interface Switch {
   forkFromNativeSessionId: string | null
 }
 
-/** 选择新线程默认 provider：显式 env 指向已注册 provider 时优先，否则 Claude 已安装且登录时用 Claude。 */
-export async function defaultProvider(hasProvider: (id: string) => boolean): Promise<string> {
-  const forced = process.env.PIGCODE_PROVIDER
-  // 第三方 provider 插件注册后同样允许强制指定，供 E2E 与手动冒烟使用。
-  if (forced && hasProvider(forced)) return forced
-  const claude = await detectClaude()
-  return claude.installed && claude.loggedIn ? "claude" : "fake"
-}
-
 /** handoff 中保留的最近消息条数与工具名数量。 */
 const HANDOFF_MESSAGE_LIMIT = 3
 const HANDOFF_TOOL_LIMIT = 3
 
-/**
- * 生成跨 provider 的 handoff：最近三条 user/assistant 文本与最近使用过的工具名。
- * 同一 provider 的切换优先原生 fork，只有无法 fork 时才走这里。
- */
-export function buildHandoff(ctx: Context, threadId: string): string {
-  const thread = ctx.threads.get(threadId)
-  const previousProvider = thread?.lastProviderId ?? thread?.defaultProviderId ?? "unknown"
+/** 线程最近的对话与工具名，按时间顺序。 */
+function recentContext(
+  ctx: Context,
+  threadId: string,
+): { messages: Array<{ role: string; text: string }>; tools: string[] } {
   const events = ctx.sessions.read(threadId, 0)
   const messages: Array<{ role: string; text: string }> = []
   const tools: string[] = []
@@ -86,17 +74,51 @@ export function buildHandoff(ctx: Context, threadId: string): string {
     if (messages.length >= HANDOFF_MESSAGE_LIMIT && tools.length >= HANDOFF_TOOL_LIMIT) break
   }
   // 反向扫描得到的是从新到旧，输出时恢复为时间顺序。
-  const recentMessages = messages.reverse()
-  const recentTools = tools.reverse()
+  return { messages: messages.reverse(), tools: tools.reverse() }
+}
+
+function contextLines(context: ReturnType<typeof recentContext>): string[] {
+  return [
+    "Recent conversation:",
+    ...(context.messages.length > 0
+      ? context.messages.map((message) => `- ${message.role}: ${message.text}`)
+      : ["- (none)"]),
+    `Recent tools: ${context.tools.length > 0 ? context.tools.join(", ") : "(none)"}`,
+  ]
+}
+
+/**
+ * 生成跨 provider 的 handoff：最近三条 user/assistant 文本与最近使用过的工具名。
+ * 同一 provider 的切换优先原生 fork，只有无法 fork 时才走这里。
+ */
+export function buildHandoff(ctx: Context, threadId: string): string {
+  const thread = ctx.threads.get(threadId)
+  const previousProvider = thread?.lastProviderId ?? thread?.defaultProviderId ?? "unknown"
   return [
     `Previous provider: ${previousProvider}`,
-    "Recent conversation:",
-    ...(recentMessages.length > 0
-      ? recentMessages.map((message) => `- ${message.role}: ${message.text}`)
-      : ["- (none)"]),
-    `Recent tools: ${recentTools.length > 0 ? recentTools.join(", ") : "(none)"}`,
+    ...contextLines(recentContext(ctx, threadId)),
     "Continue from here. Do not repeat completed work.",
   ].join("\n")
+}
+
+/**
+ * 子代理的第一条消息前附带的说明：它和主会话共用一个工作目录，并带上主会话最近的对话，
+ * 让子代理知道主 agent 在做什么。主会话还没聊过时返回 null。
+ */
+export function buildSubagentBrief(ctx: Context, parentThreadId: string): string | null {
+  if (!hasConversation(ctx, parentThreadId)) return null
+  const parent = ctx.threads.get(parentThreadId)
+  const mainAgent = parent?.lastProviderId ?? parent?.defaultProviderId ?? "unknown"
+  return [
+    `You are a sub-agent working next to the main agent (${mainAgent}) of the task "${parent?.title ?? ""}", in the same working directory.`,
+    ...contextLines(recentContext(ctx, parentThreadId)),
+    "Do what the user asks you below. Build on the main agent's work instead of redoing it, and avoid editing files it is changing unless asked.",
+  ].join("\n")
+}
+
+/** 线程里是否已经有过对话消息。 */
+function hasConversation(ctx: Context, threadId: string): boolean {
+  return ctx.sessions.read(threadId, 0).some((event) => event.type === "message.completed")
 }
 
 /** 读取尚未被下一次 run 消费的 handoff；一个 handoff 只注入一次。 */
@@ -148,9 +170,13 @@ export async function switchProvider(
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   // 同 provider 且存在 active 原生会话时优先 fork；否则生成跨 provider 的 handoff。
+  // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, providerId)
   const forkFromNativeSessionId = activeSession?.nativeSessionId ?? null
-  const handoff = forkFromNativeSessionId === null ? buildHandoff(ctx, threadId) : null
+  const handoff =
+    forkFromNativeSessionId === null && hasConversation(ctx, threadId)
+      ? buildHandoff(ctx, threadId)
+      : null
   const now = new Date().toISOString()
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
   for (const session of active) await disposeActive?.(session)
@@ -169,14 +195,4 @@ export async function switchProvider(
     createdAt: now,
   })
   return { providerId, modelId, handoff, forkFromNativeSessionId }
-}
-
-/** 解析线程的 provider cwd：优先活动 worktree，没有时回退到项目根目录。 */
-export function resolveThreadCwd(ctx: Context, threadId: string, projectId: string): string {
-  const worktree = activeWorktreePath(ctx.storage.db, threadId)
-  if (worktree) return worktree
-  const row = ctx.storage.db
-    .prepare(`SELECT root_path FROM projects WHERE id = ?`)
-    .get(projectId) as { root_path: string } | undefined
-  return row?.root_path ?? process.cwd()
 }

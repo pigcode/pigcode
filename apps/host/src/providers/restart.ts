@@ -2,7 +2,7 @@
 import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { PendingRequestStore } from "../storage/pending-request-store"
-import type { ProviderSessionStore } from "./claude/session-store"
+import type { ProviderSessionStore } from "./session-store"
 
 /** Host 重启恢复时处理的行数。 */
 export interface RestartRecovery {

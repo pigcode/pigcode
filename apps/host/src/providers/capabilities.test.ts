@@ -1,14 +1,14 @@
 /** 固定 Claude/Codex 的 capability，防止未来静默变化。 */
 import type { ProviderCapabilities } from "@pigcode/contracts"
 import { describe, expect, it } from "vitest"
-import { ClaudeDriver } from "./claude/driver"
-import { CodexDriver } from "./codex/driver"
+import { ClaudeDriver } from "@pigcode/provider-claude/driver"
+import { CodexDriver } from "@pigcode/provider-codex/driver"
 
-/** Claude Code 在 M2 的完整能力快照。 */
+/** Claude Code 的完整能力快照；AskUserQuestion 由提问卡片作答。 */
 const claudeCapabilities: ProviderCapabilities = {
   streaming: true,
   approvals: true,
-  questions: false,
+  questions: true,
   plan: true,
   resume: true,
   fork: false,

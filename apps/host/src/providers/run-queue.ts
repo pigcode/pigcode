@@ -1,11 +1,6 @@
 /** 全局运行队列、排队条目与内存中的 run 句柄。 */
 import type { ProviderEvent, RunStatus } from "@pigcode/contracts"
-import type {
-  ProviderDriver,
-  ProviderSessionHandle,
-  SessionMcp,
-  UserInput,
-} from "./driver"
+import type { ProviderDriver, ProviderSessionHandle, SessionMcp, UserInput } from "./driver"
 
 /** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
 export interface ActiveRun {
@@ -19,6 +14,10 @@ export interface ActiveRun {
   done: Promise<void>
   resolveDone: () => void
   approvals: Set<string>
+  /** 已经流给 UI、还没有被 message.completed 持久化的助手文本。 */
+  liveText: string
+  /** 当前这段思考第一次流出增量的时间；思考结束时据此记下持续时长。 */
+  reasoningStartedAt?: number | undefined
 }
 
 /**

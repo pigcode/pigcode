@@ -29,7 +29,12 @@ export function maybeAutoTitle(
         (event.payload as { role?: unknown }).role === "user",
     )
   if (hasUserMessage) return
-  const firstLine = text.replace(/\s+/g, " ").trim().split(/[。！？.!?]/)[0]?.trim() ?? ""
+  const firstLine =
+    text
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(/[。！？.!?]/)[0]
+      ?.trim() ?? ""
   if (!firstLine) return
   const updated = ctx.threads.rename(thread.id, firstLine.slice(0, 36))
   if (updated) append(thread.id, runId, "thread.updated", { title: updated.title })

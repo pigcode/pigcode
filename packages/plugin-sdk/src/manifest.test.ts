@@ -1,6 +1,10 @@
 /** 验证 manifest 结构与 apiVersion/engines 兼容性。 */
 import { describe, expect, it } from "vitest"
-import { checkPluginCompatibility, pluginManifestSchema } from "./manifest"
+import {
+  checkPluginCompatibility,
+  pluginManifestSchema,
+  readProviderContribution,
+} from "./manifest"
 
 const base = {
   name: "@pigcode/provider-fake",
@@ -38,6 +42,64 @@ describe("plugin manifest", () => {
         pigcode: { ...base.pigcode, apiVersion: 2 },
       }),
     ).toThrow()
+  })
+
+  it("reads the provider contribution with its settings fields", () => {
+    const manifest = pluginManifestSchema.parse({
+      ...base,
+      pigcode: {
+        ...base.pigcode,
+        contributes: {
+          provider: {
+            id: "fake",
+            description: { "zh-CN": "测试用", "en-US": "For tests" },
+            settings: [
+              { key: "binaryPath", type: "path", label: "Binary path", placeholder: "fake" },
+              { key: "environment", type: "env", label: "Environment" },
+            ],
+          },
+        },
+      },
+    })
+    const provider = readProviderContribution(manifest)
+    expect(provider?.id).toBe("fake")
+    expect(provider?.customModels).toBe(true)
+    expect(provider?.settings.map((field) => field.key)).toEqual(["binaryPath", "environment"])
+    expect(provider?.settings[0]).toMatchObject({ type: "path", pathKind: "file" })
+  })
+
+  it("infers a bare provider contribution from provides", () => {
+    const provider = readProviderContribution(pluginManifestSchema.parse(base))
+    expect(provider).toMatchObject({ id: "fake", settings: [], customModels: true })
+  })
+
+  it("rejects duplicate or reserved setting keys", () => {
+    const withSettings = (settings: unknown[]) => ({
+      ...base,
+      pigcode: { ...base.pigcode, contributes: { provider: { id: "fake", settings } } },
+    })
+    expect(() =>
+      pluginManifestSchema.parse(
+        withSettings([
+          { key: "binaryPath", type: "text", label: "A" },
+          { key: "binaryPath", type: "text", label: "B" },
+        ]),
+      ),
+    ).toThrow(/duplicate setting key/)
+    expect(() =>
+      pluginManifestSchema.parse(withSettings([{ key: "customModels", type: "text", label: "M" }])),
+    ).toThrow(/reserved/)
+  })
+
+  it("only accepts an https homepage, the only kind the desktop app opens", () => {
+    const withHomepage = (homepage: string) => ({
+      ...base,
+      pigcode: { ...base.pigcode, contributes: { provider: { id: "fake", homepage } } },
+    })
+    const manifest = pluginManifestSchema.parse(withHomepage("https://example.com/agent"))
+    expect(readProviderContribution(manifest)?.homepage).toBe("https://example.com/agent")
+    expect(() => pluginManifestSchema.parse(withHomepage("http://example.com"))).toThrow()
+    expect(() => pluginManifestSchema.parse(withHomepage("javascript:alert(1)"))).toThrow()
   })
 })
 

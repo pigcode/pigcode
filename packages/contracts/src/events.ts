@@ -12,6 +12,7 @@ export const threadEventTypeSchema = z.enum([
   "run.failed",
   "run.interrupted",
   "message.completed",
+  "reasoning.completed",
   "tool.started",
   "tool.completed",
   "approval.requested",
@@ -53,6 +54,17 @@ export const providerEventSchema = z.discriminatedUnion("type", [
     text: z.string(),
     parentToolUseId: z.string().optional(),
   }),
+  /** 模型的思考过程（Claude 的 thinking、Codex 的 reasoning 摘要）；增量只走实时通道。 */
+  z.object({
+    type: z.literal("reasoning.delta"),
+    text: z.string(),
+    parentToolUseId: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal("reasoning.completed"),
+    text: z.string(),
+    parentToolUseId: z.string().optional(),
+  }),
   z.object({
     type: z.literal("tool.started"),
     toolCallId: z.string(),
@@ -66,6 +78,15 @@ export const providerEventSchema = z.discriminatedUnion("type", [
     name: z.string(),
     output: z.unknown(),
     isError: z.boolean(),
+    /** 命令类工具的退出码；provider 不报告时缺省。 */
+    exitCode: z.number().int().nullable().optional(),
+    parentToolUseId: z.string().optional(),
+  }),
+  /** 运行中命令的输出片段；只走实时通道，完整输出在 tool.completed 里落库。 */
+  z.object({
+    type: z.literal("tool.outputDelta"),
+    toolCallId: z.string(),
+    delta: z.string(),
     parentToolUseId: z.string().optional(),
   }),
   z.object({
@@ -73,6 +94,8 @@ export const providerEventSchema = z.discriminatedUnion("type", [
     toolCallId: z.string(),
     name: z.string(),
     description: z.string().optional(),
+    /** 主 agent 交给子 agent 的完整任务。 */
+    prompt: z.string().optional(),
     model: z.string().optional(),
     parentToolUseId: z.string().optional(),
   }),

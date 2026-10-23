@@ -85,3 +85,46 @@ describe("client plugin slot conflicts", () => {
     controller.dispose()
   })
 })
+
+describe("client plugin panels and surfaces", () => {
+  it("registers right-panel surfaces built with the host's ui kit and drops them on dispose", async () => {
+    const source = `export function apply(ctx) {
+      ctx.registerSurface({
+        id: "inspector",
+        title: "Inspector",
+        render(container) {
+          container.append(ctx.ui.row({ title: ctx.theme.get(), control: ctx.ui.badge(ctx.locale.get()) }))
+        },
+      })
+      ctx.registerPanel({ id: "status", title: "Status", render() {} })
+    }`
+    const slots = createSlotRegistry()
+    const controller = createClientPluginController({ slots, connection })
+    const boot = {
+      entries: [
+        {
+          id: "ui.inspector",
+          revision: "1",
+          inject: [],
+          url: `data:text/javascript,${encodeURIComponent(source)}`,
+        },
+      ],
+    }
+    vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => boot }))
+    document.documentElement.setAttribute("data-theme", "dark")
+    document.documentElement.setAttribute("lang", "en-US")
+
+    await controller.reload()
+
+    const [surface] = controller.surfaces.get()
+    expect(surface?.title).toBe("Inspector")
+    const container = document.createElement("div")
+    surface?.render(container)
+    expect(container.querySelector(".pg-row-title")?.textContent).toBe("dark")
+    expect(container.querySelector(".badge")?.textContent).toBe("en-US")
+    expect(controller.panels.get().map((panel) => panel.id)).toEqual(["status"])
+    controller.dispose()
+    expect(controller.surfaces.get()).toEqual([])
+    expect(controller.panels.get()).toEqual([])
+  })
+})

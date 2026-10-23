@@ -42,15 +42,35 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
     case "message.delta":
       // 子 agent 的流式增量不混入主时间线的 streamingText；其完整文本在
       // message.completed 中带 parentToolUseId 持久化。
-      if (event.parentToolUseId === undefined) run.emitLive?.(event)
+      if (event.parentToolUseId === undefined) {
+        run.liveText += event.text
+        run.emitLive?.(event)
+      }
       return
     case "message.completed":
+      if (event.parentToolUseId === undefined) run.liveText = ""
       hooks.append(run.threadId, run.runId, "message.completed", {
         role: "assistant",
         text: event.text,
         ...parentField(event.parentToolUseId),
       })
       return
+    case "reasoning.delta":
+      if (event.parentToolUseId !== undefined) return
+      run.reasoningStartedAt ??= Date.now()
+      run.emitLive?.(event)
+      return
+    case "reasoning.completed": {
+      if (event.text.trim().length === 0) return
+      const startedAt = event.parentToolUseId === undefined ? run.reasoningStartedAt : undefined
+      if (event.parentToolUseId === undefined) run.reasoningStartedAt = undefined
+      hooks.append(run.threadId, run.runId, "reasoning.completed", {
+        text: event.text,
+        ...(startedAt === undefined ? {} : { durationMs: Math.max(0, Date.now() - startedAt) }),
+        ...parentField(event.parentToolUseId),
+      })
+      return
+    }
     case "tool.started":
       hooks.append(run.threadId, run.runId, "tool.started", {
         id: event.toolCallId,
@@ -68,8 +88,12 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
         output: event.output,
         isError: event.isError,
         status: event.isError ? "failed" : "completed",
+        ...(typeof event.exitCode === "number" ? { exitCode: event.exitCode } : {}),
         ...parentField(event.parentToolUseId),
       })
+      return
+    case "tool.outputDelta":
+      run.emitLive?.(event)
       return
     case "subagent.started":
       hooks.append(run.threadId, run.runId, "subagent.started", {
@@ -77,6 +101,7 @@ export function mapProviderEvent(run: ActiveRun, event: ProviderEvent, hooks: Ru
         id: event.toolCallId,
         name: event.name,
         ...(event.description === undefined ? {} : { description: event.description }),
+        ...(event.prompt === undefined ? {} : { prompt: event.prompt }),
         ...(event.model === undefined ? {} : { model: event.model }),
         ...parentField(event.parentToolUseId),
       })

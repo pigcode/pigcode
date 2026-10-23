@@ -1,23 +1,65 @@
-/** 工作区侧栏：项目树、线程列表与设置入口。 */
+/** 工作区侧栏：主导航、项目与会话列表；会话可按项目分组或按时间排成一列。 */
+import { useEffect, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { Button, useLocale } from "@pigcode/ui-primitives"
+import {
+  Button,
+  Menu,
+  formatShortcut,
+  useLocale,
+  useSidebarGrouping,
+  type SidebarGrouping,
+} from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
-import type { ThreadTabStatus } from "./thread-tabs"
+import { openFolder, revealLabelKey, useOpenFailure } from "./open-in"
+import { ProjectRow, ThreadRow, type RenameHandlers, type RowAction } from "./sidebar-rows"
+import type { ThreadStatus } from "./thread-status"
+import { useToast } from "./toast"
+
+export { formatThreadTime } from "./sidebar-rows"
 
 /** 工作区侧栏所需的数据与事件；数据由 store 传入。 */
 export interface WorkspaceSidebarProps {
   projects: Project[]
   threads: Thread[]
   activeThreadId: string | null
-  threadStatus?: Record<string, ThreadTabStatus> | undefined
+  threadStatus?: Record<string, ThreadStatus> | undefined
   expandedProjects: Record<string, boolean>
   onAddProject: () => void
   onToggleProject: (projectId: string, expanded: boolean) => void
   onOpenThread: (threadId: string) => void
   onNewThread: (projectId?: string) => void
   onOpenSettings?: () => void
-  /** 搜索尚未接入时可以不传，侧栏不渲染搜索入口。 */
-  onSearch?: () => void
+  /** 定时任务入口；不传时不显示。 */
+  onOpenSchedules?: () => void
+  /** 插件入口；不传时不显示。 */
+  onOpenPlugins?: () => void
+  /** 会话行右键菜单里的重命名与归档；两个都传时才有菜单。 */
+  onRenameThread?: ((threadId: string, title: string) => void) | undefined
+  onArchiveThread?: ((threadId: string) => void) | undefined
+  /** 项目行右键菜单里的重命名与移除；两个都传时才有菜单，菜单里另有「在文件管理器中打开」。 */
+  onRenameProject?: ((projectId: string, name: string) => void) | undefined
+  onRemoveProject?: ((projectId: string) => void) | undefined
+  /** 按住 ⌘/Ctrl 时在前九个会话上显示数字快捷键。 */
+  shortcutHints?: boolean
+}
+
+/** 侧栏里从上到下可见的会话；⌘/Ctrl+数字按这个顺序跳转。 */
+export function visibleThreads(
+  projects: readonly Project[],
+  threads: readonly Thread[],
+  grouping: SidebarGrouping,
+  expandedProjects: Record<string, boolean>,
+): Thread[] {
+  const known = new Set(projects.map((project) => project.id))
+  const live = threads.filter((thread) => thread.archivedAt === null && known.has(thread.projectId))
+  if (grouping === "time") {
+    return [...live].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  }
+  return projects.flatMap((project) =>
+    (expandedProjects[project.id] ?? true)
+      ? live.filter((thread) => thread.projectId === project.id)
+      : [],
+  )
 }
 
 /** 把 provider id 缩成侧栏可读的短标记。 */
@@ -28,19 +70,53 @@ function providerMark(thread: Thread): string {
   return id.slice(0, 2).toUpperCase()
 }
 
-/** 把线程更新时间格式化成“刚刚 / 3 分钟前 / 昨天”的短文本。 */
-function formatThreadTime(value: string, locale: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  const diff = Date.now() - date.getTime()
-  const minutes = Math.floor(diff / 60_000)
-  if (minutes < 1) return locale.startsWith("zh") ? "刚刚" : "now"
-  if (minutes < 60) return locale.startsWith("zh") ? `${minutes} 分钟前` : `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return locale.startsWith("zh") ? `${hours} 小时前` : `${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return locale.startsWith("zh") ? `${days} 天前` : `${days}d`
-  return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(date)
+/** 每分钟刷新一次的当前时间，让「刚刚 / 3分钟」这类相对时间跟着走。 */
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  return now
+}
+
+/** 「项目」标题旁的排列方式菜单。 */
+function GroupingMenu({
+  value,
+  onChange,
+}: {
+  value: SidebarGrouping
+  onChange: (value: SidebarGrouping) => void
+}) {
+  const { t } = useLocale()
+  const options: Array<{ id: SidebarGrouping; label: string }> = [
+    { id: "project", label: t("settings.general.byProject") },
+    { id: "time", label: t("settings.general.byTime") },
+  ]
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className="icon-btn"
+        type="button"
+        aria-label={t("sidebar.grouping")}
+        title={t("sidebar.grouping")}
+      >
+        <Icon name="filter" small />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner className="menu-positioner" side="bottom" align="end" sideOffset={6}>
+          <Menu.Popup className="menu-popup">
+            {options.map((option) => (
+              <Menu.Item key={option.id} className="menu-item" onClick={() => onChange(option.id)}>
+                <span className="grow">{option.label}</span>
+                {option.id === value ? <Icon name="check" small className="check-mark" /> : null}
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  )
 }
 
 /** 绘制工作区导航，不读取会话内核。 */
@@ -54,35 +130,118 @@ export function WorkspaceSidebar({
   onToggleProject,
   onOpenThread,
   onNewThread,
-  onSearch,
+  onOpenSchedules,
+  onOpenPlugins,
+  onRenameThread,
+  onArchiveThread,
+  onRenameProject,
+  onRemoveProject,
+  shortcutHints = false,
 }: WorkspaceSidebarProps) {
-  const { t, locale } = useLocale()
+  const { t } = useLocale()
+  const toast = useToast()
+  const openFailed = useOpenFailure()
+  const [grouping, setGrouping] = useSidebarGrouping()
+  const now = useMinuteClock()
+  // 同一时间只有一行在改名；项目与会话的 id 前缀不同，不会撞上。
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const projectNames = new Map(projects.map((project) => [project.id, project.name]))
+  const liveThreads = threads.filter(
+    (thread) => thread.archivedAt === null && projectNames.has(thread.projectId),
+  )
+  const order = visibleThreads(projects, threads, grouping, expandedProjects)
+  const shortcutIndex = new Map(order.slice(0, 9).map((thread, index) => [thread.id, index + 1]))
+
+  /** 改名中的那一行拿到提交与取消；其余行为 null。 */
+  const renameFor = (id: string, commit: (value: string) => void): RenameHandlers | null =>
+    renamingId === id
+      ? {
+          onRename: (value) => {
+            setRenamingId(null)
+            commit(value)
+          },
+          onCancel: () => setRenamingId(null),
+        }
+      : null
+
+  const threadActions = (thread: Thread): RowAction[] =>
+    onRenameThread && onArchiveThread
+      ? [
+          { icon: "pencil", label: t("sidebar.rename"), run: () => setRenamingId(thread.id) },
+          { icon: "archive", label: t("sidebar.archive"), run: () => onArchiveThread(thread.id) },
+        ]
+      : []
+
+  const projectActions = (project: Project): RowAction[] =>
+    onRenameProject && onRemoveProject
+      ? [
+          { icon: "pencil", label: t("sidebar.rename"), run: () => setRenamingId(project.id) },
+          {
+            icon: "folder-open",
+            label: t(revealLabelKey()),
+            run: () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath)),
+          },
+          {
+            icon: "x",
+            label: t("sidebar.removeProject"),
+            separated: true,
+            run: () => {
+              onRemoveProject(project.id)
+              toast(t("sidebar.projectRemoved").replace("{name}", project.name))
+            },
+          },
+        ]
+      : []
+
+  const row = (thread: Thread, detail: string, detailClass: string) => {
+    const index = shortcutHints ? shortcutIndex.get(thread.id) : undefined
+    return (
+      <ThreadRow
+        key={thread.id}
+        thread={thread}
+        active={thread.id === activeThreadId}
+        status={threadStatus[thread.id] ?? "idle"}
+        detail={detail}
+        detailClass={detailClass}
+        shortcut={index ? formatShortcut(`Mod+${index}`) : null}
+        rename={renameFor(thread.id, (title) => onRenameThread?.(thread.id, title))}
+        actions={threadActions(thread)}
+        onOpen={() => onOpenThread(thread.id)}
+        now={now}
+      />
+    )
+  }
+
   return (
     <>
       <nav className="side-actions" aria-label={t("nav.projects")}>
         <Button
-          variant="primary"
-          className="new-thread-btn"
+          variant="plain"
+          className="nav-item new-thread-btn"
           type="button"
           aria-label={t("nav.newThread")}
           onClick={() => onNewThread()}
         >
-          <Icon name="plus" />
+          <Icon name="compose" />
           <span className="grow">{t("nav.newThread")}</span>
-          <span className="new-thread-kbd">⌘N</span>
+          <kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>
         </Button>
-        {onSearch ? (
-          <Button variant="plain" className="side-command" type="button" onClick={onSearch}
-            aria-label={t("nav.search")}
-          >
-            <Icon name="search" />
-            <span className="grow">{t("nav.search")}</span>
-            <span className="nav-kbd">⌘K</span>
+        {onOpenSchedules ? (
+          <Button variant="plain" className="nav-item" type="button" onClick={onOpenSchedules}>
+            <Icon name="clock" />
+            <span className="grow">{t("settings.schedules")}</span>
+          </Button>
+        ) : null}
+        {onOpenPlugins ? (
+          <Button variant="plain" className="nav-item" type="button" onClick={onOpenPlugins}>
+            <Icon name="cube" />
+            <span className="grow">{t("settings.plugins")}</span>
           </Button>
         ) : null}
       </nav>
       <div className="side-label">
-        <span>{t("nav.projects")}</span>
+        <span>{grouping === "time" ? t("sidebar.recent") : t("nav.projects")}</span>
+        <GroupingMenu value={grouping} onChange={setGrouping} />
         <Button
           variant="plain"
           className="icon-btn"
@@ -95,82 +254,53 @@ export function WorkspaceSidebar({
         </Button>
       </div>
       {projects.length === 0 ? (
-        <div className="side-empty-card">
-          <span className="side-empty-icon">
-            <Icon name="folder" />
-          </span>
-          <strong>{t("nav.addProject")}</strong>
-          <p>{t("chat.empty.hint")}</p>
-          <Button variant="primary" size="sm" type="button" onClick={onAddProject}>
-            {t("nav.addProject")}
-          </Button>
-        </div>
+        <Button
+          variant="plain"
+          className="nav-item side-add-project"
+          type="button"
+          onClick={onAddProject}
+        >
+          <Icon name="plus" />
+          <span className="grow">{t("nav.addProject")}</span>
+        </Button>
       ) : null}
-      {projects.map((project) => {
-        const open = expandedProjects[project.id] ?? true
-        const projectThreads = threads.filter(
-          (thread) => thread.projectId === project.id && thread.archivedAt === null,
-        )
-        return (
-          <div key={project.id} className="proj-block">
-            <div className="proj-row">
-              <Button
-                variant="plain"
-                className="proj"
-                type="button"
-                aria-expanded={open}
-                onClick={() => onToggleProject(project.id, !open)}
-              >
-                <span className="proj-icon">
-                  <Icon name="folder" className="proj-folder" />
-                  <Icon name={open ? "down" : "right"} small className="proj-caret" />
-                </span>
-                <span className="truncate">{project.name}</span>
-                {projectThreads.length > 0 ? (
-                  <span className="proj-count">{projectThreads.length}</span>
-                ) : null}
-              </Button>
-              <Button
-                variant="plain"
-                className="icon-btn proj-add"
-                type="button"
-                aria-label={t("nav.newThread")}
-                title={t("nav.newThread")}
-                onClick={() => onNewThread(project.id)}
-              >
-                <Icon name="plus" small />
-              </Button>
+      {grouping === "time" ? (
+        <div className="recent-sessions">
+          {projects.length > 0 && liveThreads.length === 0 ? (
+            <p className="side-empty">{t("sidebar.noThreads")}</p>
+          ) : null}
+          {order.map((thread) =>
+            row(thread, projectNames.get(thread.projectId) ?? "", "sess-project"),
+          )}
+        </div>
+      ) : (
+        projects.map((project) => {
+          const open = expandedProjects[project.id] ?? true
+          const projectThreads = liveThreads.filter((thread) => thread.projectId === project.id)
+          return (
+            <div key={project.id} className="proj-block">
+              <ProjectRow
+                project={project}
+                open={open}
+                rename={renameFor(project.id, (name) => onRenameProject?.(project.id, name))}
+                actions={projectActions(project)}
+                onToggle={() => onToggleProject(project.id, !open)}
+                onNewThread={() => onNewThread(project.id)}
+              />
+              {open ? (
+                <div className="proj-sessions">
+                  {projectThreads.length === 0 ? (
+                    <p className="side-empty">{t("sidebar.noThreads")}</p>
+                  ) : null}
+                  {projectThreads.map((thread) =>
+                    row(thread, providerMark(thread), "sess-provider"),
+                  )}
+                </div>
+              ) : null}
             </div>
-            {open ? (
-              <div className="proj-sessions">
-                {projectThreads.length === 0 ? (
-                  <p className="side-empty">{t("sidebar.noThreads")}</p>
-                ) : null}
-                {projectThreads.map((thread) => {
-                  const active = thread.id === activeThreadId
-                  const status = threadStatus[thread.id] ?? "idle"
-                  return (
-                    <Button
-                      variant="plain"
-                      key={thread.id}
-                      className={active ? "sess is-active" : "sess"}
-                      type="button"
-                      aria-current={active ? "page" : undefined}
-                      data-status={status}
-                      onClick={() => onOpenThread(thread.id)}
-                    >
-                      <span className="sess-dot" data-status={status} />
-                      <span className="sess-provider">{providerMark(thread)}</span>
-                      <span className="sess-title truncate">{thread.title}</span>
-                      <time>{formatThreadTime(thread.updatedAt, locale)}</time>
-                    </Button>
-                  )
-                })}
-              </div>
-            ) : null}
-          </div>
-        )
-      })}
+          )
+        })
+      )}
     </>
   )
 }

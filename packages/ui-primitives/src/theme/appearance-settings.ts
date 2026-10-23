@@ -60,7 +60,7 @@ export const defaultAppearance: AppearanceSettings = {
   glass: 60,
   contrast: 45,
   uiSize: 13,
-  contentSize: 13.5,
+  contentSize: 14,
   codeSize: 11.5,
   motion: "system",
   uiWeight: "regular",

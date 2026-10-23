@@ -6,8 +6,8 @@ import type { RpcClient } from "./rpc-client"
 export function createCommands(client: RpcClient) {
   return {
     listProjects: () => client.call("project.list", {}) as Promise<Project[]>,
-    addProject: (rootPath: string) =>
-      client.call("project.add", { rootPath }) as Promise<Project>,
+    addProject: (rootPath: string, name?: string) =>
+      client.call("project.add", name ? { rootPath, name } : { rootPath }) as Promise<Project>,
     listThreads: (projectId?: string) =>
       client.call("thread.list", { projectId }) as Promise<Thread[]>,
     createThread: (projectId: string, title: string, providerId: string) =>

@@ -18,10 +18,7 @@ describe("host kernel", () => {
         "    disabled: true",
       ].join("\n"),
     )
-    await writeFile(
-      join(dir, "fixture-plugin.mjs"),
-      "export function apply() {}\n",
-    )
+    await writeFile(join(dir, "fixture-plugin.mjs"), "export function apply() {}\n")
 
     const ctx = await createHostApp({ profileDir: dir, profileName: "desktop" })
     const config = dumpConfig(ctx)

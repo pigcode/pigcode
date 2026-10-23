@@ -3,7 +3,7 @@ import type { Context } from "cordis"
 import { randomUUID } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { createRequire } from "node:module"
-import { activeWorktreePath } from "./worktrees"
+import { threadCwd } from "./worktrees"
 
 /** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
 export interface PtyLike {
@@ -151,15 +151,10 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
 
 apply.inject = inject
 
-/** 解析终端 cwd：优先活动 worktree，否则项目根；realpath 消除符号链接。 */
+/** 解析终端 cwd：与 agent 相同的线程工作目录；realpath 消除符号链接。 */
 async function resolveTerminalCwd(ctx: Context, threadId: string): Promise<string> {
-  const thread = ctx.threads.get(threadId)
-  if (!thread) throw new Error(`thread not found: ${threadId}`)
-  const project = ctx.projects.list().find((item) => item.id === thread.projectId)
-  if (!project) throw new Error(`project not found: ${thread.projectId}`)
-
   // cwd 只来自数据库中的项目根或服务创建的 worktree，不接受用户传入的相对路径。
-  const cwd = activeWorktreePath(ctx.storage.db, threadId) ?? project.rootPath
+  const cwd = threadCwd(ctx, threadId)
   let resolved: string
   try {
     resolved = await realpath(cwd)

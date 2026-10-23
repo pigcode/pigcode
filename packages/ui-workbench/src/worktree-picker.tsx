@@ -67,12 +67,7 @@ export function WorktreePicker({
             </option>
           ))}
         </select>
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={disabled}
-          onClick={() => void run(onCreate)}
-        >
+        <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void run(onCreate)}>
           新建
         </Button>
         {activePath ? (

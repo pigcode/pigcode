@@ -1,0 +1,244 @@
+/* ─── 线程头标签栏：主会话与子代理 ───────────────────────── */
+.thread-tabs {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 2px;
+  min-width: 0;
+  max-width: 70%;
+}
+.thread-tab-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.thread-tab-list::-webkit-scrollbar {
+  display: none;
+}
+.thread-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 26px;
+  border-radius: var(--r-md);
+  color: var(--muted);
+}
+.thread-tab:hover {
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.thread-tab[data-active] {
+  background: var(--active);
+  color: var(--fg);
+}
+.thread-tab[data-kind="main"] {
+  flex-shrink: 0;
+  max-width: 320px;
+}
+.thread-tab:not([data-kind="main"]) {
+  max-width: 220px;
+}
+.thread-tab-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 9px;
+  border-radius: inherit;
+  color: inherit;
+  font-size: var(--fs-md);
+  outline: none;
+}
+.thread-tab-label:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.thread-tab-title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* 标题放不下时在右缘渐隐，和侧栏标题一致 */
+.thread-tab-title[data-overflow] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+}
+.thread-tab-title.title-text {
+  color: inherit;
+}
+.thread-tab-icon {
+  flex: none;
+  color: var(--accent-text);
+}
+.thread-tab .dot-matrix {
+  color: var(--accent-text);
+}
+.thread-tab-wait {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.thread-tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  margin-left: -4px;
+  flex: none;
+  border-radius: var(--r-sm);
+  color: var(--faint);
+  opacity: 0;
+}
+.thread-tab:hover .thread-tab-close,
+.thread-tab[data-active] .thread-tab-close,
+.thread-tab-close:focus-visible {
+  opacity: 1;
+}
+.thread-tab-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.thread-tab-add {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--r-md);
+  color: var(--muted);
+}
+.thread-tab-add:hover,
+.thread-tab-add[data-popup-open] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.thread-tab-menu {
+  min-width: 220px;
+}
+.thread-tab-menu .menu-note {
+  max-width: 240px;
+  padding: 6px 8px 4px;
+  border-top: var(--hair) solid var(--divider);
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+
+/* ─── 派生子代理的只读视图：和主时间线同样的工作区与工具行 ─────── */
+.subagent-view {
+  gap: 20px;
+  padding: 24px 16px 20px;
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+}
+@container conversation (min-width: 448px) {
+  .subagent-view {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}
+.subagent-view-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--cv-hairline);
+}
+.subagent-view-head .subagent-icon {
+  margin-top: 1px;
+}
+.subagent-view-title {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  gap: 4px;
+  min-width: 0;
+}
+.subagent-view-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  font-weight: 500;
+}
+.subagent-view-model {
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+  font-weight: 400;
+}
+.subagent-view-task {
+  color: var(--cv-subtle);
+  line-height: 1.6;
+}
+.subagent-view-task-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.subagent-view-task[data-clamped] .subagent-view-task-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+.subagent-view-more {
+  margin-top: 2px;
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+}
+.subagent-view-more:hover {
+  color: var(--fg);
+}
+.subagent-view-head .subagent-status:has(.dot-matrix)::before {
+  display: none;
+}
+.subagent-view-empty {
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+}
+.subagent-view-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.subagent-view-label {
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+}
+.subagent-readonly {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--chat-col);
+  min-height: 44px;
+  margin: 0 auto;
+  padding: 0 8px 0 14px;
+  border-radius: var(--r-lg);
+  background: var(--field);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.subagent-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-md);
+  color: var(--fg-2);
+}
+.subagent-back:hover {
+  background: var(--hover);
+  color: var(--fg);
+}

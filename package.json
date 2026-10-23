@@ -4,19 +4,20 @@
   "type": "module",
   "packageManager": "pnpm@10.28.2",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "build": "pnpm -r --if-present build",
+    "build:host": "node scripts/build-host.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --check .",
-    "typecheck": "pnpm -r --if-present typecheck",
-    "real:claude": "node scripts/real-claude-smoke.mjs",
-    "real:codex": "node scripts/real-codex-smoke.mjs",
-    "real:codex:multi": "node scripts/real-codex-multi.mjs",
-    "create-plugin": "node scripts/create-plugin.mjs"
+    "typecheck": "pnpm -r --if-present typecheck && tsc -p tsconfig.json",
+    "real:claude": "node scripts/real-smoke.ts claude",
+    "real:codex": "node scripts/real-smoke.ts codex",
+    "real:codex:multi": "node scripts/real-smoke.ts codex-multi",
+    "create-plugin": "node scripts/create-plugin.ts"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.14",
@@ -25,7 +26,9 @@
     "@testing-library/user-event": "14.6.1",
     "@types/node": "24.10.1",
     "@vitejs/plugin-react": "5.1.0",
+    "esbuild": "^0.28.2",
     "eslint": "9.39.5",
+    "jiti": "2.7.0",
     "jsdom": "26.1.0",
     "prettier": "3.9.10",
     "tailwindcss": "4.1.14",

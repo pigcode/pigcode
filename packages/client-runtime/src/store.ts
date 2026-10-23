@@ -11,6 +11,10 @@ export type ThreadViewStatus =
 export interface ThreadViewState {
   events: ThreadEvent[]
   streamingText: string
+  /** 运行中命令已经流出的输出，按工具调用 id；命令结束后由完整输出取代。 */
+  liveOutput: Readonly<Record<string, string>>
+  /** 正在流出的思考过程；思考结束（reasoning.completed）后由持久事件取代。 */
+  liveReasoning: string
   status: ThreadViewStatus
   pendingApprovals: number
   lastError: string | null
@@ -32,8 +36,6 @@ export interface AppState {
   reconnected: boolean
   /** 当前线程 provider 的能力描述；尚未加载时为 null。 */
   providerCapabilities: ProviderCapabilities | null
-  /** 当前 provider 可选的模型 id 列表；未知时为空。 */
-  providerModels: string[]
   /** 插件启停后递增，通知依赖 provider 列表的界面重新拉取。 */
   providerRevision: number
   /** 按 threadId 索引的线程视图状态。 */
@@ -47,10 +49,29 @@ function emptyThreadState(): ThreadViewState {
   return {
     events: [],
     streamingText: "",
+    liveOutput: {},
+    liveReasoning: "",
     status: "idle",
     pendingApprovals: 0,
     lastError: null,
   }
+}
+
+const NO_OUTPUT: Readonly<Record<string, string>> = {}
+
+/** 命令结束或 run 结束后丢掉对应的实时输出。 */
+function liveOutputAfter(
+  previous: Readonly<Record<string, string>>,
+  event: ThreadEvent,
+): Readonly<Record<string, string>> {
+  if (RUN_END_EVENTS.has(event.type)) return NO_OUTPUT
+  if (event.type !== "tool.completed") return previous
+  const payload = event.payload as { toolCallId?: unknown; id?: unknown } | null
+  const id = typeof payload?.toolCallId === "string" ? payload.toolCallId : payload?.id
+  if (typeof id !== "string" || !(id in previous)) return previous
+  const next = { ...previous }
+  delete next[id]
+  return next
 }
 
 /** 事件类型到线程状态的映射；未知事件保持原状态。 */
@@ -59,6 +80,9 @@ const STATUS_AFTER_EVENT: Record<string, ThreadViewStatus> = {
   "run.started": "running",
   "approval.requested": "waiting-approval",
   "approval.resolved": "running",
+  // agent 的提问和审批一样要等用户处理。
+  "question.requested": "waiting-approval",
+  "question.answered": "running",
   "run.completed": "completed",
   "run.failed": "failed",
   "run.interrupted": "interrupted",
@@ -67,6 +91,13 @@ const STATUS_AFTER_EVENT: Record<string, ThreadViewStatus> = {
 /** 进入终态后，迟到的审批事件不能再把状态改回运行中。 */
 const TERMINAL_STATUSES = new Set<ThreadViewStatus>(["completed", "failed", "interrupted"])
 
+/** run 的终态事件；之后不会再有属于这个 run 的增量。 */
+const RUN_END_EVENTS = new Set<ThreadEvent["type"]>([
+  "run.completed",
+  "run.failed",
+  "run.interrupted",
+])
+
 /** 子 agent 的完成消息带有 parentToolUseId，不能清空主线程的流式文本。 */
 function isSubagentMessage(event: ThreadEvent): boolean {
   if (typeof event.payload !== "object" || event.payload === null) return false
@@ -74,11 +105,36 @@ function isSubagentMessage(event: ThreadEvent): boolean {
   return typeof parent === "string" && parent.length > 0
 }
 
-/** 从 thread.updated 的 payload 中读取标题；没有标题时返回 null。 */
-function titleFromEvent(payload: unknown): string | null {
+/** 权限模式的合法值；thread.updated 里的未知值忽略。 */
+const PERMISSION_MODES = new Set<string>([
+  "read-only",
+  "workspace-write",
+  "danger-full-access",
+  "plan",
+])
+
+/**
+ * 从 thread.updated 的 payload 中读出线程字段的变化：标题、权限模式、切换后的 provider 与模型。
+ * 没有可用字段时返回 null。
+ */
+function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
   if (typeof payload !== "object" || payload === null) return null
-  const title = (payload as { title?: unknown }).title
-  return typeof title === "string" && title.trim().length > 0 ? title : null
+  const value = payload as {
+    title?: unknown
+    permissionMode?: unknown
+    providerId?: unknown
+    modelId?: unknown
+  }
+  const patch: Partial<Thread> = {}
+  if (typeof value.title === "string" && value.title.trim().length > 0) patch.title = value.title
+  if (typeof value.permissionMode === "string" && PERMISSION_MODES.has(value.permissionMode)) {
+    patch.permissionMode = value.permissionMode as Thread["permissionMode"]
+  }
+  if (typeof value.providerId === "string" && value.providerId.length > 0) {
+    patch.lastProviderId = value.providerId
+    patch.lastModelId = typeof value.modelId === "string" ? value.modelId : null
+  }
+  return Object.keys(patch).length > 0 ? patch : null
 }
 
 /** 从事件 payload 中提取可展示的错误文本。 */
@@ -108,16 +164,67 @@ const initialState: AppState = {
   error: null,
   reconnected: false,
   providerCapabilities: null,
-  providerModels: [],
   providerRevision: 0,
   threadStates: {},
   openThreadIds: [],
+}
+
+/** 应用一条事件后的线程状态（不含事件数组本身）；endsStream 表示这条事件结束了流式文本。 */
+function applyEvent(
+  previous: ThreadViewState,
+  event: ThreadEvent,
+): { state: ThreadViewState; endsStream: boolean } {
+  const mapped = STATUS_AFTER_EVENT[event.type]
+  const late =
+    (event.type === "approval.resolved" || event.type === "question.answered") &&
+    TERMINAL_STATUSES.has(previous.status)
+  const status = mapped && !late ? mapped : previous.status
+  // 主线程的完成消息或 run 终态都会结束流式文本；中断时 Host 已把半截回复落成消息。
+  const endsStream =
+    (event.type === "message.completed" && !isSubagentMessage(event)) ||
+    RUN_END_EVENTS.has(event.type)
+  // 思考落成事件、开始回答或调用工具后，实时的思考文字都已经有了持久的去处。
+  const endsReasoning =
+    endsStream ||
+    ((event.type === "reasoning.completed" || event.type === "tool.started") &&
+      !isSubagentMessage(event))
+  return {
+    endsStream,
+    state: {
+      ...previous,
+      streamingText: endsStream ? "" : previous.streamingText,
+      liveOutput: liveOutputAfter(previous.liveOutput, event),
+      liveReasoning: endsReasoning ? "" : previous.liveReasoning,
+      status,
+      pendingApprovals: pendingApprovalsAfter(previous, event),
+      lastError:
+        event.type === "run.failed"
+          ? (errorFromPayload(event.payload) ?? previous.lastError)
+          : previous.lastError,
+    },
+  }
+}
+
+/** 下一帧执行；没有 requestAnimationFrame 的环境（测试、Node）退回 16ms 定时器。 */
+function nextFrame(callback: () => void): void {
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => callback())
+  else setTimeout(callback, 16)
 }
 
 /** 不可变状态容器；每次变更都替换快照并通知订阅者。 */
 export class AppStore {
   private state: AppState = initialState
   private readonly listeners = new Set<() => void>()
+  private readonly pendingDeltas = new Map<string, string>()
+  private readonly pendingOutput = new Map<string, Map<string, string>>()
+  private readonly pendingReasoning = new Map<string, string>()
+  private flushScheduled = false
+  private readonly schedule: (callback: () => void) => void
+
+  /** schedule 决定排队的流式文本何时写入；默认下一帧。 */
+  constructor(options: { schedule?: (callback: () => void) => void } = {}) {
+    this.schedule = options.schedule ?? nextFrame
+  }
 
   getSnapshot = (): AppState => this.state
 
@@ -144,6 +251,7 @@ export class AppStore {
 
   /** 关闭线程：删除状态；若关闭的是活动线程，则激活相邻线程。 */
   closeThread(threadId: string): void {
+    this.flushDeltas()
     const index = this.state.openThreadIds.indexOf(threadId)
     const threadStates = { ...this.state.threadStates }
     delete threadStates[threadId]
@@ -167,6 +275,7 @@ export class AppStore {
 
   /** 切换活动线程，并同步活动镜像。 */
   setActiveThread(threadId: string): void {
+    this.flushDeltas()
     this.state = {
       ...this.state,
       activeThreadId: threadId,
@@ -190,47 +299,70 @@ export class AppStore {
 
   /** 按 threadId 写入事件，并在活动线程时同步旧的顶层镜像。 */
   addEvent(event: ThreadEvent): void {
-    const previous = this.state.threadStates[event.threadId] ?? emptyThreadState()
-    const events = previous.events.some((item) => item.seq === event.seq)
-      ? previous.events
-      : [...previous.events, event]
-    const mapped = STATUS_AFTER_EVENT[event.type]
-    const status =
-      mapped && !(event.type === "approval.resolved" && TERMINAL_STATUSES.has(previous.status))
-        ? mapped
-        : previous.status
-    const subagent = isSubagentMessage(event)
-    const next: ThreadViewState = {
-      ...previous,
-      events,
-      streamingText: event.type === "message.completed" && !subagent ? "" : previous.streamingText,
-      status,
-      pendingApprovals: pendingApprovalsAfter(previous, event),
-      lastError:
-        event.type === "run.failed"
-          ? (errorFromPayload(event.payload) ?? previous.lastError)
-          : previous.lastError,
+    this.addEvents([event])
+  }
+
+  /**
+   * 批量写入事件：订阅回放一次给出整段历史，逐条写入会把事件数组复制 n 次、通知 n 次。
+   * 这里每个线程只复制一次数组，所有线程处理完再通知一次。已有的 seq 跳过。
+   */
+  addEvents(events: readonly ThreadEvent[]): void {
+    if (events.length === 0) return
+    this.flushDeltas()
+    const byThread = new Map<string, ThreadEvent[]>()
+    for (const event of events) {
+      const list = byThread.get(event.threadId)
+      if (list) list.push(event)
+      else byThread.set(event.threadId, [event])
     }
-    const threadStates = { ...this.state.threadStates, [event.threadId]: next }
-    const title = event.type === "thread.updated" ? titleFromEvent(event.payload) : null
-    const threads = title
-      ? this.state.threads.map((thread) =>
-          thread.id === event.threadId
-            ? { ...thread, title, updatedAt: event.createdAt }
-            : thread,
-        )
-      : this.state.threads
-    const mirrorActive =
-      this.state.activeThreadId === null || this.state.activeThreadId === event.threadId
+    const threadStates = { ...this.state.threadStates }
+    let threads = this.state.threads
+    let mirroredEvents = this.state.events
+    let mirroredStream = this.state.streamingText
+    for (const [threadId, incoming] of byThread) {
+      let state = threadStates[threadId] ?? emptyThreadState()
+      const list = state.events.slice()
+      let lastSeq = list.at(-1)?.seq ?? -1
+      let known: Set<number> | null = null
+      let endsStream = false
+      let added = 0
+      for (const event of incoming) {
+        // 事件按 seq 递增到达；只有回退的 seq 才需要查重。
+        if (event.seq <= lastSeq) {
+          known ??= new Set(list.map((item) => item.seq))
+          if (known.has(event.seq)) continue
+          known.add(event.seq)
+        } else {
+          lastSeq = event.seq
+        }
+        list.push(event)
+        added += 1
+        const result = applyEvent(state, event)
+        state = result.state
+        if (result.endsStream) endsStream = true
+        const patch = event.type === "thread.updated" ? threadPatchFromEvent(event.payload) : null
+        if (patch) {
+          threads = threads.map((thread) =>
+            thread.id === threadId ? { ...thread, ...patch, updatedAt: event.createdAt } : thread,
+          )
+        }
+      }
+      if (added === 0) continue
+      state = { ...state, events: list }
+      threadStates[threadId] = state
+      const mirrorActive =
+        this.state.activeThreadId === null || this.state.activeThreadId === threadId
+      if (mirrorActive) {
+        mirroredEvents = list
+        if (endsStream) mirroredStream = ""
+      }
+    }
     this.state = {
       ...this.state,
       threads,
       threadStates,
-      events: mirrorActive ? events : this.state.events,
-      streamingText:
-        mirrorActive && event.type === "message.completed" && !subagent
-          ? ""
-          : this.state.streamingText,
+      events: mirroredEvents,
+      streamingText: mirroredStream,
     }
     this.emit()
   }
@@ -240,19 +372,85 @@ export class AppStore {
    * 避免后台 run 的文本串到当前活动线程。
    */
   appendDelta(threadId: string, text: string): void {
-    const previous = this.state.threadStates[threadId]
-    if (!previous) return
-    const threadStates = {
-      ...this.state.threadStates,
-      [threadId]: { ...previous, streamingText: previous.streamingText + text },
+    this.flushDeltas()
+    this.pendingDeltas.set(threadId, text)
+    this.flushDeltas()
+  }
+
+  /**
+   * 排队一段流式文本，下一帧合并写入。模型每秒可能推几十个增量，逐个写入会让整个界面
+   * 每个增量都重新渲染一次；合并后每帧最多渲染一次。新事件到达前会先写入已排队的文本。
+   */
+  queueDelta(threadId: string, text: string): void {
+    this.pendingDeltas.set(threadId, (this.pendingDeltas.get(threadId) ?? "") + text)
+    this.scheduleFlush()
+  }
+
+  /** 排队一段命令输出，和流式文本一起按帧写入。 */
+  queueToolOutput(threadId: string, toolCallId: string, delta: string): void {
+    const byTool = this.pendingOutput.get(threadId) ?? new Map<string, string>()
+    byTool.set(toolCallId, (byTool.get(toolCallId) ?? "") + delta)
+    this.pendingOutput.set(threadId, byTool)
+    this.scheduleFlush()
+  }
+
+  /** 排队一段思考过程，和流式文本一起按帧写入。 */
+  queueReasoning(threadId: string, text: string): void {
+    this.pendingReasoning.set(threadId, (this.pendingReasoning.get(threadId) ?? "") + text)
+    this.scheduleFlush()
+  }
+
+  /** 把排队的流式文本、命令输出与思考过程一次写入。 */
+  flushDeltas(): void {
+    this.flushScheduled = false
+    if (
+      this.pendingDeltas.size === 0 &&
+      this.pendingOutput.size === 0 &&
+      this.pendingReasoning.size === 0
+    ) {
+      return
     }
-    const mirrorActive = this.state.activeThreadId === threadId
-    this.state = {
-      ...this.state,
-      threadStates,
-      streamingText: mirrorActive ? this.state.streamingText + text : this.state.streamingText,
+    const pending = [...this.pendingDeltas]
+    const output = [...this.pendingOutput]
+    const reasoning = [...this.pendingReasoning]
+    this.pendingDeltas.clear()
+    this.pendingOutput.clear()
+    this.pendingReasoning.clear()
+    const threadStates = { ...this.state.threadStates }
+    let streamingText = this.state.streamingText
+    let changed = false
+    for (const [threadId, text] of pending) {
+      const previous = threadStates[threadId]
+      if (!previous) continue
+      threadStates[threadId] = { ...previous, streamingText: previous.streamingText + text }
+      if (this.state.activeThreadId === threadId) streamingText += text
+      changed = true
     }
+    for (const [threadId, byTool] of output) {
+      const previous = threadStates[threadId]
+      if (!previous) continue
+      const liveOutput = { ...previous.liveOutput }
+      for (const [toolCallId, delta] of byTool) {
+        liveOutput[toolCallId] = (liveOutput[toolCallId] ?? "") + delta
+      }
+      threadStates[threadId] = { ...previous, liveOutput }
+      changed = true
+    }
+    for (const [threadId, text] of reasoning) {
+      const previous = threadStates[threadId]
+      if (!previous) continue
+      threadStates[threadId] = { ...previous, liveReasoning: previous.liveReasoning + text }
+      changed = true
+    }
+    if (!changed) return
+    this.state = { ...this.state, threadStates, streamingText }
     this.emit()
+  }
+
+  private scheduleFlush(): void {
+    if (this.flushScheduled) return
+    this.flushScheduled = true
+    this.schedule(() => this.flushDeltas())
   }
 
   /** 写入单个线程状态并通知订阅者。 */

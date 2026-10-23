@@ -1,3 +1,12 @@
+import { devNull } from "node:os"
+
+/**
+ * 测试里的 git 子进程不读本机的全局与系统配置：开发机上的提交签名、fsmonitor 等设置
+ * 会让并行跑的 git 测试卡住，结果也无法复现。测试仓库各自写入 user.name/email。
+ */
+process.env.GIT_CONFIG_GLOBAL = devNull
+process.env.GIT_CONFIG_NOSYSTEM = "1"
+
 /**
  * jsdom 不实现布局，ProseMirror 在输入后会读取 Range 的几何信息。
  * 返回空矩形即可，测试只关心文本与事件。

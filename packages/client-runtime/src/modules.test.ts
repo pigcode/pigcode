@@ -1,6 +1,21 @@
 /** 验证 boot graph 加载、apply 与卸载。 */
+import type { ClientPluginContext, ClientTheme, ClientUiKit } from "@pigcode/plugin-sdk"
 import { describe, expect, it, vi } from "vitest"
 import { loadClientPlugins } from "./modules"
+
+/** 什么也不做的插件上下文。 */
+function stubContext(): ClientPluginContext {
+  const fixed = <T>(value: T) => ({ get: () => value, subscribe: () => () => {} })
+  return {
+    slots: { register: () => () => {} },
+    host: { call: async () => undefined },
+    registerPanel: () => () => {},
+    registerSurface: () => () => {},
+    ui: {} as ClientUiKit,
+    theme: fixed<ClientTheme>("light"),
+    locale: fixed("zh-CN"),
+  }
+}
 
 describe("loadClientPlugins", () => {
   it("applies and disposes a client plugin", async () => {
@@ -17,11 +32,7 @@ describe("loadClientPlugins", () => {
       load,
       context: (entry) => {
         contextIds.push(entry.id)
-        return {
-          slots: { register: () => () => {} },
-          host: { call: async () => undefined },
-          registerPanel: () => () => {},
-        }
+        return stubContext()
       },
     })
     expect(applied).toHaveBeenCalledOnce()
@@ -45,11 +56,7 @@ describe("loadClientPlugins", () => {
           return () => calls.push(`dispose:${url}`)
         },
       }),
-      context: () => ({
-        slots: { register: () => () => {} },
-        host: { call: async () => undefined },
-        registerPanel: () => () => {},
-      }),
+      context: stubContext,
     })
 
     result.dispose()

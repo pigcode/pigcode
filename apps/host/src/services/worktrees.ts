@@ -19,8 +19,16 @@ export interface Worktree {
   branch: string | null
 }
 
+/** 线程的 worktree 列表与当前活动的那个。 */
+export interface WorktreeList {
+  worktrees: Worktree[]
+  activePath: string | null
+}
+
 /** worktree 服务入口。 */
 export interface WorktreesService {
+  /** 线程创建过、目录还在的 worktree；重开应用后界面据此恢复选择。 */
+  list(threadId: string): Promise<WorktreeList>
   create(threadId: string): Promise<Worktree>
   switch(threadId: string, path: string): Promise<Worktree>
   remove(threadId: string): Promise<void>
@@ -52,10 +60,22 @@ interface WorktreeRow {
 /** 注册 worktree 服务；路径始终由项目根推导，不接受调用方传入的目标目录。 */
 export const apply: WorktreesPlugin = (ctx) => {
   const service: WorktreesService = {
+    async list(threadId) {
+      const rows = ctx.storage.db
+        .prepare(
+          `SELECT id, path, branch FROM worktrees WHERE thread_id = ? ORDER BY created_at, rowid`,
+        )
+        .all(threadId) as WorktreeRow[]
+      const existing: Worktree[] = []
+      for (const row of rows) {
+        if (await pathExists(row.path)) existing.push(toWorktree(row))
+      }
+      return { worktrees: existing, activePath: activeRow(ctx.storage.db, threadId)?.path ?? null }
+    },
     async create(threadId) {
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
-      const project = ctx.projects.list().find((item) => item.id === thread.projectId)
+      const project = ctx.projects.get(thread.projectId)
       if (!project) throw new Error(`project not found: ${thread.projectId}`)
 
       // 重复 create 时复用仍然存在的活动 worktree，避免同一线程堆积目录。
@@ -105,7 +125,7 @@ export const apply: WorktreesPlugin = (ctx) => {
       if (!active) throw new Error(`worktree not found: ${threadId}`)
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
-      const project = ctx.projects.list().find((item) => item.id === thread.projectId)
+      const project = ctx.projects.get(thread.projectId)
       if (!project) throw new Error(`project not found: ${thread.projectId}`)
 
       if (await pathExists(active.path)) {
@@ -128,6 +148,27 @@ apply.inject = inject
 /** 读取线程当前的活动 worktree 路径；供 provider cwd 解析复用同一查询。 */
 export function activeWorktreePath(db: PigcodeDatabase, threadId: string): string | null {
   return activeRow(db, threadId)?.path ?? null
+}
+
+/**
+ * 线程的工作目录：自己的活动 worktree > 主会话的活动 worktree（子代理与主会话共用目录）> 项目根目录。
+ * agent、终端、文件树、Git 与 PR 都用它，保证它们看到的是同一个目录。
+ */
+export function threadCwd(
+  ctx: Pick<Context, "threads" | "projects" | "storage">,
+  threadId: string,
+): string {
+  const thread = ctx.threads.get(threadId)
+  if (!thread) throw new Error(`thread not found: ${threadId}`)
+  const own = activeWorktreePath(ctx.storage.db, threadId)
+  if (own) return own
+  const parent = thread.parentThreadId
+    ? activeWorktreePath(ctx.storage.db, thread.parentThreadId)
+    : null
+  if (parent) return parent
+  const project = ctx.projects.get(thread.projectId)
+  if (!project) throw new Error(`project not found: ${thread.projectId}`)
+  return project.rootPath
 }
 
 /** 创建 worktree；移除后分支仍存在时直接复用以避免 `-b` 冲突。 */

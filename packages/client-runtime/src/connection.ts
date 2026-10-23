@@ -1,5 +1,10 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
-import type { ProviderEvent, TerminalOutput, ThreadEvent } from "@pigcode/contracts"
+import type {
+  ProviderEvent,
+  ReasoningEffort,
+  TerminalOutput,
+  ThreadEvent,
+} from "@pigcode/contracts"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
 
@@ -9,6 +14,8 @@ export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "of
 /** 连接层向上层转发的回调。 */
 export interface ConnectionHandlers {
   onEvent(event: ThreadEvent): void
+  /** 订阅回放的一整段历史；提供时一次交出，不提供时逐条调用 onEvent。 */
+  onEvents?(events: ThreadEvent[]): void
   onDelta(event: { threadId: string; event: ProviderEvent }): void
   onStatus(status: ConnectionStatus): void
 }
@@ -51,10 +58,18 @@ export class Connection {
     if (this.client) await this.client.call("thread.unsubscribe", { threadId })
   }
 
-  /** 在指定线程发送用户消息。 */
-  async startRun(threadId: string, text: string): Promise<void> {
+  /** 在指定线程发送用户消息；effort 是本次 run 的思考深度。 */
+  async startRun(
+    threadId: string,
+    text: string,
+    options: { effort?: ReasoningEffort } = {},
+  ): Promise<void> {
     if (!this.client) throw new Error("host not connected")
-    await this.client.call("run.start", { threadId, text })
+    await this.client.call("run.start", {
+      threadId,
+      text,
+      ...(options.effort ? { effort: options.effort } : {}),
+    })
   }
 
   /** 透传一次 RPC 调用，供项目/线程/插件命令使用。 */
@@ -78,7 +93,8 @@ export class Connection {
       threadId,
       cursor,
     })) as SubscribeResult
-    for (const event of result.events) this.handlers.onEvent(event)
+    if (this.handlers.onEvents) this.handlers.onEvents(result.events)
+    else for (const event of result.events) this.handlers.onEvent(event)
     const lastSeq = result.events.reduce((max, event) => Math.max(max, event.seq), cursor)
     const nextCursor = Math.max(cursor, result.cursor ?? 0, lastSeq)
     this.subscriptions.set(threadId, nextCursor)

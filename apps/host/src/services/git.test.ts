@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import { afterEach, describe, expect, it } from "vitest"
-import { capture, diff, restore, status } from "./git"
+import { WORKTREE, capture, diff, restore, status } from "./git"
 
 const exec = promisify(execFile)
 const roots: string[] = []
@@ -87,6 +87,27 @@ describe("git service", () => {
     expect(patch).toContain("-one")
     expect(patch).toContain("+two")
     expect(await diff(root, checkpoint.commitSha, checkpoint.commitSha)).toBe("")
+  })
+
+  it("diffs the working tree, untracked files included, against a commit", async () => {
+    const root = await repo()
+    expect(await diff(root, "HEAD", WORKTREE)).toBe("")
+    await writeFile(join(root, "a.txt"), "two\n")
+    await writeFile(join(root, "b.txt"), "new file\n")
+
+    const patch = await diff(root, "HEAD", WORKTREE)
+    expect(patch).toContain("diff --git a/a.txt b/a.txt")
+    expect(patch).toContain("+two")
+    expect(patch).toContain("new file mode")
+    expect(patch).toContain("+new file")
+  })
+
+  it("diffs a repository without commits against the empty tree", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pigcode-git-empty-"))
+    roots.push(root)
+    await exec("git", ["init", "-q"], { cwd: root })
+    await writeFile(join(root, "first.txt"), "hello\n")
+    expect(await diff(root, "HEAD", WORKTREE)).toContain("+hello")
   })
 
   it("removes files created after the checkpoint", async () => {

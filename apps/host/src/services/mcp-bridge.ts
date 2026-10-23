@@ -1,9 +1,14 @@
-/** 线程级 MCP 桥：插件工具注册、Claude SDK server、Unix socket 与 Codex stdio 配置。 */
-import {
-  createSdkMcpServer,
-  type McpSdkServerConfigWithInstance,
-} from "@anthropic-ai/claude-agent-sdk"
-import type { McpBridgeApi, McpToolDefinition, McpToolHandler } from "@pigcode/plugin-sdk"
+/**
+ * 线程级 MCP 桥：插件工具注册、按线程调用、Unix socket（Windows 命名管道）与 stdio 桥的启动命令。
+ * 桥本身不关心是哪个 agent：会话拿到工具列表与调用入口，由 driver 接到自己 CLI 的 MCP 机制上。
+ */
+import type {
+  McpBridgeApi,
+  McpStdioServer,
+  McpToolDefinition,
+  McpToolHandler,
+  SessionMcp,
+} from "@pigcode/plugin-sdk"
 import type { Context } from "cordis"
 import { randomUUID } from "node:crypto"
 import { rm } from "node:fs/promises"
@@ -11,8 +16,6 @@ import net from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { z } from "zod"
-import type { SessionMcp } from "../providers/driver"
 
 /** 已注册工具及其处理函数。 */
 interface RegisteredTool {
@@ -34,12 +37,10 @@ export interface McpBridgeService extends McpBridgeApi {
   callTool(threadId: string, name: string, input: unknown): Promise<unknown>
   /** 启动（或复用）本地 socket 服务。 */
   createSocketServer(): Promise<SocketServerHandle>
-  /** 生成 Claude Agent SDK 的进程内 MCP server；没有工具时返回 null。 */
-  claudeServer(threadId: string): McpSdkServerConfigWithInstance | null
-  /** 生成 Codex `config.mcp_servers` 片段；没有工具时返回 null。 */
-  codexConfig(threadId: string): Record<string, unknown> | null
-  /** 汇总一次会话需要的注入参数；只生成当前 provider 需要的部分。 */
-  sessionMcp(threadId: string, providerId: string): SessionMcp | undefined
+  /** stdio 桥的启动命令；子进程用其中的 token 在 hello 时绑定到线程。 */
+  stdioServer(threadId: string): McpStdioServer
+  /** 一次会话可用的插件工具；没有任何工具时返回 undefined，Host 不注入空配置。 */
+  sessionMcp(threadId: string): SessionMcp | undefined
 }
 
 declare module "cordis" {
@@ -114,56 +115,20 @@ export function apply(ctx: Context): void {
     return entry.handler(input, { threadId })
   }
 
-  /** 把插件工具转成 Claude SDK 的进程内 MCP server。 */
-  function claudeServer(threadId: string): McpSdkServerConfigWithInstance | null {
-    const definitions = listTools()
-    if (definitions.length === 0) return null
-    return createSdkMcpServer({
-      name: "pigcode",
-      version: "0.1.0",
-      tools: definitions.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: shapeFromJsonSchema(tool.inputSchema),
-        handler: async (input: unknown) => {
-          try {
-            const result = await callTool(threadId, tool.name, input)
-            return {
-              content: [{ type: "text" as const, text: JSON.stringify(result) ?? "null" }],
-            }
-          } catch (error) {
-            return {
-              content: [{ type: "text" as const, text: errorMessage(error) }],
-              isError: true,
-            }
-          }
-        },
-      })),
-    })
-  }
-
-  /** 为 Codex 生成 stdio server 配置；token 在 hello 时映射回线程。 */
-  function codexConfig(threadId: string): Record<string, unknown> | null {
-    if (listTools().length === 0) return null
+  /** stdio 桥的启动命令；token 在 hello 时映射回线程。 */
+  function stdioServer(threadId: string): McpStdioServer {
     let token = threadTokens.get(threadId)
     if (!token) {
       token = randomUUID()
       threadTokens.set(threadId, token)
       tokens.set(token, threadId)
     }
-    // 配置是同步返回的；socket 监听在后台启动，子进程连接时已就绪。
+    // 命令是同步返回的；socket 监听在后台启动，子进程连接时已就绪。
     void ensureSocketServer().catch(() => undefined)
     return {
-      mcp_servers: {
-        pigcode: {
-          command: "node",
-          args: [stdioBridgePath()],
-          env: {
-            PIGCODE_MCP_SOCKET: address,
-            PIGCODE_MCP_TOKEN: token,
-          },
-        },
-      },
+      command: "node",
+      args: [stdioBridgePath()],
+      env: { PIGCODE_MCP_SOCKET: address, PIGCODE_MCP_TOKEN: token },
     }
   }
 
@@ -233,7 +198,11 @@ export function apply(ctx: Context): void {
     })
   }
 
-  async function handleLine(socket: net.Socket, line: string, state: ConnectionState): Promise<void> {
+  async function handleLine(
+    socket: net.Socket,
+    line: string,
+    state: ConnectionState,
+  ): Promise<void> {
     const message = parseRecord(line)
     if (!message) {
       send(socket, { type: "error", message: "invalid JSON payload" })
@@ -293,21 +262,16 @@ export function apply(ctx: Context): void {
     listTools,
     callTool,
     createSocketServer: () => ensureSocketServer(),
-    claudeServer,
-    codexConfig,
-    sessionMcp(threadId, providerId) {
-      if (providerId === "claude") {
-        const claude = claudeServer(threadId)
-        return claude ? { claudeServer: claude } : undefined
+    stdioServer,
+    sessionMcp(threadId) {
+      // 工具表在会话创建时取一份快照；插件启停对下一次 run 生效。
+      const tools = listTools()
+      if (tools.length === 0) return undefined
+      return {
+        tools,
+        callTool: (name, input) => callTool(threadId, name, input),
+        stdioServer: () => stdioServer(threadId),
       }
-      if (providerId === "codex") {
-        const codex = codexConfig(threadId)
-        return codex ? { codexConfig: codex } : undefined
-      }
-      // 第三方 provider 由插件自行决定使用哪种注入格式；保留两边的兼容行为。
-      const claude = claudeServer(threadId)
-      const codex = codexConfig(threadId)
-      return claude || codex ? { claudeServer: claude, codexConfig: codex } : undefined
     },
   }
 
@@ -361,50 +325,4 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-/** 把工具声明的 JSON Schema 转成 SDK 需要的 zod raw shape。 */
-function shapeFromJsonSchema(schema: Record<string, unknown>): Record<string, z.ZodTypeAny> {
-  const properties = isRecord(schema.properties) ? schema.properties : {}
-  const required = new Set(
-    Array.isArray(schema.required)
-      ? schema.required.filter((value): value is string => typeof value === "string")
-      : [],
-  )
-  const shape: Record<string, z.ZodTypeAny> = {}
-  for (const [key, value] of Object.entries(properties)) {
-    let field = zodForSchema(value)
-    const description =
-      isRecord(value) && typeof value.description === "string" ? value.description : undefined
-    if (description) field = field.describe(description)
-    shape[key] = required.has(key) ? field : field.optional()
-  }
-  return shape
-}
-
-/** 支持 JSON Schema 的常用标量/数组/对象类型；未知类型退化为 unknown。 */
-function zodForSchema(schema: unknown): z.ZodTypeAny {
-  if (!isRecord(schema)) return z.unknown()
-  if (Array.isArray(schema.enum)) {
-    const values = schema.enum.filter((value): value is string => typeof value === "string")
-    if (values.length === schema.enum.length && values.length > 0) {
-      return z.enum(values as [string, ...string[]])
-    }
-  }
-  switch (schema.type) {
-    case "string":
-      return z.string()
-    case "number":
-      return z.number()
-    case "integer":
-      return z.number().int()
-    case "boolean":
-      return z.boolean()
-    case "array":
-      return z.array(zodForSchema(schema.items))
-    case "object":
-      return z.object(shapeFromJsonSchema(schema)).loose()
-    default:
-      return z.unknown()
-  }
 }

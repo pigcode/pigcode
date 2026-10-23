@@ -1,18 +1,12 @@
 /** Host 侧插件的稳定入口类型；插件不直接依赖 Cordis 内部实现。 */
 import type { ThreadEvent } from "@pigcode/contracts"
+import type { McpToolDefinition } from "./mcp"
 import type { ProviderPluginDriver } from "./provider"
 
 /** capability 插件可用的只读会话视图；Host 的 sessions 服务结构上满足该契约。 */
 export interface PluginSessions {
   /** 读取指定线程从 cursor 开始的事件；只读，不允许插件改写事件日志。 */
   read(threadId: string, cursor: number): readonly ThreadEvent[]
-}
-
-/** 插件通过 MCP 暴露给模型的工具定义；inputSchema 使用 JSON Schema。 */
-export interface McpToolDefinition {
-  name: string
-  description: string
-  inputSchema: Record<string, unknown>
 }
 
 /** 工具调用发生时的线程上下文；插件据此区分并行会话。 */

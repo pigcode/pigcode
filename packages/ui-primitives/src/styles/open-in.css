@@ -1,0 +1,63 @@
+/* ─── 线程头「用…打开」：左边用选中的应用打开，右边换应用 ──────── */
+.open-in-split {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  height: 28px;
+  margin-right: 2px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+}
+.open-in-main,
+.open-in-more {
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+  transition: background var(--t-fast);
+}
+.open-in-main {
+  width: 32px;
+}
+.open-in-more {
+  width: 20px;
+  border-left: var(--hair) solid var(--border-strong);
+  color: var(--muted);
+}
+.open-in-more .ic {
+  width: 13px;
+  height: 13px;
+}
+.open-in-main:hover,
+.open-in-more:hover,
+.open-in-more[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.app-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  object-fit: contain;
+}
+.app-icon.is-letter {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 650;
+}
+.app-icon.is-letter[data-kind="terminal"] {
+  background: var(--fg);
+  color: var(--surface-raised);
+}
+.open-in-menu {
+  min-width: 200px;
+}
+.open-in-item {
+  min-height: 32px;
+  gap: 10px;
+}

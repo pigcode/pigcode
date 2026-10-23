@@ -1,0 +1,566 @@
+/* ─── 文件资源管理器 ───────────────────────────────────────
+   参照 t3code：紧凑的行、淡化的忽略项、git 改动的颜色与字母、缩进参考线；只渲染可见的行。 */
+
+.files-surface,
+.workbench-files {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.fx {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  font-size: calc(var(--ui-scale) * 12.5px);
+}
+.fx-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 6px 0 12px;
+}
+.fx-compact .fx-head {
+  min-height: 28px;
+  padding: 4px 4px 0 6px;
+  justify-content: flex-end;
+}
+.fx-root {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.fx-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.fx-actions .icon-btn {
+  width: 24px;
+  height: 24px;
+}
+.fx-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 6px;
+  padding: 0 8px;
+  height: 28px;
+  border-radius: var(--r-md);
+  background: var(--field);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  color: var(--muted);
+}
+.fx-compact .fx-search {
+  margin: 2px 6px 4px;
+  height: 26px;
+}
+.fx-search:focus-within {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.fx-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+.fx-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.fx-search button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.fx-search button:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.fx-note,
+.fx-empty {
+  padding: 6px 12px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.fx-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: 0;
+  padding-bottom: 8px;
+}
+.fx-rows {
+  position: relative;
+  margin: 0 6px;
+}
+.fx-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-right: 8px;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.fx-row:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.fx-row[data-active] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.fx-scroll:focus-visible .fx-row[data-focused] {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.fx-row[data-ignored] {
+  opacity: 0.5;
+}
+.fx-row[data-git="modified"] .fx-label,
+.fx-row[data-git="modified"] .fx-git {
+  color: var(--warn-text);
+}
+.fx-row[data-git="added"] .fx-label,
+.fx-row[data-git="added"] .fx-git,
+.fx-row[data-git="untracked"] .fx-label,
+.fx-row[data-git="untracked"] .fx-git {
+  color: var(--ok-text);
+}
+.fx-row[data-git="deleted"] .fx-label,
+.fx-row[data-git="deleted"] .fx-git,
+.fx-row[data-git="conflict"] .fx-label,
+.fx-row[data-git="conflict"] .fx-git {
+  color: var(--bad-text);
+}
+.fx-row[data-git="renamed"] .fx-label,
+.fx-row[data-git="renamed"] .fx-git {
+  color: var(--info);
+}
+.fx-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.fx-twisty {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+}
+.fx-twisty .ic {
+  transition: transform var(--t-fast) var(--ease);
+}
+.fx-twisty[data-open] .ic:not(.spin) {
+  transform: rotate(90deg);
+}
+.fx-label {
+  flex: 1;
+  min-width: 0;
+}
+.fx-match {
+  background: none;
+  color: var(--accent-text);
+  font-weight: 650;
+}
+.fx-git {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.fx-git-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--warn);
+  opacity: 0.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-twisty .ic {
+    transition: none;
+  }
+}
+
+/* 文件图标的色调；深色主题下提亮一档。 */
+.file-icon {
+  flex: none;
+  --tone-l: 52%;
+  color: var(--muted);
+}
+[data-theme="dark"] .file-icon {
+  --tone-l: 74%;
+}
+.file-tone-folder {
+  color: oklch(var(--tone-l) 0.12 250);
+}
+.file-tone-ts,
+.file-tone-c,
+.file-tone-cs {
+  color: oklch(var(--tone-l) 0.14 255);
+}
+.file-tone-react,
+.file-tone-dart {
+  color: oklch(var(--tone-l) 0.12 215);
+}
+.file-tone-js,
+.file-tone-json {
+  color: oklch(calc(var(--tone-l) + 8%) 0.15 90);
+}
+.file-tone-npm,
+.file-tone-rb,
+.file-tone-rs,
+.file-tone-swift {
+  color: oklch(var(--tone-l) 0.17 30);
+}
+.file-tone-html,
+.file-tone-java,
+.file-tone-svelte,
+.file-tone-git {
+  color: oklch(var(--tone-l) 0.16 45);
+}
+.file-tone-css,
+.file-tone-php,
+.file-tone-agent {
+  color: oklch(var(--tone-l) 0.15 300);
+}
+.file-tone-py,
+.file-tone-lua {
+  color: oklch(var(--tone-l) 0.12 240);
+}
+.file-tone-go {
+  color: oklch(var(--tone-l) 0.12 205);
+}
+.file-tone-vue,
+.file-tone-shell,
+.file-tone-image,
+.file-tone-data {
+  color: oklch(var(--tone-l) 0.13 155);
+}
+.file-tone-config,
+.file-tone-env,
+.file-tone-media {
+  color: oklch(var(--tone-l) 0.11 75);
+}
+.file-tone-doc {
+  color: oklch(var(--tone-l) 0.08 250);
+}
+.file-tone-lock,
+.file-tone-archive,
+.file-tone-plain {
+  color: var(--muted);
+}
+
+/* ─── 文件标签：左侧可收起的文件树，右侧面包屑与编辑器 ─────────── */
+.file-surface {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.file-surface-aside {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: min(260px, 40%);
+  min-width: 190px;
+  border-right: var(--hair) solid var(--divider);
+}
+/* 窄的时候盖在编辑器上，像抽屉一样从左边出来。 */
+.file-surface[data-overlay] .file-surface-aside {
+  position: absolute;
+  top: 35px;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  width: min(280px, 86%);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop);
+  animation: file-aside-in 140ms var(--ease);
+}
+@keyframes file-aside-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .file-surface[data-overlay] .file-surface-aside {
+    animation: none;
+  }
+}
+.file-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.file-view-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 6px 0 4px;
+  border-bottom: var(--hair) solid var(--divider);
+}
+.file-view-head .icon-btn {
+  width: 26px;
+  height: 26px;
+}
+.file-crumbs {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.file-crumb-part {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--faint);
+}
+/* 目录先收缩成省略号，文件名保持完整；比整行还长时才截断。 */
+.file-crumb-part:last-child {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+.file-crumb {
+  padding: 2px 4px;
+  border-radius: 5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+button.file-crumb:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.file-crumb.is-current {
+  color: var(--fg);
+  font-weight: 550;
+}
+.file-view-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.file-dirty {
+  color: var(--warn-text);
+}
+.file-save {
+  flex: none;
+}
+.file-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+}
+.file-banner span {
+  flex: 1;
+  min-width: 160px;
+}
+.file-banner.is-info {
+  background: var(--panel);
+  color: var(--muted);
+}
+.file-view-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  background: var(--code-bg);
+}
+.file-view-body > .workbench-empty,
+.file-view-body > .workbench-error {
+  margin: 12px;
+}
+
+/* 编辑器：textarea 与高亮层的字体、行高、内边距必须完全一致，光标才能对齐。 */
+.code-scroll {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: calc(var(--fs-code) + 0.5px);
+  line-height: 20px;
+  font-variant-ligatures: none;
+  font-feature-settings:
+    "liga" 0,
+    "calt" 0;
+}
+.code-canvas {
+  position: relative;
+}
+.code-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: var(--code-gutter);
+  height: 100%;
+  background: var(--code-bg);
+  box-shadow: inset calc(-1 * var(--hair)) 0 0 var(--divider);
+}
+.code-gutter span {
+  position: absolute;
+  right: 12px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.code-layer {
+  position: absolute;
+  left: var(--code-gutter);
+  right: 0;
+  padding: 0 10px;
+  color: var(--fg);
+  pointer-events: none;
+}
+.code-line {
+  height: 20px;
+  white-space: pre;
+}
+.code-layer .tok {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style, normal);
+  font-weight: var(--shiki-light-font-weight, normal);
+}
+[data-theme="dark"] .code-layer .tok {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style, normal);
+  font-weight: var(--shiki-dark-font-weight, normal);
+}
+.code-input {
+  position: absolute;
+  top: 0;
+  left: var(--code-gutter);
+  z-index: 1;
+  width: calc(100% - var(--code-gutter));
+  height: 100%;
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--fg);
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  white-space: pre;
+  tab-size: inherit;
+}
+.code-input::selection {
+  background: var(--accent-soft-strong);
+}
+.code-input[readonly] {
+  caret-color: transparent;
+}
+
+/* 图片预览：图片按比例缩到面板内，透明部分衬棋盘格；很小的图标至少显示 48px 宽。 */
+.file-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  overflow: auto;
+}
+.file-image img {
+  min-width: 48px;
+  max-width: 100%;
+  max-height: calc(100% - 28px);
+  object-fit: contain;
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(45deg, var(--panel) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--panel) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--panel) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--panel) 75%);
+  background-size: 12px 12px;
+  background-position:
+    0 0,
+    0 6px,
+    6px -6px,
+    -6px 0;
+  box-shadow: var(--shadow-raised);
+}
+.file-image figcaption {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 标签上的未保存圆点。 */
+.surface-tab-dirty {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+/* 放弃未保存修改的确认框。 */
+.discard-dialog {
+  padding: 18px 18px 14px;
+}
+.discard-dialog-title {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.discard-dialog-text {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.discard-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

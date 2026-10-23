@@ -7,7 +7,9 @@ import {
   rpcFailureSchema,
   rpcSuccessSchema,
 } from "@pigcode/contracts"
-import type { CommandMethod } from "@pigcode/contracts"
+import type { CommandMethod, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
+import { buildSubagentBrief } from "../providers/switching"
+import { listAgents, uninstallPluginAndClearDefault, validateAgentSettings } from "./agents"
 
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
 export class RpcServer {
@@ -67,8 +69,28 @@ export class RpcServer {
     switch (command) {
       case "project.list":
         return this.ctx.projects.list()
-      case "project.add":
-        return this.ctx.projects.add((parsed as { rootPath: string }).rootPath)
+      case "project.add": {
+        const value = parsed as { rootPath: string; name?: string }
+        return this.ctx.projects.add(value.rootPath, value.name)
+      }
+      case "project.rename": {
+        const value = parsed as { projectId: string; name: string }
+        const project = this.ctx.projects.rename(value.projectId, value.name)
+        if (!project) throw new Error(`project not found: ${value.projectId}`)
+        return project
+      }
+      case "project.remove": {
+        const value = parsed as { projectId: string }
+        const project = this.ctx.projects.remove(value.projectId)
+        if (!project) throw new Error(`project not found: ${value.projectId}`)
+        // 项目的会话随项目一起从侧栏消失，还在跑的 run 同样先停下。
+        for (const run of this.ctx.providers.listRuns()) {
+          if (this.ctx.threads.get(run.threadId)?.projectId === value.projectId) {
+            this.ctx.providers.cancelRun(run.runId)
+          }
+        }
+        return project
+      }
       case "thread.list":
         return this.ctx.threads.list((parsed as { projectId?: string }).projectId)
       case "thread.rename": {
@@ -85,17 +107,60 @@ export class RpcServer {
         })
         return thread
       }
+      case "thread.archive": {
+        const value = parsed as { threadId: string }
+        // 归档的会话从界面上消失；还在跑或排队的 run 先停下，免得在看不见的地方改代码或卡在审批上。
+        // 子代理随主会话一起归档，它们的 run 也一并停下。
+        const archived = new Set([
+          value.threadId,
+          ...this.ctx.threads.children(value.threadId).map((child) => child.id),
+        ])
+        for (const run of this.ctx.providers.listRuns()) {
+          if (archived.has(run.threadId)) this.ctx.providers.cancelRun(run.runId)
+        }
+        const thread = this.ctx.threads.archive(value.threadId)
+        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
+        return thread
+      }
       case "thread.create": {
-        const value = parsed as { projectId: string; title: string; providerId: string }
-        const thread = this.ctx.threads.create(value.projectId, value.title, value.providerId)
+        const value = parsed as {
+          projectId: string
+          title: string
+          providerId: string
+          parentThreadId?: string
+        }
+        const thread = this.ctx.threads.create(
+          value.projectId,
+          value.title,
+          value.providerId,
+          value.parentThreadId,
+        )
+        const now = new Date().toISOString()
         this.ctx.sessions.append({
           threadId: thread.id,
           runId: null,
           type: "thread.created",
-          payload: { title: thread.title },
+          payload: {
+            title: thread.title,
+            ...(value.parentThreadId ? { parentThreadId: value.parentThreadId } : {}),
+          },
           schemaVersion: 1,
-          createdAt: new Date().toISOString(),
+          createdAt: now,
         })
+        // 子代理的第一条消息前带上主会话的近况；只注入一次，之后按子代理自己的会话继续。
+        const brief = value.parentThreadId
+          ? buildSubagentBrief(this.ctx, value.parentThreadId)
+          : null
+        if (brief) {
+          this.ctx.sessions.append({
+            threadId: thread.id,
+            runId: null,
+            type: "thread.updated",
+            payload: { handoff: brief },
+            schemaVersion: 1,
+            createdAt: now,
+          })
+        }
         return thread
       }
       case "thread.subscribe": {
@@ -131,15 +196,34 @@ export class RpcServer {
           value.modelId ?? null,
         )
       }
-      case "run.start": {
-        const value = parsed as { threadId: string; text: string }
-        const { runId } = await this.ctx.providers.startRun(value.threadId, value.text, (event) => {
-          this.transport.send({
-            jsonrpc: "2.0",
-            method: "thread.delta",
-            params: { threadId: value.threadId, event },
-          })
+      case "thread.setPermissionMode": {
+        const value = parsed as { threadId: string; permissionMode: PermissionMode }
+        const thread = this.ctx.threads.setPermissionMode(value.threadId, value.permissionMode)
+        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
+        this.ctx.sessions.append({
+          threadId: thread.id,
+          runId: null,
+          type: "thread.updated",
+          payload: { permissionMode: thread.permissionMode },
+          schemaVersion: 1,
+          createdAt: new Date().toISOString(),
         })
+        return thread
+      }
+      case "run.start": {
+        const value = parsed as { threadId: string; text: string; effort?: ReasoningEffort }
+        const { runId } = await this.ctx.providers.startRun(
+          value.threadId,
+          value.text,
+          (event) => {
+            this.transport.send({
+              jsonrpc: "2.0",
+              method: "thread.delta",
+              params: { threadId: value.threadId, event },
+            })
+          },
+          value.effort ? { effort: value.effort } : {},
+        )
         return { runId }
       }
       case "run.list":
@@ -163,14 +247,45 @@ export class RpcServer {
         )
         return { ok: true }
       }
+      case "run.answerQuestion": {
+        const value = parsed as {
+          threadId: string
+          runId: string
+          requestId: string
+          answers: string[]
+        }
+        this.ctx.providers.answerQuestion(
+          value.threadId,
+          value.runId,
+          value.requestId,
+          value.answers,
+        )
+        return { ok: true }
+      }
       case "provider.detect":
-        return this.ctx.providers.detect()
+        return this.ctx.providers.detect(parsed as { providerId?: string; refresh?: boolean })
       case "provider.list":
         return this.ctx.providers.list()
       case "provider.default":
         return { id: await this.ctx.providers.defaultProvider() }
       case "provider.models":
         return this.ctx.providers.models((parsed as { providerId: string }).providerId)
+      case "agent.list":
+        return listAgents(this.ctx)
+      case "agent.updateSettings": {
+        const value = parsed as { providerId: string; values: Record<string, unknown> }
+        const agent = (await listAgents(this.ctx)).agents.find(
+          (item) => item.providerId === value.providerId,
+        )
+        if (!agent) throw new Error(`agent not found: ${value.providerId}`)
+        validateAgentSettings(agent, value.values)
+        return { values: this.ctx.providers.updateSettings(value.providerId, value.values) }
+      }
+      case "agent.setDefault": {
+        const value = parsed as { providerId: string | null }
+        this.ctx.providers.setDefaultProvider(value.providerId)
+        return { defaultProviderId: value.providerId }
+      }
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.install":
@@ -181,13 +296,38 @@ export class RpcServer {
         return this.ctx.plugins.enable((parsed as { id: string }).id)
       case "plugin.disable":
         return this.ctx.plugins.disable((parsed as { id: string }).id)
+      case "plugin.uninstall":
+        return uninstallPluginAndClearDefault(this.ctx, (parsed as { id: string }).id)
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
       case "workspace.tree":
         return this.ctx.workspace.tree((parsed as { threadId: string }).threadId)
-      case "workspace.readFile": {
+      case "workspace.root":
+        return { root: this.ctx.workspace.root((parsed as { threadId: string }).threadId) }
+      case "workspace.list": {
         const value = parsed as { threadId: string; path: string }
-        return this.ctx.workspace.readFile(value.threadId, value.path)
+        return this.ctx.workspace.list(value.threadId, value.path)
+      }
+      case "workspace.searchPaths": {
+        const value = parsed as { threadId: string; query: string; limit?: number }
+        return this.ctx.workspace.searchPaths(value.threadId, value.query, value.limit)
+      }
+      case "workspace.readFile": {
+        const value = parsed as { threadId: string; path: string; encoding?: "text" | "image" }
+        return this.ctx.workspace.readFile(value.threadId, value.path, value.encoding)
+      }
+      case "workspace.writeFile": {
+        const value = parsed as {
+          threadId: string
+          path: string
+          text: string
+          expectedMtimeMs?: number
+          eol?: "lf" | "crlf"
+        }
+        return this.ctx.workspace.writeFile(value.threadId, value.path, value.text, {
+          expectedMtimeMs: value.expectedMtimeMs,
+          eol: value.eol,
+        })
       }
       case "workspace.search": {
         const value = parsed as { threadId: string; query: string; glob?: string }
@@ -250,6 +390,8 @@ export class RpcServer {
         const value = parsed as { threadId: string; checkpointId: string }
         return this.ctx.checkpoints.restore(value.threadId, value.checkpointId)
       }
+      case "worktree.list":
+        return this.ctx.worktrees.list((parsed as { threadId: string }).threadId)
       case "worktree.create":
         return this.ctx.worktrees.create((parsed as { threadId: string }).threadId)
       case "worktree.switch": {

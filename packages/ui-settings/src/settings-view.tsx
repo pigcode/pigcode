@@ -1,9 +1,8 @@
-// 设置视图：分区导航加通用、外观、服务提供方页面，插件分区可注入插件管理视图。
+// 设置视图：分区导航加通用、外观页面；Agent、定时任务与插件分区由应用容器注入。
 import type { ReactNode } from "react"
 import { useLocale, type AppearanceController } from "@pigcode/ui-primitives"
 import { AppearancePage } from "./appearance-page"
 import { GeneralPage } from "./general-page"
-import { ProviderPage, type ProviderDetection, type ProviderStatus } from "./provider-page"
 import { SettingsNav, type SettingsSection } from "./settings-nav"
 
 /** 设置视图需要的状态与事件。 */
@@ -17,12 +16,8 @@ export interface SettingsViewProps {
   pluginManager?: ReactNode | undefined
   /** 定时任务分区的内容由应用容器注入（需要 RPC 连接）。 */
   schedulesPage?: ReactNode | undefined
-  /** Claude/Codex 检测结果；由应用容器注入。 */
-  providers?: ProviderStatus[] | undefined
-  /** 兼容旧的单 provider 检测结果。 */
-  detection?: ProviderDetection | null | undefined
-  /** 重新运行只读检测。 */
-  onDetect?: (() => void | Promise<void>) | undefined
+  /** Agent 分区的内容由应用容器注入（需要 RPC 连接）。 */
+  agentsPage?: ReactNode | undefined
   /** 外壳侧栏已经提供分区导航时传 false，避免出现两套设置导航。 */
   showNav?: boolean
 }
@@ -35,9 +30,7 @@ export function SettingsView({
   appearance,
   pluginManager,
   schedulesPage,
-  providers,
-  detection,
-  onDetect,
+  agentsPage,
   showNav = true,
 }: SettingsViewProps) {
   const { t } = useLocale()
@@ -47,9 +40,7 @@ export function SettingsView({
       <div className="panel-scroll">
         {section === "general" ? <GeneralPage /> : null}
         {section === "appearance" ? <AppearancePage appearance={appearance} /> : null}
-        {section === "providers" ? (
-          <ProviderPage providers={providers} detection={detection} onDetect={onDetect} />
-        ) : null}
+        {section === "providers" ? agentsPage : null}
         {section === "schedules" ? schedulesPage : null}
         {section === "plugins" ? pluginManager : null}
       </div>

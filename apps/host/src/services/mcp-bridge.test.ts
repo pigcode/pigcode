@@ -8,8 +8,8 @@ import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { apply as mcpBridge } from "./mcp-bridge"
 
-/** 仓库内的 stdio 桥入口；构建时由 build-host.mjs 复制到 out/host/mcp。 */
-const BRIDGE_PATH = fileURLToPath(new URL("../mcp/stdio-bridge.mjs", import.meta.url))
+/** 仓库内的 stdio 桥入口；构建时由 build-host.ts 编译到 out/host/mcp/stdio-bridge.mjs。 */
+const BRIDGE_PATH = fileURLToPath(new URL("../mcp/stdio-bridge.ts", import.meta.url))
 
 /** 所有测试创建的 context 与子进程，afterEach 统一回收。 */
 const contexts: Context[] = []
@@ -123,12 +123,12 @@ function startBridge(env: Record<string, string>): {
   }
 }
 
-/** 读取 codexConfig 生成的 pigcode server 配置。 */
-function codexServer(ctx: Context, threadId: string): { command: string; args: string[]; env: Record<string, string> } {
-  const config = ctx.mcpBridge.codexConfig(threadId) as {
-    mcp_servers: { pigcode: { command: string; args: string[]; env: Record<string, string> } }
-  }
-  return config.mcp_servers.pigcode
+/** stdio 桥的启动命令；Codex 这类以子进程连接 MCP 的 agent 用它。 */
+function stdioServer(
+  ctx: Context,
+  threadId: string,
+): { command: string; args: string[]; env: Record<string, string> } {
+  return ctx.mcpBridge.stdioServer(threadId)
 }
 
 describe("mcp bridge", () => {
@@ -158,22 +158,18 @@ describe("mcp bridge", () => {
     dispose()
   })
 
-  it("only creates the MCP server or Codex config for built-in providers", async () => {
+  it("hands sessions the tool list and a thread-scoped call only when tools exist", async () => {
     const ctx = await setup()
-    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
+    expect(ctx.mcpBridge.sessionMcp("thread-1")).toBeUndefined()
 
-    const claude = ctx.mcpBridge.sessionMcp("thread-1", "claude")
-    expect(claude?.claudeServer).toBeTruthy()
-    expect(claude?.codexConfig).toBeUndefined()
-
-    const codex = ctx.mcpBridge.sessionMcp("thread-1", "codex")
-    expect(codex?.codexConfig).toBeTruthy()
-    expect(codex?.claudeServer).toBeUndefined()
-
-    // 第三方 provider 可能接受任一格式，保留两者兼容。
-    const custom = ctx.mcpBridge.sessionMcp("thread-1", "custom")
-    expect(custom?.claudeServer).toBeTruthy()
-    expect(custom?.codexConfig).toBeTruthy()
+    const handler = vi.fn(async (_input: unknown, call: { threadId: string }) => call.threadId)
+    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, handler)
+    const session = ctx.mcpBridge.sessionMcp("thread-1")
+    expect(session?.tools).toEqual([ECHO_TOOL])
+    await expect(session?.callTool("echo", { value: 1 })).resolves.toBe("thread-1")
+    expect(session?.stdioServer().env.PIGCODE_MCP_TOKEN).toBe(
+      ctx.mcpBridge.stdioServer("thread-1").env.PIGCODE_MCP_TOKEN,
+    )
   })
 
   it("rejects unknown tools", async () => {
@@ -193,23 +189,10 @@ describe("mcp bridge", () => {
     await expect(ctx.mcpBridge.callTool("thread-b", "who", {})).resolves.toBe("thread-b")
   })
 
-  it("builds a Claude SDK server only when tools exist", async () => {
+  it("returns a stdio bridge command with a thread token", async () => {
     const ctx = await setup()
-    expect(ctx.mcpBridge.claudeServer("thread-1")).toBeNull()
-
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({ ok: true }))
-    const server = ctx.mcpBridge.claudeServer("thread-1")
-    expect(server?.type).toBe("sdk")
-    expect(server?.name).toBe("pigcode")
-    expect(server?.instance).toBeTruthy()
-  })
-
-  it("returns a codex stdio config with a thread token", async () => {
-    const ctx = await setup()
-    expect(ctx.mcpBridge.codexConfig("thread-1")).toBeNull()
-
-    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({ ok: true }))
-    const config = codexServer(ctx, "thread-1")
+    const config = stdioServer(ctx, "thread-1")
     expect(config.command).toBe("node")
     expect(config.args[0]).toMatch(/stdio-bridge\.mjs$/)
     expect(config.env.PIGCODE_MCP_SOCKET).toBeTruthy()
@@ -222,7 +205,7 @@ describe("mcp bridge", () => {
       threadId: call.threadId,
     }))
     await ctx.mcpBridge.createSocketServer()
-    const config = codexServer(ctx, "thread-socket")
+    const config = stdioServer(ctx, "thread-socket")
     const socket = connectSocket(config.env.PIGCODE_MCP_SOCKET!)
     try {
       socket.send({ type: "hello", token: config.env.PIGCODE_MCP_TOKEN })
@@ -250,7 +233,7 @@ describe("mcp bridge", () => {
       threadId: call.threadId,
     }))
     await ctx.mcpBridge.createSocketServer()
-    const config = codexServer(ctx, "thread-stdio")
+    const config = stdioServer(ctx, "thread-stdio")
     const bridge = startBridge({
       PIGCODE_MCP_SOCKET: config.env.PIGCODE_MCP_SOCKET!,
       PIGCODE_MCP_TOKEN: config.env.PIGCODE_MCP_TOKEN!,
@@ -287,7 +270,7 @@ describe("mcp bridge", () => {
     const ctx = await setup()
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
     await ctx.mcpBridge.createSocketServer()
-    const config = codexServer(ctx, "thread-stdio-close")
+    const config = stdioServer(ctx, "thread-stdio-close")
     const bridge = startBridge({
       PIGCODE_MCP_SOCKET: config.env.PIGCODE_MCP_SOCKET!,
       PIGCODE_MCP_TOKEN: config.env.PIGCODE_MCP_TOKEN!,

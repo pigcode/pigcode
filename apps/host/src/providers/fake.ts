@@ -4,21 +4,56 @@ import { randomUUID } from "node:crypto"
 import type {
   CreateSessionInput,
   ProviderDriver,
+  ProviderModelInfo,
   ProviderRuntime,
   ProviderSessionHandle,
   UserInput,
 } from "./driver"
+import {
+  FAKE_SCRIPT_TEXT,
+  FAKE_SUBAGENT_TEXT,
+  fakeScript,
+  fakeSubagentScript,
+  runFakeScript,
+} from "./fake-script"
+import { FAKE_BROWSER_PREFIX, runFakeBrowser, type FakeToolCaller } from "./fake-browser"
+import { FAKE_SHOWCASE_TEXT, fakeShowcaseScript } from "./fake-showcase"
 
 /** fake provider 固定输出的文本分片。 */
 const CHUNKS = ["Hello", " from", " fake", " provider"]
 
 /** 长跑输入的标记；用于验证 run 中断与进程清理。 */
 export const FAKE_LONG_RUN_TEXT = "long"
+export { FAKE_SCRIPT_TEXT, FAKE_SHOWCASE_TEXT, FAKE_SUBAGENT_TEXT }
+
+/** fake provider 的模型目录：一个可调思考深度，一个不可调，用来覆盖两种界面状态。 */
+export const FAKE_MODELS: ProviderModelInfo[] = [
+  {
+    id: "fake-sage",
+    displayName: "Fake Sage",
+    description: "确定性回复，可调思考深度",
+    isDefault: true,
+    efforts: ["low", "medium", "high", "max"],
+    defaultEffort: "medium",
+  },
+  {
+    id: "fake-swift",
+    displayName: "Fake Swift",
+    description: "确定性回复，没有思考深度",
+    isDefault: false,
+    efforts: [],
+    defaultEffort: null,
+  },
+]
 
 /** fake provider 的运行选项；E2E 用固定延迟制造可观察的后台运行窗口。 */
 export interface FakeProviderOptions {
   /** 每次 send 前的延迟毫秒数；缺省时读取 PIGCODE_FAKE_DELAY_MS。 */
   delayMs?: number
+  /** 脚本化回复里每个工具的耗时；缺省时读取 PIGCODE_FAKE_STEP_MS。 */
+  stepMs?: number
+  /** 以线程身份调用 MCP 工具；浏览器脚本用它操作内置浏览器。 */
+  callTool?: FakeToolCaller
 }
 
 /** 不依赖外部进程的确定性 provider 实现。 */
@@ -28,7 +63,7 @@ export class FakeProviderDriver implements ProviderDriver {
   readonly capabilities: ProviderCapabilities = {
     streaming: true,
     approvals: false,
-    questions: false,
+    questions: true,
     plan: false,
     resume: false,
     fork: false,
@@ -38,14 +73,18 @@ export class FakeProviderDriver implements ProviderDriver {
     mcp: false,
     images: false,
     usage: false,
-    modelCatalog: false,
+    modelCatalog: true,
     nativeSessionId: false,
   }
 
   private readonly delayMs: number
+  private readonly stepMs: number
+  private readonly callTool: FakeToolCaller | undefined
 
   constructor(options: FakeProviderOptions = {}) {
-    this.delayMs = options.delayMs ?? envDelayMs()
+    this.delayMs = options.delayMs ?? envMs("PIGCODE_FAKE_DELAY_MS")
+    this.stepMs = options.stepMs ?? envMs("PIGCODE_FAKE_STEP_MS", 600)
+    this.callTool = options.callTool
   }
 
   /** 创建一个仅存在于内存中的 provider 会话句柄。 */
@@ -60,9 +99,14 @@ export class FakeProviderDriver implements ProviderDriver {
     }
   }
 
-  /** 依次推送开始、分片、完成事件；`long` 输入持续输出直到被 abort。 */
+  /** 固定的模型目录。 */
+  async listModels(): Promise<ProviderModelInfo[]> {
+    return FAKE_MODELS
+  }
+
+  /** 依次推送开始、分片、完成事件；`long` 输入持续输出直到被 abort，`tools` 输入走脚本。 */
   async send(
-    _session: ProviderSessionHandle,
+    session: ProviderSessionHandle,
     input: UserInput,
     runtime: ProviderRuntime,
   ): Promise<void> {
@@ -73,6 +117,34 @@ export class FakeProviderDriver implements ProviderDriver {
     }
     if (input.text === FAKE_LONG_RUN_TEXT) {
       await runUntilAborted(runtime)
+      return
+    }
+    if (input.text === FAKE_ASK_TEXT) {
+      await runFakeQuestions(runtime)
+      if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
+      return
+    }
+    if (input.text.startsWith(FAKE_BROWSER_PREFIX)) {
+      await runFakeBrowser(runtime, {
+        threadId: session.threadId,
+        url: input.text.slice(FAKE_BROWSER_PREFIX.length).trim(),
+        stepMs: this.stepMs,
+        callTool: this.callTool,
+      })
+      if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
+      return
+    }
+    const script =
+      input.text === FAKE_SCRIPT_TEXT
+        ? fakeScript
+        : input.text === FAKE_SUBAGENT_TEXT
+          ? fakeSubagentScript
+          : input.text === FAKE_SHOWCASE_TEXT
+            ? fakeShowcaseScript
+            : null
+    if (script) {
+      await runFakeScript(runtime, this.stepMs, script)
+      if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
       return
     }
     for (const text of CHUNKS) runtime.emit({ type: "message.delta", text })
@@ -87,10 +159,49 @@ export class FakeProviderDriver implements ProviderDriver {
   async dispose(): Promise<void> {}
 }
 
-/** 从环境变量读取 E2E 延迟；非法值或非正数按 0 处理。 */
-function envDelayMs(): number {
-  const value = Number(process.env.PIGCODE_FAKE_DELAY_MS ?? "0")
-  return Number.isFinite(value) && value > 0 ? value : 0
+/** 从环境变量读取毫秒数；非法值或负数按缺省值处理。 */
+function envMs(name: string, fallback = 0): number {
+  const raw = process.env[name]
+  if (raw === undefined) return fallback
+  const value = Number(raw)
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+/** 触发提问脚本的输入。 */
+export const FAKE_ASK_TEXT = "ask"
+
+/** 先问两个问题（一个多选、一个单选），再按回答给出结论。 */
+async function runFakeQuestions(runtime: ProviderRuntime): Promise<void> {
+  runtime.emit({ type: "message.completed", text: "开始之前先确认两件事。" })
+  const answers = runtime.askQuestions
+    ? await runtime.askQuestions({
+        questions: [
+          {
+            question: "这次改动要覆盖哪些平台？",
+            header: "平台",
+            options: [{ label: "macOS" }, { label: "Windows" }, { label: "Linux" }],
+            multiSelect: true,
+          },
+          {
+            question: "测试用哪个框架？",
+            header: "测试",
+            options: [
+              { label: "Vitest", description: "和项目现有配置一致" },
+              { label: "Jest", description: "需要额外安装依赖" },
+            ],
+            multiSelect: false,
+          },
+        ],
+      })
+    : []
+  if (runtime.signal.aborted) return
+  runtime.emit({
+    type: "message.completed",
+    text:
+      answers.length === 0
+        ? "没有收到回答，先不动手。"
+        : `好的：平台 ${answers[0] ?? "未定"}，测试用 ${answers[1] ?? "未定"}。`,
+  })
 }
 
 /** 循环推送增量直到 run 的取消信号到达；中断后不再 emit。 */

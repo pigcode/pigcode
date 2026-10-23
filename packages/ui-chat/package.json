@@ -14,6 +14,7 @@
     "@pigcode/plugin-sdk": "workspace:*",
     "@pigcode/ui-composer": "workspace:*",
     "@pigcode/ui-primitives": "workspace:*",
+    "diff": "9.0.0",
     "lucide-react": "1.0.1"
   },
   "peerDependencies": {

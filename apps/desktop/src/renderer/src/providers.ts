@@ -1,7 +1,6 @@
-/** Provider 列表、能力与模型目录的查询辅助；供聊天与设置容器共用。 */
+/** Provider 列表、能力与默认 agent 的查询辅助；供聊天与设置容器共用。 */
 import type { ProviderCapabilities, Thread } from "@pigcode/contracts"
 import type { AppStore, Connection } from "@pigcode/client-runtime"
-import type { ProviderDetection, ProviderStatus } from "@pigcode/ui-settings"
 
 /** provider.list 返回的一项；能力描述用于驱动 UI。 */
 export interface ProviderInfo {
@@ -10,40 +9,12 @@ export interface ProviderInfo {
   capabilities: ProviderCapabilities
 }
 
-/** provider.models 返回的模型条目；M2 只消费 id。 */
-interface ProviderModelInfo {
-  id: string
-}
-
-/** provider.detect 返回的 Codex 检测字段；authMethod 由 UI 层补空。 */
-export interface CodexDetection {
-  installed: boolean
-  version: string | null
-  loggedIn: boolean
-  command: string
-  error: string | null
-}
-
 /** 读取 provider 列表。 */
 export async function listProviders(connection: Connection): Promise<ProviderInfo[]> {
   return (await connection.call("provider.list", {})) as ProviderInfo[]
 }
 
-/** 读取某个 provider 的模型目录并写入全局状态。 */
-export async function loadProviderModels(
-  connection: Connection,
-  store: AppStore,
-  providerId: string,
-): Promise<void> {
-  const models = (await connection.call("provider.models", { providerId })) as ProviderModelInfo[]
-  store.update({
-    providerModels: models.flatMap((model) =>
-      typeof model.id === "string" && model.id.length > 0 ? [model.id] : [],
-    ),
-  })
-}
-
-/** 按线程当前 provider 刷新能力与模型列表。 */
+/** 按线程当前 provider 刷新能力；输入框的模型目录由聊天容器按 agent 懒加载。 */
 export async function loadProviderContext(
   connection: Connection,
   store: AppStore,
@@ -51,41 +22,39 @@ export async function loadProviderContext(
 ): Promise<void> {
   const providerId = thread.lastProviderId ?? thread.defaultProviderId
   // 切换线程时先清空上一线程的能力，避免短暂显示错误的控件。
-  store.update({ providerCapabilities: null, providerModels: [] })
+  store.update({ providerCapabilities: null })
   const providers = await listProviders(connection)
   const capabilities = providers.find((provider) => provider.id === providerId)?.capabilities
   store.update({ providerCapabilities: capabilities ?? null })
+}
+
+/**
+ * agent 集合或设置变了（插件启停、安装卸载、改了设置）：刷新当前线程的能力，
+ * 并递增 providerRevision，让输入框重新读取 agent 列表与模型目录。失败不影响调用方的操作。
+ */
+export async function refreshProviderViews(deps: {
+  connection: Connection
+  store: AppStore
+}): Promise<void> {
   try {
-    await loadProviderModels(connection, store, providerId)
+    const providers = await listProviders(deps.connection)
+    const snapshot = deps.store.getSnapshot()
+    const thread = snapshot.threads.find((item) => item.id === snapshot.activeThreadId)
+    if (thread) {
+      const providerId = thread.lastProviderId ?? thread.defaultProviderId
+      deps.store.update({
+        providerCapabilities:
+          providers.find((provider) => provider.id === providerId)?.capabilities ?? null,
+      })
+    }
   } catch {
-    // 模型目录不可用时保留空列表，不阻塞聊天。
-    store.update({ providerModels: [] })
+    // 能力刷新失败时保持原样；revision 仍然递增，让输入框自己重读。
   }
+  deps.store.update({ providerRevision: deps.store.getSnapshot().providerRevision + 1 })
 }
 
-/** 把检测结果归一化为设置页的 provider 分区。 */
-export function toProviderStatus(
-  id: string,
-  displayName: string,
-  detection: ProviderDetection,
-  capabilities: ProviderCapabilities | undefined,
-): ProviderStatus {
-  return {
-    id,
-    displayName,
-    installed: detection.installed,
-    version: detection.version,
-    loggedIn: detection.loggedIn,
-    authMethod: detection.authMethod,
-    subscriptionType: detection.subscriptionType ?? null,
-    command: detection.command ?? null,
-    error: detection.error ?? null,
-    ...(capabilities ? { capabilities } : {}),
-  }
-}
-
-/** 询问 Host 当前默认 provider；失败时回退到 fake。 */
-export async function pickProviderId(connection: Connection): Promise<string> {
+/** 询问 Host 新会话的默认 agent；没有任何可用的 agent 时为 null。 */
+export async function pickProviderId(connection: Connection): Promise<string | null> {
   const result = (await connection.call("provider.default", {})) as { id?: unknown }
-  return typeof result.id === "string" && result.id.length > 0 ? result.id : "fake"
+  return typeof result.id === "string" && result.id.length > 0 ? result.id : null
 }

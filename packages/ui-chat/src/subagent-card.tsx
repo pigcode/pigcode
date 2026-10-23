@@ -1,151 +1,136 @@
-/** 子代理卡片；用 details 折叠展示子 agent 的消息与工具调用。 */
-import type { ReactNode } from "react"
+/**
+ * 子 agent 行（参照 ZCode 的 agent）：「子智能体 · 类型 · 任务说明」，运行中扫光并显示它最新在做
+ * 的事。主时间线不在原地展开子 agent 的过程，点击整行在标签页中打开；没有标签页可开时才能展开，
+ * 显示任务、过程与交回的结果。
+ */
+import { memo } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
-import { Bot, Wrench } from "lucide-react"
+import { Bot } from "lucide-react"
 import { useLocale } from "@pigcode/ui-primitives"
-import type { ToolCall, ToolStatus } from "./tool-card"
+import { asRecord, asText, toolFromEvent } from "./event-parsers"
+import { MessageText } from "./message-item"
+import { readPath } from "./tool-fields"
+import { toolFamily } from "./tool-identity"
+import { commandText, toolPreview } from "./tool-meta"
+import { ToolRow } from "./tool-row"
+import { useConversationActions } from "./tools/common"
 
 /** 子 agent 的生命周期状态。 */
 export type SubagentStatus = "running" | "completed" | "failed" | "interrupted"
 
-/** 时间线里一张子 agent 卡片需要的数据。 */
+/** 时间线里一个子 agent 需要的数据。 */
 export interface SubagentCall {
   id: string
   name: string
   description?: string
+  /** 主 agent 交给它的完整任务。 */
+  prompt?: string
   model?: string
   status: SubagentStatus
   events: ThreadEvent[]
+  /** 子 agent 交回给主 agent 的结果。 */
+  output?: string
+  /** 派生它的 run；标签栏只自动展示最近一次 run 派生的子 agent。 */
+  runId?: string | null
 }
 
-const STATUS_KEYS = {
-  running: "chat.tool.running",
-  completed: "chat.tool.completed",
-  failed: "chat.tool.failed",
-  interrupted: "tabs.status.interrupted",
-} as const
-
-/** 把 unknown payload 收窄为对象。 */
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined
-  return value as Record<string, unknown>
-}
-
-/** 只接受非空字符串。 */
-function asText(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined
-}
-
-/** 把任意 payload 值转成可读文本。 */
-function displayValue(value: unknown): string | undefined {
-  if (typeof value === "string") return value || undefined
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  if (value === null || value === undefined) return undefined
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return undefined
-  }
-}
-
-/** 收集子事件里的工具调用，按 id 合并 started/completed。 */
-function collectTools(events: ThreadEvent[]): Map<string, ToolCall> {
-  const tools = new Map<string, ToolCall>()
-  for (const event of events) {
-    if (event.type !== "tool.started" && event.type !== "tool.completed") continue
-    const payload = asRecord(event.payload)
-    if (!payload) continue
-    const id =
-      asText(payload.id) ??
-      asText(payload.toolCallId) ??
-      asText(payload.callId) ??
-      `tool-${event.seq}`
-    const name = asText(payload.name) ?? asText(payload.tool) ?? asText(payload.title) ?? "tool"
-    const failed = payload.error !== undefined || payload.status === "failed"
-    const status: ToolStatus =
-      event.type === "tool.started" ? "running" : failed ? "failed" : "completed"
-    const existing = tools.get(id)
-    tools.set(id, {
-      id,
-      name: existing && name === "tool" ? existing.name : name,
-      status,
-      input:
-        displayValue(payload.input) ??
-        displayValue(payload.command) ??
-        displayValue(payload.arguments) ??
-        existing?.input,
-      output: displayValue(payload.output) ?? displayValue(payload.result) ?? existing?.output,
-    })
-  }
-  return tools
-}
-
-/** 按 seq 渲染子 agent 的紧凑消息与工具行。 */
-function SubagentEvents({ events }: { events: ThreadEvent[] }) {
+/** 子 agent 最新一次工具调用的简短描述：动作与对象。 */
+function useLatestActivity(events: readonly ThreadEvent[]): string | null {
   const { t } = useLocale()
-  const tools = collectTools(events)
-  const renderedTools = new Set<string>()
-  const nodes: ReactNode[] = []
-
-  for (const event of [...events].sort((left, right) => left.seq - right.seq)) {
-    const payload = asRecord(event.payload)
-    if (event.type === "message.completed") {
-      const text = asText(payload?.text)
-      if (text) {
-        nodes.push(
-          <p key={`${event.seq}-${event.type}`} className="subagent-message">
-            {text}
-          </p>,
-        )
-      }
-      continue
-    }
-    if (event.type !== "tool.started" && event.type !== "tool.completed") continue
-    const id =
-      asText(payload?.id) ??
-      asText(payload?.toolCallId) ??
-      asText(payload?.callId) ??
-      `tool-${event.seq}`
-    if (renderedTools.has(id)) continue
-    renderedTools.add(id)
-    const tool = tools.get(id)
+  for (const event of [...events].sort((left, right) => right.seq - left.seq)) {
+    if (event.type !== "tool.started") continue
+    const tool = toolFromEvent(event, "running")
     if (!tool) continue
-    nodes.push(
-      <div key={`tool-${id}`} className="subagent-line subagent-tool" data-status={tool.status}>
-        <Wrench className="ic ic-sm" aria-hidden="true" />
-        <span className="subagent-tool-name">
-          {tool.name === "tool" ? t("chat.tool.unknown") : tool.name}
-        </span>
-        <span className={`subagent-tool-status ${tool.status}`}>{t(STATUS_KEYS[tool.status])}</span>
-      </div>,
-    )
+    const family = toolFamily(tool.name)
+    if (family === "file-read") {
+      return `${t("chat.toolCall.read.reading")} ${readPath(tool) ?? ""}`.trim()
+    }
+    if (family === "shell") {
+      return `${t("chat.toolCall.execute.running")} ${commandText(tool.input) ?? ""}`.trim()
+    }
+    if (family === "search") {
+      return `${t("chat.toolCall.search.searching")} ${toolPreview(tool.input) ?? ""}`.trim()
+    }
+    return toolPreview(tool.input) ?? tool.name
   }
-  return <>{nodes}</>
+  return null
 }
 
-/** 渲染子 agent；默认折叠，点击标题展开子消息。 */
-export function SubagentCard({ subagent }: { subagent: SubagentCall }) {
-  const { t } = useLocale()
+/** 子 agent 的过程：完成的消息按顺序列出。 */
+function SubagentMessages({ events }: { events: readonly ThreadEvent[] }) {
+  const messages = [...events]
+    .sort((left, right) => left.seq - right.seq)
+    .filter((event) => event.type === "message.completed")
+    .map((event) => ({ key: event.seq, text: asText(asRecord(event.payload)?.text) ?? "" }))
+    .filter((message) => message.text)
+  if (messages.length === 0) return null
   return (
-    <details className="subagent-card" data-status={subagent.status}>
-      <summary className="subagent-head">
-        <Bot className="ic ic-sm" aria-hidden="true" />
-        <span className="subagent-name">{subagent.name}</span>
-        {subagent.description ? (
-          <span className="subagent-description">{subagent.description}</span>
-        ) : null}
-        <span className="grow" />
-        <span className={`subagent-status ${subagent.status}`}>
-          {t(STATUS_KEYS[subagent.status])}
-        </span>
-      </summary>
-      <div className="subagent-body">
-        {subagent.events.length > 0 ? (
-          <SubagentEvents events={subagent.events} />
-        ) : (
-          <div className="subagent-empty muted">{t("chat.empty")}</div>
-        )}
-      </div>
-    </details>
+    <div className="subagent-section">
+      {messages.map((message) => (
+        <div key={message.key} className="md subagent-message">
+          <MessageText text={message.text} />
+        </div>
+      ))}
+    </div>
   )
 }
+
+/** 渲染一个子 agent。 */
+export const AgentRow = memo(function AgentRow({ subagent }: { subagent: SubagentCall }) {
+  const { t } = useLocale()
+  const { onOpenSubagent } = useConversationActions()
+  const running = subagent.status === "running"
+  const activity = useLatestActivity(subagent.events)
+  const title = subagent.description ?? subagent.prompt?.split("\n")[0] ?? ""
+  const status =
+    subagent.status === "failed"
+      ? { label: t("chat.toolCall.status.failed"), tooltip: subagent.output }
+      : subagent.status === "interrupted"
+        ? { label: t("chat.toolCall.status.stopped") }
+        : null
+  return (
+    <ToolRow
+      id={`agent-${subagent.id}`}
+      icon={Bot}
+      kind={t("chat.toolCall.agent.label")}
+      running={running}
+      kindDetail={<span className="subagent-type">{subagent.name}</span>}
+      separator={Boolean(title || (running && activity))}
+      primary={running && activity ? <span className="truncate">{activity}</span> : title}
+      status={status}
+      title={subagent.prompt ?? title}
+      className="subagent-row"
+      dataStatus={subagent.status}
+      action={
+        onOpenSubagent
+          ? {
+              label: `${t("chat.subagent.open")} ${subagent.name}`,
+              onActivate: () => onOpenSubagent(subagent.id),
+            }
+          : undefined
+      }
+    >
+      {() => (
+        <div className="tool-card subagent-card">
+          {subagent.prompt ? (
+            <div className="subagent-section">
+              <span className="tool-card-label">{t("chat.toolCall.agent.prompt")}</span>
+              <div className="subagent-prompt md">
+                <MessageText text={subagent.prompt} />
+              </div>
+            </div>
+          ) : null}
+          <SubagentMessages events={subagent.events} />
+          {subagent.output ? (
+            <div className="subagent-section">
+              <span className="tool-card-label">{t("chat.toolCall.agent.output")}</span>
+              <div className="subagent-output md">
+                <MessageText text={subagent.output} />
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </ToolRow>
+  )
+})

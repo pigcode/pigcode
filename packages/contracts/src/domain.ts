@@ -27,6 +27,24 @@ export const permissionModeSchema = z.enum([
   "plan",
 ])
 
+/**
+ * 推理强度（思考深度）。不同 agent 支持的档位不同：Codex 用 minimal–xhigh，
+ * Claude 用 low–max；模型目录里的 efforts 列出该模型实际可选的档位。
+ */
+export const reasoningEffortSchema = z.enum(["minimal", "low", "medium", "high", "xhigh", "max"])
+
+/** provider 模型目录中的一项；efforts 为空表示该模型没有可调的思考深度。 */
+export const providerModelSchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  description: z.string().optional(),
+  isDefault: z.boolean(),
+  efforts: z.array(reasoningEffortSchema),
+  defaultEffort: reasoningEffortSchema.nullable(),
+  /** 用户在 agent 设置里添加的模型 id，不在 agent 自己的目录里。 */
+  custom: z.boolean().optional(),
+})
+
 /** 项目实体，对应一个被 Pigcode 打开的本地根目录。 */
 export const projectSchema = z.object({
   id: z.string().min(1),
@@ -48,6 +66,8 @@ export const threadSchema = z.object({
   updatedAt: z.string().datetime(),
   archivedAt: z.string().datetime().nullable(),
   lastRunId: z.string().nullable(),
+  /** 子代理会话所属的主会话；主会话为 null。子代理共用主会话的项目与工作目录，不出现在侧栏。 */
+  parentThreadId: z.string().nullable().optional(),
 })
 
 /** 一次运行的生命周期状态。 */
@@ -152,6 +172,10 @@ export const scheduleSchema = z.object({
 export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>
 /** 权限模式的类型。 */
 export type PermissionMode = z.infer<typeof permissionModeSchema>
+/** 推理强度的类型。 */
+export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>
+/** 模型目录条目的类型。 */
+export type ProviderModel = z.infer<typeof providerModelSchema>
 /** 项目的类型。 */
 export type Project = z.infer<typeof projectSchema>
 /** 线程的类型。 */

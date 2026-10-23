@@ -1,8 +1,16 @@
 /** 定时任务设置页：创建固定间隔任务，并管理启停、立即运行与删除。 */
 import { useEffect, useState, type FormEvent } from "react"
 import type { Schedule } from "@pigcode/contracts"
-import { Button, Input, Switch, Textarea, useLocale } from "@pigcode/ui-primitives"
-import { SettingPage, SettingRow, SettingSection } from "./settings-page"
+import {
+  Button,
+  Input,
+  SettingPage,
+  SettingRow,
+  SettingSection,
+  Switch,
+  Textarea,
+  useLocale,
+} from "@pigcode/ui-primitives"
 
 /** 线程选项；只暴露选择器需要的字段。 */
 export interface ScheduleThreadOption {

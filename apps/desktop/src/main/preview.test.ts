@@ -125,24 +125,30 @@ describe("openPreview", () => {
     expect(window?.options).toMatchObject({
       width: 1100,
       height: 800,
-      webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        partition: "persist:pigcode-browser",
+      },
     })
   })
 
-  it("blocks navigation and popups that leave loopback", () => {
+  it("blocks navigation and popups that leave http and https", () => {
     openPreview("http://localhost:3000")
     const [window] = FakeBrowserWindow.instances
     const contents = window?.webContents
 
-    expect(contents?.emitNavigation("will-navigate", "https://example.com")).toBe(true)
-    expect(contents?.emitNavigation("will-redirect", "https://example.com")).toBe(true)
-    expect(contents?.emitNavigation("will-navigate", "http://127.0.0.1:5173")).toBe(false)
-    expect(contents?.openHandler?.({ url: "https://example.com" })).toEqual({ action: "deny" })
+    expect(contents?.emitNavigation("will-navigate", "file:///etc/passwd")).toBe(true)
+    expect(contents?.emitNavigation("will-redirect", "javascript:alert(1)")).toBe(true)
+    expect(contents?.emitNavigation("will-navigate", "https://example.com")).toBe(false)
+    expect(contents?.openHandler?.({ url: "pigcode://app/index.html" })).toEqual({ action: "deny" })
     expect(contents?.openHandler?.({ url: "http://localhost:5173" })).toEqual({ action: "allow" })
   })
 
-  it("throws PREVIEW_URL_NOT_ALLOWED for non-loopback urls", () => {
-    expect(() => openPreview("https://example.com")).toThrow("PREVIEW_URL_NOT_ALLOWED")
+  it("throws PREVIEW_URL_NOT_ALLOWED for other protocols", () => {
+    expect(() => openPreview("file:///tmp/index.html")).toThrow("PREVIEW_URL_NOT_ALLOWED")
+    expect(() => openPreview("about:blank")).toThrow("PREVIEW_URL_NOT_ALLOWED")
     expect(FakeBrowserWindow.instances).toHaveLength(0)
   })
 

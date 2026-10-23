@@ -17,14 +17,14 @@ declare module "cordis" {
   }
 }
 
-/** storage 插件的配置。 */
+/** storage 插件的配置；path 缺省时使用内存数据库（测试与 `--dump-config`）。 */
 export interface StorageConfig {
-  path: string
+  path?: string
 }
 
 /** 打开数据库并提供 storage 服务，插件卸载时关闭连接。 */
-export function apply(ctx: Context, config: StorageConfig): void {
-  const db = openDatabase(config.path)
+export function apply(ctx: Context, config: StorageConfig = {}): void {
+  const db = openDatabase(config.path ?? ":memory:")
   const storage: StorageService = {
     db,
     events: new EventStore(db),

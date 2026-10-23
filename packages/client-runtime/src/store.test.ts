@@ -69,6 +69,22 @@ describe("AppStore", () => {
     expect(store.getSnapshot().streamingText).toBe("main answer")
   })
 
+  it("ends the streaming text when the run is interrupted", () => {
+    const store = new AppStore()
+    store.openThread("th_1")
+    store.setActiveThread("th_1")
+
+    store.addEvent(threadEvent("th_1", 1, "run.started"))
+    store.appendDelta("th_1", "half an ans")
+    store.addEvent(threadEvent("th_1", 2, "run.interrupted"))
+
+    expect(store.getSnapshot().streamingText).toBe("")
+    expect(store.getSnapshot().threadStates["th_1"]).toMatchObject({
+      status: "interrupted",
+      streamingText: "",
+    })
+  })
+
   it("does not let a late approval resolution revive a terminal run", () => {
     const store = new AppStore()
     store.openThread("th_1")

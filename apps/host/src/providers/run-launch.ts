@@ -2,8 +2,8 @@
 import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { RunStore } from "../storage/run-store"
-import type { ProviderSessionStore } from "./claude/session-store"
-import type { UserInput } from "./driver"
+import type { ProviderSessionStore } from "./session-store"
+import type { ProviderSettingsValues, UserInput } from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
 import { pendingHandoff } from "./switching"
 
@@ -21,6 +21,8 @@ export interface LaunchDeps {
     payload: unknown,
   ) => void
   execute: (run: ActiveRun, input: UserInput) => void
+  /** 启动时读取 agent 的最新设置；排队期间改的设置同样生效。 */
+  settingsFor: (providerId: string) => ProviderSettingsValues
 }
 
 /** 启动排队 run：此时才创建 provider 会话，避免为未开始的 run 提前启动子进程。 */
@@ -37,6 +39,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       model: entry.model,
       ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
       ...(entry.mcp ? { mcp: entry.mcp } : {}),
+      settings: deps.settingsFor(entry.driver.id),
     })
     const session = deps.providerSessions.reuseOrCreate({
       draft,
@@ -55,6 +58,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       done: entry.done,
       resolveDone: entry.resolveDone,
       approvals: new Set(),
+      liveText: "",
     }
     // 切换 provider 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
     const handoff = pendingHandoff(deps.ctx, run.threadId)

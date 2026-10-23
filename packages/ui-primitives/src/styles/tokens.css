@@ -1,167 +1,203 @@
 /*
-  pigclaude 设计系统 · tokens（v4：桌面原生质感）
+  Pigcode 设计系统 · tokens（v6：与 Cursor 对齐的工作区）
   所有颜色只在本文件定义。页面与组件只引用语义变量，不写死色值。
-  质感来自四件事：毛玻璃侧栏、0.5px 细线、极轻的控件投影、紧凑而清楚的字号。
-  悬停、选中、细线一律用带透明度的黑或白，叠在任何底色上都成立。
+  结构：窗口底色承载标题栏与侧栏；聊天与右侧面板平铺在略亮一层的内容区里，
+  用户消息与输入区是再亮一层的卡片。浅色下 macOS 的侧栏更深一些，接近系统侧栏材质。
+  中性色是几乎无彩的灰；强调色是靛蓝，只出现在开关、链接与焦点上。
+  悬停、选中、细线一律用带透明度的墨色，叠在任何底色上都成立。
 */
 
 :root,
 [data-theme="light"] {
   color-scheme: light;
 
-  /* 窗口与表面 */
-  --window: oklch(95.6% 0.0012 270);
-  --wall-1: oklch(91.5% 0.004 255 / 0.85);
-  --wall-2: oklch(99.5% 0 0 / 0.9);
-  --sidebar: oklch(94.6% 0.0015 270 / 0.62);
-  --bg: oklch(96.9% 0.0008 270);
-  --surface: oklch(100% 0 0);
-  --panel: oklch(20% 0.01 270 / 0.042);
-  --hover: oklch(20% 0.01 270 / 0.05);
-  --active: oklch(20% 0.01 270 / 0.085);
-  --popover: oklch(99.5% 0 0);
-  --scrim: oklch(20% 0.005 270 / 0.2);
+  /* 窗口与表面：window 承载标题栏与侧栏，bg 是内容区，surface 是卡片 */
+  --window: oklch(95.8% 0 0);
+  --wall-1: oklch(95.8% 0 0 / 0);
+  --wall-2: oklch(95.8% 0 0 / 0);
+  --sidebar: oklch(95.8% 0 0 / 0.6);
+  --bg: oklch(97.6% 0 0);
+  --surface: oklch(99% 0 0);
+  --panel: oklch(21% 0.006 286 / 0.035);
+  --hover: oklch(21% 0.006 286 / 0.045);
+  --active: oklch(21% 0.006 286 / 0.075);
+  --popover: oklch(100% 0 0);
+  --scrim: oklch(20% 0.006 286 / 0.2);
+  --scrim-strong: oklch(0% 0 0 / 0.55);
 
   /* 文字与细线 */
-  --fg: oklch(20% 0.004 270);
-  --fg-2: oklch(38% 0.004 270);
-  --muted: oklch(54% 0.004 270);
-  --faint: oklch(69% 0.003 270);
-  --border: oklch(20% 0.01 270 / 0.08);
-  --border-strong: oklch(20% 0.01 270 / 0.15);
-  --divider: oklch(20% 0.01 270 / 0.075);
-  --border-focus: oklch(20% 0.01 270 / 0.38);
-  --field: oklch(20% 0.01 270 / 0.055);
-  --popover-glass: oklch(99% 0 0 / 0.84);
-  --scroll-thumb: oklch(20% 0.01 270 / 0.22);
-  --tl-glyph: oklch(0% 0 0 / 0.5);
+  --fg: oklch(27.4% 0.006 286);
+  --fg-2: oklch(37% 0.012 286);
+  --muted: oklch(55.2% 0.016 286);
+  --faint: oklch(70.5% 0.015 286);
+  --border: oklch(21% 0.006 286 / 0.1);
+  --border-strong: oklch(21% 0.006 286 / 0.16);
+  --divider: oklch(21% 0.006 286 / 0.075);
+  --border-focus: oklch(52% 0.2 264 / 0.6);
+  --field: oklch(21% 0.006 286 / 0.04);
+  --popover-glass: oklch(100% 0 0 / 0.9);
+  --scroll-thumb: oklch(21% 0.006 286 / 0.18);
 
-  /* 操作：主按钮黑底白字；开关是原生的深绿；链接是系统蓝；焦点只把边框加深 */
-  --primary: oklch(19% 0.004 270);
-  --primary-hover: oklch(31% 0.004 270);
-  --on-primary: oklch(99% 0 0);
-  --switch-on: oklch(56% 0.13 152);
-  --link: oklch(52% 0.16 256);
-  /* 品牌强调色：只用于主操作、活动 tab、选中线程和焦点 */
-  --accent: oklch(57% 0.15 256);
-  --accent-strong: oklch(49% 0.16 256);
-  --accent-soft: oklch(57% 0.15 256 / 0.12);
-  --accent-soft-strong: oklch(57% 0.15 256 / 0.18);
-  --on-accent: oklch(99% 0 0);
-  --surface-raised: oklch(100% 0 0);
-  --surface-sunken: oklch(20% 0.01 270 / 0.035);
+  /* 操作：主按钮、开关、链接与焦点用靛蓝，其余界面保持中性 */
+  --primary: oklch(48.8% 0.217 264);
+  --primary-hover: oklch(44% 0.21 264);
+  --on-primary: oklch(100% 0 0);
+  --switch-on: oklch(52% 0.2 264);
+  --link: oklch(48.8% 0.217 264);
+  --accent: oklch(52% 0.2 264);
+  --accent-strong: oklch(45% 0.2 264);
+  --accent-soft: oklch(52% 0.2 264 / 0.09);
+  --accent-soft-strong: oklch(52% 0.2 264 / 0.15);
+  --accent-ring: oklch(52% 0.2 264 / 0.2);
+  --accent-text: oklch(46% 0.19 264);
+  --accent-2: oklch(52% 0.2 264);
+  --on-accent: oklch(100% 0 0);
+  --surface-raised: oklch(99% 0 0);
+  --surface-sunken: oklch(21% 0.006 286 / 0.03);
+  --bubble: oklch(96.7% 0.0015 286);
 
   /* 状态 */
-  --ok: oklch(62% 0.14 152);
-  --warn: oklch(74% 0.15 72);
-  --bad: oklch(59% 0.2 27);
-  --info: oklch(60% 0.14 256);
-  --ok-text: oklch(46% 0.12 152);
-  --warn-text: oklch(52% 0.12 62);
-  --bad-text: oklch(50% 0.18 27);
+  --ok: oklch(63% 0.15 155);
+  --warn: oklch(74% 0.15 70);
+  --bad: oklch(59% 0.21 25);
+  --info: oklch(58% 0.17 255);
+  --ok-text: oklch(47% 0.13 155);
+  --warn-text: oklch(52% 0.13 62);
+  --bad-text: oklch(51% 0.19 25);
   --on-bad: oklch(99% 0 0);
+  --ok-soft: oklch(63% 0.15 155 / 0.12);
+  --warn-soft: oklch(74% 0.15 70 / 0.16);
+  --bad-soft: oklch(59% 0.21 25 / 0.1);
 
   /* 数据 */
-  --quota: oklch(32% 0.004 270);
-  --track: oklch(20% 0.01 270 / 0.08);
-  --chart-1: oklch(60% 0.15 256);
-  --chart-2: oklch(80% 0.07 256);
-  --chart-3: oklch(76% 0.003 270);
-  --chart-4: oklch(87% 0.002 270);
-  --avatar: oklch(88.5% 0.002 270);
+  --quota: oklch(52% 0.2 264);
+  --track: oklch(21% 0.006 286 / 0.08);
+  --chart-1: oklch(52% 0.2 264);
+  --chart-2: oklch(78% 0.09 264);
+  --chart-3: oklch(76% 0.006 286);
+  --chart-4: oklch(87% 0.004 286);
+  --avatar: oklch(91% 0 0);
 
-  --tl-close: oklch(68% 0.2 27);
-  --tl-min: oklch(83% 0.16 85);
-  --tl-max: oklch(74% 0.18 145);
+  /* 终端与代码块：与 terminal-view 的 xterm 主题保持同一组值 */
+  --term-bg: #ffffff;
+  --term-fg: #27272a;
+  --code-bg: oklch(96% 0.0015 286);
 
   --field-hl: oklch(100% 0 0 / 0.5);
-  --tl-edge: oklch(0% 0 0 / 0.12);
   --knob: oklch(100% 0 0);
-  --shadow-knob: 0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 1px 2px oklch(0% 0 0 / 0.22);
-  --shadow-btn: 0 0.5px 1px oklch(0% 0 0 / 0.08);
+  --shadow-knob: 0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 1px 3px oklch(0% 0 0 / 0.2);
+  --shadow-btn: 0 1px 1.5px oklch(21% 0.006 286 / 0.06);
   --shadow-soft:
-    0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 2px 6px oklch(0% 0 0 / 0.03),
-    0 8px 28px oklch(0% 0 0 / 0.05);
-  --shadow-pop: 0 0 0 0.5px oklch(0% 0 0 / 0.1), 0 10px 32px oklch(0% 0 0 / 0.13);
-  --shadow-raised: 0 0 0 0.5px oklch(0% 0 0 / 0.07), 0 2px 8px oklch(0% 0 0 / 0.05);
-  --shadow-modal: 0 0 0 0.5px oklch(0% 0 0 / 0.1), 0 24px 70px oklch(0% 0 0 / 0.2);
-  --composer-ring: oklch(20% 0.01 270 / 0.13);
-  --composer-ring-focus: oklch(20% 0.01 270 / 0.22);
-  --shadow-composer: 0 1px 2px oklch(0% 0 0 / 0.03), 0 6px 20px oklch(0% 0 0 / 0.04);
-  --shadow-composer-focus: 0 1px 2px oklch(0% 0 0 / 0.04), 0 8px 26px oklch(0% 0 0 / 0.07);
+    0 0 0 0.5px oklch(21% 0.006 286 / 0.08), 0 1px 2px oklch(21% 0.006 286 / 0.04),
+    0 6px 20px oklch(21% 0.006 286 / 0.05);
+  --shadow-pop:
+    0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 4px 10px oklch(21% 0.006 286 / 0.06),
+    0 16px 40px oklch(21% 0.006 286 / 0.12);
+  --shadow-raised: 0 0 0 0.5px oklch(21% 0.006 286 / 0.1), 0 1px 2px oklch(21% 0.006 286 / 0.05);
+  --shadow-modal:
+    0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 10px 24px oklch(21% 0.006 286 / 0.08),
+    0 30px 80px oklch(21% 0.006 286 / 0.18);
+  --shadow-panel: 0 0 0 0.5px oklch(21% 0.006 286 / 0.11), 0 1px 3px oklch(21% 0.006 286 / 0.05);
+  --composer-ring: oklch(21% 0.006 286 / 0.11);
+  --composer-ring-focus: oklch(21% 0.006 286 / 0.22);
+  --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
+  --shadow-composer-focus:
+    0 1px 2px oklch(21% 0.006 286 / 0.05), 0 8px 24px oklch(21% 0.006 286 / 0.07);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --window: oklch(17% 0.002 270);
-  --wall-1: oklch(24% 0.006 255 / 0.85);
-  --wall-2: oklch(13% 0.002 270 / 0.9);
-  --sidebar: oklch(20% 0.003 270 / 0.55);
-  --bg: oklch(18.2% 0.002 270);
-  --surface: oklch(22% 0.0025 270);
-  --panel: oklch(100% 0 0 / 0.035);
-  --hover: oklch(100% 0 0 / 0.055);
-  --active: oklch(100% 0 0 / 0.09);
-  --popover: oklch(23% 0.003 270);
-  --scrim: oklch(0% 0 0 / 0.45);
+  --window: oklch(16% 0 0);
+  --wall-1: oklch(16% 0 0 / 0);
+  --wall-2: oklch(16% 0 0 / 0);
+  --sidebar: oklch(16% 0 0 / 0.5);
+  --bg: oklch(19.5% 0 0);
+  --surface: oklch(22.5% 0 0);
+  --panel: oklch(100% 0 0 / 0.03);
+  --hover: oklch(100% 0 0 / 0.05);
+  --active: oklch(100% 0 0 / 0.085);
+  --popover: oklch(23% 0 0);
+  --scrim: oklch(0% 0 0 / 0.5);
+  --scrim-strong: oklch(0% 0 0 / 0.6);
 
-  --fg: oklch(94% 0.002 270);
-  --fg-2: oklch(80% 0.003 270);
-  --muted: oklch(64% 0.004 270);
-  --faint: oklch(47% 0.004 270);
+  --fg: oklch(96% 0 0);
+  --fg-2: oklch(84% 0.003 286);
+  --muted: oklch(64% 0.006 286);
+  --faint: oklch(47% 0.006 286);
   --border: oklch(100% 0 0 / 0.08);
-  --border-strong: oklch(100% 0 0 / 0.14);
-  --divider: oklch(100% 0 0 / 0.075);
-  --border-focus: oklch(100% 0 0 / 0.34);
-  --field: oklch(100% 0 0 / 0.06);
-  --popover-glass: oklch(24% 0.003 270 / 0.84);
-  --scroll-thumb: oklch(100% 0 0 / 0.22);
-  --tl-glyph: oklch(0% 0 0 / 0.55);
+  --border-strong: oklch(100% 0 0 / 0.13);
+  --divider: oklch(100% 0 0 / 0.065);
+  --border-focus: oklch(66% 0.17 264 / 0.75);
+  --field: oklch(100% 0 0 / 0.05);
+  --popover-glass: oklch(23% 0 0 / 0.9);
+  --scroll-thumb: oklch(100% 0 0 / 0.18);
 
-  --primary: oklch(94% 0.002 270);
-  --primary-hover: oklch(85% 0.002 270);
-  --on-primary: oklch(17% 0.002 270);
-  --switch-on: oklch(62% 0.13 152);
-  --link: oklch(74% 0.11 256);
-  --accent: oklch(72% 0.12 256);
-  --accent-strong: oklch(80% 0.1 256);
-  --accent-soft: oklch(72% 0.12 256 / 0.16);
-  --accent-soft-strong: oklch(72% 0.12 256 / 0.24);
-  --on-accent: oklch(17% 0.002 270);
-  --surface-raised: oklch(25% 0.004 270);
-  --surface-sunken: oklch(0% 0 0 / 0.16);
+  --primary: oklch(57.1% 0.21 264);
+  --primary-hover: oklch(62% 0.19 264);
+  --on-primary: oklch(100% 0 0);
+  --switch-on: oklch(57% 0.2 264);
+  --link: oklch(74% 0.13 264);
+  --accent: oklch(63% 0.18 264);
+  --accent-strong: oklch(72% 0.15 264);
+  --accent-soft: oklch(63% 0.18 264 / 0.15);
+  --accent-soft-strong: oklch(63% 0.18 264 / 0.24);
+  --accent-ring: oklch(63% 0.18 264 / 0.28);
+  --accent-text: oklch(77% 0.12 264);
+  --accent-2: oklch(63% 0.18 264);
+  --on-accent: oklch(100% 0 0);
+  --surface-raised: oklch(24% 0 0);
+  --surface-sunken: oklch(0% 0 0 / 0.18);
+  --bubble: oklch(24.5% 0 0);
 
-  --ok: oklch(72% 0.14 152);
-  --warn: oklch(79% 0.14 75);
-  --bad: oklch(67% 0.18 27);
-  --info: oklch(72% 0.11 256);
-  --ok-text: oklch(78% 0.12 152);
-  --warn-text: oklch(83% 0.11 78);
-  --bad-text: oklch(75% 0.14 27);
+  --ok: oklch(72% 0.15 155);
+  --warn: oklch(80% 0.14 75);
+  --bad: oklch(68% 0.18 25);
+  --info: oklch(72% 0.13 255);
+  --ok-text: oklch(79% 0.13 155);
+  --warn-text: oklch(84% 0.12 78);
+  --bad-text: oklch(76% 0.15 25);
   --on-bad: oklch(99% 0 0);
+  --ok-soft: oklch(72% 0.15 155 / 0.14);
+  --warn-soft: oklch(80% 0.14 75 / 0.14);
+  --bad-soft: oklch(68% 0.18 25 / 0.14);
 
-  --quota: oklch(84% 0.003 270);
+  --quota: oklch(63% 0.18 264);
   --track: oklch(100% 0 0 / 0.09);
-  --chart-1: oklch(68% 0.13 256);
-  --chart-2: oklch(48% 0.08 256);
-  --chart-3: oklch(52% 0.004 270);
-  --chart-4: oklch(36% 0.004 270);
-  --avatar: oklch(30% 0.003 270);
+  --chart-1: oklch(63% 0.18 264);
+  --chart-2: oklch(46% 0.1 264);
+  --chart-3: oklch(52% 0.005 286);
+  --chart-4: oklch(36% 0.005 286);
+  --avatar: oklch(29% 0 0);
+
+  --term-bg: #161616;
+  --term-fg: #e4e4e7;
+  --code-bg: oklch(17% 0 0);
 
   --field-hl: oklch(100% 0 0 / 0);
-  --tl-edge: oklch(0% 0 0 / 0.3);
   --knob: oklch(97% 0 0);
   --shadow-knob: 0 1px 2px oklch(0% 0 0 / 0.4);
-  --shadow-btn: 0 0.5px 1px oklch(0% 0 0 / 0.3);
-  --shadow-soft: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 8px 28px oklch(0% 0 0 / 0.3);
-  --shadow-pop: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 12px 36px oklch(0% 0 0 / 0.45);
-  --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 4px 14px oklch(0% 0 0 / 0.22);
-  --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 28px 80px oklch(0% 0 0 / 0.55);
+  --shadow-btn: 0 1px 1.5px oklch(0% 0 0 / 0.3);
+  --shadow-soft: 0 0 0 0.5px oklch(100% 0 0 / 0.07), 0 8px 28px oklch(0% 0 0 / 0.3);
+  --shadow-pop:
+    0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 4px 12px oklch(0% 0 0 / 0.3),
+    0 18px 44px oklch(0% 0 0 / 0.45);
+  --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 1px 3px oklch(0% 0 0 / 0.3);
+  --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 30px 80px oklch(0% 0 0 / 0.6);
+  --shadow-panel: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 2px 8px oklch(0% 0 0 / 0.3);
   --composer-ring: oklch(100% 0 0 / 0.1);
-  --composer-ring-focus: oklch(100% 0 0 / 0.18);
-  --shadow-composer: 0 6px 22px oklch(0% 0 0 / 0.25);
-  --shadow-composer-focus: 0 8px 28px oklch(0% 0 0 / 0.32);
+  --composer-ring-focus: oklch(100% 0 0 / 0.2);
+  --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
+  --shadow-composer-focus: 0 8px 24px oklch(0% 0 0 / 0.34);
+}
+
+/* macOS 浅色：侧栏接近系统侧栏材质的深度，内容区随之略暗 */
+:root[data-platform="darwin"]:not([data-theme="dark"]) {
+  --window: oklch(93.1% 0 0);
+  --wall-1: oklch(93.1% 0 0 / 0);
+  --wall-2: oklch(93.1% 0 0 / 0);
+  --sidebar: oklch(93.1% 0 0 / 0.6);
+  --bg: oklch(96.4% 0 0);
 }
 
 :root {
@@ -179,29 +215,33 @@
   --font-weight-content: 400;
   --font-weight-code: 400;
 
-  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 对话 13.5 / 页面标题 15，随「界面字号」整体缩放 */
+  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 页面标题 20，随「界面字号」整体缩放；对话 14 */
   --ui-scale: 1;
   --fs-xs: calc(var(--ui-scale) * 11.5px);
   --fs-sm: calc(var(--ui-scale) * 12px);
   --fs-md: calc(var(--ui-scale) * 13px);
   --fs-lg: calc(var(--ui-scale) * 13.5px);
-  --fs-title: calc(var(--ui-scale) * 15px);
+  --fs-title: calc(var(--ui-scale) * 20px);
   /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
-  --fs-content: 13.5px;
+  --fs-content: 14px;
   --fs-code: 11.5px;
 
-  /* 圆角：控件 6 / 分组与卡片 9 / 输入区与对话框 12 */
-  --r-sm: 5px;
-  --r-md: 6px;
-  --r-lg: 9px;
-  --r-xl: 12px;
+  /* 圆角：控件 7 / 行与小卡片 9 / 卡片 12 / 输入区与对话框 16 */
+  --r-sm: 6px;
+  --r-md: 7px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+  --r-panel: 12px;
   --r-full: 999px;
 
   --hair: 0.5px;
-  --sidebar-w: 252px;
+  --sidebar-w: 260px;
   --col: 720px;
-  --col-narrow: 620px;
-  --gap: 0px;
+  --col-narrow: 640px;
+  --chat-col: 848px;
+  /* 浮层与窗口边缘的间距；顶行高度（侧栏顶行、线程头与右侧面板标签栏，交通灯竖直居中其中） */
+  --gap: 8px;
+  --topbar-h: 40px;
 
   /* 颜色选择器的色域：白到透明、黑到透明、色相彩虹和拖柄白圈，与主题无关 */
   --picker-white: oklch(100% 0 0);
@@ -221,6 +261,6 @@
     0 0 0 2px var(--picker-white), 0 0 0 2.5px oklch(0% 0 0 / 0.18), 0 1px 4px oklch(0% 0 0 / 0.3);
 
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --t-fast: 90ms;
-  --t-med: 150ms;
+  --t-fast: 100ms;
+  --t-med: 160ms;
 }

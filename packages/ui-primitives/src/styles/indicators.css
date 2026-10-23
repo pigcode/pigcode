@@ -1,0 +1,259 @@
+/*
+  运行中指示：3×3 点阵，8 帧 × 175ms 一个循环（1.4s）。
+  每个点按帧号决定亮灭，帧之间不过渡（step-end），看起来像点阵屏上的游走动画。
+  帧（行优先编号 0–8）：
+    0: 3 5 6 8   1: 0 3 7 8   2: 0 3 4 7   3: 0 1 3 4 8
+    4: 1 3 4 5 6 8   5: 1 2 4 5 6   6: 2 4 5 7   7: 2 5 6 7
+*/
+.dot-matrix {
+  --dot-matrix-size: 10px;
+  --dot-matrix-dot: 2px;
+  --dot-matrix-off: 0;
+  display: inline-grid;
+  flex: none;
+  grid-template-columns: repeat(3, var(--dot-matrix-dot));
+  grid-template-rows: repeat(3, var(--dot-matrix-dot));
+  justify-content: space-between;
+  align-content: space-between;
+  width: var(--dot-matrix-size);
+  height: var(--dot-matrix-size);
+  color: var(--fg-2);
+  vertical-align: middle;
+}
+.dot-matrix-cell {
+  width: var(--dot-matrix-dot);
+  height: var(--dot-matrix-dot);
+  border-radius: 50%;
+  background: currentColor;
+  opacity: var(--dot-matrix-off);
+  animation: 1.4s step-end infinite both;
+}
+.dot-matrix-cell.c0 {
+  animation-name: dot-matrix-c0;
+}
+.dot-matrix-cell.c1 {
+  animation-name: dot-matrix-c1;
+}
+.dot-matrix-cell.c2 {
+  animation-name: dot-matrix-c2;
+}
+.dot-matrix-cell.c3 {
+  animation-name: dot-matrix-c3;
+}
+.dot-matrix-cell.c4 {
+  animation-name: dot-matrix-c4;
+}
+.dot-matrix-cell.c5 {
+  animation-name: dot-matrix-c5;
+}
+.dot-matrix-cell.c6 {
+  animation-name: dot-matrix-c6;
+}
+.dot-matrix-cell.c7 {
+  animation-name: dot-matrix-c7;
+}
+.dot-matrix-cell.c8 {
+  animation-name: dot-matrix-c8;
+}
+/* 每 12.5% 一帧；关键帧只写亮灭发生变化的位置。 */
+@keyframes dot-matrix-c0 {
+  0% {
+    opacity: var(--dot-matrix-off);
+  }
+  12.5%,
+  37.5% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: var(--dot-matrix-off);
+  }
+}
+@keyframes dot-matrix-c1 {
+  0% {
+    opacity: var(--dot-matrix-off);
+  }
+  37.5%,
+  62.5% {
+    opacity: 1;
+  }
+  75%,
+  100% {
+    opacity: var(--dot-matrix-off);
+  }
+}
+@keyframes dot-matrix-c2 {
+  0% {
+    opacity: var(--dot-matrix-off);
+  }
+  62.5%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes dot-matrix-c3 {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  62.5%,
+  100% {
+    opacity: var(--dot-matrix-off);
+  }
+}
+@keyframes dot-matrix-c4 {
+  0% {
+    opacity: var(--dot-matrix-off);
+  }
+  25%,
+  75% {
+    opacity: 1;
+  }
+  87.5%,
+  100% {
+    opacity: var(--dot-matrix-off);
+  }
+}
+@keyframes dot-matrix-c5 {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: var(--dot-matrix-off);
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes dot-matrix-c6 {
+  0% {
+    opacity: 1;
+  }
+  12.5% {
+    opacity: var(--dot-matrix-off);
+  }
+  50%,
+  62.5% {
+    opacity: 1;
+  }
+  75% {
+    opacity: var(--dot-matrix-off);
+  }
+  87.5%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes dot-matrix-c7 {
+  0% {
+    opacity: var(--dot-matrix-off);
+  }
+  12.5%,
+  25% {
+    opacity: 1;
+  }
+  37.5% {
+    opacity: var(--dot-matrix-off);
+  }
+  75%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes dot-matrix-c8 {
+  0%,
+  12.5% {
+    opacity: 1;
+  }
+  25% {
+    opacity: var(--dot-matrix-off);
+  }
+  37.5%,
+  50% {
+    opacity: 1;
+  }
+  62.5%,
+  100% {
+    opacity: var(--dot-matrix-off);
+  }
+}
+/* 减少动效：停在第 3 帧（左上角聚成一团、右下一点），仍能看出是“运行中”。 */
+@media (prefers-reduced-motion: reduce) {
+  .dot-matrix-cell {
+    animation: none;
+  }
+  .dot-matrix-cell.c0,
+  .dot-matrix-cell.c1,
+  .dot-matrix-cell.c3,
+  .dot-matrix-cell.c4,
+  .dot-matrix-cell.c8 {
+    opacity: 1;
+  }
+}
+
+/* 侧栏会话行：运行中用点阵替换状态点，占同样的宽度，标题不跳动。 */
+.sess-indicator {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+}
+.sess-indicator .dot-matrix {
+  color: color-mix(in oklab, var(--fg-2) 82%, transparent);
+}
+.sess.is-active .sess-indicator .dot-matrix {
+  color: var(--fg-2);
+}
+
+/* 长标题在右侧渐隐，而不是用省略号截断；标题较短时渐隐区落在空白处。 */
+.sess-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+
+/* 线程头的状态胶囊：运行中用点阵替换圆点。 */
+.status-pill.is-running::before {
+  display: none;
+}
+.status-pill .dot-matrix {
+  --dot-matrix-size: 9px;
+  --dot-matrix-dot: 1.8px;
+  margin-right: 2px;
+  color: currentColor;
+}
+
+/* 底部状态提示：操作失败的错误与 Host 连接状态；可以点击关闭。 */
+.toast-error,
+.toast-warn {
+  pointer-events: auto;
+}
+.toast-error {
+  max-width: min(560px, calc(100vw - 48px));
+  color: var(--bad-text);
+}
+.toast-error .toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.toast-warn {
+  color: var(--warn-text);
+}
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.toast-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}

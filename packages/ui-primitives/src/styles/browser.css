@@ -1,0 +1,113 @@
+/* ─── 内置浏览器：页面区、常驻的 webview、agent 指示 ─────────── */
+.browser-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.browser-slot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.browser-page .browser-empty {
+  position: relative;
+}
+/* 窄窗口时右栏是 z-index 60 的浮层，webview 要盖在它上面、但在侧栏抽屉与弹层之下 */
+.browser-hosted {
+  position: fixed;
+  z-index: 61;
+  overflow: hidden;
+  background: #fff;
+}
+.browser-hosted:not([data-shown]) {
+  pointer-events: none;
+}
+.browser-hosted[data-shown][data-blank] {
+  visibility: hidden;
+}
+.browser-webview {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.browser-hosted[data-agent]::after {
+  position: absolute;
+  inset: 0;
+  border: 2px solid var(--accent);
+  content: "";
+  pointer-events: none;
+  animation: browser-agent-glow 1.4s var(--ease) infinite;
+}
+@keyframes browser-agent-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+.browser-pointer {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  pointer-events: none;
+  animation: browser-pointer 1s var(--ease) forwards;
+}
+@keyframes browser-pointer {
+  0% {
+    transform: scale(0.35);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+.browser-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  flex: none;
+  padding: 0 10px;
+  border-bottom: var(--hair) solid var(--divider);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--fs-xs);
+}
+.browser-agent-label {
+  flex: none;
+  font-weight: 600;
+}
+.browser-agent-action {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.browser-agent .dot-matrix {
+  color: var(--accent-text);
+}
+.browser-toolbar .ic[data-spin] {
+  animation: browser-spin 0.9s linear infinite;
+}
+@keyframes browser-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browser-hosted[data-agent]::after,
+  .browser-pointer,
+  .browser-toolbar .ic[data-spin] {
+    animation: none;
+  }
+}

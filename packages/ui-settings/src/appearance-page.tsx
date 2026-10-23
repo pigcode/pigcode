@@ -1,5 +1,8 @@
 // 外观设置页：模式、字号、动态效果和智能标点，全部复用 useAppearance。
 import {
+  SettingPage,
+  SettingRow,
+  SettingSection,
   Slider,
   Switch,
   Toggle,
@@ -9,7 +12,6 @@ import {
   type AppearanceController,
   type ThemePreference,
 } from "@pigcode/ui-primitives"
-import { SettingPage, SettingRow, SettingSection } from "./settings-page"
 
 /** 动态效果偏好。 */
 type MotionPreference = "system" | "on" | "off"

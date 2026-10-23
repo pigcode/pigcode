@@ -15,6 +15,7 @@ export default defineConfig({
   renderer: {
     root: "src/renderer",
     plugins: [react(), tailwindcss()],
-    build: { outDir: "out/renderer" },
+    // electron-vite 默认不压缩；渲染进程的脚本压缩后体积约减半，冷启动解析更快。
+    build: { outDir: "out/renderer", minify: "esbuild" },
   },
 })

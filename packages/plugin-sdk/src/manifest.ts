@@ -1,6 +1,7 @@
 /** 校验 Pigcode 插件在 package.json 中的 pigcode 声明，并判断与当前 Host 的兼容性。 */
 import semver from "semver"
 import { z } from "zod"
+import { providerContributionSchema, type ProviderContribution } from "@pigcode/contracts"
 
 export const pluginKindSchema = z.enum(["provider", "capability", "ui", "bundle"])
 
@@ -8,6 +9,7 @@ export const pluginManifestSchema = z
   .object({
     name: z.string().min(1),
     version: z.string().min(1),
+    description: z.string().optional(),
     engines: z.object({ pigcode: z.string().min(1) }).optional(),
     pigcode: z.object({
       apiVersion: z.literal(1),
@@ -24,6 +26,20 @@ export const pluginManifestSchema = z
   .refine((value) => Boolean(value.pigcode.host || value.pigcode.client), {
     message: "plugin must declare host or client entry",
     path: ["pigcode"],
+  })
+  .superRefine((value, context) => {
+    // agent 的设置表单由 contributes.provider 生成，声明不合法时安装阶段就拒绝。
+    const provider = value.pigcode.contributes.provider
+    if (provider === undefined) return
+    const parsed = providerContributionSchema.safeParse(provider)
+    if (parsed.success) return
+    for (const issue of parsed.error.issues) {
+      context.addIssue({
+        code: "custom",
+        message: issue.message,
+        path: ["pigcode", "contributes", "provider", ...issue.path.map(String)],
+      })
+    }
   })
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
@@ -45,4 +61,18 @@ export function checkPluginCompatibility(manifest: PluginManifest): string | nul
     return `unsupported engines.pigcode: plugin requires pigcode ${range}, current ${HOST_VERSION}`
   }
   return null
+}
+
+/**
+ * provider 插件贡献的 agent：优先读 `contributes.provider`，没有时从 `provides` 里的
+ * `provider:<id>` 推断出只有 id 的贡献；都没有时返回 null。
+ */
+export function readProviderContribution(manifest: PluginManifest): ProviderContribution | null {
+  const declared = providerContributionSchema.safeParse(manifest.pigcode.contributes.provider)
+  if (declared.success) return declared.data
+  const provided = manifest.pigcode.provides.find((item) => item.startsWith("provider:"))
+  const id = provided?.slice("provider:".length)
+  if (!id) return null
+  const inferred = providerContributionSchema.safeParse({ id })
+  return inferred.success ? inferred.data : null
 }

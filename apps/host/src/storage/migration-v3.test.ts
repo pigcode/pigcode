@@ -6,7 +6,9 @@ describe("migration v3", () => {
   it("creates checkpoint and worktree tables", () => {
     const db = openDatabase(":memory:")
     const names = (
-      db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as Array<{ name: string }>
+      db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all() as Array<{
+        name: string
+      }>
     ).map((row) => row.name)
     expect(names).toContain("checkpoints")
     expect(names).toContain("worktrees")

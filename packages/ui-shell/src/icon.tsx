@@ -32,6 +32,13 @@ const marks: Record<string, string> = {
   clip: '<path d="M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.6-8.6a3.4 3.4 0 0 1 4.8 4.8l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9"/>',
   folder:
     '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  "folder-open":
+    '<path d="M3.5 17V7.5a2 2 0 0 1 2-2h4l2 2.5h6a2 2 0 0 1 2 2v1"/><path d="M3.5 17l2.3-5.6a1.6 1.6 0 0 1 1.5-1h13a.9.9 0 0 1 .8 1.3l-2.4 5.7a2 2 0 0 1-1.8 1.1H5.4a1.9 1.9 0 0 1-1.9-1.5z"/>',
+  compose:
+    '<path d="M11 4.5H6.5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V13"/><path d="M17.7 3.8a1.9 1.9 0 0 1 2.6 2.7l-7.8 7.8-3.5.8.8-3.5z"/>',
+  "arrow-left": '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  monitor:
+    '<rect x="3.5" y="4.5" width="17" height="11.5" rx="2"/><path d="M8.5 19.5h7M12 16v3.5"/>',
   "folder-plus":
     '<path d="M20.5 12V10a2 2 0 0 0-2-2h-7l-2-2.5h-4a2 2 0 0 0-2 2V17a2 2 0 0 0 2 2H12"/><path d="M18 15v6M15 18h6"/>',
   file: '<path d="M7 3.5h6.5L18 8v12.5H7z"/><path d="M13 3.5V8h5"/>',
@@ -50,10 +57,13 @@ const marks: Record<string, string> = {
   more: '<path d="M6 12h.01M12 12h.01M18 12h.01" stroke-width="2.6"/>',
   grip: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="2.4"/>',
   trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>',
+  archive:
+    '<rect x="3.5" y="4.5" width="17" height="4" rx="1"/><path d="M5 8.5v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-9M10 12.5h4"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   moon: '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
   external:
     '<path d="M14 4.5h5.5V10M19.5 4.5l-8 8M17 13.5v5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7h5"/>',
+  "arrow-up-right": '<path d="M7.5 16.5l9-9M9.5 7.5h7v7"/>',
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   swap: '<path d="M4.5 8h14M15 4.5L18.5 8 15 11.5M19.5 16h-14M9 12.5L5.5 16 9 19.5"/>',
   route:

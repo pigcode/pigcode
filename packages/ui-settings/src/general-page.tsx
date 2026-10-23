@@ -1,15 +1,20 @@
 // 通用设置页：启动、更新和侧栏会话分组。
-import { useState } from "react"
-import { Switch, Toggle, ToggleGroup, useLocale } from "@pigcode/ui-primitives"
-import { SettingPage, SettingRow, SettingSection } from "./settings-page"
+import {
+  SettingPage,
+  SettingRow,
+  SettingSection,
+  Switch,
+  Toggle,
+  ToggleGroup,
+  useLocale,
+  useSidebarGrouping,
+  type SidebarGrouping,
+} from "@pigcode/ui-primitives"
 
-/** 侧栏会话的分组方式。 */
-type SidebarGrouping = "project" | "time"
-
-/** 渲染通用设置；M0-B 只在本地保留开关状态。 */
+/** 渲染通用设置；启动与更新开关只在本页保留状态，侧栏排法保存在本机并同步到侧栏。 */
 export function GeneralPage() {
   const { t } = useLocale()
-  const [grouping, setGrouping] = useState<SidebarGrouping>("project")
+  const [grouping, setGrouping] = useSidebarGrouping()
 
   return (
     <SettingPage title={t("settings.general.pageTitle")}>

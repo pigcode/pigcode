@@ -1,16 +1,22 @@
 plugins:
   - id: core.storage
     name: "@pigcode/host/services/storage"
-    config:
-      path: ":memory:"
+  - id: core.settings
+    name: "@pigcode/host/services/settings"
   - id: core.projects
     name: "@pigcode/host/services/projects"
   - id: core.threads
     name: "@pigcode/host/services/threads"
   - id: core.sessions
     name: "@pigcode/host/services/sessions"
+  - id: core.mcp-bridge
+    name: "@pigcode/host/services/mcp-bridge"
+  - id: core.browser
+    name: "@pigcode/host/services/browser"
   - id: core.providers
     name: "@pigcode/host/providers/registry"
+    config:
+      fake: false
   - id: core.workspace
     name: "@pigcode/host/services/workspace"
   - id: core.git
@@ -25,3 +31,6 @@ plugins:
     name: "@pigcode/host/services/terminal"
   - id: core.schedules
     name: "@pigcode/host/services/schedules"
+builtinPlugins:
+  - ../../../packages/provider-claude
+  - ../../../packages/provider-codex

@@ -124,6 +124,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_schedules_next_run
     ON schedules(enabled, next_run_at);
   `,
+  `
+  ALTER TABLE projects ADD COLUMN archived_at TEXT;
+  `,
+  `
+  ALTER TABLE threads ADD COLUMN parent_thread_id TEXT REFERENCES threads(id);
+
+  CREATE INDEX IF NOT EXISTS idx_threads_parent ON threads(parent_thread_id);
+  `,
 ]
 
 /** 按 user_version 执行缺失迁移。 */

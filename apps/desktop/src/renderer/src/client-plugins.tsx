@@ -1,5 +1,9 @@
-/** 第三方 UI 插件：读取 boot graph、动态加载 client bundle，并把面板接入 React。 */
-import { useSyncExternalStore, type ReactNode } from "react"
+/**
+ * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把侧栏面板与右栏标签接入 React，
+ * 并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ */
+import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { ChevronRight } from "lucide-react"
 import type {
   BootGraph,
   ClientModule,
@@ -7,8 +11,13 @@ import type {
   SlotName,
   SlotRegistry,
 } from "@pigcode/client-runtime"
-import { loadClientPlugins } from "@pigcode/client-runtime"
-import type { ClientPanel, ClientPluginContext } from "@pigcode/plugin-sdk"
+import {
+  createUiKit,
+  loadClientPlugins,
+  observeLocale,
+  observeTheme,
+} from "@pigcode/client-runtime"
+import type { ClientPanel, ClientPluginContext, ClientSurface } from "@pigcode/plugin-sdk"
 import { useLocale } from "@pigcode/ui-primitives"
 import { PluginPanelHost } from "@pigcode/ui-shell"
 
@@ -26,11 +35,14 @@ function isSlotName(name: string): name is SlotName {
   return (SLOT_NAMES as readonly string[]).includes(name)
 }
 
-/** 插件面板的只读快照与订阅入口。 */
-export interface PanelRegistry {
-  get(): ClientPanel[]
+/** 只读快照与订阅入口。 */
+export interface SnapshotRegistry<T> {
+  get(): T[]
   subscribe(listener: () => void): () => void
 }
+
+/** 插件面板的只读快照与订阅入口。 */
+export type PanelRegistry = SnapshotRegistry<ClientPanel>
 
 /** slot 注册冲突等插件错误；id 用作快照内的稳定 key。 */
 export interface PluginError {
@@ -48,6 +60,8 @@ export interface PluginErrorRegistry {
 /** Renderer 持有的第三方插件控制器。 */
 export interface ClientPluginController {
   panels: PanelRegistry
+  /** 插件注册的右栏标签。 */
+  surfaces: SnapshotRegistry<ClientSurface>
   /** 加载/注册时被跳过的错误，供插件管理界面按需展示。 */
   errors: PluginErrorRegistry
   reload(): Promise<void>
@@ -109,10 +123,19 @@ export function createClientPluginController(deps: {
     clear: clearPanels,
   } = createSnapshotRegistry<ClientPanel>((panel) => panel.id)
   const {
+    registry: surfaces,
+    add: addSurface,
+    clear: clearSurfaces,
+  } = createSnapshotRegistry<ClientSurface>((surface) => surface.id)
+  const {
     registry: errors,
     add: addError,
     clear: clearErrors,
   } = createSnapshotRegistry<PluginError>((error) => error.id)
+  // 插件拿到的组件、主题与语言都只读宿主的根元素，所有插件共用一份。
+  const ui = createUiKit()
+  const theme = observeTheme()
+  const locale = observeLocale()
   /** slot 条目归属：key 为 `slot:id`，用于拒绝重复注册并记录冲突双方。 */
   const slotOwners = new Map<string, { pluginId: string; token: symbol }>()
   let generation = 0
@@ -171,6 +194,14 @@ export function createClientPluginController(deps: {
         bucket.push(dispose)
         return dispose
       },
+      registerSurface(surface) {
+        const dispose = addSurface(surface)
+        bucket.push(dispose)
+        return dispose
+      },
+      ui,
+      theme,
+      locale,
     }
   }
 
@@ -178,6 +209,7 @@ export function createClientPluginController(deps: {
     const current = ++generation
     clearCurrent()
     clearPanels()
+    clearSurfaces()
     clearErrors()
 
     let boot: BootGraph
@@ -218,35 +250,52 @@ export function createClientPluginController(deps: {
 
   return {
     panels,
+    surfaces,
     errors,
     reload,
     dispose() {
       generation += 1
       clearCurrent()
       clearPanels()
+      clearSurfaces()
       clearErrors()
     },
   }
 }
 
+/** 读取注册表的快照，变化时重渲染。 */
+export function useRegistry<T>(registry: SnapshotRegistry<T>): T[] {
+  return useSyncExternalStore(registry.subscribe, registry.get, registry.get)
+}
+
+/** 侧栏里的一个插件面板：和「项目」同样的分组标题，点击收起或展开。 */
+function PluginSidebarPanel({ panel }: { panel: ClientPanel }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <section className="proj-block plugin-panel" data-open={open || undefined}>
+      <button
+        type="button"
+        className="side-label plugin-panel-head"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="truncate">{panel.title}</span>
+        <ChevronRight className="ic ic-xs plugin-panel-chev" aria-hidden="true" />
+      </button>
+      {open ? <PluginPanelHost panel={panel} /> : null}
+    </section>
+  )
+}
+
 /** 把已注册的第三方面板画进侧栏；没有面板时不占用空间。 */
 export function PluginPanels({ controller }: { controller: ClientPluginController }) {
-  const panels = useSyncExternalStore(
-    controller.panels.subscribe,
-    controller.panels.get,
-    controller.panels.get,
-  )
+  const panels = useRegistry(controller.panels)
   const { t } = useLocale()
   if (panels.length === 0) return null
   return (
     <div className="plugin-panels" aria-label={t("plugins.title")}>
       {panels.map((panel) => (
-        <section className="proj-block" key={panel.id}>
-          <div className="side-label">
-            <span>{panel.title}</span>
-          </div>
-          <PluginPanelHost panel={panel} />
-        </section>
+        <PluginSidebarPanel key={panel.id} panel={panel} />
       ))}
     </div>
   )

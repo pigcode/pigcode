@@ -14,7 +14,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.304",
     "@cordisjs/plugin-loader": "1.0.0-rc.8",
     "@pigcode/client-runtime": "workspace:*",
     "@pigcode/contracts": "workspace:*",
@@ -26,6 +25,9 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.3.304",
+    "@pigcode/provider-claude": "workspace:*",
+    "@pigcode/provider-codex": "workspace:*",
     "@types/better-sqlite3": "7.6.13",
     "typescript": "5.9.3",
     "vitest": "4.0.16"

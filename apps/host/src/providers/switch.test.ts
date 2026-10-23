@@ -2,8 +2,8 @@
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
 import type { CreateSessionInput, ProviderDriver, ProviderSessionHandle, UserInput } from "./driver"
-import { ClaudeDriver } from "./claude/driver"
-import { replayQuery } from "./claude/replay"
+import { ClaudeDriver } from "@pigcode/provider-claude/driver"
+import { replayQuery } from "@pigcode/provider-claude/replay"
 import { FakeProviderDriver } from "./fake"
 import { apply as providers } from "./registry"
 import { MemoryTransport } from "../rpc/memory-transport"
@@ -206,7 +206,7 @@ describe("provider switching", () => {
   })
 
   it("puts the handoff before the user text in the Claude prompt", async () => {
-    const prompts: string[] = []
+    const prompts: unknown[] = []
     const replay = replayQuery("fixtures/simple.jsonl")
     const driver = new ClaudeDriver({
       queryFn: (params) => {

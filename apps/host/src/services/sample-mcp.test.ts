@@ -6,8 +6,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
-import { ClaudeDriver } from "../providers/claude/driver"
-import { CodexDriver } from "../providers/codex/driver"
+import { ClaudeDriver } from "@pigcode/provider-claude/driver"
+import { CodexDriver } from "@pigcode/provider-codex/driver"
 import type { CreateSessionInput, ProviderDriver } from "../providers/driver"
 import { FakeProviderDriver } from "../providers/fake"
 import { apply as providers } from "../providers/registry"
@@ -125,10 +125,10 @@ describe("provider MCP injection", () => {
       const { done } = await ctx.providers.startRun(thread.id, "what time is it")
       await done
 
-      expect(captured?.mcp?.claudeServer).toBeTruthy()
-      expect(captured?.mcp?.codexConfig).toMatchObject({
-        mcp_servers: { pigcode: { command: "node" } },
-      })
+      expect(captured?.mcp?.tools.map((tool) => tool.name)).toContain("clock_now")
+      const result = (await captured?.mcp?.callTool("clock_now", {})) as { now?: string }
+      expect(typeof result.now).toBe("string")
+      expect(captured?.mcp?.stdioServer()).toMatchObject({ command: "node" })
       // 样例插件 id 已随启用的 capability 注册到 bridge。
       expect(pluginId).toBe("capability.pigcode-capability-clock")
     } finally {

@@ -1,5 +1,14 @@
-// 插件列表：名称、版本、类型、API 版本、权限、冲突和启用状态，并提供启停按钮。
-import { Badge, Button, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+// 插件列表：和 Agent 页同一种行——头像、名称、版本、状态与类型、启用开关；点开看包名、权限与卸载。
+import { useState } from "react"
+import { ChevronDown } from "lucide-react"
+import {
+  Badge,
+  Button,
+  EntityAvatar,
+  Switch,
+  useLocale,
+  type MessageKey,
+} from "@pigcode/ui-primitives"
 
 /** 插件类型，与 Host 的 boot graph 保持一致。 */
 export type PluginKind = "provider" | "capability" | "ui" | "bundle"
@@ -8,9 +17,14 @@ export type PluginKind = "provider" | "capability" | "ui" | "bundle"
 export interface PluginSummary {
   id: string
   name: string
+  /** manifest 的 displayName；旧 Host 没有这个字段时用包名。 */
+  displayName?: string
+  description?: string | null
   version: string
   kind: PluginKind
   enabled: boolean
+  /** 随应用内置：可以停用，不能卸载。 */
+  builtin?: boolean
   /** manifest 声明的 API 版本；manifest 不可用时为 0。 */
   apiVersion: number
   /** 安装时需要展示给用户的权限列表。 */
@@ -24,7 +38,7 @@ export interface PluginSummary {
   error: string | null
 }
 
-/** 类型徽标的本地化文案。 */
+/** 类型的本地化文案。 */
 const kindKeys: Record<PluginKind, MessageKey> = {
   provider: "plugins.kind.provider",
   capability: "plugins.kind.capability",
@@ -32,89 +46,178 @@ const kindKeys: Record<PluginKind, MessageKey> = {
   bundle: "plugins.kind.bundle",
 }
 
+/** 一行的状态：加载失败 > 冲突 > 启用 > 停用。 */
+function statusOf(plugin: PluginSummary): { tone: string; label: MessageKey } {
+  if (plugin.error && plugin.error !== plugin.conflict) {
+    return { tone: "error", label: "plugins.status.failed" }
+  }
+  if (plugin.conflict) return { tone: "warning", label: "plugins.status.conflict" }
+  return plugin.enabled
+    ? { tone: "ready", label: "plugins.enabled" }
+    : { tone: "off", label: "plugins.disabled" }
+}
+
 /** 插件列表需要的状态与事件。 */
 export interface PluginListProps {
   plugins: PluginSummary[]
-  /** 正在处理的插件 id，用于禁用按钮并显示处理中。 */
+  /** 正在处理的插件 id，用于禁用开关与按钮。 */
   pendingId: string | null
   onEnable: (id: string) => void
   onDisable: (id: string) => void
+  /** 卸载用户安装的插件；内置插件不显示卸载按钮。 */
+  onUninstall?: ((id: string) => void) | undefined
 }
 
-/** 渲染已安装插件；列表为空时显示空状态。 */
-export function PluginList({ plugins, pendingId, onEnable, onDisable }: PluginListProps) {
+function PluginDetails({
+  plugin,
+  pending,
+  onUninstall,
+}: {
+  plugin: PluginSummary
+  pending: boolean
+  onUninstall?: (() => void) | undefined
+}) {
   const { t } = useLocale()
+  const [confirming, setConfirming] = useState(false)
+  const showError = plugin.error !== null && plugin.error !== plugin.conflict
+  return (
+    <div className="ext-details">
+      {plugin.description ? <p className="agent-description">{plugin.description}</p> : null}
+      <dl className="ext-facts">
+        <dt>{t("plugins.facts.package")}</dt>
+        <dd className="mono">{plugin.name}</dd>
+        <dt>{t("plugins.facts.kind")}</dt>
+        <dd>{t(kindKeys[plugin.kind])}</dd>
+        <dt>{t("plugins.facts.api")}</dt>
+        <dd>{plugin.apiVersion}</dd>
+        <dt>{t("plugins.permissions")}</dt>
+        <dd>
+          {plugin.permissions.length > 0
+            ? plugin.permissions.map((permission) => (
+                <Badge key={permission} variant="warn">
+                  {permission}
+                </Badge>
+              ))
+            : t("plugins.facts.none")}
+        </dd>
+        <dt>{t("plugins.facts.provides")}</dt>
+        <dd className="mono">
+          {plugin.provides.length > 0 ? plugin.provides.join(", ") : t("plugins.facts.none")}
+        </dd>
+      </dl>
+      {plugin.conflict ? (
+        <p className="ext-error">
+          {t("plugins.conflict")}: {plugin.conflict}
+        </p>
+      ) : null}
+      {showError ? <p className="ext-error">{plugin.error}</p> : null}
+      {onUninstall ? (
+        <div className="ext-actions">
+          {confirming ? (
+            <Button
+              size="sm"
+              variant="danger"
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                setConfirming(false)
+                onUninstall()
+              }}
+            >
+              {t("plugins.uninstallConfirm")}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              disabled={pending}
+              onClick={() => setConfirming(true)}
+            >
+              {t("plugins.uninstall")}
+            </Button>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
 
-  if (plugins.length === 0) {
-    return <div className="empty">{t("plugins.empty")}</div>
-  }
+/** 渲染已安装的插件；列表为空时显示空状态。 */
+export function PluginList({
+  plugins,
+  pendingId,
+  onEnable,
+  onDisable,
+  onUninstall,
+}: PluginListProps) {
+  const { t } = useLocale()
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
     <section className="section">
       <div className="section-head">
         <h2>{t("plugins.installed")}</h2>
       </div>
-      <div className="group">
-        {plugins.map((plugin) => {
-          const pending = pendingId === plugin.id
-          // Host 会把冲突同时写进 error；只在 error 不是冲突原因时重复展示。
-          const showError = plugin.error !== null && plugin.error !== plugin.conflict
-          return (
-            <div className="item" key={plugin.id}>
-              <div className="main">
-                <div className="ttl">
-                  {plugin.name}
-                  <Badge>{plugin.version}</Badge>
-                  <Badge variant="info">{t(kindKeys[plugin.kind])}</Badge>
-                  <Badge variant="neutral">{`API ${plugin.apiVersion}`}</Badge>
-                  <Badge variant={plugin.enabled ? "ok" : "neutral"}>
-                    {plugin.enabled ? t("plugins.enabled") : t("plugins.disabled")}
-                  </Badge>
+      {plugins.length === 0 ? (
+        <div className="empty">{t("plugins.empty")}</div>
+      ) : (
+        <div className="group ext-list">
+          {plugins.map((plugin) => {
+            const name = plugin.displayName ?? plugin.name
+            const open = expanded === plugin.id
+            const pending = pendingId === plugin.id
+            const status = statusOf(plugin)
+            return (
+              <div className="ext-item" key={plugin.id} data-plugin={plugin.name}>
+                <div className="ext-row" data-expanded={open || undefined}>
+                  <button
+                    type="button"
+                    className="ext-row-main"
+                    aria-expanded={open}
+                    aria-label={t("plugins.expand").replace("{plugin}", name)}
+                    onClick={() => setExpanded(open ? null : plugin.id)}
+                  >
+                    <EntityAvatar id={plugin.id} name={name} />
+                    <span className="ext-row-text">
+                      <span className="ext-row-title">
+                        <span className="truncate">{name}</span>
+                        {plugin.builtin ? <Badge>{t("plugins.builtin")}</Badge> : null}
+                        <span className="ext-version">{plugin.version}</span>
+                      </span>
+                      <span className="ext-row-status" data-tone={status.tone}>
+                        <span className="ext-dot" aria-hidden="true" />
+                        <span>{t(status.label)}</span>
+                        <span className="ext-row-detail truncate">
+                          · {t(kindKeys[plugin.kind])} · {plugin.name}
+                        </span>
+                      </span>
+                    </span>
+                    <ChevronDown className="ic ic-sm ext-chevron" aria-hidden="true" />
+                  </button>
+                  <Switch
+                    aria-label={t("plugins.toggle").replace("{plugin}", name)}
+                    checked={plugin.enabled}
+                    disabled={pending}
+                    onCheckedChange={(checked) =>
+                      checked ? onEnable(plugin.id) : onDisable(plugin.id)
+                    }
+                  />
                 </div>
-                <div className="desc mono">{plugin.id}</div>
-                {plugin.permissions.length > 0 ? (
-                  <div className="desc" aria-label={t("plugins.permissions")}>
-                    {t("plugins.permissions")}{" "}
-                    {plugin.permissions.map((permission) => (
-                      <Badge key={permission} variant="warn">
-                        {permission}
-                      </Badge>
-                    ))}
-                  </div>
+                {open ? (
+                  <PluginDetails
+                    plugin={plugin}
+                    pending={pending}
+                    onUninstall={
+                      onUninstall && !plugin.builtin ? () => onUninstall(plugin.id) : undefined
+                    }
+                  />
                 ) : null}
-                {plugin.conflict ? (
-                  <div className="desc error-text">
-                    {t("plugins.conflict")}: {plugin.conflict}
-                  </div>
-                ) : null}
-                {showError ? <div className="desc error-text">{plugin.error}</div> : null}
               </div>
-              <div className="trail">
-                {plugin.enabled ? (
-                  <Button
-                    size="sm"
-                    type="button"
-                    disabled={pending}
-                    onClick={() => onDisable(plugin.id)}
-                  >
-                    {pending ? t("plugins.working") : t("plugins.disable")}
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    type="button"
-                    disabled={pending}
-                    onClick={() => onEnable(plugin.id)}
-                  >
-                    {pending ? t("plugins.working") : t("plugins.enable")}
-                  </Button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </section>
   )
 }

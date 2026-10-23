@@ -6,6 +6,7 @@ import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, sep } from "node:path"
 import { promisify } from "node:util"
+import { threadCwd } from "./worktrees"
 
 const exec = promisify(execFile)
 
@@ -51,7 +52,7 @@ declare module "cordis" {
 }
 
 /** git 插件依赖的服务。 */
-export const inject = ["projects", "threads"]
+export const inject = ["projects", "threads", "storage"]
 
 /** git 插件函数，携带 Cordis 需要的 inject 元数据。 */
 export interface GitPlugin {
@@ -69,28 +70,21 @@ export class NotAGitRepoError extends Error {
   }
 }
 
-/** 注册 git 服务；线程 ID 在这里解析为项目根目录，共享函数仍接收 cwd。 */
+/**
+ * 注册 git 服务；线程 ID 在这里解析为线程的工作目录（活动 worktree 优先），
+ * 共享函数仍接收 cwd。checkpoint 必须快照与恢复 agent 实际改动的那个目录。
+ */
 export const apply: GitPlugin = (ctx) => {
   const service: GitService = {
-    status: (threadId) => status(projectRoot(ctx, threadId)),
-    diff: (threadId, base, head) => diff(projectRoot(ctx, threadId), base, head),
-    capture: (threadId, runId, phase) =>
-      capture(projectRoot(ctx, threadId), threadId, runId, phase),
-    restore: (threadId, commitSha) => restore(projectRoot(ctx, threadId), commitSha),
+    status: (threadId) => status(threadCwd(ctx, threadId)),
+    diff: (threadId, base, head) => diff(threadCwd(ctx, threadId), base, head),
+    capture: (threadId, runId, phase) => capture(threadCwd(ctx, threadId), threadId, runId, phase),
+    restore: (threadId, commitSha) => restore(threadCwd(ctx, threadId), commitSha),
   }
   ctx.provide("git", service)
 }
 
 apply.inject = inject
-
-/** 解析线程对应的项目根目录；Task 5 引入 worktree 后再切换到活动 worktree。 */
-function projectRoot(ctx: Context, threadId: string): string {
-  const thread = ctx.threads.get(threadId)
-  if (!thread) throw new Error(`thread not found: ${threadId}`)
-  const project = ctx.projects.list().find((item) => item.id === thread.projectId)
-  if (!project) throw new Error(`project not found: ${thread.projectId}`)
-  return project.rootPath
-}
 
 /** 读取 porcelain 状态；分支名单独查询，detached HEAD 返回 null。 */
 export async function status(cwd: string): Promise<GitStatus> {
@@ -118,8 +112,46 @@ export function parseStatus(output: string): GitChange[] {
 /** 返回 base 到 head 的文本 diff；没有差异时返回空字符串。 */
 export async function diff(cwd: string, base: string, head: string): Promise<string> {
   assertRevision(base, "base")
+  if (head === WORKTREE) return worktreeDiff(cwd, base)
   assertRevision(head, "head")
   return runGit(cwd, ["diff", "--no-color", base, head, "--"])
+}
+
+/** head 写成 WORKTREE 时与当前工作区比较（含未跟踪的新文件）。 */
+export const WORKTREE = "WORKTREE"
+
+/** 没有提交的仓库用空树作基准。 */
+const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+/** 未跟踪文件最多列出这么多个，避免 node_modules 之类没忽略的目录撑爆 diff。 */
+const MAX_UNTRACKED = 200
+
+async function worktreeDiff(cwd: string, base: string): Promise<string> {
+  const from = base === "HEAD" && (await headCommit(cwd)) === null ? EMPTY_TREE : base
+  const tracked = await runGit(cwd, ["diff", "--no-color", from, "--"])
+  const untracked = (await runGit(cwd, ["ls-files", "--others", "--exclude-standard", "-z"]))
+    .split("\0")
+    .filter(Boolean)
+    .slice(0, MAX_UNTRACKED)
+  const added: string[] = []
+  for (const file of untracked) added.push(await newFileDiff(cwd, file))
+  return [tracked, ...added].filter((part) => part.length > 0).join("")
+}
+
+/** 未跟踪文件相对空文件的 diff；--no-index 在有差异时以 1 退出，输出仍然在 stdout 里。 */
+async function newFileDiff(cwd: string, file: string): Promise<string> {
+  try {
+    const { stdout } = await exec(
+      "git",
+      ["diff", "--no-color", "--no-index", "--", "/dev/null", file],
+      { cwd, maxBuffer: MAX_BUFFER },
+    )
+    return stdout
+  } catch (error) {
+    const stdout = errorField(error, "stdout")
+    if (typeof stdout === "string") return stdout
+    throw normalizeGitError(error, cwd)
+  }
 }
 
 /** 用临时 index 把工作区（含未跟踪文件）写成提交并更新隐藏 ref，不触碰用户索引。 */
@@ -221,7 +253,7 @@ function normalizeGitError(error: unknown, cwd: string): Error {
 }
 
 /** 读取错误对象字段，避免使用 any。 */
-function errorField(error: unknown, key: "stderr"): unknown {
+function errorField(error: unknown, key: "stderr" | "stdout"): unknown {
   if (typeof error !== "object" || error === null || !(key in error)) return undefined
   return (error as Record<string, unknown>)[key]
 }

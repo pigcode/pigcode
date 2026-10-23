@@ -1,6 +1,7 @@
 /** M4 验收：安装/启用/停用第三方 provider、UI、capability 插件。 */
 import { mkdirSync, rmSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
+import { addProject, installPlugin } from "./projects"
 
 test("installs, enables, and disables plugins without restart", async () => {
   // 每次从干净的项目目录开始，避免上一次失败残留影响结果。
@@ -15,23 +16,14 @@ test("installs, enables, and disables plugins without restart", async () => {
   const app = await electron.launch({ args: ["."], env: { ...env, PIGCODE_PROVIDER: "echo" } })
   const page = await app.firstWindow()
   // 安装 provider 插件
-  await page.getByRole("button", { name: "添加项目" }).first().click()
-  await page.getByLabel("项目路径").fill(projectRoot)
-  await page.getByRole("button", { name: "添加", exact: true }).click()
+  await addProject(app, page, projectRoot)
   await page.getByRole("button", { name: "设置", exact: true }).click()
   await page.getByRole("button", { name: "插件", exact: true }).first().click()
   const provider = new URL("../../../examples/provider-echo", import.meta.url).pathname
-  await page.getByLabel("插件目录或 npm 包").fill(provider)
-  await page.getByRole("button", { name: "安装插件" }).click()
-  await expect(
-    page.locator(".item").filter({ hasText: "pigcode-provider-echo" }).first(),
-  ).toBeVisible()
-  await expect(
-    page
-      .locator(".item")
-      .filter({ hasText: "pigcode-provider-echo" })
-      .getByRole("button", { name: "停用" }),
-  ).toBeVisible()
+  await installPlugin(page, provider)
+  const echo = page.locator(".ext-item").filter({ hasText: "pigcode-provider-echo" })
+  await expect(echo).toBeVisible()
+  await expect(echo.getByRole("switch")).toBeChecked()
   // 设置页的侧栏和内容区各有一个返回入口，取侧栏那个。
   await page.getByRole("button", { name: "返回应用" }).first().click()
 
@@ -49,32 +41,25 @@ test("installs, enables, and disables plugins without restart", async () => {
   await page.getByRole("button", { name: "设置", exact: true }).click()
   await page.getByRole("button", { name: "插件", exact: true }).first().click()
   const ui = new URL("../../../examples/ui-debug-panel", import.meta.url).pathname
-  await page.getByLabel("插件目录或 npm 包").fill(ui)
-  await page.getByRole("button", { name: "安装插件" }).click()
-  await expect(
-    page
-      .locator(".item")
-      .filter({ hasText: "pigcode-ui-debug-panel" })
-      .getByRole("button", { name: "停用" }),
-  ).toBeVisible()
+  await installPlugin(page, ui)
+  const debug = page.locator(".ext-item").filter({ hasText: "pigcode-ui-debug-panel" })
+  await expect(debug.getByRole("switch")).toBeChecked()
   await expect(page.getByText("Debug Panel")).toBeVisible()
-  await page
-    .locator(".item")
-    .filter({ hasText: "pigcode-ui-debug-panel" })
-    .getByRole("button", { name: "停用" })
-    .click()
+  await debug.getByRole("switch").click()
   await expect(page.getByText("Debug Panel")).toBeHidden()
 
-  // capability 插件没有可见 UI，用列表状态验证启停热生效。
+  // capability 插件没有可见 UI，用列表状态验证启停热生效；详情里是包名与类型。
   const capability = new URL("../../../examples/capability-session-info", import.meta.url).pathname
-  await page.getByLabel("插件目录或 npm 包").fill(capability)
-  await page.getByRole("button", { name: "安装插件" }).click()
+  await installPlugin(page, capability)
   const capabilityItem = page
-    .locator(".item")
+    .locator(".ext-item")
     .filter({ hasText: "pigcode-capability-session-info" })
-  await expect(capabilityItem.getByRole("button", { name: "停用" })).toBeVisible()
-  await capabilityItem.getByRole("button", { name: "停用" }).click()
-  await expect(capabilityItem.getByRole("button", { name: "启用" })).toBeVisible()
+  await expect(capabilityItem.getByRole("switch")).toBeChecked()
+  await capabilityItem.getByRole("switch").click()
+  await expect(capabilityItem.getByRole("switch")).not.toBeChecked()
+  await expect(capabilityItem).toContainText("已停用")
+  await capabilityItem.locator(".ext-row-main").click()
+  await expect(capabilityItem.locator(".ext-facts")).toContainText("能力")
 
   await app.close()
 })

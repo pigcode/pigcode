@@ -1,6 +1,9 @@
 /** Host utilityProcess 入口：接收 main 转交的端口并启动 RPC。 */
-import { createHostApp } from "./kernel/app"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
+import { createHostAppFromProfile } from "./kernel/app"
 import { writeBootGraph } from "./kernel/boot"
+import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { RpcServer } from "./rpc/server"
 import { apply as pluginsPlugin } from "./services/plugins"
@@ -23,8 +26,22 @@ if (!parentPort) {
 }
 
 parentPort.on("message", (event) => {
-  void bootstrap(event)
+  void bootstrap(event).catch((error: unknown) => {
+    // 启动失败要留下原因再退出，main 会重新拉起 Host；静默的未处理拒绝无从排查。
+    console.error("[host] bootstrap failed:", error)
+    process.exit(1)
+  })
 })
+
+/**
+ * 两个目录：核心 profile 随应用发布、只读，列出核心服务与内置插件（与本文件同在 out/host 下）；
+ * 用户 profile 由 main 通过 PIGCODE_PROFILE_DIR 传入，存放安装的插件、设置与数据库。
+ */
+function coreProfileDir(): string {
+  return (
+    process.env.PIGCODE_CORE_PROFILE_DIR ?? fileURLToPath(new URL("./profile", import.meta.url))
+  )
+}
 
 /** 收到端口后创建 kernel，并在应用端口上启动 RPC。 */
 async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
@@ -33,13 +50,20 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   if (!appPort) return
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
-  const ctx = await createHostApp({ profileDir, profileName: "desktop" })
+  const profile = await loadProfile(coreProfileDir(), "desktop")
+  const ctx = await createHostAppFromProfile(profile, {
+    "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
+    "core.settings": { path: join(profileDir, "settings.json") },
+  })
   // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
   ctx.providers.recoverAfterRestart()
+  // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 provider。
+  await ctx.plugin(pluginsPlugin, { profileDir, builtin: profile.builtinPlugins })
+  await ctx.plugins.loadAll()
+  await writeBootGraph({ profileDir, builtin: profile.builtinPlugins })
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
-  await ctx.plugin(pluginsPlugin, { profileDir })
-  await writeBootGraph(profileDir)
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()
-  control?.on("message", () => {})
+  // 控制端口目前只承载内置浏览器的动作：agent 的 browser_* 工具经它交给 main 执行。
+  if (control) ctx.get("browser")?.attach(control)
 }

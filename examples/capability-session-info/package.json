@@ -2,10 +2,13 @@
   "name": "pigcode-capability-session-info",
   "version": "0.0.0",
   "type": "module",
-  "main": "./index.mjs",
+  "main": "./index.ts",
   "pigcode": {
     "apiVersion": 1,
     "kind": "capability",
-    "host": "./index.mjs"
+    "host": "./index.ts"
+  },
+  "devDependencies": {
+    "@pigcode/plugin-sdk": "workspace:*"
   }
 }

@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@pigcode/plugin-sdk": "workspace:*",
-    "@pigcode/ui-primitives": "workspace:*"
+    "@pigcode/ui-primitives": "workspace:*",
+    "lucide-react": "1.0.1"
   },
   "peerDependencies": {
     "react": "^19",

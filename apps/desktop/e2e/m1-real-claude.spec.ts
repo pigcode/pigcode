@@ -1,6 +1,7 @@
 /** 真实 Claude 端到端：新建线程、发 OK、看到流式与完成。 */
 import { mkdirSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
+import { addProject } from "./projects"
 
 test.skip(process.env.PIGCODE_REAL_CLAUDE !== "1", "set PIGCODE_REAL_CLAUDE=1")
 
@@ -18,9 +19,7 @@ test("real claude answers OK", async () => {
   const app = await electron.launch({ args: ["."], env: launchEnv() })
   try {
     const page = await app.firstWindow()
-    await page.getByRole("button", { name: "添加项目" }).first().click()
-    await page.getByLabel("项目路径").fill("/tmp/pigcode-m1-e2e")
-    await page.getByRole("button", { name: "添加", exact: true }).click()
+    await addProject(app, page, "/tmp/pigcode-m1-e2e")
     await expect(page.getByText("pigcode-m1-e2e", { exact: true })).toBeVisible()
     await page.getByRole("button", { name: "新会话" }).first().click()
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")

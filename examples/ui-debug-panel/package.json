@@ -5,6 +5,9 @@
   "pigcode": {
     "apiVersion": 1,
     "kind": "ui",
-    "client": "./client.mjs"
+    "client": "./client.ts"
+  },
+  "devDependencies": {
+    "@pigcode/plugin-sdk": "workspace:*"
   }
 }

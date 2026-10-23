@@ -1,6 +1,10 @@
-/** 本地预览窗口：只允许 loopback http/https，并在沙箱窗口中打开。 */
+/**
+ * 预览窗口：把内置浏览器里的页面放到独立的沙箱窗口打开，地址规则与内置浏览器一致（http/https）。
+ * isAllowedPreviewUrl 只用于主窗口里的 iframe，仍然限定在本机。
+ */
 import { randomUUID } from "node:crypto"
 import { BrowserWindow } from "electron"
+import { BROWSER_PARTITION, isAllowedBrowserUrl } from "./browser-policy"
 
 /** 允许的 loopback 主机名；URL 会把 IPv6 主机规范化为带方括号的形式。 */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
@@ -20,25 +24,30 @@ export function isAllowedPreviewUrl(value: string): boolean {
   return LOOPBACK_HOSTS.has(url.hostname)
 }
 
-/** 在独立沙箱窗口中打开 loopback URL，返回可用于关闭的 id。 */
+/** 在独立沙箱窗口中打开 http/https 页面，返回可用于关闭的 id。 */
 export function openPreview(url: string): { id: string } {
-  if (!isAllowedPreviewUrl(url)) throw new Error("PREVIEW_URL_NOT_ALLOWED")
+  if (!isAllowedBrowserUrl(url) || url === "about:blank") throw new Error("PREVIEW_URL_NOT_ALLOWED")
 
   const id = randomUUID()
   const window = new BrowserWindow({
     width: 1100,
     height: 800,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      partition: BROWSER_PARTITION,
+    },
   })
-  // 初始 URL 之外的跳转也必须留在 loopback；302 与脚本导航都走这里。
+  // 初始 URL 之外的跳转也只能是 http/https；302 与脚本导航都走这里。
   window.webContents.on("will-navigate", (event, target) => {
-    if (!isAllowedPreviewUrl(target)) event.preventDefault()
+    if (!isAllowedBrowserUrl(target)) event.preventDefault()
   })
   window.webContents.on("will-redirect", (event, target) => {
-    if (!isAllowedPreviewUrl(target)) event.preventDefault()
+    if (!isAllowedBrowserUrl(target)) event.preventDefault()
   })
   window.webContents.setWindowOpenHandler(({ url: target }) =>
-    isAllowedPreviewUrl(target) ? { action: "allow" } : { action: "deny" },
+    isAllowedBrowserUrl(target) ? { action: "allow" } : { action: "deny" },
   )
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => {
     callback(false)

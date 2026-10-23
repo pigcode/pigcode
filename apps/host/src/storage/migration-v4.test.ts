@@ -25,7 +25,7 @@ describe("migration v4", () => {
       "last_run_id",
       "created_at",
     ])
-    expect(db.pragma("user_version", { simple: true })).toBe(4)
+    expect(db.pragma("user_version", { simple: true })).toBeGreaterThanOrEqual(4)
     db.close()
   })
 })

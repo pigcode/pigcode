@@ -55,29 +55,55 @@ export function registerAppProtocol(appRoot: string): void {
   })
 }
 
-/** 提供 boot.json 与插件 client bundle；插件名经过 URL 编码。 */
-export function registerPluginProtocol(profileDir: string): void {
-  protocol.handle("pigcode-plugin", async (request) => {
-    const url = new URL(request.url)
-    if (url.hostname === "boot.json") {
-      return new Response(await readFile(join(profileDir, "boot.json")), {
-        headers: {
-          "content-type": "application/json",
-          "access-control-allow-origin": "*",
-        },
-      })
-    }
-    if (url.hostname !== "plugins") return new Response("not found", { status: 404 })
-    const segments = url.pathname.split("/").filter(Boolean)
-    const name = decodeURIComponent(segments[0] ?? "")
-    const file = segments.slice(1).join("/")
-    if (!name || !file) return new Response("not found", { status: 404 })
-    const target = resolveInside(join(profileDir, "node_modules", name), file)
-    return new Response(await readFile(target), {
-      headers: {
-        "content-type": file.endsWith(".css") ? "text/css" : "text/javascript",
-        "access-control-allow-origin": "*",
-      },
+/** 文件不存在时返回 null；其他读错误照常抛出。 */
+async function readIfExists(
+  path: string,
+  read: (path: string) => Promise<Buffer<ArrayBuffer>>,
+): Promise<Buffer<ArrayBuffer> | null> {
+  try {
+    return await read(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
+    throw error
+  }
+}
+
+/**
+ * 处理一次 pigcode-plugin:// 请求：boot.json 与插件 client bundle；插件名经过 URL 编码。
+ * 新 profile 里 Host 还没写出 boot.json 时返回空的启动图，而不是让请求失败。
+ */
+export async function handlePluginRequest(
+  profileDir: string,
+  requestUrl: string,
+  read: (path: string) => Promise<Buffer<ArrayBuffer>> = (path) => readFile(path),
+): Promise<Response> {
+  const url = new URL(requestUrl)
+  const cors = { "access-control-allow-origin": "*" }
+  if (url.hostname === "boot.json") {
+    const body = await readIfExists(join(profileDir, "boot.json"), read)
+    return new Response(body ?? JSON.stringify({ entries: [] }), {
+      headers: { "content-type": "application/json", ...cors },
     })
+  }
+  if (url.hostname !== "plugins") return new Response("not found", { status: 404, headers: cors })
+  const segments = url.pathname.split("/").filter(Boolean)
+  const name = decodeURIComponent(segments[0] ?? "")
+  const file = segments.slice(1).join("/")
+  if (!name || !file) return new Response("not found", { status: 404, headers: cors })
+  let target: string
+  try {
+    target = resolveInside(join(profileDir, "node_modules", name), file)
+  } catch {
+    return new Response("forbidden", { status: 403, headers: cors })
+  }
+  const body = await readIfExists(target, read)
+  if (!body) return new Response("not found", { status: 404, headers: cors })
+  return new Response(body, {
+    headers: { "content-type": file.endsWith(".css") ? "text/css" : "text/javascript", ...cors },
   })
+}
+
+/** app ready 之后注册插件协议。 */
+export function registerPluginProtocol(profileDir: string): void {
+  protocol.handle("pigcode-plugin", (request) => handlePluginRequest(profileDir, request.url))
 }

@@ -2,12 +2,14 @@
 import { Context } from "cordis"
 import Loader, { type EntryOptions } from "@cordisjs/plugin-loader"
 import { pathToFileURL } from "node:url"
-import { loadProfile } from "./profile"
+import { loadProfile, type LoadedProfile } from "./profile"
 
 /** 创建 Host kernel 所需的 profile 位置。 */
 export interface CreateHostAppOptions {
   profileDir: string
   profileName: string
+  /** 按条目 id 替换 config，例如把 storage 指到用户目录里的数据库。 */
+  configOverrides?: Record<string, unknown>
 }
 
 /** `--dump-config` 输出中的单条插件配置。 */
@@ -26,25 +28,34 @@ export interface DumpedConfig {
 /** loader 创建条目时使用的选项；运行时会保留显式传入的 id。 */
 type LoaderCreateOptions = Omit<EntryOptions, "id"> & { id?: string }
 
-/** 按 profile 加载插件；加载失败的第三方插件不阻止 kernel 返回。 */
-export async function createHostApp(options: CreateHostAppOptions): Promise<Context> {
+/** 按 profile 加载核心服务；条目的相对入口以 profile 目录为基准解析。 */
+export async function createHostAppFromProfile(
+  profile: LoadedProfile,
+  configOverrides: Record<string, unknown> = {},
+): Promise<Context> {
   const ctx = new Context()
-  const profile = await loadProfile(options.profileDir, options.profileName)
   const base = pathToFileURL(profile.profileDir).href
   const baseUrl = base.endsWith("/") ? base : `${base}/`
   await ctx.plugin(Loader, { baseUrl })
 
   for (const entry of profile.plugins) {
+    const config = entry.id in configOverrides ? configOverrides[entry.id] : entry.config
     const createOptions: LoaderCreateOptions = {
       id: entry.id,
       name: entry.name,
-      ...(entry.config === undefined ? {} : { config: entry.config }),
+      ...(config === undefined ? {} : { config }),
       ...(entry.disabled === undefined ? {} : { disabled: entry.disabled }),
     }
     await ctx.loader.create(createOptions)
   }
   await ctx.loader.await()
   return ctx
+}
+
+/** 读取 profile 并创建 kernel。 */
+export async function createHostApp(options: CreateHostAppOptions): Promise<Context> {
+  const profile = await loadProfile(options.profileDir, options.profileName)
+  return createHostAppFromProfile(profile, options.configOverrides)
 }
 
 /** 输出 loader 当前条目，供 `pigcode --dump-config` 使用。 */

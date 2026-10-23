@@ -12,10 +12,7 @@ export interface SheetPopupProps extends ComponentProps<typeof BaseDialog.Popup>
 }
 
 /** 蒙层，沿用 scrim 语义类。 */
-export function SheetBackdrop({
-  className,
-  ...props
-}: ComponentProps<typeof BaseDialog.Backdrop>) {
+export function SheetBackdrop({ className, ...props }: ComponentProps<typeof BaseDialog.Backdrop>) {
   return <BaseDialog.Backdrop className={cn("scrim", className)} {...props} />
 }
 

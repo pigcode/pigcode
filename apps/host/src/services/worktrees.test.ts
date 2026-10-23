@@ -1,17 +1,18 @@
 /** 验证 worktree 的创建、切换、移除，以及线程 cwd 跟随活动 worktree。 */
 import { execFile } from "node:child_process"
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it } from "vitest"
-import { resolveThreadCwd } from "../providers/switching"
+import { apply as git } from "./git"
 import { apply as projects } from "./projects"
 import { apply as sessions } from "./sessions"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
-import { apply as worktrees } from "./worktrees"
+import { apply as workspaceService } from "./workspace"
+import { apply as worktrees, threadCwd } from "./worktrees"
 
 const exec = promisify(execFile)
 const contexts: Context[] = []
@@ -95,17 +96,58 @@ describe("worktrees service", () => {
   it("tracks the active path and resolves the thread cwd", async () => {
     const { ctx, thread, root } = await setupGitThread()
     expect(ctx.worktrees.activePath(thread.id)).toBeNull()
-    expect(resolveThreadCwd(ctx, thread.id, thread.projectId)).toBe(root)
+    expect(threadCwd(ctx, thread.id)).toBe(root)
 
     const worktree = await ctx.worktrees.create(thread.id)
 
     expect(ctx.worktrees.activePath(thread.id)).toBe(worktree.path)
-    expect(resolveThreadCwd(ctx, thread.id, thread.projectId)).toBe(worktree.path)
+    expect(threadCwd(ctx, thread.id)).toBe(worktree.path)
 
     await ctx.worktrees.remove(thread.id)
 
     expect(ctx.worktrees.activePath(thread.id)).toBeNull()
-    expect(resolveThreadCwd(ctx, thread.id, thread.projectId)).toBe(root)
+    expect(threadCwd(ctx, thread.id)).toBe(root)
+  })
+
+  it("points files, git status and checkpoints at the active worktree", async () => {
+    const { ctx, thread, root } = await setupGitThread()
+    await ctx.plugin(workspaceService)
+    await ctx.plugin(git)
+    const worktree = await ctx.worktrees.create(thread.id)
+    await writeFile(join(worktree.path, "only-in-worktree.txt"), "agent output\n")
+
+    // 文件树、git status 与 checkpoint 都要看 agent 实际工作的目录，而不是主 checkout。
+    const tree = await ctx.workspace.tree(thread.id)
+    expect(tree.map((entry) => entry.path)).toContain("only-in-worktree.txt")
+    const status = await ctx.git.status(thread.id)
+    expect(status.branch).toBe(worktree.branch)
+    expect(status.changed.map((change) => change.path)).toEqual(["only-in-worktree.txt"])
+    expect(await pathExists(join(root, "only-in-worktree.txt"))).toBe(false)
+
+    const checkpoint = await ctx.git.capture(thread.id, "run_wt", "baseline")
+    await writeFile(join(worktree.path, "a.txt"), "changed\n")
+    await ctx.git.restore(thread.id, checkpoint.commitSha)
+    expect(await readFile(join(worktree.path, "a.txt"), "utf8")).toBe("one\n")
+    await ctx.worktrees.remove(thread.id)
+  })
+
+  it("lists the thread's worktrees that still exist with the active one", async () => {
+    const { ctx, thread } = await setupGitThread()
+    await expect(ctx.worktrees.list(thread.id)).resolves.toEqual({
+      worktrees: [],
+      activePath: null,
+    })
+    const first = await ctx.worktrees.create(thread.id)
+    await expect(ctx.worktrees.list(thread.id)).resolves.toEqual({
+      worktrees: [first],
+      activePath: first.path,
+    })
+    await ctx.worktrees.remove(thread.id)
+    // 目录已经删掉的 worktree 不再列出。
+    await expect(ctx.worktrees.list(thread.id)).resolves.toEqual({
+      worktrees: [],
+      activePath: null,
+    })
   })
 
   it("rejects switching to a worktree that was not created", async () => {

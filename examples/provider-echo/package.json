@@ -1,21 +1,52 @@
 {
   "name": "pigcode-provider-echo",
   "version": "0.1.0",
+  "description": "Example agent that echoes your message back",
   "type": "module",
-  "main": "./index.mjs",
+  "main": "./index.ts",
   "pigcode": {
     "apiVersion": 1,
     "kind": "provider",
     "displayName": "Echo",
-    "host": "./index.mjs",
+    "host": "./index.ts",
     "provides": [
       "provider:echo"
     ],
     "permissions": [],
     "contributes": {
       "provider": {
-        "id": "echo"
+        "id": "echo",
+        "description": {
+          "zh-CN": "示例 agent：把你的消息原样回显，用来试插件与设置。",
+          "en-US": "Example agent that echoes your message back, for trying plugins and settings."
+        },
+        "settings": [
+          {
+            "key": "prefix",
+            "type": "text",
+            "label": {
+              "zh-CN": "回复前缀",
+              "en-US": "Reply prefix"
+            },
+            "placeholder": "echo:"
+          },
+          {
+            "key": "uppercase",
+            "type": "boolean",
+            "label": {
+              "zh-CN": "转成大写",
+              "en-US": "Uppercase"
+            },
+            "description": {
+              "zh-CN": "把回显的内容转成大写字母。",
+              "en-US": "Echo the message in upper case."
+            }
+          }
+        ]
       }
     }
+  },
+  "devDependencies": {
+    "@pigcode/plugin-sdk": "workspace:*"
   }
 }

@@ -223,10 +223,13 @@ describe("providers.startRun", () => {
     await ctx.fiber.dispose()
   })
 
-  it("honors the forced provider env", async () => {
+  it("honors the forced provider env only for registered providers", async () => {
     process.env.PIGCODE_PROVIDER = "claude"
     const { ctx } = await setup()
     try {
+      // Claude Code 由插件注册；插件没加载时强制指定不生效，回到 fake。
+      await expect(ctx.providers.defaultProvider()).resolves.toBe("fake")
+      ctx.providers.register({ ...blockingDriver().driver, id: "claude", displayName: "Claude" })
       await expect(ctx.providers.defaultProvider()).resolves.toBe("claude")
     } finally {
       delete process.env.PIGCODE_PROVIDER

@@ -6,11 +6,7 @@ import { Context } from "cordis"
 import { afterEach, describe, expect, it } from "vitest"
 import { apply as projects } from "./projects"
 import { apply as storage } from "./storage"
-import {
-  apply as terminal,
-  type PtyFactory,
-  type PtySpawnInput,
-} from "./terminal"
+import { apply as terminal, type PtyFactory, type PtySpawnInput } from "./terminal"
 import { apply as threads } from "./threads"
 
 /** 单个 fake PTY 的内部状态。 */

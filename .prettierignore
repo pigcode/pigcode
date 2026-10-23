@@ -1,0 +1,2 @@
+# pnpm writes the lockfile in its own format.
+pnpm-lock.yaml

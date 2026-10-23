@@ -1,6 +1,10 @@
-/** 审批卡片；按钮文案来自 locale，决议值沿用 allow-once / allow-for-session / deny。 */
-import { Check, Hand } from "lucide-react"
+/**
+ * 审批卡片；按钮文案来自 locale，决议值沿用 allow-once / allow-for-session / deny。
+ * 计划模式下 agent 交出的计划（ExitPlanMode）显示成计划正文，选择开始执行或继续完善。
+ */
+import { Check, Hand, ListChecks } from "lucide-react"
 import { Button, useLocale } from "@pigcode/ui-primitives"
+import { MessageText } from "./message-item"
 
 /** 用户对审批请求的三种决议。 */
 export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny"
@@ -11,6 +15,8 @@ export interface ApprovalRequest {
   title: string | undefined
   description: string | undefined
   command: string | undefined
+  /** 计划模式交出的计划（Markdown）；有值时按计划审批展示。 */
+  plan?: string | undefined
 }
 
 const RESOLVED_KEYS = {
@@ -36,6 +42,28 @@ export function ApprovalCard({
       <div className="perm-done">
         <Check className="ic ic-sm" aria-hidden="true" />
         {t(RESOLVED_KEYS[resolved])}
+      </div>
+    )
+  }
+
+  if (request.plan) {
+    return (
+      <div className="perm plan-approval" role="group" aria-label={t("chat.plan.ready")}>
+        <div className="q">
+          <ListChecks className="ic" aria-hidden="true" />
+          {t("chat.plan.ready")}
+        </div>
+        <div className="plan-approval-body md">
+          <MessageText text={request.plan} />
+        </div>
+        <div className="acts">
+          <Button variant="primary" onClick={() => onApproval(request.id, "allow-once")}>
+            {t("chat.plan.start")}
+          </Button>
+          <Button variant="ghost" onClick={() => onApproval(request.id, "deny")}>
+            {t("chat.plan.keep")}
+          </Button>
+        </div>
       </div>
     )
   }

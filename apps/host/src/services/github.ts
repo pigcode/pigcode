@@ -3,7 +3,7 @@ import type { Context } from "cordis"
 import { pullRequestInfoSchema, type PullRequestInfo } from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { activeWorktreePath } from "./worktrees"
+import { threadCwd } from "./worktrees"
 import { currentBranch } from "./git"
 
 const exec = promisify(execFile)
@@ -98,10 +98,7 @@ export const defaultGhRunner: GhRunner = async (args, cwd) => {
 
 /** 注册 github 服务；线程 cwd 与分支读取都留在 Host 内。 */
 export const apply: GithubPlugin = (ctx) => {
-  ctx.provide(
-    "github",
-    new GithubService(defaultGhRunner, (threadId) => resolveThreadCwd(ctx, threadId)),
-  )
+  ctx.provide("github", new GithubService(defaultGhRunner, (threadId) => threadCwd(ctx, threadId)))
 }
 
 apply.inject = inject
@@ -153,15 +150,6 @@ export class GithubService implements GithubServiceInterface {
       throw normalizeGhError(error)
     }
   }
-}
-
-/** 解析线程 cwd：优先活动 worktree，否则项目根目录。 */
-function resolveThreadCwd(ctx: Context, threadId: string): string {
-  const thread = ctx.threads.get(threadId)
-  if (!thread) throw new Error(`thread not found: ${threadId}`)
-  const project = ctx.projects.list().find((item) => item.id === thread.projectId)
-  if (!project) throw new Error(`project not found: ${thread.projectId}`)
-  return activeWorktreePath(ctx.storage.db, threadId) ?? project.rootPath
 }
 
 /** 把 execFile 错误映射为 gh 领域错误；已经归一化的错误原样返回。 */
