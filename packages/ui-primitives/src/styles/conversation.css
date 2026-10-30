@@ -6,12 +6,6 @@
 */
 
 :root {
-  --cv-fs: var(--fs-content);
-  --cv-fs-sm: calc(var(--fs-content) - 2px);
-  --cv-fs-xs: calc(var(--fs-content) - 4px);
-  --cv-fs-lg: calc(var(--fs-content) + 2px);
-  --cv-fs-xl: calc(var(--fs-content) + 4px);
-  --cv-fs-code: calc(var(--fs-code) + 1.5px);
   --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
   --cv-subtlest: color-mix(in oklab, var(--fg) 40%, transparent);
   --cv-surface: var(--field);
@@ -25,8 +19,6 @@
   --cv-success: #1e8a3e;
   --cv-shimmer-strong: var(--fg);
   --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
-  --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
-  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.1), 0 4px 6px -4px oklch(0% 0 0 / 0.1);
   --cv-col: 56rem;
 }
 [data-theme="dark"] {
@@ -34,8 +26,6 @@
   --cv-added: #46bf72;
   --cv-removed: #ff5c5c;
   --cv-success: #46bf72;
-  --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.3), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
-  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.35), 0 4px 6px -4px oklch(0% 0 0 / 0.3);
 }
 
 /* ─── 会话区布局 ───────────────────────────────────────── */

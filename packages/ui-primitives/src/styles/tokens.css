@@ -98,6 +98,8 @@
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 10px 24px oklch(21% 0.006 286 / 0.08),
     0 30px 80px oklch(21% 0.006 286 / 0.18);
   --shadow-panel: 0 0 0 0.5px oklch(21% 0.006 286 / 0.11), 0 1px 3px oklch(21% 0.006 286 / 0.05);
+  --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
+  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.1), 0 4px 6px -4px oklch(0% 0 0 / 0.1);
   --composer-ring: oklch(21% 0.006 286 / 0.11);
   --composer-ring-focus: oklch(21% 0.006 286 / 0.22);
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
@@ -185,6 +187,8 @@
   --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 1px 3px oklch(0% 0 0 / 0.3);
   --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 30px 80px oklch(0% 0 0 / 0.6);
   --shadow-panel: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 2px 8px oklch(0% 0 0 / 0.3);
+  --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.3), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
+  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.35), 0 4px 6px -4px oklch(0% 0 0 / 0.3);
   --composer-ring: oklch(100% 0 0 / 0.1);
   --composer-ring-focus: oklch(100% 0 0 / 0.2);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
@@ -225,14 +229,61 @@
   /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
   --fs-content: 14px;
   --fs-code: 11.5px;
+  /* 对话区的字号以对话正文为基准上下浮动 */
+  --cv-fs: var(--fs-content);
+  --cv-fs-sm: calc(var(--fs-content) - 2px);
+  --cv-fs-xs: calc(var(--fs-content) - 4px);
+  --cv-fs-lg: calc(var(--fs-content) + 2px);
+  --cv-fs-xl: calc(var(--fs-content) + 4px);
+  --cv-fs-code: calc(var(--fs-code) + 1.5px);
 
-  /* 圆角：控件 7 / 行与小卡片 9 / 卡片 12 / 输入区与对话框 16 */
+  /*
+    圆角：xs 4（复选框）/ sm 6（小按钮）/ md 7（按钮、输入框、列表行）/ lg 10（卡片里的块）/
+    panel 12（卡片、分组）/ xl 14（输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
+  */
+  --r-xs: 4px;
   --r-sm: 6px;
   --r-md: 7px;
   --r-lg: 10px;
-  --r-xl: 14px;
   --r-panel: 12px;
+  --r-xl: 14px;
+  --r-2xl: 16px;
   --r-full: 999px;
+
+  /* 间距：内边距、间隔、外边距都从这里取 */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+
+  /* 控件高度：xs 20（开关）/ sm 24（小按钮、分段里的项）/ md 28（按钮、输入框、菜单行）/ lg 32 */
+  --control-xs: 20px;
+  --control-sm: 24px;
+  --control-md: 28px;
+  --control-lg: 32px;
+  --switch-w: 34px;
+  --check-size: 14px;
+  --textarea-min-h: 80px;
+
+  /* 图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标统一 14 */
+  --icon-xs: 11px;
+  --icon-sm: 13px;
+  --icon-md: 15px;
+  --icon-lg: 18px;
+  --icon-btn: 14px;
+
+  /* 按钮和输入框的阴影：主按钮的立体感、输入框的细边与聚焦光圈 */
+  --shadow-primary:
+    inset 0 1px 0 oklch(100% 0 0 / 0.16),
+    0 0 0 0.5px color-mix(in oklab, var(--primary) 70%, black), 0 1px 2px oklch(0% 0 0 / 0.12);
+  --shadow-field:
+    inset 0 0 0 var(--hair) var(--border-strong), 0 1px 1px oklch(26% 0.02 280 / 0.03);
+  --shadow-field-focus: inset 0 0 0 1px var(--border-focus), 0 0 0 3.5px var(--accent-ring);
 
   --hair: 0.5px;
   --sidebar-w: 260px;

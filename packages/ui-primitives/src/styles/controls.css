@@ -1,13 +1,297 @@
 /*
-  Task 3 控件样式：补足 globals.css 未覆盖的 shadcn 控件类。
-  类名与 pigclaude 保持一致，数据属性按 Base UI 的 data-* 状态调整。
+  基础控件：按钮、图标按钮、输入框、多行输入框、开关、复选框、分段切换与 Tabs。
+  尺寸、间距、圆角、字号只用 tokens.css 的刻度。这个文件在 globals.css 里最先导入，
+  各区域要用别的尺寸时在自己的样式里覆盖，同等选择器下区域样式生效。
 */
 
-/* ─── 按钮尺寸补充 ─────────────────────────────────────── */
-.btn.btn-icon {
-  width: 28px;
-  height: 28px;
+/* ─── 按钮 ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  height: var(--control-md);
+  padding: 0 var(--space-6);
+  border: 0;
+  border-radius: var(--r-md);
+  font-size: var(--fs-md);
+  font-weight: var(--font-weight-ui);
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background var(--t-fast),
+    filter var(--t-fast);
+}
+.btn .ic {
+  width: var(--icon-btn);
+  height: var(--icon-btn);
+}
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 500;
+  box-shadow: var(--shadow-primary);
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+.btn-secondary,
+.btn-danger {
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-raised);
+}
+.btn-secondary {
+  color: var(--fg);
+}
+.btn-danger {
+  color: var(--bad-text);
+}
+.btn-secondary:hover,
+.btn-danger:hover {
+  background: color-mix(in oklab, var(--surface-raised) 95%, var(--fg));
+}
+.btn-secondary:active,
+.btn-danger:active {
+  background: color-mix(in oklab, var(--surface-raised) 90%, var(--fg));
+}
+.btn-ghost {
+  color: var(--fg-2);
+}
+.btn-ghost:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.btn-solid-danger {
+  background: var(--bad);
+  color: var(--on-bad);
+  box-shadow: var(--shadow-btn);
+}
+.btn-solid-danger:hover {
+  filter: brightness(0.92);
+}
+.btn-sm {
+  height: var(--control-sm);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+.btn-lg {
+  height: var(--control-lg);
+  padding: 0 var(--space-7);
+  border-radius: var(--r-lg);
+}
+.btn-block {
+  width: 100%;
+}
+.btn[disabled],
+.btn.is-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* 图标按钮：Button size="icon" 和只放一个图标的 .icon-btn 一样大；宽度固定，不要横向内边距 */
+.btn.btn-icon,
+.icon-btn {
+  width: var(--control-md);
+  height: var(--control-md);
   padding: 0;
+}
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: var(--r-md);
+  color: var(--muted);
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.icon-btn:disabled {
+  pointer-events: none;
+}
+.icon-btn:hover,
+.icon-btn[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* ─── 输入框（Select 的触发器也用 .input） ──────────────── */
+.input,
+.textarea {
+  width: 100%;
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  box-shadow: var(--shadow-field);
+  transition: box-shadow var(--t-fast);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--faint);
+}
+.input:focus,
+.textarea:focus {
+  outline: none;
+  box-shadow: var(--shadow-field-focus);
+}
+.input.is-error {
+  box-shadow: inset 0 0 0 1px var(--bad);
+}
+.textarea {
+  height: auto;
+  min-height: var(--textarea-min-h);
+  padding: var(--space-4) var(--space-5);
+  line-height: 1.5;
+  resize: vertical;
+}
+.input-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-field);
+}
+.input-group:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+.input-group input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  height: 100%;
+}
+.input-group .ic {
+  color: var(--muted);
+}
+
+/* ─── 开关：滑块直径 = 开关高度 − 上下各一档间距 ─────────── */
+.switch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--switch-w);
+  height: var(--control-xs);
+  border-radius: var(--r-full);
+  background: var(--track);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  vertical-align: middle;
+  transition: background var(--t-med) var(--ease);
+}
+.switch[aria-checked="true"] {
+  background: var(--switch-on);
+  box-shadow: none;
+}
+.switch[aria-disabled="true"],
+.switch[data-disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.switch > .switch-thumb {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  width: calc(var(--control-xs) - 2 * var(--space-1));
+  height: calc(var(--control-xs) - 2 * var(--space-1));
+  border-radius: 50%;
+  background: var(--knob);
+  box-shadow: var(--shadow-knob);
+  transition: transform var(--t-med) var(--ease);
+}
+.switch[aria-checked="true"] > .switch-thumb {
+  transform: translateX(calc(var(--switch-w) - var(--control-xs)));
+}
+
+/* ─── 复选框 ───────────────────────────────────────────── */
+.checkbox {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--check-size);
+  height: var(--check-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 var(--hair) var(--border-strong),
+    var(--shadow-btn);
+}
+.checkbox[data-checked],
+.checkbox[data-indeterminate] {
+  background: var(--primary);
+  box-shadow: none;
+}
+.checkbox:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.checkbox[data-disabled] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+/* 对勾：宽为边长的 1/4、高为 1/2，旋转 45° */
+.checkbox-indicator {
+  width: calc(var(--check-size) / 4);
+  height: calc(var(--check-size) / 2);
+  border: solid var(--on-primary);
+  border-width: 0 1.6px 1.6px 0;
+  transform: translateY(-1px) rotate(45deg);
+}
+
+/* ─── 分段切换与 Tabs：外框 = 控件高度，里面的项低一档，圆角向内收一档间距 ─── */
+.seg,
+.tabs-list {
+  display: inline-flex;
+  padding: var(--space-1);
+  gap: var(--space-1);
+  border-radius: var(--r-md);
+  background: var(--field);
+}
+.tabs-list {
+  align-self: flex-start;
+}
+.seg .seg-item,
+.tabs-tab {
+  height: var(--control-sm);
+  padding: 0 var(--space-5);
+  border-radius: calc(var(--r-md) - var(--space-1));
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--font-weight-ui);
+}
+.seg .seg-item:hover,
+.tabs-tab:hover {
+  color: var(--fg);
+}
+.seg .seg-item[data-pressed],
+.tabs-tab[data-active] {
+  background: var(--surface-raised);
+  color: var(--fg);
+  box-shadow: var(--shadow-raised);
+}
+.seg .seg-item:focus-visible,
+.tabs-tab:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 1px;
+}
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.tabs-panel {
+  min-width: 0;
+  outline: none;
 }
 
 /* ─── 滑块 ─────────────────────────────────────────────── */
@@ -64,108 +348,6 @@
   text-align: end;
 }
 
-/* ─── Tabs ─────────────────────────────────────────────── */
-.tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-}
-.tabs-list {
-  display: inline-flex;
-  align-self: flex-start;
-  padding: 2px;
-  gap: 1px;
-  border-radius: 7px;
-  background: var(--hover);
-}
-.tabs-tab {
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 5px;
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  font-weight: var(--font-weight-ui);
-}
-.tabs-tab:hover {
-  color: var(--fg);
-}
-.tabs-tab[data-active] {
-  background: var(--surface);
-  color: var(--fg);
-  box-shadow:
-    inset 0 0 0 var(--hair) var(--border),
-    var(--shadow-btn);
-}
-.tabs-tab:focus-visible {
-  outline: 1px solid var(--border-focus);
-  outline-offset: 1px;
-}
-.tabs-panel {
-  min-width: 0;
-  outline: none;
-}
-
-/* ─── 分段切换 ─────────────────────────────────────────── */
-.seg .seg-item {
-  height: 22px;
-  padding: 0 10px;
-  border-radius: 5px;
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  font-weight: var(--font-weight-ui);
-}
-.seg .seg-item:hover {
-  color: var(--fg);
-}
-.seg .seg-item[data-pressed] {
-  background: var(--surface);
-  color: var(--fg);
-  box-shadow:
-    inset 0 0 0 var(--hair) var(--border),
-    var(--shadow-btn);
-}
-.seg .seg-item:focus-visible {
-  outline: 1px solid var(--border-focus);
-  outline-offset: 1px;
-}
-
-/* ─── 复选框 ───────────────────────────────────────────── */
-.checkbox {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: var(--surface);
-  box-shadow:
-    inset 0 0 0 var(--hair) var(--border-strong),
-    var(--shadow-btn);
-}
-.checkbox[data-checked],
-.checkbox[data-indeterminate] {
-  background: var(--primary);
-  box-shadow: none;
-}
-.checkbox:focus-visible {
-  outline: 1px solid var(--border-focus);
-  outline-offset: 2px;
-}
-.checkbox[data-disabled] {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.checkbox-indicator {
-  width: 3.5px;
-  height: 7px;
-  border: solid var(--on-primary);
-  border-width: 0 1.6px 1.6px 0;
-  transform: translateY(-1px) rotate(45deg);
-}
-
 /* ─── 单选框 ───────────────────────────────────────────── */
 .radio-group {
   display: flex;
@@ -201,33 +383,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--knob);
-}
-
-/* ─── 开关滑块（globals 的 .switch::after 由 Thumb 取代） ─── */
-.switch {
-  display: inline-block;
-  vertical-align: middle;
-}
-.switch[data-disabled] {
-  opacity: 0.4;
-  pointer-events: none;
-}
-.switch:has(> .switch-thumb)::after {
-  content: none;
-}
-.switch > .switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--knob);
-  box-shadow: var(--shadow-knob);
-  transition: transform var(--t-med) var(--ease);
-}
-.switch[aria-checked="true"] > .switch-thumb {
-  transform: translateX(14px);
 }
 
 /* ─── 折叠区 ───────────────────────────────────────────── */
