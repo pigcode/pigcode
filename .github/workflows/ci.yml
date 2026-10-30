@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
+      # runner 镜像没有中文字体，视觉基线需要它；visual-baselines.yml 装同一个包。
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       # Electron 需要虚拟显示；globalSetup 会先构建 main/preload/renderer 与 Host。
       # 全部 E2E 与视觉回归；真实 Claude/Codex 用例没有 PIGCODE_REAL_* 时自行跳过。
       - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test

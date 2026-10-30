@@ -15,6 +15,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
+      # runner 镜像没有中文字体，不装的话截图里的中文全是方框；ci.yml 的 e2e 任务装同一个包。
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test visual --update-snapshots
         env:
           PIGCODE_E2E: "1"
