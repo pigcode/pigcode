@@ -33,6 +33,25 @@ function closeThread(connection: Connection, store: AppStore, threadId: string):
   void connection.closeThread(threadId).catch(() => undefined)
 }
 
+/**
+ * 首次连上 Host 后读取项目与会话。读取期间新加的项目、新建的会话已经写进 store，
+ * 这里合并而不是覆盖，否则它们会从侧栏消失。
+ */
+export async function loadWorkspace(connection: Connection, store: AppStore): Promise<void> {
+  const projects = (await connection.call("project.list", {})) as Project[]
+  const threads = (await connection.call("thread.list", {})) as Thread[]
+  const current = store.getSnapshot()
+  const addedProjects = new Set(current.projects.map((item) => item.id))
+  const addedThreads = new Set(current.threads.map((item) => item.id))
+  store.update({
+    projects: byCreation([
+      ...current.projects,
+      ...projects.filter((item) => !addedProjects.has(item.id)),
+    ]),
+    threads: [...current.threads, ...threads.filter((item) => !addedThreads.has(item.id))],
+  })
+}
+
 /** 添加项目；Host 对已在列表里或移除过的同一文件夹返回原来的项目，这里按 id 去重。 */
 export async function addProject(
   connection: Connection,

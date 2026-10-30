@@ -5,6 +5,7 @@ import { AppStore, type Connection } from "@pigcode/client-runtime"
 import {
   addProject,
   archiveThread,
+  loadWorkspace,
   removeProject,
   renameProject,
   renameThread,
@@ -131,6 +132,31 @@ describe("workspace actions", () => {
 
     expect(store.getSnapshot().projects.map((item) => item.id)).toEqual(["p0", "p1"])
     expect(store.getSnapshot().activeProjectId).toBe("p0")
+  })
+
+  it("keeps a project and a thread added while the first load is still running", async () => {
+    const store = new AppStore()
+    const added = { ...project("p2"), createdAt: "2026-10-21T00:00:00.000Z" }
+    const created = thread("t-new", "p2", "2026-10-21T00:00:00.000Z")
+    let releaseThreads!: () => void
+    const threadsListed = new Promise<void>((resolve) => (releaseThreads = resolve))
+    const { connection } = fakeConnection({
+      "project.list": () => [project("p1")],
+      "thread.list": async () => {
+        await threadsListed
+        return [thread("t-old", "p1", "2026-10-20T00:00:00.000Z")]
+      },
+      "project.add": () => added,
+    })
+
+    const loading = loadWorkspace(connection, store)
+    await addProject(connection, store, "/tmp/p2")
+    store.update({ threads: [created, ...store.getSnapshot().threads] })
+    releaseThreads()
+    await loading
+
+    expect(store.getSnapshot().projects.map((item) => item.id)).toEqual(["p1", "p2"])
+    expect(store.getSnapshot().threads.map((item) => item.id)).toEqual(["t-new", "t-old"])
   })
 
   it("renames a project with the record the Host returns", async () => {

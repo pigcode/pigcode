@@ -1,6 +1,6 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
-import type { Project, Thread } from "@pigcode/contracts"
+import type { Thread } from "@pigcode/contracts"
 import { AppRenderer, SlotHost, useAppStore, type SlotRegistry } from "@pigcode/client-runtime"
 import {
   useAppearance,
@@ -51,6 +51,7 @@ import { layoutLabels } from "./workbench-labels"
 import {
   addProject,
   archiveThread,
+  loadWorkspace,
   removeProject,
   renameProject,
   renameThread,
@@ -142,16 +143,10 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   useEffect(() => {
     if (state.status !== "connected" || initialLoadDone.current) return
     initialLoadDone.current = true
-    void (async () => {
-      try {
-        const projects = (await connection.call("project.list", {})) as Project[]
-        const threads = (await connection.call("thread.list", {})) as Thread[]
-        store.update({ projects, threads })
-      } catch (error) {
-        initialLoadDone.current = false
-        store.update({ error: messageOf(error) })
-      }
-    })()
+    void loadWorkspace(connection, store).catch((error: unknown) => {
+      initialLoadDone.current = false
+      store.update({ error: messageOf(error) })
+    })
   }, [state.status, connection, store])
 
   // 当前线程或它的 provider 变化时刷新能力，驱动按 capability 隐藏控件。
