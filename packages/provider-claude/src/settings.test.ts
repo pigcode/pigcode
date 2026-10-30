@@ -75,12 +75,15 @@ describe("Claude launch settings", () => {
 })
 
 describe("Claude detection", () => {
-  it("probes the configured binary with the configured environment", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-settings-"))
-    const bin = join(dir, "claude-custom")
-    await writeFile(
-      bin,
-      `#!/bin/sh
+  // fixture 是 /bin/sh 脚本，Windows 上不能直接执行。
+  it.skipIf(process.platform === "win32")(
+    "probes the configured binary with the configured environment",
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-settings-"))
+      const bin = join(dir, "claude-custom")
+      await writeFile(
+        bin,
+        `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "9.9.9 (Claude Code)"; exit 0; fi
 if [ "$1" = "auth" ]; then
   if [ "$CLAUDE_CONFIG_DIR" = "${dir}/cfg" ]; then
@@ -92,27 +95,30 @@ if [ "$1" = "auth" ]; then
 fi
 exit 1
 `,
-    )
-    await chmod(bin, 0o755)
-    const driver = new ClaudeDriver()
-    await expect(driver.detect({ binaryPath: bin, configDir: join(dir, "cfg") })).resolves.toEqual({
-      installed: true,
-      version: "9.9.9 (Claude Code)",
-      authenticated: true,
-      account: "max · claude.ai",
-      command: bin,
-      error: null,
-    })
-    await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
-      installed: true,
-      authenticated: false,
-    })
-    await expect(driver.detect({ binaryPath: join(dir, "missing") })).resolves.toMatchObject({
-      installed: false,
-      authenticated: null,
-      error: expect.stringContaining("not found"),
-    })
-  })
+      )
+      await chmod(bin, 0o755)
+      const driver = new ClaudeDriver()
+      await expect(
+        driver.detect({ binaryPath: bin, configDir: join(dir, "cfg") }),
+      ).resolves.toEqual({
+        installed: true,
+        version: "9.9.9 (Claude Code)",
+        authenticated: true,
+        account: "max · claude.ai",
+        command: bin,
+        error: null,
+      })
+      await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
+        installed: true,
+        authenticated: false,
+      })
+      await expect(driver.detect({ binaryPath: join(dir, "missing") })).resolves.toMatchObject({
+        installed: false,
+        authenticated: null,
+        error: expect.stringContaining("not found"),
+      })
+    },
+  )
 })
 
 describe("Claude MCP server", () => {

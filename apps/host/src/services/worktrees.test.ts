@@ -60,7 +60,9 @@ async function setupGitThread(gitRepo = true) {
 afterEach(async () => {
   // 先让服务清理 worktree，再删除临时仓库；新建但未删除的目录也需要回收。
   await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true, maxRetries: 5 })),
+  )
 })
 
 describe("worktrees service", () => {

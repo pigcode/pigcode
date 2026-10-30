@@ -117,7 +117,9 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map((ctx) => ctx.fiber.dispose()))
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true, maxRetries: 5 })),
+  )
 })
 
 describe("terminal service", () => {

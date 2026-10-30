@@ -1,7 +1,7 @@
 /** 验证打开项目文件夹前的路径校验、应用检测与各平台的启动命令。 */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { delimiter, join } from "node:path"
 import { afterAll, describe, expect, it } from "vitest"
 import { appDefsFor, detectApps, findOnPath, type DetectedApp } from "./open-apps"
 import { launchCommand, readDirectory, readExistingPath, settleOpenPath } from "./open-in"
@@ -76,12 +76,16 @@ describe("detectApps", () => {
   })
 
   it("finds Linux apps on PATH and always offers the file manager", () => {
-    const onPath = new Set(["/usr/bin/code", "/opt/bin/ghostty"])
-    const apps = detectApps(appDefsFor("linux"), (path) => onPath.has(path), "/usr/bin:/opt/bin")
+    // PATH 分隔符和路径拼接跟随运行测试的平台，Windows 上也能模拟 Linux 的 PATH。
+    const code = join("/usr/bin", "code")
+    const ghostty = join("/opt/bin", "ghostty")
+    const onPath = new Set([code, ghostty])
+    const searchPath = ["/usr/bin", "/opt/bin"].join(delimiter)
+    const apps = detectApps(appDefsFor("linux"), (path) => onPath.has(path), searchPath)
     expect(apps.map((app) => [app.def.id, app.location])).toEqual([
       ["file-manager", ""],
-      ["vscode", "/usr/bin/code"],
-      ["ghostty", "/opt/bin/ghostty"],
+      ["vscode", code],
+      ["ghostty", ghostty],
     ])
     expect(findOnPath("missing", "/usr/bin", () => false)).toBeNull()
   })

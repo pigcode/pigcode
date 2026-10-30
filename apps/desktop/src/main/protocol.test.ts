@@ -1,4 +1,5 @@
 /** 验证自定义协议：路径不越出根目录，boot.json 缺失时返回空启动图，插件文件缺失时 404。 */
+import { join, resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { handlePluginRequest, resolveInside } from "./protocol"
 
@@ -13,7 +14,7 @@ function files(entries: Record<string, string>): (path: string) => Promise<Buffe
 
 describe("protocol path resolution", () => {
   it("resolves a file inside the root", () => {
-    expect(resolveInside("/tmp/root", "client.js")).toBe("/tmp/root/client.js")
+    expect(resolveInside("/tmp/root", "client.js")).toBe(resolve("/tmp/root", "client.js"))
   })
 
   it("rejects a traversal path", () => {
@@ -29,9 +30,10 @@ describe("pigcode-plugin requests", () => {
   })
 
   it("serves boot.json and plugin bundles from the profile", async () => {
+    // 路径按当前平台拼出：Windows 上是反斜杠，resolve 还会补上盘符。
     const read = files({
-      "/profile/boot.json": '{"entries":[{"id":"ui.demo"}]}',
-      "/profile/node_modules/pigcode-ui-demo/client.mjs": "export function apply() {}",
+      [join("/profile", "boot.json")]: '{"entries":[{"id":"ui.demo"}]}',
+      [resolve("/profile/node_modules/pigcode-ui-demo/client.mjs")]: "export function apply() {}",
     })
     expect(
       await (await handlePluginRequest("/profile", "pigcode-plugin://boot.json/", read)).json(),

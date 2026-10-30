@@ -89,12 +89,15 @@ describe("Codex driver with settings", () => {
     tracked.close()
   })
 
-  it("detects the configured binary with CODEX_HOME", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-settings-"))
-    const bin = join(dir, "codex-custom")
-    await writeFile(
-      bin,
-      `#!/bin/sh
+  // fixture 是 /bin/sh 脚本，Windows 上不能直接执行。
+  it.skipIf(process.platform === "win32")(
+    "detects the configured binary with CODEX_HOME",
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-settings-"))
+      const bin = join(dir, "codex-custom")
+      await writeFile(
+        bin,
+        `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "codex-cli 9.0.0"; exit 0; fi
 if [ "$1" = "login" ]; then
   if [ "$CODEX_HOME" = "${dir}/home" ]; then echo "Logged in using ChatGPT"; exit 0; fi
@@ -102,20 +105,23 @@ if [ "$1" = "login" ]; then
 fi
 exit 1
 `,
-    )
-    await chmod(bin, 0o755)
-    const driver = new CodexDriver()
-    await expect(driver.detect({ binaryPath: bin, homePath: join(dir, "home") })).resolves.toEqual({
-      installed: true,
-      version: "codex-cli 9.0.0",
-      authenticated: true,
-      account: "Logged in using ChatGPT",
-      command: bin,
-      error: null,
-    })
-    await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
-      authenticated: false,
-      error: null,
-    })
-  })
+      )
+      await chmod(bin, 0o755)
+      const driver = new CodexDriver()
+      await expect(
+        driver.detect({ binaryPath: bin, homePath: join(dir, "home") }),
+      ).resolves.toEqual({
+        installed: true,
+        version: "codex-cli 9.0.0",
+        authenticated: true,
+        account: "Logged in using ChatGPT",
+        command: bin,
+        error: null,
+      })
+      await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
+        authenticated: false,
+        error: null,
+      })
+    },
+  )
 })

@@ -6,7 +6,8 @@ import { describe, expect, it } from "vitest"
 import { detectClaude } from "./detect"
 
 describe("detectClaude", () => {
-  it("parses version and auth status", async () => {
+  // fixture 是 /bin/sh 脚本，Windows 上不能直接执行。
+  it.skipIf(process.platform === "win32")("parses version and auth status", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-"))
     const bin = join(dir, "claude")
     await writeFile(

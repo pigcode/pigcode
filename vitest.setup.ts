@@ -1,10 +1,15 @@
-import { devNull } from "node:os"
+import { writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 /**
  * 测试里的 git 子进程不读本机的全局与系统配置：开发机上的提交签名、fsmonitor 等设置
  * 会让并行跑的 git 测试卡住，结果也无法复现。测试仓库各自写入 user.name/email。
+ * 全局配置指向一个空文件而不是 os.devNull：Windows 上的 git 打不开 `\\.\nul`。
  */
-process.env.GIT_CONFIG_GLOBAL = devNull
+const emptyGitConfig = join(tmpdir(), "pigcode-test-gitconfig")
+writeFileSync(emptyGitConfig, "")
+process.env.GIT_CONFIG_GLOBAL = emptyGitConfig
 process.env.GIT_CONFIG_NOSYSTEM = "1"
 
 /**

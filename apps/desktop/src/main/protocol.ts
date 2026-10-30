@@ -1,7 +1,7 @@
 /** 注册 pigcode:// 与 pigcode-plugin://，并保证路径不越出根目录。 */
 import { protocol } from "electron"
 import { readFile } from "node:fs/promises"
-import { extname, join, normalize, resolve } from "node:path"
+import { extname, join, normalize, resolve, sep } from "node:path"
 
 /** 常见静态资源扩展名对应的 MIME 类型。 */
 const contentTypes: Record<string, string> = {
@@ -20,7 +20,8 @@ const contentTypes: Record<string, string> = {
 export function resolveInside(root: string, requestPath: string): string {
   const normalizedRoot = resolve(root)
   const target = resolve(normalizedRoot, normalize(requestPath))
-  if (target !== normalizedRoot && !target.startsWith(`${normalizedRoot}/`)) {
+  // 用平台分隔符比较：Windows 上 resolve 返回反斜杠路径。
+  if (target !== normalizedRoot && !target.startsWith(`${normalizedRoot}${sep}`)) {
     throw new Error(`path escapes root: ${requestPath}`)
   }
   return target
