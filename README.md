@@ -160,6 +160,7 @@ Environment overrides:
 - `PIGCODE_PROVIDER`: force the default agent (`claude`, `codex`, or `fake` for the
   scripted development agent, which is otherwise not registered).
 - `PIGCODE_CLAUDE_PATH`: Claude Code executable used when its binary path setting is blank.
+- `PIGCODE_CODEX_PATH`: Codex executable used when its binary path setting is blank.
 
 The E2E suite runs with `PIGCODE_PROFILE_DIR=apps/desktop/out-e2e/profile` (cleared
 before each run) and an in-memory database.

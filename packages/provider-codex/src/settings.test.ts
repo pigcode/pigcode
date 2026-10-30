@@ -2,7 +2,7 @@
 import { chmod, mkdtemp, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { CodexDriver } from "./driver"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
 import { ScriptedTransport, messageOf } from "./scripted-transport"
@@ -32,6 +32,16 @@ describe("Codex launch settings", () => {
     ])
     expect(launch.env?.CODEX_HOME).toBe(join(homedir(), ".codex-work"))
     expect(launch.env?.OPENAI_BASE_URL).toBe("http://127.0.0.1:8080/v1")
+  })
+
+  it("uses PIGCODE_CODEX_PATH only when the binary path setting is blank", () => {
+    vi.stubEnv("PIGCODE_CODEX_PATH", "/opt/codex-from-env")
+    try {
+      expect(codexLaunch({}).command).toBe("/opt/codex-from-env")
+      expect(codexLaunch({ binaryPath: "/opt/codex" }).command).toBe("/opt/codex")
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("changes the launch key only when the effective command changes", () => {

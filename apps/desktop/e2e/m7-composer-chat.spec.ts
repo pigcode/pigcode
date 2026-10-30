@@ -1,9 +1,14 @@
 /** 输入框、按轮时间线、运行指示与「用…打开」的端到端验收（fake provider）。 */
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 
 test("composer: agent rail, models, thinking depth, permissions, @files and /commands", async () => {
-  const { app, page } = await openThread("composer")
+  // Codex 指向一个不存在的文件，不管本机装没装 Codex，结果都一样。
+  const { app, page } = await openThread("composer", {
+    PIGCODE_CODEX_PATH: join(tmpdir(), "pigcode-e2e-no-codex"),
+  })
   try {
     // 新会话用 agent 的默认模型；思考深度是本机偏好，先显式选一次。
     const chip = page.getByRole("button", { name: /Agent 与模型/ })
@@ -23,7 +28,7 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     // 其他 agent 只有选中后才列出自己的模型。
     await page.getByRole("tab", { name: "Claude Code" }).click()
     await expect(page.getByRole("listbox", { name: "Claude Code" })).toBeVisible()
-    // 没装 Codex 时读取目录会启动失败；Host 不能因此崩溃，列表只是为空。
+    // Codex 启动失败时读取目录也失败；Host 不能因此崩溃，列表只是为空。
     await page.getByRole("tab", { name: "Codex" }).click()
     await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没有匹配的模型")
     await page.getByRole("tab", { name: "Fake Provider" }).click()
@@ -58,7 +63,8 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await page.locator(".tiptap").click()
     await page.keyboard.press("ArrowUp")
     await expect(page.locator(".tiptap")).toContainText("look at @src/index.ts please")
-    await page.keyboard.press("Control+a")
+    // macOS 上 Control+A 只是移到行首，全选要用 ⌘A。
+    await page.keyboard.press("ControlOrMeta+a")
     await page.keyboard.press("Backspace")
     await page.keyboard.type("/readonly")
     await page.keyboard.press("Enter")

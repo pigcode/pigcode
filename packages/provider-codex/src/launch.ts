@@ -15,12 +15,21 @@ export interface CodexLaunch {
   env: NodeJS.ProcessEnv | undefined
 }
 
+/** 解析可执行文件：设置页的路径 > PIGCODE_CODEX_PATH > PATH 与常见安装目录。 */
+export function codexExecutable(settings: ProviderSettingsValues | undefined): string {
+  const configured = settingString(settings, "binaryPath")
+  if (configured) return resolveExecutable(configured, "codex")
+  const fromEnv = process.env.PIGCODE_CODEX_PATH
+  if (fromEnv) return fromEnv
+  return resolveExecutable(undefined, "codex")
+}
+
 /** 根据设置生成 app-server 的启动命令；启动参数追加在 `app-server --stdio` 之后。 */
 export function codexLaunch(settings: ProviderSettingsValues | undefined): CodexLaunch {
   const entries = settingEnvironment(settings)
   const home = settingString(settings, "homePath")
   return {
-    command: resolveExecutable(settingString(settings, "binaryPath"), "codex"),
+    command: codexExecutable(settings),
     args: ["app-server", "--stdio", ...tokenizeCliArgs(settingString(settings, "launchArgs"))],
     env:
       entries.length > 0 || home
