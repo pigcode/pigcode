@@ -39,7 +39,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "electron",
-      "esbuild"
+      "esbuild",
+      "node-pty"
     ],
     "ignoredBuiltDependencies": [
       "better-sqlite3"
