@@ -129,14 +129,10 @@ export function OpenInButton({ path }: { path: string }) {
           <Icon name="down" />
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Positioner className="menu-positioner" side="bottom" align="end" sideOffset={6}>
-            <Menu.Popup className="menu-popup open-in-menu">
+          <Menu.Positioner side="bottom" align="end" sideOffset={6}>
+            <Menu.Popup className="open-in-menu">
               {apps.map((app) => (
-                <Menu.Item
-                  key={app.id}
-                  className="menu-item open-in-item"
-                  onClick={() => open(app)}
-                >
+                <Menu.Item key={app.id} className="open-in-item" onClick={() => open(app)}>
                   <AppIcon app={app} />
                   <span className="grow">{nameOf(app)}</span>
                   {app.id === selected.id ? (
@@ -144,9 +140,8 @@ export function OpenInButton({ path }: { path: string }) {
                   ) : null}
                 </Menu.Item>
               ))}
-              <Menu.Separator className="menu-sep" />
+              <Menu.Separator />
               <Menu.Item
-                className="menu-item"
                 onClick={() => {
                   void copyText(path).then(() => toast(t("openIn.copied")))
                 }}

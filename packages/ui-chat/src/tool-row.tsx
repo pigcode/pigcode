@@ -82,8 +82,8 @@ function StatusWord({ status }: { status: ToolRowStatus }) {
         {status.label}
       </Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Positioner side="top" align="start" sideOffset={6} className="tip-positioner">
-          <Tooltip.Popup className="tip-popup tool-tip">
+        <Tooltip.Positioner side="top" align="start" sideOffset={6}>
+          <Tooltip.Popup className="tool-tip">
             <span className="tool-tip-text">{tooltip}</span>
             <button
               type="button"

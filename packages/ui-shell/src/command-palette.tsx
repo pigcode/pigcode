@@ -191,7 +191,12 @@ export function CommandPalette(props: CommandPaletteProps) {
         if (event.target === event.currentTarget) props.onClose()
       }}
     >
-      <div className="palette" role="dialog" aria-modal="true" aria-label={t("palette.actions")}>
+      <div
+        className="popup palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("palette.actions")}
+      >
         <div className="palette-search">
           <Icon name="search" />
           <input
@@ -222,7 +227,8 @@ export function CommandPalette(props: CommandPaletteProps) {
                     type="button"
                     role="option"
                     aria-selected={index === active}
-                    className={index === active ? "palette-item is-active" : "palette-item"}
+                    data-highlighted={index === active ? "" : undefined}
+                    className="palette-item"
                     onMouseEnter={() => setActive(index)}
                     onClick={() => {
                       item.run()

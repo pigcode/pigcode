@@ -16,48 +16,48 @@
     }
   },
   "radius": {
-    "total": 93,
+    "total": 83,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 2,
-      "packages/ui-primitives/src/styles/composer.css": 11,
-      "packages/ui-primitives/src/styles/conversation.css": 37,
+      "packages/ui-primitives/src/styles/composer.css": 8,
+      "packages/ui-primitives/src/styles/conversation.css": 35,
       "packages/ui-primitives/src/styles/files.css": 2,
-      "packages/ui-primitives/src/styles/globals.css": 38,
+      "packages/ui-primitives/src/styles/globals.css": 33,
       "packages/ui-primitives/src/styles/indicators.css": 1,
       "packages/ui-primitives/src/styles/open-in.css": 2
     }
   },
   "fontSize": {
-    "total": 55,
+    "total": 51,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 1,
       "packages/ui-primitives/src/styles/composer.css": 4,
       "packages/ui-primitives/src/styles/files.css": 2,
-      "packages/ui-primitives/src/styles/globals.css": 47,
+      "packages/ui-primitives/src/styles/globals.css": 43,
       "packages/ui-primitives/src/styles/open-in.css": 1
     }
   },
   "height": {
-    "total": 215,
+    "total": 208,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 4,
       "packages/ui-primitives/src/styles/browser.css": 2,
-      "packages/ui-primitives/src/styles/composer.css": 12,
+      "packages/ui-primitives/src/styles/composer.css": 11,
       "packages/ui-primitives/src/styles/controls.css": 6,
       "packages/ui-primitives/src/styles/conversation.css": 45,
       "packages/ui-primitives/src/styles/files.css": 12,
-      "packages/ui-primitives/src/styles/globals.css": 121,
+      "packages/ui-primitives/src/styles/globals.css": 116,
       "packages/ui-primitives/src/styles/indicators.css": 2,
-      "packages/ui-primitives/src/styles/open-in.css": 4,
+      "packages/ui-primitives/src/styles/open-in.css": 3,
       "packages/ui-primitives/src/styles/plugins.css": 1,
       "packages/ui-primitives/src/styles/tabs.css": 6
     }
   },
   "duplicateSelector": {
-    "total": 97,
+    "total": 93,
     "files": {
       "packages/ui-primitives/src/styles/conversation.css": 4,
-      "packages/ui-primitives/src/styles/globals.css": 93
+      "packages/ui-primitives/src/styles/globals.css": 89
     }
   },
   "uiText": {

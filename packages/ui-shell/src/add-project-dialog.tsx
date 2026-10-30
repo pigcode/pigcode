@@ -125,15 +125,14 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
               </div>
               <Select.Portal>
                 <Select.Positioner
-                  className="menu-positioner"
                   side="bottom"
                   align="start"
                   sideOffset={6}
                   alignItemWithTrigger={false}
                 >
-                  <Select.Popup className="menu-popup project-select-popup">
+                  <Select.Popup className="project-select-popup">
                     {devices.map((device) => (
-                      <Select.Item key={device.value} value={device.value} className="menu-item">
+                      <Select.Item key={device.value} value={device.value}>
                         <Icon name="monitor" />
                         <Select.ItemText className="grow">{device.label}</Select.ItemText>
                         <Select.ItemIndicator className="check-mark">

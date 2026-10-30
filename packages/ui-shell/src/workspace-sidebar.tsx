@@ -104,10 +104,10 @@ function GroupingMenu({
         <Icon name="filter" small />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner className="menu-positioner" side="bottom" align="end" sideOffset={6}>
-          <Menu.Popup className="menu-popup">
+        <Menu.Positioner side="bottom" align="end" sideOffset={6}>
+          <Menu.Popup>
             {options.map((option) => (
-              <Menu.Item key={option.id} className="menu-item" onClick={() => onChange(option.id)}>
+              <Menu.Item key={option.id} onClick={() => onChange(option.id)}>
                 <span className="grow">{option.label}</span>
                 {option.id === value ? <Icon name="check" small className="check-mark" /> : null}
               </Menu.Item>

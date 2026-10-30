@@ -1,4 +1,5 @@
 /* ─── 输入框：@ 文件与 / 命令建议、文件标记 ───────────────── */
+/* 外框与行是 menus.css 的 .popup、.menu-popup、.menu-item；这里只把面板贴到输入框上沿 */
 .suggest-panel {
   position: absolute;
   right: 0;
@@ -7,43 +8,16 @@
   z-index: 30;
   max-height: 288px;
   overflow: auto;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--popover-glass);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  backdrop-filter: blur(24px) saturate(1.8);
-  box-shadow: var(--shadow-pop);
 }
 .suggest-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px 2px;
-  color: var(--muted);
-  font-size: var(--fs-xs);
+  gap: var(--space-3);
 }
 .suggest-empty {
   padding: 8px 8px 10px;
   color: var(--faint);
   font-size: var(--fs-sm);
-}
-.suggest-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 0 8px;
-  border-radius: var(--r-sm);
-  color: var(--fg);
-  font-size: var(--fs-md);
-  cursor: default;
-}
-.suggest-item .ic {
-  flex: none;
-  color: var(--muted);
-}
-.suggest-item.is-active {
-  background: var(--hover);
 }
 .suggest-label {
   flex: none;
@@ -82,14 +56,6 @@
 }
 .permission-menu {
   width: 296px;
-}
-.permission-item {
-  align-items: flex-start;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-.permission-item > .ic:first-child {
-  margin-top: 2px;
 }
 .permission-item.is-danger,
 .permission-item.is-danger .ic {
@@ -180,15 +146,10 @@
 }
 
 /* ─── 模型选择器：左栏 agent，右栏模型与思考深度 ───────────── */
+/* 外框是 Popover 自带的 .popup */
 .model-picker {
   width: min(480px, calc(100vw - 32px));
   overflow: hidden;
-  border-radius: 14px;
-  background: var(--popover-glass);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  backdrop-filter: blur(24px) saturate(1.8);
-  box-shadow: var(--shadow-pop);
-  outline: none;
 }
 .model-picker-body {
   display: grid;
@@ -295,11 +256,11 @@
   gap: 8px;
   min-height: 48px;
   padding: 6px 8px 6px 10px;
-  border-radius: 9px;
+  border-radius: calc(var(--r-lg) - var(--space-2));
   cursor: default;
 }
-.model-row.is-active {
-  background: var(--hover);
+.model-row[data-highlighted] {
+  background: var(--active);
 }
 .model-row[aria-disabled="true"] {
   opacity: 0.6;

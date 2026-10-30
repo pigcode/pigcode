@@ -354,26 +354,17 @@ export function Composer({
                 <Plus className="ic" aria-hidden="true" />
               </Menu.Trigger>
               <Menu.Portal>
-                <Menu.Positioner
-                  className="menu-positioner"
-                  side={menuSide}
-                  align="start"
-                  sideOffset={8}
-                >
-                  <Menu.Popup className="menu-popup">
-                    <Menu.Item className="menu-item" onClick={() => insertTrigger("@")}>
+                <Menu.Positioner side={menuSide} align="start" sideOffset={8}>
+                  <Menu.Popup>
+                    <Menu.Item onClick={() => insertTrigger("@")}>
                       <AtSign className="ic" aria-hidden="true" />
                       <span className="grow">{t("composer.attach.file")}</span>
-                      <span className="end">@</span>
+                      <span className="menu-meta">@</span>
                     </Menu.Item>
-                    <Menu.Item
-                      className="menu-item"
-                      disabled={!empty}
-                      onClick={() => insertTrigger("/")}
-                    >
+                    <Menu.Item disabled={!empty} onClick={() => insertTrigger("/")}>
                       <Slash className="ic" aria-hidden="true" />
                       <span className="grow">{t("composer.attach.command")}</span>
-                      <span className="end">/</span>
+                      <span className="menu-meta">/</span>
                     </Menu.Item>
                   </Menu.Popup>
                 </Menu.Positioner>

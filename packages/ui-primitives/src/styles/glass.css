@@ -59,8 +59,7 @@
 [data-glass="true"] .dialog,
 [data-glass="true"] .drawer,
 [data-glass="true"] .composer,
-[data-glass="true"] .side-notice,
-[data-glass="true"] [data-tip]:hover::after {
+[data-glass="true"] .side-notice {
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }

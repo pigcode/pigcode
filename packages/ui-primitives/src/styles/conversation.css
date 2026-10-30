@@ -1216,24 +1216,6 @@
 }
 
 /* 悬停提示：失败原因与复制按钮 */
-.tip-positioner {
-  z-index: 80;
-}
-.tip-popup {
-  display: inline-flex;
-  max-width: 20rem;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--cv-border);
-  border-radius: 8px;
-  background: var(--popover);
-  box-shadow: var(--cv-shadow-md);
-  color: var(--fg);
-  font-family: var(--font-ui);
-  font-size: var(--cv-fs-sm);
-  line-height: 1.5;
-}
 .tool-tip {
   max-width: 24rem;
 }
@@ -1692,19 +1674,15 @@
   opacity: 1;
   transform: scaleX(1.5);
 }
+/* 问题导航的悬停卡片：外观是 .tip-popup，内容是这一问的提问与回答摘要 */
 .turn-nav-card {
   display: flex;
   width: 20rem;
   max-width: calc(100vw - 2rem);
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--cv-border);
-  border-radius: 12px;
-  background: var(--popover);
-  box-shadow: var(--cv-shadow-lg);
-  color: var(--fg);
-  font-family: var(--font-ui);
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-6);
   font-size: var(--cv-fs);
   line-height: 20px;
 }

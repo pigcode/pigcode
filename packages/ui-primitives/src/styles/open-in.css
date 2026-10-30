@@ -54,10 +54,3 @@
   background: var(--fg);
   color: var(--surface-raised);
 }
-.open-in-menu {
-  min-width: 200px;
-}
-.open-in-item {
-  min-height: 32px;
-  gap: 10px;
-}

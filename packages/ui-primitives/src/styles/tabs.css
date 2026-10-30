@@ -121,15 +121,6 @@
 .thread-tab-menu {
   min-width: 220px;
 }
-.thread-tab-menu .menu-note {
-  max-width: 240px;
-  padding: 6px 8px 4px;
-  border-top: var(--hair) solid var(--divider);
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  line-height: 1.5;
-}
 
 /* ─── 派生子代理的只读视图：和主时间线同样的工作区与工具行 ─────── */
 .subagent-view {

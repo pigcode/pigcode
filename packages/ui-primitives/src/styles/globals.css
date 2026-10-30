@@ -1,6 +1,7 @@
 @import "./tokens.css";
 @import "./glass.css";
 @import "./controls.css";
+@import "./menus.css";
 @import "./indicators.css";
 @import "./composer.css";
 @import "./open-in.css";
@@ -106,7 +107,6 @@ select:focus-visible {
 .btn,
 .seg,
 .chip-btn,
-.popover,
 .item .ttl,
 .tag,
 .status,
@@ -119,7 +119,6 @@ a.item,
 .nav-item,
 .proj,
 .sess,
-.menu-item,
 .choice,
 .acct-switch {
   cursor: default;
@@ -323,9 +322,6 @@ a.item,
   display: flex;
   gap: 6px;
   flex: none;
-}
-.menu-toggle {
-  display: none !important;
 }
 
 /* ─── 侧栏（毛玻璃） ───────────────────────────────────── */
@@ -666,30 +662,6 @@ a.item,
   width: 15px;
   height: 15px;
   stroke-width: 1.4;
-}
-.menu-user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-}
-.menu-user .avatar {
-  width: 30px;
-  height: 30px;
-  font-size: calc(var(--ui-scale) * 12.5px);
-}
-.menu-user-name {
-  display: block;
-  font-size: var(--fs-md);
-  font-weight: 500;
-}
-.menu-user-mail {
-  display: block;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.popover.menu-wide {
-  min-width: 236px;
 }
 
 /* ─── 分组与行 ─────────────────────────────────────────── */
@@ -1143,80 +1115,6 @@ kbd {
   text-align: right;
 }
 
-/* ─── 浮层 ─────────────────────────────────────────────── */
-.popover {
-  position: fixed;
-  /* 高于对话框（蒙层 80、卡片 81），对话框里打开的下拉和弹层不会被蒙层盖住；低于提示 90 */
-  z-index: 85;
-  min-width: 200px;
-  padding: 4px;
-  border-radius: var(--r-lg);
-  background: var(--popover-glass);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  backdrop-filter: blur(24px) saturate(1.8);
-  box-shadow: var(--shadow-pop);
-  opacity: 0;
-  transform: translateY(2px);
-  pointer-events: none;
-  transition:
-    opacity var(--t-fast) var(--ease),
-    transform var(--t-fast) var(--ease);
-}
-/* Base UI 的 Positioner 负责浮层定位，浮层自身保持文档流 */
-.popover.is-open,
-.popover[data-open] {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
-}
-.menu-label {
-  padding: 5px 8px 3px;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.menu-item {
-  outline: none;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-height: 28px;
-  padding: 3px 8px;
-  border-radius: var(--r-sm);
-  text-align: left;
-  color: var(--fg);
-  font-size: var(--fs-md);
-}
-.menu-item:hover,
-.menu-item[data-highlighted],
-.menu-item.is-focus {
-  background: var(--hover);
-}
-.menu-item .ic {
-  color: var(--fg-2);
-}
-.menu-item .end {
-  margin-left: auto;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.menu-item .check-mark {
-  margin-left: auto;
-  color: var(--fg);
-}
-.menu-item.danger,
-.menu-item.danger .ic {
-  color: var(--bad-text);
-}
-.menu-sep {
-  height: var(--hair);
-  background: var(--border-strong);
-  margin: 4px 6px;
-}
-
 .scrim {
   position: fixed;
   inset: 0;
@@ -1341,52 +1239,6 @@ kbd {
     opacity: 0;
     transform: translateY(5px);
   }
-}
-
-[data-tip] {
-  position: relative;
-}
-[data-tip]:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 6px);
-  transform: translateX(-50%);
-  background: var(--popover);
-  color: var(--fg);
-  box-shadow: var(--shadow-pop);
-  font-size: calc(var(--ui-scale) * 11px);
-  font-weight: var(--font-weight-ui);
-  padding: 3px 7px;
-  border-radius: 5px;
-  white-space: nowrap;
-  z-index: 70;
-  pointer-events: none;
-}
-[data-tip-pos="up"]:hover::after {
-  top: auto;
-  bottom: calc(100% + 6px);
-}
-
-.cmdk {
-  width: min(540px, 100%);
-  align-self: start;
-  margin-top: 14vh;
-}
-.cmdk .input-group {
-  height: 42px;
-  border-radius: 0;
-  background: none;
-  box-shadow: inset 0 -0.5px 0 var(--border-strong);
-  padding: 0 14px;
-}
-.cmdk .input-group input {
-  font-size: var(--fs-lg);
-}
-.cmdk-list {
-  padding: 4px;
-  max-height: 360px;
-  overflow: auto;
 }
 
 /* ─── 其他 ─────────────────────────────────────────────── */
@@ -1615,19 +1467,6 @@ kbd {
   background: var(--active);
   color: var(--faint);
   pointer-events: none;
-}
-/* Base UI 的 Positioner 负责定位，Popup 只负责外观 */
-.menu-positioner {
-  z-index: 85;
-}
-.menu-popup {
-  min-width: 200px;
-  padding: 4px;
-  border-radius: var(--r-lg);
-  background: var(--popover-glass);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  backdrop-filter: blur(24px) saturate(1.8);
-  box-shadow: var(--shadow-pop);
 }
 @media (max-width: 720px) {
   .composer-wrap {
@@ -2725,13 +2564,6 @@ body.is-resizing-rows iframe {
   gap: 6px;
   max-width: 300px;
 }
-.model-dot {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--accent);
-}
 .model-name {
   min-width: 0;
   color: var(--fg);
@@ -2739,14 +2571,6 @@ body.is-resizing-rows iframe {
 .model-depth {
   flex: none;
   color: var(--muted);
-}
-.model-menu {
-  min-width: 220px;
-}
-.menu-item-desc {
-  display: block;
-  color: var(--muted);
-  font-size: calc(var(--ui-scale) * 12px);
 }
 /* 空会话：开场说明与输入区一起竖直居中；有了第一条消息后输入区回到底部 */
 .view:has(.chat-empty) .thread-wrap {
@@ -2891,25 +2715,6 @@ body.is-resizing-rows iframe {
     0 0 0 3.5px var(--accent-ring);
 }
 
-/* ─── 浮层：参照 ZCode 的菜单——8px 圆角、4px 内边距，28px 高的行、6px 圆角与中性的悬停色 ─── */
-.popover,
-.menu-popup {
-  padding: 4px;
-  border-radius: 8px;
-}
-.menu-item {
-  min-height: 28px;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
-.menu-item:hover,
-.menu-item[data-highlighted],
-.menu-item.is-focus {
-  background: var(--active);
-}
-.menu-item .check-mark {
-  color: var(--accent);
-}
 .dialog {
   border-radius: 16px;
   box-shadow: var(--shadow-modal);
@@ -2936,10 +2741,6 @@ body.is-resizing-rows iframe {
 }
 .toast {
   border-radius: var(--r-panel);
-}
-[data-tip]:hover::after {
-  border-radius: 6px;
-  padding: 4px 8px;
 }
 
 /* ─── 创建项目对话框 ───────────────────────────────────── */
@@ -3036,9 +2837,6 @@ body.is-resizing-rows iframe {
 }
 .project-select-popup {
   width: var(--anchor-width);
-}
-.project-select-popup .menu-item {
-  gap: 10px;
 }
 /* 源文件夹：虚线框整体是一个按钮，点开系统的文件夹选择框；选好后显示文件夹名与完整路径 */
 .project-folder {
@@ -3338,12 +3136,6 @@ body.is-resizing-rows iframe {
 }
 .surface-menu {
   min-width: 220px;
-}
-.menu-kbd {
-  margin-left: auto;
-  color: var(--faint);
-  font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 11px);
 }
 .layout-controls {
   display: flex;
@@ -3899,9 +3691,8 @@ body.is-resizing-rows iframe {
   width: min(580px, calc(100vw - 40px));
   max-height: min(560px, 72vh);
   overflow: hidden;
-  border-radius: 16px;
+  /* 蒙层自己有 backdrop-filter，里面的面板模糊不到页面，半透明会透出底下的字，所以用不透明底色 */
   background: var(--popover);
-  box-shadow: var(--shadow-modal);
   isolation: isolate;
 }
 .palette-search {
@@ -3960,12 +3751,12 @@ body.is-resizing-rows iframe {
   width: 100%;
   height: 38px;
   padding: 0 10px;
-  border-radius: var(--r-lg);
+  border-radius: calc(var(--r-lg) - var(--space-2));
   color: var(--fg);
   text-align: left;
 }
-.palette-item.is-active {
-  background: var(--accent-soft);
+.palette-item[data-highlighted] {
+  background: var(--active);
 }
 .palette-icon {
   display: grid;
@@ -3976,10 +3767,6 @@ body.is-resizing-rows iframe {
   border-radius: 7px;
   background: var(--field);
   color: var(--fg-2);
-}
-.palette-item.is-active .palette-icon {
-  background: var(--accent);
-  color: var(--on-accent);
 }
 .palette-label {
   font-size: var(--fs-md);

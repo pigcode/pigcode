@@ -41,13 +41,13 @@ function RowMenu({ actions, children }: { actions: RowAction[]; children: ReactN
     <ContextMenu.Root>
       <ContextMenu.Trigger className="row-menu-area">{children}</ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Positioner className="menu-positioner">
+        <ContextMenu.Positioner>
           {/* 菜单关闭后不把焦点还给行，否则会抢走「重命名」刚聚焦的输入框 */}
-          <ContextMenu.Popup className="menu-popup" finalFocus={false}>
+          <ContextMenu.Popup finalFocus={false}>
             {actions.map((action) => (
               <Fragment key={action.label}>
-                {action.separated ? <ContextMenu.Separator className="menu-sep" /> : null}
-                <ContextMenu.Item className="menu-item" onClick={action.run}>
+                {action.separated ? <ContextMenu.Separator /> : null}
+                <ContextMenu.Item onClick={action.run}>
                   <Icon name={action.icon} small />
                   <span className="grow">{action.label}</span>
                 </ContextMenu.Item>

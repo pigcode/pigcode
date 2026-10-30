@@ -121,12 +121,7 @@ export function TurnNavigator({
               <span className="turn-nav-bar" />
             </Tooltip.Trigger>
             <Tooltip.Portal>
-              <Tooltip.Positioner
-                side="right"
-                align="start"
-                sideOffset={8}
-                className="tip-positioner"
-              >
+              <Tooltip.Positioner side="right" align="start" sideOffset={8}>
                 <Tooltip.Popup className="turn-nav-card">
                   <p className="turn-nav-user">{plainPreview(item.user)}</p>
                   <p className="turn-nav-assistant" data-empty={item.assistant ? undefined : true}>

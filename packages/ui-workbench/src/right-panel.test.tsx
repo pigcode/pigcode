@@ -161,6 +161,25 @@ describe("RightPanel", () => {
     input.remove()
   })
 
+  it("ignores launcher letters while a menu or dialog is open, but not under composer suggestions", () => {
+    const { onAdd } = renderPanel({ surfaces: [], activeId: null })
+    const layer = document.createElement("div")
+    document.body.append(layer)
+
+    layer.className = "menu-positioner"
+    fireEvent.keyDown(window, { key: "t" })
+    layer.className = ""
+    layer.setAttribute("role", "dialog")
+    fireEvent.keyDown(window, { key: "t" })
+    expect(onAdd).not.toHaveBeenCalled()
+
+    layer.removeAttribute("role")
+    layer.className = "popup menu-popup suggest-panel"
+    fireEvent.keyDown(window, { key: "t" })
+    expect(onAdd).toHaveBeenCalledWith("terminal")
+    layer.remove()
+  })
+
   it("moves the launcher highlight with arrow keys and opens it with Enter", () => {
     const { onAdd } = renderPanel({ surfaces: [], activeId: null })
     const launcher = screen.getByLabelText("打开一个面板")

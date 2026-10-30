@@ -87,8 +87,8 @@ export interface RightPanelProps {
   children?: ReactNode
 }
 
-/** 弹层打开时不响应启动器快捷键，避免和菜单、对话框的键盘操作冲突。 */
-const BLOCKING_LAYERS = ".menu-popup, [role='dialog'], .palette"
+/** 菜单、下拉、对话框打开时不响应启动器快捷键，避免和它们的键盘操作冲突；输入框上方的建议列表不算。 */
+const BLOCKING_LAYERS = ".menu-positioner, [role='dialog']"
 
 /** 焦点在可输入元素里时不拦截单键快捷键。 */
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -274,34 +274,29 @@ function AddSurfaceMenu({
         <Plus className="ic ic-sm" aria-hidden="true" />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner className="menu-positioner" side="bottom" align="start" sideOffset={6}>
-          <Menu.Popup className="menu-popup surface-menu" onKeyDownCapture={onKeyDownCapture}>
+        <Menu.Positioner side="bottom" align="start" sideOffset={6}>
+          <Menu.Popup className="surface-menu" onKeyDownCapture={onKeyDownCapture}>
             {SURFACE_KINDS.map((kind) => (
               <Menu.Item
                 key={kind}
-                className="menu-item"
                 disabled={unavailable[kind] !== undefined}
                 aria-keyshortcuts={SURFACE_SHORTCUTS[kind]}
                 onClick={() => onAdd(kind)}
               >
                 <SurfaceIcon kind={kind} />
                 <span className="grow">{labels.surfaces[kind]}</span>
-                <kbd className="menu-kbd" aria-hidden="true">
+                <kbd className="menu-meta" aria-hidden="true">
                   {SURFACE_SHORTCUTS[kind]}
                 </kbd>
               </Menu.Item>
             ))}
             {plugins.length > 0 && onAddPlugin ? (
               <>
-                <Menu.Separator className="menu-sep" />
+                <Menu.Separator />
                 <Menu.Group>
-                  <Menu.Label className="menu-label">{labels.plugins}</Menu.Label>
+                  <Menu.Label>{labels.plugins}</Menu.Label>
                   {plugins.map((plugin) => (
-                    <Menu.Item
-                      key={plugin.id}
-                      className="menu-item"
-                      onClick={() => onAddPlugin(plugin.id)}
-                    >
+                    <Menu.Item key={plugin.id} onClick={() => onAddPlugin(plugin.id)}>
                       <SurfaceIcon kind="plugin" />
                       <span className="grow">{plugin.title}</span>
                     </Menu.Item>

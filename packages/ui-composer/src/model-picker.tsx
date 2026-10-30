@@ -126,7 +126,7 @@ export function ModelPicker({
   useEffect(() => setIndex(0), [tab, query])
   useEffect(() => {
     listRef.current
-      ?.querySelector<HTMLElement>("[data-active='true']")
+      ?.querySelector<HTMLElement>("[data-highlighted]")
       ?.scrollIntoView?.({ block: "nearest" })
   }, [index])
 
@@ -180,7 +180,7 @@ export function ModelPicker({
         <ChevronDown className="ic chip-caret" aria-hidden="true" />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Positioner className="menu-positioner" side={side} align="end" sideOffset={8}>
+        <Popover.Positioner side={side} align="end" sideOffset={8}>
           <Popover.Popup className="model-picker" initialFocus={searchRef}>
             <div className="model-picker-body" onKeyDown={onKeyDown}>
               <nav
@@ -271,8 +271,8 @@ export function ModelPicker({
                         role="option"
                         aria-selected={current}
                         aria-disabled={locked || undefined}
-                        data-active={rowIndex === index ? "true" : undefined}
-                        className={`model-row${current ? " is-current" : ""}${rowIndex === index ? " is-active" : ""}`}
+                        data-highlighted={rowIndex === index ? "" : undefined}
+                        className={current ? "model-row is-current" : "model-row"}
                         onMouseEnter={() => setIndex(rowIndex)}
                         onClick={() => choose(row)}
                       >

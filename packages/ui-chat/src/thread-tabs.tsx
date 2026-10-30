@@ -166,20 +166,19 @@ export function ThreadTabs({
             <Plus className="ic ic-sm" aria-hidden="true" />
           </Menu.Trigger>
           <Menu.Portal>
-            <Menu.Positioner className="menu-positioner" side="bottom" align="start" sideOffset={6}>
-              <Menu.Popup className="menu-popup thread-tab-menu">
+            <Menu.Positioner side="bottom" align="start" sideOffset={6}>
+              <Menu.Popup className="thread-tab-menu">
                 <div className="menu-label">{t("chat.tabs.addTitle")}</div>
                 {agents.map((agent) => (
                   <Menu.Item
                     key={agent.id}
-                    className="menu-item"
                     disabled={agent.installed === false}
                     onClick={() => onAdd(agent.id)}
                   >
                     <AgentMark agent={agent} size="sm" />
                     <span className="grow">{agent.label}</span>
                     {agent.installed === false ? (
-                      <span className="end">{t("composer.model.notInstalled")}</span>
+                      <span className="menu-meta">{t("composer.model.notInstalled")}</span>
                     ) : null}
                   </Menu.Item>
                 ))}

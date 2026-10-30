@@ -66,8 +66,8 @@ export function PermissionMenu({ value, modes, onChange, side = "top" }: Permiss
           <ChevronDown className="ic chip-caret" aria-hidden="true" />
         </Menu.Trigger>
         <Menu.Portal>
-          <Menu.Positioner className="menu-positioner" side={side} align="start" sideOffset={8}>
-            <Menu.Popup className="menu-popup permission-menu">
+          <Menu.Positioner side={side} align="start" sideOffset={8}>
+            <Menu.Popup className="permission-menu">
               {modes.map((mode) => {
                 const ModeIcon = ICONS[mode]
                 return (
@@ -75,8 +75,8 @@ export function PermissionMenu({ value, modes, onChange, side = "top" }: Permiss
                     key={mode}
                     className={
                       mode === "danger-full-access"
-                        ? "menu-item permission-item is-danger"
-                        : "menu-item permission-item"
+                        ? "permission-item is-danger"
+                        : "permission-item"
                     }
                     onClick={() => pick(mode)}
                   >

@@ -20,7 +20,7 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
 
   // 键盘移动高亮时让当前项保持在可见范围内。
   useEffect(() => {
-    const active = listRef.current?.querySelector<HTMLElement>("[data-active='true']")
+    const active = listRef.current?.querySelector<HTMLElement>("[data-highlighted]")
     active?.scrollIntoView?.({ block: "nearest" })
   }, [snapshot.index, snapshot.items])
 
@@ -28,8 +28,8 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
   const title =
     snapshot.kind === "file" ? t("composer.suggest.files") : t("composer.suggest.commands")
   return (
-    <div className="suggest-panel" role="listbox" aria-label={title} ref={listRef}>
-      <div className="suggest-title">
+    <div className="popup menu-popup suggest-panel" role="listbox" aria-label={title} ref={listRef}>
+      <div className="menu-label suggest-title">
         <span>{title}</span>
         {snapshot.loading ? <Loader2 className="ic ic-sm spin" aria-hidden="true" /> : null}
       </div>
@@ -48,8 +48,8 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
             key={`${item.kind}-${item.id}`}
             role="option"
             aria-selected={active}
-            data-active={active ? "true" : undefined}
-            className={active ? "suggest-item is-active" : "suggest-item"}
+            data-highlighted={active ? "" : undefined}
+            className="menu-item"
             onMouseEnter={() => store.highlight(index)}
             onMouseDown={(event) => {
               // 保持编辑器焦点，选择由 suggestion 插件完成。

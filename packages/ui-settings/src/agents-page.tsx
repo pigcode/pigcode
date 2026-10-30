@@ -181,21 +181,13 @@ export function AgentsPage({
               <ChevronDown className="ic ic-sm" aria-hidden="true" />
             </Select.Trigger>
             <Select.Portal>
-              <Select.Positioner
-                className="menu-positioner"
-                sideOffset={6}
-                alignItemWithTrigger={false}
-              >
-                <Select.Popup className="menu-popup">
-                  <Select.Item value={AUTO} className="menu-item">
+              <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+                <Select.Popup>
+                  <Select.Item value={AUTO}>
                     <Select.ItemText>{t("agents.default.auto")}</Select.ItemText>
                   </Select.Item>
                   {selectable.map((agent) => (
-                    <Select.Item
-                      key={agent.providerId}
-                      value={agent.providerId}
-                      className="menu-item"
-                    >
+                    <Select.Item key={agent.providerId} value={agent.providerId}>
                       <Select.ItemText>{agent.displayName}</Select.ItemText>
                     </Select.Item>
                   ))}

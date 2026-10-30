@@ -65,14 +65,10 @@ export function FieldControl({
           <Select.Value className="grow" />
         </Select.Trigger>
         <Select.Portal>
-          <Select.Positioner
-            className="menu-positioner"
-            sideOffset={6}
-            alignItemWithTrigger={false}
-          >
-            <Select.Popup className="menu-popup">
+          <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+            <Select.Popup>
               {field.options.map((option) => (
-                <Select.Item key={option.value} value={option.value} className="menu-item">
+                <Select.Item key={option.value} value={option.value}>
                   <Select.ItemText>{localizeText(option.label, locale)}</Select.ItemText>
                 </Select.Item>
               ))}
