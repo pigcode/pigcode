@@ -192,6 +192,8 @@ for (const theme of ["light", "dark"] as const) {
       await expect(turn.locator(".work-toggle")).toBeEnabled()
 
       await scrollThread(page, 1)
+      // 代码高亮是异步的（Shiki 按需加载语言），等高亮后的 token 出现再截图。
+      await expect(page.locator(".code-block .tok").first()).toBeVisible()
       await snap(page, "timeline-summary", theme)
       await turn.locator(".work-toggle").click()
       await expect(turn.locator(".tool-row").first()).toBeVisible()
@@ -237,6 +239,7 @@ for (const theme of ["light", "dark"] as const) {
         page.locator(".right-panel").getByRole("tab", { name: "README.md" }),
       ).toBeVisible()
       await expect(pane).toContainText("A small project for screenshots.")
+      await expect(pane.locator(".code-line .tok").first()).toBeVisible()
       await snap(page, "surface-file-editor", theme)
 
       await page.keyboard.press("Control+Backquote")
