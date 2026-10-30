@@ -29,6 +29,14 @@ jobs:
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
       # Electron 需要虚拟显示；globalSetup 会先构建 main/preload/renderer 与 Host。
-      - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test e2e/m0-b.spec.ts
+      # 全部 E2E 与视觉回归；真实 Claude/Codex 用例没有 PIGCODE_REAL_* 时自行跳过。
+      # 视觉基线是在 Linux 上生成的，所以只在这里比对。
+      - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test
         env:
           PIGCODE_E2E: "1"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results
+          path: apps/desktop/test-results/
+          retention-days: 7
