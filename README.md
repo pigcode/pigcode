@@ -165,6 +165,12 @@ Environment overrides:
 The E2E suite runs with `PIGCODE_PROFILE_DIR=apps/desktop/out-e2e/profile` (cleared
 before each run) and an in-memory database.
 
+Visual baselines in `apps/desktop/visual/__screenshots__` are generated on the CI
+runner image (`ubuntu-24.04`); other systems render fonts differently, so the visual
+specs only pass there. After an intended UI change, run
+`gh workflow run visual-baselines.yml --ref <branch>`; it regenerates the screenshots
+and commits them to that branch.
+
 ## Real Claude smoke
 
 Set `PIGCODE_REAL_CLAUDE=1` and run:

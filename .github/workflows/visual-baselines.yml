@@ -1,0 +1,35 @@
+name: visual-baselines
+# 手动触发：在 CI 比对视觉基线的同一个 runner 镜像上重新生成截图，并提交回触发的分支。
+# 其他系统的字体渲染不同，基线只能在这里生成。
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  update:
+    # 与 ci.yml 的 e2e 任务保持同一个镜像。
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10.28.2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test visual --update-snapshots
+        env:
+          PIGCODE_E2E: "1"
+      - name: Commit changed baselines
+        # 分支名经环境变量传入，不直接拼进脚本。
+        env:
+          BRANCH: ${{ github.ref_name }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          git add apps/desktop/visual/__screenshots__
+          if git diff --cached --quiet; then
+            echo "baselines unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "test(visual): update baselines on ubuntu-24.04 (run $RUN_ID)"
+          git push origin "HEAD:$BRANCH"

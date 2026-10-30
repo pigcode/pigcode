@@ -1,5 +1,6 @@
 name: ci
-on: [push, pull_request]
+# workflow_dispatch：visual-baselines 用 GITHUB_TOKEN 提交的基线不会触发 push，需要手动跑一次。
+on: [push, pull_request, workflow_dispatch]
 jobs:
   test:
     strategy:
@@ -20,7 +21,8 @@ jobs:
       - run: pnpm test
 
   e2e:
-    runs-on: ubuntu-latest
+    # 固定镜像：视觉基线由 visual-baselines.yml 在同一个镜像上生成。
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -30,7 +32,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Electron 需要虚拟显示；globalSetup 会先构建 main/preload/renderer 与 Host。
       # 全部 E2E 与视觉回归；真实 Claude/Codex 用例没有 PIGCODE_REAL_* 时自行跳过。
-      # 视觉基线是在 Linux 上生成的，所以只在这里比对。
       - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test
         env:
           PIGCODE_E2E: "1"
