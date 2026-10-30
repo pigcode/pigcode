@@ -1,0 +1,89 @@
+{
+  "color": {
+    "total": 154,
+    "files": {
+      "apps/desktop/src/main/window-options.ts": 4,
+      "packages/ui-primitives/src/styles/browser.css": 1,
+      "packages/ui-primitives/src/styles/composer.css": 3,
+      "packages/ui-primitives/src/styles/conversation.css": 23,
+      "packages/ui-primitives/src/styles/glass.css": 20,
+      "packages/ui-primitives/src/styles/globals.css": 2,
+      "packages/ui-primitives/src/styles/indicators.css": 2,
+      "packages/ui-primitives/src/styles/tabs.css": 2,
+      "packages/ui-primitives/src/theme/appearance-glass.ts": 48,
+      "packages/ui-primitives/src/theme/appearance-tokens.ts": 6,
+      "packages/ui-shell/src/title-bar.tsx": 1,
+      "packages/ui-workbench/src/terminal-view.tsx": 42
+    }
+  },
+  "radius": {
+    "total": 100,
+    "files": {
+      "packages/ui-primitives/src/styles/agents.css": 2,
+      "packages/ui-primitives/src/styles/composer.css": 11,
+      "packages/ui-primitives/src/styles/controls.css": 4,
+      "packages/ui-primitives/src/styles/conversation.css": 37,
+      "packages/ui-primitives/src/styles/files.css": 2,
+      "packages/ui-primitives/src/styles/globals.css": 41,
+      "packages/ui-primitives/src/styles/indicators.css": 1,
+      "packages/ui-primitives/src/styles/open-in.css": 2
+    }
+  },
+  "fontSize": {
+    "total": 57,
+    "files": {
+      "packages/ui-primitives/src/styles/agents.css": 1,
+      "packages/ui-primitives/src/styles/composer.css": 4,
+      "packages/ui-primitives/src/styles/files.css": 2,
+      "packages/ui-primitives/src/styles/globals.css": 49,
+      "packages/ui-primitives/src/styles/open-in.css": 1
+    }
+  },
+  "height": {
+    "total": 242,
+    "files": {
+      "packages/ui-primitives/src/styles/agents.css": 4,
+      "packages/ui-primitives/src/styles/browser.css": 2,
+      "packages/ui-primitives/src/styles/composer.css": 12,
+      "packages/ui-primitives/src/styles/controls.css": 12,
+      "packages/ui-primitives/src/styles/conversation.css": 45,
+      "packages/ui-primitives/src/styles/files.css": 12,
+      "packages/ui-primitives/src/styles/globals.css": 142,
+      "packages/ui-primitives/src/styles/indicators.css": 2,
+      "packages/ui-primitives/src/styles/open-in.css": 4,
+      "packages/ui-primitives/src/styles/plugins.css": 1,
+      "packages/ui-primitives/src/styles/tabs.css": 6
+    }
+  },
+  "duplicateSelector": {
+    "total": 105,
+    "files": {
+      "packages/ui-primitives/src/styles/conversation.css": 4,
+      "packages/ui-primitives/src/styles/globals.css": 101
+    }
+  },
+  "uiText": {
+    "total": 127,
+    "files": {
+      "apps/desktop/src/renderer/src/app.tsx": 3,
+      "apps/desktop/src/renderer/src/chat-container.tsx": 2,
+      "apps/desktop/src/renderer/src/workbench.tsx": 1,
+      "packages/provider-claude/src/driver.ts": 2,
+      "packages/provider-claude/src/models.ts": 1,
+      "packages/ui-chat/src/duration.ts": 4,
+      "packages/ui-composer/src/composer.tsx": 1,
+      "packages/ui-primitives/src/theme/theme-file.ts": 4,
+      "packages/ui-shell/src/command-palette.tsx": 6,
+      "packages/ui-shell/src/sidebar-rows.tsx": 4,
+      "packages/ui-workbench/src/browser-view.tsx": 23,
+      "packages/ui-workbench/src/checkpoint-panel.tsx": 9,
+      "packages/ui-workbench/src/diff-view.tsx": 3,
+      "packages/ui-workbench/src/file-explorer.tsx": 10,
+      "packages/ui-workbench/src/file-viewer.tsx": 15,
+      "packages/ui-workbench/src/layout-controls.tsx": 4,
+      "packages/ui-workbench/src/pr-panel.tsx": 9,
+      "packages/ui-workbench/src/right-panel.tsx": 10,
+      "packages/ui-workbench/src/worktree-picker.tsx": 16
+    }
+  }
+}
