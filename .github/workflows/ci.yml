@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      # 一个平台失败时其他平台照样跑完，才能看到各自的结果。
+      fail-fast: false
       matrix:
         os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
