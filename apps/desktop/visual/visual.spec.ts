@@ -71,7 +71,7 @@ async function launch(theme: Theme): Promise<{ app: ElectronApplication; page: P
 
 /** 每次运行都会变、但占位大小固定的区域：终端里的 shell 输出、Diff 基准下拉框。 */
 function volatile(page: Page): Locator[] {
-  return [page.locator(".terminal-view"), page.locator(".workbench-diff-base select")]
+  return [page.locator(".terminal-view"), page.locator(".workbench-diff-base-select")]
 }
 
 /** 截图时额外加的样式：隐藏会变的文字（时间、耗时），见 hide-volatile.css。 */

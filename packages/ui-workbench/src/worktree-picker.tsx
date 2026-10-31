@@ -1,7 +1,7 @@
 /** Worktree 选择器：创建、切换与删除线程的 worktree。 */
 import { useState } from "react"
-import { GitBranch } from "lucide-react"
-import { Button, EmptyState } from "@pigcode/ui-primitives"
+import { ChevronDown, GitBranch } from "lucide-react"
+import { Button, EmptyState, Select } from "@pigcode/ui-primitives"
 
 /** 一条 worktree 记录；branch 为空表示未记录分支。 */
 export interface WorktreeItem {
@@ -21,6 +21,10 @@ export interface WorktreePickerProps {
   /** 紧凑模式：用于工作台文件 tab 顶部的一行工具条。 */
   compact?: boolean
 }
+
+/** 「项目根目录」在 Select 里的值；worktree 路径不会以冒号开头。 */
+const ROOT = ":root"
+const ROOT_LABEL = "项目根目录"
 
 /** Worktree 选择器入口；删除只针对当前活动 worktree，并要求二次确认。 */
 export function WorktreePicker({
@@ -52,22 +56,41 @@ export function WorktreePicker({
     return (
       <div className="worktree-compact">
         <span className="worktree-compact-label">工作树</span>
-        <select
-          className="worktree-compact-select"
-          aria-label="工作树"
-          value={activePath ?? ""}
+        <Select.Root
+          value={activePath ?? ROOT}
           disabled={disabled}
-          onChange={(event) => {
-            if (event.target.value) void run(() => onSwitch(event.target.value))
+          onValueChange={(next) => {
+            if (typeof next === "string" && next !== ROOT) void run(() => onSwitch(next))
           }}
         >
-          <option value="">项目根目录</option>
-          {worktrees.map((worktree) => (
-            <option key={worktree.id} value={worktree.path}>
-              {worktree.branch ?? worktree.path}
-            </option>
-          ))}
-        </select>
+          <Select.Trigger
+            className="input select-trigger worktree-compact-select"
+            aria-label="工作树"
+          >
+            <Select.Value className="grow truncate">
+              {(value: string) =>
+                value === ROOT
+                  ? ROOT_LABEL
+                  : (worktrees.find((worktree) => worktree.path === value)?.branch ?? value)
+              }
+            </Select.Value>
+            <ChevronDown className="ic ic-sm" aria-hidden="true" />
+          </Select.Trigger>
+          <Select.Portal>
+            <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+              <Select.Popup>
+                <Select.Item value={ROOT}>
+                  <Select.ItemText>{ROOT_LABEL}</Select.ItemText>
+                </Select.Item>
+                {worktrees.map((worktree) => (
+                  <Select.Item key={worktree.id} value={worktree.path}>
+                    <Select.ItemText>{worktree.branch ?? worktree.path}</Select.ItemText>
+                  </Select.Item>
+                ))}
+              </Select.Popup>
+            </Select.Positioner>
+          </Select.Portal>
+        </Select.Root>
         <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void run(onCreate)}>
           新建
         </Button>

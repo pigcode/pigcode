@@ -61,7 +61,7 @@ export function FieldControl({
     const current = typeof value === "string" ? value : (field.default ?? field.options[0]?.value)
     return (
       <Select.Root value={current ?? null} onValueChange={(next) => onChange(next)}>
-        <Select.Trigger className="input agent-select" aria-label={label}>
+        <Select.Trigger className="input select-trigger" aria-label={label}>
           <Select.Value className="grow" />
         </Select.Trigger>
         <Select.Portal>

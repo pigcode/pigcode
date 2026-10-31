@@ -61,42 +61,6 @@
   color: var(--surface-raised);
 }
 
-/* ─── agent 标记 ──────────────────────────────────────── */
-.agent-mark {
-  display: inline-grid;
-  flex: none;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-family: var(--font-ui);
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  line-height: 1;
-}
-.agent-mark.is-md {
-  width: 26px;
-  height: 26px;
-  font-size: 9.5px;
-}
-.agent-mark.is-sm {
-  width: 16px;
-  height: 16px;
-  font-size: 7px;
-}
-.agent-mark[data-agent="claude"] {
-  background: #d97757;
-  color: #fff;
-}
-.agent-mark[data-agent="codex"] {
-  background: var(--fg);
-  color: var(--surface-raised);
-}
-.agent-mark[data-agent="fake"] {
-  background: var(--active);
-  color: var(--fg-2);
-}
-
 /* ─── 模型选择器：左栏 agent，右栏模型与思考深度 ───────────── */
 /* 外框是 Popover 自带的 .popup */
 .model-picker {
@@ -155,7 +119,7 @@
   background: var(--ok);
   content: "";
 }
-.rail-btn[data-unavailable="true"] .agent-mark {
+.rail-btn[data-unavailable="true"] .entity-avatar {
   opacity: 0.4;
 }
 .rail-sep {
@@ -243,31 +207,7 @@
   color: var(--muted);
   font-size: var(--fs-xs);
 }
-.effort-seg {
-  display: inline-flex;
-  flex: none;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--field);
-}
-.effort-opt {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 6px;
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-.effort-opt:hover {
-  color: var(--fg);
-}
-.effort-opt[aria-checked="true"] {
-  background: var(--surface-raised);
-  box-shadow: var(--shadow-btn);
-  color: var(--fg);
-}
-.chip-btn.model-chip .agent-mark {
+.chip-btn.model-chip .entity-avatar {
   margin-right: 1px;
 }
 .composer-under {

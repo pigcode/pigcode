@@ -97,7 +97,7 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
             <Select.Root items={devices} defaultValue="local">
               <div className="field">
                 <Select.Label className="label">{t("project.add.device")}</Select.Label>
-                <Select.Trigger className="input project-select">
+                <Select.Trigger className="input select-trigger">
                   <Icon name="monitor" />
                   <Select.Value className="grow" />
                   <Select.Icon className="project-select-caret">

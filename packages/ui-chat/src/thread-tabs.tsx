@@ -5,8 +5,8 @@
  */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Bot, Plus, X } from "lucide-react"
-import { AgentMark, type ComposerAgent } from "@pigcode/ui-composer"
-import { DotMatrix, Menu, useLocale } from "@pigcode/ui-primitives"
+import type { ComposerAgent } from "@pigcode/ui-composer"
+import { EntityAvatar, Menu, StatusDot, useLocale } from "@pigcode/ui-primitives"
 
 /** 标签种类：主会话、用户添加的子代理、主 agent 派生的子代理。 */
 export type ThreadTabKind = "main" | "agent" | "spawned"
@@ -64,11 +64,8 @@ function TabTitle({ text, main }: { text: string; main: boolean }) {
 function TabMark({ tab, agents }: { tab: ThreadTab; agents: readonly ComposerAgent[] }) {
   if (tab.kind === "spawned") return <Bot className="ic ic-sm thread-tab-icon" aria-hidden="true" />
   if (tab.kind !== "agent" || !tab.agentId) return null
-  const agent = agents.find((item) => item.id === tab.agentId) ?? {
-    id: tab.agentId,
-    label: tab.agentId,
-  }
-  return <AgentMark agent={agent} size="sm" />
+  const name = agents.find((item) => item.id === tab.agentId)?.label ?? tab.agentId
+  return <EntityAvatar id={tab.agentId} name={name} size="sm" />
 }
 
 /** 渲染标签栏；左右方向键在标签间移动。 */
@@ -134,10 +131,11 @@ export function ThreadTabs({
               >
                 <TabMark tab={tab} agents={agents} />
                 <TabTitle text={tab.title} main={tab.kind === "main"} />
-                {tab.kind !== "main" && tab.waiting ? (
-                  <span className="thread-tab-wait" role="img" aria-label={status ?? undefined} />
-                ) : tab.kind !== "main" && tab.running ? (
-                  <DotMatrix {...(status ? { label: status } : {})} />
+                {tab.kind !== "main" && (tab.waiting || tab.running) ? (
+                  <StatusDot
+                    tone={tab.waiting ? "warning" : "running"}
+                    label={status ?? undefined}
+                  />
                 ) : null}
               </button>
               {tab.closable && onClose ? (
@@ -175,7 +173,7 @@ export function ThreadTabs({
                     disabled={agent.installed === false}
                     onClick={() => onAdd(agent.id)}
                   >
-                    <AgentMark agent={agent} size="sm" />
+                    <EntityAvatar id={agent.id} name={agent.label} size="sm" />
                     <span className="grow">{agent.label}</span>
                     {agent.installed === false ? (
                       <span className="menu-meta">{t("composer.model.notInstalled")}</span>

@@ -114,13 +114,3 @@ export function resolveEffort(
   if (preferred && model.efforts.includes(preferred)) return preferred
   return model.defaultEffort
 }
-
-/** 给 agent 生成两个字母的标记，例如 Claude Code → CL、Codex → CX。 */
-export function agentMark(agent: { id: string; label: string }): string {
-  if (agent.id === "claude") return "CL"
-  if (agent.id === "codex") return "CX"
-  const words = agent.label.split(/[\s_-]+/).filter(Boolean)
-  const initials =
-    words.length > 1 ? `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}` : agent.id.slice(0, 2)
-  return initials.toUpperCase()
-}

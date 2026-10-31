@@ -141,6 +141,17 @@
 .input.is-error {
   box-shadow: inset 0 0 0 1px var(--bad);
 }
+/* Select 的触发器：外观是 .input，值靠左，后面跟一个箭头 */
+.select-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 180px;
+  text-align: left;
+}
+.select-trigger[data-disabled] {
+  opacity: 0.45;
+}
 .textarea {
   height: auto;
   min-height: var(--textarea-min-h);
@@ -247,51 +258,40 @@
   transform: translateY(-1px) rotate(45deg);
 }
 
-/* ─── 分段切换与 Tabs：外框 = 控件高度，里面的项低一档，圆角向内收一档间距 ─── */
-.seg,
-.tabs-list {
+/* ─── 分段控件（SegmentedControl）：外框 = 控件高度，里面的项低一档，圆角向内收一档间距 ─── */
+.seg {
   display: inline-flex;
+  flex: none;
   padding: var(--space-1);
   gap: var(--space-1);
   border-radius: var(--r-md);
   background: var(--field);
 }
-.tabs-list {
-  align-self: flex-start;
-}
-.seg .seg-item,
-.tabs-tab {
+.seg-item {
+  display: inline-flex;
+  align-items: center;
   height: var(--control-sm);
   padding: 0 var(--space-5);
   border-radius: calc(var(--r-md) - var(--space-1));
   color: var(--fg-2);
   font-size: var(--fs-sm);
   font-weight: var(--font-weight-ui);
+  white-space: nowrap;
 }
-.seg .seg-item:hover,
-.tabs-tab:hover {
+.seg-item:hover {
   color: var(--fg);
 }
-.seg .seg-item[data-pressed],
-.tabs-tab[data-active] {
+.seg-item[data-checked] {
   background: var(--surface-raised);
   color: var(--fg);
   box-shadow: var(--shadow-raised);
 }
-.seg .seg-item:focus-visible,
-.tabs-tab:focus-visible {
+.seg-item:focus-visible {
   outline: 1px solid var(--border-focus);
   outline-offset: 1px;
 }
-.tabs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  min-width: 0;
-}
-.tabs-panel {
-  min-width: 0;
-  outline: none;
+.seg-item[data-disabled] {
+  opacity: 0.45;
 }
 
 /* ─── 滑块 ─────────────────────────────────────────────── */
@@ -409,13 +409,13 @@
   height: 100%;
 }
 
-/* ─── 徽标 ─────────────────────────────────────────────── */
+/* ─── 徽标（Badge）：一种胶囊，颜色按 variant ─────────────── */
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 18px;
-  padding: 0 7px;
+  gap: var(--space-2);
+  height: 19px;
+  padding: 0 var(--space-4);
   border-radius: var(--r-full);
   background: var(--hover);
   color: var(--fg-2);
@@ -440,6 +440,6 @@
   color: var(--bad-text);
 }
 .badge-info {
-  background: color-mix(in oklab, var(--info) 14%, transparent);
-  color: var(--info);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }

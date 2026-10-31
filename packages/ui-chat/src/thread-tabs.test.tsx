@@ -86,8 +86,8 @@ describe("ThreadTabs", () => {
     const tabs = screen.getAllByRole("tab")
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "修登录",
-      "CXCodex 子代理",
-      "CLClaude 子代理",
+      "COCodex 子代理",
+      "CCClaude 子代理",
       "梳理入口",
     ])
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true")

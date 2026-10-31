@@ -1,12 +1,11 @@
 // 外观设置页：模式、字号、动态效果和智能标点，全部复用 useAppearance。
 import {
+  SegmentedControl,
   SettingPage,
   SettingRow,
   SettingSection,
   Slider,
   Switch,
-  Toggle,
-  ToggleGroup,
   useAppearance,
   useLocale,
   type AppearanceController,
@@ -77,18 +76,16 @@ function AppearancePageContent({ appearance }: { appearance: AppearanceControlle
     <SettingPage title={t("settings.appearance.pageTitle")}>
       <SettingSection title={t("settings.appearance.mode")}>
         <SettingRow title={t("settings.appearance.mode")}>
-          <ToggleGroup<ThemePreference>
-            multiple={false}
-            value={[settings.mode]}
-            onValueChange={(next) => {
-              const mode = next[0]
-              if (mode) update((current) => ({ ...current, mode }))
-            }}
-          >
-            <Toggle value="system">{t("settings.appearance.system")}</Toggle>
-            <Toggle value="light">{t("settings.appearance.light")}</Toggle>
-            <Toggle value="dark">{t("settings.appearance.dark")}</Toggle>
-          </ToggleGroup>
+          <SegmentedControl<ThemePreference>
+            aria-label={t("settings.appearance.mode")}
+            value={settings.mode}
+            onValueChange={(mode) => update((current) => ({ ...current, mode }))}
+            options={[
+              { value: "system", label: t("settings.appearance.system") },
+              { value: "light", label: t("settings.appearance.light") },
+              { value: "dark", label: t("settings.appearance.dark") },
+            ]}
+          />
         </SettingRow>
         <SettingRow title={t("settings.appearance.uiSize")}>
           <SizeRow
@@ -113,18 +110,16 @@ function AppearancePageContent({ appearance }: { appearance: AppearanceControlle
       </SettingSection>
       <SettingSection title={t("settings.appearance.motion")}>
         <SettingRow title={t("settings.appearance.motion")}>
-          <ToggleGroup<MotionPreference>
-            multiple={false}
-            value={[settings.motion]}
-            onValueChange={(next) => {
-              const motion = next[0]
-              if (motion) update((current) => ({ ...current, motion }))
-            }}
-          >
-            <Toggle value="system">{t("settings.appearance.motion.system")}</Toggle>
-            <Toggle value="on">{t("settings.appearance.motion.on")}</Toggle>
-            <Toggle value="off">{t("settings.appearance.motion.off")}</Toggle>
-          </ToggleGroup>
+          <SegmentedControl<MotionPreference>
+            aria-label={t("settings.appearance.motion")}
+            value={settings.motion}
+            onValueChange={(motion) => update((current) => ({ ...current, motion }))}
+            options={[
+              { value: "system", label: t("settings.appearance.motion.system") },
+              { value: "on", label: t("settings.appearance.motion.on") },
+              { value: "off", label: t("settings.appearance.motion.off") },
+            ]}
+          />
         </SettingRow>
         <SettingRow
           title={t("settings.appearance.smartPunctuation")}

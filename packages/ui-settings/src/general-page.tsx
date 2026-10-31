@@ -1,11 +1,10 @@
 // 通用设置页：启动、更新和侧栏会话分组。
 import {
+  SegmentedControl,
   SettingPage,
   SettingRow,
   SettingSection,
   Switch,
-  Toggle,
-  ToggleGroup,
   useLocale,
   useSidebarGrouping,
   type SidebarGrouping,
@@ -42,17 +41,15 @@ export function GeneralPage() {
       </SettingSection>
       <SettingSection title={t("settings.general.sidebar")}>
         <SettingRow title={t("settings.general.sidebarGrouping")}>
-          <ToggleGroup<SidebarGrouping>
-            multiple={false}
-            value={[grouping]}
-            onValueChange={(next) => {
-              const value = next[0]
-              if (value) setGrouping(value)
-            }}
-          >
-            <Toggle value="project">{t("settings.general.byProject")}</Toggle>
-            <Toggle value="time">{t("settings.general.byTime")}</Toggle>
-          </ToggleGroup>
+          <SegmentedControl<SidebarGrouping>
+            aria-label={t("settings.general.sidebarGrouping")}
+            value={grouping}
+            onValueChange={setGrouping}
+            options={[
+              { value: "project", label: t("settings.general.byProject") },
+              { value: "time", label: t("settings.general.byTime") },
+            ]}
+          />
         </SettingRow>
       </SettingSection>
       <SettingSection title={t("settings.about")}>

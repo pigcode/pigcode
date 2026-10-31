@@ -162,6 +162,21 @@ describe("ModelPicker", () => {
     expect(onSubmit).toHaveBeenCalledWith("deep", { effort: "max" })
   })
 
+  it("moves the effort with arrow keys without switching agents, and Enter still picks the model", async () => {
+    const { chip, onSelectModel } = renderPicker()
+    await userEvent.click(chip())
+    const efforts = await screen.findByRole("radiogroup", { name: "思考深度" })
+    await userEvent.click(within(efforts).getByRole("radio", { name: "高" }))
+    await userEvent.keyboard("{ArrowRight}")
+    expect(within(efforts).getByRole("radio", { name: "最高" }).getAttribute("aria-checked")).toBe(
+      "true",
+    )
+    expect(screen.getByRole("listbox", { name: "Claude Code" })).toBeTruthy()
+
+    await userEvent.keyboard("{Enter}")
+    expect(onSelectModel).toHaveBeenCalledWith("claude", "opus")
+  })
+
   it("hides the effort control for a model without efforts", async () => {
     const { chip } = renderPicker({ modelId: "haiku" })
     expect(chip().textContent).toContain("Haiku")

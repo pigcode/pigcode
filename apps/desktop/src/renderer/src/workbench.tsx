@@ -3,10 +3,10 @@
  * 插件注册的标签挂在同样的标签栏与外框里。
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Loader2, Plus, Trash2, Unplug } from "lucide-react"
+import { ChevronDown, Loader2, Plus, Trash2, Unplug } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ClientSurface } from "@pigcode/plugin-sdk"
-import { Button, EmptyState, useLocale } from "@pigcode/ui-primitives"
+import { Button, EmptyState, Select, useLocale } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 import {
   CheckpointPanel,
@@ -66,6 +66,11 @@ interface CheckpointRecord {
   commitSha: string | null
   label: string | null
   createdAt: string
+}
+
+/** Diff 基准下拉里一个 checkpoint 的文字：标签或阶段，加创建时间。 */
+function checkpointLabel(checkpoint: CheckpointRecord): string {
+  return `${checkpoint.label ?? checkpoint.phase} · ${checkpoint.createdAt}`
 }
 
 /** 把 unknown 错误转成可展示文本。 */
@@ -255,19 +260,34 @@ export function WorkbenchPanel({
     diff: (
       <div className="workbench-diff">
         {committed.length > 0 ? (
-          <label className="workbench-diff-base">
-            <span>{t("workbench.diffBase")}</span>
-            <select
-              value={baseSha ?? ""}
-              onChange={(event) => setDiffBase(event.target.value || null)}
+          <div className="workbench-diff-base">
+            <Select.Root
+              value={baseSha ?? null}
+              onValueChange={(next) => setDiffBase(typeof next === "string" && next ? next : null)}
             >
-              {[...committed].reverse().map((checkpoint) => (
-                <option key={checkpoint.id} value={checkpoint.commitSha ?? ""}>
-                  {checkpoint.label ?? checkpoint.phase} · {checkpoint.createdAt}
-                </option>
-              ))}
-            </select>
-          </label>
+              <Select.Label>{t("workbench.diffBase")}</Select.Label>
+              <Select.Trigger className="input select-trigger workbench-diff-base-select">
+                <Select.Value className="grow truncate">
+                  {(value: string | null) => {
+                    const checkpoint = committed.find((item) => item.commitSha === value)
+                    return checkpoint ? checkpointLabel(checkpoint) : "HEAD"
+                  }}
+                </Select.Value>
+                <ChevronDown className="ic ic-sm" aria-hidden="true" />
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+                  <Select.Popup>
+                    {[...committed].reverse().map((checkpoint) => (
+                      <Select.Item key={checkpoint.id} value={checkpoint.commitSha ?? ""}>
+                        <Select.ItemText>{checkpointLabel(checkpoint)}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Popup>
+                </Select.Positioner>
+              </Select.Portal>
+            </Select.Root>
+          </div>
         ) : null}
         {diffError ? (
           <p className="workbench-error">{diffError}</p>

@@ -35,6 +35,8 @@ export interface ShellProps {
   activeThreadId: string | null
   /** 线程运行状态；用于侧栏的状态点。 */
   threadStatus?: Record<string, ThreadStatus>
+  /** agent 的显示名，按 provider id；侧栏会话行的 agent 缩写由它得出。 */
+  agentNames?: Readonly<Record<string, string>>
   expandedProjects?: Record<string, boolean>
   sidebarOpen?: boolean
   /** 右栏内容；由调用方按当前线程组装。收起时只隐藏，不卸载，终端与页面得以保留。 */
@@ -103,6 +105,7 @@ export function Shell({
   threads,
   activeThreadId,
   threadStatus,
+  agentNames,
   expandedProjects,
   sidebarOpen,
   rightPanel,
@@ -340,6 +343,7 @@ export function Shell({
               threads={threads}
               activeThreadId={activeThreadId}
               threadStatus={threadStatus}
+              agentNames={agentNames}
               expandedProjects={expanded}
               onAddProject={() => setDialogOpen(true)}
               onToggleProject={toggleProject}

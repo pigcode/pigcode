@@ -6,14 +6,15 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronDown, Loader2, Star } from "lucide-react"
 import {
   EmptyState,
+  EntityAvatar,
   ListRow,
   Popover,
   SearchField,
+  SegmentedControl,
   formatShortcut,
   useLocale,
 } from "@pigcode/ui-primitives"
 import {
-  agentMark,
   effortKeys,
   resolveEffort,
   resolveModel,
@@ -47,15 +48,6 @@ export interface ModelPickerProps {
 interface Row {
   agent: ComposerAgent
   model: ComposerModel
-}
-
-/** agent 的圆形标记。 */
-export function AgentMark({ agent, size = "md" }: { agent: ComposerAgent; size?: "sm" | "md" }) {
-  return (
-    <span className={`agent-mark is-${size}`} data-agent={agent.id} aria-hidden="true">
-      {agentMark(agent)}
-    </span>
-  )
 }
 
 /** 当前 agent、模型与思考深度的胶囊，以及展开后的选择面板。 */
@@ -144,6 +136,14 @@ export function ModelPicker({
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    // 回车总是选中高亮的模型；单选按钮会拦下回车，所以在 defaultPrevented 之前处理。
+    if (event.key === "Enter") {
+      event.preventDefault()
+      choose(rows[index])
+      return
+    }
+    // 思考深度的分段控件自己处理方向键，不再移动列表或切换左栏。
+    if (event.defaultPrevented) return
     if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
       event.preventDefault()
       choose(rows[Number(event.key) - 1])
@@ -153,11 +153,6 @@ export function ModelPicker({
       event.preventDefault()
       const delta = event.key === "ArrowDown" ? 1 : -1
       setIndex((value) => (rows.length ? (value + delta + rows.length) % rows.length : 0))
-      return
-    }
-    if (event.key === "Enter") {
-      event.preventDefault()
-      choose(rows[index])
       return
     }
     // 搜索框为空时用左右方向键切换左栏。
@@ -181,7 +176,7 @@ export function ModelPicker({
         title={`${t("composer.modelMenu")} ${formatShortcut("Mod+/")}`}
         aria-label={`${t("composer.modelMenu")}: ${[agent?.label, currentModel?.label, effort ? t(effortKeys[effort]) : null].filter(Boolean).join(" · ")}`}
       >
-        {agent ? <AgentMark agent={agent} size="sm" /> : null}
+        {agent ? <EntityAvatar id={agent.id} name={agent.label} size="sm" /> : null}
         <span className="model-name truncate">{chipLabel}</span>
         {effort ? <span className="model-depth">{t(effortKeys[effort])}</span> : null}
         <ChevronDown className="ic chip-caret" aria-hidden="true" />
@@ -225,7 +220,7 @@ export function ModelPicker({
                     aria-label={item.label}
                     onClick={() => setTab(item.id)}
                   >
-                    <AgentMark agent={item} />
+                    <EntityAvatar id={item.id} name={item.label} size="md" />
                   </button>
                 ))}
               </nav>
@@ -369,20 +364,12 @@ function EffortControl({
         {t("composer.effort.label")}
         <span className="model-effort-model truncate">{modelLabel}</span>
       </span>
-      <div className="effort-seg" role="radiogroup" aria-label={t("composer.effort.label")}>
-        {efforts.map((effort) => (
-          <button
-            key={effort}
-            type="button"
-            role="radio"
-            aria-checked={effort === value}
-            className="effort-opt"
-            onClick={() => onChange(effort)}
-          >
-            {t(effortKeys[effort])}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<ReasoningEffort>
+        aria-label={t("composer.effort.label")}
+        value={value}
+        onValueChange={onChange}
+        options={efforts.map((effort) => ({ value: effort, label: t(effortKeys[effort]) }))}
+      />
     </div>
   )
 }

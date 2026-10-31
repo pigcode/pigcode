@@ -1,9 +1,10 @@
 /** 工作区侧栏：主导航、项目与会话列表；会话可按项目分组或按时间排成一列。 */
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import {
   Button,
   EmptyState,
+  EntityAvatar,
   ListRow,
   Menu,
   formatShortcut,
@@ -25,6 +26,8 @@ export interface WorkspaceSidebarProps {
   threads: Thread[]
   activeThreadId: string | null
   threadStatus?: Record<string, ThreadStatus> | undefined
+  /** agent 的显示名，按 provider id；会话行上的 agent 缩写由它得出，缺少时用 id。 */
+  agentNames?: Readonly<Record<string, string>> | undefined
   expandedProjects: Record<string, boolean>
   onAddProject: () => void
   onToggleProject: (projectId: string, expanded: boolean) => void
@@ -62,14 +65,6 @@ export function visibleThreads(
       ? live.filter((thread) => thread.projectId === project.id)
       : [],
   )
-}
-
-/** 把 provider id 缩成侧栏可读的短标记。 */
-function providerMark(thread: Thread): string {
-  const id = thread.lastProviderId ?? thread.defaultProviderId
-  if (id === "claude") return "CL"
-  if (id === "codex") return "CX"
-  return id.slice(0, 2).toUpperCase()
 }
 
 /** 每分钟刷新一次的当前时间，让「刚刚 / 3分钟」这类相对时间跟着走。 */
@@ -127,6 +122,7 @@ export function WorkspaceSidebar({
   threads,
   activeThreadId,
   threadStatus = {},
+  agentNames = {},
   expandedProjects,
   onAddProject,
   onToggleProject,
@@ -195,7 +191,7 @@ export function WorkspaceSidebar({
         ]
       : []
 
-  const row = (thread: Thread, detail: string, detailClass: string) => {
+  const row = (thread: Thread, detail: ReactNode) => {
     const index = shortcutHints ? shortcutIndex.get(thread.id) : undefined
     return (
       <ThreadRow
@@ -204,7 +200,6 @@ export function WorkspaceSidebar({
         active={thread.id === activeThreadId}
         status={threadStatus[thread.id] ?? "idle"}
         detail={detail}
-        detailClass={detailClass}
         shortcut={index ? formatShortcut(`Mod+${index}`) : null}
         rename={renameFor(thread.id, (title) => onRenameThread?.(thread.id, title))}
         actions={threadActions(thread)}
@@ -274,7 +269,12 @@ export function WorkspaceSidebar({
             <EmptyState size="compact" title={t("sidebar.noThreads")} />
           ) : null}
           {order.map((thread) =>
-            row(thread, projectNames.get(thread.projectId) ?? "", "sess-project"),
+            row(
+              thread,
+              <span className="sess-project truncate">
+                {projectNames.get(thread.projectId) ?? ""}
+              </span>,
+            ),
           )}
         </div>
       ) : (
@@ -296,9 +296,23 @@ export function WorkspaceSidebar({
                   {projectThreads.length === 0 ? (
                     <EmptyState size="compact" title={t("sidebar.noThreads")} />
                   ) : null}
-                  {projectThreads.map((thread) =>
-                    row(thread, providerMark(thread), "sess-provider"),
-                  )}
+                  {projectThreads.map((thread) => {
+                    const providerId = thread.lastProviderId ?? thread.defaultProviderId
+                    const agentName = agentNames[providerId] ?? providerId
+                    // 缩写只是装饰；读屏器读 agent 的全名。
+                    return row(
+                      thread,
+                      <>
+                        <EntityAvatar
+                          id={providerId}
+                          name={agentName}
+                          size="inline"
+                          className="sess-provider"
+                        />
+                        <span className="sr-only">{agentName}</span>
+                      </>,
+                    )
+                  })}
                 </div>
               ) : null}
             </div>

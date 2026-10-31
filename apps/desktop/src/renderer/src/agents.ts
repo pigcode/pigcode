@@ -1,6 +1,6 @@
 /** 输入框模型选择器的数据：已注册的 agent、各自的安装状态与按需读取的模型目录。 */
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { ProviderCapabilities, ProviderModel } from "@pigcode/contracts"
+import type { AgentList, ProviderCapabilities, ProviderModel } from "@pigcode/contracts"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ComposerAgent, ComposerModel, ComposerModelCatalog } from "@pigcode/ui-composer"
 import { listProviders } from "./providers"
@@ -53,6 +53,34 @@ export function useAgents(
     }
   }, [connection, revision, connected])
   return agents
+}
+
+/**
+ * agent 的显示名，按 provider id；侧栏会话行上的 agent 缩写由它得出。取自 agent.list，停用或注册失败的
+ * agent 也在里面，和设置页的缩写一致。连上 Host 与插件启停后重新读取。
+ */
+export function useAgentNames(
+  connection: Connection,
+  revision: number,
+  connected: boolean,
+): Readonly<Record<string, string>> {
+  const [names, setNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!connected) return undefined
+    let cancelled = false
+    void (connection.call("agent.list", {}) as Promise<AgentList>)
+      .then((list) => {
+        if (cancelled) return
+        setNames(
+          Object.fromEntries(list.agents.map((agent) => [agent.providerId, agent.displayName])),
+        )
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [connection, revision, connected])
+  return names
 }
 
 /** 各 agent 的能力；子代理标签可能和主会话用不同的 agent，按标签所在会话的 agent 取能力。 */

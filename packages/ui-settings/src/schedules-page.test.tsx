@@ -63,6 +63,21 @@ describe("SchedulesPage", () => {
     })
   })
 
+  it("creates the schedule for the thread picked in the thread select", async () => {
+    const props = renderPage({
+      threads: [
+        { id: "th_1", title: "Sprint" },
+        { id: "th_2", title: "Release" },
+      ],
+    })
+    await userEvent.click(screen.getByRole("combobox", { name: "会话" }))
+    await userEvent.click(await screen.findByRole("option", { name: "Release" }))
+    await userEvent.type(screen.getByLabelText("任务内容"), "发版检查")
+    await userEvent.click(screen.getByRole("button", { name: "创建任务" }))
+
+    expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ threadId: "th_2" }))
+  })
+
   it("toggles, runs immediately and deletes a schedule", async () => {
     const props = renderPage()
 

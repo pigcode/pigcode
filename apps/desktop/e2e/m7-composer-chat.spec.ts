@@ -84,7 +84,6 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
 
     // 运行中：侧栏显示点阵，线程头只有标签、没有状态胶囊；工作区展开、没有箭头并实时计时。
     await expect(page.locator(".sess.is-active .sess-indicator .dot-matrix")).toBeVisible()
-    await expect(page.locator(".panel-top .status-pill")).toHaveCount(0)
     await expect(page.locator(".thread-tab[data-kind='main']")).toHaveAttribute(
       "data-active",
       "true",

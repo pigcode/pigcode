@@ -75,16 +75,6 @@
   flex: none;
   color: var(--accent-text);
 }
-.thread-tab .dot-matrix {
-  color: var(--accent-text);
-}
-.thread-tab-wait {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--warn);
-}
 .thread-tab-close {
   display: grid;
   place-items: center;
@@ -187,9 +177,6 @@
 }
 .subagent-view-more:hover {
   color: var(--fg);
-}
-.subagent-view-head .subagent-status:has(.dot-matrix)::before {
-  display: none;
 }
 .subagent-view-result {
   display: flex;

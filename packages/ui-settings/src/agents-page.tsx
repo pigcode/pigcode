@@ -13,6 +13,7 @@ import {
   SettingPage,
   SettingRow,
   SettingSection,
+  StatusDot,
   Switch,
   useLocale,
 } from "@pigcode/ui-primitives"
@@ -78,7 +79,7 @@ function AgentRow({
       }
       description={
         <span className="ext-row-status" data-tone={headline.tone}>
-          <span className="ext-dot" aria-hidden="true" />
+          <StatusDot tone={headline.tone} />
           <span>{t(headline.label)}</span>
           {headline.detail ? (
             <span className="ext-row-detail truncate">· {headline.detail}</span>
@@ -176,7 +177,7 @@ export function AgentsPage({
               )
             }
           >
-            <Select.Trigger className="input agent-select" aria-label={t("agents.default.title")}>
+            <Select.Trigger className="input select-trigger" aria-label={t("agents.default.title")}>
               <Select.Value className="grow">
                 {(value: string) =>
                   value === AUTO

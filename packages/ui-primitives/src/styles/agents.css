@@ -8,24 +8,6 @@
 .ext-item + .ext-item {
   box-shadow: inset 0 1px 0 var(--divider);
 }
-.entity-avatar {
-  --entity-hue: 264;
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-  color: oklch(42% 0.12 var(--entity-hue));
-  background: oklch(92% 0.045 var(--entity-hue));
-}
-[data-theme="dark"] .entity-avatar {
-  color: oklch(86% 0.09 var(--entity-hue));
-  background: oklch(32% 0.06 var(--entity-hue));
-}
 /* 行本身是 ListRow：左右留出卡片的内边距，头像、文字、箭头与开关之间宽一点 */
 .ext-row {
   gap: var(--space-5);
@@ -52,38 +34,8 @@
 .ext-row-detail {
   color: var(--faint);
 }
-.ext-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--faint);
-}
-.ext-row-status[data-tone="ready"] .ext-dot {
-  background: var(--ok);
-}
-.ext-row-status[data-tone="warning"] .ext-dot {
-  background: var(--warn);
-}
-.ext-row-status[data-tone="error"] .ext-dot {
-  background: var(--bad);
-}
-.ext-row-status[data-tone="checking"] .ext-dot {
-  background: var(--info);
-  animation: agent-pulse 1.2s ease-in-out infinite;
-}
-.ext-row-status[data-tone="off"] {
+.ext-row-status[data-tone="idle"] {
   color: var(--faint);
-}
-@keyframes agent-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ext-row-status[data-tone="checking"] .ext-dot {
-    animation: none;
-  }
 }
 .ext-chevron {
   color: var(--faint);
@@ -219,13 +171,6 @@
 .agent-input.mono {
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
-}
-.agent-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 180px;
-  text-align: left;
 }
 .agent-env {
   display: flex;

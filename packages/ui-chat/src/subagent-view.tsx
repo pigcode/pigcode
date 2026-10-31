@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
 import { Bot } from "lucide-react"
-import { DotMatrix, EmptyState, useLocale } from "@pigcode/ui-primitives"
+import { EmptyState, StatusDot, useLocale, type StatusTone } from "@pigcode/ui-primitives"
 import { asRecord, asText, collectTools, toolFromEvent } from "./event-parsers"
 import { MessageText } from "./message-item"
 import type { SubagentCall } from "./subagent-card"
@@ -66,6 +66,14 @@ const STATUS_KEYS = {
   interrupted: "chat.toolCall.status.stopped",
 } as const
 
+/** 状态点的色调；和侧栏会话的同一种状态一样。 */
+const STATUS_TONES: Record<SubagentCall["status"], StatusTone> = {
+  running: "running",
+  completed: "ready",
+  failed: "error",
+  interrupted: "idle",
+}
+
 /** 渲染派生子代理的过程与结果。 */
 export function SubagentView({
   subagent,
@@ -102,8 +110,8 @@ export function SubagentView({
             </div>
             {subagent.prompt ? <SubagentTask text={subagent.prompt} /> : null}
           </div>
-          <span className={`subagent-status ${subagent.status}`}>
-            {subagent.status === "running" ? <DotMatrix /> : null}
+          <span className="subagent-status" data-status={subagent.status}>
+            <StatusDot tone={STATUS_TONES[subagent.status]} />
             {t(STATUS_KEYS[subagent.status])}
           </span>
         </header>

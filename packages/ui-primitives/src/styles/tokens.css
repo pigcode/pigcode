@@ -279,6 +279,11 @@
   --icon-md: 15px;
   --icon-lg: 18px;
   --icon-btn: 14px;
+  /* 状态点的直径；Agent 与插件头像：sm 菜单、胶囊与标签 / md 模型菜单左栏 / lg 设置里的列表 */
+  --dot-size: 6px;
+  --avatar-sm: 16px;
+  --avatar-md: 26px;
+  --avatar-lg: 32px;
 
   /* 按钮和输入框的阴影：主按钮的立体感、输入框的细边与聚焦光圈 */
   --shadow-primary:

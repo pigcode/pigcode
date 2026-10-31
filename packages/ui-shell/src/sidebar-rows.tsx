@@ -1,9 +1,9 @@
 /** 侧栏里的项目行与会话行：右键菜单、就地改名，会话行还有状态点、时间与数字快捷键。 */
 import { Fragment, useRef, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { Button, ContextMenu, DotMatrix, ListRow, useLocale } from "@pigcode/ui-primitives"
+import { Button, ContextMenu, ListRow, StatusDot, useLocale } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
-import { THREAD_STATUS_MESSAGE, type ThreadStatus } from "./thread-status"
+import { THREAD_STATUS_MESSAGE, THREAD_STATUS_TONE, type ThreadStatus } from "./thread-status"
 
 /** 把线程更新时间格式化成「刚刚 / 3分钟 / 2小时 / 5天」这样常驻显示的短文本。 */
 export function formatThreadTime(value: string, locale: string, now = Date.now()): string {
@@ -97,25 +97,23 @@ function RenameInput({
   )
 }
 
-/** 会话的状态标记：运行中是游走的点阵，其余状态是一个彩色圆点。 */
+/** 会话的状态标记：运行中是游走的点阵（.sess-indicator），其余状态是一个彩色圆点（.sess-dot）。 */
 export function ThreadStatusMark({ status }: { status: ThreadStatus }) {
-  if (status === "running") {
-    return (
-      <span className="sess-indicator" data-status={status}>
-        <DotMatrix />
-      </span>
-    )
-  }
-  return <span className="sess-dot" data-status={status} />
+  return (
+    <StatusDot
+      tone={THREAD_STATUS_TONE[status]}
+      className={status === "running" ? "sess-indicator" : "sess-dot"}
+      data-status={status}
+    />
+  )
 }
 
-/** 一行会话：状态点、标题、补充信息（provider 或项目名）与时间；按住 ⌘/Ctrl 时时间换成快捷键。 */
+/** 一行会话：状态点、标题、补充信息（agent 缩写或项目名）与时间；按住 ⌘/Ctrl 时时间换成快捷键。 */
 export function ThreadRow({
   thread,
   active,
   status,
   detail,
-  detailClass,
   shortcut,
   rename,
   actions,
@@ -125,8 +123,7 @@ export function ThreadRow({
   thread: Thread
   active: boolean
   status: ThreadStatus
-  detail: string
-  detailClass: string
+  detail: ReactNode
   shortcut: string | null
   /** 改名中时传入；行换成输入框。 */
   rename: RenameHandlers | null
@@ -170,7 +167,7 @@ export function ThreadRow({
             <kbd className="sess-kbd">{shortcut}</kbd>
           ) : (
             <>
-              <span className={`${detailClass} truncate`}>{detail}</span>
+              {detail}
               <time dateTime={thread.updatedAt}>
                 {formatThreadTime(thread.updatedAt, locale, now)}
               </time>

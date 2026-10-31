@@ -192,20 +192,95 @@
   }
 }
 
-/* 侧栏会话行：运行中用点阵替换状态点，占同样的宽度，标题不跳动。 */
-.sess-indicator {
-  display: inline-flex;
+/*
+  状态点（StatusDot）：同一种状态在侧栏、子代理标签、Agent 与插件列表里都是同一个颜色。
+  圆点和运行中的点阵都用 currentColor；色调写在 data-tone 上，每种色调一个主题颜色。
+*/
+.status-dot {
+  display: inline-grid;
   flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 15px;
-  height: 15px;
+  place-items: center;
+  color: var(--faint);
 }
-.sess-indicator .dot-matrix {
-  color: color-mix(in oklab, var(--fg-2) 82%, transparent);
+.status-dot::before {
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
 }
-.sess.is-active .sess-indicator .dot-matrix {
-  color: var(--fg-2);
+.status-dot[data-tone="running"]::before {
+  display: none;
+}
+.status-dot .dot-matrix {
+  color: inherit;
+}
+.status-dot[data-tone="running"] {
+  color: var(--accent);
+}
+.status-dot[data-tone="ready"] {
+  color: var(--ok);
+}
+.status-dot[data-tone="warning"] {
+  color: var(--warn);
+}
+.status-dot[data-tone="error"] {
+  color: var(--bad);
+}
+.status-dot[data-tone="checking"] {
+  color: var(--info);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+@keyframes status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-dot[data-tone="checking"] {
+    animation: none;
+  }
+}
+
+/*
+  Agent 与插件的头像（EntityAvatar）：缩写和底色都来自 entityMark，色相写在 --entity-hue 上。
+  sm 是菜单、胶囊与标签里的，md 是模型菜单的左栏，lg 是设置里的列表；inline 是一行文字里的彩色缩写。
+*/
+.entity-avatar {
+  --entity-hue: 264;
+  --avatar-size: var(--avatar-lg);
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  border-radius: 28%;
+  background: oklch(92% 0.045 var(--entity-hue));
+  color: oklch(42% 0.12 var(--entity-hue));
+  font-family: var(--font-ui);
+  font-size: calc(var(--avatar-size) * 0.4);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+[data-theme="dark"] .entity-avatar {
+  background: oklch(32% 0.06 var(--entity-hue));
+  color: oklch(86% 0.09 var(--entity-hue));
+}
+.entity-avatar[data-size="sm"] {
+  --avatar-size: var(--avatar-sm);
+}
+.entity-avatar[data-size="md"] {
+  --avatar-size: var(--avatar-md);
+}
+/* 一行文字里的缩写：只留颜色，字体与字号由所在的位置给（侧栏是 .sess-provider） */
+.entity-avatar[data-size="inline"] {
+  display: inline;
+  width: auto;
+  height: auto;
+  background: none;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 /* 长标题在右侧渐隐，而不是用省略号截断；标题较短时渐隐区落在空白处。 */
@@ -215,17 +290,6 @@
   text-overflow: clip;
   -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
   mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
-}
-
-/* 线程头的状态胶囊：运行中用点阵替换圆点。 */
-.status-pill.is-running::before {
-  display: none;
-}
-.status-pill .dot-matrix {
-  --dot-matrix-size: 9px;
-  --dot-matrix-dot: 1.8px;
-  margin-right: 2px;
-  color: currentColor;
 }
 
 /* 底部状态提示：操作失败的错误与 Host 连接状态；可以点击关闭。 */

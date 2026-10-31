@@ -7,9 +7,11 @@ import {
   EmptyState,
   EntityAvatar,
   ListRow,
+  StatusDot,
   Switch,
   useLocale,
   type MessageKey,
+  type StatusTone,
 } from "@pigcode/ui-primitives"
 
 /** 插件类型，与 Host 的 boot graph 保持一致。 */
@@ -49,14 +51,14 @@ const kindKeys: Record<PluginKind, MessageKey> = {
 }
 
 /** 一行的状态：加载失败 > 冲突 > 启用 > 停用。 */
-function statusOf(plugin: PluginSummary): { tone: string; label: MessageKey } {
+function statusOf(plugin: PluginSummary): { tone: StatusTone; label: MessageKey } {
   if (plugin.error && plugin.error !== plugin.conflict) {
     return { tone: "error", label: "plugins.status.failed" }
   }
   if (plugin.conflict) return { tone: "warning", label: "plugins.status.conflict" }
   return plugin.enabled
     ? { tone: "ready", label: "plugins.enabled" }
-    : { tone: "off", label: "plugins.disabled" }
+    : { tone: "idle", label: "plugins.disabled" }
 }
 
 /** 插件列表需要的状态与事件。 */
@@ -207,7 +209,7 @@ export function PluginList({
                   }
                   description={
                     <span className="ext-row-status" data-tone={status.tone}>
-                      <span className="ext-dot" aria-hidden="true" />
+                      <StatusDot tone={status.tone} />
                       <span>{t(status.label)}</span>
                       <span className="ext-row-detail truncate">
                         · {t(kindKeys[plugin.kind])} · {plugin.name}

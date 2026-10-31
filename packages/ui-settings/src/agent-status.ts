@@ -1,9 +1,9 @@
 /** 把 agent 的启用状态与检测结果归成一行状态：色调、标题与补充说明。 */
 import type { AgentSummary, ProviderStatus } from "@pigcode/contracts"
-import type { MessageKey } from "@pigcode/ui-primitives"
+import type { MessageKey, StatusTone } from "@pigcode/ui-primitives"
 
-/** 状态色调；与 status-dot 的颜色一一对应。 */
-export type AgentTone = "ready" | "warning" | "error" | "checking" | "off"
+/** 状态色调；用 StatusDot 的色调，和侧栏、插件列表里同一种状态同一个颜色。 */
+export type AgentTone = Exclude<StatusTone, "running">
 
 /** 一行状态。 */
 export interface AgentHeadline {
@@ -21,7 +21,7 @@ export function agentHeadline(
   agent: Pick<AgentSummary, "enabled" | "registered" | "error">,
   status: ProviderStatus | undefined,
 ): AgentHeadline {
-  if (!agent.enabled) return { tone: "off", label: "agents.status.disabled", detail: null }
+  if (!agent.enabled) return { tone: "idle", label: "agents.status.disabled", detail: null }
   if (!agent.registered) {
     return { tone: "error", label: "agents.status.failed", detail: agent.error }
   }

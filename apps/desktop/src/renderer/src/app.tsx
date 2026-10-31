@@ -20,6 +20,7 @@ import {
   type PanelLayoutControlsProps,
   type PanelSurfaceState,
 } from "@pigcode/ui-workbench"
+import { useAgentNames } from "./agents"
 import { BrowserHost } from "./browser-host"
 import { PluginPanels, useRegistry } from "./client-plugins"
 import type { ChatSlotProps, CoreDeps } from "./chat-container"
@@ -107,6 +108,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
   const pluginSurfaces = useRegistry(plugins.surfaces)
+  const agentNames = useAgentNames(connection, state.providerRevision, state.status === "connected")
   const [view, setView] = useState<ShellView>("chat")
   const [section, setSection] = useState<SettingsSection>("general")
   const [rightOpen, setRightOpen] = useState(false)
@@ -358,6 +360,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       threads={mainThreads}
       activeThreadId={state.activeThreadId}
       threadStatus={threadStatus}
+      agentNames={agentNames}
       onToggleRight={toggleRight}
       onToggleTerminal={toggleTerminal}
       canGoBack={canGoBack(history)}

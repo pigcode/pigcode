@@ -1,11 +1,12 @@
 /** 定时任务设置页：创建固定间隔任务，并管理启停、立即运行与删除。 */
 import { useEffect, useState, type FormEvent } from "react"
-import { CalendarClock, Loader2, MessageSquare } from "lucide-react"
+import { CalendarClock, ChevronDown, Loader2, MessageSquare } from "lucide-react"
 import type { Schedule } from "@pigcode/contracts"
 import {
   Button,
   EmptyState,
   Input,
+  Select,
   SettingPage,
   SettingRow,
   SettingSection,
@@ -128,18 +129,34 @@ export function SchedulesPage({
             />
           ) : null}
           <SettingRow title={t("settings.schedules.thread")}>
-            <select
-              aria-label={t("settings.schedules.thread")}
+            <Select.Root
               value={threadId}
               disabled={threads.length === 0 || submitting}
-              onChange={(event) => setThreadId(event.target.value)}
+              onValueChange={(next) => {
+                if (typeof next === "string") setThreadId(next)
+              }}
             >
-              {threads.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  {thread.title}
-                </option>
-              ))}
-            </select>
+              <Select.Trigger
+                className="input select-trigger"
+                aria-label={t("settings.schedules.thread")}
+              >
+                <Select.Value className="grow truncate">
+                  {(value: string) => threadTitle(value)}
+                </Select.Value>
+                <ChevronDown className="ic ic-sm" aria-hidden="true" />
+              </Select.Trigger>
+              <Select.Portal>
+                <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
+                  <Select.Popup>
+                    {threads.map((thread) => (
+                      <Select.Item key={thread.id} value={thread.id}>
+                        <Select.ItemText>{thread.title}</Select.ItemText>
+                      </Select.Item>
+                    ))}
+                  </Select.Popup>
+                </Select.Positioner>
+              </Select.Portal>
+            </Select.Root>
           </SettingRow>
           <SettingRow title={t("settings.schedules.prompt")}>
             <Textarea
