@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import {
   Button,
+  EmptyState,
   ListRow,
   Menu,
   formatShortcut,
@@ -270,7 +271,7 @@ export function WorkspaceSidebar({
       {grouping === "time" ? (
         <div className="recent-sessions">
           {projects.length > 0 && liveThreads.length === 0 ? (
-            <p className="side-empty">{t("sidebar.noThreads")}</p>
+            <EmptyState size="compact" title={t("sidebar.noThreads")} />
           ) : null}
           {order.map((thread) =>
             row(thread, projectNames.get(thread.projectId) ?? "", "sess-project"),
@@ -293,7 +294,7 @@ export function WorkspaceSidebar({
               {open ? (
                 <div className="proj-sessions">
                   {projectThreads.length === 0 ? (
-                    <p className="side-empty">{t("sidebar.noThreads")}</p>
+                    <EmptyState size="compact" title={t("sidebar.noThreads")} />
                   ) : null}
                   {projectThreads.map((thread) =>
                     row(thread, providerMark(thread), "sess-provider"),

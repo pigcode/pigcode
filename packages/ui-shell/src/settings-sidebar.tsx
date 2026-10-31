@@ -1,6 +1,12 @@
 /** 设置侧栏：返回入口、搜索框与设置分区导航。 */
 import { useState } from "react"
-import { Button, Input, ListRow, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import {
+  EmptyState,
+  ListRow,
+  SearchField,
+  useLocale,
+  type MessageKey,
+} from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
 /** 设置页的分区。 */
@@ -45,35 +51,19 @@ export function SettingsSidebar({ activeSection, onSelect, onExit }: SettingsSid
         leading={<Icon name="left" />}
         title={t("settings.back")}
       />
-      <label className="side-search">
-        <Icon name="search" small />
-        <Input
-          type="search"
-          placeholder={t("settings.search")}
-          aria-label={t("settings.search")}
-          autoComplete="off"
-          spellCheck={false}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setQuery("")
-            const first = items[0]
-            if (event.key === "Enter" && first) onSelect(first.id)
-          }}
-        />
-        {query ? (
-          <Button
-            variant="plain"
-            className="side-search-clear"
-            type="button"
-            aria-label={t("settings.clear")}
-            onClick={() => setQuery("")}
-          >
-            <Icon name="x" small />
-          </Button>
-        ) : null}
-      </label>
-      {items.length === 0 ? <p className="side-empty-hit">{t("settings.noMatches")}</p> : null}
+      <SearchField
+        className="side-search"
+        value={query}
+        onValueChange={setQuery}
+        placeholder={t("settings.search")}
+        clearLabel={t("settings.clear")}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setQuery("")
+          const first = items[0]
+          if (event.key === "Enter" && first) onSelect(first.id)
+        }}
+      />
+      {items.length === 0 ? <EmptyState size="compact" title={t("settings.noMatches")} /> : null}
       <div className="side-group">{t("settings.title")}</div>
       {items.map((item) => {
         const active = item.id === activeSection

@@ -191,10 +191,6 @@
 .subagent-view-head .subagent-status:has(.dot-matrix)::before {
   display: none;
 }
-.subagent-view-empty {
-  color: var(--cv-subtle);
-  font-family: var(--font-ui);
-}
 .subagent-view-result {
   display: flex;
   flex-direction: column;

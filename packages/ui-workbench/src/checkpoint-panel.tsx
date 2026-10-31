@@ -1,6 +1,7 @@
 /** Checkpoint 面板：列出 baseline/final/manual，恢复前要求二次确认。 */
 import { useState } from "react"
-import { Button } from "@pigcode/ui-primitives"
+import { History } from "lucide-react"
+import { Button, EmptyState } from "@pigcode/ui-primitives"
 
 /** checkpoint 的创建阶段；与 Host 的 CheckpointPhase 保持一致。 */
 export type CheckpointPhase = "baseline" | "final" | "manual"
@@ -19,6 +20,9 @@ export interface CheckpointPanelProps {
   checkpoints: readonly CheckpointItem[]
   onRestore: (checkpointId: string) => void | Promise<void>
   restoring?: boolean
+  /** 没有 checkpoint 时的标题与说明；容器按 locale 注入。 */
+  emptyText?: string | undefined
+  emptyHint?: string | undefined
 }
 
 /** 阶段中文标签。 */
@@ -39,6 +43,8 @@ export function CheckpointPanel({
   checkpoints,
   onRestore,
   restoring = false,
+  emptyText = "暂无 checkpoint",
+  emptyHint,
 }: CheckpointPanelProps) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -57,7 +63,9 @@ export function CheckpointPanel({
   }
 
   if (checkpoints.length === 0) {
-    return <p className="workbench-empty">暂无 checkpoint</p>
+    return (
+      <EmptyState icon={<History className="ic" />} title={emptyText} description={emptyHint} />
+    )
   }
 
   return (

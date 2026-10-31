@@ -2,10 +2,18 @@
  * 文件标签的内容：顶部面包屑与操作，下面是可编辑的高亮代码、图片预览或无法预览的说明。
  * 修改只在保存时写回磁盘；文件在编辑期间被别处改过时给出提示，由用户选择重新加载或覆盖。
  */
-import { ChevronRight, Ellipsis, PanelLeftClose, PanelLeftOpen, Save } from "lucide-react"
+import {
+  ChevronRight,
+  Ellipsis,
+  FileQuestionMark,
+  Loader2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Save,
+} from "lucide-react"
 import { useState } from "react"
 import { CodeEditor } from "./code-editor"
-import { languageForPath } from "@pigcode/ui-primitives"
+import { EmptyState, languageForPath } from "@pigcode/ui-primitives"
 
 /** 一次读取的文件；字段与 Host 的 workspace.readFile 一致。 */
 export interface FileViewerFile {
@@ -140,14 +148,19 @@ export function FileViewer({
 
   let body
   if (error) body = <p className="workbench-error">{error}</p>
-  else if (!file) body = <p className="workbench-empty">{loading ? labels.loading : null}</p>
-  else if (file.image) {
+  else if (!file) {
+    body = loading ? (
+      <EmptyState icon={<Loader2 className="ic spin" />} title={labels.loading} />
+    ) : null
+  } else if (file.image) {
     body = <ImagePreview src={`data:${file.image.mime};base64,${file.image.base64}`} alt={path} />
   } else if (file.binary) {
     body = (
-      <p className="workbench-empty">
-        {file.truncated ? labels.imageTooLarge : labels.binary} · {formatSize(file.size)}
-      </p>
+      <EmptyState
+        icon={<FileQuestionMark className="ic" />}
+        title={file.truncated ? labels.imageTooLarge : labels.binary}
+        description={formatSize(file.size)}
+      />
     )
   } else {
     body = (

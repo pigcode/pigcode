@@ -1,7 +1,8 @@
 /** 终端 surface：挂载时打开一个 PTY，卸载时关闭；右侧面板的终端标签与底部终端共用。 */
 import { useEffect, useRef, useState, type ReactNode } from "react"
+import { Loader2 } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
-import { useLocale } from "@pigcode/ui-primitives"
+import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { TerminalView, type TerminalHandle } from "@pigcode/ui-workbench"
 
 /** terminal.open 返回的会话。 */
@@ -103,7 +104,7 @@ export function TerminalSurface({ connection, threadId, active, tools }: Termina
         <TerminalView onData={send} onResize={resize} onReady={ready} />
       ) : (
         // terminal.open 是异步 RPC；会话就绪前不挂载 xterm，避免输入被静默丢弃。
-        <p className="workbench-empty">{t("workbench.terminalOpening")}</p>
+        <EmptyState icon={<Loader2 className="ic spin" />} title={t("workbench.terminalOpening")} />
       )}
       {tools ? <div className="terminal-surface-tools">{tools}</div> : null}
     </div>

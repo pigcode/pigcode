@@ -91,6 +91,7 @@ export function browserLabels(t: Translate): BrowserViewLabels {
 export function prPanelLabels(t: Translate): PrPanelLabels {
   return {
     empty: t("pr.empty"),
+    emptyHint: t("pr.emptyHint"),
     loading: t("pr.loading"),
     title: t("pr.title"),
     titlePlaceholder: t("pr.titlePlaceholder"),
@@ -112,6 +113,7 @@ export function explorerLabels(t: Translate): FileExplorerLabels {
     refresh: t("files.refresh"),
     collapseAll: t("files.collapseAll"),
     empty: t("files.empty"),
+    emptyHint: t("files.emptyHint"),
     loading: t("files.loading"),
     noMatches: t("files.noMatches"),
     searchTruncated: t("files.searchTruncated"),

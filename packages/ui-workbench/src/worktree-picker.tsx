@@ -1,6 +1,7 @@
 /** Worktree 选择器：创建、切换与删除线程的 worktree。 */
 import { useState } from "react"
-import { Button } from "@pigcode/ui-primitives"
+import { GitBranch } from "lucide-react"
+import { Button, EmptyState } from "@pigcode/ui-primitives"
 
 /** 一条 worktree 记录；branch 为空表示未记录分支。 */
 export interface WorktreeItem {
@@ -101,7 +102,11 @@ export function WorktreePicker({
         </Button>
       </header>
       {worktrees.length === 0 ? (
-        <p className="workbench-empty">尚未创建工作树，当前使用项目根目录。</p>
+        <EmptyState
+          size="compact"
+          icon={<GitBranch className="ic" />}
+          title="尚未创建工作树，当前使用项目根目录。"
+        />
       ) : (
         <ul className="worktree-list">
           {worktrees.map((worktree) => {

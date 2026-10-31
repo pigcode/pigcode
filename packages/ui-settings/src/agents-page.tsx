@@ -1,10 +1,11 @@
 // Agent 设置页：默认 agent、已安装的 agent 列表（状态与启用开关），点开一项编辑它的设置。
 import { useState } from "react"
-import { ChevronDown, Plus, RefreshCw } from "lucide-react"
+import { Bot, ChevronDown, Plus, RefreshCw } from "lucide-react"
 import type { AgentSummary, ProviderSettingsValues, ProviderStatus } from "@pigcode/contracts"
 import {
   Badge,
   Button,
+  EmptyState,
   EntityAvatar,
   InstallDialog,
   ListRow,
@@ -207,7 +208,18 @@ export function AgentsPage({
           <h2>{t("agents.list")}</h2>
         </div>
         {agents.length === 0 ? (
-          <div className="empty">{t("agents.empty")}</div>
+          <EmptyState
+            className="group"
+            icon={<Bot className="ic" />}
+            title={t("agents.empty")}
+            description={t("agents.emptyHint")}
+            actions={
+              <Button size="sm" type="button" onClick={() => setInstallOpen(true)}>
+                <Plus className="ic ic-sm" aria-hidden="true" />
+                {t("agents.install")}
+              </Button>
+            }
+          />
         ) : (
           <div className="group ext-list">
             {agents.map((agent) => {

@@ -1,7 +1,7 @@
 /** @ 文件与 / 命令的建议面板：贴在输入框上沿，宽度与输入框一致。 */
 import { useEffect, useRef, useSyncExternalStore } from "react"
 import { FileText, Loader2, Slash } from "lucide-react"
-import { useLocale } from "@pigcode/ui-primitives"
+import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import type { SuggestionStore } from "./suggestion-store"
 
 /** 把路径拆成文件名和所在目录，列表里文件名在前、目录淡显。 */
@@ -34,11 +34,14 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
         {snapshot.loading ? <Loader2 className="ic ic-sm spin" aria-hidden="true" /> : null}
       </div>
       {snapshot.items.length === 0 && !snapshot.loading ? (
-        <div className="suggest-empty">
-          {snapshot.kind === "file"
-            ? t("composer.suggest.noFiles")
-            : t("composer.suggest.noCommands")}
-        </div>
+        <EmptyState
+          size="compact"
+          title={
+            snapshot.kind === "file"
+              ? t("composer.suggest.noFiles")
+              : t("composer.suggest.noCommands")
+          }
+        />
       ) : null}
       {snapshot.items.map((item, index) => {
         const active = index === snapshot.index

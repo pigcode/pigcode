@@ -88,6 +88,7 @@ export function PluginManagerView({
           <PluginList
             plugins={plugins}
             pendingId={pendingId}
+            onInstall={() => setInstallOpen(true)}
             onEnable={(id) => void run(id, () => onEnable(id))}
             onDisable={(id) => void run(id, () => onDisable(id))}
             {...(onUninstall

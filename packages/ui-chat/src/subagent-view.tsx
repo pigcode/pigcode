@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
 import { Bot } from "lucide-react"
-import { DotMatrix, useLocale } from "@pigcode/ui-primitives"
+import { DotMatrix, EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { asRecord, asText, collectTools, toolFromEvent } from "./event-parsers"
 import { MessageText } from "./message-item"
 import type { SubagentCall } from "./subagent-card"
@@ -108,7 +108,11 @@ export function SubagentView({
           </span>
         </header>
         {steps.length === 0 ? (
-          <div className="subagent-view-empty">{t("chat.subagent.empty")}</div>
+          <EmptyState
+            icon={<Bot className="ic" />}
+            title={t("chat.subagent.empty")}
+            description={t("chat.subagent.stepsHint")}
+          />
         ) : (
           <WorkList
             items={steps}

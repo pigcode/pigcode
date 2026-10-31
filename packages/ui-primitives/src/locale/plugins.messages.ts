@@ -15,7 +15,8 @@ export const pluginsZhCN = {
   "plugins.facts.api": "API 版本",
   "plugins.facts.provides": "提供",
   "plugins.facts.none": "无",
-  "plugins.surfaceGone": "这个插件标签已不可用：插件已停用或卸载。",
+  "plugins.surfaceGone": "插件标签不可用",
+  "plugins.surfaceGoneHint": "插件已停用或卸载。重新启用插件后，这个标签会恢复。",
   "panel.plugins": "插件",
 } as const
 
@@ -36,7 +37,8 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
   "plugins.facts.api": "API version",
   "plugins.facts.provides": "Provides",
   "plugins.facts.none": "None",
-  "plugins.surfaceGone":
-    "This plugin tab is no longer available: the plugin was disabled or removed.",
+  "plugins.surfaceGone": "Plugin tab unavailable",
+  "plugins.surfaceGoneHint":
+    "The plugin was disabled or removed. Enable it again to bring this tab back.",
   "panel.plugins": "Plugins",
 }

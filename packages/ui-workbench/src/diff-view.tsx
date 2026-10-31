@@ -1,11 +1,15 @@
 /** Diff 视图：用 diff 的 parsePatch 解析 unified diff，按行渲染增删与上下文。 */
 import { useMemo } from "react"
 import { parsePatch, type StructuredPatch } from "diff"
+import { FileDiff } from "lucide-react"
+import { EmptyState } from "@pigcode/ui-primitives"
 
 /** Diff 视图属性；diff 文本通常来自 git.diff。 */
 export interface DiffViewProps {
   diff: string
   emptyText?: string
+  /** 没有改动时标题下面的说明。 */
+  emptyHint?: string | undefined
 }
 
 /** 一行 diff 的分类。 */
@@ -104,10 +108,14 @@ function parseDiff(diff: string): RenderedFile[] {
 }
 
 /** Diff 视图入口。 */
-export function DiffView({ diff, emptyText = "暂无变更" }: DiffViewProps) {
+export function DiffView({ diff, emptyText = "暂无变更", emptyHint }: DiffViewProps) {
   const files = useMemo(() => (diff.trim().length === 0 ? [] : parseDiff(diff)), [diff])
 
-  if (files.length === 0) return <p className="workbench-empty">{emptyText}</p>
+  if (files.length === 0) {
+    return (
+      <EmptyState icon={<FileDiff className="ic" />} title={emptyText} description={emptyHint} />
+    )
+  }
 
   return (
     <div className="diff-view">

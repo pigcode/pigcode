@@ -122,7 +122,7 @@ describe("ModelPicker", () => {
   it("filters with the search box and picks with ⌘/Ctrl+number", async () => {
     const { chip, onSelectModel } = renderPicker()
     await userEvent.click(chip())
-    const search = await screen.findByRole("textbox", { name: "搜索模型…" })
+    const search = await screen.findByRole("searchbox", { name: "搜索模型…" })
     await waitFor(() => expect(document.activeElement).toBe(search))
     await userEvent.type(search, "hai")
     const list = screen.getByRole("listbox", { name: "Claude Code" })

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
 import { ArrowLeft, ArrowRight, Bot, ExternalLink, Globe, RotateCw } from "lucide-react"
-import { Button, DotMatrix } from "@pigcode/ui-primitives"
+import { Button, DotMatrix, EmptyState } from "@pigcode/ui-primitives"
 
 /** 在独立窗口打开页面的原生桥签名；测试可注入替身。 */
 export type PreviewOpen = (url: string) => Promise<{ id: string }>
@@ -268,13 +268,11 @@ export function BrowserView({
       ) : null}
       <div className="browser-page">
         {current ? null : (
-          <div className="browser-empty">
-            <span className="browser-empty-icon">
-              <Globe className="ic" aria-hidden="true" />
-            </span>
-            <strong>{labels.empty}</strong>
-            <p>{labels.emptyHint}</p>
-          </div>
+          <EmptyState
+            icon={<Globe className="ic" />}
+            title={labels.empty}
+            description={labels.emptyHint}
+          />
         )}
         {slot}
       </div>

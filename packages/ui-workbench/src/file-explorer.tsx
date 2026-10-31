@@ -3,8 +3,16 @@
  * 带祖先目录的结果树；被忽略的条目淡化，git 改动带颜色与字母；只渲染可见的行；键盘可完整操作；
  * 右键弹出菜单，拖到输入框插入 @路径。
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { ChevronsDownUp, RefreshCw, Search, X } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import {
+  ChevronsDownUp,
+  FolderOpen,
+  Loader2,
+  RefreshCw,
+  SearchX,
+  TriangleAlert,
+} from "lucide-react"
+import { EmptyState, SearchField } from "@pigcode/ui-primitives"
 import { ExplorerRow, rowId } from "./file-explorer-row"
 import {
   ancestorsOf,
@@ -36,6 +44,8 @@ export interface FileExplorerLabels {
   refresh: string
   collapseAll: string
   empty: string
+  /** 目录是空的时候标题下面的说明。 */
+  emptyHint?: string | undefined
   loading: string
   noMatches: string
   searchTruncated: string
@@ -353,16 +363,21 @@ export function FileExplorer({
 
   const rootState = directories.get("")
   const rootError = failed.get("")
-  const empty = results
+  // 树里没有行时显示的空状态：没有匹配、读取失败、目录是空的，或者还在读取。
+  const empty: { icon: ReactNode; title: string; description?: string | undefined } | null = results
     ? results.entries.length === 0 && !searching
-      ? labels.noMatches
+      ? { icon: <SearchX className="ic" />, title: labels.noMatches }
       : null
     : rootError
-      ? `${labels.loadFailed}: ${rootError}`
+      ? { icon: <TriangleAlert className="ic" />, title: labels.loadFailed, description: rootError }
       : rootState && rootState.entries.length === 0
-        ? labels.empty
+        ? {
+            icon: <FolderOpen className="ic" />,
+            title: labels.empty,
+            description: labels.emptyHint,
+          }
         : !rootState
-          ? labels.loading
+          ? { icon: <Loader2 className="ic spin" />, title: labels.loading }
           : null
 
   return (
@@ -400,32 +415,23 @@ export function FileExplorer({
           </button>
         </span>
       </div>
-      <label className="fx-search">
-        <Search className="ic ic-sm" aria-hidden="true" />
-        <input
-          type="search"
-          value={query}
-          placeholder={labels.search}
-          aria-label={labels.search}
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setQuery("")
-            if (event.key === "ArrowDown") {
-              event.preventDefault()
-              const first = rows[0]
-              if (first) setFocused(first.path)
-              scroller.current?.focus()
-            }
-          }}
-        />
-        {query ? (
-          <button type="button" aria-label={labels.clearSearch} onClick={() => setQuery("")}>
-            <X className="ic ic-sm" aria-hidden="true" />
-          </button>
-        ) : null}
-      </label>
+      <SearchField
+        size="compact"
+        className="fx-search"
+        value={query}
+        onValueChange={setQuery}
+        placeholder={labels.search}
+        clearLabel={labels.clearSearch}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") setQuery("")
+          if (event.key === "ArrowDown") {
+            event.preventDefault()
+            const first = rows[0]
+            if (first) setFocused(first.path)
+            scroller.current?.focus()
+          }
+        }}
+      />
       {results?.truncated ? <p className="fx-note">{labels.searchTruncated}</p> : null}
       <div
         ref={scroller}
@@ -442,7 +448,7 @@ export function FileExplorer({
           if (focused === null && rows[0]) setFocused(activePath ?? rows[0].path)
         }}
       >
-        {empty ? <p className="fx-empty">{empty}</p> : null}
+        {empty ? <EmptyState size={compact ? "compact" : "default"} {...empty} /> : null}
         <div className="fx-rows" style={{ height: rows.length * rowHeight }}>
           {rows.slice(first, last).map((row, offset) => (
             <ExplorerRow

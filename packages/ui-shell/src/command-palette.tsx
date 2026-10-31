@@ -1,7 +1,14 @@
 /** 命令面板：会话切换、主操作与快捷键入口。 */
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { ListRow, formatShortcut, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import {
+  EmptyState,
+  ListRow,
+  SearchField,
+  formatShortcut,
+  useLocale,
+  type MessageKey,
+} from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
 /** 命令面板中的一条可执行项。 */
@@ -198,24 +205,20 @@ export function CommandPalette(props: CommandPaletteProps) {
         aria-label={t("palette.actions")}
       >
         <div className="palette-search">
-          <Icon name="search" />
-          <input
-            ref={inputRef}
+          <SearchField
+            inputRef={inputRef}
             value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
+            onValueChange={(value) => {
+              setQuery(value)
               setActive(0)
             }}
             placeholder={t("palette.placeholder")}
-            aria-label={t("palette.placeholder")}
-            autoComplete="off"
-            spellCheck={false}
+            trailing={<kbd>esc</kbd>}
           />
-          <kbd>esc</kbd>
         </div>
         <div className="palette-list" role="listbox" aria-label={t("palette.actions")}>
           {visible.length === 0 ? (
-            <p className="palette-empty">{t("palette.empty")}</p>
+            <EmptyState size="compact" title={t("palette.empty")} />
           ) : (
             visible.map((item, index) => {
               const header = item.group !== lastGroup ? groupTitles[item.group] : null

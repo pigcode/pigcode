@@ -90,7 +90,10 @@ describe("PluginManagerView", () => {
     const onInstall = vi.fn(async (): Promise<void> => undefined)
     renderView([], { onInstall })
     const user = userEvent.setup()
-    await user.click(screen.getByRole("button", { name: "安装插件" }))
+    // 没有插件时，标题栏和空状态里各有一个「安装插件」；空状态里的那个同样打开对话框。
+    const installs = screen.getAllByRole("button", { name: "安装插件" })
+    expect(installs).toHaveLength(2)
+    await user.click(installs[1] as HTMLElement)
     const spec = "pigcode-provider-demo@1.0.0"
     await user.type(screen.getByLabelText("插件目录或 npm 包"), spec)
     await user.click(screen.getByRole("button", { name: "安装" }))

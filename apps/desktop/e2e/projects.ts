@@ -45,7 +45,8 @@ export async function openThread(
 
 /** 在插件管理页打开「安装插件」对话框，安装一个插件目录或 npm 包。 */
 export async function installPlugin(page: Page, spec: string): Promise<void> {
-  await page.getByRole("button", { name: "安装插件" }).click()
+  // 列表为空时空状态里也有一个「安装插件」，用标题栏里那个。
+  await page.locator(".page-head").getByRole("button", { name: "安装插件" }).click()
   const dialog = page.getByRole("dialog", { name: "安装插件" })
   await dialog.getByLabel("插件目录或 npm 包").fill(spec)
   await dialog.getByRole("button", { name: "安装", exact: true }).click()

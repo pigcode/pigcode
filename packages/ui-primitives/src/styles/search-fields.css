@@ -1,0 +1,69 @@
+/*
+  搜索框：SearchField 的外框、图标、输入框与清除按钮。命令面板、模型菜单与设置侧栏用 default（高 28），
+  文件树用 compact（高 24）。外框没有描边，聚焦时整框一圈焦点环，输入框自己不画描边。
+  区域样式只补它所在位置的外边距，不再写搜索框的颜色、高度与圆角。
+*/
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--field);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  cursor: text;
+  transition: box-shadow var(--t-fast);
+}
+.search-field[data-size="compact"] {
+  gap: var(--space-2);
+  height: var(--control-sm);
+  padding: 0 var(--space-3);
+  font-size: var(--fs-sm);
+}
+.search-field:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+.search-field > input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+}
+.search-field > input::placeholder {
+  color: var(--muted);
+}
+.search-field > input::-webkit-search-cancel-button,
+.search-field > input::-webkit-search-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+/* 清除按钮：小圆底上的叉 */
+.search-field-clear {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--icon-md);
+  height: var(--icon-md);
+  border-radius: var(--r-full);
+  background: var(--faint);
+  color: var(--surface);
+}
+.search-field-clear:hover {
+  background: var(--muted);
+}
+.search-field-clear > .ic {
+  width: 60%;
+  height: 60%;
+  stroke-width: 2.4;
+}

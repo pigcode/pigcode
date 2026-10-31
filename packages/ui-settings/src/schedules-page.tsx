@@ -1,8 +1,10 @@
 /** 定时任务设置页：创建固定间隔任务，并管理启停、立即运行与删除。 */
 import { useEffect, useState, type FormEvent } from "react"
+import { CalendarClock, Loader2, MessageSquare } from "lucide-react"
 import type { Schedule } from "@pigcode/contracts"
 import {
   Button,
+  EmptyState,
   Input,
   SettingPage,
   SettingRow,
@@ -119,7 +121,11 @@ export function SchedulesPage({
       <form onSubmit={(event) => void submit(event)}>
         <SettingSection title={t("settings.schedules.new")}>
           {threads.length === 0 ? (
-            <div className="empty">{t("settings.schedules.noThreads")}</div>
+            <EmptyState
+              icon={<MessageSquare className="ic" />}
+              title={t("settings.schedules.noThreadsTitle")}
+              description={t("settings.schedules.noThreads")}
+            />
           ) : null}
           <SettingRow title={t("settings.schedules.thread")}>
             <select
@@ -165,9 +171,18 @@ export function SchedulesPage({
       </form>
 
       <SettingSection title={t("settings.schedules.list")}>
-        {loading ? <div className="empty">{t("settings.schedules.loading")}</div> : null}
+        {loading ? (
+          <EmptyState
+            icon={<Loader2 className="ic spin" />}
+            title={t("settings.schedules.loading")}
+          />
+        ) : null}
         {!loading && schedules.length === 0 ? (
-          <div className="empty">{t("settings.schedules.empty")}</div>
+          <EmptyState
+            icon={<CalendarClock className="ic" />}
+            title={t("settings.schedules.empty")}
+            description={t("settings.schedules.emptyHint")}
+          />
         ) : null}
         {schedules.map((schedule) => (
           <SettingRow

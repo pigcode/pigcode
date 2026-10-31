@@ -209,7 +209,7 @@ for (const theme of ["light", "dark"] as const) {
 
       const pane = page.locator(".right-panel-body .surface-pane:not([hidden])")
       await launcher.getByRole("button", { name: /^浏览器/ }).click()
-      await expect(page.locator(".browser-empty")).toBeVisible()
+      await expect(pane.locator(".browser-page > .empty-state")).toBeVisible()
       await snap(page, "surface-browser", theme)
 
       /** 从「添加面板」菜单打开一种 Surface；ready 出现、loading 文字消失后截图。 */
@@ -287,7 +287,7 @@ for (const theme of ["light", "dark"] as const) {
       await snap(page, "settings-plugins", theme)
 
       for (const name of ["ui-debug-panel", "provider-echo", "capability-clock"]) {
-        await page.getByRole("button", { name: "安装插件" }).click()
+        await page.locator(".page-head").getByRole("button", { name: "安装插件" }).click()
         const dialog = page.getByRole("dialog", { name: "安装插件" })
         const input = dialog.getByLabel("插件目录或 npm 包")
         if (name === "ui-debug-panel") {

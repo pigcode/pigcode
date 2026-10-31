@@ -3,10 +3,10 @@
  * 插件注册的标签挂在同样的标签栏与外框里。
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { Plus, Trash2 } from "lucide-react"
+import { Loader2, Plus, Trash2, Unplug } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ClientSurface } from "@pigcode/plugin-sdk"
-import { Button, useLocale } from "@pigcode/ui-primitives"
+import { Button, EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 import {
   CheckpointPanel,
@@ -272,9 +272,13 @@ export function WorkbenchPanel({
         {diffError ? (
           <p className="workbench-error">{diffError}</p>
         ) : diffLoading ? (
-          <p className="workbench-empty">正在读取 diff…</p>
+          <EmptyState icon={<Loader2 className="ic spin" />} title={t("workbench.diff.loading")} />
         ) : (
-          <DiffView diff={diff} />
+          <DiffView
+            diff={diff}
+            emptyText={t("workbench.diff.empty")}
+            emptyHint={t("workbench.diff.emptyHint")}
+          />
         )}
       </div>
     ),
@@ -296,6 +300,8 @@ export function WorkbenchPanel({
           checkpoints={checkpoints}
           onRestore={restoreCheckpoint}
           restoring={checkpointBusy}
+          emptyText={t("workbench.checkpoint.empty")}
+          emptyHint={t("workbench.checkpoint.emptyHint")}
         />
       </div>
     ),
@@ -407,7 +413,11 @@ export function WorkbenchPanel({
                 {plugin ? (
                   <PluginContentHost id={plugin.id} render={plugin.render} kind="surface" />
                 ) : (
-                  <p className="workbench-empty">{t("plugins.surfaceGone")}</p>
+                  <EmptyState
+                    icon={<Unplug className="ic" />}
+                    title={t("plugins.surfaceGone")}
+                    description={t("plugins.surfaceGoneHint")}
+                  />
                 )}
               </div>
             )

@@ -1,9 +1,10 @@
 // 插件列表：和 Agent 页同一种行——头像、名称、版本、状态与类型、启用开关；点开看包名、权限与卸载。
 import { useState } from "react"
-import { ChevronDown } from "lucide-react"
+import { Box, ChevronDown, Plus } from "lucide-react"
 import {
   Badge,
   Button,
+  EmptyState,
   EntityAvatar,
   ListRow,
   Switch,
@@ -67,6 +68,8 @@ export interface PluginListProps {
   onDisable: (id: string) => void
   /** 卸载用户安装的插件；内置插件不显示卸载按钮。 */
   onUninstall?: ((id: string) => void) | undefined
+  /** 打开安装对话框；给了它，列表为空时空状态里出现「安装插件」。 */
+  onInstall?: (() => void) | undefined
 }
 
 function PluginDetails({
@@ -151,6 +154,7 @@ export function PluginList({
   onEnable,
   onDisable,
   onUninstall,
+  onInstall,
 }: PluginListProps) {
   const { t } = useLocale()
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -161,7 +165,20 @@ export function PluginList({
         <h2>{t("plugins.installed")}</h2>
       </div>
       {plugins.length === 0 ? (
-        <div className="empty">{t("plugins.empty")}</div>
+        <EmptyState
+          className="group"
+          icon={<Box className="ic" />}
+          title={t("plugins.empty")}
+          description={t("plugins.emptyHint")}
+          actions={
+            onInstall ? (
+              <Button size="sm" type="button" onClick={onInstall}>
+                <Plus className="ic ic-sm" aria-hidden="true" />
+                {t("plugins.install")}
+              </Button>
+            ) : null
+          }
+        />
       ) : (
         <div className="group ext-list">
           {plugins.map((plugin) => {

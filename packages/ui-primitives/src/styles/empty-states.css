@@ -1,0 +1,88 @@
+/*
+  空状态：EmptyState 的两种尺寸。页面与 Surface 用 default：居中，图标在圆底里，标题、一句说明和操作；
+  列表与弹层用 compact：和列表行一样高的一行弱化文字，可以带小图标和说明。加载中也是这两种样子，图标换成转圈。
+  区域样式只补它所在位置的布局（占满剩余高度、缩进），不再写空状态的颜色、字号与间距。
+*/
+
+/* ─── default：页面与 Surface ─── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-9) var(--space-7);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  text-align: center;
+}
+/* 图标放在 40 的圆底里 */
+.empty-state-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--control-lg) + var(--space-4));
+  height: calc(var(--control-lg) + var(--space-4));
+  margin-bottom: var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--muted);
+}
+.empty-state-icon > svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+.empty-state-title {
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.empty-state-desc {
+  max-width: 24em;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* ─── compact：列表与弹层里的一行，和列表行一样高、一样的内边距 ─── */
+.empty-state[data-size="compact"] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: var(--space-1) var(--space-3);
+  min-height: var(--row-h);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.empty-state[data-size="compact"] > .empty-state-icon {
+  width: auto;
+  height: auto;
+  margin: 0;
+  background: none;
+}
+.empty-state[data-size="compact"] > .empty-state-icon > svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+.empty-state[data-size="compact"] > .empty-state-title {
+  color: var(--muted);
+  font-size: inherit;
+  font-weight: 400;
+}
+/* 说明和操作各占一行 */
+.empty-state[data-size="compact"] > .empty-state-desc,
+.empty-state[data-size="compact"] > .empty-state-actions {
+  flex-basis: 100%;
+  max-width: none;
+  margin: 0;
+  justify-content: flex-start;
+}

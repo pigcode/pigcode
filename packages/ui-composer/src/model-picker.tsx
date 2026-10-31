@@ -3,8 +3,15 @@
  * 底部是当前模型支持的思考深度。只有选中某个 agent 才会列出它自己的模型。
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { Check, ChevronDown, Search, Star } from "lucide-react"
-import { ListRow, Popover, formatShortcut, useLocale } from "@pigcode/ui-primitives"
+import { Check, ChevronDown, Loader2, Star } from "lucide-react"
+import {
+  EmptyState,
+  ListRow,
+  Popover,
+  SearchField,
+  formatShortcut,
+  useLocale,
+} from "@pigcode/ui-primitives"
 import {
   agentMark,
   effortKeys,
@@ -223,16 +230,14 @@ export function ModelPicker({
                 ))}
               </nav>
               <div className="model-pane">
-                <label className="model-search">
-                  <Search className="ic ic-sm" aria-hidden="true" />
-                  <input
-                    ref={searchRef}
+                <div className="model-search">
+                  <SearchField
+                    inputRef={searchRef}
                     value={query}
+                    onValueChange={setQuery}
                     placeholder={t("composer.model.search")}
-                    aria-label={t("composer.model.search")}
-                    onChange={(event) => setQuery(event.target.value)}
                   />
-                </label>
+                </div>
                 <div
                   className="model-list"
                   role="listbox"
@@ -242,14 +247,22 @@ export function ModelPicker({
                   }
                 >
                   {loading ? (
-                    <div className="model-empty">{t("composer.model.loading")}</div>
+                    <EmptyState
+                      size="compact"
+                      icon={<Loader2 className="ic spin" />}
+                      title={t("composer.model.loading")}
+                    />
                   ) : null}
                   {!loading && rows.length === 0 ? (
-                    <div className="model-empty">
-                      {tab === FAVORITES && !query
-                        ? t("composer.model.noFavorites")
-                        : t("composer.model.none")}
-                    </div>
+                    <EmptyState
+                      size="compact"
+                      icon={tab === FAVORITES && !query ? <Star className="ic" /> : undefined}
+                      title={
+                        tab === FAVORITES && !query
+                          ? t("composer.model.noFavorites")
+                          : t("composer.model.none")
+                      }
+                    />
                   ) : null}
                   {rows.map((row, rowIndex) => {
                     const key = modelKey(row.agent.id, row.model.id)

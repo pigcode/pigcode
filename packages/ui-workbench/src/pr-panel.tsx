@@ -1,7 +1,15 @@
 /** PR 面板：展示当前分支的 PR 状态，并在没有 PR 时提供创建表单。 */
 import { useState, type FormEvent } from "react"
 import type { PullRequestInfo } from "@pigcode/contracts"
-import { Badge, Button, Input, Textarea, type BadgeVariant } from "@pigcode/ui-primitives"
+import { GitPullRequest, Loader2 } from "lucide-react"
+import {
+  Badge,
+  Button,
+  EmptyState,
+  Input,
+  Textarea,
+  type BadgeVariant,
+} from "@pigcode/ui-primitives"
 
 /** 创建 PR 的输入；body/base 省略时由 Host 使用 gh 默认值。 */
 export interface PrCreateInput {
@@ -13,6 +21,8 @@ export interface PrCreateInput {
 /** PR 面板文案；容器按当前 locale 注入，组件本身保持无 locale 依赖。 */
 export interface PrPanelLabels {
   empty: string
+  /** 没有 PR 时标题下面的说明。 */
+  emptyHint?: string | undefined
   loading: string
   title: string
   titlePlaceholder: string
@@ -93,7 +103,9 @@ export function PrPanel({
 
   return (
     <div className="pr-panel">
-      {loading ? <p className="workbench-empty">{labels.loading}</p> : null}
+      {loading ? (
+        <EmptyState icon={<Loader2 className="ic spin" />} title={labels.loading} />
+      ) : null}
       {error ? <p className="workbench-error">{error}</p> : null}
       {pullRequest ? (
         <section className="pr-card" aria-label="Pull request">
@@ -111,7 +123,11 @@ export function PrPanel({
         </section>
       ) : loading ? null : (
         <>
-          <p className="workbench-empty">{labels.empty}</p>
+          <EmptyState
+            icon={<GitPullRequest className="ic" />}
+            title={labels.empty}
+            description={labels.emptyHint}
+          />
           <form className="pr-form" onSubmit={(event) => void submit(event)}>
             <label className="pr-field">
               <span>{labels.title}</span>
