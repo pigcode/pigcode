@@ -1,5 +1,5 @@
 /** 权限模式的胶囊与菜单；完全访问需要在确认框里再点一次才会开启。 */
-import { useState, type CSSProperties } from "react"
+import { useState } from "react"
 import {
   Check,
   ChevronDown,
@@ -17,14 +17,6 @@ const ICONS: Record<PermissionMode, LucideIcon> = {
   plan: ListChecks,
   "read-only": Eye,
   "danger-full-access": ShieldAlert,
-}
-
-const centered: CSSProperties = {
-  position: "fixed",
-  left: "50%",
-  top: "50%",
-  transform: "translate(-50%, -50%)",
-  zIndex: 90,
 }
 
 /** 权限菜单的属性。 */
@@ -94,35 +86,24 @@ export function PermissionMenu({ value, modes, onChange, side = "top" }: Permiss
         </Menu.Portal>
       </Menu.Root>
       <Dialog.Root open={confirming} onOpenChange={setConfirming}>
-        <Dialog.Portal>
-          <Dialog.Backdrop className="confirm-scrim" />
-          <Dialog.Popup className="confirm-dialog" style={centered}>
-            <div className="confirm-icon" aria-hidden="true">
-              <ShieldAlert className="ic" />
-            </div>
-            <Dialog.Title className="confirm-title">
-              {t("composer.permission.full.confirmTitle")}
-            </Dialog.Title>
-            <Dialog.Description className="confirm-text">
-              {t("composer.permission.full.confirmText")}
-            </Dialog.Description>
-            <div className="confirm-actions">
-              <Dialog.Close render={<Button variant="secondary" size="sm" />}>
-                {t("common.cancel")}
-              </Dialog.Close>
-              <Button
-                variant="solidDanger"
-                size="sm"
-                onClick={() => {
-                  setConfirming(false)
-                  onChange?.("danger-full-access")
-                }}
-              >
-                {t("composer.permission.full.confirm")}
-              </Button>
-            </div>
-          </Dialog.Popup>
-        </Dialog.Portal>
+        <Dialog.Content
+          title={t("composer.permission.full.confirmTitle")}
+          description={t("composer.permission.full.confirmText")}
+          closeLabel={t("common.close")}
+        >
+          <Dialog.Footer>
+            <Dialog.Close render={<Button variant="ghost" />}>{t("common.cancel")}</Dialog.Close>
+            <Button
+              variant="solidDanger"
+              onClick={() => {
+                setConfirming(false)
+                onChange?.("danger-full-access")
+              }}
+            >
+              {t("composer.permission.full.confirm")}
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
       </Dialog.Root>
     </>
   )

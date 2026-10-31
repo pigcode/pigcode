@@ -2,18 +2,9 @@
  * 「创建项目」对话框：项目名称、设备与源文件夹。
  * 源文件夹通过系统自带的文件管理器选择；项目名称留空时用文件夹名。
  */
-import { useState, type CSSProperties } from "react"
+import { useState } from "react"
 import { Button, Dialog, Input, Select, useLocale } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
-
-/** Base UI 的 Popup 不带定位，用固定定位把对话框居中。 */
-const centeredPopupStyle: CSSProperties = {
-  position: "fixed",
-  left: "50%",
-  top: "50%",
-  transform: "translate(-50%, -50%)",
-  zIndex: 81,
-}
 
 /** 取路径最后一段作为项目名；去掉结尾斜杠，空路径返回空字符串。 */
 export function projectNameFromPath(path: string): string {
@@ -76,33 +67,24 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
 
   return (
     <Dialog.Root open={open} onOpenChange={close}>
-      <Dialog.Portal>
-        <Dialog.Backdrop className="project-scrim" />
-        <Dialog.Popup className="project-dialog" style={centeredPopupStyle}>
-          <div className="project-dialog-head">
-            <Dialog.Title>{t("project.add.title")}</Dialog.Title>
-            <Dialog.Close
-              className="icon-btn project-dialog-close"
-              aria-label={t("common.close")}
-              title={t("common.close")}
-            >
-              <Icon name="x" />
-            </Dialog.Close>
-          </div>
-          <form
-            className="project-dialog-body"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void create()
-            }}
-          >
-            <div className="project-field">
-              <label htmlFor="project-name" className="project-label">
+      <Dialog.Content
+        className="project-dialog"
+        title={t("project.add.title")}
+        closeLabel={t("common.close")}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            void create()
+          }}
+        >
+          <Dialog.Body>
+            <div className="field">
+              <label htmlFor="project-name" className="label">
                 {t("project.add.name")}
               </label>
               <Input
                 id="project-name"
-                className="project-input"
                 value={name}
                 autoFocus
                 maxLength={120}
@@ -113,9 +95,9 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
               />
             </div>
             <Select.Root items={devices} defaultValue="local">
-              <div className="project-field">
-                <Select.Label className="project-label">{t("project.add.device")}</Select.Label>
-                <Select.Trigger className="project-input project-select">
+              <div className="field">
+                <Select.Label className="label">{t("project.add.device")}</Select.Label>
+                <Select.Trigger className="input project-select">
                   <Icon name="monitor" />
                   <Select.Value className="grow" />
                   <Select.Icon className="project-select-caret">
@@ -144,8 +126,8 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
                 </Select.Positioner>
               </Select.Portal>
             </Select.Root>
-            <div className="project-field" role="group" aria-labelledby="project-folder-label">
-              <span id="project-folder-label" className="project-label">
+            <div className="field" role="group" aria-labelledby="project-folder-label">
+              <span id="project-folder-label" className="label">
                 {t("project.add.folder")}
               </span>
               <button
@@ -170,27 +152,17 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
                 </span>
               </button>
             </div>
-            <div className="project-dialog-foot">
-              <Button
-                type="button"
-                variant="ghost"
-                className="project-cancel"
-                onClick={() => close(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                className="project-create"
-                disabled={!folder && !canPick}
-              >
-                {t("project.add.create")}
-              </Button>
-            </div>
-          </form>
-        </Dialog.Popup>
-      </Dialog.Portal>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Button type="button" variant="ghost" onClick={() => close(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" variant="primary" disabled={!folder && !canPick}>
+              {t("project.add.create")}
+            </Button>
+          </Dialog.Footer>
+        </form>
+      </Dialog.Content>
     </Dialog.Root>
   )
 }

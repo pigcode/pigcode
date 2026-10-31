@@ -102,6 +102,7 @@ export function PluginManagerView({
         onInstall={onInstall}
         inputId="plugin-install-spec"
         labels={{
+          close: t("common.close"),
           title: t("plugins.install.title"),
           description: t("plugins.install.description"),
           spec: t("plugins.installSpec"),

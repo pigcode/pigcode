@@ -16,37 +16,37 @@
     }
   },
   "radius": {
-    "total": 83,
+    "total": 77,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 2,
-      "packages/ui-primitives/src/styles/composer.css": 8,
+      "packages/ui-primitives/src/styles/composer.css": 7,
       "packages/ui-primitives/src/styles/conversation.css": 35,
       "packages/ui-primitives/src/styles/files.css": 2,
-      "packages/ui-primitives/src/styles/globals.css": 33,
+      "packages/ui-primitives/src/styles/globals.css": 28,
       "packages/ui-primitives/src/styles/indicators.css": 1,
       "packages/ui-primitives/src/styles/open-in.css": 2
     }
   },
   "fontSize": {
-    "total": 51,
+    "total": 41,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 1,
-      "packages/ui-primitives/src/styles/composer.css": 4,
+      "packages/ui-primitives/src/styles/composer.css": 3,
       "packages/ui-primitives/src/styles/files.css": 2,
-      "packages/ui-primitives/src/styles/globals.css": 43,
+      "packages/ui-primitives/src/styles/globals.css": 34,
       "packages/ui-primitives/src/styles/open-in.css": 1
     }
   },
   "height": {
-    "total": 208,
+    "total": 200,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 4,
       "packages/ui-primitives/src/styles/browser.css": 2,
-      "packages/ui-primitives/src/styles/composer.css": 11,
+      "packages/ui-primitives/src/styles/composer.css": 10,
       "packages/ui-primitives/src/styles/controls.css": 6,
       "packages/ui-primitives/src/styles/conversation.css": 45,
       "packages/ui-primitives/src/styles/files.css": 12,
-      "packages/ui-primitives/src/styles/globals.css": 116,
+      "packages/ui-primitives/src/styles/globals.css": 109,
       "packages/ui-primitives/src/styles/indicators.css": 2,
       "packages/ui-primitives/src/styles/open-in.css": 3,
       "packages/ui-primitives/src/styles/plugins.css": 1,
@@ -54,10 +54,10 @@
     }
   },
   "duplicateSelector": {
-    "total": 93,
+    "total": 87,
     "files": {
       "packages/ui-primitives/src/styles/conversation.css": 4,
-      "packages/ui-primitives/src/styles/globals.css": 89
+      "packages/ui-primitives/src/styles/globals.css": 83
     }
   },
   "uiText": {

@@ -212,6 +212,8 @@ export function Shell({
       const key = event.key.toLowerCase()
       if (key === "k") {
         event.preventDefault()
+        // 对话框打开时不叠一层命令面板：面板会落在对话框下面，回车会在背后执行命令。
+        if (document.querySelector(".dialog")) return
         setPaletteOpen((value) => !value)
         return
       }

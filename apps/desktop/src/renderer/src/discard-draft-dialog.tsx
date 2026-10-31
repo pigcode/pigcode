@@ -19,23 +19,20 @@ export function DiscardDraftDialog({
         if (!open) onCancel()
       }}
     >
-      <Dialog.Portal>
-        <Dialog.Backdrop />
-        <Dialog.Popup className="discard-dialog">
-          <Dialog.Title className="discard-dialog-title">{t("files.discard.title")}</Dialog.Title>
-          <Dialog.Description className="discard-dialog-text">
-            {t("files.discard.description").replace("{file}", file ?? "")}
-          </Dialog.Description>
-          <div className="discard-dialog-actions">
-            <Button type="button" variant="ghost" onClick={onCancel}>
-              {t("files.discard.cancel")}
-            </Button>
-            <Button type="button" variant="solidDanger" onClick={onDiscard}>
-              {t("files.discard.confirm")}
-            </Button>
-          </div>
-        </Dialog.Popup>
-      </Dialog.Portal>
+      <Dialog.Content
+        title={t("files.discard.title")}
+        description={t("files.discard.description").replace("{file}", file ?? "")}
+        closeLabel={t("common.close")}
+      >
+        <Dialog.Footer>
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            {t("files.discard.cancel")}
+          </Button>
+          <Button type="button" variant="solidDanger" onClick={onDiscard}>
+            {t("files.discard.confirm")}
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
     </Dialog.Root>
   )
 }

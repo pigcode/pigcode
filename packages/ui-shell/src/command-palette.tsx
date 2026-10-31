@@ -185,7 +185,7 @@ export function CommandPalette(props: CommandPaletteProps) {
 
   return (
     <div
-      className="palette-scrim"
+      className="scrim palette-scrim"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) props.onClose()

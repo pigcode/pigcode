@@ -245,6 +245,7 @@ export function AgentsPage({
         onInstall={onInstall}
         inputId="agent-install-spec"
         labels={{
+          close: t("common.close"),
           title: t("agents.install.title"),
           description: t("agents.install.description"),
           spec: t("agents.install.spec"),

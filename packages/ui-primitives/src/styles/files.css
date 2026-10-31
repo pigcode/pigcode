@@ -543,24 +543,3 @@ button.file-crumb:hover {
   border-radius: 50%;
   background: var(--warn);
 }
-
-/* 放弃未保存修改的确认框。 */
-.discard-dialog {
-  padding: 18px 18px 14px;
-}
-.discard-dialog-title {
-  font-size: var(--fs-lg);
-  font-weight: 600;
-}
-.discard-dialog-text {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.55;
-}
-.discard-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-}

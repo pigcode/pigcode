@@ -2,6 +2,7 @@
 @import "./glass.css";
 @import "./controls.css";
 @import "./menus.css";
+@import "./dialogs.css";
 @import "./indicators.css";
 @import "./composer.css";
 @import "./open-in.css";
@@ -1113,90 +1114,6 @@ kbd {
 }
 .dtable .r {
   text-align: right;
-}
-
-.scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  background: var(--scrim);
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--t-med) var(--ease);
-}
-.scrim.is-open,
-.scrim[data-open] {
-  opacity: 1;
-  pointer-events: auto;
-}
-.dialog {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  z-index: 81;
-  width: min(420px, 100%);
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  background: var(--popover);
-  border-radius: var(--r-xl);
-  box-shadow: var(--shadow-pop);
-  transform: translate(-50%, -50%) translateY(4px) scale(0.99);
-  transition: transform var(--t-med) var(--ease);
-}
-.scrim.is-open .dialog,
-.scrim[data-open] + .dialog {
-  transform: translate(-50%, -50%);
-}
-.dialog.sheet {
-  top: 0;
-  height: 100vh;
-  max-height: 100vh;
-  border-radius: 0;
-  transform: translateY(0);
-}
-.dialog.sheet-right {
-  left: auto;
-  right: 0;
-}
-.dialog.sheet-left {
-  left: 0;
-  right: auto;
-}
-.dialog.sheet-right[data-open],
-.dialog.sheet-left[data-open] {
-  transform: translateY(0);
-}
-.dialog.wide {
-  width: min(540px, 100%);
-}
-.dialog-head {
-  padding: 18px 20px 2px;
-}
-.dialog-head h2 {
-  font-size: calc(var(--ui-scale) * 14px);
-}
-.dialog-head p {
-  color: var(--muted);
-  margin-top: 5px;
-  font-size: var(--fs-sm);
-}
-.dialog-body {
-  padding: 14px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.dialog-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-  padding: 8px 20px 18px;
-}
-.dialog-foot .left {
-  margin-right: auto;
 }
 
 .toast-stack {
@@ -2715,120 +2632,20 @@ body.is-resizing-rows iframe {
     0 0 0 3.5px var(--accent-ring);
 }
 
-.dialog {
-  border-radius: 16px;
-  box-shadow: var(--shadow-modal);
-}
-.dialog-head {
-  padding: 20px 22px 2px;
-}
-.dialog-head h2 {
-  font-size: calc(var(--ui-scale) * 15px);
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-.dialog-body {
-  padding: 16px 22px;
-}
-.dialog-foot {
-  padding: 6px 22px 20px;
-}
-/* Windows/Linux 的系统窗口按钮画在页面之上，蒙层盖不住；蒙层从标题栏下方开始，标题栏整条保持原样 */
-.scrim {
-  top: var(--titlebar-h);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
 .toast {
   border-radius: var(--r-panel);
 }
 
 /* ─── 创建项目对话框 ───────────────────────────────────── */
-/* 白色大圆角卡片：标题与关闭按钮一行，三个带标题的字段，底部右对齐的取消与黑色主按钮 */
-.scrim.project-scrim {
-  background: var(--scrim-strong);
+.project-dialog {
+  width: min(520px, calc(100vw - 48px));
 }
-.dialog.project-dialog {
-  width: min(600px, calc(100vw - 48px));
-  padding: 22px 20px 20px;
-  border-radius: 18px;
-  background: var(--popover);
-  box-shadow: var(--shadow-modal);
-}
-.project-dialog-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 22px;
-}
-.project-dialog-head h2 {
-  font-size: calc(var(--ui-scale) * 17px);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.project-dialog-close {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  margin-right: -4px;
-  border-radius: var(--r-md);
-  color: var(--fg-2);
-}
-.project-dialog-close:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.project-dialog-close .ic {
-  width: 15px;
-  height: 15px;
-}
-.project-dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.project-field {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.project-label {
-  color: var(--fg);
-  font-size: calc(var(--ui-scale) * 14px);
-  font-weight: 600;
-}
-.input.project-input,
-.project-input {
-  height: 42px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: var(--popover);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-  color: var(--fg);
-  font-size: calc(var(--ui-scale) * 15px);
-}
-.input.project-input:focus,
-.project-select:focus-visible,
-.project-select[data-popup-open] {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--composer-ring-focus);
-}
-.project-input::placeholder {
-  color: var(--faint);
-}
+/* 设备选择是 Select 的触发器，外观和输入框一样 */
 .project-select {
   display: flex;
   align-items: center;
-  gap: 10px;
-  width: 100%;
+  gap: var(--space-4);
   text-align: left;
-}
-.project-select > .ic {
-  width: 18px;
-  height: 18px;
-  color: var(--fg-2);
 }
 .project-select-caret {
   display: grid;
@@ -2844,12 +2661,12 @@ body.is-resizing-rows iframe {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--space-2);
   width: 100%;
-  min-height: 162px;
-  padding: 20px 24px;
+  min-height: 132px;
+  padding: var(--space-8) var(--space-9);
   border: 1px dashed var(--border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   color: var(--fg);
   text-align: center;
   transition:
@@ -2866,66 +2683,29 @@ body.is-resizing-rows iframe {
 .project-folder-icon {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  margin-bottom: 8px;
-  border-radius: 50%;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  margin-bottom: var(--space-3);
+  border-radius: var(--r-full);
   background: var(--field);
   color: var(--muted);
-}
-.project-folder-icon .ic {
-  width: 17px;
-  height: 17px;
 }
 .project-folder[data-selected] .project-folder-icon {
   color: var(--fg-2);
 }
 .project-folder-title {
   max-width: 100%;
-  font-size: calc(var(--ui-scale) * 16px);
+  font-size: var(--fs-md);
   font-weight: 600;
 }
 .project-folder-hint {
   max-width: 100%;
   color: var(--muted);
-  font-size: calc(var(--ui-scale) * 13.5px);
+  font-size: var(--fs-sm);
 }
 .project-folder[data-selected] .project-folder-hint {
   font-family: var(--font-mono);
-  font-size: calc(var(--ui-scale) * 12.5px);
-}
-.project-dialog-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
-}
-.btn.project-cancel,
-.btn.project-create {
-  height: 32px;
-  padding: 0 12px;
-  border-radius: 8px;
-  box-shadow: none;
-  font-size: calc(var(--ui-scale) * 15px);
-  font-weight: 500;
-}
-.btn.project-cancel {
-  background: none;
-  color: var(--fg);
-}
-.btn.project-cancel:hover {
-  background: var(--hover);
-}
-.btn.project-create {
-  background: var(--fg);
-  color: var(--popover);
-}
-.btn.project-create:hover {
-  background: color-mix(in oklab, var(--fg) 86%, var(--popover));
-}
-.btn.project-create:disabled {
-  opacity: 0.35;
+  font-size: var(--fs-xs);
 }
 
 /* ─── 设置与插件页 ─────────────────────────────────────── */
@@ -3673,17 +3453,12 @@ body.is-resizing-rows iframe {
 }
 
 /* ─── 命令面板 ─────────────────────────────────────────── */
+/* 蒙层的颜色和层级来自 .scrim，这里只让面板靠上居中 */
 .palette-scrim {
-  position: fixed;
-  inset: var(--titlebar-h) 0 0;
-  z-index: 110;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   padding-top: 14vh;
-  background: var(--scrim);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
 }
 .palette {
   display: flex;

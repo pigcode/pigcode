@@ -1,0 +1,89 @@
+/*
+  对话框：Dialog.Content 的蒙层、面板、标题行与关闭按钮，Dialog.Body 与 Dialog.Footer。
+  命令面板的蒙层也用 .scrim。各对话框只在自己的区域样式里设宽度。
+*/
+
+/* 蒙层从标题栏下方开始：Windows/Linux 的系统窗口按钮画在页面之上，盖不住；标题栏整条保持原样 */
+.scrim {
+  position: fixed;
+  inset: var(--titlebar-h) 0 0;
+  z-index: 80;
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  transition: opacity var(--t-med) var(--ease);
+}
+.scrim[data-starting-style],
+.scrim[data-ending-style] {
+  opacity: 0;
+}
+
+/* 面板居中，高于蒙层、低于菜单（85），对话框里打开的下拉显示在它上面 */
+.dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 81;
+  width: min(420px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: var(--r-2xl);
+  background: var(--popover);
+  box-shadow: var(--shadow-modal);
+  outline: none;
+  transform: translate(-50%, -50%);
+  transition:
+    opacity var(--t-med) var(--ease),
+    transform var(--t-med) var(--ease);
+}
+.dialog[data-starting-style],
+.dialog[data-ending-style] {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.98);
+}
+
+/* 标题行：标题和说明在左，关闭按钮在右 */
+.dialog-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-8) 0;
+}
+.dialog-heading {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.dialog-title {
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+.dialog-desc {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+/* 关闭按钮往右上挪一点，图标和标题文字居中对齐，右边和正文对齐 */
+.dialog-close {
+  margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1) 0 0;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-7) var(--space-8) 0;
+}
+
+/* 底部按钮靠右：取消在左、确认在右 */
+.dialog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding: var(--space-8);
+}

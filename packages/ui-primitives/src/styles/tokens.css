@@ -23,7 +23,6 @@
   --active: oklch(21% 0.006 286 / 0.075);
   --popover: oklch(100% 0 0);
   --scrim: oklch(20% 0.006 286 / 0.2);
-  --scrim-strong: oklch(0% 0 0 / 0.55);
 
   /* 文字与细线 */
   --fg: oklch(27.4% 0.006 286);
@@ -121,7 +120,6 @@
   --active: oklch(100% 0 0 / 0.085);
   --popover: oklch(23% 0 0);
   --scrim: oklch(0% 0 0 / 0.5);
-  --scrim-strong: oklch(0% 0 0 / 0.6);
 
   --fg: oklch(96% 0 0);
   --fg-2: oklch(84% 0.003 286);
@@ -219,12 +217,13 @@
   --font-weight-content: 400;
   --font-weight-code: 400;
 
-  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 页面标题 20，随「界面字号」整体缩放；对话 14 */
+  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 对话框标题 15 / 页面标题 20，随「界面字号」整体缩放；对话 14 */
   --ui-scale: 1;
   --fs-xs: calc(var(--ui-scale) * 11.5px);
   --fs-sm: calc(var(--ui-scale) * 12px);
   --fs-md: calc(var(--ui-scale) * 13px);
   --fs-lg: calc(var(--ui-scale) * 13.5px);
+  --fs-heading: calc(var(--ui-scale) * 15px);
   --fs-title: calc(var(--ui-scale) * 20px);
   /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
   --fs-content: 14px;

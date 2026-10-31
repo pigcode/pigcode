@@ -320,33 +320,14 @@
   font-size: var(--fs-sm);
 }
 
-/* 安装对话框（Agent 页与插件管理页共用） */
+/* 安装对话框（Agent 页与插件管理页共用）：输入框和「选择文件夹」一行，下面是权限提示 */
 .install-dialog {
   width: min(520px, calc(100vw - 48px));
-}
-.install-dialog form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px 22px 18px;
-}
-.install-dialog-title {
-  font-size: var(--fs-lg);
-  font-weight: 600;
-}
-.install-dialog-desc {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
-}
-.install-dialog-label {
-  font-size: var(--fs-sm);
-  color: var(--fg);
 }
 .install-dialog-input {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .install-dialog-input .input {
   flex: 1;
@@ -358,9 +339,9 @@
 }
 .install-dialog-trust {
   display: flex;
-  gap: 7px;
+  gap: var(--space-3);
   align-items: flex-start;
-  padding: 9px 11px;
+  padding: var(--space-4) var(--space-5);
   border-radius: var(--r-md);
   background: var(--warn-soft);
   color: var(--warn-text);
@@ -369,10 +350,5 @@
 }
 .install-dialog-trust .ic {
   flex: none;
-  margin-top: 2px;
-}
-.install-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  margin-top: var(--space-1);
 }

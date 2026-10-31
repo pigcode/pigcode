@@ -166,6 +166,20 @@ describe("Shell", () => {
     expect(screen.getByRole("dialog", { name: "行动" })).toBeTruthy()
   })
 
+  it("does not open the command palette over an open dialog", () => {
+    renderShell()
+    const dialog = document.createElement("div")
+    dialog.className = "dialog"
+    document.body.append(dialog)
+
+    fireEvent.keyDown(window, { key: "k", metaKey: true })
+    expect(screen.queryByRole("dialog", { name: "行动" })).toBeNull()
+
+    dialog.remove()
+    fireEvent.keyDown(window, { key: "k", metaKey: true })
+    expect(screen.getByRole("dialog", { name: "行动" })).toBeTruthy()
+  })
+
   it("places chat and the right panel side by side in the workspace", () => {
     const { container } = renderShell()
 

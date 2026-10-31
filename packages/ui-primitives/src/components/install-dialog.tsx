@@ -17,6 +17,7 @@ export interface InstallDialogLabels {
   chooseFolder: string
   trust: string
   cancel: string
+  close: string
   submit: string
   installing: string
   failed: string
@@ -34,7 +35,7 @@ export interface InstallDialogProps {
   onPickFolder?: (() => Promise<string | null>) | undefined
 }
 
-/** 渲染安装对话框。 */
+/** 渲染安装对话框；安装进行中不能关闭。 */
 export function InstallDialog({
   open,
   onOpenChange,
@@ -72,43 +73,46 @@ export function InstallDialog({
         if (!installing) onOpenChange(next)
       }}
     >
-      <Dialog.Portal>
-        <Dialog.Backdrop />
-        <Dialog.Popup className="install-dialog">
-          <form onSubmit={(event) => void submit(event)}>
-            <Dialog.Title className="install-dialog-title">{labels.title}</Dialog.Title>
-            <Dialog.Description className="install-dialog-desc">
-              {labels.description}
-            </Dialog.Description>
-            <label className="install-dialog-label" htmlFor={inputId}>
-              {labels.spec}
-            </label>
-            <div className="install-dialog-input">
-              <Input
-                id={inputId}
-                className="mono"
-                value={spec}
-                autoFocus
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={labels.placeholder}
-                onChange={(event) => setSpec(event.target.value)}
-              />
-              {onPickFolder ? (
-                <Button
-                  size="sm"
-                  type="button"
-                  disabled={installing}
-                  onClick={() => {
-                    void onPickFolder().then((folder) => {
-                      if (folder) setSpec(folder)
-                    })
-                  }}
-                >
-                  <FolderOpen className="ic ic-sm" aria-hidden="true" />
-                  {labels.chooseFolder}
-                </Button>
-              ) : null}
+      <Dialog.Content
+        className="install-dialog"
+        title={labels.title}
+        description={labels.description}
+        closeLabel={labels.close}
+        closeDisabled={installing}
+      >
+        <form onSubmit={(event) => void submit(event)}>
+          <Dialog.Body>
+            <div className="field">
+              <label className="label" htmlFor={inputId}>
+                {labels.spec}
+              </label>
+              <div className="install-dialog-input">
+                <Input
+                  id={inputId}
+                  className="mono"
+                  value={spec}
+                  autoFocus
+                  spellCheck={false}
+                  autoComplete="off"
+                  placeholder={labels.placeholder}
+                  onChange={(event) => setSpec(event.target.value)}
+                />
+                {onPickFolder ? (
+                  <Button
+                    size="sm"
+                    type="button"
+                    disabled={installing}
+                    onClick={() => {
+                      void onPickFolder().then((folder) => {
+                        if (folder) setSpec(folder)
+                      })
+                    }}
+                  >
+                    <FolderOpen className="ic ic-sm" aria-hidden="true" />
+                    {labels.chooseFolder}
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <p className="install-dialog-trust">
               <ShieldAlert className="ic ic-sm" aria-hidden="true" />
@@ -119,17 +123,17 @@ export function InstallDialog({
                 {error}
               </p>
             ) : null}
-            <div className="install-dialog-actions">
-              <Dialog.Close render={<Button type="button" variant="ghost" disabled={installing} />}>
-                {labels.cancel}
-              </Dialog.Close>
-              <Button type="submit" variant="primary" disabled={installing || !spec.trim()}>
-                {installing ? labels.installing : labels.submit}
-              </Button>
-            </div>
-          </form>
-        </Dialog.Popup>
-      </Dialog.Portal>
+          </Dialog.Body>
+          <Dialog.Footer>
+            <Dialog.Close render={<Button type="button" variant="ghost" disabled={installing} />}>
+              {labels.cancel}
+            </Dialog.Close>
+            <Button type="submit" variant="primary" disabled={installing || !spec.trim()}>
+              {installing ? labels.installing : labels.submit}
+            </Button>
+          </Dialog.Footer>
+        </form>
+      </Dialog.Content>
     </Dialog.Root>
   )
 }
