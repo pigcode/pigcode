@@ -123,17 +123,12 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
 export function SettingsContainer({
   deps,
   section,
-  onSection,
-  onClose,
   appearance,
 }: SettingsSlotProps & { deps: CoreDeps }) {
   return (
     <SettingsView
       section={section}
-      onSection={onSection}
-      onClose={onClose}
       appearance={appearance}
-      showNav={false}
       agentsPage={<AgentsContainer deps={deps} />}
       pluginManager={<PluginManagerContainer deps={deps} />}
       schedulesPage={<SchedulesContainer deps={deps} />}

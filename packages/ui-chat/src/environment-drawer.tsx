@@ -1,7 +1,7 @@
 /** 会话环境抽屉：只展示 provider、工作目录、模型与权限，不含账号或代理字段。 */
 import { X } from "lucide-react"
 import type { PermissionMode } from "@pigcode/contracts"
-import { Button, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { Button, SettingRow, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 
 /** 抽屉需要的会话环境数据。 */
 export interface EnvironmentInfo {
@@ -19,14 +19,7 @@ const PERMISSION_KEYS: Record<PermissionMode, MessageKey> = {
 }
 
 function EnvironmentItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="item">
-      <div className="main">
-        <div className="ttl">{label}</div>
-        <div className="desc mono">{value}</div>
-      </div>
-    </div>
-  )
+  return <SettingRow title={label} description={value} />
 }
 
 /** 渲染右侧环境抽屉；关闭时不占用布局。 */

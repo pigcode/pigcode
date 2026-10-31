@@ -207,48 +207,17 @@
   overflow-y: auto;
   padding: 4px 6px 6px;
 }
-.model-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 48px;
-  padding: 6px 8px 6px 10px;
-  border-radius: calc(var(--r-lg) - var(--space-2));
-  cursor: default;
-}
-.model-row[data-highlighted] {
-  background: var(--active);
-}
+/* 模型行是 ListRow：当前模型名字加粗，右侧是勾、快捷键与收藏星标 */
 .model-row[aria-disabled="true"] {
   opacity: 0.6;
-}
-.model-row-text {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 1px;
-}
-.model-row-name {
-  color: var(--fg);
-  font-size: var(--fs-md);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .model-row.is-current .model-row-name {
   font-weight: 600;
 }
-.model-row-sub {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
 .model-row-check {
-  flex: none;
   color: var(--accent);
 }
 .model-row-kbd {
-  flex: none;
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--field);

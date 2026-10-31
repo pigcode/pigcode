@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   EntityAvatar,
+  ListRow,
   Switch,
   useLocale,
   type MessageKey,
@@ -170,40 +171,44 @@ export function PluginList({
             const status = statusOf(plugin)
             return (
               <div className="ext-item" key={plugin.id} data-plugin={plugin.name}>
-                <div className="ext-row" data-expanded={open || undefined}>
-                  <button
-                    type="button"
-                    className="ext-row-main"
-                    aria-expanded={open}
-                    aria-label={t("plugins.expand").replace("{plugin}", name)}
-                    onClick={() => setExpanded(open ? null : plugin.id)}
-                  >
-                    <EntityAvatar id={plugin.id} name={name} />
-                    <span className="ext-row-text">
-                      <span className="ext-row-title">
-                        <span className="truncate">{name}</span>
-                        {plugin.builtin ? <Badge>{t("plugins.builtin")}</Badge> : null}
-                        <span className="ext-version">{plugin.version}</span>
-                      </span>
-                      <span className="ext-row-status" data-tone={status.tone}>
-                        <span className="ext-dot" aria-hidden="true" />
-                        <span>{t(status.label)}</span>
-                        <span className="ext-row-detail truncate">
-                          · {t(kindKeys[plugin.kind])} · {plugin.name}
-                        </span>
+                <ListRow
+                  className="ext-row"
+                  data-expanded={open || undefined}
+                  button={{
+                    className: "ext-row-main",
+                    "aria-expanded": open,
+                    "aria-label": t("plugins.expand").replace("{plugin}", name),
+                    onClick: () => setExpanded(open ? null : plugin.id),
+                  }}
+                  leading={<EntityAvatar id={plugin.id} name={name} />}
+                  title={
+                    <span className="ext-row-title">
+                      <span className="truncate">{name}</span>
+                      {plugin.builtin ? <Badge>{t("plugins.builtin")}</Badge> : null}
+                      <span className="ext-version">{plugin.version}</span>
+                    </span>
+                  }
+                  description={
+                    <span className="ext-row-status" data-tone={status.tone}>
+                      <span className="ext-dot" aria-hidden="true" />
+                      <span>{t(status.label)}</span>
+                      <span className="ext-row-detail truncate">
+                        · {t(kindKeys[plugin.kind])} · {plugin.name}
                       </span>
                     </span>
-                    <ChevronDown className="ic ic-sm ext-chevron" aria-hidden="true" />
-                  </button>
-                  <Switch
-                    aria-label={t("plugins.toggle").replace("{plugin}", name)}
-                    checked={plugin.enabled}
-                    disabled={pending}
-                    onCheckedChange={(checked) =>
-                      checked ? onEnable(plugin.id) : onDisable(plugin.id)
-                    }
-                  />
-                </div>
+                  }
+                  meta={<ChevronDown className="ic ic-sm ext-chevron" aria-hidden="true" />}
+                  actions={
+                    <Switch
+                      aria-label={t("plugins.toggle").replace("{plugin}", name)}
+                      checked={plugin.enabled}
+                      disabled={pending}
+                      onCheckedChange={(checked) =>
+                        checked ? onEnable(plugin.id) : onDisable(plugin.id)
+                      }
+                    />
+                  }
+                />
                 {open ? (
                   <PluginDetails
                     plugin={plugin}

@@ -1,0 +1,126 @@
+/*
+  列表行：ListRow 的布局、状态与各部分。侧栏、设置分组、Agent 与插件、模型列表、命令面板与文件树共用。
+  悬停、选中与键盘焦点各只有一种样子；列表框里的键盘光标（data-highlighted）算选中。
+  区域样式只补它所在位置的布局（缩进、宽度、悬停才出现的操作），不再写行的颜色、高度与状态。
+*/
+
+/* ─── 行：最小高度 28，两行的行随内容长高，左右两侧保持竖直居中 ─── */
+.list-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-height: var(--row-h);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--r-md);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  text-align: left;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* 文件树的紧凑行：高度 24，行高由虚拟滚动给出，上下不留内边距 */
+.list-row[data-density="compact"] {
+  gap: var(--space-2);
+  min-height: var(--row-h-compact);
+  padding-block: 0;
+}
+
+/* ─── 状态 ─── */
+/* 悬停；右键菜单打开期间，菜单针对的那一行保持悬停的样子 */
+.list-row[data-interactive]:not([data-selected], [data-highlighted]):hover,
+[data-popup-open] > .list-row[data-interactive]:not([data-selected]) {
+  background: var(--hover);
+}
+.list-row[data-selected],
+.list-row[data-highlighted] {
+  background: var(--active);
+  color: var(--fg);
+}
+/* 键盘焦点：行内一圈描边。文件树用 aria-activedescendant，焦点在容器上，描边画在当前行 */
+.list-row:focus-visible,
+.list-row:has(> .list-row-button:focus-visible),
+:focus-visible .list-row[data-focused] {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+/* 焦点由行画出，行里的主按钮和文件树的容器不再叠加 globals.css 里通用的描边 */
+.list-row-button:focus-visible,
+:focus-visible:has(.list-row[data-focused]) {
+  outline: none;
+}
+
+/* ─── 各部分 ─── */
+.list-row-leading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  color: color-mix(in oklab, var(--fg-2), var(--muted));
+}
+.list-row-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.list-row-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 说明可以换行；整段是一个 .truncate 时单行截断 */
+.list-row-desc {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.list-row-desc > .truncate {
+  display: block;
+}
+.list-row-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+  margin-left: auto;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+/* 操作叠在主按钮盖住整行的 ::after 之上 */
+.list-row-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-4);
+}
+/* 行里的主按钮：占满文字区域，::after 盖住整行，点行的任何空白处都等于点它 */
+.list-row-button {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: inherit;
+}
+.list-row-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}

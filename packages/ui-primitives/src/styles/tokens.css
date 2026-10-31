@@ -265,6 +265,10 @@
   --control-sm: 24px;
   --control-md: 28px;
   --control-lg: 32px;
+  /* 列表行的最小高度：侧栏、设置分组、Agent 与插件、模型、命令面板的行 */
+  --row-h: var(--control-md);
+  /* 文件树的紧凑行高；file-explorer.tsx 的虚拟滚动行高与它相同 */
+  --row-h-compact: var(--control-sm);
   --switch-w: 34px;
   --check-size: 14px;
   --textarea-min-h: 80px;

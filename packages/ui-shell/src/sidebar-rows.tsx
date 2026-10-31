@@ -1,7 +1,7 @@
 /** 侧栏里的项目行与会话行：右键菜单、就地改名，会话行还有状态点、时间与数字快捷键。 */
 import { Fragment, useRef, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { Button, ContextMenu, DotMatrix, useLocale } from "@pigcode/ui-primitives"
+import { Button, ContextMenu, DotMatrix, ListRow, useLocale } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 import { THREAD_STATUS_MESSAGE, type ThreadStatus } from "./thread-status"
 
@@ -139,38 +139,45 @@ export function ThreadRow({
   const statusKey = THREAD_STATUS_MESSAGE[status]
   if (rename) {
     return (
-      <div className="sess is-editing" data-status={status}>
-        <ThreadStatusMark status={status} />
-        <RenameInput value={thread.title} label={t("sidebar.threadName")} {...rename} />
-      </div>
+      <ListRow
+        className="sess is-editing"
+        data-status={status}
+        selected
+        leading={<ThreadStatusMark status={status} />}
+        title={<RenameInput value={thread.title} label={t("sidebar.threadName")} {...rename} />}
+      />
     )
   }
   return (
     <RowMenu actions={actions}>
-      <Button
-        variant="plain"
+      <ListRow
+        render={<button type="button" />}
         className={active ? "sess is-active" : "sess"}
-        type="button"
+        selected={active}
         aria-current={active ? "page" : undefined}
         data-status={status}
         onClick={onOpen}
-      >
-        <ThreadStatusMark status={status} />
-        {statusKey ? <span className="sr-only">{t(statusKey)}</span> : null}
-        <span className="sess-title" title={thread.title}>
-          {thread.title}
-        </span>
-        {shortcut ? (
-          <kbd className="sess-kbd">{shortcut}</kbd>
-        ) : (
+        leading={
           <>
-            <span className={`${detailClass} truncate`}>{detail}</span>
-            <time dateTime={thread.updatedAt}>
-              {formatThreadTime(thread.updatedAt, locale, now)}
-            </time>
+            <ThreadStatusMark status={status} />
+            {statusKey ? <span className="sr-only">{t(statusKey)}</span> : null}
           </>
-        )}
-      </Button>
+        }
+        title={thread.title}
+        titleProps={{ className: "sess-title", title: thread.title }}
+        meta={
+          shortcut ? (
+            <kbd className="sess-kbd">{shortcut}</kbd>
+          ) : (
+            <>
+              <span className={`${detailClass} truncate`}>{detail}</span>
+              <time dateTime={thread.updatedAt}>
+                {formatThreadTime(thread.updatedAt, locale, now)}
+              </time>
+            </>
+          )
+        }
+      />
     </RowMenu>
   )
 }
@@ -195,38 +202,34 @@ export function ProjectRow({
   const folder = <Icon name={open ? "folder-open" : "folder"} className="proj-folder" />
   if (rename) {
     return (
-      <div className="proj-row">
-        <div className="proj is-editing">
-          {folder}
-          <RenameInput value={project.name} label={t("sidebar.projectName")} {...rename} />
-        </div>
-      </div>
+      <ListRow
+        className="proj-row is-editing"
+        selected
+        leading={folder}
+        title={<RenameInput value={project.name} label={t("sidebar.projectName")} {...rename} />}
+      />
     )
   }
   return (
     <RowMenu actions={actions}>
-      <div className="proj-row">
-        <Button
-          variant="plain"
-          className="proj"
-          type="button"
-          aria-expanded={open}
-          onClick={onToggle}
-        >
-          {folder}
-          <span className="truncate">{project.name}</span>
-        </Button>
-        <Button
-          variant="plain"
-          className="icon-btn proj-add"
-          type="button"
-          aria-label={t("nav.newThread")}
-          title={t("nav.newThread")}
-          onClick={onNewThread}
-        >
-          <Icon name="plus" small />
-        </Button>
-      </div>
+      <ListRow
+        className="proj-row"
+        button={{ className: "proj", "aria-expanded": open, onClick: onToggle }}
+        leading={folder}
+        title={project.name}
+        actions={
+          <Button
+            variant="plain"
+            className="icon-btn proj-add"
+            type="button"
+            aria-label={t("nav.newThread")}
+            title={t("nav.newThread")}
+            onClick={onNewThread}
+          >
+            <Icon name="plus" small />
+          </Button>
+        }
+      />
     </RowMenu>
   )
 }

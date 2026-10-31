@@ -4,7 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronDown, Search, Star } from "lucide-react"
-import { Popover, formatShortcut, useLocale } from "@pigcode/ui-primitives"
+import { ListRow, Popover, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 import {
   agentMark,
   effortKeys,
@@ -266,7 +266,7 @@ export function ModelPicker({
                       .filter(Boolean)
                       .join(" · ")
                     return (
-                      <div
+                      <ListRow
                         key={key}
                         role="option"
                         aria-selected={current}
@@ -275,37 +275,47 @@ export function ModelPicker({
                         className={current ? "model-row is-current" : "model-row"}
                         onMouseEnter={() => setIndex(rowIndex)}
                         onClick={() => choose(row)}
-                      >
-                        <span className="model-row-text">
-                          <span className="model-row-name">{row.model.label}</span>
-                          <span className="model-row-sub truncate">{subtitle}</span>
-                        </span>
-                        {current ? (
-                          <Check className="ic ic-sm model-row-check" aria-hidden="true" />
-                        ) : null}
-                        {rowIndex < 9 ? (
-                          <kbd className="model-row-kbd">
-                            {formatShortcut(`Mod+${rowIndex + 1}`)}
-                          </kbd>
-                        ) : null}
-                        <button
-                          type="button"
-                          className="model-star"
-                          aria-pressed={favorite}
-                          aria-label={
-                            favorite ? t("composer.model.unfavorite") : t("composer.model.favorite")
-                          }
-                          title={
-                            favorite ? t("composer.model.unfavorite") : t("composer.model.favorite")
-                          }
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            preferences.toggleFavorite(key)
-                          }}
-                        >
-                          <Star className="ic ic-sm" aria-hidden="true" />
-                        </button>
-                      </div>
+                        title={row.model.label}
+                        titleProps={{ className: "model-row-name" }}
+                        description={<span className="truncate">{subtitle}</span>}
+                        meta={
+                          current || rowIndex < 9 ? (
+                            <>
+                              {current ? (
+                                <Check className="ic ic-sm model-row-check" aria-hidden="true" />
+                              ) : null}
+                              {rowIndex < 9 ? (
+                                <kbd className="model-row-kbd">
+                                  {formatShortcut(`Mod+${rowIndex + 1}`)}
+                                </kbd>
+                              ) : null}
+                            </>
+                          ) : null
+                        }
+                        actions={
+                          <button
+                            type="button"
+                            className="model-star"
+                            aria-pressed={favorite}
+                            aria-label={
+                              favorite
+                                ? t("composer.model.unfavorite")
+                                : t("composer.model.favorite")
+                            }
+                            title={
+                              favorite
+                                ? t("composer.model.unfavorite")
+                                : t("composer.model.favorite")
+                            }
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              preferences.toggleFavorite(key)
+                            }}
+                          >
+                            <Star className="ic ic-sm" aria-hidden="true" />
+                          </button>
+                        }
+                      />
                     )
                   })}
                 </div>

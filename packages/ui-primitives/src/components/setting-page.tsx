@@ -1,5 +1,6 @@
 // 设置类页面的通用外框（设置、Agent、插件管理共用）：标题栏、内容列、分组与设置行。
 import type { ReactNode } from "react"
+import { ListRow } from "./list-row"
 
 /** 设置页容器：标题加居中内容列。 */
 export function SettingPage({
@@ -47,7 +48,7 @@ export function SettingSection({
   )
 }
 
-/** 设置单行：左侧标题和说明，右侧是控件或只读值。 */
+/** 设置单行：左侧标题和说明，右侧是只读值或控件。 */
 export function SettingRow({
   title,
   description,
@@ -59,13 +60,5 @@ export function SettingRow({
   value?: ReactNode | undefined
   children?: ReactNode | undefined
 }) {
-  return (
-    <div className="item">
-      <div className="main">
-        <div className="ttl">{title}</div>
-        {description ? <div className="desc">{description}</div> : null}
-      </div>
-      {children ? <div className="trail">{children}</div> : <span className="val">{value}</span>}
-    </div>
-  )
+  return <ListRow title={title} description={description} meta={value} actions={children} />
 }

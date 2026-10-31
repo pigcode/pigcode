@@ -60,8 +60,6 @@ import {
 /** settings.section slot 传给核心设置视图的属性。 */
 export interface SettingsSlotProps {
   section: SettingsSection
-  onSection: (section: SettingsSection) => void
-  onClose: () => void
   appearance: AppearanceController
 }
 
@@ -462,12 +460,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
         <SlotHost<SettingsSlotProps>
           registry={slots}
           name="settings.section"
-          props={{
-            section: effectiveSection,
-            onSection: setSection,
-            onClose: () => setView("chat"),
-            appearance,
-          }}
+          props={{ section: effectiveSection, appearance }}
         />
       )}
     </AppRenderer>

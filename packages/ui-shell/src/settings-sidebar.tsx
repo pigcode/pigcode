@@ -1,6 +1,6 @@
 /** 设置侧栏：返回入口、搜索框与设置分区导航。 */
 import { useState } from "react"
-import { Button, Input, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { Button, Input, ListRow, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
 /** 设置页的分区。 */
@@ -38,10 +38,13 @@ export function SettingsSidebar({ activeSection, onSelect, onExit }: SettingsSid
     : settingsNav
   return (
     <>
-      <Button variant="plain" className="nav-item back" type="button" onClick={onExit}>
-        <Icon name="left" />
-        {t("settings.back")}
-      </Button>
+      <ListRow
+        render={<button type="button" />}
+        className="nav-item back"
+        onClick={onExit}
+        leading={<Icon name="left" />}
+        title={t("settings.back")}
+      />
       <label className="side-search">
         <Icon name="search" small />
         <Input
@@ -75,17 +78,16 @@ export function SettingsSidebar({ activeSection, onSelect, onExit }: SettingsSid
       {items.map((item) => {
         const active = item.id === activeSection
         return (
-          <Button
-            variant="plain"
+          <ListRow
             key={item.id}
-            className={active ? "nav-item is-active" : "nav-item"}
-            type="button"
+            render={<button type="button" />}
+            className="nav-item"
+            selected={active}
             aria-current={active ? "page" : undefined}
             onClick={() => onSelect(item.id)}
-          >
-            <Icon name={item.icon} />
-            {t(item.labelKey)}
-          </Button>
+            leading={<Icon name={item.icon} />}
+            title={t(item.labelKey)}
+          />
         )
       })}
     </>

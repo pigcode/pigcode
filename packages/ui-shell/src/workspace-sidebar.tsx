@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import {
   Button,
+  ListRow,
   Menu,
   formatShortcut,
   useLocale,
@@ -215,28 +216,32 @@ export function WorkspaceSidebar({
   return (
     <>
       <nav className="side-actions" aria-label={t("nav.projects")}>
-        <Button
-          variant="plain"
+        <ListRow
+          render={<button type="button" />}
           className="nav-item new-thread-btn"
-          type="button"
           aria-label={t("nav.newThread")}
           onClick={() => onNewThread()}
-        >
-          <Icon name="compose" />
-          <span className="grow">{t("nav.newThread")}</span>
-          <kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>
-        </Button>
+          leading={<Icon name="compose" />}
+          title={t("nav.newThread")}
+          meta={<kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>}
+        />
         {onOpenSchedules ? (
-          <Button variant="plain" className="nav-item" type="button" onClick={onOpenSchedules}>
-            <Icon name="clock" />
-            <span className="grow">{t("settings.schedules")}</span>
-          </Button>
+          <ListRow
+            render={<button type="button" />}
+            className="nav-item"
+            onClick={onOpenSchedules}
+            leading={<Icon name="clock" />}
+            title={t("settings.schedules")}
+          />
         ) : null}
         {onOpenPlugins ? (
-          <Button variant="plain" className="nav-item" type="button" onClick={onOpenPlugins}>
-            <Icon name="cube" />
-            <span className="grow">{t("settings.plugins")}</span>
-          </Button>
+          <ListRow
+            render={<button type="button" />}
+            className="nav-item"
+            onClick={onOpenPlugins}
+            leading={<Icon name="cube" />}
+            title={t("settings.plugins")}
+          />
         ) : null}
       </nav>
       <div className="side-label">
@@ -254,15 +259,13 @@ export function WorkspaceSidebar({
         </Button>
       </div>
       {projects.length === 0 ? (
-        <Button
-          variant="plain"
+        <ListRow
+          render={<button type="button" />}
           className="nav-item side-add-project"
-          type="button"
           onClick={onAddProject}
-        >
-          <Icon name="plus" />
-          <span className="grow">{t("nav.addProject")}</span>
-        </Button>
+          leading={<Icon name="plus" />}
+          title={t("nav.addProject")}
+        />
       ) : null}
       {grouping === "time" ? (
         <div className="recent-sessions">

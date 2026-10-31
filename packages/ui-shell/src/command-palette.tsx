@@ -1,7 +1,7 @@
 /** 命令面板：会话切换、主操作与快捷键入口。 */
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { formatShortcut, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { ListRow, formatShortcut, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
 /** 命令面板中的一条可执行项。 */
@@ -223,8 +223,8 @@ export function CommandPalette(props: CommandPaletteProps) {
               return (
                 <div key={item.id}>
                   {header ? <div className="palette-group">{header}</div> : null}
-                  <button
-                    type="button"
+                  <ListRow
+                    render={<button type="button" />}
                     role="option"
                     aria-selected={index === active}
                     data-highlighted={index === active ? "" : undefined}
@@ -234,13 +234,16 @@ export function CommandPalette(props: CommandPaletteProps) {
                       item.run()
                       props.onClose()
                     }}
-                  >
-                    <span className="palette-icon">
-                      <Icon name={item.icon} />
-                    </span>
-                    <span className="palette-label truncate">{item.label}</span>
-                    {item.hint ? <span className="palette-hint truncate">{item.hint}</span> : null}
-                  </button>
+                    leading={
+                      <span className="palette-icon">
+                        <Icon name={item.icon} />
+                      </span>
+                    }
+                    title={item.label}
+                    meta={
+                      item.hint ? <span className="palette-hint truncate">{item.hint}</span> : null
+                    }
+                  />
                 </div>
               )
             })

@@ -7,6 +7,7 @@ import {
   Button,
   EntityAvatar,
   InstallDialog,
+  ListRow,
   Select,
   SettingPage,
   SettingRow,
@@ -57,40 +58,44 @@ function AgentRow({
   const { t } = useLocale()
   const headline = agentHeadline(agent, status)
   return (
-    <div className="ext-row" data-expanded={expanded || undefined}>
-      <button
-        type="button"
-        className="ext-row-main"
-        aria-expanded={expanded}
-        aria-label={t("agents.expand").replace("{agent}", agent.displayName)}
-        onClick={onToggle}
-      >
-        <EntityAvatar id={agent.providerId} name={agent.displayName} />
-        <span className="ext-row-text">
-          <span className="ext-row-title">
-            <span className="truncate">{agent.displayName}</span>
-            {agent.builtin && agent.pluginId ? <Badge>{t("agents.builtin")}</Badge> : null}
-            {agent.version ? <span className="ext-version">{agent.version}</span> : null}
-          </span>
-          <span className="ext-row-status" data-tone={headline.tone}>
-            <span className="ext-dot" aria-hidden="true" />
-            <span>{t(headline.label)}</span>
-            {headline.detail ? (
-              <span className="ext-row-detail truncate">· {headline.detail}</span>
-            ) : null}
-          </span>
+    <ListRow
+      className="ext-row"
+      data-expanded={expanded || undefined}
+      button={{
+        className: "ext-row-main",
+        "aria-expanded": expanded,
+        "aria-label": t("agents.expand").replace("{agent}", agent.displayName),
+        onClick: onToggle,
+      }}
+      leading={<EntityAvatar id={agent.providerId} name={agent.displayName} />}
+      title={
+        <span className="ext-row-title">
+          <span className="truncate">{agent.displayName}</span>
+          {agent.builtin && agent.pluginId ? <Badge>{t("agents.builtin")}</Badge> : null}
+          {agent.version ? <span className="ext-version">{agent.version}</span> : null}
         </span>
-        <ChevronDown className="ic ic-sm ext-chevron" aria-hidden="true" />
-      </button>
-      {agent.pluginId ? (
-        <Switch
-          aria-label={t("agents.enable").replace("{agent}", agent.displayName)}
-          checked={agent.enabled}
-          disabled={pending}
-          onCheckedChange={(checked) => onSetEnabled(checked)}
-        />
-      ) : null}
-    </div>
+      }
+      description={
+        <span className="ext-row-status" data-tone={headline.tone}>
+          <span className="ext-dot" aria-hidden="true" />
+          <span>{t(headline.label)}</span>
+          {headline.detail ? (
+            <span className="ext-row-detail truncate">· {headline.detail}</span>
+          ) : null}
+        </span>
+      }
+      meta={<ChevronDown className="ic ic-sm ext-chevron" aria-hidden="true" />}
+      actions={
+        agent.pluginId ? (
+          <Switch
+            aria-label={t("agents.enable").replace("{agent}", agent.displayName)}
+            checked={agent.enabled}
+            disabled={pending}
+            onCheckedChange={(checked) => onSetEnabled(checked)}
+          />
+        ) : null
+      }
+    />
   )
 }
 

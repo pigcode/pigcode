@@ -1,7 +1,7 @@
 // 插件管理插件入口：注册设置分区和侧栏底部的插件入口。
 import { createElement } from "react"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
-import { Button, useLocale } from "@pigcode/ui-primitives"
+import { ListRow, useLocale } from "@pigcode/ui-primitives"
 import { PluginManagerView, type PluginManagerViewProps } from "./plugin-manager-view"
 
 /** slot 宿主未传 props 时使用的空插件管理视图。 */
@@ -21,11 +21,12 @@ interface PluginEntryProps {
 /** 侧栏底部的插件入口按钮；用 createElement 保持本文件为 .ts。 */
 function PluginEntry({ onOpen }: PluginEntryProps) {
   const { t } = useLocale()
-  return createElement(
-    Button,
-    { variant: "plain", className: "nav-item", type: "button", onClick: onOpen },
-    t("plugins.open"),
-  )
+  return createElement(ListRow, {
+    render: createElement("button", { type: "button" }),
+    className: "nav-item",
+    onClick: onOpen,
+    title: t("plugins.open"),
+  })
 }
 
 /** 注册插件管理视图和入口；返回注销函数。 */

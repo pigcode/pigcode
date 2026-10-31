@@ -3,6 +3,7 @@
 @import "./controls.css";
 @import "./menus.css";
 @import "./dialogs.css";
+@import "./list-rows.css";
 @import "./indicators.css";
 @import "./composer.css";
 @import "./open-in.css";
@@ -108,7 +109,6 @@ select:focus-visible {
 .btn,
 .seg,
 .chip-btn,
-.item .ttl,
 .tag,
 .status,
 .side-label,
@@ -116,10 +116,6 @@ select:focus-visible {
   -webkit-user-select: none;
   user-select: none;
 }
-a.item,
-.nav-item,
-.proj,
-.sess,
 .choice,
 .acct-switch {
   cursor: default;
@@ -296,7 +292,7 @@ a.item,
 .page {
   max-width: var(--col);
   margin: 0 auto;
-  padding: 4px 28px 72px;
+  padding: 8px 32px 72px;
 }
 .page.narrow {
   max-width: var(--col-narrow);
@@ -306,18 +302,19 @@ a.item,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 14px 0 20px;
+  margin: 22px 0 22px;
   min-height: 30px;
 }
 .page-head h1 {
   font-size: var(--fs-title);
-  letter-spacing: -0.01em;
-  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
 }
 .page-head .sub {
+  margin-top: 4px;
   color: var(--muted);
-  font-size: var(--fs-sm);
-  margin-top: 2px;
+  font-size: var(--fs-md);
 }
 .page-head .actions {
   display: flex;
@@ -348,43 +345,6 @@ a.item,
   width: var(--sidebar-w);
   padding: 0 8px 10px;
 }
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 28px;
-  margin-bottom: 2px;
-  padding: 0 8px;
-  border-radius: var(--r-md);
-  color: var(--fg);
-  font-size: var(--fs-md);
-  text-align: left;
-}
-.nav-item .ic {
-  color: var(--fg-2);
-}
-.nav-item:hover {
-  background: var(--hover);
-}
-.nav-item.is-active {
-  background: var(--active);
-}
-.nav-item.back {
-  color: var(--fg-2);
-}
-.nav-kbd {
-  margin-left: auto;
-  color: var(--faint);
-  font-size: var(--fs-xs);
-  font-family: var(--font-ui);
-  letter-spacing: 0.04em;
-  opacity: 0;
-  transition: opacity var(--t-fast);
-}
-.nav-item:hover .nav-kbd {
-  opacity: 1;
-}
 .side-label {
   display: flex;
   align-items: center;
@@ -402,9 +362,6 @@ a.item,
 .side-label .icon-btn {
   width: 22px;
   height: 22px;
-}
-.nav-item.muted-item {
-  color: var(--muted);
 }
 .side-group {
   padding: 14px 8px 5px;
@@ -468,93 +425,6 @@ a.item,
   height: 10px;
   color: inherit;
   stroke-width: 2.4;
-}
-.proj-block + .proj-block {
-  margin-top: 4px;
-}
-.proj-row {
-  position: relative;
-}
-.proj {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 28px;
-  margin-bottom: 2px;
-  padding: 0 32px 0 8px;
-  border-radius: var(--r-md);
-  color: var(--fg-2);
-  font-size: var(--fs-md);
-  text-align: left;
-}
-.proj .ic {
-  color: var(--muted);
-}
-.proj-row:hover .proj {
-  background: var(--hover);
-  color: var(--fg);
-}
-.proj-add {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  opacity: 0;
-}
-.proj-row:hover .proj-add,
-.proj-add:focus-visible {
-  opacity: 1;
-}
-.proj-add:hover {
-  background: var(--active);
-}
-.proj-sessions {
-  margin-bottom: 2px;
-}
-.sess {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 28px;
-  margin-bottom: 2px;
-  padding: 0 8px 0 13px;
-  text-align: left;
-  border-radius: var(--r-md);
-  color: var(--fg);
-  font-size: var(--fs-md);
-}
-.sess:hover {
-  background: var(--hover);
-}
-.sess.is-active {
-  background: var(--active);
-}
-.sess-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--faint);
-  opacity: 0.7;
-  flex: none;
-  margin-right: 4px;
-}
-.sess-dot.live {
-  background: var(--link);
-  opacity: 1;
-}
-.sess time {
-  margin-left: auto;
-  flex: none;
-  color: var(--faint);
-  font-size: calc(var(--ui-scale) * 11px);
-}
-.side-empty {
-  padding: 3px 8px 5px 31px;
-  color: var(--faint);
-  font-size: var(--fs-sm);
 }
 .side-notice {
   position: relative;
@@ -667,10 +537,7 @@ a.item,
 
 /* ─── 分组与行 ─────────────────────────────────────────── */
 .section {
-  margin-top: 26px;
-}
-.section:first-child {
-  margin-top: 0;
+  margin-top: 28px;
 }
 .section-head {
   display: flex;
@@ -678,13 +545,15 @@ a.item,
   justify-content: space-between;
   gap: 12px;
   min-height: 22px;
-  margin: 0 2px 6px;
+  margin: 0 4px 8px;
 }
 .section-head h2 {
-  font-size: var(--fs-sm);
-  font-weight: var(--font-weight-ui);
   color: var(--muted);
   font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 11px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .section-head .end {
   display: flex;
@@ -694,80 +563,33 @@ a.item,
   font-size: var(--fs-xs);
 }
 .group {
-  background: var(--panel);
-  border-radius: 10px;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
 }
-.item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 50px;
-  padding: 10px 12px;
+/* 分组卡片里的设置行：卡片的内边距，标题与控件之间留宽一些；单行的行 52 高，行之间一条细线 */
+.group > .list-row {
+  gap: var(--space-7);
+  min-height: calc(var(--row-h) + var(--space-9));
+  padding: 11px 14px;
 }
-.item {
-  position: relative;
+/* 设置行的标题可以换行（定时任务的标题是用户写的任务内容），说明可以选中复制 */
+.group > .list-row .list-row-title {
+  white-space: normal;
 }
-.item + .item::before {
+.group > .list-row .list-row-desc {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.group > .list-row + .list-row::before {
   content: "";
   position: absolute;
   top: 0;
-  left: 12px;
-  right: 12px;
-  height: 1px;
-  background: var(--divider);
+  left: 14px;
+  right: 14px;
+  height: var(--hair);
+  background: var(--border-strong);
   pointer-events: none;
-}
-.item .main {
-  flex: 1;
-  min-width: 0;
-}
-.item .ttl {
-  font-size: var(--fs-md);
-  font-weight: var(--font-weight-ui);
-  color: var(--fg);
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-.item .desc {
-  font-size: var(--fs-sm);
-  color: var(--muted);
-  margin-top: 1px;
-}
-.item .val {
-  flex: none;
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.item .trail {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-a.item,
-button.item,
-.item.is-click {
-  width: 100%;
-  text-align: left;
-  cursor: default;
-  transition: background var(--t-fast);
-}
-a.item:hover,
-button.item:hover,
-.item.is-click:hover {
-  background: var(--hover);
-}
-.group > .item:first-child {
-  border-top-left-radius: var(--r-lg);
-  border-top-right-radius: var(--r-lg);
-}
-.group > .item:last-child {
-  border-bottom-left-radius: var(--r-lg);
-  border-bottom-right-radius: var(--r-lg);
 }
 .chev {
   color: var(--faint);
@@ -1163,10 +985,12 @@ kbd {
   display: flex;
   flex-direction: column;
   align-items: center;
-  text-align: center;
   gap: 6px;
-  padding: 36px 24px;
+  padding: 40px 24px;
+  border-radius: var(--r-panel);
+  background: var(--panel);
   color: var(--muted);
+  text-align: center;
 }
 .skeleton {
   display: inline-block;
@@ -1941,54 +1765,27 @@ body.is-resizing-rows iframe {
   flex-direction: column;
   gap: 2px;
 }
-.nav-item,
-.btn.nav-item {
-  justify-content: flex-start;
-  gap: 10px;
-  width: 100%;
-  height: 30px;
-  margin: 0;
-  padding: 0 9px;
-  border-radius: var(--r-md);
-  background: none;
-  box-shadow: none;
-  color: var(--fg-2);
-  font-size: var(--fs-md);
-  font-weight: 400;
-  text-align: left;
-}
-.nav-item .ic {
-  color: color-mix(in oklab, var(--fg-2), var(--muted));
-}
-.nav-item:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.nav-item.is-active,
-.nav-item.is-active:hover {
-  background: var(--active);
-  color: var(--fg);
-}
-.nav-item.is-active .ic {
-  color: var(--fg);
-}
+/* 侧栏的行都是 ListRow，同一个高度；这里只管行间距和悬停才出现的部分 */
 .nav-item.back {
-  margin-bottom: 6px;
-  color: var(--muted);
+  margin-bottom: var(--space-3);
 }
-/* 快捷键徽标在悬停或键盘聚焦时出现 */
-.nav-item .nav-kbd {
-  height: 20px;
+/* 快捷键徽标在悬停、键盘聚焦或按住 ⌘/Ctrl 时出现 */
+.nav-kbd {
+  height: var(--control-xs);
   padding: 0 7px;
   border-radius: var(--r-full);
   background: var(--active);
   color: var(--muted);
+  font-family: var(--font-ui);
   font-size: calc(var(--ui-scale) * 11px);
-  line-height: 20px;
+  line-height: var(--control-xs);
   letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity var(--t-fast);
 }
 .nav-item:hover .nav-kbd,
-.nav-item:focus-visible .nav-kbd {
+.nav-item:focus-visible .nav-kbd,
+.sidebar.show-shortcuts .nav-kbd {
   opacity: 1;
 }
 .side-label,
@@ -1998,7 +1795,7 @@ body.is-resizing-rows iframe {
   gap: 2px;
   height: 28px;
   margin-top: 18px;
-  padding: 0 4px 0 9px;
+  padding: 0 4px 0 var(--space-4);
   color: var(--muted);
   font-size: var(--fs-md);
   font-weight: 400;
@@ -2031,57 +1828,30 @@ body.is-resizing-rows iframe {
     0 0 0 1px var(--border-focus),
     0 0 0 3.5px var(--accent-ring);
 }
-/* 项目行：打开的项目显示展开的文件夹；悬停时右侧出现新会话按钮 */
+/* 项目行：打开的项目显示展开的文件夹；悬停或键盘聚焦时右侧出现新会话按钮 */
 .proj-block + .proj-block {
   margin-top: 10px;
 }
-.proj,
-.btn.proj {
-  justify-content: flex-start;
-  gap: 10px;
-  height: 30px;
-  margin-bottom: 2px;
-  padding: 0 34px 0 9px;
-  border-radius: var(--r-md);
-  color: var(--fg-2);
-  font-size: var(--fs-md);
-  font-weight: 400;
-  text-align: left;
-}
-.proj .ic {
-  color: color-mix(in oklab, var(--fg-2), var(--muted));
+.proj-row,
+.sess {
+  margin-bottom: var(--space-1);
 }
 .proj-add {
-  top: 4px;
-  right: 4px;
-  border-radius: 6px;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  border-radius: var(--r-sm);
+  opacity: 0;
 }
-.proj-sessions {
-  margin: 0;
+.proj-row:hover .proj-add,
+.proj-row:has(:focus-visible) .proj-add {
+  opacity: 1;
 }
-/* 会话行：状态点在文件夹图标正下方，标题与项目名对齐，右侧常驻 provider 与时间 */
-.sess,
-.btn.sess {
-  position: relative;
-  justify-content: flex-start;
-  gap: 10px;
-  height: 30px;
-  margin-bottom: 2px;
-  padding: 0 10px 0 9px;
-  border-radius: var(--r-md);
-  color: var(--fg);
-  font-size: var(--fs-md);
-  text-align: left;
-}
-.sess:hover {
-  background: var(--hover);
-}
-.sess.is-active,
-.sess.is-active:hover {
+.proj-add:hover {
   background: var(--active);
-  color: var(--fg);
 }
+/* 会话行：状态点和文件夹图标一样宽，标题与项目名对齐，右侧常驻 provider 与时间 */
 .sess-dot {
+  flex: none;
   width: 6px;
   height: 6px;
   margin: 0 4.5px;
@@ -2106,10 +1876,6 @@ body.is-resizing-rows iframe {
   background: var(--ok);
   opacity: 1;
 }
-.sess-title {
-  flex: 1 1 auto;
-  font-size: var(--fs-md);
-}
 .sess-provider {
   flex: none;
   color: var(--faint);
@@ -2130,13 +1896,9 @@ body.is-resizing-rows iframe {
   font-size: calc(var(--ui-scale) * 12px);
   font-variant-numeric: tabular-nums;
 }
-/* 右键菜单的触发区只是包住项目行或会话行，不参与布局；菜单打开期间标出它针对的那一行 */
+/* 右键菜单的触发区只是包住项目行或会话行，不参与布局；菜单打开期间那一行的样子在 list-rows.css */
 .row-menu-area {
   display: block;
-}
-.row-menu-area[data-popup-open] .sess:not(.is-active),
-.row-menu-area[data-popup-open] .proj {
-  background: var(--hover);
 }
 /* 按住 ⌘/Ctrl 时，前九个会话右侧的数字快捷键 */
 .sess-kbd {
@@ -2154,22 +1916,15 @@ body.is-resizing-rows iframe {
 .sess.is-active .sess-kbd {
   background: var(--surface-raised);
 }
-.sidebar.show-shortcuts .nav-kbd {
-  opacity: 1;
-}
-/* 重命名时整行换成输入框，状态点或文件夹图标留在原位 */
-.sess.is-editing,
-.sess.is-editing:hover,
-.proj.is-editing {
-  background: var(--active);
-}
-.proj.is-editing {
-  padding-right: 9px;
+/* 重命名时标题换成输入框，状态点或文件夹图标留在原位；输入框的光圈画在标题格外面 */
+.is-editing > .list-row-title {
+  display: flex;
+  overflow: visible;
 }
 .row-rename {
   flex: 1;
   min-width: 0;
-  height: 22px;
+  height: var(--control-xs);
   margin-left: -5px;
   padding: 0 5px;
   border: 0;
@@ -2184,7 +1939,7 @@ body.is-resizing-rows iframe {
   outline: none;
 }
 .side-empty {
-  padding: 2px 10px 6px 34px;
+  padding: 2px 10px 6px 31px;
   color: var(--faint);
   font-size: var(--fs-sm);
 }
@@ -2451,6 +2206,10 @@ body.is-resizing-rows iframe {
   background: var(--panel);
   box-shadow: none;
 }
+/* 环境抽屉里的值（工作目录、模型）用等宽字 */
+.drawer .list-row-desc {
+  font-family: var(--font-mono);
+}
 
 /* ─── 输入区 ───────────────────────────────────────────── */
 .composer-wrap {
@@ -2709,72 +2468,6 @@ body.is-resizing-rows iframe {
 }
 
 /* ─── 设置与插件页 ─────────────────────────────────────── */
-.page {
-  padding: 8px 32px 72px;
-}
-.page-head {
-  margin: 22px 0 22px;
-}
-.page-head h1 {
-  font-size: var(--fs-title);
-  font-weight: 650;
-  letter-spacing: -0.025em;
-  line-height: 1.25;
-}
-.page-head .sub {
-  margin-top: 4px;
-  font-size: var(--fs-md);
-}
-.section {
-  margin-top: 28px;
-}
-.section-head {
-  margin: 0 4px 8px;
-}
-.section-head h2 {
-  color: var(--muted);
-  font-size: calc(var(--ui-scale) * 11px);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.group {
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
-}
-.item {
-  gap: 16px;
-  min-height: 52px;
-  padding: 11px 14px;
-}
-.item + .item::before {
-  left: 14px;
-  right: 14px;
-  height: var(--hair);
-  background: var(--border-strong);
-}
-.item .main {
-  flex: 1 1 auto;
-  min-width: 96px;
-}
-.item .trail {
-  flex: 0 1 auto;
-  min-width: 0;
-  justify-content: flex-end;
-}
-.item .desc {
-  margin-top: 2px;
-  line-height: 1.45;
-}
-.group > .item:first-child {
-  border-top-left-radius: var(--r-panel);
-  border-top-right-radius: var(--r-panel);
-}
-.group > .item:last-child {
-  border-bottom-left-radius: var(--r-panel);
-  border-bottom-right-radius: var(--r-panel);
-}
 .cap-list {
   display: flex;
   flex-wrap: wrap;
@@ -2786,12 +2479,6 @@ body.is-resizing-rows iframe {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
-}
-.empty {
-  padding: 40px 24px;
-  border-radius: var(--r-panel);
-  background: var(--panel);
-  color: var(--muted);
 }
 
 /* ─── 工作台 ───────────────────────────────────────────── */
@@ -3519,20 +3206,6 @@ body.is-resizing-rows iframe {
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
-.palette-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  height: 38px;
-  padding: 0 10px;
-  border-radius: calc(var(--r-lg) - var(--space-2));
-  color: var(--fg);
-  text-align: left;
-}
-.palette-item[data-highlighted] {
-  background: var(--active);
-}
 .palette-icon {
   display: grid;
   place-items: center;
@@ -3543,11 +3216,7 @@ body.is-resizing-rows iframe {
   background: var(--field);
   color: var(--fg-2);
 }
-.palette-label {
-  font-size: var(--fs-md);
-}
 .palette-hint {
-  margin-left: auto;
   max-width: 180px;
   color: var(--faint);
   font-size: calc(var(--ui-scale) * 11px);
@@ -3582,9 +3251,7 @@ body.is-resizing-rows iframe {
 @media (prefers-reduced-motion: no-preference) {
   .surface-tab,
   .surface-launcher-item,
-  .sess,
-  .nav-item,
-  .palette-item,
+  .list-row,
   .chip-btn {
     transition:
       background var(--t-fast) var(--ease),

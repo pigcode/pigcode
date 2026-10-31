@@ -77,7 +77,7 @@ export interface FileExplorerProps {
     | undefined
   /** 同一个 key 的展开状态在组件重新挂载后保留（切换标签、收起侧栏）。 */
   stateKey?: string | undefined
-  /** 窄的侧栏样式：行更矮、没有根目录标题。 */
+  /** 窄的侧栏样式：没有根目录标题。 */
   compact?: boolean | undefined
   labels?: Partial<FileExplorerLabels> | undefined
 }
@@ -123,7 +123,8 @@ export function FileExplorer({
   const latest = useRef({ directories, expanded, loadDirectory })
   latest.current = { directories, expanded, loadDirectory }
   const idPrefix = useMemo(() => `fx-${Math.random().toString(36).slice(2, 8)}`, [])
-  const rowHeight = compact ? 22 : 24
+  // 与 tokens.css 的 --row-h-compact 相同：虚拟滚动按这个高度定位每一行
+  const rowHeight = 24
 
   useEffect(() => {
     if (stateKey) memory.set(stateKey, { directories, expanded })

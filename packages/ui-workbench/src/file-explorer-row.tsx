@@ -1,7 +1,7 @@
 /** 资源管理器的一行：缩进参考线、展开箭头、图标、名字（搜索时加粗匹配的字符）与 git 标记。 */
 import type { ReactNode } from "react"
 import { ChevronRight, RefreshCw } from "lucide-react"
-import { FileIcon } from "@pigcode/ui-primitives"
+import { FileIcon, ListRow } from "@pigcode/ui-primitives"
 import { fuzzyIndices, type GitDecoration, type VisibleRow } from "./file-tree-model"
 
 /** git 改动的字母标记。 */
@@ -69,7 +69,9 @@ export function ExplorerRow({
   onContextMenu,
 }: ExplorerRowProps) {
   return (
-    <div
+    <ListRow
+      // 整行的提示放在行元素上；ListRow 的 title 是标题这一格
+      render={<div title={error ?? row.path} />}
       id={id}
       role="treeitem"
       aria-label={row.label}
@@ -77,11 +79,12 @@ export function ExplorerRow({
       aria-selected={active}
       {...(row.kind === "directory" ? { "aria-expanded": row.expanded } : {})}
       className="fx-row"
+      density="compact"
+      selected={active}
       data-active={active || undefined}
       data-focused={focused || undefined}
       data-ignored={row.ignored || undefined}
       data-git={decoration}
-      title={error ?? row.path}
       draggable
       style={{ top, height, paddingLeft: 6 + row.depth * 12 }}
       onClick={onActivate}
@@ -94,33 +97,39 @@ export function ExplorerRow({
         event.dataTransfer.setData("text/plain", `@${row.path} `)
         event.dataTransfer.effectAllowed = "copy"
       }}
-    >
-      {Array.from({ length: row.depth }, (_unused, level) => (
-        <span
-          key={level}
-          className="fx-guide"
-          style={{ left: 13 + level * 12 }}
-          aria-hidden="true"
-        />
-      ))}
-      <span className="fx-twisty" data-open={row.expanded || undefined} aria-hidden="true">
-        {row.kind === "directory" ? (
-          loading ? (
-            <RefreshCw className="ic ic-xs spin" />
-          ) : (
-            <ChevronRight className="ic ic-xs" />
-          )
-        ) : null}
-      </span>
-      <FileIcon name={row.entry.name} kind={row.kind} open={row.expanded} />
-      <span className="fx-label truncate">{highlighted(row.label, query)}</span>
-      {decoration ? (
-        <span className="fx-git" aria-label={decoration}>
-          {GIT_LETTER[decoration]}
-        </span>
-      ) : changedInside ? (
-        <span className="fx-git-dot" aria-hidden="true" />
-      ) : null}
-    </div>
+      leading={
+        <>
+          {Array.from({ length: row.depth }, (_unused, level) => (
+            <span
+              key={level}
+              className="fx-guide"
+              style={{ left: 13 + level * 12 }}
+              aria-hidden="true"
+            />
+          ))}
+          <span className="fx-twisty" data-open={row.expanded || undefined} aria-hidden="true">
+            {row.kind === "directory" ? (
+              loading ? (
+                <RefreshCw className="ic ic-xs spin" />
+              ) : (
+                <ChevronRight className="ic ic-xs" />
+              )
+            ) : null}
+          </span>
+          <FileIcon name={row.entry.name} kind={row.kind} open={row.expanded} />
+        </>
+      }
+      title={highlighted(row.label, query)}
+      titleProps={{ className: "fx-label" }}
+      meta={
+        decoration ? (
+          <span className="fx-git" aria-label={decoration}>
+            {GIT_LETTER[decoration]}
+          </span>
+        ) : changedInside ? (
+          <span className="fx-git-dot" aria-hidden="true" />
+        ) : null
+      }
+    />
   )
 }
