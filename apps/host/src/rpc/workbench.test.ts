@@ -101,7 +101,8 @@ afterEach(async () => {
   )
 })
 
-describe("workbench rpc", () => {
+// 这些用例真的跑 git（检查点、worktree）；Windows runner 上一次 git 调用就可能要几百毫秒，默认 5 秒不够。
+describe("workbench rpc", { timeout: 30_000 }, () => {
   it("dispatches workspace.tree", async () => {
     const { thread, transport } = await setupWorkbenchRpc()
     const response = await call(transport, "1", "workspace.tree", { threadId: thread.id })
