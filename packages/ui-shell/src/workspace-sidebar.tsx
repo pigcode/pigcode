@@ -18,8 +18,6 @@ import { ProjectRow, ThreadRow, type RenameHandlers, type RowAction } from "./si
 import type { ThreadStatus } from "./thread-status"
 import { useToast } from "./toast"
 
-export { formatThreadTime } from "./sidebar-rows"
-
 /** 工作区侧栏所需的数据与事件；数据由 store 传入。 */
 export interface WorkspaceSidebarProps {
   projects: Project[]

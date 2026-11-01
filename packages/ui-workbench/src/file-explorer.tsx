@@ -12,7 +12,7 @@ import {
   SearchX,
   TriangleAlert,
 } from "lucide-react"
-import { EmptyState, SearchField } from "@pigcode/ui-primitives"
+import { EmptyState, SearchField, useLocale } from "@pigcode/ui-primitives"
 import { ExplorerRow, rowId } from "./file-explorer-row"
 import {
   ancestorsOf,
@@ -34,35 +34,6 @@ export interface ExplorerListing {
 export interface ExplorerSearchResult {
   entries: Array<{ path: string; kind: "file" | "directory" }>
   truncated: boolean
-}
-
-/** 资源管理器文案；容器按 locale 注入。 */
-export interface FileExplorerLabels {
-  tree: string
-  search: string
-  clearSearch: string
-  refresh: string
-  collapseAll: string
-  empty: string
-  /** 目录是空的时候标题下面的说明。 */
-  emptyHint?: string | undefined
-  loading: string
-  noMatches: string
-  searchTruncated: string
-  loadFailed: string
-}
-
-const DEFAULT_LABELS: FileExplorerLabels = {
-  tree: "工作区文件",
-  search: "搜索文件",
-  clearSearch: "清除搜索",
-  refresh: "刷新",
-  collapseAll: "全部收起",
-  empty: "这个目录是空的",
-  loading: "正在读取…",
-  noMatches: "没有匹配的文件",
-  searchTruncated: "匹配太多，只显示前 200 项；输入更具体的关键词",
-  loadFailed: "读取失败",
 }
 
 /** 资源管理器属性。 */
@@ -89,7 +60,6 @@ export interface FileExplorerProps {
   stateKey?: string | undefined
   /** 窄的侧栏样式：没有根目录标题。 */
   compact?: boolean | undefined
-  labels?: Partial<FileExplorerLabels> | undefined
 }
 
 /** 按 stateKey 保存的展开状态与已加载目录。 */
@@ -113,9 +83,8 @@ export function FileExplorer({
   onContextMenu,
   stateKey,
   compact = false,
-  labels: overrides,
 }: FileExplorerProps) {
-  const labels = { ...DEFAULT_LABELS, ...overrides }
+  const { t } = useLocale()
   const remembered = stateKey ? memory.get(stateKey) : undefined
   const [directories, setDirectories] = useState(
     () => remembered?.directories ?? new Map<string, DirectoryState>(),
@@ -366,18 +335,22 @@ export function FileExplorer({
   // 树里没有行时显示的空状态：没有匹配、读取失败、目录是空的，或者还在读取。
   const empty: { icon: ReactNode; title: string; description?: string | undefined } | null = results
     ? results.entries.length === 0 && !searching
-      ? { icon: <SearchX className="ic" />, title: labels.noMatches }
+      ? { icon: <SearchX className="ic" />, title: t("files.noMatches") }
       : null
     : rootError
-      ? { icon: <TriangleAlert className="ic" />, title: labels.loadFailed, description: rootError }
+      ? {
+          icon: <TriangleAlert className="ic" />,
+          title: t("files.loadFailed"),
+          description: rootError,
+        }
       : rootState && rootState.entries.length === 0
         ? {
             icon: <FolderOpen className="ic" />,
-            title: labels.empty,
-            description: labels.emptyHint,
+            title: t("files.empty"),
+            description: t("files.emptyHint"),
           }
         : !rootState
-          ? { icon: <Loader2 className="ic spin" />, title: labels.loading }
+          ? { icon: <Loader2 className="ic spin" />, title: t("files.loading") }
           : null
 
   return (
@@ -392,8 +365,8 @@ export function FileExplorer({
           <button
             type="button"
             className="icon-btn"
-            aria-label={labels.refresh}
-            title={labels.refresh}
+            aria-label={t("files.refresh")}
+            title={t("files.refresh")}
             onClick={() => {
               void load("")
               for (const path of expanded) void load(path)
@@ -407,8 +380,8 @@ export function FileExplorer({
           <button
             type="button"
             className="icon-btn"
-            aria-label={labels.collapseAll}
-            title={labels.collapseAll}
+            aria-label={t("files.collapseAll")}
+            title={t("files.collapseAll")}
             onClick={collapseAll}
           >
             <ChevronsDownUp className="ic ic-sm" aria-hidden="true" />
@@ -420,8 +393,8 @@ export function FileExplorer({
         className="fx-search"
         value={query}
         onValueChange={setQuery}
-        placeholder={labels.search}
-        clearLabel={labels.clearSearch}
+        placeholder={t("files.search")}
+        clearLabel={t("files.clearSearch")}
         onKeyDown={(event) => {
           if (event.key === "Escape") setQuery("")
           if (event.key === "ArrowDown") {
@@ -432,12 +405,12 @@ export function FileExplorer({
           }
         }}
       />
-      {results?.truncated ? <p className="fx-note">{labels.searchTruncated}</p> : null}
+      {results?.truncated ? <p className="fx-note">{t("files.searchTruncated")}</p> : null}
       <div
         ref={scroller}
         className="fx-scroll"
         role="tree"
-        aria-label={labels.tree}
+        aria-label={t("files.tree")}
         tabIndex={0}
         {...(focusedIndex >= 0
           ? { "aria-activedescendant": rowId(idPrefix, rows[focusedIndex]?.path ?? "") }

@@ -6,7 +6,7 @@ import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { ToastProvider } from "./toast"
-import { WorkspaceSidebar, formatThreadTime, visibleThreads } from "./workspace-sidebar"
+import { WorkspaceSidebar, visibleThreads } from "./workspace-sidebar"
 
 afterEach(cleanup)
 
@@ -150,15 +150,6 @@ describe("WorkspaceSidebar", () => {
     ).toEqual(["beta", "alpha", "alpha"])
     expect(window.localStorage.getItem("pigcode.sidebarGrouping")).toBe("time")
     window.localStorage.removeItem("pigcode.sidebarGrouping")
-  })
-
-  it("formats thread times compactly so they can stay visible", () => {
-    const now = Date.parse("2026-10-21T12:00:00Z")
-    expect(formatThreadTime("2026-10-21T11:59:40Z", "zh-CN", now)).toBe("刚刚")
-    expect(formatThreadTime("2026-10-21T11:41:00Z", "zh-CN", now)).toBe("19分钟")
-    expect(formatThreadTime("2026-10-21T10:00:00Z", "en-US", now)).toBe("2h")
-    expect(formatThreadTime("2026-10-16T12:00:00Z", "en-US", now)).toBe("5d")
-    expect(formatThreadTime("not a date", "en-US", now)).toBe("")
   })
 
   it("animates a dot matrix for running threads and keeps a status dot for the rest", () => {

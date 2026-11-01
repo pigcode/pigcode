@@ -1,7 +1,7 @@
 /** Worktree 选择器：创建、切换与删除线程的 worktree。 */
 import { useState } from "react"
 import { ChevronDown, GitBranch } from "lucide-react"
-import { Button, EmptyState, Select } from "@pigcode/ui-primitives"
+import { Button, EmptyState, Select, useLocale } from "@pigcode/ui-primitives"
 
 /** 一条 worktree 记录；branch 为空表示未记录分支。 */
 export interface WorktreeItem {
@@ -24,7 +24,6 @@ export interface WorktreePickerProps {
 
 /** 「项目根目录」在 Select 里的值；worktree 路径不会以冒号开头。 */
 const ROOT = ":root"
-const ROOT_LABEL = "项目根目录"
 
 /** Worktree 选择器入口；删除只针对当前活动 worktree，并要求二次确认。 */
 export function WorktreePicker({
@@ -36,6 +35,7 @@ export function WorktreePicker({
   busy = false,
   compact = false,
 }: WorktreePickerProps) {
+  const { t } = useLocale()
   const [pending, setPending] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const disabled = busy || pending
@@ -55,7 +55,7 @@ export function WorktreePicker({
   if (compact) {
     return (
       <div className="worktree-compact">
-        <span className="worktree-compact-label">工作树</span>
+        <span className="worktree-compact-label">{t("worktree.label")}</span>
         <Select.Root
           value={activePath ?? ROOT}
           disabled={disabled}
@@ -65,12 +65,12 @@ export function WorktreePicker({
         >
           <Select.Trigger
             className="input select-trigger worktree-compact-select"
-            aria-label="工作树"
+            aria-label={t("worktree.label")}
           >
             <Select.Value className="grow truncate">
               {(value: string) =>
                 value === ROOT
-                  ? ROOT_LABEL
+                  ? t("worktree.root")
                   : (worktrees.find((worktree) => worktree.path === value)?.branch ?? value)
               }
             </Select.Value>
@@ -80,7 +80,7 @@ export function WorktreePicker({
             <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
               <Select.Popup>
                 <Select.Item value={ROOT}>
-                  <Select.ItemText>{ROOT_LABEL}</Select.ItemText>
+                  <Select.ItemText>{t("worktree.root")}</Select.ItemText>
                 </Select.Item>
                 {worktrees.map((worktree) => (
                   <Select.Item key={worktree.id} value={worktree.path}>
@@ -92,7 +92,7 @@ export function WorktreePicker({
           </Select.Portal>
         </Select.Root>
         <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void run(onCreate)}>
-          新建
+          {t("worktree.new")}
         </Button>
         {activePath ? (
           <Button
@@ -104,7 +104,7 @@ export function WorktreePicker({
               else setConfirmRemove(true)
             }}
           >
-            {confirmRemove ? "确认移除" : "移除"}
+            {confirmRemove ? t("worktree.confirmRemove") : t("worktree.remove")}
           </Button>
         ) : null}
       </div>
@@ -114,21 +114,21 @@ export function WorktreePicker({
   return (
     <div className="worktree-picker">
       <header className="workbench-section-header">
-        <span>工作树</span>
+        <span>{t("worktree.label")}</span>
         <Button
           variant="secondary"
           size="sm"
           disabled={disabled}
           onClick={() => void run(onCreate)}
         >
-          新建工作树
+          {t("worktree.create")}
         </Button>
       </header>
       {worktrees.length === 0 ? (
         <EmptyState
           size="compact"
           icon={<GitBranch className="ic" />}
-          title="尚未创建工作树，当前使用项目根目录。"
+          title={t("worktree.empty")}
         />
       ) : (
         <ul className="worktree-list">
@@ -140,8 +140,10 @@ export function WorktreePicker({
                   <span className="worktree-path" title={worktree.path}>
                     {worktree.path}
                   </span>
-                  <span className="worktree-branch">{worktree.branch ?? "未记录分支"}</span>
-                  {active ? <span className="worktree-active">使用中</span> : null}
+                  <span className="worktree-branch">
+                    {worktree.branch ?? t("worktree.noBranch")}
+                  </span>
+                  {active ? <span className="worktree-active">{t("worktree.active")}</span> : null}
                 </div>
                 <div className="worktree-actions">
                   <Button
@@ -150,19 +152,19 @@ export function WorktreePicker({
                     disabled={disabled || active}
                     onClick={() => void run(() => onSwitch(worktree.path))}
                   >
-                    切换
+                    {t("worktree.switch")}
                   </Button>
                   {active ? (
                     confirmRemove ? (
                       <>
-                        <span className="worktree-confirm">确认删除？</span>
+                        <span className="worktree-confirm">{t("worktree.deletePrompt")}</span>
                         <Button
                           variant="solidDanger"
                           size="sm"
                           disabled={disabled}
                           onClick={() => void run(onRemove)}
                         >
-                          确认删除
+                          {t("worktree.confirmDelete")}
                         </Button>
                         <Button
                           variant="ghost"
@@ -170,7 +172,7 @@ export function WorktreePicker({
                           disabled={disabled}
                           onClick={() => setConfirmRemove(false)}
                         >
-                          取消
+                          {t("common.cancel")}
                         </Button>
                       </>
                     ) : (
@@ -180,7 +182,7 @@ export function WorktreePicker({
                         disabled={disabled}
                         onClick={() => setConfirmRemove(true)}
                       >
-                        删除
+                        {t("worktree.delete")}
                       </Button>
                     )
                   ) : null}

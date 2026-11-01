@@ -2,14 +2,11 @@
 import { useMemo } from "react"
 import { parsePatch, type StructuredPatch } from "diff"
 import { FileDiff } from "lucide-react"
-import { EmptyState } from "@pigcode/ui-primitives"
+import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 
 /** Diff 视图属性；diff 文本通常来自 git.diff。 */
 export interface DiffViewProps {
   diff: string
-  emptyText?: string
-  /** 没有改动时标题下面的说明。 */
-  emptyHint?: string | undefined
 }
 
 /** 一行 diff 的分类。 */
@@ -88,32 +85,41 @@ function renderHunk(hunk: StructuredPatch["hunks"][number], index: number): Rend
   }
 }
 
-/** 解析单个文件 patch。 */
-function renderFile(patch: StructuredPatch, index: number): RenderedFile {
+/** 解析单个文件 patch；没有文件名时用 unknownName。 */
+function renderFile(patch: StructuredPatch, index: number, unknownName: string): RenderedFile {
   return {
     key: `${index}:${patch.oldFileName ?? "unknown"}:${patch.newFileName ?? "unknown"}`,
-    oldName: patch.oldFileName ?? "未知文件",
-    newName: patch.newFileName ?? "未知文件",
+    oldName: patch.oldFileName ?? unknownName,
+    newName: patch.newFileName ?? unknownName,
     hunks: patch.hunks.map((hunk, hunkIndex) => renderHunk(hunk, hunkIndex)),
   }
 }
 
 /** 容错解析；格式不合法时展示为空而不是让界面崩溃。 */
-function parseDiff(diff: string): RenderedFile[] {
+function parseDiff(diff: string, unknownName: string): RenderedFile[] {
   try {
-    return parsePatch(diff).map((patch, index) => renderFile(patch, index))
+    return parsePatch(diff).map((patch, index) => renderFile(patch, index, unknownName))
   } catch {
     return []
   }
 }
 
 /** Diff 视图入口。 */
-export function DiffView({ diff, emptyText = "暂无变更", emptyHint }: DiffViewProps) {
-  const files = useMemo(() => (diff.trim().length === 0 ? [] : parseDiff(diff)), [diff])
+export function DiffView({ diff }: DiffViewProps) {
+  const { t } = useLocale()
+  const unknownName = t("workbench.diff.unknownFile")
+  const files = useMemo(
+    () => (diff.trim().length === 0 ? [] : parseDiff(diff, unknownName)),
+    [diff, unknownName],
+  )
 
   if (files.length === 0) {
     return (
-      <EmptyState icon={<FileDiff className="ic" />} title={emptyText} description={emptyHint} />
+      <EmptyState
+        icon={<FileDiff className="ic" />}
+        title={t("workbench.diff.empty")}
+        description={t("workbench.diff.emptyHint")}
+      />
     )
   }
 

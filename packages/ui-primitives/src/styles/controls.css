@@ -390,6 +390,35 @@
   overflow: hidden;
 }
 
+/* ─── 错误说明：解释在上，原始信息可以展开 ─────────────────── */
+.error-notice-text {
+  margin: 0;
+}
+.error-notice-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  opacity: 0.8;
+  font-size: var(--fs-xs);
+}
+.error-notice-toggle:hover {
+  opacity: 1;
+}
+.error-notice-toggle .ic {
+  transition: transform 200ms var(--ease);
+}
+.error-notice-toggle[data-panel-open] .ic {
+  transform: rotate(90deg);
+}
+.error-notice-raw {
+  margin: var(--space-2) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* ─── 标签与分隔线 ─────────────────────────────────────── */
 .ui-label {
   color: var(--fg-2);

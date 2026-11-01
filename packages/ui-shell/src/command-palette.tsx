@@ -47,7 +47,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
       label: t("nav.newThread"),
       hint: formatShortcut("Mod+n"),
       icon: "plus",
-      keywords: "new chat session 新会话",
+      keywords: t("palette.keywords.newThread"),
       run: props.onNewThread,
     },
     ...(props.onToggleSidebar
@@ -58,7 +58,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
             label: t("palette.toggleSidebar"),
             hint: formatShortcut("Mod+b"),
             icon: "sidebar",
-            keywords: "sidebar 侧栏",
+            keywords: t("palette.keywords.toggleSidebar"),
             run: props.onToggleSidebar,
           },
         ]
@@ -71,7 +71,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
             label: t("palette.toggleWorkbench"),
             hint: formatShortcut("Mod+j"),
             icon: "tray",
-            keywords: "workbench panel 工作台",
+            keywords: t("palette.keywords.toggleWorkbench"),
             run: props.onToggleWorkbench,
           },
         ]
@@ -82,7 +82,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
       label: t("settings.title"),
       hint: formatShortcut("Mod+,"),
       icon: "gear",
-      keywords: "settings preferences 设置",
+      keywords: t("palette.keywords.settings"),
       run: props.onSettings,
     },
     {
@@ -90,7 +90,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
       group: "actions",
       label: t("settings.plugins"),
       icon: "cube",
-      keywords: "plugins extensions 插件",
+      keywords: t("palette.keywords.plugins"),
       run: props.onPlugins,
     },
     {
@@ -98,7 +98,7 @@ function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps)
       group: "actions",
       label: t("nav.addProject"),
       icon: "folder-plus",
-      keywords: "add project folder 项目",
+      keywords: t("palette.keywords.addProject"),
       run: props.onAddProject,
     },
   ]

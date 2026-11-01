@@ -6,9 +6,12 @@ import {
   Badge,
   Button,
   EmptyState,
+  ErrorNotice,
   Input,
   Textarea,
+  useLocale,
   type BadgeVariant,
+  type HostErrorInfo,
 } from "@pigcode/ui-primitives"
 
 /** 创建 PR 的输入；body/base 省略时由 Host 使用 gh 默认值。 */
@@ -18,44 +21,14 @@ export interface PrCreateInput {
   base?: string
 }
 
-/** PR 面板文案；容器按当前 locale 注入，组件本身保持无 locale 依赖。 */
-export interface PrPanelLabels {
-  empty: string
-  /** 没有 PR 时标题下面的说明。 */
-  emptyHint?: string | undefined
-  loading: string
-  title: string
-  titlePlaceholder: string
-  body: string
-  bodyPlaceholder: string
-  base: string
-  basePlaceholder: string
-  create: string
-  creating: string
-}
-
-/** 默认中文文案；未注入 labels 时使用。 */
-export const DEFAULT_PR_LABELS: PrPanelLabels = {
-  empty: "还没有关联的 Pull Request",
-  loading: "正在查询 Pull Request…",
-  title: "标题",
-  titlePlaceholder: "Pull Request 标题",
-  body: "描述",
-  bodyPlaceholder: "可选：说明改动",
-  base: "目标分支",
-  basePlaceholder: "main",
-  create: "创建 PR",
-  creating: "正在创建…",
-}
-
 /** PR 面板属性；所有 RPC 由父组件完成。 */
 export interface PrPanelProps {
   pullRequest: PullRequestInfo | null
   onCreate: (input: PrCreateInput) => void | Promise<void>
   creating?: boolean
   loading?: boolean
-  error?: string | null
-  labels?: Partial<PrPanelLabels>
+  /** 查询或创建失败；gh 未安装、未登录、没有远程仓库这些错误显示当前语言的说明。 */
+  error?: HostErrorInfo | null
 }
 
 /** PR 状态对应的徽标颜色。 */
@@ -72,9 +45,8 @@ export function PrPanel({
   creating = false,
   loading = false,
   error = null,
-  labels: overrides,
 }: PrPanelProps) {
-  const labels: PrPanelLabels = { ...DEFAULT_PR_LABELS, ...overrides }
+  const { t } = useLocale()
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
   const [base, setBase] = useState("")
@@ -104,11 +76,11 @@ export function PrPanel({
   return (
     <div className="pr-panel">
       {loading ? (
-        <EmptyState icon={<Loader2 className="ic spin" />} title={labels.loading} />
+        <EmptyState icon={<Loader2 className="ic spin" />} title={t("pr.loading")} />
       ) : null}
-      {error ? <p className="workbench-error">{error}</p> : null}
+      {error ? <ErrorNotice className="workbench-error" error={error} /> : null}
       {pullRequest ? (
-        <section className="pr-card" aria-label="Pull request">
+        <section className="pr-card" aria-label={t("pr.card")}>
           <header className="pr-card-header">
             <span className="pr-number">#{pullRequest.number}</span>
             <Badge variant={STATE_VARIANTS[pullRequest.state]}>{pullRequest.state}</Badge>
@@ -125,40 +97,40 @@ export function PrPanel({
         <>
           <EmptyState
             icon={<GitPullRequest className="ic" />}
-            title={labels.empty}
-            description={labels.emptyHint}
+            title={t("pr.empty")}
+            description={t("pr.emptyHint")}
           />
           <form className="pr-form" onSubmit={(event) => void submit(event)}>
             <label className="pr-field">
-              <span>{labels.title}</span>
+              <span>{t("pr.title")}</span>
               <Input
                 value={title}
-                placeholder={labels.titlePlaceholder}
+                placeholder={t("pr.titlePlaceholder")}
                 disabled={creating}
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
             <label className="pr-field">
-              <span>{labels.body}</span>
+              <span>{t("pr.body")}</span>
               <Textarea
                 value={body}
-                placeholder={labels.bodyPlaceholder}
+                placeholder={t("pr.bodyPlaceholder")}
                 disabled={creating}
                 rows={3}
                 onChange={(event) => setBody(event.target.value)}
               />
             </label>
             <label className="pr-field">
-              <span>{labels.base}</span>
+              <span>{t("pr.base")}</span>
               <Input
                 value={base}
-                placeholder={labels.basePlaceholder}
+                placeholder={t("pr.basePlaceholder")}
                 disabled={creating}
                 onChange={(event) => setBase(event.target.value)}
               />
             </label>
             <Button type="submit" size="sm" disabled={creating || trimmedTitle.length === 0}>
-              {creating ? labels.creating : labels.create}
+              {creating ? t("pr.creating") : t("pr.create")}
             </Button>
           </form>
         </>

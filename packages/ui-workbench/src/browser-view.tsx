@@ -4,7 +4,7 @@
  */
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
 import { ArrowLeft, ArrowRight, Bot, ExternalLink, Globe, RotateCw } from "lucide-react"
-import { Button, DotMatrix, EmptyState } from "@pigcode/ui-primitives"
+import { Button, DotMatrix, EmptyState, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 
 /** 在独立窗口打开页面的原生桥签名；测试可注入替身。 */
 export type PreviewOpen = (url: string) => Promise<{ id: string }>
@@ -46,48 +46,21 @@ export function normalizeBrowserUrl(input: string): string | null {
   }
 }
 
-/** 浏览器文案；容器按 locale 注入。 */
-export interface BrowserViewLabels {
-  address: string
-  back: string
-  forward: string
-  reload: string
-  external: string
-  empty: string
-  emptyHint: string
-  invalid: string
-  bridgeMissing: string
-  agent: string
-  actions: Record<string, string>
-}
-
-/** 默认中文文案。 */
-export const DEFAULT_BROWSER_LABELS: BrowserViewLabels = {
-  address: "输入网址，例如 localhost:3000",
-  back: "后退",
-  forward: "前进",
-  reload: "重新加载",
-  external: "在新窗口打开",
-  empty: "还没有打开页面",
-  emptyHint: "输入网址，或者让 agent 打开 dev server 检查页面。",
-  invalid: "只支持 http/https 网址",
-  bridgeMissing: "当前环境不支持预览窗口",
-  agent: "Agent 正在操作",
-  actions: {
-    open: "打开",
-    navigate: "打开",
-    back: "后退",
-    forward: "前进",
-    reload: "刷新",
-    snapshot: "读取页面",
-    click: "点击",
-    type: "输入",
-    press: "按键",
-    scroll: "滚动",
-    wait: "等待",
-    evaluate: "执行脚本",
-    screenshot: "截图",
-  },
+/** agent 动作名对应的文案；没有列出的动作原样显示。 */
+const ACTION_LABELS: Record<string, MessageKey> = {
+  open: "browser.action.open",
+  navigate: "browser.action.navigate",
+  back: "browser.action.back",
+  forward: "browser.action.forward",
+  reload: "browser.action.reload",
+  snapshot: "browser.action.snapshot",
+  click: "browser.action.click",
+  type: "browser.action.type",
+  press: "browser.action.press",
+  scroll: "browser.action.scroll",
+  wait: "browser.action.wait",
+  evaluate: "browser.action.evaluate",
+  screenshot: "browser.action.screenshot",
 }
 
 /** 页面状态，来自 webview 的导航事件。 */
@@ -113,10 +86,10 @@ function openInNativeWindow(url: string): Promise<{ id: string }> {
 }
 
 /** 把主进程错误码映射成可读文案；未知错误原样展示。 */
-function openError(error: unknown, labels: BrowserViewLabels): string {
+function openError(error: unknown, t: (key: MessageKey) => string): string {
   const message = error instanceof Error ? error.message : String(error)
-  if (message.includes("PREVIEW_URL_NOT_ALLOWED")) return labels.invalid
-  if (message.includes("PREVIEW_BRIDGE_UNAVAILABLE")) return labels.bridgeMissing
+  if (message.includes("PREVIEW_URL_NOT_ALLOWED")) return t("preview.invalid")
+  if (message.includes("PREVIEW_BRIDGE_UNAVAILABLE")) return t("preview.bridgeMissing")
   return message
 }
 
@@ -131,7 +104,6 @@ export interface BrowserViewProps {
   openExternal?: PreviewOpen
   /** 页面区的占位槽；宿主把 webview 盖在它上面。 */
   slot: ReactNode
-  labels?: Partial<BrowserViewLabels>
 }
 
 /** 浏览器 surface。 */
@@ -144,13 +116,10 @@ export function BrowserView({
   onReload,
   openExternal = openInNativeWindow,
   slot,
-  labels: overrides,
 }: BrowserViewProps) {
-  const labels: BrowserViewLabels = {
-    ...DEFAULT_BROWSER_LABELS,
-    ...overrides,
-    actions: { ...DEFAULT_BROWSER_LABELS.actions, ...overrides?.actions },
-  }
+  const { t } = useLocale()
+  const invalid = t("preview.invalid")
+  const actionKey = agent ? ACTION_LABELS[agent.action] : undefined
   const current = page.url && page.url !== "about:blank" ? page.url : ""
   const [address, setAddress] = useState(current)
   const [editing, setEditing] = useState(false)
@@ -164,7 +133,7 @@ export function BrowserView({
     event.preventDefault()
     const url = normalizeBrowserUrl(address)
     if (!url) {
-      setError(labels.invalid)
+      setError(invalid)
       return
     }
     setError(null)
@@ -180,7 +149,7 @@ export function BrowserView({
     try {
       await openExternal(current)
     } catch (cause) {
-      setError(openError(cause, labels))
+      setError(openError(cause, t))
     }
   }
 
@@ -191,8 +160,8 @@ export function BrowserView({
           variant="plain"
           size="icon"
           type="button"
-          aria-label={labels.back}
-          title={labels.back}
+          aria-label={t("browser.back")}
+          title={t("browser.back")}
           disabled={!page.canGoBack}
           onClick={onBack}
         >
@@ -202,8 +171,8 @@ export function BrowserView({
           variant="plain"
           size="icon"
           type="button"
-          aria-label={labels.forward}
-          title={labels.forward}
+          aria-label={t("browser.forward")}
+          title={t("browser.forward")}
           disabled={!page.canGoForward}
           onClick={onForward}
         >
@@ -213,8 +182,8 @@ export function BrowserView({
           variant="plain"
           size="icon"
           type="button"
-          aria-label={labels.reload}
-          title={labels.reload}
+          aria-label={t("browser.reload")}
+          title={t("browser.reload")}
           disabled={!current}
           onClick={onReload}
         >
@@ -224,9 +193,9 @@ export function BrowserView({
           <input
             type="text"
             value={address}
-            placeholder={labels.address}
-            aria-label={labels.address}
-            aria-invalid={error === labels.invalid || undefined}
+            placeholder={t("browser.address")}
+            aria-label={t("browser.address")}
+            aria-invalid={error === invalid || undefined}
             spellCheck={false}
             autoComplete="off"
             onChange={(event) => {
@@ -241,8 +210,8 @@ export function BrowserView({
           variant="plain"
           size="icon"
           type="button"
-          aria-label={labels.external}
-          title={labels.external}
+          aria-label={t("browser.external")}
+          title={t("browser.external")}
           disabled={!current}
           onClick={() => void openWindow()}
         >
@@ -252,11 +221,9 @@ export function BrowserView({
       {agent ? (
         <div className="browser-agent" role="status" aria-live="polite">
           <Bot className="ic ic-sm" aria-hidden="true" />
-          <span className="browser-agent-label">{labels.agent}</span>
+          <span className="browser-agent-label">{t("browser.agent")}</span>
           <span className="browser-agent-action truncate">
-            {[labels.actions[agent.action] ?? agent.action, agent.detail]
-              .filter(Boolean)
-              .join(" · ")}
+            {[actionKey ? t(actionKey) : agent.action, agent.detail].filter(Boolean).join(" · ")}
           </span>
           <DotMatrix />
         </div>
@@ -270,8 +237,8 @@ export function BrowserView({
         {current ? null : (
           <EmptyState
             icon={<Globe className="ic" />}
-            title={labels.empty}
-            description={labels.emptyHint}
+            title={t("browser.empty")}
+            description={t("browser.emptyHint")}
           />
         )}
         {slot}

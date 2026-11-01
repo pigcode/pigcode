@@ -24,7 +24,8 @@ export const CLAUDE_FALLBACK_MODELS: ProviderModelInfo[] = [
   {
     id: "default",
     displayName: "Default",
-    description: "Claude Code 的默认模型",
+    // 和 SDK 返回的模型说明一样用英文；模型目录没有多语言字段。
+    description: "Claude Code's default model",
     isDefault: true,
     efforts: CLAUDE_EFFORTS,
     defaultEffort: null,

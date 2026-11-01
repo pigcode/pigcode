@@ -60,26 +60,7 @@
     }
   },
   "uiText": {
-    "total": 126,
-    "files": {
-      "apps/desktop/src/renderer/src/app.tsx": 3,
-      "apps/desktop/src/renderer/src/chat-container.tsx": 2,
-      "packages/provider-claude/src/driver.ts": 2,
-      "packages/provider-claude/src/models.ts": 1,
-      "packages/ui-chat/src/duration.ts": 4,
-      "packages/ui-composer/src/composer.tsx": 1,
-      "packages/ui-primitives/src/theme/theme-file.ts": 4,
-      "packages/ui-shell/src/command-palette.tsx": 6,
-      "packages/ui-shell/src/sidebar-rows.tsx": 4,
-      "packages/ui-workbench/src/browser-view.tsx": 23,
-      "packages/ui-workbench/src/checkpoint-panel.tsx": 9,
-      "packages/ui-workbench/src/diff-view.tsx": 3,
-      "packages/ui-workbench/src/file-explorer.tsx": 10,
-      "packages/ui-workbench/src/file-viewer.tsx": 15,
-      "packages/ui-workbench/src/layout-controls.tsx": 4,
-      "packages/ui-workbench/src/pr-panel.tsx": 9,
-      "packages/ui-workbench/src/right-panel.tsx": 10,
-      "packages/ui-workbench/src/worktree-picker.tsx": 16
-    }
+    "total": 0,
+    "files": {}
   }
 }

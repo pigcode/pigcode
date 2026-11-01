@@ -4,6 +4,7 @@ import { apply as providers } from "../providers/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
+import { GitNoRemoteError, GithubService } from "../services/github"
 import { apply as threads } from "../services/threads"
 import { MemoryTransport } from "./memory-transport"
 import { RpcServer } from "./server"
@@ -22,6 +23,34 @@ async function createServer() {
 }
 
 describe("rpc server", () => {
+  it("keeps the code of errors the UI explains and reports the rest as COMMAND_FAILED", async () => {
+    const { ctx, transport } = await createServer()
+    const github = new GithubService(
+      async () => "",
+      () => "/tmp",
+      async () => "main",
+    )
+    github.status = async () => {
+      throw new GitNoRemoteError("no git remotes found")
+    }
+    github.create = async () => {
+      throw Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" })
+    }
+    ctx.provide("github", github)
+    const send = async (id: string, method: string, params: unknown) => {
+      transport.client.send({ jsonrpc: "2.0", id, method, params })
+      return transport.client.next()
+    }
+
+    expect(await send("1", "pr.status", { threadId: "t1" })).toMatchObject({
+      error: { code: "GIT_NO_REMOTE", message: "no git remotes found" },
+    })
+    expect(await send("2", "pr.create", { threadId: "t1", title: "Title" })).toMatchObject({
+      error: { code: "COMMAND_FAILED", message: "database is locked" },
+    })
+    await ctx.fiber.dispose()
+  })
+
   it("answers project.list", async () => {
     const { ctx, transport } = await createServer()
     transport.client.send({ jsonrpc: "2.0", id: "1", method: "project.list", params: {} })

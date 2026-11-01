@@ -6,9 +6,18 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { ChevronDown, Loader2, Plus, Trash2, Unplug } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ClientSurface } from "@pigcode/plugin-sdk"
-import { Button, EmptyState, Select, useLocale } from "@pigcode/ui-primitives"
+import {
+  Button,
+  EmptyState,
+  Select,
+  formatDateTime,
+  translate,
+  useLocale,
+  type Locale,
+} from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 import {
+  CHECKPOINT_PHASE_LABELS,
   CheckpointPanel,
   DiffView,
   PrPanel,
@@ -31,7 +40,7 @@ import { FileSurface, FilesSurface } from "./files-surface"
 import { TerminalSurface } from "./terminal-surface"
 import { usePullRequest } from "./use-pull-request"
 import { useWorktrees } from "./use-worktrees"
-import { browserLabels, prPanelLabels, rightPanelLabels, surfaceTitle } from "./workbench-labels"
+import { surfaceTitle } from "./workbench-labels"
 
 /** 右侧面板属性；标签状态由 App 按线程保存，线程切换时父组件用 key 重新挂载以释放终端。 */
 export interface WorkbenchPanelProps {
@@ -69,8 +78,9 @@ interface CheckpointRecord {
 }
 
 /** Diff 基准下拉里一个 checkpoint 的文字：标签或阶段，加创建时间。 */
-function checkpointLabel(checkpoint: CheckpointRecord): string {
-  return `${checkpoint.label ?? checkpoint.phase} · ${checkpoint.createdAt}`
+function checkpointLabel(checkpoint: CheckpointRecord, locale: Locale): string {
+  const name = checkpoint.label ?? translate(locale, CHECKPOINT_PHASE_LABELS[checkpoint.phase])
+  return `${name} · ${formatDateTime(checkpoint.createdAt, locale)}`
 }
 
 /** 把 unknown 错误转成可展示文本。 */
@@ -95,7 +105,7 @@ export function WorkbenchPanel({
   workspaceRevision,
   pluginSurfaces = [],
 }: WorkbenchPanelProps) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const tab: PanelSurfaceKind | null =
     panel.surfaces.find((surface) => surface.id === panel.activeId)?.kind ?? null
   // 保存文件、恢复检查点、切换 worktree 都会改动工作目录，与 agent 改文件一样要让文件树、
@@ -205,10 +215,6 @@ export function WorkbenchPanel({
     }
   }
 
-  const labels = rightPanelLabels(t)
-  const prLabels = prPanelLabels(t)
-  const webLabels = browserLabels(t)
-
   function add(kind: SurfaceKind): void {
     onPanelChange((state) =>
       addSurface(state, kind, nextSurfaceId(), (index) => surfaceTitle(t, kind, index)),
@@ -270,7 +276,7 @@ export function WorkbenchPanel({
                 <Select.Value className="grow truncate">
                   {(value: string | null) => {
                     const checkpoint = committed.find((item) => item.commitSha === value)
-                    return checkpoint ? checkpointLabel(checkpoint) : "HEAD"
+                    return checkpoint ? checkpointLabel(checkpoint, locale) : "HEAD"
                   }}
                 </Select.Value>
                 <ChevronDown className="ic ic-sm" aria-hidden="true" />
@@ -280,7 +286,7 @@ export function WorkbenchPanel({
                   <Select.Popup>
                     {[...committed].reverse().map((checkpoint) => (
                       <Select.Item key={checkpoint.id} value={checkpoint.commitSha ?? ""}>
-                        <Select.ItemText>{checkpointLabel(checkpoint)}</Select.ItemText>
+                        <Select.ItemText>{checkpointLabel(checkpoint, locale)}</Select.ItemText>
                       </Select.Item>
                     ))}
                   </Select.Popup>
@@ -294,11 +300,7 @@ export function WorkbenchPanel({
         ) : diffLoading ? (
           <EmptyState icon={<Loader2 className="ic spin" />} title={t("workbench.diff.loading")} />
         ) : (
-          <DiffView
-            diff={diff}
-            emptyText={t("workbench.diff.empty")}
-            emptyHint={t("workbench.diff.emptyHint")}
-          />
+          <DiffView diff={diff} />
         )}
       </div>
     ),
@@ -320,8 +322,6 @@ export function WorkbenchPanel({
           checkpoints={checkpoints}
           onRestore={restoreCheckpoint}
           restoring={checkpointBusy}
-          emptyText={t("workbench.checkpoint.empty")}
-          emptyHint={t("workbench.checkpoint.emptyHint")}
         />
       </div>
     ),
@@ -332,7 +332,6 @@ export function WorkbenchPanel({
         creating={pr.creating}
         error={pr.error}
         onCreate={pr.create}
-        labels={prLabels}
       />
     ),
   }
@@ -349,7 +348,6 @@ export function WorkbenchPanel({
         plugins={pluginSurfaces}
         onAddPlugin={addPlugin}
         controls={controls}
-        labels={labels}
       >
         {panel.surfaces.map((surface) => {
           const active = surface.id === panel.activeId
@@ -391,7 +389,7 @@ export function WorkbenchPanel({
           if (surface.kind === "browser") {
             return (
               <div key={surface.id} className="surface-pane" hidden={!active}>
-                <BrowserSurface id={surface.id} labels={webLabels} />
+                <BrowserSurface id={surface.id} />
               </div>
             )
           }

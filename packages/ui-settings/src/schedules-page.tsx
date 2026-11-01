@@ -12,7 +12,9 @@ import {
   SettingSection,
   Switch,
   Textarea,
+  formatDateTime,
   useLocale,
+  type Locale,
 } from "@pigcode/ui-primitives"
 
 /** 线程选项；只暴露选择器需要的字段。 */
@@ -51,9 +53,9 @@ export interface SchedulesPageProps {
 /** 默认间隔；与常见的每分钟巡检一致。 */
 const DEFAULT_INTERVAL_SECONDS = 60
 
-/** 把 ISO 时间显示为本地时间；空值显示 never。 */
-function formatTime(value: string | null, never: string): string {
-  return value ? new Date(value).toLocaleString() : never
+/** 把 ISO 时间按界面语言显示；空值显示 never。 */
+function formatTime(value: string | null, never: string, locale: Locale): string {
+  return value ? formatDateTime(value, locale) : never
 }
 
 /** 渲染定时任务管理与创建表单。 */
@@ -67,7 +69,7 @@ export function SchedulesPage({
   onDelete,
   onRunNow,
 }: SchedulesPageProps) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [threadId, setThreadId] = useState(threads[0]?.id ?? "")
   const [prompt, setPrompt] = useState("")
   const [intervalValue, setIntervalValue] = useState(String(DEFAULT_INTERVAL_SECONDS))
@@ -210,11 +212,12 @@ export function SchedulesPage({
                 {threadTitle(schedule.threadId)} · {t("settings.schedules.every")}{" "}
                 {schedule.intervalSeconds} {t("settings.schedules.seconds")} ·{" "}
                 {t("settings.schedules.nextRun")}{" "}
-                {formatTime(schedule.nextRunAt, t("settings.schedules.never"))}
+                {formatTime(schedule.nextRunAt, t("settings.schedules.never"), locale)}
                 {schedule.lastRunAt
                   ? ` · ${t("settings.schedules.lastRun")} ${formatTime(
                       schedule.lastRunAt,
                       t("settings.schedules.never"),
+                      locale,
                     )}`
                   : null}
               </>

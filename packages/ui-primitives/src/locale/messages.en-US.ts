@@ -4,12 +4,14 @@ import { conversationEnUS } from "./conversation.messages"
 import { filesEnUS } from "./files.messages"
 import type { zhCN } from "./messages.zh-CN"
 import { pluginsEnUS } from "./plugins.messages"
+import { workbenchEnUS } from "./workbench.messages"
 
 export const enUS = {
   ...agentsEnUS,
   ...conversationEnUS,
   ...filesEnUS,
   ...pluginsEnUS,
+  ...workbenchEnUS,
   "nav.newThread": "New chat",
   "nav.search": "Search",
   "nav.projects": "Projects",
@@ -71,6 +73,12 @@ export const enUS = {
   "palette.hint": "↑↓ move · ↵ open · Esc close",
   "palette.toggleSidebar": "Toggle sidebar",
   "palette.toggleWorkbench": "Toggle side panel",
+  "palette.keywords.newThread": "new chat session",
+  "palette.keywords.toggleSidebar": "sidebar",
+  "palette.keywords.toggleWorkbench": "workbench panel",
+  "palette.keywords.settings": "settings preferences",
+  "palette.keywords.plugins": "plugins extensions",
+  "palette.keywords.addProject": "add project folder",
   "chat.empty.title": "Start with a task",
   "chat.empty.hint": "Describe the goal and Pigcode will drive Claude Code or Codex.",
   "chat.empty.command": "Open the command palette",
@@ -116,6 +124,12 @@ export const enUS = {
   "settings.appearance.smartPunctuation": "Smart punctuation",
   "settings.appearance.smartPunctuation.description":
     "Replace quotes and dashes automatically while typing",
+  "settings.appearance.themeFile.invalidJson": "Not valid JSON. Check that the file is complete.",
+  "settings.appearance.themeFile.wrongSchema":
+    "Not a pigcode theme file (schema must be pigcode-theme/1)",
+  "settings.appearance.themeFile.missingName": "The theme has no name",
+  "settings.appearance.themeFile.noColors":
+    "No usable colors. Light and dark both need bg and fg as #RRGGBB.",
   "settings.providers.capability.streaming": "Streaming",
   "settings.providers.capability.approvals": "Approvals",
   "settings.providers.capability.questions": "Questions",
@@ -212,6 +226,9 @@ export const enUS = {
     "The agent will edit project files and run any command without asking. Only turn this on for tasks and projects you trust; it applies from the next message.",
   "composer.permission.full.confirm": "Turn on full access",
   "composer.command.model": "Switch agent and model",
+  "composer.command.model.keyword": "model",
+  "composer.command.new.keyword": "new chat",
+  "composer.command.panel.keyword": "workbench",
   "composer.suggest.files": "Files",
   "composer.suggest.commands": "Commands",
   "composer.suggest.noFiles": "No matching files",
@@ -297,6 +314,7 @@ export const enUS = {
   "browser.action.screenshot": "Screenshot",
   "preview.invalid": "Only http and https URLs are supported",
   "preview.bridgeMissing": "Preview windows are not available in this environment",
+  "pr.card": "Pull request",
   "pr.empty": "No pull request is associated with this branch",
   "pr.loading": "Looking up pull request…",
   "pr.emptyHint": "Fill in a title below to open a pull request for this branch.",
@@ -373,4 +391,6 @@ export const enUS = {
   "status.offline": "Can't reach the Host, retrying…",
   "status.connecting": "Connecting to the Host…",
   "status.dismiss": "Dismiss",
+  "thread.defaultTitle": "New thread",
+  "app.noAgent": "No agent available. Enable or install one in Settings → Agents.",
 } satisfies Record<keyof typeof zhCN, string>

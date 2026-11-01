@@ -279,7 +279,7 @@ export function ChatViewContainer({
               id: "new",
               label: "/new",
               description: t("nav.newThread"),
-              keywords: ["新会话"],
+              keywords: [t("composer.command.new.keyword")],
               run: onNewThread,
             },
           ]
@@ -290,7 +290,7 @@ export function ChatViewContainer({
               id: "panel",
               label: "/panel",
               description: t("panel.toggleRight"),
-              keywords: ["工作台"],
+              keywords: [t("composer.command.panel.keyword")],
               run: onToggleRight,
             },
           ]

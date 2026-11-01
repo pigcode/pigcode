@@ -26,12 +26,15 @@ const CHUNKS = ["Hello", " from", " fake", " provider"]
 export const FAKE_LONG_RUN_TEXT = "long"
 export { FAKE_SCRIPT_TEXT, FAKE_SHOWCASE_TEXT, FAKE_SUBAGENT_TEXT }
 
-/** fake provider 的模型目录：一个可调思考深度，一个不可调，用来覆盖两种界面状态。 */
+/**
+ * fake provider 的模型目录：一个可调思考深度，一个不可调，用来覆盖两种界面状态。
+ * 模型说明和真实 provider 的目录一样用英文。
+ */
 export const FAKE_MODELS: ProviderModelInfo[] = [
   {
     id: "fake-sage",
     displayName: "Fake Sage",
-    description: "确定性回复，可调思考深度",
+    description: "Deterministic replies, adjustable thinking effort",
     isDefault: true,
     efforts: ["low", "medium", "high", "max"],
     defaultEffort: "medium",
@@ -39,7 +42,7 @@ export const FAKE_MODELS: ProviderModelInfo[] = [
   {
     id: "fake-swift",
     displayName: "Fake Swift",
-    description: "确定性回复，没有思考深度",
+    description: "Deterministic replies, no thinking effort",
     isDefault: false,
     efforts: [],
     defaultEffort: null,

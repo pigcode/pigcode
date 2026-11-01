@@ -131,7 +131,7 @@ export function Composer({
             id: "model",
             label: "/model",
             description: t("composer.command.model"),
-            keywords: ["模型"],
+            keywords: [t("composer.command.model.keyword")],
             run: () => setPickerOpen(true),
           },
         ]

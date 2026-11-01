@@ -1,8 +1,9 @@
 /**
  * 样式检查：统计主题 token 以外写死的颜色，写死的圆角、字号、控件高度，重复定义的选择器，
  * 以及组件里写死的界面文字。各类数量记在 style-check.baseline.json，只能减少。
+ * HARD_RULES 里的类别是硬性规则：不看基线，出现一处就失败。
  *
- *   node scripts/style-check.ts            # 打印各类数量
+ *   node scripts/style-check.ts            # 打印各类数量；违反硬性规则时退出码为 1
  *   node scripts/style-check.ts --update   # 把当前数量写成新的基线；任何一类变多时拒绝
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
@@ -20,6 +21,14 @@ export const CATEGORIES = [
 ] as const
 
 export type Category = (typeof CATEGORIES)[number]
+
+/** 硬性规则：上限固定为 0，不受基线影响。界面文字一律放进语言包。 */
+export const HARD_RULES: readonly Category[] = ["uiText"]
+
+/** 一类问题允许的数量：硬性规则是 0，其余按基线。 */
+export function ceilingOf(category: Category, baseline: Baseline): number {
+  return HARD_RULES.includes(category) ? 0 : baseline[category].total
+}
 
 /** 一处问题：文件路径相对 frontend 目录，统一用 `/` 分隔。 */
 export interface Finding {
@@ -40,7 +49,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   fontSize: "写死的字号",
   height: "写死的控件高度（height、min-height）",
   duplicateSelector: "重复定义的选择器",
-  uiText: "组件里写死的界面文字",
+  uiText: "组件里写死的界面文字（硬性规则，必须为 0）",
 }
 
 /** 允许出现颜色字面量的文件：主题 token 和内置主题表本身。 */
@@ -339,8 +348,9 @@ export function readBaseline(root: string): Baseline {
   return JSON.parse(readFileSync(join(root, BASELINE_FILE), "utf8")) as Baseline
 }
 
-/** 比基线多出来的文件和它们的问题；超过上限时用来指出新增的位置。 */
+/** 比基线多出来的文件和它们的问题；超过上限时用来指出新增的位置。硬性规则的每一处都算。 */
 export function grownFindings(report: Report, baseline: Baseline, category: Category): Finding[] {
+  if (HARD_RULES.includes(category)) return report[category]
   const before = baseline[category].files
   const now = countByFile(report[category])
   return report[category].filter(
@@ -352,7 +362,12 @@ export function grownFindings(report: Report, baseline: Baseline, category: Cate
 export function formatCounts(report: Report, baseline: Baseline | null): string {
   return CATEGORIES.map((category) => {
     const count = report[category].length
-    const ceiling = baseline ? ` / 上限 ${baseline[category].total}` : ""
+    const limit = baseline
+      ? ceilingOf(category, baseline)
+      : HARD_RULES.includes(category)
+        ? 0
+        : null
+    const ceiling = limit === null ? "" : ` / 上限 ${limit}`
     return `${category.padEnd(18)} ${String(count).padStart(5)}${ceiling}  ${CATEGORY_LABELS[category]}`
   }).join("\n")
 }
@@ -367,9 +382,20 @@ function main(): void {
     baseline = null
   }
   console.log(formatCounts(report, baseline))
+  const broken = HARD_RULES.filter((category) => report[category].length > 0)
+  if (broken.length > 0) {
+    for (const category of broken) {
+      console.error(`\n${CATEGORY_LABELS[category]}：`)
+      for (const finding of report[category]) {
+        console.error(`  ${finding.file}:${finding.line}  ${finding.text}`)
+      }
+    }
+    console.error(`\n违反硬性规则：${broken.join("、")} 必须为 0。`)
+    process.exit(1)
+  }
   if (!process.argv.includes("--update")) return
   const grown = baseline
-    ? CATEGORIES.filter((category) => report[category].length > baseline[category].total)
+    ? CATEGORIES.filter((category) => report[category].length > ceilingOf(category, baseline))
     : []
   if (grown.length > 0) {
     console.error(`拒绝更新：${grown.join("、")} 比基线多。`)

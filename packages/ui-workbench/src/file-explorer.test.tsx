@@ -1,10 +1,26 @@
 /** 验证资源管理器组件：按需加载、展开收起、键盘操作、搜索、git 标记与右键菜单。 */
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderUi,
+  screen,
+  waitFor,
+} from "@testing-library/react"
+import type { ReactElement } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { LocaleProvider } from "@pigcode/ui-primitives"
 import { FileExplorer, type ExplorerListing } from "./file-explorer"
 import type { ExplorerEntry } from "./file-tree-model"
+
+/** 组件文案来自 locale；测试按中文界面渲染。 */
+function render(ui: ReactElement) {
+  return renderUi(ui, {
+    wrapper: ({ children }) => <LocaleProvider locale="zh-CN">{children}</LocaleProvider>,
+  })
+}
 
 afterEach(cleanup)
 

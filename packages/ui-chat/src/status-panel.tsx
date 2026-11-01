@@ -18,8 +18,8 @@ import {
   SquareTerminal,
   type LucideIcon,
 } from "lucide-react"
-import { useLocale } from "@pigcode/ui-primitives"
-import { elapsed, formatDuration, useNow } from "./duration"
+import { formatDuration, useLocale } from "@pigcode/ui-primitives"
+import { elapsed, useNow } from "./duration"
 import { toolFamily } from "./tool-identity"
 import { commandText } from "./tool-meta"
 import type { TodoItem } from "./tool-fields"

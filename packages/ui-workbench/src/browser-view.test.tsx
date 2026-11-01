@@ -1,9 +1,18 @@
 /** 验证浏览器 surface：地址补全、只允许 http/https、工具栏操作、agent 指示与独立窗口打开。 */
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render as renderUi, screen } from "@testing-library/react"
+import type { ReactElement } from "react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { LocaleProvider } from "@pigcode/ui-primitives"
 import { BrowserView, normalizeBrowserUrl, type BrowserViewProps } from "./browser-view"
+
+/** 组件文案来自 locale；测试按中文界面渲染。 */
+function render(ui: ReactElement) {
+  return renderUi(ui, {
+    wrapper: ({ children }) => <LocaleProvider locale="zh-CN">{children}</LocaleProvider>,
+  })
+}
 
 const previewOpen = vi.fn<(url: string) => Promise<{ id: string }>>()
 

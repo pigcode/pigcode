@@ -1,9 +1,9 @@
 /** 右栏的浏览器标签：工具栏与 agent 指示来自会话状态，页面区是 BrowserHost 盖上来的 webview。 */
-import { BrowserView, type BrowserViewLabels } from "@pigcode/ui-workbench"
+import { BrowserView } from "@pigcode/ui-workbench"
 import { browserSessions, useBrowserVersion } from "./browser-sessions"
 import { BrowserSlot } from "./browser-slot"
 
-export function BrowserSurface({ id, labels }: { id: string; labels: BrowserViewLabels }) {
+export function BrowserSurface({ id }: { id: string }) {
   useBrowserVersion()
   const page = browserSessions.page(id)
   const activity = browserSessions.activity(id)
@@ -12,7 +12,6 @@ export function BrowserSurface({ id, labels }: { id: string; labels: BrowserView
     <BrowserView
       page={page}
       agent={agent}
-      labels={labels}
       onNavigate={(url) => browserSessions.load(id, url)}
       onBack={() => browserSessions.command(id, "back")}
       onForward={() => browserSessions.command(id, "forward")}

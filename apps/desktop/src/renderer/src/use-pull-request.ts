@@ -2,18 +2,15 @@
 import { useEffect, useState } from "react"
 import type { Connection } from "@pigcode/client-runtime"
 import type { PullRequestInfo } from "@pigcode/contracts"
+import { toHostError, type HostErrorInfo } from "@pigcode/ui-primitives"
 import type { PrCreateInput } from "@pigcode/ui-workbench"
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
 
 /** active 为 true（PR 标签可见）时读取；没有 PR 与 gh 错误都作为面板状态展示。 */
 export function usePullRequest(connection: Connection, threadId: string, active: boolean) {
   const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<HostErrorInfo | null>(null)
 
   useEffect(() => {
     if (!active) return undefined
@@ -27,7 +24,7 @@ export function usePullRequest(connection: Connection, threadId: string, active:
       .catch((reason: unknown) => {
         if (cancelled) return
         setPullRequest(null)
-        setError(messageOf(reason))
+        setError(toHostError(reason))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -46,7 +43,7 @@ export function usePullRequest(connection: Connection, threadId: string, active:
         (await connection.call("pr.create", { threadId, ...input })) as PullRequestInfo,
       )
     } catch (reason) {
-      setError(messageOf(reason))
+      setError(toHostError(reason))
       throw reason
     } finally {
       setCreating(false)

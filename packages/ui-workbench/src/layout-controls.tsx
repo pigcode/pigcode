@@ -1,22 +1,6 @@
 /** 面板布局按钮：最大化右侧面板、切换底部终端、切换右侧面板。 */
 import { Maximize2, Minimize2, PanelBottom, PanelRight } from "lucide-react"
-import { Button, formatShortcut } from "@pigcode/ui-primitives"
-
-/** 布局按钮文案。 */
-export interface PanelLayoutLabels {
-  maximize: string
-  restore: string
-  terminal: string
-  right: string
-}
-
-/** 默认中文文案。 */
-export const DEFAULT_PANEL_LAYOUT_LABELS: PanelLayoutLabels = {
-  maximize: "最大化面板",
-  restore: "还原面板大小",
-  terminal: "切换底部终端",
-  right: "切换右侧面板",
-}
+import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 
 /** 布局按钮属性；只传入的回调才渲染对应按钮。 */
 export interface PanelLayoutControlsProps {
@@ -28,7 +12,6 @@ export interface PanelLayoutControlsProps {
   onToggleMaximize?: () => void
   /** 没有活动会话时按钮置灰。 */
   disabled?: boolean
-  labels?: Partial<PanelLayoutLabels>
 }
 
 /** 一组切换按钮；聊天头部与右侧面板标签栏共用。 */
@@ -40,10 +23,11 @@ export function PanelLayoutControls({
   maximized = false,
   onToggleMaximize,
   disabled = false,
-  labels: overrides,
 }: PanelLayoutControlsProps) {
-  const labels = { ...DEFAULT_PANEL_LAYOUT_LABELS, ...overrides }
-  const maximizeLabel = maximized ? labels.restore : labels.maximize
+  const { t } = useLocale()
+  const maximizeLabel = maximized ? t("panel.restore") : t("panel.maximize")
+  const terminalLabel = t("panel.toggleTerminal")
+  const rightLabel = t("panel.toggleRight")
   return (
     <div className="layout-controls" role="group">
       {onToggleMaximize ? (
@@ -69,8 +53,8 @@ export function PanelLayoutControls({
           variant="plain"
           size="icon"
           type="button"
-          aria-label={labels.terminal}
-          title={`${labels.terminal} ${formatShortcut("Ctrl+`")}`}
+          aria-label={terminalLabel}
+          title={`${terminalLabel} ${formatShortcut("Ctrl+`")}`}
           aria-pressed={terminalOpen}
           disabled={disabled}
           onClick={onToggleTerminal}
@@ -82,8 +66,8 @@ export function PanelLayoutControls({
         variant="plain"
         size="icon"
         type="button"
-        aria-label={labels.right}
-        title={`${labels.right} ${formatShortcut("Mod+j")}`}
+        aria-label={rightLabel}
+        title={`${rightLabel} ${formatShortcut("Mod+j")}`}
         aria-pressed={rightOpen}
         disabled={disabled}
         onClick={onToggleRight}

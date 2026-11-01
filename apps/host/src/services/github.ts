@@ -1,6 +1,6 @@
 /** GitHub PR 服务：通过 gh CLI 查询与创建 PR，不读取或保存 GitHub token。 */
 import type { Context } from "cordis"
-import { pullRequestInfoSchema, type PullRequestInfo } from "@pigcode/contracts"
+import { pullRequestInfoSchema, type HostErrorCode, type PullRequestInfo } from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { threadCwd } from "./worktrees"
@@ -24,9 +24,11 @@ export type CwdResolver = (threadId: string) => string
 export type BranchReader = (cwd: string) => Promise<string | null>
 
 /** gh 未安装时的错误码。 */
-export const GH_NOT_AVAILABLE = "GH_NOT_AVAILABLE"
+export const GH_NOT_AVAILABLE = "GH_NOT_AVAILABLE" satisfies HostErrorCode
 /** gh 未登录时的错误码。 */
-export const GH_NOT_AUTHENTICATED = "GH_NOT_AUTHENTICATED"
+export const GH_NOT_AUTHENTICATED = "GH_NOT_AUTHENTICATED" satisfies HostErrorCode
+/** 仓库没有指向 GitHub 的远程仓库时的错误码。 */
+export const GIT_NO_REMOTE = "GIT_NO_REMOTE" satisfies HostErrorCode
 /** gh 命令失败的通用错误码。 */
 export const GH_COMMAND_FAILED = "GH_COMMAND_FAILED"
 
@@ -47,6 +49,16 @@ export class GhNotAuthenticatedError extends Error {
   constructor(detail: string) {
     super(`GitHub CLI is not authenticated. Run \`gh auth login\` first. (${detail})`)
     this.name = "GhNotAuthenticatedError"
+  }
+}
+
+/** 仓库没有 git remote，或者 remote 都不指向 GitHub，gh 不知道要操作哪个仓库；信息保留 gh 的原文。 */
+export class GitNoRemoteError extends Error {
+  readonly code = GIT_NO_REMOTE
+
+  constructor(detail: string) {
+    super(detail)
+    this.name = "GitNoRemoteError"
   }
 }
 
@@ -157,6 +169,7 @@ function normalizeGhError(error: unknown): Error {
   if (
     error instanceof GhNotAvailableError ||
     error instanceof GhNotAuthenticatedError ||
+    error instanceof GitNoRemoteError ||
     error instanceof GhCommandError
   ) {
     return error
@@ -165,6 +178,7 @@ function normalizeGhError(error: unknown): Error {
 
   const detail = errorDetail(error)
   if (AUTH_PATTERN.test(detail)) return new GhNotAuthenticatedError(detail)
+  if (NO_REMOTE_PATTERN.test(detail)) return new GitNoRemoteError(detail)
   return new GhCommandError(detail)
 }
 
@@ -186,6 +200,10 @@ function stringField(error: unknown, key: string): string | null {
 /** gh 的登录失败提示随版本变化，这里覆盖常见措辞。 */
 const AUTH_PATTERN =
   /(gh auth login|not logged in|not authenticated|authentication required|bad credentials|http 401|gh_token)/i
+
+/** 仓库没有 remote，或者 remote 都不指向 GitHub 时 gh 的提示。 */
+const NO_REMOTE_PATTERN =
+  /(no git remotes found|none of the git remotes configured for this repository point to a known github host)/i
 
 /** gh pr view 在没有关联 PR 时的固定提示。 */
 function isNoPullRequest(error: unknown): boolean {

@@ -15,7 +15,7 @@ import {
   type FileViewerFile,
 } from "@pigcode/ui-workbench"
 import { getDraft, setDraft, useDraftVersion } from "./file-drafts"
-import { explorerLabels, viewerLabels, type Translate } from "./workbench-labels"
+import type { Translate } from "./workbench-labels"
 
 /** 两种文件 surface 共用的属性。 */
 interface FilesBaseProps {
@@ -159,7 +159,6 @@ export function FilesSurface({
         revision={revision}
         git={git}
         stateKey={`explorer:${threadId}`}
-        labels={explorerLabels(t)}
         onContextMenu={(entry, point) =>
           void showEntryMenu({ connection, threadId, entry, point, t, onOpenFile, onError })
         }
@@ -332,7 +331,6 @@ export function FileSurface({
             revision={revision}
             git={git}
             stateKey={`explorer:${threadId}`}
-            labels={explorerLabels(t)}
             onContextMenu={(entry, point) =>
               void showEntryMenu({ connection, threadId, entry, point, t, onOpenFile, onError })
             }
@@ -378,7 +376,6 @@ export function FileSurface({
           })
         }
         revealLine={line ?? null}
-        labels={viewerLabels(t)}
       />
     </div>
   )

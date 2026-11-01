@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest"
 import {
   CATEGORIES,
   CATEGORY_LABELS,
+  HARD_RULES,
+  ceilingOf,
   duplicateSelectorFindings,
   formatCounts,
   grownFindings,
@@ -112,10 +114,20 @@ describe("style check", () => {
     expect(Object.keys(baseline).sort()).toEqual([...CATEGORIES].sort())
   })
 
+  it("treats UI text as a hard rule that ignores the baseline", () => {
+    expect(HARD_RULES).toEqual(["uiText"])
+    const loose = { ...baseline, uiText: { total: 5, files: { "a.tsx": 5 } } }
+    expect(ceilingOf("uiText", loose)).toBe(0)
+    expect(ceilingOf("color", loose)).toBe(baseline.color.total)
+    const found = [{ file: "a.tsx", line: 1, text: "提示" }]
+    expect(grownFindings({ ...report, uiText: found }, loose, "uiText")).toEqual(found)
+    expect(formatCounts({ ...report, uiText: found }, loose)).toMatch(/uiText\s+1 \/ 上限 0/)
+  })
+
   for (const category of CATEGORIES) {
     it(`does not add ${category} findings`, () => {
       const count = report[category].length
-      const ceiling = baseline[category].total
+      const ceiling = ceilingOf(category, baseline)
       const added = grownFindings(report, baseline, category)
         .map((found) => `  ${found.file}:${found.line}  ${found.text}`)
         .join("\n")

@@ -152,4 +152,19 @@ describe("github service", () => {
       message: expect.stringContaining("gh auth login"),
     })
   })
+
+  it("maps a repository without a GitHub remote to GIT_NO_REMOTE and keeps gh's text", async () => {
+    for (const stderr of [
+      "no git remotes found",
+      "none of the git remotes configured for this repository point to a known GitHub host.",
+    ]) {
+      const { run } = fakeRunner([commandError({ stderr })])
+      const service = makeService(run)
+
+      await expect(service.status("thread-1")).rejects.toMatchObject({
+        code: "GIT_NO_REMOTE",
+        message: stderr,
+      })
+    }
+  })
 })

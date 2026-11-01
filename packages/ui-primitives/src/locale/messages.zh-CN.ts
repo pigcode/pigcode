@@ -3,12 +3,14 @@ import { agentsZhCN } from "./agents.messages"
 import { conversationZhCN } from "./conversation.messages"
 import { filesZhCN } from "./files.messages"
 import { pluginsZhCN } from "./plugins.messages"
+import { workbenchZhCN } from "./workbench.messages"
 
 export const zhCN = {
   ...agentsZhCN,
   ...conversationZhCN,
   ...filesZhCN,
   ...pluginsZhCN,
+  ...workbenchZhCN,
   "nav.newThread": "新会话",
   "nav.search": "搜索",
   "nav.projects": "项目",
@@ -70,6 +72,12 @@ export const zhCN = {
   "palette.hint": "↑↓ 移动 · ↵ 打开 · Esc 关闭",
   "palette.toggleSidebar": "显示或隐藏侧栏",
   "palette.toggleWorkbench": "显示或隐藏右侧面板",
+  "palette.keywords.newThread": "new chat session 新会话",
+  "palette.keywords.toggleSidebar": "sidebar 侧栏",
+  "palette.keywords.toggleWorkbench": "workbench panel 工作台",
+  "palette.keywords.settings": "settings preferences 设置",
+  "palette.keywords.plugins": "plugins extensions 插件",
+  "palette.keywords.addProject": "add project folder 项目",
   "chat.empty.title": "从一个任务开始",
   "chat.empty.hint": "描述目标，Pigcode 会驱动 Claude Code 或 Codex 完成工作。",
   "chat.empty.command": "打开命令面板",
@@ -114,6 +122,12 @@ export const zhCN = {
   "settings.appearance.motion.off": "关闭",
   "settings.appearance.smartPunctuation": "智能标点",
   "settings.appearance.smartPunctuation.description": "输入时自动替换引号和破折号",
+  "settings.appearance.themeFile.invalidJson": "不是有效的 JSON，请检查内容是否完整",
+  "settings.appearance.themeFile.wrongSchema":
+    "不是 pigcode 主题文件格式（需要 schema 为 pigcode-theme/1）",
+  "settings.appearance.themeFile.missingName": "主题缺少名字",
+  "settings.appearance.themeFile.noColors":
+    "没有可用的颜色，浅色和深色都需要 #RRGGBB 形式的 bg 和 fg",
   "settings.providers.capability.streaming": "流式输出",
   "settings.providers.capability.approvals": "审批",
   "settings.providers.capability.questions": "提问",
@@ -206,6 +220,9 @@ export const zhCN = {
     "Agent 将不经询问直接修改项目文件、运行任意命令。只在你信任当前任务和项目时开启，下一条消息起生效。",
   "composer.permission.full.confirm": "开启完全访问",
   "composer.command.model": "切换 agent 与模型",
+  "composer.command.model.keyword": "模型",
+  "composer.command.new.keyword": "新会话",
+  "composer.command.panel.keyword": "工作台",
   "composer.suggest.files": "文件",
   "composer.suggest.commands": "命令",
   "composer.suggest.noFiles": "没有匹配的文件",
@@ -291,6 +308,7 @@ export const zhCN = {
   "browser.action.screenshot": "截图",
   "preview.invalid": "只支持 http/https 网址",
   "preview.bridgeMissing": "当前环境不支持预览窗口",
+  "pr.card": "Pull Request",
   "pr.empty": "还没有关联的 Pull Request",
   "pr.loading": "正在查询 Pull Request…",
   "pr.emptyHint": "在下面填写标题，为当前分支创建 Pull Request。",
@@ -364,4 +382,6 @@ export const zhCN = {
   "status.offline": "连不上 Host，正在重试…",
   "status.connecting": "正在连接 Host…",
   "status.dismiss": "关闭提示",
+  "thread.defaultTitle": "新会话",
+  "app.noAgent": "没有可用的 agent：在「设置 → Agent」里启用或安装一个。",
 } as const

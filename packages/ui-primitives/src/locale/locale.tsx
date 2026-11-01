@@ -11,6 +11,11 @@ const dictionaries: Record<Locale, Record<MessageKey, string>> = {
   "en-US": enUS,
 }
 
+/** 不经过 React 读取一条文案；时间格式化这类纯函数用它。 */
+export function translate(locale: Locale, key: MessageKey): string {
+  return dictionaries[locale][key]
+}
+
 interface LocaleValue {
   locale: Locale
   t: (key: MessageKey) => string
@@ -21,7 +26,7 @@ const LocaleContext = createContext<LocaleValue | null>(null)
 /** 提供 locale 与 t()。 */
 export function LocaleProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
   const value = useMemo(
-    () => ({ locale, t: (key: MessageKey) => dictionaries[locale][key] }),
+    () => ({ locale, t: (key: MessageKey) => translate(locale, key) }),
     [locale],
   )
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>

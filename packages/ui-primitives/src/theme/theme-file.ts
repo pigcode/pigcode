@@ -1,12 +1,14 @@
 // 负责主题 JSON 的导入解析和导出序列化（格式见规格 §5.7）。
+import type { MessageKey } from "../locale/locale"
 import type { ModeOverrides } from "./appearance-settings"
 import { parseHex } from "./color-math"
 import type { ThemeColors, ThemeDefinition } from "./theme-presets"
 
 const SCHEMA = "pigcode-theme/1"
 
-/** 导入结果：成功带主题，失败带可直接展示给用户的原因。 */
-export type ThemeFileResult = { ok: true; theme: ThemeDefinition } | { ok: false; reason: string }
+/** 导入结果：成功带主题，失败带原因的文案 key，由界面按当前语言显示。 */
+export type ThemeFileResult =
+  { ok: true; theme: ThemeDefinition } | { ok: false; reason: MessageKey }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -35,19 +37,19 @@ export function parseThemeFile(text: string, existingNames: readonly string[]): 
   try {
     data = JSON.parse(text)
   } catch {
-    return { ok: false, reason: "不是有效的 JSON，请检查内容是否完整" }
+    return { ok: false, reason: "settings.appearance.themeFile.invalidJson" }
   }
   if (!isRecord(data) || data.schema !== SCHEMA) {
-    return { ok: false, reason: `不是 pigcode 主题文件格式（需要 schema 为 ${SCHEMA}）` }
+    return { ok: false, reason: "settings.appearance.themeFile.wrongSchema" }
   }
   const name = typeof data.name === "string" ? data.name.trim() : ""
-  if (!name) return { ok: false, reason: "主题缺少名字" }
+  if (!name) return { ok: false, reason: "settings.appearance.themeFile.missingName" }
   const light = parseThemeColors(data.light)
   const dark = parseThemeColors(data.dark)
   const filledLight = light ?? dark
   const filledDark = dark ?? light
   if (!filledLight || !filledDark) {
-    return { ok: false, reason: "没有可用的颜色，浅色和深色都需要 #RRGGBB 形式的 bg 和 fg" }
+    return { ok: false, reason: "settings.appearance.themeFile.noColors" }
   }
   return {
     ok: true,

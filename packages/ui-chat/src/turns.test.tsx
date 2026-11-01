@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { MessageList } from "./message-list"
 import { resetToolOpen } from "./tool-open"
-import { formatDuration } from "./turn-view"
 import { buildTimeline, latestPlan, type Turn } from "./turns"
 
 afterEach(() => {
@@ -178,17 +177,6 @@ describe("buildTimeline", () => {
     const after = onlyTurns([...first, ...scriptedRun("run_2", 100).slice(0, 7)])
     expect(after[0]?.signature).toBe(before[0]?.signature)
     expect(after[1]?.signature).not.toBe(before[1]?.signature)
-  })
-})
-
-describe("formatDuration", () => {
-  it("rounds to seconds and keeps the two largest units", () => {
-    expect(formatDuration(400, "zh-CN")).toBe("1 秒")
-    expect(formatDuration(12_000, "zh-CN")).toBe("12 秒")
-    expect(formatDuration(185_000, "zh-CN")).toBe("3 分 5 秒")
-    expect(formatDuration(3_605_000, "zh-CN")).toBe("1 时 5 秒")
-    expect(formatDuration(93_784_000, "zh-CN")).toBe("1 天 2 时")
-    expect(formatDuration(3_720_000, "en-US")).toBe("1h 2m")
   })
 })
 

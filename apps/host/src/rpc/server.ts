@@ -3,6 +3,7 @@ import type { Context } from "cordis"
 import type { HostTransport } from "@pigcode/client-runtime/transport"
 import {
   commandSchemas,
+  isHostErrorCode,
   parseRpcRequest,
   rpcFailureSchema,
   rpcSuccessSchema,
@@ -10,6 +11,12 @@ import {
 import type { CommandMethod, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
 import { buildSubagentBrief } from "../providers/switching"
 import { listAgents, uninstallPluginAndClearDefault, validateAgentSettings } from "./agents"
+
+/** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
+function errorCode(error: unknown): string {
+  const code = typeof error === "object" && error !== null && "code" in error ? error.code : null
+  return isHostErrorCode(code) ? code : "COMMAND_FAILED"
+}
 
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
 export class RpcServer {
@@ -55,7 +62,7 @@ export class RpcServer {
         rpcFailureSchema.parse({
           jsonrpc: "2.0",
           id: request.id,
-          error: { code: "COMMAND_FAILED", message: messageText, retryable: false },
+          error: { code: errorCode(error), message: messageText, retryable: false },
         }),
       )
     }

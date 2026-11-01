@@ -1,24 +1,16 @@
 /** 侧栏里的项目行与会话行：右键菜单、就地改名，会话行还有状态点、时间与数字快捷键。 */
 import { Fragment, useRef, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import { Button, ContextMenu, ListRow, StatusDot, useLocale } from "@pigcode/ui-primitives"
+import {
+  Button,
+  ContextMenu,
+  ListRow,
+  StatusDot,
+  formatRelativeTime,
+  useLocale,
+} from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 import { THREAD_STATUS_MESSAGE, THREAD_STATUS_TONE, type ThreadStatus } from "./thread-status"
-
-/** 把线程更新时间格式化成「刚刚 / 3分钟 / 2小时 / 5天」这样常驻显示的短文本。 */
-export function formatThreadTime(value: string, locale: string, now = Date.now()): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
-  const zh = locale.startsWith("zh")
-  const minutes = Math.floor((now - date.getTime()) / 60_000)
-  if (minutes < 1) return zh ? "刚刚" : "now"
-  if (minutes < 60) return zh ? `${minutes}分钟` : `${minutes}m`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return zh ? `${hours}小时` : `${hours}h`
-  const days = Math.floor(hours / 24)
-  if (days < 7) return zh ? `${days}天` : `${days}d`
-  return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(date)
-}
 
 /** 右键菜单里的一项；separated 时在它上方画分隔线。 */
 export interface RowAction {
@@ -169,7 +161,7 @@ export function ThreadRow({
             <>
               {detail}
               <time dateTime={thread.updatedAt}>
-                {formatThreadTime(thread.updatedAt, locale, now)}
+                {formatRelativeTime(thread.updatedAt, locale, now)}
               </time>
             </>
           )

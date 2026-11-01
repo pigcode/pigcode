@@ -6,9 +6,9 @@
  */
 import { memo, useState } from "react"
 import { AlertTriangle, ChevronRight, LoaderCircle } from "lucide-react"
-import { useLocale } from "@pigcode/ui-primitives"
+import { formatDuration, useLocale } from "@pigcode/ui-primitives"
 import { ApprovalCard, type ApprovalDecision } from "./approval-card"
-import { elapsed, formatDuration, useNow } from "./duration"
+import { elapsed, useNow } from "./duration"
 import { FileSummary } from "./file-summary"
 import { MessageText } from "./message-item"
 import { QuestionCard } from "./question-card"
@@ -16,8 +16,6 @@ import { TurnActions } from "./turn-actions"
 import { isEnded, type Turn } from "./turns"
 import { UserBubble } from "./user-bubble"
 import { WorkList } from "./work-list"
-
-export { formatDuration } from "./duration"
 
 /** 折叠头的文字：排队、等待、工作中、已停止、已工作或已处理。 */
 function useWorkLabel(turn: Turn): string {

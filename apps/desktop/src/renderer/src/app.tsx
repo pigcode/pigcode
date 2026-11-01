@@ -3,8 +3,8 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
 import { AppRenderer, SlotHost, useAppStore, type SlotRegistry } from "@pigcode/client-runtime"
 import {
+  translate,
   useAppearance,
-  useLocale,
   type AppearanceController,
   type Locale,
 } from "@pigcode/ui-primitives"
@@ -17,7 +17,6 @@ import {
   addSurface,
   openFileSurface,
   updateSurface,
-  type PanelLayoutControlsProps,
   type PanelSurfaceState,
 } from "@pigcode/ui-workbench"
 import { useAgentNames } from "./agents"
@@ -48,7 +47,6 @@ const WorkbenchPanel = lazy(() =>
 const TerminalDrawer = lazy(() =>
   import("./terminal-drawer").then((module) => ({ default: module.TerminalDrawer })),
 )
-import { layoutLabels } from "./workbench-labels"
 import {
   addProject,
   archiveThread,
@@ -95,12 +93,6 @@ export function mergeChildStatus(
     }
   }
   return result
-}
-
-/** 布局按钮；App 位于 LocaleProvider 之外，文案在渲染处读取。 */
-function LayoutControls(props: Omit<PanelLayoutControlsProps, "labels">) {
-  const { t } = useLocale()
-  return <PanelLayoutControls {...props} labels={layoutLabels(t)} />
 }
 
 /** 应用根组件。 */
@@ -177,17 +169,12 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
     try {
       const providerId = await pickProviderId(connection)
       if (!providerId) {
-        store.update({
-          error:
-            locale === "en-US"
-              ? "No agent available. Enable or install one in Settings → Agents."
-              : "没有可用的 agent：在「设置 → Agent」里启用或安装一个。",
-        })
+        store.update({ error: translate(locale, "app.noAgent") })
         return
       }
       const thread = (await connection.call("thread.create", {
         projectId: project.id,
-        title: locale === "en-US" ? "New thread" : "新会话",
+        title: translate(locale, "thread.defaultTitle"),
         providerId,
       })) as Thread
       store.update({
@@ -293,7 +280,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
                     {
                       id,
                       kind: "browser",
-                      title: url ? new URL(url).host : locale === "en-US" ? "Browser" : "浏览器",
+                      title: url ? new URL(url).host : translate(locale, "workbench.browser"),
                       ...(url ? { url } : {}),
                     },
                   ],
@@ -337,7 +324,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   }, [panels, state.threads])
 
   const layoutControls = (maximizable: boolean) => (
-    <LayoutControls
+    <PanelLayoutControls
       rightOpen={rightOpen}
       onToggleRight={toggleRight}
       terminalOpen={terminalOpen}

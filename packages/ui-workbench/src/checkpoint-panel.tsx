@@ -1,7 +1,13 @@
 /** Checkpoint 面板：列出 baseline/final/manual，恢复前要求二次确认。 */
 import { useState } from "react"
 import { History } from "lucide-react"
-import { Button, EmptyState } from "@pigcode/ui-primitives"
+import {
+  Button,
+  EmptyState,
+  formatDateTime,
+  useLocale,
+  type MessageKey,
+} from "@pigcode/ui-primitives"
 
 /** checkpoint 的创建阶段；与 Host 的 CheckpointPhase 保持一致。 */
 export type CheckpointPhase = "baseline" | "final" | "manual"
@@ -20,22 +26,13 @@ export interface CheckpointPanelProps {
   checkpoints: readonly CheckpointItem[]
   onRestore: (checkpointId: string) => void | Promise<void>
   restoring?: boolean
-  /** 没有 checkpoint 时的标题与说明；容器按 locale 注入。 */
-  emptyText?: string | undefined
-  emptyHint?: string | undefined
 }
 
-/** 阶段中文标签。 */
-const PHASE_LABELS: Record<CheckpointPhase, string> = {
-  baseline: "基线",
-  final: "结束",
-  manual: "手动",
-}
-
-/** 时间展示；非法时间直接回退到原始字符串。 */
-function formatTime(value: string): string {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+/** 阶段标签的文案；Diff 基准下拉也用它。 */
+export const CHECKPOINT_PHASE_LABELS: Record<CheckpointPhase, MessageKey> = {
+  baseline: "checkpoint.phase.baseline",
+  final: "checkpoint.phase.final",
+  manual: "checkpoint.phase.manual",
 }
 
 /** Checkpoint 面板入口。 */
@@ -43,9 +40,8 @@ export function CheckpointPanel({
   checkpoints,
   onRestore,
   restoring = false,
-  emptyText = "暂无 checkpoint",
-  emptyHint,
 }: CheckpointPanelProps) {
+  const { t, locale } = useLocale()
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const busy = restoring || pendingId !== null
@@ -64,7 +60,11 @@ export function CheckpointPanel({
 
   if (checkpoints.length === 0) {
     return (
-      <EmptyState icon={<History className="ic" />} title={emptyText} description={emptyHint} />
+      <EmptyState
+        icon={<History className="ic" />}
+        title={t("workbench.checkpoint.empty")}
+        description={t("workbench.checkpoint.emptyHint")}
+      />
     )
   }
 
@@ -78,21 +78,26 @@ export function CheckpointPanel({
             <li className="checkpoint-item" key={checkpoint.id}>
               <div className="checkpoint-meta">
                 <span className={`checkpoint-phase checkpoint-phase-${checkpoint.phase}`}>
-                  {PHASE_LABELS[checkpoint.phase]}
+                  {t(CHECKPOINT_PHASE_LABELS[checkpoint.phase])}
                 </span>
-                <span className="checkpoint-label">{checkpoint.label ?? checkpoint.phase}</span>
-                <span className="checkpoint-time">{formatTime(checkpoint.createdAt)}</span>
+                {/* 基线与结束检查点没有自己的名字，阶段徽标已经说明了它是什么 */}
+                {checkpoint.label ? (
+                  <span className="checkpoint-label">{checkpoint.label}</span>
+                ) : null}
+                <span className="checkpoint-time">
+                  {formatDateTime(checkpoint.createdAt, locale)}
+                </span>
               </div>
               {confirming ? (
                 <div className="checkpoint-actions">
-                  <span className="checkpoint-confirm">确认恢复到此 checkpoint？</span>
+                  <span className="checkpoint-confirm">{t("checkpoint.restorePrompt")}</span>
                   <Button
                     variant="solidDanger"
                     size="sm"
                     disabled={busy}
                     onClick={() => void restore(checkpoint.id)}
                   >
-                    {pending ? "恢复中…" : "确认恢复"}
+                    {pending ? t("checkpoint.restoring") : t("checkpoint.confirmRestore")}
                   </Button>
                   <Button
                     variant="ghost"
@@ -100,7 +105,7 @@ export function CheckpointPanel({
                     disabled={busy}
                     onClick={() => setConfirmingId(null)}
                   >
-                    取消
+                    {t("common.cancel")}
                   </Button>
                 </div>
               ) : (
@@ -110,7 +115,7 @@ export function CheckpointPanel({
                   disabled={busy}
                   onClick={() => setConfirmingId(checkpoint.id)}
                 >
-                  恢复
+                  {t("checkpoint.restore")}
                 </Button>
               )}
             </li>

@@ -15,7 +15,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react"
-import { FileIcon, Menu } from "@pigcode/ui-primitives"
+import { FileIcon, Menu, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import {
   SURFACE_KINDS,
   SURFACE_SHORTCUTS,
@@ -36,8 +36,18 @@ const SURFACE_ICONS: Record<SurfaceKind, LucideIcon> = {
   checkpoint: History,
 }
 
-/** 右侧面板文案；容器按 locale 注入，组件本身不依赖 locale。 */
-export interface RightPanelLabels {
+/** surface 种类名称的文案；容器给新标签起标题时也用它。 */
+export const SURFACE_LABELS: Record<SurfaceKind, MessageKey> = {
+  browser: "workbench.browser",
+  terminal: "workbench.terminal",
+  files: "workbench.files",
+  diff: "workbench.diff",
+  pr: "workbench.pr",
+  checkpoint: "workbench.checkpoint",
+}
+
+/** 右侧面板各部分用到的文案。 */
+interface RightPanelLabels {
   panel: string
   tabs: string
   launcher: string
@@ -48,22 +58,24 @@ export interface RightPanelLabels {
   surfaces: Record<SurfaceKind, string>
 }
 
-/** 默认中文文案。 */
-export const DEFAULT_RIGHT_PANEL_LABELS: RightPanelLabels = {
-  panel: "右侧面板",
-  tabs: "面板标签",
-  launcher: "打开一个面板",
-  add: "添加面板",
-  close: "关闭",
-  plugins: "插件",
-  surfaces: {
-    browser: "浏览器",
-    terminal: "终端",
-    files: "文件",
-    diff: "Diff",
-    pr: "PR",
-    checkpoint: "检查点",
-  },
+function useRightPanelLabels(): RightPanelLabels {
+  const { t } = useLocale()
+  return {
+    panel: t("panel.label"),
+    tabs: t("panel.tabs"),
+    launcher: t("panel.launcher"),
+    add: t("panel.add"),
+    close: t("panel.close"),
+    plugins: t("panel.plugins"),
+    surfaces: {
+      browser: t(SURFACE_LABELS.browser),
+      terminal: t(SURFACE_LABELS.terminal),
+      files: t(SURFACE_LABELS.files),
+      diff: t(SURFACE_LABELS.diff),
+      pr: t(SURFACE_LABELS.pr),
+      checkpoint: t(SURFACE_LABELS.checkpoint),
+    },
+  }
 }
 
 /** 右侧面板属性；标签内容由容器渲染为 children，以便终端与浏览器在切换标签时保持挂载。 */
@@ -81,9 +93,6 @@ export interface RightPanelProps {
   onAddPlugin?: ((id: string) => void) | undefined
   /** 标签栏右侧的布局按钮（最大化、底部终端、收起面板）。 */
   controls?: ReactNode
-  labels?: Partial<Omit<RightPanelLabels, "surfaces">> & {
-    surfaces?: Partial<Record<SurfaceKind, string>>
-  }
   children?: ReactNode
 }
 
@@ -323,14 +332,9 @@ export function RightPanel({
   plugins = [],
   onAddPlugin,
   controls,
-  labels: overrides,
   children,
 }: RightPanelProps) {
-  const labels: RightPanelLabels = {
-    ...DEFAULT_RIGHT_PANEL_LABELS,
-    ...overrides,
-    surfaces: { ...DEFAULT_RIGHT_PANEL_LABELS.surfaces, ...overrides?.surfaces },
-  }
+  const labels = useRightPanelLabels()
   const tablist = useRef<HTMLDivElement | null>(null)
   const activeTitle = surfaces.find((surface) => surface.id === activeId)?.title
 

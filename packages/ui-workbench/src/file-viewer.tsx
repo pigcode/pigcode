@@ -13,7 +13,7 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { CodeEditor } from "./code-editor"
-import { EmptyState, languageForPath } from "@pigcode/ui-primitives"
+import { EmptyState, languageForPath, useLocale } from "@pigcode/ui-primitives"
 
 /** 一次读取的文件；字段与 Host 的 workspace.readFile 一致。 */
 export interface FileViewerFile {
@@ -25,43 +25,6 @@ export interface FileViewerFile {
   mtimeMs: number
   eol: "lf" | "crlf"
   image?: { mime: string; base64: string } | undefined
-}
-
-/** 文件标签文案；容器按 locale 注入。 */
-export interface FileViewerLabels {
-  loading: string
-  binary: string
-  truncated: string
-  imageTooLarge: string
-  save: string
-  saving: string
-  unsaved: string
-  conflict: string
-  reload: string
-  overwrite: string
-  showExplorer: string
-  hideExplorer: string
-  more: string
-  editor: string
-  breadcrumbs: string
-}
-
-const DEFAULT_LABELS: FileViewerLabels = {
-  loading: "正在读取文件…",
-  binary: "二进制文件，无法预览",
-  truncated: "文件较大，只显示前 1 MB，只读",
-  imageTooLarge: "图片太大，无法预览",
-  save: "保存",
-  saving: "正在保存…",
-  unsaved: "未保存",
-  conflict: "这个文件在磁盘上被修改过。",
-  reload: "放弃修改并重新加载",
-  overwrite: "仍然保存",
-  showExplorer: "显示文件树",
-  hideExplorer: "隐藏文件树",
-  more: "更多操作",
-  editor: "文件内容",
-  breadcrumbs: "文件路径",
 }
 
 /** 文件标签属性；读取、保存与草稿都由容器管理。 */
@@ -87,7 +50,6 @@ export interface FileViewerProps {
   /** 「更多」按钮：容器弹出复制路径、在文件管理器中显示等菜单。 */
   onMore?: ((point: { x: number; y: number }) => void) | undefined
   revealLine?: number | null | undefined
-  labels?: Partial<FileViewerLabels> | undefined
 }
 
 /** 把字节数写成 KB / MB。 */
@@ -138,9 +100,8 @@ export function FileViewer({
   onNavigate,
   onMore,
   revealLine = null,
-  labels: overrides,
 }: FileViewerProps) {
-  const labels = { ...DEFAULT_LABELS, ...overrides }
+  const { t } = useLocale()
   const segments = path.split("/")
   const dirty = draft !== null
   const editable = Boolean(file && !file.binary && !file.truncated)
@@ -150,7 +111,7 @@ export function FileViewer({
   if (error) body = <p className="workbench-error">{error}</p>
   else if (!file) {
     body = loading ? (
-      <EmptyState icon={<Loader2 className="ic spin" />} title={labels.loading} />
+      <EmptyState icon={<Loader2 className="ic spin" />} title={t("files.viewer.loading")} />
     ) : null
   } else if (file.image) {
     body = <ImagePreview src={`data:${file.image.mime};base64,${file.image.base64}`} alt={path} />
@@ -158,7 +119,7 @@ export function FileViewer({
     body = (
       <EmptyState
         icon={<FileQuestionMark className="ic" />}
-        title={file.truncated ? labels.imageTooLarge : labels.binary}
+        title={file.truncated ? t("files.viewer.imageTooLarge") : t("files.viewer.binary")}
         description={formatSize(file.size)}
       />
     )
@@ -168,7 +129,7 @@ export function FileViewer({
         value={draft ?? file.text}
         language={language}
         readOnly={!editable}
-        label={`${labels.editor} ${path}`}
+        label={`${t("files.viewer.editor")} ${path}`}
         revealLine={revealLine}
         onChange={(text) => onDraftChange(text === file.text ? null : text)}
         onSave={() => {
@@ -185,8 +146,10 @@ export function FileViewer({
           type="button"
           className="icon-btn"
           aria-pressed={explorerOpen}
-          aria-label={explorerOpen ? labels.hideExplorer : labels.showExplorer}
-          title={explorerOpen ? labels.hideExplorer : labels.showExplorer}
+          aria-label={
+            explorerOpen ? t("files.viewer.hideExplorer") : t("files.viewer.showExplorer")
+          }
+          title={explorerOpen ? t("files.viewer.hideExplorer") : t("files.viewer.showExplorer")}
           onClick={onToggleExplorer}
         >
           {explorerOpen ? (
@@ -195,7 +158,7 @@ export function FileViewer({
             <PanelLeftOpen className="ic ic-sm" aria-hidden="true" />
           )}
         </button>
-        <nav className="file-crumbs" aria-label={labels.breadcrumbs}>
+        <nav className="file-crumbs" aria-label={t("files.viewer.breadcrumbs")}>
           <button type="button" className="file-crumb" onClick={() => onNavigate("")}>
             {rootName}
           </button>
@@ -223,7 +186,7 @@ export function FileViewer({
           })}
         </nav>
         <span className="file-view-meta">
-          {dirty ? <span className="file-dirty">{labels.unsaved}</span> : null}
+          {dirty ? <span className="file-dirty">{t("files.viewer.unsaved")}</span> : null}
           {file && !file.binary ? <span>{formatSize(file.size)}</span> : null}
           {file?.eol === "crlf" ? <span>CRLF</span> : null}
         </span>
@@ -235,15 +198,15 @@ export function FileViewer({
             onClick={onSave}
           >
             <Save className="ic ic-sm" aria-hidden="true" />
-            {saving ? labels.saving : labels.save}
+            {saving ? t("files.viewer.saving") : t("files.viewer.save")}
           </button>
         ) : null}
         {onMore ? (
           <button
             type="button"
             className="icon-btn"
-            aria-label={labels.more}
-            title={labels.more}
+            aria-label={t("files.viewer.more")}
+            title={t("files.viewer.more")}
             onClick={(event) => {
               const box = event.currentTarget.getBoundingClientRect()
               onMore({ x: box.left, y: box.bottom })
@@ -255,17 +218,17 @@ export function FileViewer({
       </header>
       {conflict ? (
         <div className="file-banner" role="alert">
-          <span>{labels.conflict}</span>
+          <span>{t("files.viewer.conflict")}</span>
           <button type="button" className="btn btn-sm" onClick={onReload}>
-            {labels.reload}
+            {t("files.viewer.reload")}
           </button>
           <button type="button" className="btn btn-sm btn-danger" onClick={onOverwrite}>
-            {labels.overwrite}
+            {t("files.viewer.overwrite")}
           </button>
         </div>
       ) : null}
       {file?.truncated && !file.binary ? (
-        <p className="file-banner is-info">{labels.truncated}</p>
+        <p className="file-banner is-info">{t("files.viewer.truncated")}</p>
       ) : null}
       <div className="file-view-body">{body}</div>
     </section>

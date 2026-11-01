@@ -68,7 +68,9 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   )
 
   useEffect(() => {
-    void refresh().catch((error: unknown) => deps.store.update({ error: String(error) }))
+    void refresh().catch((error: unknown) =>
+      deps.store.update({ error: error instanceof Error ? error.message : String(error) }),
+    )
     void detect().catch(() => undefined)
   }, [refresh, detect, deps.store])
 

@@ -193,7 +193,10 @@ export class ClaudeDriver implements ProviderDriver {
           const questions = toolName === "AskUserQuestion" ? parseQuestions(toolInput) : null
           if (questions && runtime.askQuestions) {
             const answers = await runtime.askQuestions({ questions })
-            if (answers.length === 0) return { behavior: "deny", message: "用户没有回答这些问题" }
+            // 这句话写给模型，不显示在界面上，所以固定用英文，不跟随界面语言。
+            if (answers.length === 0) {
+              return { behavior: "deny", message: "The user did not answer these questions." }
+            }
             return {
               behavior: "allow",
               updatedInput: { ...toolInput, answers: answerRecord(questions, answers) },
@@ -325,7 +328,8 @@ function toPermissionResult(
   toolName: string,
   suggestions: PermissionUpdate[] | undefined,
 ): PermissionResult {
-  if (decision === "deny") return { behavior: "deny", message: "用户拒绝了这次工具调用" }
+  // 拒绝原因写给模型，不显示在界面上，所以固定用英文，不跟随界面语言。
+  if (decision === "deny") return { behavior: "deny", message: "The user denied this tool call." }
   if (decision === "allow-for-session") {
     return {
       behavior: "allow",

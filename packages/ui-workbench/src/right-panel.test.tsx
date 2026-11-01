@@ -1,9 +1,10 @@
 /** 验证右侧面板：surface 状态计算、标签切换与关闭、启动器与添加菜单的快捷键。 */
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render as renderUi, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { ComponentProps } from "react"
+import type { ComponentProps, ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { LocaleProvider } from "@pigcode/ui-primitives"
 import {
   EMPTY_SURFACE_STATE,
   RightPanel,
@@ -13,6 +14,13 @@ import {
   updateSurface,
   type PanelSurface,
 } from "./right-panel"
+
+/** 组件文案来自 locale；测试按中文界面渲染。 */
+function render(ui: ReactElement) {
+  return renderUi(ui, {
+    wrapper: ({ children }) => <LocaleProvider locale="zh-CN">{children}</LocaleProvider>,
+  })
+}
 
 afterEach(() => cleanup())
 
