@@ -29,7 +29,9 @@ jobs:
         with: { version: 10.28.2 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
-      - run: pnpm install --frozen-lockfile
+      # 依赖缓存在 Linux 的单元测试和 E2E 之间共用，缓存里的 node-pty 构建结果在 Electron 里加载不了；
+      # 启动应用的任务总是在本机重新编译原生模块。
+      - run: pnpm install --frozen-lockfile --config.side-effects-cache=false
       # runner 镜像没有中文字体，视觉基线需要它；visual-baselines.yml 装同一个包。
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       # Electron 需要虚拟显示；globalSetup 会先构建 main/preload/renderer 与 Host。

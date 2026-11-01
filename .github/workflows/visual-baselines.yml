@@ -14,7 +14,9 @@ jobs:
         with: { version: 10.28.2 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
-      - run: pnpm install --frozen-lockfile
+      # 依赖缓存在 Linux 的单元测试和 E2E 之间共用，缓存里的 node-pty 构建结果在 Electron 里加载不了；
+      # 启动应用的任务总是在本机重新编译原生模块。
+      - run: pnpm install --frozen-lockfile --config.side-effects-cache=false
       # runner 镜像没有中文字体，不装的话截图里的中文全是方框；ci.yml 的 e2e 任务装同一个包。
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - run: xvfb-run -a pnpm --dir apps/desktop exec playwright test visual --update-snapshots
