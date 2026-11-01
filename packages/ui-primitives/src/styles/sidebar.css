@@ -48,7 +48,7 @@
   background: var(--active);
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 11px);
+  font-size: var(--fs-2xs);
   line-height: var(--control-xs);
   letter-spacing: 0.02em;
   opacity: 0;
@@ -66,7 +66,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 28px;
+  height: var(--row-h);
   margin-top: 18px;
   padding: 0 4px 0 var(--space-4);
   color: var(--muted);
@@ -82,9 +82,9 @@
   flex: 1;
 }
 .side-label .icon-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 /* 菜单展开时保持次要文字色，悬停时才变深 */
@@ -132,14 +132,14 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: clip;
-  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
-  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(90deg, var(--mask-fill) calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, var(--mask-fill) calc(100% - 28px), transparent);
 }
 /* agent 缩写是 inline 尺寸的 EntityAvatar，字体与字号在这里给 */
 .entity-avatar.sess-provider {
   flex: none;
   font-family: var(--font-mono);
-  font-size: calc(var(--ui-scale) * 10px);
+  font-size: var(--fs-4xs);
   letter-spacing: 0.02em;
 }
 /* 按时间排列时显示会话所在的项目 */
@@ -147,12 +147,12 @@
   flex: 0 1 auto;
   max-width: 84px;
   color: var(--faint);
-  font-size: calc(var(--ui-scale) * 11.5px);
+  font-size: var(--fs-xs);
 }
 .sess time {
   flex: none;
   color: var(--muted);
-  font-size: calc(var(--ui-scale) * 12px);
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 /* 右键菜单的触发区只是包住项目行或会话行，不参与布局；菜单打开期间那一行的样子在 list-rows.css */
@@ -162,14 +162,14 @@
 /* 按住 ⌘/Ctrl 时，前九个会话右侧的数字快捷键 */
 .sess-kbd {
   flex: none;
-  height: 20px;
+  height: var(--control-xs);
   padding: 0 7px;
   border-radius: var(--r-full);
   background: var(--active);
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 11px);
-  line-height: 20px;
+  font-size: var(--fs-2xs);
+  line-height: var(--control-xs);
   letter-spacing: 0.02em;
 }
 .sess.is-active .sess-kbd {
@@ -187,7 +187,7 @@
   margin-left: -5px;
   padding: 0 5px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--surface-raised);
   box-shadow:
     0 0 0 1px var(--border-focus),
@@ -210,7 +210,7 @@
   align-items: center;
   gap: 8px;
   width: var(--sidebar-w);
-  height: 52px;
+  height: var(--side-foot-h);
   padding: 0 12px 0 14px;
 }
 .side-account {
@@ -225,21 +225,21 @@
 .side-avatar {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--avatar-md);
+  height: var(--avatar-md);
   flex: none;
   border-radius: 50%;
   background: var(--avatar);
   color: var(--fg-2);
 }
 .side-avatar .ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   stroke-width: 1.6;
 }
 .side-foot .foot-gear {
-  width: 28px;
-  height: 28px;
+  width: var(--control-md);
+  height: var(--control-md);
   border-radius: var(--r-md);
   background: none;
   color: var(--muted);
@@ -254,8 +254,8 @@
   color: var(--fg);
 }
 .side-foot .foot-gear .ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   stroke-width: 1.4;
 }
 

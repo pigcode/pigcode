@@ -2,38 +2,10 @@
   对话时间线（参照 ZCode 的 ConversationTurnGroup、ToolCallBlocks 与 MessageResponse）。
   一轮是一段竖排的块：用户气泡、「已工作」折叠头与工作区、最终回答、改动汇总与操作栏，块间 20px；
   工作区里的工具行是一行行安静的灰字，运行中动作扫光，悬停出现箭头，展开后是卡片或带左线的子列表。
-  颜色从主题变量推出（前景的 60% / 40% 透明度作为次要与最次要文字），用户换主题时一起变化。
-  这个文件放对话区共用的 --cv-* 变量、会话区布局、一轮的骨架（用户气泡、工作区折叠头）、操作栏、标记行与回到底部；
+  颜色用 tokens.css 里对话区的 --cv-* 变量，从主题变量推出，用户换主题时一起变化。
+  这个文件放会话区布局、一轮的骨架（用户气泡、工作区折叠头）、操作栏、标记行与回到底部；
   回答的 Markdown、代码块、工具行与卡片、审批、改动汇总、问题导航与状态面板各在自己的文件里。
 */
-
-:root {
-  --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
-  --cv-subtlest: color-mix(in oklab, var(--fg) 40%, transparent);
-  --cv-surface: var(--field);
-  --cv-panel: var(--surface);
-  --cv-card: var(--surface-raised);
-  --cv-border: var(--border);
-  --cv-hairline: color-mix(in oklab, var(--border) 50%, transparent);
-  --cv-inline-code: color-mix(in oklab, var(--fg) 7%, transparent);
-  --cv-added: #1e8a3e;
-  --cv-removed: #e03131;
-  --cv-success: #1e8a3e;
-  --cv-shimmer-strong: var(--fg);
-  --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
-  --cv-col: 56rem;
-  /* @ 提到的文件与子 agent 类型的文字颜色 */
-  --file-node-fg: #1a70b8;
-  --subagent-node-fg: #6f7a2f;
-}
-[data-theme="dark"] {
-  --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
-  --cv-added: #46bf72;
-  --cv-removed: #ff5c5c;
-  --cv-success: #46bf72;
-  --file-node-fg: #8fc5ef;
-  --subagent-node-fg: #c8cd90;
-}
 
 /* ─── 会话区布局 ───────────────────────────────────────── */
 .view {
@@ -115,7 +87,7 @@
   gap: 8px;
   padding: 12px 16px;
   border: 1px solid var(--cv-border);
-  border-radius: 12px 4px 12px 12px;
+  border-radius: var(--r-panel) var(--r-xs) var(--r-panel) var(--r-panel);
   background: var(--cv-surface);
   color: var(--fg);
   font-family: var(--font-content);
@@ -135,8 +107,18 @@
   transition: max-height 300ms ease-out;
 }
 .msg-user[data-clamped] .msg-user-body {
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    var(--mask-fill) 0%,
+    var(--mask-fill) 70%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    var(--mask-fill) 0%,
+    var(--mask-fill) 70%,
+    transparent 100%
+  );
 }
 .msg-user-more {
   display: flex;
@@ -151,20 +133,20 @@
 .msg-user-toggle {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 24px;
+  width: var(--control-md);
+  height: var(--control-sm);
   border: 1px solid var(--cv-border);
   border-radius: var(--r-full);
   background: var(--bg);
-  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+  box-shadow: var(--cv-shadow-sm);
   color: var(--fg);
 }
 .msg-user-toggle:hover {
   border-color: var(--border-strong);
 }
 .msg-user-toggle .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
 }
 .mention-file {
   display: inline-flex;
@@ -178,8 +160,8 @@
   vertical-align: top;
 }
 .mention-file .file-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
 }
 .mention-file.is-link:hover .mention-name {
   text-decoration: underline;
@@ -243,13 +225,13 @@
 }
 .turn-loading {
   display: flex;
-  min-height: 20px;
+  min-height: var(--control-xs);
   align-items: center;
   color: var(--cv-subtle);
 }
 .turn-loading .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
   animation: spin 1s linear infinite;
 }
 .turn-error {
@@ -257,7 +239,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: var(--r-block);
   background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
   color: var(--cv-removed);
   font-family: var(--font-ui);
@@ -288,9 +270,9 @@
 .turn-action {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
   color: var(--cv-subtle);
 }
 .turn-action:hover {
@@ -298,8 +280,8 @@
   color: var(--fg);
 }
 .turn-action .ic {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-btn);
+  height: var(--icon-btn);
 }
 .turn-actions time {
   padding-left: 4px;
@@ -328,8 +310,8 @@
   gap: 8px;
 }
 .marker-label .ic {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-cv-sm);
+  height: var(--icon-cv-sm);
 }
 .msgs > .marker-divider {
   margin-top: 36px;
@@ -346,8 +328,8 @@
   z-index: 5;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--control-lg);
+  height: var(--control-lg);
   transform: translateX(-50%);
   border: 1px solid var(--cv-border);
   border-radius: var(--r-full);
@@ -361,8 +343,8 @@
   border-color: var(--border-strong);
 }
 .scroll-bottom .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
 }
 @media (prefers-reduced-motion: no-preference) {
   .turn-user {

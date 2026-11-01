@@ -1,6 +1,10 @@
-// 负责「磨砂透明度」：glass.css 半透明表面的 alpha 基准表、随 g 变化的曲线，以及从不透明配色到磨砂的过渡。
+// 负责「磨砂透明度」：磨砂半透明表面的 alpha 基准表、随 g 变化的曲线，以及从不透明配色到磨砂的过渡。
+// 基准表与不透明配色都从 tokens.css 原文读出，不另存一份色值。
+import tokensCss from "../styles/tokens.css?raw"
 import type { Hex } from "./color-math"
 import { hexToRgb, rgbToHex } from "./color-math"
+import type { TokenReader } from "./theme-tokens"
+import { parseCssColor, ruleBlock, splitAlpha, tokenBlock, tokenReader } from "./theme-tokens"
 
 type Tone = "light" | "dark"
 
@@ -18,12 +22,40 @@ export function paint(color: Hex, alpha = 1, css?: string): Paint {
   return { css: css ?? (alpha === 1 ? color : withAlpha(color, alpha)), color, alpha }
 }
 
-/** glass.css 中一个半透明表面：变量名、色调来源、在 g=60 时的 alpha。 */
+/**
+ * 把 token 的颜色读成 Paint：css 是原文，color 是去掉透明度后的近似 sRGB（只用于插值），alpha 是透明度。
+ * 认不出时抛错：tokens.css 里这些 token 的写法变了，这里要跟着改。
+ */
+export function tokenPaint(css: string): Paint {
+  const { color, alpha } = splitAlpha(css)
+  const hex = parseCssColor(color)
+  if (!hex) throw new Error(`unsupported token colour: ${css}`)
+  return paint(hex, alpha, css)
+}
+
+const glassSelector = ':root[data-glass="true"]'
+
+/** tokens.css 的明暗主题块（不含平台附加条件），即 pigclaude 未改设置时的不透明配色。 */
+export const defaultTokens: Record<Tone, TokenReader> = {
+  light: tokenReader(tokenBlock(tokensCss, "light")),
+  dark: tokenReader(tokenBlock(tokensCss, "dark")),
+}
+
+/** tokens.css 的磨砂块：深色在浅色磨砂块之上再覆盖一层。 */
+export const glassTokens: Record<Tone, TokenReader> = {
+  light: tokenReader(ruleBlock(tokensCss, glassSelector)),
+  dark: tokenReader({
+    ...ruleBlock(tokensCss, glassSelector),
+    ...ruleBlock(tokensCss, `${glassSelector}[data-theme="dark"]`),
+  }),
+}
+
+/** 磨砂下一个半透明表面：变量名、色调来源、在 g=60 时的 alpha。 */
 export type GlassBase = {
   name: string
   /** ground 跟随底色；raised 是抬起的表面；popover 是弹层（有 alpha 下限）。 */
   role: "ground" | "raised" | "popover"
-  /** pigclaude 未改 bg 时使用的颜色，近似 glass.css 里的 oklch 值。 */
+  /** pigclaude 未改 bg 时使用的颜色：tokens.css 磨砂块里 oklch 值的近似 sRGB。 */
   color: Hex
   alpha: number
   /** g=0 时对应的不透明变量（--glass-tint 是页面底色，对应 --window）。 */
@@ -31,71 +63,55 @@ export type GlassBase = {
 }
 
 /**
- * 抄自 styles/glass.css 的 :root[data-glass="true"] 与 :root[data-glass="true"][data-theme="dark"]。
- * 改 glass.css 时同步改这里。细线、输入底和头像底（--border/--divider/--field/--avatar）
- * 不是表面，不在此表，由叠色组处理。
+ * 磨砂下的半透明表面，色调和 alpha 读自 tokens.css 的 :root[data-glass="true"] 两块。
+ * 细线、输入底和头像底（--border/--divider/--field/--avatar）不是表面，不在此表，由叠色组处理。
  */
+const glassSurfaces: ReadonlyArray<Omit<GlassBase, "color" | "alpha">> = [
+  { name: "--glass-tint", role: "ground", opaque: "--window" },
+  { name: "--bg", role: "ground", opaque: "--bg" },
+  { name: "--surface", role: "raised", opaque: "--surface" },
+  { name: "--panel", role: "raised", opaque: "--panel" },
+  { name: "--popover", role: "popover", opaque: "--popover" },
+  { name: "--popover-glass", role: "popover", opaque: "--popover-glass" },
+]
+
+const glassBasesOf = (tone: Tone): GlassBase[] =>
+  glassSurfaces.map((surface) => {
+    const { color, alpha } = tokenPaint(glassTokens[tone](surface.name))
+    return { ...surface, color, alpha }
+  })
+
 export const glassBases: Record<Tone, readonly GlassBase[]> = {
-  light: [
-    { name: "--glass-tint", role: "ground", color: "#FFFFFF", alpha: 0.16, opaque: "--window" },
-    { name: "--bg", role: "ground", color: "#FFFFFF", alpha: 0.3, opaque: "--bg" },
-    { name: "--surface", role: "raised", color: "#FFFFFF", alpha: 0.62, opaque: "--surface" },
-    { name: "--panel", role: "raised", color: "#FFFFFF", alpha: 0.4, opaque: "--panel" },
-    { name: "--popover", role: "popover", color: "#FCFCFC", alpha: 0.78, opaque: "--popover" },
-    {
-      name: "--popover-glass",
-      role: "popover",
-      color: "#FCFCFC",
-      alpha: 0.68,
-      opaque: "--popover-glass",
-    },
-  ],
-  dark: [
-    { name: "--glass-tint", role: "ground", color: "#000000", alpha: 0.42, opaque: "--window" },
-    { name: "--bg", role: "ground", color: "#000000", alpha: 0.14, opaque: "--bg" },
-    { name: "--surface", role: "raised", color: "#FFFFFF", alpha: 0.07, opaque: "--surface" },
-    { name: "--panel", role: "raised", color: "#FFFFFF", alpha: 0.045, opaque: "--panel" },
-    { name: "--popover", role: "popover", color: "#1F1F21", alpha: 0.82, opaque: "--popover" },
-    {
-      name: "--popover-glass",
-      role: "popover",
-      color: "#1F1F21",
-      alpha: 0.72,
-      opaque: "--popover-glass",
-    },
-  ],
+  light: glassBasesOf("light"),
+  dark: glassBasesOf("dark"),
 }
 
+/** 磨砂从不透明配色过渡时用到的变量。 */
+const opaqueNames = [
+  "--window",
+  "--sidebar",
+  "--bg",
+  "--surface",
+  "--panel",
+  "--popover",
+  "--popover-glass",
+  "--avatar",
+  "--field-hl",
+] as const
+
+const opaqueOf = (tone: Tone): Record<string, Paint> =>
+  Object.fromEntries(opaqueNames.map((name) => [name, tokenPaint(defaultTokens[tone](name))]))
+
 /**
- * pigclaude 未改 bg 时的不透明配色，css 原文抄自 styles/tokens.css（改 tokens.css 时同步改这里），
+ * pigclaude 未改 bg 时的不透明配色：css 是 tokens.css 的原文，
  * color 是对应 oklch 的近似 sRGB，只用于 0 < g < 60 的插值。
  */
 export const pigclaudeOpaque: Record<Tone, Record<string, Paint>> = {
-  light: {
-    "--window": paint("#F1F1F1", 1, "oklch(95.8% 0 0)"),
-    "--sidebar": paint("#F1F1F1", 0.6, "oklch(95.8% 0 0 / 0.6)"),
-    "--bg": paint("#F7F7F7", 1, "oklch(97.6% 0 0)"),
-    "--surface": paint("#FCFCFC", 1, "oklch(99% 0 0)"),
-    "--panel": paint("#18181B", 0.035, "oklch(21% 0.006 286 / 0.035)"),
-    "--popover": paint("#FFFFFF", 1, "oklch(100% 0 0)"),
-    "--popover-glass": paint("#FFFFFF", 0.9, "oklch(100% 0 0 / 0.9)"),
-    "--avatar": paint("#E1E1E1", 1, "oklch(91% 0 0)"),
-    "--field-hl": paint("#FFFFFF", 0.5, "oklch(100% 0 0 / 0.5)"),
-  },
-  dark: {
-    "--window": paint("#0D0D0D", 1, "oklch(16% 0 0)"),
-    "--sidebar": paint("#0D0D0D", 0.5, "oklch(16% 0 0 / 0.5)"),
-    "--bg": paint("#151515", 1, "oklch(19.5% 0 0)"),
-    "--surface": paint("#1C1C1C", 1, "oklch(22.5% 0 0)"),
-    "--panel": paint("#FFFFFF", 0.03, "oklch(100% 0 0 / 0.03)"),
-    "--popover": paint("#1D1D1D", 1, "oklch(23% 0 0)"),
-    "--popover-glass": paint("#1D1D1D", 0.9, "oklch(23% 0 0 / 0.9)"),
-    "--avatar": paint("#2B2B2B", 1, "oklch(29% 0 0)"),
-    "--field-hl": paint("#FFFFFF", 0, "oklch(100% 0 0 / 0)"),
-  },
+  light: opaqueOf("light"),
+  dark: opaqueOf("dark"),
 }
 
-/** g 的默认值：在这里得到 glass.css 原值。 */
+/** g 的默认值：在这里得到 tokens.css 磨砂块的原值。 */
 export const defaultGlass = 60
 
 /** 弹层在任何 g 下的最低 alpha，保证文字可读。 */
@@ -129,7 +145,7 @@ export function blendPaint(from: Paint, to: Paint, s: number): string {
   return withAlpha(rgbToHex([mix(0), mix(1), mix(2)]), alpha)
 }
 
-/** 从不透明配色表中取一项；键由常量表维护，缺失说明表与 glass.css 不同步。 */
+/** 从不透明配色表中取一项；缺失说明调用方用了表里没有的变量。 */
 export function paintAt(paints: Record<string, Paint>, name: string): Paint {
   const value = paints[name]
   if (value === undefined) throw new Error(`missing paint: ${name}`)
@@ -141,8 +157,8 @@ export type GlassTint = { ground: Hex; raised: Hex; popover: Hex }
 
 /**
  * 按 g 输出磨砂表面变量。opaque 是同一主题同一模式的不透明配色（键为不透明变量名）。
- * g=0 等于 opaque；0–60 在预乘空间里过渡到 glass.css 的值；60 以上按 alphaAt 继续变透。
- * tint 为 null 时沿用 glass.css 的白/黑色调。
+ * g=0 等于 opaque；0–60 在预乘空间里过渡到磨砂块的值；60 以上按 alphaAt 继续变透。
+ * tint 为 null 时沿用磨砂块的白/黑色调。
  */
 export function deriveGlassVars(
   tone: Tone,

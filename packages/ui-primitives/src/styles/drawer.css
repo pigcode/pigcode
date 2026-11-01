@@ -21,7 +21,7 @@
   padding: 10px 0 12px;
 }
 .drawer-head h2 {
-  font-size: calc(var(--ui-scale) * 13.5px);
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 .drawer .group {

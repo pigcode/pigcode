@@ -40,7 +40,7 @@
   font-size: var(--fs-sm);
 }
 .pr-title {
-  font-size: calc(var(--ui-scale) * 14px);
+  font-size: var(--fs-xl);
   font-weight: 600;
   line-height: 1.4;
 }

@@ -99,7 +99,7 @@
 
 .pg-row {
   display: flex;
-  min-height: 44px;
+  min-height: var(--row-h-lg);
   align-items: center;
   gap: 12px;
   padding: 8px 12px;

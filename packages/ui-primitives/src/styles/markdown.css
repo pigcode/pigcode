@@ -95,12 +95,12 @@
 .md .md-check {
   display: inline-grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: var(--check-size);
+  height: var(--check-size);
   flex: none;
   margin-top: 0.45em;
   border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
 }
 .md .md-check[data-checked] {
   border-color: var(--fg);
@@ -108,14 +108,14 @@
   color: var(--bg);
 }
 .md .md-check .ic {
-  width: 10px;
-  height: 10px;
+  width: var(--check-icon);
+  height: var(--check-icon);
   stroke-width: 3;
 }
 .md code {
   margin: 0 2px;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--cv-inline-code);
   color: var(--fg);
   font-family: var(--font-mono);
@@ -147,7 +147,7 @@
   max-width: 50%;
   margin: 16px 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--r-panel);
 }
 .md .md-image img {
   display: block;
@@ -155,7 +155,7 @@
   max-height: 360px;
   height: auto;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--bg);
   object-fit: cover;
 }
@@ -163,7 +163,7 @@
   margin: 16px 0;
   overflow-x: auto;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
 }
 .md .md-table table {
   width: max-content;

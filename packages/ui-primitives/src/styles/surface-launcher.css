@@ -36,16 +36,16 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 28px;
+  height: var(--row-h);
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   color: var(--fg-2);
   font-size: var(--fs-md);
   text-align: left;
 }
 .surface-launcher-item .ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   color: color-mix(in oklab, var(--fg-2), var(--muted));
 }
 .surface-launcher-item[data-highlighted],
@@ -59,13 +59,13 @@
 .surface-launcher-item kbd {
   display: inline-grid;
   place-items: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: var(--control-xs);
+  height: var(--control-xs);
   padding: 0 5px;
-  border-radius: 5px;
+  border-radius: var(--r-kbd);
   color: var(--faint);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 11px);
+  font-size: var(--fs-2xs);
 }
 @media (prefers-reduced-motion: no-preference) {
   .surface-launcher-item {

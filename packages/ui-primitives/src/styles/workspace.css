@@ -5,29 +5,6 @@
   系统的最小化、最大化与关闭按钮叠在标题栏上。侧栏、聊天区与右侧面板平铺在窗口里，之间只有一条细线。
 */
 
-:root {
-  --right-w: 460px;
-  /* 自绘标题栏高度，比主进程的 TITLE_BAR_HEIGHT 多 1px 底线，细线横贯系统按钮下方 */
-  --titlebar-h: 0px;
-  /* 侧栏顶行按钮的起点；macOS 让出交通灯的位置 */
-  --controls-left: 10px;
-  /* 侧栏收起后顶行按钮占的宽度，内容区顶栏从它右边开始 */
-  --controls-w: 126px;
-}
-:root[data-platform="win32"],
-:root[data-platform="linux"] {
-  --titlebar-h: 37px;
-}
-:root[data-platform="darwin"] {
-  --controls-left: 76px;
-  --controls-w: 192px;
-}
-/* 全屏时交通灯隐藏，不再留白 */
-:root[data-platform="darwin"][data-fullscreen="true"] {
-  --controls-left: 10px;
-  --controls-w: 126px;
-}
-
 /* ─── 网格：第一行标题栏，第二行侧栏与内容区 ─────────────── */
 .app {
   position: relative;
@@ -112,7 +89,7 @@
   top: 0;
   bottom: 0;
   left: -4px;
-  width: 7px;
+  width: var(--resizer-size);
   cursor: col-resize;
   touch-action: none;
 }

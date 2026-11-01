@@ -11,7 +11,7 @@
   margin-bottom: 8px;
   padding: 12px 16px;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-panel);
   color: var(--fg);
 }
@@ -31,7 +31,7 @@
 }
 .tool-card-chip {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   background: var(--cv-surface);
   font-family: var(--font-mono);
   font-size: var(--cv-fs-sm);
@@ -41,7 +41,7 @@
   margin: 0;
   overflow: auto;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-surface);
   color: var(--cv-subtle);
   font-family: var(--font-mono);
@@ -118,8 +118,8 @@
   text-decoration: underline;
 }
 .cmd-more .ic {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-btn-sm);
+  height: var(--icon-btn-sm);
 }
 .cmd-more .ic[data-up] {
   transform: rotate(180deg);
@@ -152,7 +152,7 @@
   margin-bottom: 8px;
   overflow: auto;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-card);
   font-family: var(--font-mono);
   font-size: var(--cv-fs-code);
@@ -235,7 +235,7 @@
 .mcp-compact {
   padding: 8px 12px;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-card);
   color: var(--fg);
   white-space: pre-wrap;
@@ -246,7 +246,7 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
   color: var(--cv-removed);
 }
@@ -290,7 +290,7 @@
   max-width: min(100%, 480px);
   max-height: 320px;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   object-fit: contain;
   background: var(--bg);
 }
@@ -341,8 +341,8 @@
   overflow: hidden;
   color: var(--cv-subtle);
   white-space: nowrap;
-  -webkit-mask-image: linear-gradient(to right, transparent, black 24px);
-  mask-image: linear-gradient(to right, transparent, black 24px);
+  -webkit-mask-image: linear-gradient(to right, transparent, var(--mask-fill) 24px);
+  mask-image: linear-gradient(to right, transparent, var(--mask-fill) 24px);
 }
 .reasoning-peek > span {
   flex: none;
@@ -372,14 +372,14 @@
   margin-bottom: 8px;
   overflow: hidden;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-card);
-  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.04);
+  box-shadow: var(--cv-shadow-card);
   font-family: var(--font-content);
 }
 .plan-card-head {
   display: flex;
-  height: 40px;
+  height: var(--bar-h);
   align-items: center;
   gap: 8px;
   padding: 16px 12px 0 16px;
@@ -388,8 +388,8 @@
   font-weight: 500;
 }
 .plan-card-head > .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
   color: var(--cv-subtle);
 }
 .plan-card-title {
@@ -398,9 +398,9 @@
 .plan-card-copy {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: var(--control-md);
+  height: var(--control-md);
+  border-radius: var(--r-block);
   color: var(--cv-subtle);
 }
 .plan-card-copy:hover {
@@ -415,8 +415,18 @@
 .plan-card-body[data-clamped] {
   max-height: 256px;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 30%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 0%, black 30%, transparent 100%);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    var(--mask-fill) 0%,
+    var(--mask-fill) 30%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    var(--mask-fill) 0%,
+    var(--mask-fill) 30%,
+    transparent 100%
+  );
 }
 .plan-card-more {
   position: absolute;
@@ -425,13 +435,13 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 28px;
+  height: var(--control-md);
   padding: 0 12px;
   transform: translateX(-50%);
   border: 1px solid var(--cv-border);
   border-radius: var(--r-full);
   background: var(--bg);
-  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+  box-shadow: var(--cv-shadow-sm);
   color: var(--fg);
   font-family: var(--font-ui);
   font-size: var(--cv-fs-sm);
@@ -459,10 +469,10 @@
 .tool-tip-copy {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: var(--control-xs);
+  height: var(--control-xs);
   flex: none;
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   color: var(--cv-subtle);
 }
 .tool-tip-copy:hover {
@@ -470,6 +480,6 @@
   color: var(--fg);
 }
 .tool-tip-copy .ic {
-  width: 12px;
-  height: 12px;
+  width: var(--icon-btn-sm);
+  height: var(--icon-btn-sm);
 }

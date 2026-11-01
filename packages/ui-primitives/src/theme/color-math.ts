@@ -5,6 +5,10 @@ export type Hex = `#${string}`
 
 type Rgb = [number, number, number]
 
+/** 纯白与纯黑：混色和对比度计算的两端。 */
+export const white: Hex = "#FFFFFF"
+export const black: Hex = "#000000"
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 

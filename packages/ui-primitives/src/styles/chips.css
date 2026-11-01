@@ -4,7 +4,7 @@
 */
 .chip-btn {
   display: inline-flex;
-  height: 28px;
+  height: var(--control-md);
   min-width: 0;
   align-items: center;
   gap: 5px;
@@ -21,8 +21,8 @@
   color: var(--muted);
 }
 .chip-btn .chip-caret {
-  width: 11px;
-  height: 11px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   margin-left: -1px;
   color: var(--faint);
 }

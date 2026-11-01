@@ -37,10 +37,10 @@
   flex: 0 1 auto;
   min-width: 88px;
   max-width: 180px;
-  height: 26px;
-  border-radius: 6px;
+  height: var(--control-bar);
+  border-radius: var(--r-sm);
   color: var(--muted);
-  font-size: calc(var(--ui-scale) * 12.5px);
+  font-size: var(--fs-compact);
 }
 .surface-tab:hover {
   background: var(--hover);
@@ -57,15 +57,15 @@
   display: grid;
   place-items: center;
   width: 24px;
-  height: 26px;
+  height: var(--control-bar);
   flex: none;
   padding: 0 0 0 4px;
-  border-radius: 6px 0 0 6px;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
   color: inherit;
 }
 .surface-tab-close .ic {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 .surface-tab-close:hover {
   color: var(--fg);
@@ -87,20 +87,20 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 26px;
+  height: var(--control-bar);
   padding: 0 10px 0 3px;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   color: inherit;
   font: inherit;
 }
 .icon-btn.surface-add {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--control-bar);
+  height: var(--control-bar);
   flex: none;
   margin-left: 2px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 /* 悬停和展开菜单时只有底色变化，图标保持次要文字色 */
@@ -109,8 +109,8 @@
   color: var(--muted);
 }
 .icon-btn.surface-add .ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 /* 「添加面板」菜单是 Menu 的弹层，只改最小宽度 */
 .menu-popup.surface-menu {
@@ -126,9 +126,9 @@
    比 thread-header.css 的 .panel-top .btn.btn-icon 更具体 */
 .layout-controls .btn.btn-icon,
 .panel-top .layout-controls .btn.btn-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: var(--control-md);
+  height: var(--control-md);
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 .layout-controls .btn.btn-icon:hover {
@@ -140,8 +140,8 @@
   color: var(--fg);
 }
 .layout-controls .btn .ic {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 @media (prefers-reduced-motion: no-preference) {
   .surface-tab {

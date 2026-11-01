@@ -15,10 +15,10 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: var(--empty-mark-size);
+  height: var(--empty-mark-size);
   margin-bottom: 8px;
-  border-radius: 14px;
+  border-radius: var(--r-xl);
   background: var(--bg);
   box-shadow:
     0 0 0 var(--hair) var(--border),
@@ -26,14 +26,14 @@
   color: var(--fg-2);
 }
 .empty-mark .ic {
-  width: 24px;
-  height: 24px;
+  width: var(--empty-mark-icon);
+  height: var(--empty-mark-icon);
   stroke-width: 1.6;
 }
 .chat-empty h2 {
   color: var(--fg);
   font-family: var(--font-display);
-  font-size: calc(var(--ui-scale) * 22px);
+  font-size: var(--fs-display);
   font-weight: 650;
   letter-spacing: -0.025em;
 }
@@ -54,7 +54,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 30px;
+  height: var(--empty-hint-h);
   padding: 0 11px 0 6px;
   border-radius: var(--r-lg);
   background: var(--surface-raised);
@@ -65,13 +65,13 @@
 .empty-hints kbd {
   display: inline-grid;
   place-items: center;
-  height: 20px;
+  height: var(--control-xs);
   padding: 0 6px;
-  border-radius: 5px;
+  border-radius: var(--r-kbd);
   background: var(--field);
   color: var(--fg-2);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 10.5px);
+  font-size: var(--fs-3xs);
   font-weight: 500;
 }
 /* 空会话：开场说明与输入区一起竖直居中；有了第一条消息后输入区回到底部 */

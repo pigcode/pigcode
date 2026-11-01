@@ -1,20 +1,24 @@
 // 负责把外观设置推导成写到 <html> 上的 CSS 变量和 data-* 属性；只输出与 tokens.css 不同的部分。
 import type { Hex } from "./color-math"
-import { mixHex, readableOn } from "./color-math"
+import { black, mixHex, readableOn, white } from "./color-math"
 import type { AppearanceSettings } from "./appearance-settings"
 import { activeSlot } from "./appearance-settings"
 import type { GlassTint, Paint } from "./appearance-glass"
 import {
   blendPaint,
   defaultGlass,
+  defaultTokens,
   deriveGlassVars,
+  glassTokens,
   paint,
   paintAt,
   pigclaudeOpaque,
+  tokenPaint,
   withAlpha,
 } from "./appearance-glass"
 import type { ThemeDefinition } from "./theme-presets"
 import { findTheme } from "./theme-presets"
+import { splitAlpha } from "./theme-tokens"
 
 /** 推导时需要的运行环境：当前实际模式、是否有系统磨砂、平台和系统的减少动态偏好。 */
 export type AppearanceEnvironment = {
@@ -72,49 +76,40 @@ export const overlayVars = [
 
 type OverlayName = (typeof overlayVars)[number]
 
-// 叠色用的黑与白，取自 tokens.css（浅色是带一点冷调的深灰，不是纯黑）
-const ink: Record<Tone, string> = { light: "oklch(21% 0.006 286", dark: "oklch(100% 0 0" }
-// 上面两种叠色的近似 sRGB，只用于插值
-const inkHex: Record<Tone, Hex> = { light: "#18181B", dark: "#FFFFFF" }
+const byTone = <T>(of: (tone: Tone) => T): Record<Tone, T> => ({
+  light: of("light"),
+  dark: of("dark"),
+})
 
-// tokens.css 中叠色变量的 alpha；磨砂下 glass.css 改了其中三项
-const overlayBases: Record<Tone, Record<OverlayName, number>> = {
-  light: {
-    "--border": 0.1,
-    "--border-strong": 0.16,
-    "--divider": 0.075,
-    "--hover": 0.045,
-    "--active": 0.075,
-    "--field": 0.04,
-    "--track": 0.08,
-    "--scroll-thumb": 0.18,
-  },
-  dark: {
-    "--border": 0.08,
-    "--border-strong": 0.13,
-    "--divider": 0.065,
-    "--hover": 0.05,
-    "--active": 0.085,
-    "--field": 0.05,
-    "--track": 0.09,
-    "--scroll-thumb": 0.18,
-  },
-}
+// 叠色用的墨色，取 tokens.css 里 --border 的颜色部分（浅色是带一点冷调的深灰，不是纯黑）；
+// inkHex 是它的近似 sRGB，只用于插值
+const ink = byTone((tone) => splitAlpha(defaultTokens[tone]("--border")).color)
+const inkHex = byTone((tone) => tokenPaint(ink[tone]).color)
 
-const glassOverlayBases: Record<Tone, Partial<Record<OverlayName, number>>> = {
-  light: { "--border": 0.1, "--divider": 0.09, "--field": 0.05 },
-  dark: { "--border": 0.09, "--divider": 0.08, "--field": 0.06 },
-}
+// tokens.css 中叠色变量的 alpha；磨砂下 tokens.css 的磨砂块改了其中三项
+const overlayBases = byTone(
+  (tone) =>
+    Object.fromEntries(
+      overlayVars.map((name) => [name, tokenPaint(defaultTokens[tone](name)).alpha]),
+    ) as Record<OverlayName, number>,
+)
 
-// glass.css 里头像底也是叠色
-const glassAvatarAlpha: Record<Tone, number> = { light: 0.08, dark: 0.1 }
+const glassOverlayBases = byTone((tone): Partial<Record<OverlayName, number>> =>
+  Object.fromEntries(
+    (["--border", "--divider", "--field"] as const).map((name) => [
+      name,
+      tokenPaint(glassTokens[tone](name)).alpha,
+    ]),
+  ),
+)
+
+// 磨砂块里头像底也是叠色
+const glassAvatarAlpha = byTone((tone) => tokenPaint(glassTokens[tone]("--avatar")).alpha)
 
 // pigclaude 只改了 fg 时，用来推出次级文字色的背景
-const pigclaudeBg: Record<Tone, Hex> = { light: "#F7F7F7", dark: "#151515" }
+const pigclaudeBg = byTone((tone) => tokenPaint(defaultTokens[tone]("--bg")).color)
 
 const defaultContrast = 45
-const white: Hex = "#FFFFFF"
-const black: Hex = "#000000"
 
 const cjkSans = `"PingFang SC", "Hiragino Sans GB", "Segoe UI Variable Text", "Microsoft YaHei UI", "Noto Sans CJK SC"`
 const uiChain = `-apple-system, BlinkMacSystemFont, "SF Pro Text", ${cjkSans}, sans-serif`
@@ -141,7 +136,8 @@ const codeFonts: Record<AppearanceSettings["codeFont"], string | null> = {
 
 const round3 = (value: number): number => Number(value.toFixed(3))
 
-const overlay = (tone: Tone, alpha: number): string => `${ink[tone]} / ${round3(alpha)})`
+const overlay = (tone: Tone, alpha: number): string =>
+  ink[tone].replace(/\)$/, ` / ${round3(alpha)})`)
 
 const overlayPaint = (tone: Tone, alpha: number): Paint =>
   paint(inkHex[tone], alpha, overlay(tone, alpha))
@@ -242,7 +238,7 @@ function textGroup(fg: Hex, ground: Hex): Vars {
   }
 }
 
-/** glassMix 为 0 时取 tokens.css 的叠色基准，为 1 时取 glass.css 的（磨砂 g 从 0 到 60）。 */
+/** glassMix 为 0 时取 tokens.css 的叠色基准，为 1 时取磨砂块的（磨砂 g 从 0 到 60）。 */
 function overlayGroup(tone: Tone, glassMix: number, contrast: number): Vars {
   const k = contrastFactor(contrast)
   const glassy = glassOverlayBases[tone]
@@ -257,7 +253,7 @@ function overlayGroup(tone: Tone, glassMix: number, contrast: number): Vars {
 
 /**
  * 磨砂下的表面：g=0 时等于同一主题的不透明配色（层次与关闭磨砂时相同），
- * 0–60 过渡到 glass.css，60 以上继续变透。侧栏、头像底、输入高光同样从不透明值过渡。
+ * 0–60 过渡到 tokens.css 的磨砂块，60 以上继续变透。侧栏、头像底、输入高光同样从不透明值过渡。
  */
 function glassGroup(bg: Hex | null, tone: Tone, env: AppearanceEnvironment, g: number): Vars {
   const opaque = bg ? surfacePaints(bg, tone) : pigclaudeOpaque[tone]

@@ -20,7 +20,7 @@
   position: fixed;
   z-index: 61;
   overflow: hidden;
-  background: #fff;
+  background: var(--browser-page-bg);
 }
 .browser-hosted:not([data-shown]) {
   pointer-events: none;
@@ -53,8 +53,8 @@
 }
 .browser-pointer {
   position: absolute;
-  width: 24px;
-  height: 24px;
+  width: var(--browser-pointer-size);
+  height: var(--browser-pointer-size);
   margin: -12px 0 0 -12px;
   border: 2px solid var(--accent);
   border-radius: 50%;
@@ -79,7 +79,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: var(--control-md);
   flex: none;
   padding: 0 10px;
   border-bottom: var(--hair) solid var(--divider);
@@ -125,15 +125,15 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 40px;
+  height: var(--bar-h);
   flex: none;
   padding: 0 8px;
   border-bottom: var(--hair) solid var(--divider);
 }
 .browser-toolbar .btn.btn-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
+  width: var(--control-md);
+  height: var(--control-md);
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 .browser-toolbar .btn.btn-icon:hover:not(:disabled) {
@@ -153,14 +153,14 @@
 /* 带工具栏前缀：圆角和 outline 比全局焦点环与 input:focus-visible 优先 */
 .browser-toolbar .browser-address input {
   width: 100%;
-  height: 28px;
+  height: var(--control-md);
   padding: 0 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   outline: 0;
   background: var(--field);
   color: var(--fg);
-  font-size: calc(var(--ui-scale) * 12.5px);
+  font-size: var(--fs-compact);
 }
 .browser-toolbar .browser-address input::placeholder {
   color: var(--faint);

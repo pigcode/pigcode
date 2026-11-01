@@ -108,11 +108,41 @@
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 10px 24px oklch(21% 0.006 286 / 0.08),
     0 30px 80px oklch(21% 0.006 286 / 0.18);
   --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
+  /*
+    浮在对话上的小按钮（展开用户消息、展开计划）；计划卡片。写成 rgb：构建时组件样式里的颜色被压成
+    #0000000d / #0000000a，变量里的值不经过压缩，用 rgb 才与原来的计算值一致
+  */
+  --cv-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --cv-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04);
   --composer-ring: oklch(21% 0.006 286 / 0.11);
   --composer-ring-focus: oklch(21% 0.006 286 / 0.22);
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
   --shadow-composer-focus:
     0 1px 2px oklch(21% 0.006 286 / 0.05), 0 8px 24px oklch(21% 0.006 286 / 0.07);
+
+  /*
+    对话区（timeline.css 及各块）：前景的 60% / 40% 透明度作为次要与最次要文字，细线、卡片从主题表面推出，
+    用户换主题时一起变化；改动的增删与成功色、@ 提到的文件与子 agent 类型的文字色是固定值。
+  */
+  --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
+  --cv-subtlest: color-mix(in oklab, var(--fg) 40%, transparent);
+  --cv-surface: var(--field);
+  --cv-panel: var(--surface);
+  --cv-card: var(--surface-raised);
+  --cv-border: var(--border);
+  --cv-hairline: color-mix(in oklab, var(--border) 50%, transparent);
+  --cv-inline-code: color-mix(in oklab, var(--fg) 7%, transparent);
+  --cv-added: #1e8a3e;
+  --cv-removed: #e03131;
+  --cv-success: #1e8a3e;
+  --cv-shimmer-strong: var(--fg);
+  --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
+  --file-node-fg: #1a70b8;
+  --subagent-node-fg: #6f7a2f;
+
+  /* 收藏的星标；内置浏览器里网页的底色（网页默认白底，不随主题变） */
+  --favorite: #e5a00d;
+  --browser-page-bg: #fff;
 }
 
 [data-theme="dark"] {
@@ -204,10 +234,22 @@
   --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 1px 3px oklch(0% 0 0 / 0.3);
   --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 30px 80px oklch(0% 0 0 / 0.6);
   --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.3), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
+  --cv-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --cv-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04);
   --composer-ring: oklch(100% 0 0 / 0.1);
   --composer-ring-focus: oklch(100% 0 0 / 0.2);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
   --shadow-composer-focus: 0 8px 24px oklch(0% 0 0 / 0.34);
+
+  --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
+  --cv-added: #46bf72;
+  --cv-removed: #ff5c5c;
+  --cv-success: #46bf72;
+  --file-node-fg: #8fc5ef;
+  --subagent-node-fg: #c8cd90;
+
+  --favorite: #e5a00d;
+  --browser-page-bg: #fff;
 }
 
 /* macOS 浅色：侧栏接近系统侧栏材质的深度，内容区随之略暗 */
@@ -234,14 +276,30 @@
   --font-weight-content: 400;
   --font-weight-code: 400;
 
-  /* 字号：说明 11.5 / 次要 12 / 界面 13 / 对话框标题 15 / 页面标题 20，随「界面字号」整体缩放；对话 14 */
+  /*
+    字号：键帽与头像字母 10 / 小键帽与分组名 10.5 / 快捷键与附注 11 / 说明 11.5 / 次要 12 /
+    右栏紧凑文字 12.5 / 界面 13 / 抽屉标题 13.5 / 面板标题 14 / 对话框标题 15 / 页面标题 20 /
+    空白页标题 22，随「界面字号」整体缩放；对话 14
+  */
   --ui-scale: 1;
+  --fs-4xs: calc(var(--ui-scale) * 10px);
+  --fs-3xs: calc(var(--ui-scale) * 10.5px);
+  --fs-2xs: calc(var(--ui-scale) * 11px);
   --fs-xs: calc(var(--ui-scale) * 11.5px);
   --fs-sm: calc(var(--ui-scale) * 12px);
+  --fs-compact: calc(var(--ui-scale) * 12.5px);
   --fs-md: calc(var(--ui-scale) * 13px);
   --fs-lg: calc(var(--ui-scale) * 13.5px);
+  --fs-xl: calc(var(--ui-scale) * 14px);
   --fs-heading: calc(var(--ui-scale) * 15px);
   --fs-title: calc(var(--ui-scale) * 20px);
+  --fs-display: calc(var(--ui-scale) * 22px);
+  /* 固定大小的图标里的字母（应用图标的首字母）、文件树的 git 状态字母：不随界面字号缩放 */
+  --fs-icon-letter: 10px;
+  --fs-tree-badge: 10.5px;
+  /* 相对周围文字：等宽片段（.mono）、输入框里 @ 提到的文件胶囊 */
+  --fs-mono-inline: 0.9em;
+  --fs-mention: 0.88em;
   /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
   --fs-content: 14px;
   --fs-code: 11.5px;
@@ -254,12 +312,16 @@
   --cv-fs-code: calc(var(--fs-code) + 1.5px);
 
   /*
-    圆角：xs 4（复选框）/ sm 6（小按钮）/ md 7（按钮、输入框、列表行）/ lg 10（卡片里的块）/
-    panel 12（卡片、分组）/ xl 14（输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
+    圆角：2xs 2（细条）/ xs 4（复选框）/ kbd 5（键帽、路径片段、字母图标）/ sm 6（小按钮）/
+    md 7（按钮、输入框、列表行）/ block 8（对话卡片里的按钮、行与小块，浮起的工具条，滚动条滑块）/
+    lg 10（卡片里的块）/ panel 12（卡片、分组）/ xl 14（输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
   */
+  --r-2xs: 2px;
   --r-xs: 4px;
+  --r-kbd: 5px;
   --r-sm: 6px;
   --r-md: 7px;
+  --r-block: 8px;
   --r-lg: 10px;
   --r-panel: 12px;
   --r-xl: 14px;
@@ -277,30 +339,67 @@
   --space-8: 20px;
   --space-9: 24px;
 
-  /* 控件高度：xs 20（开关）/ sm 24（小按钮、分段里的项）/ md 28（按钮、输入框、菜单行）/ lg 32 */
+  /*
+    控件高度：2xs 18（胶囊和标签里的关闭按钮、小键帽）/ xs 20（开关、键帽）/ sm 24（小按钮、分段里的项）/
+    bar 26（标签栏、标题栏与面板标题行里的标签和按钮，模型菜单行尾的收藏按钮）/
+    md 28（按钮、输入框、菜单行）/ lg 32
+  */
+  --control-2xs: 18px;
   --control-xs: 20px;
   --control-sm: 24px;
+  --control-bar: 26px;
   --control-md: 28px;
   --control-lg: 32px;
   /* 列表行的最小高度：侧栏、设置分组、Agent 与插件、模型、命令面板的行 */
   --row-h: var(--control-md);
   /* 文件树的紧凑行高；file-explorer.tsx 的虚拟滚动行高与它相同 */
   --row-h-compact: var(--control-sm);
+  /* 高一档的行：插件页的行、子 agent 的只读提示条 */
+  --row-h-lg: 44px;
+  /* 卡片标题行与浏览器工具条；右栏文件查看器与终端抽屉的标题行 */
+  --bar-h: 40px;
+  --panel-head-h: 34px;
+  /* 代码查看器的行高；code-editor.tsx 的虚拟滚动行高（LINE_HEIGHT）与它相同 */
+  --code-line-h: 20px;
   --switch-w: 34px;
   --check-size: 14px;
+  /* 圆形小控件的直径：单选框、滑块的拇指（滑块与它同高）；滑块轨道的粗细；徽标的高度 */
+  --knob-size: 16px;
+  --slider-track-h: 4px;
+  --badge-h: 19px;
   --textarea-min-h: 80px;
+  /* 滚动条的宽度；拖动分隔条（右栏、终端抽屉）的可拖范围 */
+  --scrollbar-size: 11px;
+  --resizer-size: 7px;
 
-  /* 图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标统一 14 */
+  /*
+    图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标统一 14，20px 小按钮与「展开输出」里的图标 12；
+    对话区（消息、卡片、状态面板、输入区、文件图标）的图标 16，对话区分隔线标签里的小图标 14；
+    标题栏的应用图标与顶行按钮的图标 16；复选框里的对勾 10
+  */
   --icon-xs: 11px;
   --icon-sm: 13px;
   --icon-md: 15px;
   --icon-lg: 18px;
   --icon-btn: 14px;
-  /* 状态点的直径；Agent 与插件头像：sm 菜单、胶囊与标签 / md 模型菜单左栏 / lg 设置里的列表 */
+  --icon-btn-sm: 12px;
+  --icon-cv: 16px;
+  --icon-cv-sm: 14px;
+  --icon-titlebar: 16px;
+  --check-icon: 10px;
+  /*
+    状态点的直径：sm 5（文件树的改动点）/ 6 / lg 7（图标角上带描边的状态点）；
+    Agent 与插件头像：sm 菜单、胶囊与标签 / md 模型菜单左栏、侧栏底部的账户 / lg 设置里的列表
+  */
+  --dot-size-sm: 5px;
   --dot-size: 6px;
+  --dot-size-lg: 7px;
   --avatar-sm: 16px;
   --avatar-md: 26px;
   --avatar-lg: 32px;
+  /* 运行中的 3×3 点阵：整体边长与每个点的边长 */
+  --dot-matrix-size: 10px;
+  --dot-matrix-dot: 2px;
 
   /* 按钮和输入框的阴影：主按钮的立体感、输入框的细边与聚焦光圈 */
   --shadow-primary:
@@ -311,17 +410,116 @@
   --shadow-field-focus: inset 0 0 0 1px var(--border-focus), 0 0 0 3.5px var(--accent-ring);
   /* 浮层的磨砂 */
   --popup-blur: blur(24px) saturate(1.8);
+  /* 遮罩渐变里不透明的一端：遮罩只看 alpha，与主题无关 */
+  --mask-fill: #000;
 
   --hair: 0.5px;
   --sidebar-w: 260px;
   --col: 720px;
   --col-narrow: 640px;
   --chat-col: 848px;
+  /* 对话列的最大宽度 */
+  --cv-col: 56rem;
   /* 浮层与窗口边缘的间距；顶行高度（侧栏顶行、线程头与右侧面板标签栏，交通灯竖直居中其中） */
   --gap: 8px;
   --topbar-h: 40px;
 
+  /*
+    窗口布局（workspace.css、titlebar.css）：右侧面板的默认宽度（拖动后由 shell.tsx 写到 .app 上）；
+    自绘标题栏高度，比主进程的 TITLE_BAR_HEIGHT 多 1px 底线，细线横贯系统按钮下方；
+    侧栏顶行按钮的起点（macOS 让出交通灯的位置）；侧栏收起后顶行按钮占的宽度，内容区顶栏从它右边开始
+  */
+  --right-w: 460px;
+  --titlebar-h: 0px;
+  --controls-left: 10px;
+  --controls-w: 126px;
+
+  /*
+    组件尺寸：只属于一个组件的固定尺寸，也集中放在这里。
+    空白页的图标块与其中的图标、提示胶囊的高度；设置页的页头与分组标题行；
+    输入框的最小高度（普通与加高）；模型菜单的高度、左栏按钮；侧栏底部账户行；
+    线程头里子 agent 的图标块；命令面板每行的图标块；内置浏览器里 agent 点击位置的圆圈；
+    添加项目对话框的文件夹选择区；终端抽屉的最小高度；问题导航里每一项的可点高度与其中的短横
+  */
+  --empty-mark-size: 48px;
+  --empty-mark-icon: 24px;
+  --empty-hint-h: 30px;
+  --page-head-h: 30px;
+  --section-head-h: 22px;
+  --composer-input-h: 52px;
+  --composer-input-h-tall: 70px;
+  --model-picker-h: min(400px, 62vh);
+  --model-rail-btn: 38px;
+  --side-foot-h: 52px;
+  --subagent-icon-size: 22px;
+  --palette-icon-size: 24px;
+  --browser-pointer-size: 24px;
+  --folder-picker-h: 132px;
+  --terminal-drawer-min-h: 140px;
+  --turn-nav-item-h: 10px;
+  --turn-nav-bar-h: 2px;
+
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --t-fast: 100ms;
   --t-med: 160ms;
+}
+
+:root[data-platform="win32"],
+:root[data-platform="linux"] {
+  --titlebar-h: 37px;
+}
+:root[data-platform="darwin"] {
+  --controls-left: 76px;
+  --controls-w: 192px;
+}
+/* 全屏时交通灯隐藏，不再留白 */
+:root[data-platform="darwin"][data-fullscreen="true"] {
+  --controls-left: 10px;
+  --controls-w: 126px;
+}
+
+/*
+  磨砂玻璃（桌面端，glass.css 使用）：窗口本身是系统磨砂材质，页面不再画不透明的底，
+  所有表面换成半透明的白或黑。只在 [data-glass="true"] 下生效。
+  appearance-glass.ts 从这两块读出表面的色调与 alpha，作为磨砂强度调节的基准。
+  带 :root：比上面的 [data-theme] 主题块更具体，不靠先后顺序。
+*/
+:root[data-glass="true"] {
+  /* 整窗只叠一层很薄的色调，侧栏直接露出系统材质 */
+  --glass-tint: oklch(100% 0 0 / 0.16);
+  --window: transparent;
+  --wall-1: transparent;
+  --wall-2: transparent;
+  --sidebar: transparent;
+  --bg: oklch(100% 0 0 / 0.3);
+
+  /* 抬起的表面：卡片、输入框、按钮底、分组 */
+  --surface: oklch(100% 0 0 / 0.62);
+  --panel: oklch(100% 0 0 / 0.4);
+  --popover: oklch(99% 0 0 / 0.78);
+  --popover-glass: oklch(99% 0 0 / 0.68);
+  --avatar: oklch(20% 0.01 270 / 0.08);
+  --field: oklch(20% 0.01 270 / 0.05);
+  --field-hl: transparent;
+
+  /* 半透明底上细线要略深一点才看得见 */
+  --divider: oklch(20% 0.01 270 / 0.09);
+  --border: oklch(20% 0.01 270 / 0.1);
+
+  --glass-blur: blur(28px) saturate(1.7);
+}
+
+:root[data-glass="true"][data-theme="dark"] {
+  --glass-tint: oklch(0% 0 0 / 0.42);
+  --bg: oklch(0% 0 0 / 0.14);
+
+  --surface: oklch(100% 0 0 / 0.07);
+  --panel: oklch(100% 0 0 / 0.045);
+  --popover: oklch(24% 0.003 270 / 0.82);
+  --popover-glass: oklch(24% 0.003 270 / 0.72);
+  --avatar: oklch(100% 0 0 / 0.1);
+  --field: oklch(100% 0 0 / 0.06);
+
+  --divider: oklch(100% 0 0 / 0.08);
+  --border: oklch(100% 0 0 / 0.09);
 }

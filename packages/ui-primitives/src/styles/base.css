@@ -106,8 +106,8 @@ select:focus-visible {
   user-select: none;
 }
 ::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -115,7 +115,7 @@ select:focus-visible {
 ::-webkit-scrollbar-thumb {
   background: transparent;
   border: 3px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--r-block);
   background-clip: content-box;
 }
 *:hover::-webkit-scrollbar-thumb {
@@ -146,7 +146,7 @@ select:focus-visible {
 }
 .mono {
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: var(--fs-mono-inline);
   letter-spacing: 0;
 }
 .num {

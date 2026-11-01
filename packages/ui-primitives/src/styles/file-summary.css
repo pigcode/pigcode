@@ -4,7 +4,7 @@
 .file-summary {
   overflow: hidden;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-card);
   font-family: var(--font-ui);
   font-size: var(--cv-fs);
@@ -12,7 +12,7 @@
 .file-summary-head {
   display: flex;
   width: 100%;
-  height: 40px;
+  height: var(--bar-h);
   align-items: center;
   gap: 8px;
   padding: 0 12px;
@@ -63,7 +63,7 @@
   align-items: center;
   gap: 6px;
   padding: 2px 4px;
-  border-radius: 6px;
+  border-radius: var(--r-sm);
 }
 .file-summary-file[role="button"] {
   cursor: pointer;
@@ -72,8 +72,8 @@
   background: color-mix(in oklab, var(--hover) 30%, transparent);
 }
 .file-summary-file .file-icon {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
 }
 .file-summary-name {
   flex: none;
@@ -95,11 +95,11 @@
   text-decoration: line-through;
 }
 .file-summary-review {
-  height: 28px;
+  height: var(--control-md);
   flex: none;
   padding: 0 8px;
   border: 1px solid var(--cv-border);
-  border-radius: 8px;
+  border-radius: var(--r-block);
   background: var(--cv-card);
   color: var(--fg);
 }
@@ -110,10 +110,10 @@
 .file-summary-open {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--control-md);
+  height: var(--control-md);
   flex: none;
-  border-radius: 8px;
+  border-radius: var(--r-block);
   color: var(--cv-subtle);
 }
 .file-summary-open:hover {

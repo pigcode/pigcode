@@ -6,7 +6,9 @@ import {
   CATEGORY_LABELS,
   HARD_RULES,
   ceilingOf,
+  cssFindings,
   duplicateSelectorFindings,
+  emptyReport,
   formatCounts,
   grownFindings,
   hasColorLiteral,
@@ -80,6 +82,20 @@ describe("literal detection", () => {
     expect(sizeCategory("max-height", "320px")).toBeNull()
   })
 
+  it("counts px custom properties declared outside tokens.css", () => {
+    const css = `:root { --x: 26px; --hair: 0.5px; --w: var(--control-md); --c: #fff; }
+.a { height: var(--x); }`
+    const report = emptyReport()
+    cssFindings("packages/ui-primitives/src/styles/a.css", css, report)
+    expect(report.customProperty.map((found) => found.text)).toEqual(["--x: 26px"])
+    expect(report.color.map((found) => found.text)).toEqual(["--c: #fff"])
+    expect(report.height).toEqual([])
+    const tokens = emptyReport()
+    cssFindings("packages/ui-primitives/src/styles/tokens.css", css, tokens)
+    expect(tokens.customProperty).toEqual([])
+    expect(tokens.color).toEqual([])
+  })
+
   it("finds Chinese UI text in strings and JSX but not in comments", () => {
     const source = `
       // 注释里的中文不算
@@ -103,6 +119,20 @@ describe("literal detection", () => {
       "rgba(0,0,0,.2)",
     ])
   })
+
+  it("does not count property keys or xterm ANSI key names as colors", () => {
+    const source = `
+      const keys = [["black", "--term-black"], ["white", "--term-white"]]
+      const map = { "white": 1, black: 2 }
+      const style = { color: "white" }
+      const fill = "black"
+      type Key = "white" | "black"
+    `
+    expect(tsColorFindings("theme.ts", source).map((found) => found.text)).toEqual([
+      "white",
+      "black",
+    ])
+  })
 })
 
 describe("style check", () => {
@@ -114,14 +144,17 @@ describe("style check", () => {
     expect(Object.keys(baseline).sort()).toEqual([...CATEGORIES].sort())
   })
 
-  it("treats UI text as a hard rule that ignores the baseline", () => {
-    expect(HARD_RULES).toEqual(["uiText"])
-    const loose = { ...baseline, uiText: { total: 5, files: { "a.tsx": 5 } } }
-    expect(ceilingOf("uiText", loose)).toBe(0)
-    expect(ceilingOf("color", loose)).toBe(baseline.color.total)
-    const found = [{ file: "a.tsx", line: 1, text: "提示" }]
-    expect(grownFindings({ ...report, uiText: found }, loose, "uiText")).toEqual(found)
-    expect(formatCounts({ ...report, uiText: found }, loose)).toMatch(/uiText\s+1 \/ 上限 0/)
+  it("treats every category as a hard rule that ignores the baseline", () => {
+    expect([...HARD_RULES].sort()).toEqual([...CATEGORIES].sort())
+    for (const category of CATEGORIES) {
+      const loose = { ...baseline, [category]: { total: 5, files: { "a.css": 5 } } }
+      expect(ceilingOf(category, loose)).toBe(0)
+      const found = [{ file: "a.css", line: 1, text: "height: 26px" }]
+      expect(grownFindings({ ...report, [category]: found }, loose, category)).toEqual(found)
+      expect(formatCounts({ ...report, [category]: found }, loose)).toMatch(
+        new RegExp(`${category}\\s+1 / 上限 0`),
+      )
+    }
   })
 
   for (const category of CATEGORIES) {

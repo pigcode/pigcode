@@ -28,14 +28,14 @@
 .palette-foot kbd {
   display: inline-grid;
   place-items: center;
-  min-width: 18px;
-  height: 18px;
+  min-width: var(--control-2xs);
+  height: var(--control-2xs);
   padding: 0 5px;
-  border-radius: 5px;
+  border-radius: var(--r-kbd);
   background: var(--field);
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 10px);
+  font-size: var(--fs-4xs);
 }
 .palette-list {
   flex: 1;
@@ -46,7 +46,7 @@
 .palette-group {
   padding: 10px 10px 4px;
   color: var(--faint);
-  font-size: calc(var(--ui-scale) * 10.5px);
+  font-size: var(--fs-3xs);
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -54,17 +54,17 @@
 .palette-icon {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: var(--palette-icon-size);
+  height: var(--palette-icon-size);
   flex: none;
-  border-radius: 7px;
+  border-radius: var(--r-md);
   background: var(--field);
   color: var(--fg-2);
 }
 .palette-hint {
   max-width: 180px;
   color: var(--faint);
-  font-size: calc(var(--ui-scale) * 11px);
+  font-size: var(--fs-2xs);
 }
 .palette-foot {
   display: flex;
@@ -73,7 +73,7 @@
   padding: 9px 16px;
   border-top: var(--hair) solid var(--divider);
   color: var(--faint);
-  font-size: calc(var(--ui-scale) * 11px);
+  font-size: var(--fs-2xs);
 }
 @media (prefers-reduced-motion: no-preference) {
   .palette {

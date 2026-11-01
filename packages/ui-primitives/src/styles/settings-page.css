@@ -16,7 +16,7 @@
   justify-content: space-between;
   gap: 16px;
   margin: 22px 0 22px;
-  min-height: 30px;
+  min-height: var(--page-head-h);
 }
 .page-head h1 {
   font-size: var(--fs-title);
@@ -43,13 +43,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 22px;
+  min-height: var(--section-head-h);
   margin: 0 4px 8px;
 }
 .section-head h2 {
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: calc(var(--ui-scale) * 11px);
+  font-size: var(--fs-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;

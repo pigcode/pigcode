@@ -6,7 +6,7 @@
   margin: 16px 0;
   overflow: hidden;
   border: 1px solid var(--cv-border);
-  border-radius: 12px;
+  border-radius: var(--r-panel);
   background: var(--cv-card);
   letter-spacing: normal;
 }
@@ -35,9 +35,9 @@
 .code-block-btn {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: var(--control-md);
+  height: var(--control-md);
+  border-radius: var(--r-block);
   color: var(--cv-subtle);
 }
 .code-block-btn:hover,
@@ -46,8 +46,8 @@
   color: var(--fg);
 }
 .code-block-btn .ic {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-btn);
+  height: var(--icon-btn);
 }
 .code-block-body {
   margin: 0;

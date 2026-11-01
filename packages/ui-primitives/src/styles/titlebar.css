@@ -1,6 +1,6 @@
 /*
   标题栏与顶行按钮：Windows/Linux 自绘的标题栏（应用图标与菜单），以及固定在窗口左上角的侧栏开关、搜索与前进后退。
-  窗口布局变量（--titlebar-h、--controls-left、--controls-w）在 workspace.css。
+  窗口布局变量（--titlebar-h、--controls-left、--controls-w）在 tokens.css。
 */
 
 /* 标题栏：内容只排在 titlebar-area 给出的空白里，系统按钮按桌面设置落在左侧或右侧 */
@@ -26,8 +26,8 @@
   flex: none;
 }
 .titlebar-icon .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-titlebar);
+  height: var(--icon-titlebar);
   stroke-width: 1.7;
 }
 .titlebar-menus {
@@ -36,7 +36,7 @@
   min-width: 0;
 }
 .titlebar-menu {
-  height: 26px;
+  height: var(--control-bar);
   padding: 0 9px;
   border-radius: var(--r-md);
   color: inherit;
@@ -79,14 +79,14 @@
 }
 /* 按钮是 Button 的 plain 变体加 .icon-btn；展开侧栏时（aria-expanded）也保持这个颜色 */
 .window-controls .btn.icon-btn {
-  width: 26px;
-  height: 26px;
+  width: var(--control-bar);
+  height: var(--control-bar);
   border-radius: var(--r-md);
   color: color-mix(in oklab, var(--fg-2), var(--muted));
 }
 .window-controls .icon-btn .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-titlebar);
+  height: var(--icon-titlebar);
   stroke-width: 1.4;
 }
 .window-controls .icon-btn:hover {

@@ -14,11 +14,10 @@ export type ColorResolver = (css: string) => string | null
 export type TitleBarColors = { color: Hex; symbolColor: Hex }
 
 /**
- * 取出 tokens.css 里某个明暗块声明的变量。只认选择器列表里直接含 `[data-theme="light"]`
- * 或 `[data-theme="dark"]` 的规则（`:root` 与浅色同一块），平台等附加条件的规则不算。
+ * 取出 CSS 里选择器列表直接含 selector 的规则声明的变量，多条规则按出现顺序合并。
+ * 只认完全相同的选择器：`:root[data-glass="true"]` 不会算进 `[data-theme="dark"]`。
  */
-export function tokenBlock(css: string, tone: ResolvedTheme): Record<string, string> {
-  const selector = `[data-theme="${tone}"]`
+export function ruleBlock(css: string, selector: string): Record<string, string> {
   const values: Record<string, string> = {}
   const source = css.replace(/\/\*[\s\S]*?\*\//g, "")
   for (const [, selectors = "", body = ""] of source.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
@@ -28,6 +27,14 @@ export function tokenBlock(css: string, tone: ResolvedTheme): Record<string, str
     }
   }
   return values
+}
+
+/**
+ * 取出 tokens.css 里某个明暗块声明的变量。只认选择器列表里直接含 `[data-theme="light"]`
+ * 或 `[data-theme="dark"]` 的规则（`:root` 与浅色同一块），平台等附加条件的规则不算。
+ */
+export function tokenBlock(css: string, tone: ResolvedTheme): Record<string, string> {
+  return ruleBlock(css, `[data-theme="${tone}"]`)
 }
 
 /** 从一组变量值读 token，并展开其中的 `var(--name)`；缺失或循环引用读成空串。 */
@@ -53,6 +60,17 @@ export function parseCssColor(css: string): Hex | null {
   if (!match) return null
   const [, l = "", percent, c = "", h = ""] = match
   return oklchToHex(Number(l) / (percent ? 100 : 1), Number(c), Number(h))
+}
+
+/**
+ * 拆出颜色函数末尾的透明度：`oklch(L C H / a)` 得到 `oklch(L C H)` 与 a（百分数换成 0–1）；
+ * 没有透明度时原样返回，alpha 为 1。
+ */
+export function splitAlpha(css: string): { color: string; alpha: number } {
+  const match = /^(\w+\([^()/]*?)\s*\/\s*([\d.]+)(%?)\s*\)$/.exec(css.trim())
+  if (!match) return { color: css.trim(), alpha: 1 }
+  const [, head = "", alpha = "", percent] = match
+  return { color: `${head})`, alpha: Number(alpha) / (percent ? 100 : 1) }
 }
 
 /**

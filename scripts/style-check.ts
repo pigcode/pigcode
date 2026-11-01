@@ -1,7 +1,7 @@
 /**
- * 样式检查：统计主题 token 以外写死的颜色，写死的圆角、字号、控件高度，重复定义的选择器，
- * 以及组件里写死的界面文字。各类数量记在 style-check.baseline.json，只能减少。
- * HARD_RULES 里的类别是硬性规则：不看基线，出现一处就失败。
+ * 样式检查：统计主题 token 以外写死的颜色，写死的圆角、字号、控件高度，tokens.css 以外声明的尺寸变量，
+ * 重复定义的选择器，以及组件里写死的界面文字。各类数量记在 style-check.baseline.json，只能减少。
+ * HARD_RULES 里的类别是硬性规则：不看基线，出现一处就失败。目前每一类都是硬性规则。
  *
  *   node scripts/style-check.ts            # 打印各类数量；违反硬性规则时退出码为 1
  *   node scripts/style-check.ts --update   # 把当前数量写成新的基线；任何一类变多时拒绝
@@ -16,14 +16,25 @@ export const CATEGORIES = [
   "radius",
   "fontSize",
   "height",
+  "customProperty",
   "duplicateSelector",
   "uiText",
 ] as const
 
 export type Category = (typeof CATEGORIES)[number]
 
-/** 硬性规则：上限固定为 0，不受基线影响。界面文字一律放进语言包。 */
-export const HARD_RULES: readonly Category[] = ["uiText"]
+/**
+ * 硬性规则：上限固定为 0，不受基线影响。颜色和尺寸一律取 tokens.css 的 token，界面文字一律放进语言包。
+ */
+export const HARD_RULES: readonly Category[] = [
+  "color",
+  "radius",
+  "fontSize",
+  "height",
+  "customProperty",
+  "duplicateSelector",
+  "uiText",
+]
 
 /** 一类问题允许的数量：硬性规则是 0，其余按基线。 */
 export function ceilingOf(category: Category, baseline: Baseline): number {
@@ -48,18 +59,22 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   radius: "写死的圆角",
   fontSize: "写死的字号",
   height: "写死的控件高度（height、min-height）",
+  customProperty: "tokens.css 以外声明的尺寸变量（值里有大于 1px 的 px）",
   duplicateSelector: "重复定义的选择器",
-  uiText: "组件里写死的界面文字（硬性规则，必须为 0）",
+  uiText: "组件里写死的界面文字",
 }
 
-/** 允许出现颜色字面量的文件：主题 token 和内置主题表本身。 */
+/**
+ * 允许出现颜色字面量的文件：主题 token（含磨砂块）、内置主题表，以及颜色运算（纯黑纯白是运算的两端）。
+ * 外观推导（appearance-*.ts）和终端配色都从 tokens.css 原文读色值，不在此列。
+ */
 const COLOR_SOURCES = new Set([
   "packages/ui-primitives/src/styles/tokens.css",
   "packages/ui-primitives/src/theme/theme-presets.ts",
   "packages/ui-primitives/src/theme/color-math.ts",
 ])
 
-/** 定义尺寸 token 的文件，不算写死的尺寸。 */
+/** 定义尺寸 token 的文件，不算写死的尺寸，也只有这里可以声明带 px 的变量。 */
 const SIZE_SOURCES = new Set(["packages/ui-primitives/src/styles/tokens.css"])
 
 const SKIPPED_DIRS = new Set([
@@ -246,7 +261,8 @@ export function sizeCategory(property: string, value: string): Category | null {
   return null
 }
 
-function cssFindings(file: string, css: string, report: Report): void {
+/** 一个 CSS 文件里的问题，追加到 report。 */
+export function cssFindings(file: string, css: string, report: Report): void {
   const { rules, declarations } = parseCss(css)
   report.duplicateSelector.push(...duplicateSelectorFindings(file, rules))
   for (const declaration of declarations) {
@@ -254,10 +270,13 @@ function cssFindings(file: string, css: string, report: Report): void {
     if (!COLOR_SOURCES.has(file) && hasColorLiteral(declaration.value)) {
       report.color.push({ file, line: declaration.line, text })
     }
-    const size = SIZE_SOURCES.has(file)
-      ? null
-      : sizeCategory(declaration.property, declaration.value)
+    if (SIZE_SOURCES.has(file)) continue
+    const size = sizeCategory(declaration.property, declaration.value)
     if (size) report[size].push({ file, line: declaration.line, text })
+    // 自定义属性：把 `height: 26px` 改成局部的 `--x: 26px` 不算消掉了写死的尺寸
+    if (declaration.property.startsWith("--") && hasPxLiteral(declaration.value)) {
+      report.customProperty.push({ file, line: declaration.line, text })
+    }
   }
 }
 
@@ -265,11 +284,17 @@ function cssFindings(file: string, css: string, report: Report): void {
 
 const HAN = /\p{Script=Han}/u
 
+interface StringPiece {
+  text: string
+  line: number
+  node: ts.Node
+}
+
 /** 源码里的字符串、模板片段和 JSX 文本；注释不算。 */
-function stringPieces(file: string, source: string): Array<{ text: string; line: number }> {
+function stringPieces(file: string, source: string): StringPiece[] {
   const kind = file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, kind)
-  const pieces: Array<{ text: string; line: number }> = []
+  const pieces: StringPiece[] = []
   const visit = (node: ts.Node): void => {
     if (
       ts.isStringLiteral(node) ||
@@ -280,7 +305,7 @@ function stringPieces(file: string, source: string): Array<{ text: string; line:
       ts.isJsxText(node)
     ) {
       const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
-      pieces.push({ text: node.text, line: line + 1 })
+      pieces.push({ text: node.text, line: line + 1, node })
     }
     ts.forEachChild(node, visit)
   }
@@ -295,16 +320,55 @@ export function uiTextFindings(file: string, source: string): Finding[] {
     .map((piece) => ({ file, line: piece.line, text: piece.text.trim().slice(0, 60) }))
 }
 
-/** 字符串里的颜色字面量。 */
+/** xterm 主题（ITheme）里 ANSI 16 色的键名；其中 black、white 也是 CSS 颜色名。 */
+const XTERM_ANSI_KEYS = new Set([
+  "black",
+  "red",
+  "green",
+  "yellow",
+  "blue",
+  "magenta",
+  "cyan",
+  "white",
+  "brightBlack",
+  "brightRed",
+  "brightGreen",
+  "brightYellow",
+  "brightBlue",
+  "brightMagenta",
+  "brightCyan",
+  "brightWhite",
+])
+
+/**
+ * 字符串在当键名用，不是颜色：对象或类型的属性名、`x["…"]` 里的键、类型里的字面量；
+ * 或者整串就是 xterm 的 ANSI 键名（如终端配色表里的 `["white", "--term-white"]`），
+ * 又不是赋给属性、变量或 JSX 属性的值。
+ */
+function isKeyName(piece: StringPiece): boolean {
+  const { node } = piece
+  const parent = node.parent
+  if (ts.isPropertyName(node) && "name" in parent && parent.name === node) return true
+  if (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) return true
+  if (ts.isLiteralTypeNode(parent)) return true
+  if (!XTERM_ANSI_KEYS.has(piece.text)) return false
+  return !(
+    ts.isPropertyAssignment(parent) ||
+    ts.isVariableDeclaration(parent) ||
+    ts.isJsxAttribute(parent)
+  )
+}
+
+/** 字符串里的颜色字面量；当键名用的字符串不算。 */
 export function tsColorFindings(file: string, source: string): Finding[] {
   return stringPieces(file, source)
-    .filter((piece) => hasColorLiteral(piece.text))
+    .filter((piece) => hasColorLiteral(piece.text) && !isKeyName(piece))
     .map((piece) => ({ file, line: piece.line, text: piece.text.trim().slice(0, 60) }))
 }
 
 // ---------- 汇总 ----------
 
-function emptyReport(): Report {
+export function emptyReport(): Report {
   return Object.fromEntries(CATEGORIES.map((category) => [category, []])) as unknown as Report
 }
 

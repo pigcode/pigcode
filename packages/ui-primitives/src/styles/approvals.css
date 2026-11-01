@@ -7,7 +7,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--cv-border);
-  border-radius: 16px;
+  border-radius: var(--r-2xl);
   background: var(--popover);
   box-shadow: var(--cv-shadow-md);
   color: var(--fg);
@@ -22,8 +22,8 @@
   font-weight: 500;
 }
 .perm .q > .ic {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-cv);
+  height: var(--icon-cv);
   color: var(--cv-subtle);
 }
 .perm > p {
@@ -35,7 +35,7 @@
   overflow: auto;
   padding: 8px 12px;
   border: 1px solid var(--cv-border);
-  border-radius: 8px;
+  border-radius: var(--r-block);
   background: var(--cv-panel);
   font-family: var(--font-mono);
   font-size: var(--cv-fs-code);
@@ -48,9 +48,9 @@
   gap: 8px;
 }
 .perm .acts .btn {
-  height: 32px;
+  height: var(--control-lg);
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--r-block);
   font-size: var(--cv-fs);
 }
 .perm-done {
@@ -101,9 +101,9 @@
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   column-gap: 10px;
-  min-height: 32px;
+  min-height: var(--control-lg);
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-block);
   cursor: pointer;
 }
 .question-option:hover {
@@ -121,11 +121,11 @@
   font-size: var(--cv-fs-sm);
 }
 .question-other {
-  height: 32px;
+  height: var(--control-lg);
   margin-top: 4px;
   padding: 0 10px;
   border: 1px solid var(--cv-border);
-  border-radius: 8px;
+  border-radius: var(--r-block);
   background: var(--cv-card);
   color: var(--fg);
   font: inherit;

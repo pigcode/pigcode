@@ -51,9 +51,9 @@
 .toast-close {
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 .toast-close:hover {
