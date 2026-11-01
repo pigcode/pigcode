@@ -1,6 +1,5 @@
-/** Electron 构建配置：renderer 使用 React 与 Tailwind。 */
+/** Electron 构建配置：renderer 使用 React，样式是 ui-primitives 里的普通 CSS。 */
 import react from "@vitejs/plugin-react"
-import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "electron-vite"
 
 export default defineConfig({
@@ -17,7 +16,7 @@ export default defineConfig({
   },
   renderer: {
     root: "src/renderer",
-    plugins: [react(), tailwindcss()],
+    plugins: [react()],
     // electron-vite 默认不压缩；渲染进程的脚本压缩后体积约减半，冷启动解析更快。
     build: { outDir: "out/renderer", minify: "esbuild" },
   },

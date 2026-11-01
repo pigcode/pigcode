@@ -9,7 +9,8 @@
   box-shadow: inset 0 1px 0 var(--divider);
 }
 /* 行本身是 ListRow：左右留出卡片的内边距，头像、文字、箭头与开关之间宽一点 */
-.ext-row {
+/* 行是 ListRow，这里换成设置列表里更宽松的间距 */
+.list-row.ext-row {
   gap: var(--space-5);
   padding: 9px var(--space-6);
 }
@@ -206,7 +207,8 @@
   box-shadow: inset 0 0 0 1px var(--border);
   font-size: var(--fs-sm);
 }
-.agent-model-chip button {
+/* 带列表前缀：圆形的移除按钮比全局焦点环（html :focus-visible）优先 */
+.agent-model-list .agent-model-chip button {
   display: grid;
   place-items: center;
   width: 18px;
@@ -232,9 +234,14 @@
   color: var(--muted);
   font-size: var(--fs-sm);
 }
+/* 保存失败的提示沿用 .error-text 的颜色与字号 */
+.agent-notice.error-text {
+  color: var(--bad-text);
+  font-size: var(--fs-xs);
+}
 
 /* 安装对话框（Agent 页与插件管理页共用）：输入框和「选择文件夹」一行，下面是权限提示 */
-.install-dialog {
+.dialog.install-dialog {
   width: min(520px, calc(100vw - 48px));
 }
 .install-dialog-input {

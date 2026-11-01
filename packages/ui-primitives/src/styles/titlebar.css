@@ -1,0 +1,120 @@
+/*
+  标题栏与顶行按钮：Windows/Linux 自绘的标题栏（应用图标与菜单），以及固定在窗口左上角的侧栏开关、搜索与前进后退。
+  窗口布局变量（--titlebar-h、--controls-left、--controls-w）在 workspace.css。
+*/
+
+/* 标题栏：内容只排在 titlebar-area 给出的空白里，系统按钮按桌面设置落在左侧或右侧 */
+.titlebar {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  height: var(--titlebar-h);
+  padding-left: env(titlebar-area-x, 0px);
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+  border-bottom: 1px solid var(--divider);
+  background: var(--window);
+  color: var(--fg);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.titlebar-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 100%;
+  flex: none;
+}
+.titlebar-icon .ic {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.7;
+}
+.titlebar-menus {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.titlebar-menu {
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--r-md);
+  color: inherit;
+  font-size: var(--fs-md);
+  -webkit-app-region: no-drag;
+}
+.titlebar-menu:hover,
+.titlebar-menu[aria-expanded="true"] {
+  background: var(--hover);
+}
+
+/* 侧栏顶行按钮固定在窗口左上角：展开时左边开关、右边搜索与前进后退；
+   侧栏收起后挨在一起，排进内容区顶栏的左端。这一行的拖动区由它自己提供，
+   下面的 .side-top 只占位，不再声明拖动区，否则会盖住按钮 */
+.window-controls {
+  position: fixed;
+  top: var(--titlebar-h);
+  left: 0;
+  z-index: 75;
+  display: flex;
+  align-items: center;
+  width: var(--sidebar-w);
+  height: var(--topbar-h);
+  padding: 0 10px 0 var(--controls-left);
+  -webkit-app-region: drag;
+}
+.window-controls > .btn {
+  -webkit-app-region: no-drag;
+}
+.window-controls-gap {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+.app.is-collapsed .window-controls {
+  width: auto;
+  padding-right: 0;
+}
+.app.is-collapsed .window-controls-gap {
+  flex: 0 0 4px;
+}
+/* 按钮是 Button 的 plain 变体加 .icon-btn；展开侧栏时（aria-expanded）也保持这个颜色 */
+.window-controls .btn.icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-md);
+  color: color-mix(in oklab, var(--fg-2), var(--muted));
+}
+.window-controls .icon-btn .ic {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.4;
+}
+.window-controls .icon-btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.window-controls .icon-btn[aria-expanded="true"]:not(:hover) {
+  background: none;
+}
+.window-controls .icon-btn:disabled {
+  background: none;
+  color: var(--faint);
+  opacity: 0.7;
+}
+@media (max-width: 960px) {
+  .window-controls {
+    width: auto;
+    padding-right: 0;
+  }
+  .window-controls-gap {
+    flex: 0 0 4px;
+  }
+  /* 抽屉打开时顶行按钮回到侧栏的排法：开关在左，搜索与前进后退在右 */
+  .app.is-drawer-open .window-controls {
+    width: var(--sidebar-w);
+    padding-right: 10px;
+  }
+  .app.is-drawer-open .window-controls-gap {
+    flex: 1 1 auto;
+  }
+}

@@ -1,0 +1,95 @@
+/*
+  线程头：聊天面板顶部与侧栏顶行等高的拖动条。左边是主会话与子代理的标签（tabs.css），
+  右边是「用…打开」（open-in.css）、状态胶囊与布局按钮（surface-tabs.css）。这里写拖动区、胶囊和图标按钮在顶栏里的样子。
+*/
+.panel-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: var(--topbar-h);
+  padding: 0 8px;
+}
+/* 拖动区按文档顺序叠加，后出现的覆盖先出现的；顶栏只让空白的 spacer 可拖动，
+   避免侧栏收起后压住固定在左上角的顶行按钮 */
+.panel-top > * {
+  -webkit-app-region: no-drag;
+}
+.panel-top .spacer {
+  flex: 1;
+  align-self: stretch;
+  -webkit-app-region: drag;
+}
+.title-text {
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 400;
+}
+.panel-top .chip-btn {
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-radius: var(--r-md);
+  color: var(--fg-2);
+}
+/* 顶栏的胶囊悬停和展开时只有底色变化 */
+.panel-top .chip-btn:hover,
+.panel-top .chip-btn[aria-expanded="true"] {
+  color: var(--fg-2);
+}
+/* 「IDE ↗」是一枚安静的文字按钮，和右侧的图标按钮同高 */
+.panel-top .chip-btn.open-in {
+  gap: 2px;
+  margin-right: 2px;
+  padding: 0 7px 0 9px;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+.panel-top .chip-btn.open-in .ic {
+  color: inherit;
+}
+.panel-top .chip-btn.open-in:hover,
+.panel-top .chip-btn.open-in[aria-expanded="true"] {
+  color: var(--fg);
+}
+.panel-top .btn-icon,
+.panel-top .btn.btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-md);
+  color: var(--muted);
+}
+.panel-top .btn-icon:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.panel-top .btn-icon[aria-pressed="true"],
+.panel-top .btn-icon[aria-expanded="true"] {
+  background: var(--active);
+  color: var(--fg);
+}
+/* 子代理标签页的标题图标与状态 */
+.subagent-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.subagent-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  color: var(--muted);
+  font-size: calc(var(--ui-scale) * 11px);
+}
+/* 窄窗口下侧栏是抽屉，顶行按钮总是排在顶栏左端 */
+@media (max-width: 960px) {
+  .panel-top,
+  .app.is-collapsed .panel-top {
+    padding-left: var(--controls-w);
+  }
+}

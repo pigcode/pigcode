@@ -1,0 +1,77 @@
+/*
+  空面板启动器：右侧面板没有打开任何 Surface 时，左上对齐的一列入口，标题是一行弱化的说明。
+  启动器和入口用带容器前缀的选择器，outline 与圆角比全局焦点环（html :focus-visible）优先。
+*/
+.right-panel-body > .surface-launcher {
+  flex: 1;
+  padding: 2px 12px 16px;
+  overflow: auto;
+  outline: 0;
+}
+.surface-launcher-inner {
+  width: min(280px, 100%);
+}
+.surface-launcher h3 {
+  margin: 0 0 2px;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  line-height: 28px;
+}
+.surface-launcher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.surface-launcher-group {
+  margin: 12px 0 2px;
+  padding: 0 8px;
+  color: var(--faint);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: 24px;
+}
+.surface-launcher-list .surface-launcher-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: var(--fg-2);
+  font-size: var(--fs-md);
+  text-align: left;
+}
+.surface-launcher-item .ic {
+  width: 15px;
+  height: 15px;
+  color: color-mix(in oklab, var(--fg-2), var(--muted));
+}
+.surface-launcher-item[data-highlighted],
+.surface-launcher:focus-visible .surface-launcher-item[data-highlighted] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.surface-launcher-item:disabled {
+  opacity: 0.45;
+}
+.surface-launcher-item kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  color: var(--faint);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 11px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .surface-launcher-item {
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
+}

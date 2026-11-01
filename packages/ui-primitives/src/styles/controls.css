@@ -1,7 +1,7 @@
 /*
   基础控件：按钮、图标按钮、输入框、多行输入框、开关、复选框、分段切换与 Tabs。
-  尺寸、间距、圆角、字号只用 tokens.css 的刻度。这个文件在 globals.css 里最先导入，
-  各区域要用别的尺寸时在自己的样式里覆盖，同等选择器下区域样式生效。
+  尺寸、间距、圆角、字号只用 tokens.css 的刻度。各区域要用别的尺寸时在自己的样式里覆盖，
+  选择器要比这里更具体（带上区域的类，或写成 .icon-btn.proj-add 这样的组合），不靠导入顺序。
 */
 
 /* ─── 按钮 ─────────────────────────────────────────────── */
@@ -159,30 +159,6 @@
   line-height: 1.5;
   resize: vertical;
 }
-.input-group {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--control-md);
-  padding: 0 var(--space-5);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  box-shadow: var(--shadow-field);
-}
-.input-group:focus-within {
-  box-shadow: var(--shadow-field-focus);
-}
-.input-group input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: none;
-  outline: none;
-  height: 100%;
-}
-.input-group .ic {
-  color: var(--muted);
-}
 
 /* ─── 开关：滑块直径 = 开关高度 − 上下各一档间距 ─────────── */
 .switch {
@@ -326,7 +302,7 @@
 .slider-range {
   position: absolute;
   height: 100%;
-  background: var(--fg-2);
+  background: var(--accent);
 }
 .slider-thumb {
   display: block;
@@ -379,10 +355,16 @@
   pointer-events: none;
 }
 .radio-dot {
-  width: 6px;
-  height: 6px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: var(--knob);
+  background: var(--surface);
+  box-shadow:
+    inset 0 0 0 var(--hair) var(--border-strong),
+    var(--shadow-btn);
 }
 
 /* ─── 折叠区 ───────────────────────────────────────────── */
@@ -419,12 +401,7 @@
   overflow-wrap: anywhere;
 }
 
-/* ─── 标签与分隔线 ─────────────────────────────────────── */
-.ui-label {
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  font-weight: 500;
-}
+/* ─── 分隔线 ───────────────────────────────────────────── */
 .ui-separator {
   flex: none;
   background: var(--border-strong);

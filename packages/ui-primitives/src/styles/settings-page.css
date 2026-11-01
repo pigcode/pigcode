@@ -1,0 +1,101 @@
+/*
+  设置页与插件管理页：SettingPage 的页面宽度与页头，分区标题，分组卡片与卡片里的设置行，插件能力的标签列表。
+  设置行是 ListRow，这里用 .group > .list-row 只改间距与分隔线。
+*/
+.page {
+  max-width: var(--col);
+  margin: 0 auto;
+  padding: 8px 32px 72px;
+}
+.page.narrow {
+  max-width: var(--col-narrow);
+}
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 22px 0 22px;
+  min-height: 30px;
+}
+.page-head h1 {
+  font-size: var(--fs-title);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+}
+.page-head .sub {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: var(--fs-md);
+}
+.page-head .actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+/* ─── 分组与行 ─────────────────────────────────────────── */
+.section {
+  margin-top: 28px;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+  margin: 0 4px 8px;
+}
+.section-head h2 {
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 11px);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.group {
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+/* 分组卡片里的设置行：卡片的内边距，标题与控件之间留宽一些；单行的行 52 高，行之间一条细线 */
+.group > .list-row {
+  gap: var(--space-7);
+  min-height: calc(var(--row-h) + var(--space-9));
+  padding: 11px 14px;
+}
+/* 设置行的标题可以换行（定时任务的标题是用户写的任务内容），说明可以选中复制 */
+.group > .list-row .list-row-title {
+  white-space: normal;
+}
+.group > .list-row .list-row-desc {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.group > .list-row + .list-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: var(--hair);
+  background: var(--border-strong);
+  pointer-events: none;
+}
+@media (max-width: 640px) {
+  .page {
+    padding: 4px 16px 64px;
+  }
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+/* 插件能力的标签列表 */
+.cap-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}

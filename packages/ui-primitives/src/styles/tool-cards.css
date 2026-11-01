@@ -1,0 +1,475 @@
+/*
+  工具行展开后的内容：命令、技能、任务输出与通用工具的卡片，终端命令与输出，内联 diff，MCP 结果，
+  截图与浏览器步骤，提问的历史行，思考，子 agent 的过程卡片，退出计划模式交上来的计划，以及工具行的悬停提示。
+*/
+/* ─── 展开后的卡片：命令、技能、任务输出、通用工具 ─── */
+.tool-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-panel);
+  color: var(--fg);
+}
+.tool-card-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tool-card-field.is-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.tool-card-label {
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.tool-card-chip {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--cv-surface);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+}
+.tool-card-pre {
+  max-height: 200px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--cv-surface);
+  color: var(--cv-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-card-pre.is-output {
+  max-height: 100px;
+}
+.tool-card-text {
+  color: var(--cv-subtle);
+}
+.tool-card-empty {
+  color: var(--cv-subtle);
+  font-family: var(--font-mono);
+}
+
+/* 终端命令：`$ 命令`（三行以上折叠）与输出（五行高，跟随最新） */
+.cmd-card {
+  gap: 12px;
+}
+.cmd-text {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 1ch minmax(0, 1fr);
+  gap: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+}
+.cmd-text-body {
+  display: flex;
+  grid-column: span 2;
+  min-width: 0;
+  max-height: calc(3 * 20px);
+  align-items: flex-start;
+  gap: 8px;
+  overflow: hidden;
+  margin-right: -12px;
+  padding-right: 12px;
+  line-height: 20px;
+}
+.cmd-text-body[data-expanded] {
+  max-height: calc(10 * 20px);
+  overflow-y: auto;
+}
+.cmd-prompt {
+  flex: none;
+  color: var(--cv-subtle);
+  user-select: none;
+}
+.cmd-text pre {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  color: var(--fg);
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cmd-more {
+  display: inline-flex;
+  grid-column: 2;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+}
+.cmd-more:hover,
+.cmd-more:focus-visible {
+  text-decoration: underline;
+}
+.cmd-more .ic {
+  width: 12px;
+  height: 12px;
+}
+.cmd-more .ic[data-up] {
+  transform: rotate(180deg);
+}
+.cmd-output {
+  max-height: calc(5 * 20px);
+  overflow: auto;
+  outline: none;
+  color: var(--cv-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+  line-height: 20px;
+}
+.cmd-output:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.cmd-output pre {
+  margin: 0;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cmd-output.is-empty {
+  max-height: none;
+}
+
+/* 内联 diff：浅色底与左侧 3px 色条，有行号时显示行号栏 */
+.inline-diff {
+  max-height: 240px;
+  margin-bottom: 8px;
+  overflow: auto;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-card);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+  line-height: 20px;
+}
+.inline-diff-body {
+  display: flex;
+  min-width: fit-content;
+  flex-direction: column;
+  padding: 4px 0;
+}
+.idiff-line {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  padding-right: 12px;
+  white-space: pre;
+}
+.inline-diff[data-numbered] .idiff-line {
+  grid-template-columns: 48px 20px minmax(0, 1fr);
+}
+.idiff-line.is-add {
+  background: color-mix(in srgb, var(--cv-added) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cv-added);
+}
+.idiff-line.is-remove {
+  background: color-mix(in srgb, var(--cv-removed) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cv-removed);
+}
+.idiff-gutter {
+  position: sticky;
+  left: 0;
+  padding-right: 8px;
+  border-right: 1px solid var(--cv-border);
+  background: var(--cv-card);
+  color: var(--cv-subtlest);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+}
+.idiff-line.is-add .idiff-gutter {
+  color: var(--cv-added);
+}
+.idiff-line.is-remove .idiff-gutter {
+  color: var(--cv-removed);
+}
+.idiff-line.is-gap .idiff-gutter {
+  border-right: 0;
+}
+.idiff-marker {
+  padding-left: 8px;
+  color: var(--cv-subtlest);
+  user-select: none;
+}
+.idiff-line.is-add .idiff-marker {
+  color: var(--cv-added);
+}
+.idiff-line.is-remove .idiff-marker {
+  color: var(--cv-removed);
+}
+.idiff-line.is-gap .idiff-code {
+  color: var(--cv-subtlest);
+}
+.idiff-code {
+  min-width: 0;
+}
+.inline-diff-note {
+  padding: 6px 12px 8px;
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+}
+
+/* MCP：简短结果的小卡片，调用参数折叠在「查看调用详情」里 */
+.mcp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mcp-compact {
+  padding: 8px 12px;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-card);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.mcp-error {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
+  color: var(--cv-removed);
+}
+.mcp-error pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+  white-space: pre-wrap;
+}
+.mcp-details-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.mcp-details-toggle:hover {
+  color: var(--fg);
+}
+.mcp-details-toggle .ic {
+  transition: transform 200ms var(--ease);
+}
+.mcp-details-toggle[aria-expanded="true"] .ic {
+  transform: rotate(90deg);
+}
+.mcp-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* 截图与浏览器步骤 */
+.tool-row-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.tool-row-images img {
+  max-width: min(100%, 480px);
+  max-height: 320px;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  object-fit: contain;
+  background: var(--bg);
+}
+.browser-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 提问的历史行：问题加粗，回答用次要文字 */
+.ask-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ask-question {
+  color: var(--fg);
+  font-weight: 500;
+}
+.ask-answer {
+  color: var(--cv-subtle);
+  white-space: pre-wrap;
+}
+
+/* 思考：左侧细线、最多 240px 高的纯文本，流式时最新一句滚动显示在动作后面 */
+.reasoning-row > .tool-row-body {
+  padding-top: 12px;
+}
+.reasoning-body {
+  max-height: 240px;
+  margin-left: 8px;
+  padding-left: 14px;
+  overflow: auto;
+  border-left: 1px solid var(--cv-border);
+  outline: none;
+  color: var(--cv-subtlest);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reasoning-peek {
+  display: flex;
+  max-width: min(32rem, 60cqw);
+  min-width: 0;
+  justify-content: flex-end;
+  overflow: hidden;
+  color: var(--cv-subtle);
+  white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 24px);
+  mask-image: linear-gradient(to right, transparent, black 24px);
+}
+.reasoning-peek > span {
+  flex: none;
+}
+
+/* 子 agent 行展开后的过程卡片 */
+.subagent-card {
+  gap: 12px;
+}
+.subagent-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.subagent-prompt,
+.subagent-output,
+.subagent-message {
+  max-height: 256px;
+  overflow: auto;
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+}
+
+/* 退出计划模式交上来的计划 */
+.plan-card {
+  position: relative;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-card);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.04);
+  font-family: var(--font-content);
+}
+.plan-card-head {
+  display: flex;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px 0 16px;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-weight: 500;
+}
+.plan-card-head > .ic {
+  width: 16px;
+  height: 16px;
+  color: var(--cv-subtle);
+}
+.plan-card-title {
+  flex: 1;
+}
+.plan-card-copy {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--cv-subtle);
+}
+.plan-card-copy:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.plan-card-body {
+  padding: 8px 16px 16px;
+  font-size: var(--cv-fs);
+  line-height: 1.75;
+}
+.plan-card-body[data-clamped] {
+  max-height: 256px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 30%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 30%, transparent 100%);
+}
+.plan-card-more {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--r-full);
+  background: var(--bg);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+}
+.plan-card[data-expanded] .plan-card-more {
+  position: static;
+  margin: 0 auto 12px;
+  transform: none;
+  display: flex;
+  width: fit-content;
+}
+
+/* 悬停提示：失败原因与复制按钮 */
+.tool-tip {
+  max-width: 24rem;
+}
+.tool-tip-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tool-tip-copy {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 4px;
+  color: var(--cv-subtle);
+}
+.tool-tip-copy:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.tool-tip-copy .ic {
+  width: 12px;
+  height: 12px;
+}

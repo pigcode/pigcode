@@ -1,0 +1,193 @@
+/*
+  基础：元素重置、全局焦点环、滚动条与少量工具类（图标尺寸、等宽、截断、行内排列）。
+  这里的类名选择器只有一个类；组件和区域要改图标尺寸或文字颜色时，用更具体的选择器覆盖，不靠导入顺序。
+*/
+
+/* ─── 元素重置 ─────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-md);
+  font-weight: var(--font-weight-ui);
+  line-height: 1.5;
+  letter-spacing: -0.003em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--window);
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button {
+  cursor: default;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  text-wrap: balance;
+}
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+kbd {
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  color: var(--faint);
+}
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+::selection {
+  background: color-mix(in oklab, var(--link) 24%, transparent);
+}
+/* 键盘焦点环。html 前缀让它的优先级（一个伪类加一个元素）高于组件的基础规则（一个类），
+   低于组件自己的 :focus-visible 规则（一个类加一个伪类），和导入顺序无关。
+   区域里要保留自己的圆角或不画描边的元素，选择器至少要有两个类。 */
+html :focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+  border-radius: var(--r-md);
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+/* 原生感：界面文字不可选、默认箭头光标、细的悬浮滚动条 */
+.sidebar,
+.panel-top,
+.section-head,
+.btn,
+.seg,
+.chip-btn,
+.side-label,
+.side-group {
+  -webkit-user-select: none;
+  user-select: none;
+}
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: content-box;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ─── 图标与文字工具类 ─────────────────────────────────── */
+.ic {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ic-sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+.ic-xs {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  letter-spacing: 0;
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.muted {
+  color: var(--muted);
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+[hidden] {
+  display: none !important;
+}
+/* ─── 加载占位 ─────────────────────────────────────────── */
+.skeleton {
+  display: inline-block;
+  border-radius: var(--r-sm);
+  background: var(--active);
+  animation: pulse 1.2s var(--ease) infinite;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}

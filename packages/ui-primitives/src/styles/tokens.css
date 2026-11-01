@@ -44,16 +44,12 @@
   --switch-on: oklch(52% 0.2 264);
   --link: oklch(48.8% 0.217 264);
   --accent: oklch(52% 0.2 264);
-  --accent-strong: oklch(45% 0.2 264);
   --accent-soft: oklch(52% 0.2 264 / 0.09);
   --accent-soft-strong: oklch(52% 0.2 264 / 0.15);
   --accent-ring: oklch(52% 0.2 264 / 0.2);
   --accent-text: oklch(46% 0.19 264);
-  --accent-2: oklch(52% 0.2 264);
-  --on-accent: oklch(100% 0 0);
   --surface-raised: oklch(99% 0 0);
   --surface-sunken: oklch(21% 0.006 286 / 0.03);
-  --bubble: oklch(96.7% 0.0015 286);
 
   /* 状态 */
   --ok: oklch(63% 0.15 155);
@@ -69,12 +65,7 @@
   --bad-soft: oklch(59% 0.21 25 / 0.1);
 
   /* 数据 */
-  --quota: oklch(52% 0.2 264);
   --track: oklch(21% 0.006 286 / 0.08);
-  --chart-1: oklch(52% 0.2 264);
-  --chart-2: oklch(78% 0.09 264);
-  --chart-3: oklch(76% 0.006 286);
-  --chart-4: oklch(87% 0.004 286);
   --avatar: oklch(91% 0 0);
 
   /*
@@ -109,9 +100,6 @@
   --knob: oklch(100% 0 0);
   --shadow-knob: 0 0 0 0.5px oklch(0% 0 0 / 0.06), 0 1px 3px oklch(0% 0 0 / 0.2);
   --shadow-btn: 0 1px 1.5px oklch(21% 0.006 286 / 0.06);
-  --shadow-soft:
-    0 0 0 0.5px oklch(21% 0.006 286 / 0.08), 0 1px 2px oklch(21% 0.006 286 / 0.04),
-    0 6px 20px oklch(21% 0.006 286 / 0.05);
   --shadow-pop:
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 4px 10px oklch(21% 0.006 286 / 0.06),
     0 16px 40px oklch(21% 0.006 286 / 0.12);
@@ -119,9 +107,7 @@
   --shadow-modal:
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 10px 24px oklch(21% 0.006 286 / 0.08),
     0 30px 80px oklch(21% 0.006 286 / 0.18);
-  --shadow-panel: 0 0 0 0.5px oklch(21% 0.006 286 / 0.11), 0 1px 3px oklch(21% 0.006 286 / 0.05);
   --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.1), 0 2px 4px -2px oklch(0% 0 0 / 0.1);
-  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.1), 0 4px 6px -4px oklch(0% 0 0 / 0.1);
   --composer-ring: oklch(21% 0.006 286 / 0.11);
   --composer-ring-focus: oklch(21% 0.006 286 / 0.22);
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
@@ -162,16 +148,12 @@
   --switch-on: oklch(57% 0.2 264);
   --link: oklch(74% 0.13 264);
   --accent: oklch(63% 0.18 264);
-  --accent-strong: oklch(72% 0.15 264);
   --accent-soft: oklch(63% 0.18 264 / 0.15);
   --accent-soft-strong: oklch(63% 0.18 264 / 0.24);
   --accent-ring: oklch(63% 0.18 264 / 0.28);
   --accent-text: oklch(77% 0.12 264);
-  --accent-2: oklch(63% 0.18 264);
-  --on-accent: oklch(100% 0 0);
   --surface-raised: oklch(24% 0 0);
   --surface-sunken: oklch(0% 0 0 / 0.18);
-  --bubble: oklch(24.5% 0 0);
 
   --ok: oklch(72% 0.15 155);
   --warn: oklch(80% 0.14 75);
@@ -185,12 +167,7 @@
   --warn-soft: oklch(80% 0.14 75 / 0.14);
   --bad-soft: oklch(68% 0.18 25 / 0.14);
 
-  --quota: oklch(63% 0.18 264);
   --track: oklch(100% 0 0 / 0.09);
-  --chart-1: oklch(63% 0.18 264);
-  --chart-2: oklch(46% 0.1 264);
-  --chart-3: oklch(52% 0.005 286);
-  --chart-4: oklch(36% 0.005 286);
   --avatar: oklch(29% 0 0);
 
   /* 深色底上状态色本身就够亮：普通色取状态色，亮色取更亮的文字色 */
@@ -221,15 +198,12 @@
   --knob: oklch(97% 0 0);
   --shadow-knob: 0 1px 2px oklch(0% 0 0 / 0.4);
   --shadow-btn: 0 1px 1.5px oklch(0% 0 0 / 0.3);
-  --shadow-soft: 0 0 0 0.5px oklch(100% 0 0 / 0.07), 0 8px 28px oklch(0% 0 0 / 0.3);
   --shadow-pop:
     0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 4px 12px oklch(0% 0 0 / 0.3),
     0 18px 44px oklch(0% 0 0 / 0.45);
   --shadow-raised: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 1px 3px oklch(0% 0 0 / 0.3);
   --shadow-modal: 0 0 0 0.5px oklch(100% 0 0 / 0.1), 0 30px 80px oklch(0% 0 0 / 0.6);
-  --shadow-panel: 0 0 0 0.5px oklch(100% 0 0 / 0.08), 0 2px 8px oklch(0% 0 0 / 0.3);
   --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.3), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
-  --cv-shadow-lg: 0 10px 15px -3px oklch(0% 0 0 / 0.35), 0 4px 6px -4px oklch(0% 0 0 / 0.3);
   --composer-ring: oklch(100% 0 0 / 0.1);
   --composer-ring-focus: oklch(100% 0 0 / 0.2);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
@@ -346,23 +320,6 @@
   /* 浮层与窗口边缘的间距；顶行高度（侧栏顶行、线程头与右侧面板标签栏，交通灯竖直居中其中） */
   --gap: 8px;
   --topbar-h: 40px;
-
-  /* 颜色选择器的色域：白到透明、黑到透明、色相彩虹和拖柄白圈，与主题无关 */
-  --picker-white: oklch(100% 0 0);
-  --picker-black: oklch(0% 0 0);
-  --picker-edge: oklch(0% 0 0 / 0.14);
-  --picker-hue: linear-gradient(
-    to right,
-    #ff0000,
-    #ffff00,
-    #00ff00,
-    #00ffff,
-    #0000ff,
-    #ff00ff,
-    #ff0000
-  );
-  --picker-knob-shadow:
-    0 0 0 2px var(--picker-white), 0 0 0 2.5px oklch(0% 0 0 / 0.18), 0 1px 4px oklch(0% 0 0 / 0.3);
 
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --t-fast: 100ms;

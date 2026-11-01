@@ -1,0 +1,88 @@
+/*
+  Diff Surface：顶部选基准的一行，下面每个文件一张卡片，卡片里是文件名、hunk 标题与带行号的行。
+  行的类型是 diff-line-${kind}（add、remove、context）。
+*/
+.workbench-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.workbench-diff-base {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+/* 选择框是 Select 的触发器，在这一行里不占满宽度 */
+.select-trigger.workbench-diff-base-select {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.diff-view {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+.diff-view .diff-file {
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.diff-file-header {
+  padding: 8px 12px;
+  border-bottom: var(--hair) solid var(--divider);
+  background: var(--surface-sunken);
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+.diff-hunk-header {
+  padding: 3px 12px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: calc(var(--fs-code) - 0.5px);
+}
+.diff-line {
+  display: flex;
+  gap: 0;
+  padding: 0 12px 0 0;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.diff-line-no {
+  min-width: 34px;
+  padding-right: 8px;
+  color: var(--faint);
+  font-size: calc(var(--fs-code) - 1px);
+  text-align: right;
+  user-select: none;
+}
+.diff-line-sign {
+  width: 14px;
+  flex: none;
+  color: var(--muted);
+  user-select: none;
+}
+.diff-line-text {
+  flex: 1;
+  min-width: 0;
+}
+.diff-line-add {
+  background: var(--ok-soft);
+}
+.diff-line-add .diff-line-sign {
+  color: var(--ok-text);
+}
+.diff-line-remove {
+  background: var(--bad-soft);
+}
+.diff-line-remove .diff-line-sign {
+  color: var(--bad-text);
+}

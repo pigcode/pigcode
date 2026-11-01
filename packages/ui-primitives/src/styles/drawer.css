@@ -1,0 +1,39 @@
+/*
+  环境抽屉：聊天区右上角浮起的卡片，列出工作目录、模型这些会话环境。里面的分组是 settings-page.css 的 .group。
+*/
+.drawer {
+  position: absolute;
+  z-index: 30;
+  top: var(--gap);
+  right: var(--gap);
+  bottom: var(--gap);
+  width: 300px;
+  overflow: auto;
+  padding: 4px 14px 16px;
+  border-radius: var(--r-panel);
+  background: var(--popover);
+  box-shadow: var(--shadow-pop);
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+}
+.drawer-head h2 {
+  font-size: calc(var(--ui-scale) * 13.5px);
+  font-weight: 600;
+}
+.drawer .group {
+  background: var(--panel);
+  box-shadow: none;
+}
+/* 环境抽屉里的值（工作目录、模型）用等宽字 */
+.drawer .list-row-desc {
+  font-family: var(--font-mono);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drawer {
+    animation: palette-in 160ms var(--ease) both;
+  }
+}

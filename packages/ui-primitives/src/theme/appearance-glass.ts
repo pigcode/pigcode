@@ -31,7 +31,7 @@ export type GlassBase = {
 }
 
 /**
- * 抄自 styles/glass.css 的 [data-glass="true"] 与 [data-glass="true"][data-theme="dark"]。
+ * 抄自 styles/glass.css 的 :root[data-glass="true"] 与 :root[data-glass="true"][data-theme="dark"]。
  * 改 glass.css 时同步改这里。细线、输入底和头像底（--border/--divider/--field/--avatar）
  * 不是表面，不在此表，由叠色组处理。
  */

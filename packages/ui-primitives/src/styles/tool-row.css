@@ -1,0 +1,224 @@
+/*
+  工具行：工作区里一行一个动作的安静灰字，左边图标与动作，悬停出现箭头；运行中的动作扫光。
+  还有行里共用的改动行数、文件名与父目录，以及展开后带左线的子列表。展开后的卡片在 tool-cards.css。
+*/
+/* ─── 工具行 ───────────────────────────────────────────── */
+.tool-row {
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  line-height: 1.5;
+}
+.tool-row-head {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  color: var(--cv-subtlest);
+  text-align: left;
+  vertical-align: top;
+}
+.tool-row-head[data-interactive] {
+  cursor: pointer;
+}
+.tool-row-head:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+/* 图标带 .ic-sm；在对话的一轮里放大到 16，别处保持 .ic-sm 的尺寸 */
+.tool-row-icon {
+  color: var(--cv-subtlest);
+}
+.turn .tool-row .ic.tool-row-icon {
+  width: 16px;
+  height: 16px;
+}
+.tool-row-kind {
+  flex: none;
+  color: var(--cv-subtlest);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.tool-row-detail {
+  flex: none;
+  color: var(--cv-subtle);
+  white-space: nowrap;
+}
+.tool-row-summary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.tool-row-sep {
+  flex: none;
+}
+.tool-row-primary,
+.tool-row-secondary {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.tool-row-primary > .truncate,
+.tool-row-secondary > .truncate {
+  min-width: 0;
+}
+.tool-row-action {
+  flex: none;
+}
+.tool-row-chev {
+  flex: none;
+  color: var(--cv-subtlest);
+  opacity: 0;
+  transition:
+    opacity 200ms var(--ease),
+    transform 200ms var(--ease);
+}
+.tool-row-head:hover .tool-row-chev,
+.tool-row-head:focus-visible .tool-row-chev,
+.tool-row.is-open > .tool-row-head .tool-row-chev {
+  opacity: 1;
+}
+.tool-row.is-open > .tool-row-head .tool-row-chev {
+  transform: rotate(90deg);
+}
+.tool-row-body {
+  padding-top: 8px;
+}
+.tool-row-status {
+  flex: none;
+  color: var(--cv-subtlest);
+  white-space: nowrap;
+}
+.tool-row[data-status="failed"] .tool-row-status {
+  color: var(--cv-subtle);
+}
+.tool-row-status.has-tip {
+  cursor: help;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.cmd-summary {
+  overflow: hidden;
+  color: inherit;
+  font-family: var(--font-ui);
+  font-size: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-row-server {
+  color: var(--cv-subtle);
+}
+.subagent-type {
+  color: var(--subagent-node-fg);
+}
+
+/* 运行中的动作：整段前景色，一道浅色的光从右向左扫过 */
+.tool-shimmer {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--cv-shimmer-strong) 0%,
+    var(--cv-shimmer-strong) 34%,
+    var(--cv-shimmer-soft) 50%,
+    var(--cv-shimmer-strong) 66%,
+    var(--cv-shimmer-strong) 100%
+  );
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-flow 4s linear infinite;
+}
+@keyframes gradient-flow {
+  0% {
+    background-position: 100% 0;
+  }
+  50%,
+  100% {
+    background-position: 0% 0;
+  }
+}
+
+/* 改动行数、文件名与父目录 */
+.diff-count {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: calc(var(--cv-fs) - 1px);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+.diff-count .add,
+.file-summary .add {
+  color: var(--cv-added);
+}
+.diff-count .del,
+.file-summary .del {
+  color: var(--cv-removed);
+}
+.file-chip {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--cv-subtle);
+  font: inherit;
+}
+.file-chip .file-icon {
+  width: 16px;
+  height: 16px;
+}
+.file-chip.is-link:hover > .truncate {
+  text-decoration: underline;
+}
+.file-parent {
+  min-width: 0;
+  color: var(--cv-subtlest);
+}
+.file-chips {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+}
+.file-chips-item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+}
+.file-chips-sep {
+  margin-right: 6px;
+}
+
+/* 展开后的子列表：左侧一条细线，子项不带图标 */
+.tool-children {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 0 8px;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--cv-border);
+  list-style: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-shimmer {
+    animation: none;
+    background: none;
+    color: var(--fg);
+    -webkit-text-fill-color: currentColor;
+  }
+  .tool-row-chev {
+    transition: none;
+  }
+}

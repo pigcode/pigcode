@@ -1,0 +1,299 @@
+/*
+  侧栏：直接露出窗口底色。顶行留给交通灯与顶行按钮（titlebar.css），中间是导航、项目与会话列表，
+  底部固定一行账户与设置。侧栏的行都是 ListRow（list-rows.css），这里只管行间距、悬停才出现的部分和重命名。
+  窄窗口下侧栏变成从左边滑出的抽屉，盖在内容上，下面一层蒙层。
+*/
+
+/* ─── 外框 ─────────────────────────────────────────────── */
+.sidebar {
+  grid-row: 2;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.app.is-collapsed .sidebar {
+  visibility: hidden;
+}
+.side-top {
+  height: var(--topbar-h);
+  flex: none;
+}
+.side-scroll {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: var(--sidebar-w);
+  padding: 2px 10px 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.side-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+/* 侧栏的行都是 ListRow，同一个高度；这里只管行间距和悬停才出现的部分 */
+.nav-item.back {
+  margin-bottom: var(--space-3);
+}
+/* 快捷键徽标在悬停、键盘聚焦或按住 ⌘/Ctrl 时出现 */
+.nav-kbd {
+  height: var(--control-xs);
+  padding: 0 7px;
+  border-radius: var(--r-full);
+  background: var(--active);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 11px);
+  line-height: var(--control-xs);
+  letter-spacing: 0.02em;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.nav-item:hover .nav-kbd,
+.nav-item:focus-visible .nav-kbd,
+.sidebar.show-shortcuts .nav-kbd {
+  opacity: 1;
+}
+
+/* ─── 分区标题：「项目」「会话」与设置侧栏的分组名 ─────────── */
+.side-label,
+.side-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  margin-top: 18px;
+  padding: 0 4px 0 var(--space-4);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.side-group {
+  margin-top: 10px;
+}
+.side-label span {
+  flex: 1;
+}
+.side-label .icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+/* 菜单展开时保持次要文字色，悬停时才变深 */
+.side-label .icon-btn[aria-expanded="true"] {
+  color: var(--muted);
+}
+.side-label .icon-btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+/* 设置侧栏的搜索框是 SearchField，这里只管它和下面分区之间的间距 */
+.side-search {
+  margin-bottom: var(--space-2);
+}
+
+/* ─── 项目行与会话行 ───────────────────────────────────── */
+/* 项目行：打开的项目显示展开的文件夹；悬停或键盘聚焦时右侧出现新会话按钮 */
+.proj-block + .proj-block {
+  margin-top: 10px;
+}
+.proj-row,
+.sess {
+  margin-bottom: var(--space-1);
+}
+.icon-btn.proj-add {
+  width: var(--control-xs);
+  height: var(--control-xs);
+  border-radius: var(--r-sm);
+  opacity: 0;
+}
+.proj-row:hover .proj-add,
+.proj-row:has(:focus-visible) .proj-add {
+  opacity: 1;
+}
+.icon-btn.proj-add:hover {
+  background: var(--active);
+}
+/* 会话行：状态点（运行中是点阵）占和文件夹图标一样宽的一格，标题与项目名对齐，右侧常驻 agent 缩写与时间 */
+.sess .status-dot {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+/* 长标题在右侧渐隐，而不是用省略号截断；标题较短时渐隐区落在空白处。 */
+.list-row-title.sess-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+}
+/* agent 缩写是 inline 尺寸的 EntityAvatar，字体与字号在这里给 */
+.entity-avatar.sess-provider {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: calc(var(--ui-scale) * 10px);
+  letter-spacing: 0.02em;
+}
+/* 按时间排列时显示会话所在的项目 */
+.sess-project {
+  flex: 0 1 auto;
+  max-width: 84px;
+  color: var(--faint);
+  font-size: calc(var(--ui-scale) * 11.5px);
+}
+.sess time {
+  flex: none;
+  color: var(--muted);
+  font-size: calc(var(--ui-scale) * 12px);
+  font-variant-numeric: tabular-nums;
+}
+/* 右键菜单的触发区只是包住项目行或会话行，不参与布局；菜单打开期间那一行的样子在 list-rows.css */
+.row-menu-area {
+  display: block;
+}
+/* 按住 ⌘/Ctrl 时，前九个会话右侧的数字快捷键 */
+.sess-kbd {
+  flex: none;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--r-full);
+  background: var(--active);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 11px);
+  line-height: 20px;
+  letter-spacing: 0.02em;
+}
+.sess.is-active .sess-kbd {
+  background: var(--surface-raised);
+}
+/* 重命名时标题换成输入框，状态点或文件夹图标留在原位；输入框的光圈画在标题格外面 */
+.is-editing > .list-row-title {
+  display: flex;
+  overflow: visible;
+}
+.is-editing .row-rename {
+  flex: 1;
+  min-width: 0;
+  height: var(--control-xs);
+  margin-left: -5px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 0 0 1px var(--border-focus),
+    0 0 0 3px var(--accent-ring);
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--fs-md);
+  outline: none;
+}
+/* 没有会话时的空状态和会话标题对齐：行内边距 + 状态点的宽度 + 间距 */
+.sidebar .proj-sessions > .empty-state,
+.sidebar .recent-sessions > .empty-state {
+  padding-left: calc(var(--space-4) * 2 + var(--icon-md));
+}
+
+/* ─── 底部一行：账户与设置 ─────────────────────────────── */
+.side-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: var(--sidebar-w);
+  height: 52px;
+  padding: 0 12px 0 14px;
+}
+.side-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: var(--fs-md);
+}
+.side-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--avatar);
+  color: var(--fg-2);
+}
+.side-avatar .ic {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.6;
+}
+.side-foot .foot-gear {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--muted);
+}
+.side-foot .foot-gear:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.side-foot .foot-gear.is-active,
+.side-foot .foot-gear.is-active:hover {
+  background: var(--active);
+  color: var(--fg);
+}
+.side-foot .foot-gear .ic {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.4;
+}
+
+/* ─── 窄窗口：侧栏变成抽屉 ─────────────────────────────── */
+.drawer-scrim {
+  display: none;
+}
+@media (max-width: 960px) {
+  .sidebar,
+  .app.is-collapsed .sidebar {
+    position: fixed;
+    inset: var(--titlebar-h) auto 0 0;
+    width: var(--sidebar-w);
+    z-index: 70;
+    visibility: hidden;
+    background: var(--window);
+    transform: translateX(-100%);
+    transition:
+      transform var(--t-med) var(--ease),
+      visibility var(--t-med);
+    box-shadow: var(--shadow-pop);
+  }
+  .app.is-drawer-open .sidebar {
+    visibility: visible;
+    transform: none;
+  }
+  .drawer-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--titlebar-h) 0 0;
+    z-index: 65;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-med) var(--ease);
+  }
+  .app.is-drawer-open .drawer-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}

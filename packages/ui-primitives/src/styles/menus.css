@@ -1,7 +1,7 @@
 /*
   菜单与浮层：Menu、ContextMenu、Select、Popover 的弹层，命令面板与输入框建议列表的外框，提示气泡。
   ui-primitives 的组件自动加上这些类名；手写的列表（@ 与 / 建议、命令面板）用同样的类名。
-  这个文件在 controls.css 之后、各区域样式之前导入，区域样式只覆盖宽度这类布局。
+  区域样式只覆盖宽度这类布局，选择器带上组件自己的类（如 .menu-popup.surface-menu），不靠导入顺序。
 */
 
 /* ─── 浮层外框：所有弹出层同一种底色、圆角、阴影与磨砂 ─── */
@@ -39,7 +39,7 @@
   text-align: left;
   cursor: default;
 }
-/* 高亮就是焦点的样子，不再叠加 globals.css 里通用的 :focus-visible 描边 */
+/* 高亮就是焦点的样子，不再叠加 base.css 里通用的 :focus-visible 描边 */
 .popup:focus-visible,
 .menu-item:focus-visible {
   outline: none;

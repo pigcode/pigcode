@@ -1,0 +1,86 @@
+/*
+  代码块（CodeBlock）：回答里的 Markdown 代码块和工具卡片里的代码都用它。细边框白卡片，标题栏是语言与换行、复制按钮；
+  代码高亮的 token 颜色来自 Shiki 写在 style 里的 --shiki-light / --shiki-dark。
+*/
+.code-block {
+  margin: 16px 0;
+  overflow: hidden;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-card);
+  letter-spacing: normal;
+}
+.code-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 0 12px;
+  color: var(--cv-subtle);
+}
+.code-block-lang {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+  text-overflow: ellipsis;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+.code-block-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+.code-block-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--cv-subtle);
+}
+.code-block-btn:hover,
+.code-block-btn[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.code-block-btn .ic {
+  width: 14px;
+  height: 14px;
+}
+.code-block-body {
+  margin: 0;
+  padding: 4px 12px 12px;
+  overflow-x: auto;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+  font-weight: var(--font-weight-code);
+  line-height: 1.6;
+  white-space: pre;
+}
+.code-block[data-wrap] .code-block-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-block.is-compact {
+  margin: 0;
+}
+.code-block.is-compact .code-block-body {
+  max-height: 288px;
+  overflow: auto;
+}
+/* 比 markdown.css 的 .md code 更具体：代码块里的 code 不画行内代码的底色 */
+.code-block .code-block-body code {
+  padding: 0;
+  margin: 0;
+  background: none;
+  font: inherit;
+}
+.tok {
+  color: var(--shiki-light);
+}
+[data-theme="dark"] .tok {
+  color: var(--shiki-dark);
+}

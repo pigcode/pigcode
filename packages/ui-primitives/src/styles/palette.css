@@ -1,0 +1,82 @@
+/*
+  命令面板：⌘K 打开的面板，顶部搜索框，下面分组的命令列表与底部按键提示。外框是 menus.css 的 .popup。
+*/
+/* 蒙层的颜色和层级来自 .scrim，这里只让面板靠上居中 */
+.palette-scrim {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 14vh;
+}
+.popup.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(580px, calc(100vw - 40px));
+  max-height: min(560px, 72vh);
+  overflow: hidden;
+  /* 蒙层自己有 backdrop-filter，里面的面板模糊不到页面，半透明会透出底下的字，所以用不透明底色 */
+  background: var(--popover);
+  isolation: isolate;
+}
+/* 顶部一行只负责给 SearchField 留出内边距，和下面列表的行左右对齐 */
+.palette-search {
+  flex: none;
+  padding: var(--space-4) var(--space-3);
+  border-bottom: var(--hair) solid var(--divider);
+}
+.palette-search kbd,
+.palette-foot kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--field);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: calc(var(--ui-scale) * 10px);
+}
+.palette-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+.palette-group {
+  padding: 10px 10px 4px;
+  color: var(--faint);
+  font-size: calc(var(--ui-scale) * 10.5px);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.palette-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--field);
+  color: var(--fg-2);
+}
+.palette-hint {
+  max-width: 180px;
+  color: var(--faint);
+  font-size: calc(var(--ui-scale) * 11px);
+}
+.palette-foot {
+  display: flex;
+  gap: 14px;
+  flex: none;
+  padding: 9px 16px;
+  border-top: var(--hair) solid var(--divider);
+  color: var(--faint);
+  font-size: calc(var(--ui-scale) * 11px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .palette {
+    animation: palette-in 160ms var(--ease) both;
+  }
+}

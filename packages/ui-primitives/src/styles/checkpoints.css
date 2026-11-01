@@ -1,0 +1,72 @@
+/*
+  检查点 Surface：一列卡片，每张是阶段徽标、标签与时间，下面一行恢复与删除的操作。
+  阶段徽标的颜色按阶段（checkpoint-phase-${phase}）区分。
+*/
+.checkpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.checkpoint-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.checkpoint-item > .btn {
+  align-self: flex-start;
+}
+.checkpoint-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+/* 阶段徽标；按阶段换色的规则写在后面，同一个文件里靠后的生效 */
+.checkpoint-phase {
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--fg-2);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.checkpoint-phase-manual {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.checkpoint-phase-pre {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.checkpoint-phase-post {
+  background: var(--ok-soft);
+  color: var(--ok-text);
+}
+.checkpoint-label {
+  color: var(--fg);
+  font-weight: 500;
+}
+.checkpoint-time {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.checkpoint-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+}
+.checkpoint-confirm {
+  color: var(--muted);
+}

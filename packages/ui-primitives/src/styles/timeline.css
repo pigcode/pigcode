@@ -1,0 +1,377 @@
+/*
+  对话时间线（参照 ZCode 的 ConversationTurnGroup、ToolCallBlocks 与 MessageResponse）。
+  一轮是一段竖排的块：用户气泡、「已工作」折叠头与工作区、最终回答、改动汇总与操作栏，块间 20px；
+  工作区里的工具行是一行行安静的灰字，运行中动作扫光，悬停出现箭头，展开后是卡片或带左线的子列表。
+  颜色从主题变量推出（前景的 60% / 40% 透明度作为次要与最次要文字），用户换主题时一起变化。
+  这个文件放对话区共用的 --cv-* 变量、会话区布局、一轮的骨架（用户气泡、工作区折叠头）、操作栏、标记行与回到底部；
+  回答的 Markdown、代码块、工具行与卡片、审批、改动汇总、问题导航与状态面板各在自己的文件里。
+*/
+
+:root {
+  --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
+  --cv-subtlest: color-mix(in oklab, var(--fg) 40%, transparent);
+  --cv-surface: var(--field);
+  --cv-panel: var(--surface);
+  --cv-card: var(--surface-raised);
+  --cv-border: var(--border);
+  --cv-hairline: color-mix(in oklab, var(--border) 50%, transparent);
+  --cv-inline-code: color-mix(in oklab, var(--fg) 7%, transparent);
+  --cv-added: #1e8a3e;
+  --cv-removed: #e03131;
+  --cv-success: #1e8a3e;
+  --cv-shimmer-strong: var(--fg);
+  --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
+  --cv-col: 56rem;
+  /* @ 提到的文件与子 agent 类型的文字颜色 */
+  --file-node-fg: #1a70b8;
+  --subagent-node-fg: #6f7a2f;
+}
+[data-theme="dark"] {
+  --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
+  --cv-added: #46bf72;
+  --cv-removed: #ff5c5c;
+  --cv-success: #46bf72;
+  --file-node-fg: #8fc5ef;
+  --subagent-node-fg: #c8cd90;
+}
+
+/* ─── 会话区布局 ───────────────────────────────────────── */
+.view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.thread-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  container: conversation / inline-size;
+}
+.thread {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 0 32px;
+  scrollbar-gutter: stable;
+}
+.msgs {
+  display: flex;
+  width: 100%;
+  max-width: var(--cv-col);
+  margin: 0 auto;
+  flex-direction: column;
+}
+@container conversation (min-width: 864px) {
+  .msgs {
+    width: calc(100% - 6rem);
+  }
+}
+.msgs > .chat-empty {
+  padding: 0 16px;
+}
+
+/* ─── 一轮 ─────────────────────────────────────────────── */
+.turn {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 20px;
+  padding: 56px 16px 20px;
+  color: var(--fg);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  font-weight: var(--font-weight-content);
+}
+.turn:not([data-user]) {
+  padding-top: 0;
+}
+@container conversation (min-width: 448px) {
+  .turn,
+  .msgs > .marker-divider {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+/* 用户气泡：靠右，浅底细边，右上角小圆角；超过 120px 折叠并渐隐 */
+.turn-user {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.msg-user {
+  position: relative;
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px 4px 12px 12px;
+  background: var(--cv-surface);
+  color: var(--fg);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+}
+@container conversation (min-width: 624px) {
+  .msg-user {
+    max-width: 36rem;
+  }
+}
+.msg-user-body {
+  min-width: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  transition: max-height 300ms ease-out;
+}
+.msg-user[data-clamped] .msg-user-body {
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, black 70%, transparent 100%);
+}
+.msg-user-more {
+  display: flex;
+  justify-content: center;
+}
+.msg-user[data-clamped] .msg-user-more {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  left: 0;
+}
+.msg-user-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--r-full);
+  background: var(--bg);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.05);
+  color: var(--fg);
+}
+.msg-user-toggle:hover {
+  border-color: var(--border-strong);
+}
+.msg-user-toggle .ic {
+  width: 16px;
+  height: 16px;
+}
+.mention-file {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  margin: 0 2px;
+  color: var(--file-node-fg);
+  font: inherit;
+  font-weight: 500;
+  vertical-align: top;
+}
+.mention-file .file-icon {
+  width: 16px;
+  height: 16px;
+}
+.mention-file.is-link:hover .mention-name {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+}
+.turn-user-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.turn-user:hover .turn-user-actions,
+.turn-user-actions:focus-within {
+  opacity: 1;
+}
+
+/* 工作区折叠头：次要文字、50% 细线，没有图标 */
+.work-head {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cv-hairline);
+}
+.work-toggle {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 8px;
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  text-align: left;
+}
+.work-toggle:disabled {
+  cursor: default;
+}
+.work-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.work-chev {
+  color: var(--cv-subtlest);
+  opacity: 0.7;
+  transition: transform 200ms var(--ease);
+}
+.work-toggle[aria-expanded="true"] .work-chev {
+  transform: rotate(90deg);
+}
+.turn-work {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+.turn-loading {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  color: var(--cv-subtle);
+}
+.turn-loading .ic {
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+.turn-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
+  color: var(--cv-removed);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.turn-error .ic {
+  margin-top: 3px;
+}
+/* ─── 回答下方的操作栏：悬停这一轮时出现 ─────────────────── */
+.turn-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: -12px;
+  color: var(--cv-subtlest);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.turn:hover .turn-actions,
+.turn-actions:focus-within {
+  opacity: 1;
+}
+.turn-action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--cv-subtle);
+}
+.turn-action:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.turn-action .ic {
+  width: 14px;
+  height: 14px;
+}
+.turn-actions time {
+  padding-left: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── 标记行：切换 agent、带上主会话近况 ─────────────────── */
+.marker-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+}
+.marker-line {
+  height: 1px;
+  flex: 1;
+  background: var(--cv-hairline);
+}
+.marker-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.marker-label .ic {
+  width: 14px;
+  height: 14px;
+}
+.msgs > .marker-divider {
+  margin-top: 36px;
+}
+.msgs > .marker-divider:first-child {
+  margin-top: 16px;
+}
+
+/* ─── 滚动到底部 ───────────────────────────────────────── */
+.scroll-bottom {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform: translateX(-50%);
+  border: 1px solid var(--cv-border);
+  border-radius: var(--r-full);
+  background: var(--cv-card);
+  box-shadow: var(--cv-shadow-md);
+  color: var(--fg);
+  animation: message-in 160ms var(--ease) both;
+}
+.scroll-bottom:hover {
+  background: var(--popover);
+  border-color: var(--border-strong);
+}
+.scroll-bottom .ic {
+  width: 16px;
+  height: 16px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .turn-user {
+    animation: message-in 200ms var(--ease) both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg-user-body,
+  .work-chev {
+    transition: none;
+  }
+}

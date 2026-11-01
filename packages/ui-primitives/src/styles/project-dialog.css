@@ -1,0 +1,68 @@
+/*
+  创建项目对话框：设备选择与源文件夹选择框。对话框外框在 dialogs.css，这里只设宽度与里面的内容。
+*/
+.dialog.project-dialog {
+  width: min(520px, calc(100vw - 48px));
+}
+/* 设备选择是 Select 的触发器（.select-trigger） */
+.project-select-caret {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.project-select-popup {
+  width: var(--anchor-width);
+}
+/* 源文件夹：虚线框整体是一个按钮，点开系统的文件夹选择框；选好后显示文件夹名与完整路径 */
+/* 带 .dialog 前缀：圆角比全局焦点环（html :focus-visible）优先 */
+.dialog .project-folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 132px;
+  padding: var(--space-8) var(--space-9);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-panel);
+  color: var(--fg);
+  text-align: center;
+  transition:
+    background var(--t-fast),
+    border-color var(--t-fast);
+}
+.project-folder:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+.project-folder:disabled {
+  opacity: 0.6;
+}
+.project-folder-icon {
+  display: grid;
+  place-items: center;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  margin-bottom: var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--muted);
+}
+.project-folder[data-selected] .project-folder-icon {
+  color: var(--fg-2);
+}
+.project-folder-title {
+  max-width: 100%;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.project-folder-hint {
+  max-width: 100%;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.project-folder[data-selected] .project-folder-hint {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}

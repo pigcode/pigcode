@@ -1,12 +1,15 @@
 /* ─── 文件资源管理器 ───────────────────────────────────────
    参照 t3code：紧凑的行、淡化的忽略项、git 改动的颜色与字母、缩进参考线；只渲染可见的行。 */
 
-.files-surface,
-.workbench-files {
+.files-surface {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+/* 文件 Surface 的面板（.surface-pane）至少和面板区一样高 */
+.surface-pane.workbench-files {
+  min-height: 100%;
 }
 .fx {
   display: flex;
@@ -46,11 +49,11 @@
   height: 24px;
 }
 /* 搜索框是紧凑的 SearchField，这里只管它四周的间距，左右和树的行对齐 */
-.fx-search {
+.search-field.fx-search {
   width: auto;
   margin: var(--space-2) var(--space-3) var(--space-3);
 }
-.fx-compact .fx-search {
+.fx-compact .search-field.fx-search {
   margin: var(--space-1) var(--space-3) var(--space-2);
 }
 .fx-note {
@@ -72,7 +75,7 @@
   margin: 0 6px;
 }
 /* 行是紧凑的 ListRow，按虚拟滚动给出的位置绝对定位；悬停、选中与焦点的样子在 list-rows.css */
-.fx-row {
+.list-row.fx-row {
   position: absolute;
   left: 0;
   right: 0;

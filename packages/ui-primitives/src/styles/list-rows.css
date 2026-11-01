@@ -46,7 +46,7 @@
   outline: none;
   box-shadow: inset 0 0 0 1px var(--border-focus);
 }
-/* 焦点由行画出，行里的主按钮和文件树的容器不再叠加 globals.css 里通用的描边 */
+/* 焦点由行画出，行里的主按钮和文件树的容器不再叠加 base.css 里通用的描边 */
 .list-row-button:focus-visible,
 :focus-visible:has(.list-row[data-focused]) {
   outline: none;
@@ -123,4 +123,12 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .list-row {
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
 }

@@ -1,0 +1,179 @@
+/*
+  窗口外壳：.app 的网格（标题栏一行、侧栏与内容区一行），内容区里的聊天面板与右侧面板槽，
+  右侧面板的拖动分隔条，以及窄窗口下右侧面板浮起来的排法。标题栏与顶行按钮在 titlebar.css，侧栏在 sidebar.css。
+  窗口按钮全部由系统绘制：macOS 的交通灯落在侧栏顶行；Windows/Linux 顶部是一条自绘标题栏，
+  系统的最小化、最大化与关闭按钮叠在标题栏上。侧栏、聊天区与右侧面板平铺在窗口里，之间只有一条细线。
+*/
+
+:root {
+  --right-w: 460px;
+  /* 自绘标题栏高度，比主进程的 TITLE_BAR_HEIGHT 多 1px 底线，细线横贯系统按钮下方 */
+  --titlebar-h: 0px;
+  /* 侧栏顶行按钮的起点；macOS 让出交通灯的位置 */
+  --controls-left: 10px;
+  /* 侧栏收起后顶行按钮占的宽度，内容区顶栏从它右边开始 */
+  --controls-w: 126px;
+}
+:root[data-platform="win32"],
+:root[data-platform="linux"] {
+  --titlebar-h: 37px;
+}
+:root[data-platform="darwin"] {
+  --controls-left: 76px;
+  --controls-w: 192px;
+}
+/* 全屏时交通灯隐藏，不再留白 */
+:root[data-platform="darwin"][data-fullscreen="true"] {
+  --controls-left: 10px;
+  --controls-w: 126px;
+}
+
+/* ─── 网格：第一行标题栏，第二行侧栏与内容区 ─────────────── */
+.app {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100vh;
+  overflow: hidden;
+  transition: grid-template-columns var(--t-med) var(--ease);
+}
+.app.is-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr);
+}
+.workspace {
+  grid-row: 2;
+  grid-column: 2;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid var(--divider);
+  background: var(--bg);
+}
+.app.is-collapsed .workspace {
+  border-left: 0;
+}
+
+/* ─── 聊天面板与右侧面板槽 ─────────────────────────────── */
+.panel {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.panel-scroll {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+.right-panel-slot {
+  position: relative;
+  display: flex;
+  flex: none;
+  width: var(--right-w);
+  min-width: 320px;
+  min-height: 0;
+  max-width: 72%;
+  overflow: visible;
+  border-left: 1px solid var(--divider);
+  background: var(--bg);
+}
+.right-panel-slot[hidden] {
+  display: none;
+}
+.right-panel-slot > :not(.panel-resizer) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.app.is-right-max .panel {
+  display: none;
+}
+.app.is-right-max .right-panel-slot {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  border-left: 0;
+}
+/* 侧栏收起后顶行按钮排进内容区顶栏的左端，顶栏让出它们的宽度 */
+.app.is-collapsed .panel-top,
+.app.is-collapsed.is-right-max .right-panel-bar {
+  padding-left: var(--controls-w);
+}
+
+/* ─── 右侧面板的拖动分隔条 ─────────────────────────────── */
+.panel-resizer {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: transparent;
+  transition: background var(--t-fast);
+}
+.panel-resizer:hover::after,
+.panel-resizer:focus-visible::after {
+  background: var(--accent);
+}
+body.is-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+body.is-resizing-rows {
+  cursor: row-resize;
+  user-select: none;
+}
+/* 拖动分隔条时 iframe 会吞掉指针事件。 */
+body.is-resizing iframe,
+body.is-resizing-rows iframe {
+  pointer-events: none;
+}
+
+/* ─── 窄窗口：内容区占满，右侧面板浮在内容区上方，避免挤压聊天宽度 ─── */
+@media (max-width: 960px) {
+  .app,
+  .app.is-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace,
+  .app.is-collapsed .workspace {
+    grid-column: 1;
+    border-left: 0;
+  }
+  .app.has-right .right-panel-slot {
+    position: fixed;
+    z-index: 60;
+    top: calc(var(--titlebar-h) + var(--topbar-h) + var(--gap));
+    right: var(--gap);
+    bottom: var(--gap);
+    left: auto;
+    width: min(460px, calc(100vw - 2 * var(--gap)));
+    max-width: none;
+    overflow: hidden;
+    border-left: 0;
+    border-radius: var(--r-panel);
+    box-shadow: var(--shadow-modal);
+  }
+  .app.is-right-max .right-panel-slot {
+    inset: calc(var(--titlebar-h) + var(--gap)) var(--gap) var(--gap);
+    width: auto;
+  }
+  .panel-resizer {
+    display: none;
+  }
+}

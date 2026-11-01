@@ -128,7 +128,7 @@
   gap: 6px;
 }
 
-.pg-input {
+.input.pg-input {
   width: 100%;
   min-width: 0;
   padding: 0 10px;
@@ -243,11 +243,11 @@ button.pg-list-item:hover {
 }
 
 /* 侧栏插件面板的标题：和「项目」一样的分组标题，点击收起 */
+/* 间距跟 .side-label 一样，这里不另写 */
 .plugin-panel-head {
   display: flex;
   width: 100%;
   align-items: center;
-  gap: 4px;
   text-align: left;
 }
 .plugin-panel-chev {

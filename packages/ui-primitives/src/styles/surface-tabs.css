@@ -1,0 +1,153 @@
+/*
+  右侧面板顶栏：Surface 标签（关闭按钮在图标的位置上，悬停时出现）、添加面板按钮与菜单、布局按钮，
+  空白处是窗口拖动区。标签、按钮与面板内容的布局在 workbench.css。
+*/
+.right-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--topbar-h);
+  flex: none;
+  padding: 0 8px 0 10px;
+  user-select: none;
+}
+.right-panel-bar > :not(.right-panel-drag) {
+  -webkit-app-region: no-drag;
+}
+.right-panel-drag {
+  flex: 1;
+  align-self: stretch;
+  min-width: 16px;
+  -webkit-app-region: drag;
+}
+.surface-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.surface-tabs::-webkit-scrollbar {
+  display: none;
+}
+.surface-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 88px;
+  max-width: 180px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: calc(var(--ui-scale) * 12.5px);
+}
+.surface-tab:hover {
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.surface-tab[data-active],
+.surface-tab[data-active]:hover {
+  flex-shrink: 0;
+  background: var(--active);
+  color: var(--fg);
+}
+/* 关闭按钮与标题两半拼成一个标签，圆角要压过全局焦点环，所以带上 .surface-tab */
+.surface-tab .surface-tab-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 26px;
+  flex: none;
+  padding: 0 0 0 4px;
+  border-radius: 6px 0 0 6px;
+  color: inherit;
+}
+.surface-tab-close .ic {
+  width: 13px;
+  height: 13px;
+}
+.surface-tab-close:hover {
+  color: var(--fg);
+}
+.surface-tab-icon {
+  display: grid;
+  place-items: center;
+}
+.surface-tab-x,
+.surface-tab:hover .surface-tab-icon,
+.surface-tab-close:focus-visible .surface-tab-icon {
+  display: none;
+}
+.surface-tab:hover .surface-tab-x,
+.surface-tab-close:focus-visible .surface-tab-x {
+  display: block;
+}
+.surface-tab .surface-tab-label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 26px;
+  padding: 0 10px 0 3px;
+  border-radius: 0 6px 6px 0;
+  color: inherit;
+  font: inherit;
+}
+.icon-btn.surface-add {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  margin-left: 2px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+/* 悬停和展开菜单时只有底色变化，图标保持次要文字色 */
+.icon-btn.surface-add:hover,
+.icon-btn.surface-add[aria-expanded="true"] {
+  color: var(--muted);
+}
+.icon-btn.surface-add .ic {
+  width: 15px;
+  height: 15px;
+}
+/* 「添加面板」菜单是 Menu 的弹层，只改最小宽度 */
+.menu-popup.surface-menu {
+  min-width: 220px;
+}
+.layout-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+/* 布局按钮：线程头和右侧面板顶栏都有。线程头里也用这里的圆角，所以多一条带 .panel-top 的选择器，
+   比 thread-header.css 的 .panel-top .btn.btn-icon 更具体 */
+.layout-controls .btn.btn-icon,
+.panel-top .layout-controls .btn.btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.layout-controls .btn.btn-icon:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.layout-controls .btn.btn-icon[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--fg);
+}
+.layout-controls .btn .ic {
+  width: 15px;
+  height: 15px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .surface-tab {
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
+}

@@ -1,0 +1,62 @@
+/*
+  PR Surface：创建 PR 的表单，已有 PR 时的卡片（编号、标题、分支与链接）。
+*/
+.pr-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-form,
+.pr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.pr-form > .btn {
+  align-self: flex-end;
+}
+.pr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-field > span {
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.pr-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pr-number {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.pr-title {
+  font-size: calc(var(--ui-scale) * 14px);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.pr-branches {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+.pr-link {
+  overflow: hidden;
+  color: var(--link);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pr-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

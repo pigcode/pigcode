@@ -1,0 +1,41 @@
+/*
+  胶囊按钮（.chip-btn）：输入区工具栏、输入框下方一行和线程头里的文字按钮，左边可以带图标，右边可以带下拉箭头。
+  所在区域只改颜色和内边距，写在区域样式里，用带区域类名的选择器。
+*/
+.chip-btn {
+  display: inline-flex;
+  height: 28px;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: var(--r-md);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.chip-btn > .ic:first-child {
+  color: var(--muted);
+}
+.chip-btn .chip-caret {
+  width: 11px;
+  height: 11px;
+  margin-left: -1px;
+  color: var(--faint);
+}
+.chip-btn:hover,
+.chip-btn[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chip-btn {
+    transition:
+      background var(--t-fast) var(--ease),
+      color var(--t-fast) var(--ease),
+      box-shadow var(--t-fast) var(--ease);
+  }
+}

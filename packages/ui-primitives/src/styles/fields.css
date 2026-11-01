@@ -1,0 +1,25 @@
+/*
+  表单字段：Field 的外框、标签、说明与错误文字。输入框、开关这些控件本身在 controls.css。
+*/
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field > label,
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--fg-2);
+}
+.hint {
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.error-text {
+  font-size: var(--fs-xs);
+  color: var(--bad-text);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

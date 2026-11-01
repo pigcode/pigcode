@@ -1,0 +1,204 @@
+/*
+  回答与过程消息的 Markdown：段落、标题、列表与任务项、行内代码、引用、分隔线、图片与表格。代码块在 code-block.css。
+*/
+.msg-ai,
+.work-message {
+  min-width: 0;
+  color: var(--fg);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  line-height: 1.75;
+  letter-spacing: 0.025em;
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 1em 0;
+}
+.md strong {
+  font-weight: 500;
+}
+.md em {
+  font-style: italic;
+}
+.md del {
+  text-decoration: line-through;
+}
+.md a {
+  color: var(--link);
+  font-weight: 500;
+  text-decoration: none;
+  text-underline-offset: 4px;
+}
+.md a:hover {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+.md .md-h {
+  margin: 24px 0 16px;
+  color: var(--fg);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.5;
+}
+.md .md-h1 {
+  font-size: var(--cv-fs-xl);
+}
+.md .md-h2 {
+  font-size: var(--cv-fs-lg);
+}
+.md .md-h5 {
+  font-weight: 500;
+}
+.md .md-h6 {
+  font-weight: 400;
+}
+.md ul,
+.md ol {
+  display: flex;
+  margin: 12px 0;
+  flex-direction: column;
+  gap: 6px;
+}
+.md ul {
+  padding-left: 20px;
+  list-style: disc outside;
+}
+.md ol {
+  padding-left: 0;
+  list-style: decimal inside;
+}
+.md li {
+  padding-left: 4px;
+}
+.md li::marker {
+  color: var(--cv-subtlest);
+}
+.md li > ul,
+.md li > ol {
+  margin: 6px 0;
+}
+.md li.md-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-left: -20px;
+  list-style: none;
+}
+.md .md-check {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 0.45em;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+.md .md-check[data-checked] {
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+}
+.md .md-check .ic {
+  width: 10px;
+  height: 10px;
+  stroke-width: 3;
+}
+.md code {
+  margin: 0 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--cv-inline-code);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+  font-weight: var(--font-weight-code);
+  letter-spacing: 0;
+}
+.md blockquote {
+  margin: 16px 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--cv-border);
+  color: var(--cv-subtle);
+}
+.md blockquote > p {
+  margin: 0;
+}
+.md blockquote > p + p {
+  margin-top: 8px;
+}
+.md hr {
+  height: 1px;
+  margin: 20px 0;
+  border: 0;
+  background: var(--cv-border);
+}
+.md .md-image {
+  display: block;
+  width: fit-content;
+  max-width: 50%;
+  margin: 16px 0;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.md .md-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  height: auto;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--bg);
+  object-fit: cover;
+}
+.md .md-table {
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+}
+.md .md-table table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--cv-fs);
+  letter-spacing: normal;
+}
+.md .md-table th,
+.md .md-table td {
+  min-width: 64px;
+  max-width: 28rem;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cv-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+.md .md-table th {
+  color: var(--cv-subtlest);
+  font-weight: 400;
+}
+.md .md-table tr:last-child td {
+  border-bottom: 0;
+}
+.md .md-table tbody tr:hover {
+  background: color-mix(in oklab, var(--hover) 20%, transparent);
+}
+.md .md-table [data-align="center"] {
+  text-align: center;
+}
+.md .md-table [data-align="right"] {
+  text-align: right;
+}
+.msg-ai.is-streaming > :last-child {
+  margin-bottom: 0;
+}

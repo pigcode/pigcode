@@ -1,0 +1,62 @@
+/*
+  底部提示（Toast）：窗口底部居中的一列提示，操作失败的错误与 Host 连接状态也用它，可以带关闭按钮。
+*/
+.toast-stack {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+/* 错误与连接状态的提示（.toast-error、.toast-warn）和普通提示同样的宽度与文字颜色 */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 420px;
+  padding: 8px 13px;
+  border-radius: var(--r-panel);
+  background: var(--popover-glass);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  backdrop-filter: blur(24px) saturate(1.8);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  box-shadow: var(--shadow-pop);
+  pointer-events: auto;
+  animation: toast-in 160ms var(--ease);
+}
+.toast .ic {
+  color: var(--muted);
+}
+.toast.is-leaving {
+  opacity: 0;
+  transition: opacity 140ms var(--ease);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+}
+.toast-error .toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--muted);
+}
+.toast-close:hover {
+  background: var(--hover);
+  color: var(--fg);
+}

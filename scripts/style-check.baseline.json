@@ -4,58 +4,107 @@
     "files": {
       "packages/ui-primitives/src/styles/browser.css": 1,
       "packages/ui-primitives/src/styles/composer.css": 1,
-      "packages/ui-primitives/src/styles/conversation.css": 19,
       "packages/ui-primitives/src/styles/glass.css": 20,
-      "packages/ui-primitives/src/styles/indicators.css": 2,
+      "packages/ui-primitives/src/styles/sidebar.css": 2,
       "packages/ui-primitives/src/styles/tabs.css": 2,
+      "packages/ui-primitives/src/styles/timeline.css": 13,
+      "packages/ui-primitives/src/styles/tool-cards.css": 6,
       "packages/ui-primitives/src/theme/appearance-glass.ts": 48,
       "packages/ui-primitives/src/theme/appearance-tokens.ts": 6,
       "packages/ui-workbench/src/terminal-theme.ts": 2
     }
   },
   "radius": {
-    "total": 69,
+    "total": 66,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 1,
+      "packages/ui-primitives/src/styles/approvals.css": 5,
+      "packages/ui-primitives/src/styles/base.css": 1,
+      "packages/ui-primitives/src/styles/browser.css": 2,
+      "packages/ui-primitives/src/styles/chat-empty.css": 2,
+      "packages/ui-primitives/src/styles/code-block.css": 2,
+      "packages/ui-primitives/src/styles/composer-input.css": 1,
       "packages/ui-primitives/src/styles/composer.css": 5,
-      "packages/ui-primitives/src/styles/conversation.css": 35,
+      "packages/ui-primitives/src/styles/file-summary.css": 4,
       "packages/ui-primitives/src/styles/files.css": 1,
-      "packages/ui-primitives/src/styles/globals.css": 24,
-      "packages/ui-primitives/src/styles/indicators.css": 1,
-      "packages/ui-primitives/src/styles/open-in.css": 2
+      "packages/ui-primitives/src/styles/markdown.css": 5,
+      "packages/ui-primitives/src/styles/open-in.css": 2,
+      "packages/ui-primitives/src/styles/palette.css": 2,
+      "packages/ui-primitives/src/styles/sidebar.css": 2,
+      "packages/ui-primitives/src/styles/status-panel.css": 4,
+      "packages/ui-primitives/src/styles/surface-launcher.css": 2,
+      "packages/ui-primitives/src/styles/surface-tabs.css": 5,
+      "packages/ui-primitives/src/styles/terminal.css": 3,
+      "packages/ui-primitives/src/styles/thread-header.css": 1,
+      "packages/ui-primitives/src/styles/timeline.css": 3,
+      "packages/ui-primitives/src/styles/toast.css": 1,
+      "packages/ui-primitives/src/styles/tool-cards.css": 10,
+      "packages/ui-primitives/src/styles/tool-row.css": 1,
+      "packages/ui-primitives/src/styles/turn-nav.css": 1
     }
   },
   "fontSize": {
-    "total": 28,
+    "total": 26,
     "files": {
+      "packages/ui-primitives/src/styles/base.css": 1,
+      "packages/ui-primitives/src/styles/browser.css": 1,
+      "packages/ui-primitives/src/styles/chat-empty.css": 2,
+      "packages/ui-primitives/src/styles/composer-input.css": 1,
       "packages/ui-primitives/src/styles/composer.css": 1,
+      "packages/ui-primitives/src/styles/drawer.css": 1,
       "packages/ui-primitives/src/styles/files.css": 2,
-      "packages/ui-primitives/src/styles/globals.css": 24,
-      "packages/ui-primitives/src/styles/open-in.css": 1
+      "packages/ui-primitives/src/styles/open-in.css": 1,
+      "packages/ui-primitives/src/styles/palette.css": 4,
+      "packages/ui-primitives/src/styles/pr-panel.css": 1,
+      "packages/ui-primitives/src/styles/settings-page.css": 1,
+      "packages/ui-primitives/src/styles/sidebar.css": 5,
+      "packages/ui-primitives/src/styles/surface-launcher.css": 1,
+      "packages/ui-primitives/src/styles/surface-tabs.css": 1,
+      "packages/ui-primitives/src/styles/terminal.css": 1,
+      "packages/ui-primitives/src/styles/thread-header.css": 1,
+      "packages/ui-primitives/src/styles/workbench.css": 1
     }
   },
   "height": {
-    "total": 152,
+    "total": 128,
     "files": {
       "packages/ui-primitives/src/styles/agents.css": 1,
-      "packages/ui-primitives/src/styles/browser.css": 2,
+      "packages/ui-primitives/src/styles/approvals.css": 4,
+      "packages/ui-primitives/src/styles/base.css": 1,
+      "packages/ui-primitives/src/styles/browser.css": 5,
+      "packages/ui-primitives/src/styles/chat-empty.css": 4,
+      "packages/ui-primitives/src/styles/chips.css": 2,
+      "packages/ui-primitives/src/styles/code-block.css": 2,
+      "packages/ui-primitives/src/styles/composer-input.css": 7,
       "packages/ui-primitives/src/styles/composer.css": 5,
       "packages/ui-primitives/src/styles/controls.css": 6,
-      "packages/ui-primitives/src/styles/conversation.css": 45,
+      "packages/ui-primitives/src/styles/file-summary.css": 4,
       "packages/ui-primitives/src/styles/files.css": 9,
-      "packages/ui-primitives/src/styles/globals.css": 74,
-      "packages/ui-primitives/src/styles/indicators.css": 1,
+      "packages/ui-primitives/src/styles/markdown.css": 2,
       "packages/ui-primitives/src/styles/open-in.css": 3,
+      "packages/ui-primitives/src/styles/palette.css": 2,
       "packages/ui-primitives/src/styles/plugins.css": 1,
-      "packages/ui-primitives/src/styles/tabs.css": 5
+      "packages/ui-primitives/src/styles/project-dialog.css": 1,
+      "packages/ui-primitives/src/styles/settings-page.css": 2,
+      "packages/ui-primitives/src/styles/sidebar.css": 8,
+      "packages/ui-primitives/src/styles/status-panel.css": 8,
+      "packages/ui-primitives/src/styles/surface-launcher.css": 3,
+      "packages/ui-primitives/src/styles/surface-tabs.css": 8,
+      "packages/ui-primitives/src/styles/tabs.css": 5,
+      "packages/ui-primitives/src/styles/terminal.css": 5,
+      "packages/ui-primitives/src/styles/thread-header.css": 3,
+      "packages/ui-primitives/src/styles/timeline.css": 10,
+      "packages/ui-primitives/src/styles/titlebar.css": 4,
+      "packages/ui-primitives/src/styles/toast.css": 1,
+      "packages/ui-primitives/src/styles/tool-cards.css": 7,
+      "packages/ui-primitives/src/styles/tool-row.css": 2,
+      "packages/ui-primitives/src/styles/turn-nav.css": 2,
+      "packages/ui-primitives/src/styles/workbench.css": 1
     }
   },
   "duplicateSelector": {
-    "total": 55,
-    "files": {
-      "packages/ui-primitives/src/styles/conversation.css": 4,
-      "packages/ui-primitives/src/styles/globals.css": 51
-    }
+    "total": 0,
+    "files": {}
   },
   "uiText": {
     "total": 0,

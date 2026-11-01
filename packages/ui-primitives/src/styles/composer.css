@@ -46,6 +46,12 @@
 .permission-chip[data-mode="danger-full-access"] {
   background: var(--warn-soft);
 }
+/* 悬停和展开菜单时和普通胶囊一样 */
+.permission-chip[data-mode="danger-full-access"]:hover,
+.permission-chip[data-mode="danger-full-access"][aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
 .permission-chip[data-mode="plan"] > .ic:first-child {
   color: var(--accent-text);
 }
@@ -55,10 +61,6 @@
 .permission-item.is-danger,
 .permission-item.is-danger .ic {
   color: var(--warn-text);
-}
-.send.is-stop {
-  background: var(--fg);
-  color: var(--surface-raised);
 }
 
 /* ─── 模型选择器：左栏 agent，右栏模型与思考深度 ───────────── */
@@ -209,7 +211,4 @@
 }
 .chip-btn.model-chip .entity-avatar {
   margin-right: 1px;
-}
-.composer-under {
-  justify-content: space-between;
 }

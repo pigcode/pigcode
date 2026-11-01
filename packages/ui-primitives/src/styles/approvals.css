@@ -1,0 +1,141 @@
+/*
+  待处理的审批与提问：唯一需要用户动手的卡片。审批、计划确认与提问的问题、选项和操作按钮。
+*/
+.perm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--cv-border);
+  border-radius: 16px;
+  background: var(--popover);
+  box-shadow: var(--cv-shadow-md);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+}
+.perm .q {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.perm .q > .ic {
+  width: 16px;
+  height: 16px;
+  color: var(--cv-subtle);
+}
+.perm > p {
+  color: var(--cv-subtle);
+}
+.perm pre {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--cv-border);
+  border-radius: 8px;
+  background: var(--cv-panel);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.perm .acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.perm .acts .btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: var(--cv-fs);
+}
+.perm-done {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cv-subtle);
+}
+.plan-approval-body {
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px 0;
+  font-family: var(--font-content);
+  line-height: 1.75;
+}
+.question-card fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.question-card legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.question-header {
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--cv-surface);
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-xs);
+  font-weight: 500;
+}
+.question-text {
+  font-weight: 500;
+}
+.question-hint {
+  color: var(--cv-subtlest);
+  font-size: var(--cv-fs-sm);
+}
+.question-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.question-option:hover {
+  background: var(--hover);
+}
+.question-option:has(input:checked) {
+  background: var(--cv-surface);
+}
+.question-option input {
+  accent-color: var(--fg);
+}
+.question-option-desc {
+  grid-column: 2;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.question-other {
+  height: 32px;
+  margin-top: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--cv-border);
+  border-radius: 8px;
+  background: var(--cv-card);
+  color: var(--fg);
+  font: inherit;
+}
+.question-other:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .perm {
+    animation: message-in 200ms var(--ease) both;
+  }
+}

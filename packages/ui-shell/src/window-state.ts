@@ -79,7 +79,7 @@ export function historyStep(
   return event.key === "ArrowLeft" ? "back" : event.key === "ArrowRight" ? "forward" : null
 }
 
-/** 与 globals.css 的窄窗口断点一致：更窄时侧栏改成浮在内容上的抽屉。 */
+/** 与 sidebar.css、workspace.css 的窄窗口断点一致：更窄时侧栏改成浮在内容上的抽屉。 */
 const NARROW_QUERY = "(max-width: 960px)"
 
 function matchesNarrow(): boolean {

@@ -96,15 +96,15 @@
   background: var(--hover);
   color: var(--fg);
 }
-.thread-tab-add {
+.icon-btn.thread-tab-add {
   width: 26px;
   height: 26px;
   flex: none;
   border-radius: var(--r-md);
   color: var(--muted);
 }
-.thread-tab-add:hover,
-.thread-tab-add[data-popup-open] {
+.icon-btn.thread-tab-add:hover,
+.icon-btn.thread-tab-add[data-popup-open] {
   background: var(--hover);
   color: var(--fg);
 }

@@ -1,0 +1,134 @@
+/*
+  工作台：右侧面板的外框、Surface 的内容区与面板之间共用的部分（分节标题、错误提示），以及工作树的选择与列表。
+  顶栏在 surface-tabs.css，各个 Surface 的内容在 surface-launcher.css、browser.css、terminal.css、files.css、
+  diff.css、checkpoints.css 与 pr-panel.css。
+*/
+.workbench {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+.workbench .right-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.right-panel-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.surface-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.surface-pane[hidden] {
+  display: none;
+}
+.surface-scroll {
+  padding: 4px 12px 12px;
+  overflow: auto;
+}
+.workbench-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 2px 10px;
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.workbench-error {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: var(--fs-sm);
+}
+/* ─── 工作树：右侧面板顶部的紧凑选择与列表 ─────────────── */
+.workbench-worktree-compact {
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: var(--hair) solid var(--divider);
+  background: none;
+}
+.worktree-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.worktree-compact-label {
+  color: var(--muted);
+  font-size: calc(var(--ui-scale) * 11px);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* 选择框是 Select 的触发器，在这一行里不占满宽度 */
+.select-trigger.worktree-compact-select {
+  width: auto;
+  min-width: 0;
+}
+.worktree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.worktree-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: var(--hair) solid var(--border);
+  border-radius: var(--r-md);
+}
+.worktree-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.worktree-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.worktree-branch,
+.worktree-active,
+.worktree-confirm {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.worktree-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

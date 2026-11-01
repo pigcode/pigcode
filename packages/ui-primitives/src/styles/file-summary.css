@@ -1,0 +1,122 @@
+/*
+  改动汇总卡片：一轮结束后列出改动的文件、增删行数，以及查看与打开的按钮。
+*/
+.file-summary {
+  overflow: hidden;
+  border: 1px solid var(--cv-border);
+  border-radius: 12px;
+  background: var(--cv-card);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+}
+.file-summary-head {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--fg);
+  text-align: left;
+  transition: background var(--t-fast);
+}
+.file-summary-head:hover {
+  background: var(--hover);
+}
+.file-summary-chev {
+  color: var(--cv-subtlest);
+  transition: transform 200ms var(--ease);
+}
+.file-summary[data-open] .file-summary-chev {
+  transform: rotate(90deg);
+}
+.file-summary-title {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-summary-stat {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.file-summary-list {
+  display: grid;
+  border-top: 1px solid var(--cv-border);
+  list-style: none;
+}
+.file-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: color-mix(in oklab, var(--bg) 50%, transparent);
+}
+.file-summary-row + .file-summary-row {
+  border-top: 1px solid var(--cv-hairline);
+}
+.file-summary-file {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.file-summary-file[role="button"] {
+  cursor: pointer;
+}
+.file-summary-file[role="button"]:hover {
+  background: color-mix(in oklab, var(--hover) 30%, transparent);
+}
+.file-summary-file .file-icon {
+  width: 16px;
+  height: 16px;
+}
+.file-summary-name {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  color: var(--fg);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-summary-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cv-subtlest);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-summary-row[data-operation="delete"] .file-summary-name {
+  text-decoration: line-through;
+}
+.file-summary-review {
+  height: 28px;
+  flex: none;
+  padding: 0 8px;
+  border: 1px solid var(--cv-border);
+  border-radius: 8px;
+  background: var(--cv-card);
+  color: var(--fg);
+}
+.file-summary-review:hover {
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+.file-summary-open {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 8px;
+  color: var(--cv-subtle);
+}
+.file-summary-open:hover {
+  background: var(--hover);
+  color: var(--fg);
+}

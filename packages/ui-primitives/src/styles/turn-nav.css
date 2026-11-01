@@ -1,0 +1,113 @@
+/*
+  问题导航：对话区左侧一列短横线，一条代表一次提问；悬停时弹出这一问的提问与回答摘要。
+*/
+.turn-nav {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  width: 48px;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-8px);
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms ease-out,
+    visibility 150ms;
+}
+@container conversation (min-width: 864px) {
+  .turn-nav {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+}
+.turn-nav-rail {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  display: flex;
+  width: 36px;
+  max-height: calc(100% - 6rem);
+  flex-direction: column;
+  padding: 4px 0;
+  overflow: hidden auto;
+  pointer-events: auto;
+  scrollbar-width: none;
+  transform: translateY(-50%);
+}
+.turn-nav-rail::-webkit-scrollbar {
+  display: none;
+}
+.turn-nav-item {
+  display: flex;
+  width: 36px;
+  height: 10px;
+  flex: none;
+  align-items: center;
+  border-radius: 4px;
+}
+.turn-nav-bar {
+  display: block;
+  width: 12px;
+  height: 2px;
+  border-radius: var(--r-full);
+  background: var(--cv-subtlest);
+  opacity: 0.55;
+  transform-origin: left;
+  transition:
+    opacity 150ms ease-out,
+    transform 150ms ease-out,
+    background-color 150ms ease-out;
+}
+.turn-nav-item[data-running] .turn-nav-bar {
+  opacity: 0.72;
+}
+.turn-nav-item[aria-current] .turn-nav-bar {
+  background: var(--fg);
+  opacity: 0.9;
+}
+.turn-nav-item:hover .turn-nav-bar,
+.turn-nav-item:focus-visible .turn-nav-bar {
+  background: var(--fg);
+  opacity: 1;
+  transform: scaleX(1.5);
+}
+/* 问题导航的悬停卡片：外观是 .tip-popup，内容是这一问的提问与回答摘要 */
+.turn-nav-card {
+  display: flex;
+  width: 20rem;
+  max-width: calc(100vw - 2rem);
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  font-size: var(--cv-fs);
+  line-height: 20px;
+}
+.turn-nav-user {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-weight: 500;
+  white-space: pre-line;
+}
+.turn-nav-assistant {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: color-mix(in oklab, var(--fg) 80%, transparent);
+}
+.turn-nav-assistant[data-empty] {
+  color: var(--cv-subtle);
+}
+@media (prefers-reduced-motion: reduce) {
+  .turn-nav,
+  .turn-nav-bar {
+    transition: none;
+  }
+}

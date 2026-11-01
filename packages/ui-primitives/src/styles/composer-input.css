@@ -1,0 +1,182 @@
+/*
+  输入区：对话下方的输入框卡片、TipTap 编辑区、工具栏（附件、权限、模型与发送）和输入框下方的一行。
+  胶囊按钮本身在 chips.css，@ 与 / 建议、模型选择器在 composer.css；这里只写输入区的布局和各按钮在输入区里的样子。
+*/
+
+/* ─── 输入框卡片 ───────────────────────────────────────── */
+.composer-wrap {
+  padding: 0 32px 8px;
+}
+.composer-shell {
+  max-width: var(--chat-col);
+  margin: 0 auto;
+}
+.composer {
+  position: relative;
+  max-width: var(--chat-col);
+  margin: 0 auto;
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow:
+    0 0 0 var(--hair) var(--composer-ring),
+    var(--shadow-composer);
+  transition: box-shadow var(--t-med) var(--ease);
+}
+/* 聚焦只把细线加深一点，边框粗细不变 */
+.composer:focus-within {
+  box-shadow:
+    0 0 0 1px var(--composer-ring-focus),
+    var(--shadow-composer-focus);
+}
+.composer .tiptap {
+  min-height: 52px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 14px 16px 4px;
+  outline: none;
+  background: none;
+  font-size: var(--fs-content);
+  line-height: 1.6;
+}
+.composer.is-tall .tiptap {
+  min-height: 70px;
+}
+.composer .tiptap p {
+  margin: 0;
+}
+.composer .tiptap p.is-editor-empty:first-child::before {
+  float: left;
+  height: 0;
+  color: var(--faint);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+/* ─── 工具栏：左侧放附件和权限，右侧放模型、思考深度和发送 ─── */
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+.composer-side {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+.composer-side.end {
+  justify-content: flex-end;
+}
+.composer-bar .icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--muted);
+}
+/* 工具栏的图标按钮悬停和展开时也保持次要文字色，只有底色变化 */
+.composer-bar .icon-btn:hover,
+.composer-bar .icon-btn[aria-expanded="true"] {
+  color: var(--muted);
+}
+.composer-bar .icon-btn .ic {
+  width: 16px;
+  height: 16px;
+}
+/* 附件按钮是菜单的触发器；菜单展开时保持自己的底色，悬停时才变深 */
+.composer-bar .composer-attach,
+.composer-bar .composer-attach[aria-expanded="true"] {
+  background: var(--field);
+}
+.composer-bar .composer-attach:hover {
+  background: var(--active);
+}
+
+/* 发送与停止：Button 的 plain 变体，圆形、前景色底 */
+.btn.send {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  margin-left: 4px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: none;
+  transition:
+    background var(--t-fast),
+    transform var(--t-fast);
+}
+.send:hover {
+  background: color-mix(in oklab, var(--fg) 86%, var(--bg));
+}
+.send:active {
+  transform: scale(0.96);
+}
+.send[aria-disabled="true"] {
+  background: var(--active);
+  color: var(--faint);
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  pointer-events: none;
+}
+.btn.send .ic {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
+}
+
+/* ─── 输入框下方一行：左边权限模式，右边按键提示（聚焦时出现） ─── */
+.composer-under {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  padding: 2px 2px 0;
+}
+.composer-under .chip-btn {
+  color: var(--muted);
+}
+.composer-under .chip-btn:hover,
+.composer-under .chip-btn[aria-expanded="true"] {
+  color: var(--fg);
+}
+.composer-hint {
+  margin-right: 4px;
+  color: var(--faint);
+  font-size: calc(var(--ui-scale) * 10.5px);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.composer-shell:focus-within .composer-hint {
+  opacity: 1;
+}
+
+/* ─── 模型胶囊：provider 或模型名 + 思考深度，菜单里分组切换 ─── */
+.chip-btn.model-chip {
+  gap: 6px;
+  max-width: 300px;
+}
+.model-name {
+  min-width: 0;
+  color: var(--fg);
+}
+.model-depth {
+  flex: none;
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .composer-wrap {
+    padding: 0 12px 12px;
+  }
+  .composer .chip-btn .chip-label-optional {
+    display: none;
+  }
+}

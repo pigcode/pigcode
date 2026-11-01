@@ -5,7 +5,8 @@
   只在 [data-glass="true"] 下生效；浏览器里仍使用 tokens.css 的不透明配色。
 */
 
-[data-glass="true"] {
+/* 带 :root：比 tokens.css 的 [data-theme] 主题块更具体，不靠导入顺序 */
+:root[data-glass="true"] {
   /* 整窗只叠一层很薄的色调，侧栏直接露出系统材质 */
   --glass-tint: oklch(100% 0 0 / 0.16);
   --window: transparent;
@@ -30,7 +31,7 @@
   --glass-blur: blur(28px) saturate(1.7);
 }
 
-[data-glass="true"][data-theme="dark"] {
+:root[data-glass="true"][data-theme="dark"] {
   --glass-tint: oklch(0% 0 0 / 0.42);
   --bg: oklch(0% 0 0 / 0.14);
 
@@ -58,8 +59,7 @@
 /* 盖在内容上的层自己做一次模糊，避免透出下面的文字 */
 [data-glass="true"] .dialog,
 [data-glass="true"] .drawer,
-[data-glass="true"] .composer,
-[data-glass="true"] .side-notice {
+[data-glass="true"] .composer {
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }
