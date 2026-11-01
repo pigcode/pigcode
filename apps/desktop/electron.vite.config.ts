@@ -4,7 +4,10 @@ import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from "electron-vite"
 
 export default defineConfig({
-  main: { build: { outDir: "out/main" } },
+  // 标题栏默认色取自 ui-primitives 的 tokens.css 与纯函数模块；它的入口是 TS 源码，打进 main 而不外置。
+  main: {
+    build: { outDir: "out/main", externalizeDeps: { exclude: ["@pigcode/ui-primitives"] } },
+  },
   // sandbox 渲染器只能加载 CJS preload，因此显式输出 .cjs。
   preload: {
     build: {

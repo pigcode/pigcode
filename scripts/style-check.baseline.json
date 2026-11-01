@@ -1,8 +1,7 @@
 {
   "color": {
-    "total": 146,
+    "total": 101,
     "files": {
-      "apps/desktop/src/main/window-options.ts": 4,
       "packages/ui-primitives/src/styles/browser.css": 1,
       "packages/ui-primitives/src/styles/composer.css": 1,
       "packages/ui-primitives/src/styles/conversation.css": 19,
@@ -11,8 +10,7 @@
       "packages/ui-primitives/src/styles/tabs.css": 2,
       "packages/ui-primitives/src/theme/appearance-glass.ts": 48,
       "packages/ui-primitives/src/theme/appearance-tokens.ts": 6,
-      "packages/ui-shell/src/title-bar.tsx": 1,
-      "packages/ui-workbench/src/terminal-view.tsx": 42
+      "packages/ui-workbench/src/terminal-theme.ts": 2
     }
   },
   "radius": {

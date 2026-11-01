@@ -288,6 +288,12 @@ function colorVars(
   if (accent) Object.assign(vars, accentGroup(accent))
   if (bg && !env.glass) Object.assign(vars, cssOf(surfacePaints(bg, tone)))
   if (fg) Object.assign(vars, textGroup(fg, bg ?? pigclaudeBg[env.resolved]))
+  // 终端是不透明的一块，磨砂下也一样：浅色主题接近白色的表面，深色主题比底色再暗一点；文字直接用主题前景色
+  // ANSI 配色和默认文字色跟随当前明暗，主题背景的明暗和它不一致时终端底色保持默认，免得深底配深字
+  if (bg && tone === env.resolved) {
+    vars["--term-bg"] = tone === "light" ? mixHex(bg, white, 0.7) : mixHex(bg, black, 0.2)
+  }
+  if (fg) vars["--term-fg"] = fg
   const g = settings.glass
   const glassMix = env.glass ? Math.min(1, g / defaultGlass) : 0
   if (bg || settings.contrast !== defaultContrast || (glassMix < 1 && env.glass)) {

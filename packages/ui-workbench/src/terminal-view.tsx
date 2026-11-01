@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react"
 import { FitAddon } from "@xterm/addon-fit"
 import { Terminal, type ITheme } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
+import { documentTokenReader, resolveCssColor } from "@pigcode/ui-primitives"
+import { terminalTheme } from "./terminal-theme"
 
 /** 父组件持有的终端句柄；用于写入 PTY 输出和主动聚焦。 */
 export interface TerminalHandle {
@@ -21,65 +23,9 @@ export interface TerminalViewProps {
   theme?: ITheme
 }
 
-/**
- * 未传 theme 时按 html[data-theme] 选用的配色；背景与前景和 tokens.css 的 --term-bg / --term-fg 一致，
- * 改动时两边同步。
- */
-export const TERMINAL_THEMES: Record<"light" | "dark", ITheme> = {
-  light: {
-    background: "#ffffff",
-    foreground: "#27272a",
-    cursor: "#3b5bdb",
-    cursorAccent: "#ffffff",
-    selectionBackground: "#3b5bdb2e",
-    black: "#27272a",
-    red: "#d1364b",
-    green: "#1f8a4c",
-    yellow: "#a86a00",
-    blue: "#3463d6",
-    magenta: "#8a3fd1",
-    cyan: "#0f7f8f",
-    white: "#6b6b7b",
-    brightBlack: "#8b8b9a",
-    brightRed: "#e5485d",
-    brightGreen: "#2aa160",
-    brightYellow: "#c27d00",
-    brightBlue: "#4b78ea",
-    brightMagenta: "#a259e6",
-    brightCyan: "#1496a8",
-    brightWhite: "#3a3a48",
-  },
-  dark: {
-    background: "#161616",
-    foreground: "#e4e4e7",
-    cursor: "#7c93f2",
-    cursorAccent: "#161616",
-    selectionBackground: "#7c93f240",
-    black: "#2c2c38",
-    red: "#ff6b7d",
-    green: "#5fd38d",
-    yellow: "#f2c35b",
-    blue: "#7aa2ff",
-    magenta: "#c79bff",
-    cyan: "#5ccfe0",
-    white: "#c8c8d4",
-    brightBlack: "#6b6b7d",
-    brightRed: "#ff8a98",
-    brightGreen: "#7fe3a5",
-    brightYellow: "#ffd47a",
-    brightBlue: "#9ab9ff",
-    brightMagenta: "#dab8ff",
-    brightCyan: "#7fdeec",
-    brightWhite: "#f4f4f8",
-  },
-}
-
-/** 读取当前界面明暗；没有 DOM 时按浅色处理。 */
+/** 未传 theme 时按 <html> 上当前的 --term-* token 生成配色，外观设置的内联覆盖也算在内。 */
 function documentTheme(): ITheme {
-  if (typeof document === "undefined") return TERMINAL_THEMES.light
-  return document.documentElement.dataset.theme === "dark"
-    ? TERMINAL_THEMES.dark
-    : TERMINAL_THEMES.light
+  return terminalTheme(documentTokenReader(), resolveCssColor)
 }
 
 /** 终端视图入口；只负责渲染，不启动进程。 */
@@ -124,16 +70,23 @@ export function TerminalView({ onData, onResize, onReady, className, theme }: Te
     )
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => fit())
     observer?.observe(host)
-    // 外部没有指定配色时，界面切换明暗后终端跟着换。
+    // 外部没有指定配色时，明暗切换和外观设置改写 <html> 上的 token 后终端跟着换；
+    // 拖动取色器时每次都会触发，所以只在配色真的变了时才交给 xterm 重绘。
+    let appliedTheme = JSON.stringify(terminal.options.theme)
     const themeObserver =
       typeof MutationObserver === "undefined"
         ? null
         : new MutationObserver(() => {
-            if (!themeRef.current) terminal.options.theme = documentTheme()
+            if (themeRef.current) return
+            const next = documentTheme()
+            const key = JSON.stringify(next)
+            if (key === appliedTheme) return
+            appliedTheme = key
+            terminal.options.theme = next
           })
     themeObserver?.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-theme"],
+      attributeFilter: ["style", "data-theme"],
     })
 
     callbacksRef.current.onReady?.({

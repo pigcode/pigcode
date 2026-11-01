@@ -1,5 +1,12 @@
 /** 按平台生成主窗口选项：窗口按钮一律交给系统绘制，渲染进程只画按钮旁边的外壳。 */
 import type { BrowserWindowConstructorOptions } from "electron"
+import tokensCss from "@pigcode/ui-primitives/styles/tokens.css?raw"
+import {
+  parseCssColor,
+  titleBarColors,
+  tokenBlock,
+  tokenReader,
+} from "@pigcode/ui-primitives/theme-tokens"
 
 /** 窗口原生外观可以跟随的主题来源。 */
 export type ThemeSource = "light" | "dark" | "system"
@@ -23,11 +30,16 @@ export interface TitleBarColors {
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i
 
-/** 页面上报外观之前使用的颜色，与 tokens.css 的窗口底色和次级文字一致。 */
-export function defaultTitleBarColors(dark: boolean): TitleBarColors {
-  return dark
-    ? { color: "#0D0D0D", symbolColor: "#D4D4D8" }
-    : { color: "#F1F1F1", symbolColor: "#3F3F46" }
+/**
+ * 页面上报外观之前使用的颜色：构建时打包进来的 tokens.css 里默认主题的 --window 与 --fg-2，
+ * 和页面上报时用的是同一套 token 与取色规则。token 改成了这里解析不了的写法时返回 null：窗口照常打开，
+ * 先用系统默认的颜色，页面上报后再换成正确的颜色。
+ */
+export function defaultTitleBarColors(dark: boolean): TitleBarColors | null {
+  const tokens = tokenReader(tokenBlock(tokensCss, dark ? "dark" : "light"))
+  const colors = titleBarColors(tokens, parseCssColor)
+  if (!colors) console.warn("tokens.css: --window / --fg-2 could not be parsed for the title bar")
+  return colors
 }
 
 /** 校验渲染进程上报的标题栏颜色；只接受 6 位十六进制色，其他输入返回 null。 */
@@ -59,11 +71,12 @@ export function createMainWindowOptions({
   isPackaged: boolean
   dark?: boolean
 }): BrowserWindowConstructorOptions {
+  const initial = defaultTitleBarColors(dark)
   const options: BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
     show: false,
-    backgroundColor: defaultTitleBarColors(dark).color,
+    ...(initial ? { backgroundColor: initial.color } : {}),
     autoHideMenuBar: true,
     title: "Pigcode",
     webPreferences: {
@@ -90,7 +103,7 @@ export function createMainWindowOptions({
       ...options,
       ...(platform === "win32" ? { backgroundMaterial: "mica" as const } : {}),
       titleBarStyle: "hidden",
-      titleBarOverlay: { ...defaultTitleBarColors(dark), height: TITLE_BAR_HEIGHT },
+      titleBarOverlay: { ...initial, height: TITLE_BAR_HEIGHT },
     }
   }
   return options

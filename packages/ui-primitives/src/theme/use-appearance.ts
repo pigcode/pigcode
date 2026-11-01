@@ -5,9 +5,11 @@ import { loadAppearance, saveAppearance, saveCustomThemes } from "./appearance-s
 import type { AppearanceSettings } from "./appearance-settings"
 import type { AppearanceOutput } from "./appearance-tokens"
 import { deriveAppearance } from "./appearance-tokens"
+import { documentTokenReader, resolveCssColor } from "./resolve-color"
 import type { ResolvedTheme } from "./theme-model"
 import { resolveTheme } from "./theme-model"
 import type { ThemeDefinition } from "./theme-presets"
+import { titleBarColors } from "./theme-tokens"
 
 const darkQuery = "(prefers-color-scheme: dark)"
 const motionQuery = "(prefers-reduced-motion: reduce)"
@@ -31,7 +33,7 @@ function useMediaQuery(query: string): boolean {
 
 /**
  * 外观设置的唯一入口。保证：初次渲染读本机存储（含旧键迁移）；每次设置变化都会保存、
- * 重新推导并写到 `<html>`，同时同步 data-theme 和主进程窗口主题；开发期 ?theme= 优先。
+ * 重新推导并写到 `<html>`，同时同步 data-theme、主进程窗口主题和原生标题栏颜色；开发期 ?theme= 优先。
  */
 export function useAppearance() {
   const [initial] = useState(() => loadAppearance(window.localStorage))
@@ -44,6 +46,7 @@ export function useAppearance() {
   const prefersReducedMotion = useMediaQuery(motionQuery)
   const resolved = devTheme ?? resolveTheme(settings.mode, systemDark)
   const previous = useRef<AppearanceOutput | null>(null)
+  const reportedTitleBar = useRef("")
 
   const output = useMemo(
     () =>
@@ -64,6 +67,17 @@ export function useAppearance() {
     applyAppearance(document.documentElement, output, previous.current)
     previous.current = output
   }, [output])
+
+  // 写完变量后按 token 的计算值给原生标题栏上色，与页面 .titlebar 同源；颜色没变就不再上报。
+  useEffect(() => {
+    const native = window.pigcodeNative
+    if (!native?.setTitleBarColors) return
+    const colors = titleBarColors(documentTokenReader(), resolveCssColor)
+    const key = colors ? `${colors.color}${colors.symbolColor}` : ""
+    if (!colors || key === reportedTitleBar.current) return
+    reportedTitleBar.current = key
+    void native.setTitleBarColors(colors)
+  }, [output, resolved])
 
   useEffect(() => {
     saveAppearance(window.localStorage, settings)

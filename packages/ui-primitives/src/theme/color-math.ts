@@ -92,3 +92,27 @@ export function contrastRatio(a: Hex, b: Hex): number {
 export function readableOn(hex: Hex): "#000000" | "#FFFFFF" {
   return contrastRatio(hex, "#000000") >= contrastRatio(hex, "#FFFFFF") ? "#000000" : "#FFFFFF"
 }
+
+/** sRGB 传输函数：线性分量（0–1）编码成显示用的 0–255。 */
+const encodeSrgb = (linear: number): number => {
+  const v = clamp(linear, 0, 1)
+  return 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055)
+}
+
+/**
+ * OKLCH 转 `#RRGGBB`：l 为 0–1，c 为色度，h 为角度。超出 sRGB 的分量直接截断，
+ * 与 Chromium 把 oklch 画进 sRGB 画布的结果一致（只差取整）。
+ */
+export function oklchToHex(l: number, c: number, h: number): Hex {
+  const rad = (h * Math.PI) / 180
+  const a = c * Math.cos(rad)
+  const b = c * Math.sin(rad)
+  const lc = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3
+  const mc = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3
+  const sc = (l - 0.0894841775 * a - 1.291485548 * b) ** 3
+  return rgbToHex([
+    encodeSrgb(4.0767416621 * lc - 3.3077115913 * mc + 0.2309699292 * sc),
+    encodeSrgb(-1.2684380046 * lc + 2.6097574011 * mc - 0.3413193965 * sc),
+    encodeSrgb(-0.0041960863 * lc - 0.7034186147 * mc + 1.707614701 * sc),
+  ])
+}

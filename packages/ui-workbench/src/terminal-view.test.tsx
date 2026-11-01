@@ -82,6 +82,17 @@ class FakeResizeObserver {
 vi.mock("@xterm/xterm", () => ({ Terminal: xtermMock.FakeTerminal }))
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: xtermMock.FakeFitAddon }))
 
+/** jsdom 没有 tokens.css 的计算值，也没有画布：token 直接读 <html> 的内联变量，颜色只认十六进制。 */
+vi.mock("@pigcode/ui-primitives", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@pigcode/ui-primitives")>()
+  return {
+    ...actual,
+    documentTokenReader: () => (name: string) =>
+      document.documentElement.style.getPropertyValue(name).trim(),
+    resolveCssColor: actual.parseCssColor,
+  }
+})
+
 /** 读取指定序号的假终端；缺失时让测试立即失败。 */
 function terminalAt(index: number): InstanceType<typeof xtermMock.FakeTerminal> {
   const terminal = xtermMock.FakeTerminal.instances[index]
@@ -168,6 +179,37 @@ describe("TerminalView", () => {
 
     act(() => observerAt(0).trigger())
     expect(fit).toHaveBeenCalledTimes(2)
+  })
+
+  it("follows token changes on <html> and skips identical recomputes", async () => {
+    const root = document.documentElement
+    root.style.setProperty("--term-bg", "#101010")
+    root.style.setProperty("--term-cursor", "#123456")
+    render(<TerminalView />)
+
+    const terminal = terminalAt(0)
+    expect(terminal.options.theme).toEqual({ background: "#101010", cursor: "#123456" })
+
+    root.style.setProperty("--term-cursor", "#D97757")
+    await act(async () => {})
+    expect(terminal.options.theme).toEqual({ background: "#101010", cursor: "#D97757" })
+
+    const applied = terminal.options.theme
+    root.dataset.theme = "dark"
+    await act(async () => {})
+    expect(terminal.options.theme).toBe(applied)
+
+    root.removeAttribute("style")
+    delete root.dataset.theme
+  })
+
+  it("keeps an explicit theme prop", async () => {
+    const theme = { background: "#000000" }
+    render(<TerminalView theme={theme} />)
+    document.documentElement.style.setProperty("--term-bg", "#FFFFFF")
+    await act(async () => {})
+    expect(terminalAt(0).options.theme).toBe(theme)
+    document.documentElement.removeAttribute("style")
   })
 
   it("releases the handle when unmounted", () => {
