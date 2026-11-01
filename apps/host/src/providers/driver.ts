@@ -21,7 +21,7 @@ export interface ProviderRunConfig {
   maxQueuedRuns?: number
   /**
    * 注册开发与测试用的 fake agent；缺省时注册。随应用发布的 profile 关掉它，
-   * 此时只有 `PIGCODE_PROVIDER=fake`（E2E 与手动冒烟）会重新打开。
+   * 此时只有 `PIGCODE_AGENT=fake`（或旧名字 `PIGCODE_PROVIDER=fake`，E2E 与手动冒烟）会重新打开。
    */
   fake?: boolean
 }

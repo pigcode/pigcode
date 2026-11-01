@@ -8,6 +8,7 @@ import {
   DEFAULT_PROVIDER_KEY,
   createDetectionCache,
   customModelIds,
+  forcedAgentId,
   normalizeProviderSettings,
   pickDefaultProvider,
   providerSettingsKey,
@@ -95,7 +96,7 @@ export function createAgentCatalog(
       const configured = store()?.get(DEFAULT_PROVIDER_KEY)
       return pickDefaultProvider({
         registered: [...drivers.keys()],
-        forced: process.env.PIGCODE_PROVIDER,
+        forced: forcedAgentId(),
         configured: typeof configured === "string" ? configured : undefined,
         status: (id) => detectOne(id),
       })

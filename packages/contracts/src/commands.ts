@@ -1,7 +1,19 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
-import { providerSettingsValuesSchema } from "./agents"
+import { agentSettingsValuesSchema } from "./agents"
 import { permissionModeSchema, reasoningEffortSchema } from "./domain"
+
+/** 只读检测；refresh 跳过缓存重新运行，providerId 只检测这一个 agent。 */
+const agentDetectParams = z.object({
+  providerId: z.string().min(1).optional(),
+  refresh: z.boolean().optional(),
+})
+/** `agent.registered` 不带参数，返回已注册 driver 的 agent：id、名字与 Agent 功能。 */
+const agentRegisteredParams = z.object({})
+/** `agent.default` 不带参数，返回新会话默认使用的 agent `{ id }`；没有可用的 agent 时 id 为 null。 */
+const agentDefaultParams = z.object({})
+/** 一个 agent 的模型目录，含用户添加的自定义模型。 */
+const agentModelsParams = z.object({ providerId: z.string().min(1) })
 
 /** 命令方法到参数 schema 的映射。 */
 export const commandSchemas = {
@@ -60,20 +72,21 @@ export const commandSchemas = {
     requestId: z.string().min(1),
     answers: z.array(z.string()),
   }),
-  /** 只读检测；refresh 跳过缓存重新运行，providerId 只检测这一个 agent。 */
-  "provider.detect": z.object({
-    providerId: z.string().min(1).optional(),
-    refresh: z.boolean().optional(),
-  }),
-  "provider.list": z.object({}),
-  "provider.default": z.object({}),
-  "provider.models": z.object({ providerId: z.string().min(1) }),
+  "agent.detect": agentDetectParams,
+  "agent.registered": agentRegisteredParams,
+  "agent.default": agentDefaultParams,
+  "agent.models": agentModelsParams,
+  /** 旧名字，转到 `agent.*`；见 commandAliases。 */
+  "provider.detect": agentDetectParams,
+  "provider.list": agentRegisteredParams,
+  "provider.default": agentDefaultParams,
+  "provider.models": agentModelsParams,
   /** 设置页的 agent 列表：插件、能力、设置字段与当前值。 */
   "agent.list": z.object({}),
   /** 整体替换一个 agent 的设置值；对之后新建的会话、检测与模型目录生效。 */
   "agent.updateSettings": z.object({
     providerId: z.string().min(1),
-    values: providerSettingsValuesSchema,
+    values: agentSettingsValuesSchema,
   }),
   /** 新会话默认使用的 agent；null 表示自动挑选第一个可用的。 */
   "agent.setDefault": z.object({ providerId: z.string().min(1).nullable() }),
@@ -172,8 +185,31 @@ export const commandSchemas = {
   "terminal.close": z.object({ terminalId: z.string().min(1) }),
 } as const
 
+/**
+ * 旧命令名到新命令名：Host 按新名字处理，旧名字和新名字共用参数 schema 与返回值。
+ * `provider.list` 对应 `agent.registered`，不是 `agent.list`：后者是设置页的列表，形状不同。
+ */
+export const commandAliases = {
+  "provider.detect": "agent.detect",
+  "provider.list": "agent.registered",
+  "provider.default": "agent.default",
+  "provider.models": "agent.models",
+} as const satisfies Partial<Record<keyof typeof commandSchemas, keyof typeof commandSchemas>>
+
 /** 所有命令方法名的联合类型。 */
 export type CommandMethod = keyof typeof commandSchemas
+/** 只是别名的旧命令名。 */
+export type CommandAlias = keyof typeof commandAliases
+/** Host 实际处理的命令名。 */
+export type CanonicalCommandMethod = Exclude<CommandMethod, CommandAlias>
+
+/** 把旧命令名换成它转到的新命令名；其余原样返回。 */
+export function resolveCommandMethod(method: CommandMethod): CanonicalCommandMethod {
+  return method in commandAliases
+    ? commandAliases[method as CommandAlias]
+    : (method as CanonicalCommandMethod)
+}
+
 /** 指定命令方法的参数类型。 */
 export type CommandParams<M extends CommandMethod> = z.infer<(typeof commandSchemas)[M]>
 

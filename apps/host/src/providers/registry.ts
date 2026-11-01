@@ -12,6 +12,7 @@ import type {
 } from "./driver"
 import { FakeProviderDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
+import { forcedAgentId } from "./agent-settings"
 import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from "./errors"
 import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
@@ -44,7 +45,7 @@ export function apply(ctx: Context, config: ProviderRunConfig = {}): void {
   const maxQueuedRuns = config.maxQueuedRuns ?? 32
   // Claude Code、Codex 与第三方 agent 都由各自的插件注册；Host 只自带开发与测试用的 fake。
   const drivers = new Map<string, ProviderDriver>()
-  if (config.fake !== false || process.env.PIGCODE_PROVIDER === "fake") {
+  if (config.fake !== false || forcedAgentId() === "fake") {
     const fake = new FakeProviderDriver({
       callTool: (threadId, name, input) => {
         const bridge = ctx.reflect.get("mcpBridge")

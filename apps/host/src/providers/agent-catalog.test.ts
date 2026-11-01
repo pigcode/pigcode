@@ -12,6 +12,7 @@ import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 import {
   createDetectionCache,
+  forcedAgentId,
   normalizeProviderSettings,
   pickDefaultProvider,
 } from "./agent-settings"
@@ -222,6 +223,33 @@ describe("default agent", () => {
     await expect(pickDefaultProvider(input)).resolves.toBe("claude")
     await expect(pickDefaultProvider({ ...input, registered: ["fake"] })).resolves.toBe("fake")
     await expect(pickDefaultProvider({ ...input, registered: [] })).resolves.toBeNull()
+  })
+
+  it("reads the forced agent from PIGCODE_AGENT before the old PIGCODE_PROVIDER", () => {
+    expect(forcedAgentId({})).toBeUndefined()
+    expect(forcedAgentId({ PIGCODE_PROVIDER: "codex" })).toBe("codex")
+    expect(forcedAgentId({ PIGCODE_AGENT: "claude" })).toBe("claude")
+    expect(forcedAgentId({ PIGCODE_AGENT: "claude", PIGCODE_PROVIDER: "codex" })).toBe("claude")
+    // 空值当作没设。
+    expect(forcedAgentId({ PIGCODE_AGENT: "", PIGCODE_PROVIDER: "codex" })).toBe("codex")
+    expect(forcedAgentId({ PIGCODE_AGENT: "", PIGCODE_PROVIDER: "" })).toBeUndefined()
+  })
+
+  it("forces the default agent and the fake agent through PIGCODE_AGENT", async () => {
+    vi.stubEnv("PIGCODE_PROVIDER", "codex")
+    vi.stubEnv("PIGCODE_AGENT", "fake")
+    try {
+      // 随应用发布的 profile 不注册 fake；PIGCODE_AGENT=fake 重新打开它，并压过 PIGCODE_PROVIDER。
+      const ctx = await setup({ fake: false })
+      ctx.providers.register(recordingDriver("codex").driver)
+      expect(ctx.providers.list().map((driver) => driver.id)).toEqual(["fake", "codex"])
+      await expect(ctx.providers.defaultProvider()).resolves.toBe("fake")
+      vi.stubEnv("PIGCODE_AGENT", "")
+      await expect(ctx.providers.defaultProvider()).resolves.toBe("codex")
+      await ctx.fiber.dispose()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it("rejects malformed custom models", () => {

@@ -39,8 +39,8 @@ export const threadEventSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
-/** provider 适配器输出的规范化事件。 */
-export const providerEventSchema = z.discriminatedUnion("type", [
+/** Agent driver 输出的规范化事件。 */
+export const agentEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.started") }),
   z.object({ type: z.literal("session.started"), nativeSessionId: z.string() }),
   z.object({
@@ -117,6 +117,9 @@ export const providerEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.interrupted") }),
 ])
 
+/** @deprecated use agentEventSchema */
+export const providerEventSchema = agentEventSchema
+
 /** 终端输出通知；只走实时通道，不写入事件日志。 */
 export const terminalOutputSchema = z.object({
   terminalId: z.string().min(1),
@@ -133,8 +136,10 @@ export const threadSnapshotSchema = z.object({
 
 /** 持久线程事件的类型。 */
 export type ThreadEvent = z.infer<typeof threadEventSchema>
-/** 规范化 provider 事件的类型。 */
-export type ProviderEvent = z.infer<typeof providerEventSchema>
+/** 规范化 Agent 事件的类型。 */
+export type AgentEvent = z.infer<typeof agentEventSchema>
+/** @deprecated use AgentEvent */
+export type ProviderEvent = AgentEvent
 /** 线程订阅快照的类型。 */
 export type ThreadSnapshot = z.infer<typeof threadSnapshotSchema>
 /** 终端输出通知的类型。 */

@@ -10,6 +10,14 @@ import {
 } from "@pigcode/contracts"
 import type { SettingsService } from "../services/settings"
 
+/**
+ * 环境变量强制指定的 agent（E2E 与手动冒烟用）：`PIGCODE_AGENT`，旧名字 `PIGCODE_PROVIDER`；
+ * 两个都设了时用 `PIGCODE_AGENT`。空值视为没设。
+ */
+export function forcedAgentId(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return env.PIGCODE_AGENT || env.PIGCODE_PROVIDER || undefined
+}
+
 /** 用户选择的默认 agent。 */
 export const DEFAULT_PROVIDER_KEY = "agents.defaultProvider"
 
@@ -67,7 +75,7 @@ export function customModelIds(settings: ProviderSettingsValues): string[] {
 /** 选择默认 agent 需要的信息；registered 按注册顺序排列（内置 agent 在前）。 */
 export interface DefaultProviderInput {
   registered: readonly string[]
-  /** `PIGCODE_PROVIDER`：E2E 与手动冒烟用来强制指定。 */
+  /** 环境变量强制指定的 agent，见 forcedAgentId。 */
   forced: string | undefined
   /** 用户在设置页选择的默认 agent。 */
   configured: string | undefined

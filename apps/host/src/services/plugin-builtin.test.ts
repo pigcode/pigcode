@@ -24,11 +24,15 @@ import { apply as settings } from "./settings"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/** 写一个注册 provider 的 Host 插件包；settings 进入 contributes.provider。 */
+/**
+ * 写一个注册 agent 的 Host 插件包；settings 进入 contributes.provider，
+ * names 为 agent 时 manifest 改用新名字（kind、contributes 与 provides 都写 agent）。
+ */
 async function writeProviderPackage(
   dir: string,
   name: string,
   providerId: string,
+  names: "agent" | "provider" = "provider",
 ): Promise<string> {
   await mkdir(dir, { recursive: true })
   await writeFile(
@@ -39,12 +43,12 @@ async function writeProviderPackage(
       type: "module",
       pigcode: {
         apiVersion: 1,
-        kind: "provider",
+        kind: names,
         displayName: providerId.toUpperCase(),
         host: "./index.mjs",
-        provides: [`provider:${providerId}`],
+        provides: [`${names}:${providerId}`],
         contributes: {
-          provider: {
+          [names]: {
             id: providerId,
             settings: [{ key: "binaryPath", type: "path", label: "Binary path" }],
           },
@@ -127,6 +131,23 @@ describe("built-in plugins", () => {
       "provider.@pigcode/provider-alpha",
     ])
     await expect(stat(join(env.profileDir, "node_modules", "pigcode-beta"))).rejects.toThrow()
+  })
+
+  it("gives an Agent plugin written with the new names the same id, kind and conflicts", async () => {
+    const { root, env } = await fixture()
+    const source = await writeProviderPackage(
+      join(root, "src-gamma"),
+      "pigcode-gamma",
+      "alpha",
+      "agent",
+    )
+    const entry = await installLocalPlugin(env, source)
+    expect(entry.id).toBe("provider.pigcode-gamma")
+    const gamma = (await listPlugins(env)).find((plugin) => plugin.id === entry.id)
+    expect(gamma).toMatchObject({ kind: "provider", provides: ["provider:alpha"] })
+    expect(Object.keys(gamma?.contributes ?? {})).toEqual(["provider"])
+    // agent:alpha 和内置插件的 provider:alpha 是同一个声明，算冲突。
+    expect(gamma?.conflict).toContain("provider:alpha is provided by")
   })
 })
 
@@ -213,6 +234,35 @@ describe("plugins service", () => {
       binaryPath: "/opt/beta",
       customModels: ["beta-large"],
     })
+    await ctx.fiber.dispose()
+  })
+
+  it("lists, loads and uninstalls an Agent plugin written with the new names", async () => {
+    const { ctx, root } = await host()
+    await ctx.plugins.loadAll()
+    const source = await writeProviderPackage(
+      join(root, "src-gamma"),
+      "pigcode-gamma",
+      "gamma",
+      "agent",
+    )
+    await ctx.plugins.installLocal(source)
+    expect(ctx.providers.list().map((driver) => driver.id)).toEqual(["alpha", "gamma"])
+    const transport = new MemoryTransport()
+    new RpcServer(ctx, transport.host).start()
+    transport.client.send({ jsonrpc: "2.0", id: "1", method: "agent.list", params: {} })
+    const listed = (await transport.client.next()) as {
+      result: { agents: Array<{ providerId: string; pluginId: string; fields: unknown[] }> }
+    }
+    expect(listed.result.agents[1]).toMatchObject({
+      providerId: "gamma",
+      pluginId: "provider.pigcode-gamma",
+      fields: [{ key: "binaryPath", type: "path" }],
+    })
+    // 卸载默认 agent 的插件时，kind 写 agent 的插件同样清掉默认选择。
+    ctx.providers.setDefaultProvider("gamma")
+    await uninstallPluginAndClearDefault(ctx, "provider.pigcode-gamma")
+    expect(ctx.providers.configuredDefaultProvider()).toBeNull()
     await ctx.fiber.dispose()
   })
 

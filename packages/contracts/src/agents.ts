@@ -1,10 +1,10 @@
 /**
- * Agent（provider 插件）的设置字段、检测状态与设置页摘要；Host、插件与界面共用。
+ * Agent（由 Agent 插件接入）的设置字段、检测状态与设置页摘要；Host、插件与界面共用。
  * 设置字段由插件在 manifest 的 `contributes.provider.settings` 里声明，界面据此生成表单，
  * Host 原样保存用户填的值，并在检测、读取模型目录和创建会话时交给 driver。
  */
 import { z } from "zod"
-import { providerCapabilitiesSchema } from "./domain"
+import { agentFeaturesSchema } from "./domain"
 
 /** 自定义模型的键：Host 把这里的模型 id 追加到 agent 的模型目录。 */
 export const CUSTOM_MODELS_KEY = "customModels"
@@ -31,7 +31,7 @@ const fieldBase = {
  * 一个设置字段。值的类型：text/path/select 为字符串，boolean 为布尔，env 为
  * `{ name, value }` 数组。字段都是可选的：留空表示用 agent 自己的默认值。
  */
-export const providerSettingFieldSchema = z.discriminatedUnion("type", [
+export const agentSettingFieldSchema = z.discriminatedUnion("type", [
   z.object({
     ...fieldBase,
     type: z.literal("text"),
@@ -56,6 +56,9 @@ export const providerSettingFieldSchema = z.discriminatedUnion("type", [
   z.object({ ...fieldBase, type: z.literal("env") }),
 ])
 
+/** @deprecated use agentSettingFieldSchema */
+export const providerSettingFieldSchema = agentSettingFieldSchema
+
 /** 一组环境变量；名称遵循 POSIX 规则，值原样传给子进程。 */
 export const environmentEntriesSchema = z.array(
   z.object({ name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), value: z.string() }),
@@ -64,8 +67,8 @@ export const environmentEntriesSchema = z.array(
 /** 自定义模型列表：去掉首尾空白后的非空 id，最长 256 个字符。 */
 export const customModelsSchema = z.array(z.string().trim().min(1).max(256))
 
-/** provider 插件在 manifest 里声明的贡献：agent id、介绍与设置字段。 */
-export const providerContributionSchema = z
+/** Agent 插件在 manifest 里声明的贡献：agent id、介绍与设置字段。 */
+export const agentContributionSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
     description: localizedTextSchema.optional(),
@@ -73,7 +76,7 @@ export const providerContributionSchema = z
     homepage: z.url({ protocol: /^https$/ }).optional(),
     /** 没装 CLI 时给用户的安装提示，例如安装命令。 */
     installHint: localizedTextSchema.optional(),
-    settings: z.array(providerSettingFieldSchema).default([]),
+    settings: z.array(agentSettingFieldSchema).default([]),
     /** 是否允许用户添加自定义模型 id；默认允许。 */
     customModels: z.boolean().default(true),
   })
@@ -91,11 +94,17 @@ export const providerContributionSchema = z
     }
   })
 
+/** @deprecated use agentContributionSchema */
+export const providerContributionSchema = agentContributionSchema
+
 /** agent 的设置值：键为字段 key，另加 Host 处理的 customModels。 */
-export const providerSettingsValuesSchema = z.record(z.string(), z.unknown())
+export const agentSettingsValuesSchema = z.record(z.string(), z.unknown())
+
+/** @deprecated use agentSettingsValuesSchema */
+export const providerSettingsValuesSchema = agentSettingsValuesSchema
 
 /** 一次只读检测的结果；authenticated 为 null 表示无法判断登录状态。 */
-export const providerStatusSchema = z.object({
+export const agentStatusSchema = z.object({
   installed: z.boolean(),
   version: z.string().nullable(),
   authenticated: z.boolean().nullable(),
@@ -105,6 +114,9 @@ export const providerStatusSchema = z.object({
   command: z.string().nullable().optional(),
   error: z.string().nullable().optional(),
 })
+
+/** @deprecated use agentStatusSchema */
+export const providerStatusSchema = agentStatusSchema
 
 /** 设置页里的一个 agent：插件信息、能力、设置字段与当前值。 */
 export const agentSummarySchema = z.object({
@@ -118,13 +130,13 @@ export const agentSummarySchema = z.object({
   enabled: z.boolean(),
   /** driver 已注册；插件启用但加载失败时为 false。 */
   registered: z.boolean(),
-  capabilities: providerCapabilitiesSchema.nullable(),
+  capabilities: agentFeaturesSchema.nullable(),
   description: localizedTextSchema.nullable(),
   homepage: z.string().nullable(),
   installHint: localizedTextSchema.nullable(),
-  fields: z.array(providerSettingFieldSchema),
+  fields: z.array(agentSettingFieldSchema),
   customModels: z.boolean(),
-  values: providerSettingsValuesSchema,
+  values: agentSettingsValuesSchema,
   error: z.string().nullable(),
 })
 
@@ -136,12 +148,22 @@ export const agentListSchema = z.object({
 })
 
 export type LocalizedText = z.infer<typeof localizedTextSchema>
-export type ProviderSettingField = z.infer<typeof providerSettingFieldSchema>
-export type ProviderSettingFieldInput = z.input<typeof providerSettingFieldSchema>
+export type AgentSettingField = z.infer<typeof agentSettingFieldSchema>
+export type AgentSettingFieldInput = z.input<typeof agentSettingFieldSchema>
 export type EnvironmentEntry = z.infer<typeof environmentEntriesSchema>[number]
-export type ProviderContribution = z.infer<typeof providerContributionSchema>
-export type ProviderSettingsValues = z.infer<typeof providerSettingsValuesSchema>
-export type ProviderStatus = z.infer<typeof providerStatusSchema>
+export type AgentContribution = z.infer<typeof agentContributionSchema>
+export type AgentSettingsValues = z.infer<typeof agentSettingsValuesSchema>
+export type AgentStatus = z.infer<typeof agentStatusSchema>
+/** @deprecated use AgentSettingField */
+export type ProviderSettingField = AgentSettingField
+/** @deprecated use AgentSettingFieldInput */
+export type ProviderSettingFieldInput = AgentSettingFieldInput
+/** @deprecated use AgentContribution */
+export type ProviderContribution = AgentContribution
+/** @deprecated use AgentSettingsValues */
+export type ProviderSettingsValues = AgentSettingsValues
+/** @deprecated use AgentStatus */
+export type ProviderStatus = AgentStatus
 export type AgentSummary = z.infer<typeof agentSummarySchema>
 export type AgentList = z.infer<typeof agentListSchema>
 

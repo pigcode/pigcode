@@ -1,8 +1,8 @@
-/** 定义 Pigcode 的持久领域实体与 provider 能力描述。 */
+/** 定义 Pigcode 的持久领域实体与 Agent 功能描述。 */
 import { z } from "zod"
 
-/** provider 支持的能力集合，Host 与插件据此协商可用功能。 */
-export const providerCapabilitiesSchema = z.object({
+/** Agent 功能：一个 Agent 支持哪些功能，界面据此隐藏不支持的控件。 */
+export const agentFeaturesSchema = z.object({
   streaming: z.boolean(),
   approvals: z.boolean(),
   questions: z.boolean(),
@@ -19,6 +19,9 @@ export const providerCapabilitiesSchema = z.object({
   nativeSessionId: z.boolean(),
 })
 
+/** @deprecated use agentFeaturesSchema */
+export const providerCapabilitiesSchema = agentFeaturesSchema
+
 /** 线程的执行权限模式。 */
 export const permissionModeSchema = z.enum([
   "read-only",
@@ -33,8 +36,8 @@ export const permissionModeSchema = z.enum([
  */
 export const reasoningEffortSchema = z.enum(["minimal", "low", "medium", "high", "xhigh", "max"])
 
-/** provider 模型目录中的一项；efforts 为空表示该模型没有可调的思考深度。 */
-export const providerModelSchema = z.object({
+/** Agent 模型目录中的一项；efforts 为空表示该模型没有可调的思考深度。 */
+export const agentModelSchema = z.object({
   id: z.string().min(1),
   displayName: z.string().min(1),
   description: z.string().optional(),
@@ -44,6 +47,9 @@ export const providerModelSchema = z.object({
   /** 用户在 agent 设置里添加的模型 id，不在 agent 自己的目录里。 */
   custom: z.boolean().optional(),
 })
+
+/** @deprecated use agentModelSchema */
+export const providerModelSchema = agentModelSchema
 
 /** 项目实体，对应一个被 Pigcode 打开的本地根目录。 */
 export const projectSchema = z.object({
@@ -168,14 +174,18 @@ export const scheduleSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
-/** provider 能力集合的类型。 */
-export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>
+/** Agent 功能的类型。 */
+export type AgentFeatures = z.infer<typeof agentFeaturesSchema>
+/** @deprecated use AgentFeatures */
+export type ProviderCapabilities = AgentFeatures
 /** 权限模式的类型。 */
 export type PermissionMode = z.infer<typeof permissionModeSchema>
 /** 推理强度的类型。 */
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>
 /** 模型目录条目的类型。 */
-export type ProviderModel = z.infer<typeof providerModelSchema>
+export type AgentModel = z.infer<typeof agentModelSchema>
+/** @deprecated use AgentModel */
+export type ProviderModel = AgentModel
 /** 项目的类型。 */
 export type Project = z.infer<typeof projectSchema>
 /** 线程的类型。 */

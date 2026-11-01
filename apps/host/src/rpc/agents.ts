@@ -11,7 +11,7 @@ import {
   type AgentSummary,
   type ProviderSettingField,
 } from "@pigcode/contracts"
-import { readProviderContribution } from "@pigcode/plugin-sdk"
+import { isAgentPlugin, readProviderContribution } from "@pigcode/plugin-sdk"
 
 /** 列出全部 agent；插件服务不在时只列已注册的 driver。 */
 export async function listAgents(ctx: Context): Promise<AgentList> {
@@ -25,7 +25,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
   const listed = new Set<string>()
   for (const record of records) {
     const manifest = record.manifest
-    if (manifest?.pigcode.kind !== "provider") continue
+    if (!manifest || !isAgentPlugin(manifest)) continue
     const contribution = readProviderContribution(manifest)
     if (!contribution || listed.has(contribution.id)) continue
     listed.add(contribution.id)
@@ -80,7 +80,7 @@ export async function uninstallPluginAndClearDefault(ctx: Context, id: string): 
   await ctx.plugins.uninstall(id)
   const manifest = record?.manifest
   const providerId =
-    manifest?.pigcode.kind === "provider" ? readProviderContribution(manifest)?.id : undefined
+    manifest && isAgentPlugin(manifest) ? readProviderContribution(manifest)?.id : undefined
   if (providerId && ctx.providers.configuredDefaultProvider() === providerId) {
     ctx.providers.setDefaultProvider(null)
   }

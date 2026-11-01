@@ -1,4 +1,4 @@
-/** 验证输入框里的 agent 选项走到 Host：模型目录、思考深度、权限模式与首次切换不带 handoff。 */
+/** 验证输入框里的 agent 选项走到 Host：模型目录、思考深度、权限模式与首次切换不带 handoff；以及 agent.* 命令和旧的 provider.* 名字。 */
 import type { ProviderModel } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { describe, expect, it, vi } from "vitest"
@@ -164,6 +164,52 @@ describe("agent options over RPC", () => {
     await call("run.start", { threadId: thread.id, text: "first message" })
     await vi.waitFor(() => expect(recorder.inputs).toHaveLength(1))
     expect(recorder.inputs[0]).toEqual({ text: "first message" })
+    await ctx.fiber.dispose()
+  })
+})
+
+describe("agent.* commands and their provider.* names", () => {
+  it("serves registered agents, detection, models and the default agent under both names", async () => {
+    const { ctx, call } = await setup()
+    const detect = vi.fn(async () => ({ installed: true, version: "1.0.0", authenticated: true }))
+    ctx.providers.register({ ...recordingDriver(async () => [SAGE]).driver, detect })
+
+    const registered = (await call("agent.registered", {})) as Array<{ id: string }>
+    expect(registered.map((agent) => agent.id)).toEqual(["fake", "rec"])
+    expect(registered[1]).toMatchObject({ displayName: "Recorder", capabilities: { plan: true } })
+    await expect(call("agent.detect", { providerId: "rec" })).resolves.toEqual({
+      rec: { installed: true, version: "1.0.0", authenticated: true },
+    })
+    await expect(call("agent.models", { providerId: "rec" })).resolves.toEqual([SAGE])
+    await expect(call("agent.default", {})).resolves.toEqual({ id: "rec" })
+
+    const pairs = [
+      ["agent.registered", "provider.list", {}],
+      ["agent.detect", "provider.detect", { providerId: "rec" }],
+      ["agent.models", "provider.models", { providerId: "rec" }],
+      ["agent.default", "provider.default", {}],
+    ] as const
+    for (const [name, alias, params] of pairs) {
+      expect(await call(alias, params), alias).toEqual(await call(name, params))
+    }
+    // 参数校验也是同一份：缺 providerId 时两个名字报同样的错。
+    const failure = (method: string) => call(method, {}).catch((error: Error) => error.message)
+    expect(await failure("provider.models")).toBe(await failure("agent.models"))
+    await ctx.fiber.dispose()
+  })
+
+  it("keeps agent.list as the settings list, unlike agent.registered", async () => {
+    const { ctx, call } = await setup()
+    ctx.providers.register(recordingDriver(async () => [SAGE]).driver)
+    const list = (await call("agent.list", {})) as {
+      agents: Array<{ providerId: string; registered: boolean }>
+      defaultProviderId: string | null
+    }
+    expect(list.defaultProviderId).toBeNull()
+    expect(list.agents.map((agent) => [agent.providerId, agent.registered])).toEqual([
+      ["fake", true],
+      ["rec", true],
+    ])
     await ctx.fiber.dispose()
   })
 })
