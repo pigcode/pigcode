@@ -5,7 +5,7 @@ import { addProject } from "./projects"
 
 test.skip(process.env.PIGCODE_REAL_CODEX !== "1", "set PIGCODE_REAL_CODEX=1")
 
-/** 过滤 undefined；强制 codex provider 与 6.1sol 模型。 */
+/** 过滤 undefined；强制使用 Codex 与 6.1sol 模型。 */
 function launchEnv(): Record<string, string> {
   const entries = Object.entries(process.env).filter(
     (entry): entry is [string, string] => entry[1] !== undefined,
@@ -13,7 +13,7 @@ function launchEnv(): Record<string, string> {
   return {
     ...Object.fromEntries(entries),
     PIGCODE_REAL_CODEX: "1",
-    PIGCODE_PROVIDER: "codex",
+    PIGCODE_AGENT: "codex",
     PIGCODE_CODEX_MODEL: process.env.PIGCODE_CODEX_MODEL ?? "gpt-6.1-sol",
   }
 }

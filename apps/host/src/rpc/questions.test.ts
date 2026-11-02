@@ -1,7 +1,7 @@
 /** 验证 agent 提问：写 question.requested、等用户回答、答案交回 driver；run 结束时问题以空答案收尾。 */
 import { Context } from "cordis"
 import { describe, expect, it, vi } from "vitest"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
@@ -15,7 +15,7 @@ async function setup() {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   const transport = new MemoryTransport()
   new RpcServer(ctx, transport.host).start()
   const project = ctx.projects.add("/tmp/pigcode-questions")
@@ -54,8 +54,8 @@ describe("agent questions", () => {
       ["这次改动要覆盖哪些平台？", true],
       ["测试用哪个框架？", false],
     ])
-    expect(ctx.providers.getRunStatus(runId)).toBe("waiting-input")
-    expect(ctx.providers.listPendingRequests(thread.id)).toMatchObject([
+    expect(ctx.agents.getRunStatus(runId)).toBe("waiting-input")
+    expect(ctx.agents.listPendingRequests(thread.id)).toMatchObject([
       { id: request.id, kind: "question" },
     ])
 
@@ -74,7 +74,7 @@ describe("agent questions", () => {
       answers: ["macOS, Linux", "Vitest"],
     })
 
-    await vi.waitFor(() => expect(ctx.providers.listRuns()).toHaveLength(0))
+    await vi.waitFor(() => expect(ctx.agents.listRuns()).toHaveLength(0))
     expect(events().find((event) => event.type === "question.answered")?.payload).toEqual({
       requestId: request.id,
       id: request.id,
@@ -84,7 +84,7 @@ describe("agent questions", () => {
       .filter((event) => event.type === "message.completed")
       .at(-1)?.payload as { text: string }
     expect(reply.text).toBe("好的：平台 macOS, Linux，测试用 Vitest。")
-    expect(ctx.providers.listPendingRequests(thread.id)).toEqual([])
+    expect(ctx.agents.listPendingRequests(thread.id)).toEqual([])
     await ctx.fiber.dispose()
   })
 
@@ -95,7 +95,7 @@ describe("agent questions", () => {
     }
     await vi.waitFor(() => expect(pendingQuestion()).toBeDefined())
     await call("run.interrupt", { threadId: thread.id, runId })
-    await vi.waitFor(() => expect(ctx.providers.listRuns()).toHaveLength(0))
+    await vi.waitFor(() => expect(ctx.agents.listRuns()).toHaveLength(0))
     expect(events().find((event) => event.type === "question.answered")?.payload).toMatchObject({
       answers: [],
       reason: "run-ended",

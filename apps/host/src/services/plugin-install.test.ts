@@ -5,8 +5,8 @@ import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { installPlugin, listPlugins, type PnpmRunner } from "./plugin-manager"
 
-/** 构造一个合法的 provider 包 manifest。 */
-function providerManifest(name: string): Record<string, unknown> {
+/** 构造一个合法的 Agent 插件包 manifest。 */
+function agentManifest(name: string): Record<string, unknown> {
   return {
     name,
     version: "0.1.0",
@@ -14,10 +14,10 @@ function providerManifest(name: string): Record<string, unknown> {
     main: "./index.mjs",
     pigcode: {
       apiVersion: 1,
-      kind: "provider",
+      kind: "agent",
       displayName: "Echo",
       host: "./index.mjs",
-      provides: ["provider:echo"],
+      provides: ["agent:echo"],
       permissions: [],
     },
   }
@@ -50,7 +50,7 @@ async function writeNpmInstall(profileDir: string, name: string): Promise<void> 
   )
   const target = join(profileDir, "node_modules", name)
   await mkdir(target, { recursive: true })
-  await writeFile(join(target, "package.json"), JSON.stringify(providerManifest(name)))
+  await writeFile(join(target, "package.json"), JSON.stringify(agentManifest(name)))
   await writeFile(join(target, "index.mjs"), "export function apply() {}\n")
 }
 
@@ -67,7 +67,7 @@ describe("plugin install", () => {
 
     expect(calls[0]).toEqual(["add", "pigcode-provider-echo@0.1.0", "--dir", profileDir])
     expect(entry).toEqual({
-      id: "provider.pigcode-provider-echo",
+      id: "agent.pigcode-provider-echo",
       name: "pigcode-provider-echo",
       config: {},
       disabled: false,
@@ -98,7 +98,7 @@ describe("plugin install", () => {
     const profileDir = join(root, "profile")
     const source = join(root, "src-plugin")
     await mkdir(source, { recursive: true })
-    await writeFile(join(source, "package.json"), JSON.stringify(providerManifest("pigcode-local")))
+    await writeFile(join(source, "package.json"), JSON.stringify(agentManifest("pigcode-local")))
     await writeFile(join(source, "index.mjs"), "export function apply() {}\n")
 
     const entry = await installPlugin(profileDir, `file:${source}`, async () => {
@@ -106,7 +106,7 @@ describe("plugin install", () => {
     })
 
     expect(entry).toEqual({
-      id: "provider.pigcode-local",
+      id: "agent.pigcode-local",
       name: "pigcode-local",
       config: {},
       disabled: false,
@@ -156,7 +156,7 @@ describe("plugin install", () => {
       await mkdir(target, { recursive: true })
       await writeFile(
         join(target, "package.json"),
-        JSON.stringify(providerManifest("pigcode-provider-echo")),
+        JSON.stringify(agentManifest("pigcode-provider-echo")),
       )
       await writeFile(join(target, "index.mjs"), "export function apply() {}\n")
     }

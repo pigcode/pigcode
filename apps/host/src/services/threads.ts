@@ -1,4 +1,4 @@
-/** 管理线程记录；线程是 provider 无关的持久会话。 */
+/** 管理线程记录；线程是与 Agent 无关的持久会话。 */
 import type { Context } from "cordis"
 import type { Thread } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto"
 /** 线程记录的读写入口。 */
 export interface ThreadsService {
   /** parentThreadId 指向主会话时创建的是子代理会话，项目必须与主会话相同。 */
-  create(projectId: string, title: string, providerId: string, parentThreadId?: string): Thread
+  create(projectId: string, title: string, agentId: string, parentThreadId?: string): Thread
   list(projectId?: string): Thread[]
   get(threadId: string): Thread | undefined
   /** 主会话下未归档的子代理，按创建时间排列。 */
@@ -15,8 +15,8 @@ export interface ThreadsService {
   rename(threadId: string, title: string): Thread | undefined
   /** 归档后线程不再出现在侧栏与命令面板里，事件与记录保留；子代理随主会话一起归档。 */
   archive(threadId: string): Thread | undefined
-  /** 记录线程最近选择的 provider/model，切换后下一次 run 生效。 */
-  updateSelection(threadId: string, providerId: string, modelId: string | null): void
+  /** 记录线程最近选择的 Agent/model，切换后下一次 run 生效。 */
+  updateSelection(threadId: string, agentId: string, modelId: string | null): void
   /** 修改权限模式；下一次 run 起生效，返回更新后的记录。 */
   setPermissionMode(threadId: string, mode: Thread["permissionMode"]): Thread | undefined
 }
@@ -39,7 +39,7 @@ export interface ThreadsPlugin {
 /** 注册 threads 服务；新线程默认使用 workspace-write 权限模式。 */
 export const apply: ThreadsPlugin = (ctx) => {
   const service: ThreadsService = {
-    create(projectId, title, providerId, parentThreadId) {
+    create(projectId, title, agentId, parentThreadId) {
       if (parentThreadId !== undefined) {
         const parent = service.get(parentThreadId)
         if (!parent) throw new Error(`thread not found: ${parentThreadId}`)
@@ -52,7 +52,7 @@ export const apply: ThreadsPlugin = (ctx) => {
         id: `th_${randomUUID()}`,
         projectId,
         title,
-        defaultProviderId: providerId,
+        defaultProviderId: agentId,
         lastProviderId: null,
         lastModelId: null,
         permissionMode: "workspace-write",
@@ -64,7 +64,7 @@ export const apply: ThreadsPlugin = (ctx) => {
       }
       ctx.storage.db
         .prepare(
-          `INSERT INTO threads (id, project_id, title, default_provider_id, last_provider_id,
+          `INSERT INTO threads (id, project_id, title, default_agent_id, last_agent_id,
             last_model_id, permission_mode, created_at, updated_at, archived_at, last_run_id,
             parent_thread_id)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -123,13 +123,13 @@ export const apply: ThreadsPlugin = (ctx) => {
         .run(now, threadId, threadId)
       return service.get(threadId)
     },
-    updateSelection(threadId, providerId, modelId) {
+    updateSelection(threadId, agentId, modelId) {
       ctx.storage.db
         .prepare(
-          `UPDATE threads SET last_provider_id = ?, last_model_id = ?, updated_at = ?
+          `UPDATE threads SET last_agent_id = ?, last_model_id = ?, updated_at = ?
            WHERE id = ?`,
         )
-        .run(providerId, modelId, new Date().toISOString(), threadId)
+        .run(agentId, modelId, new Date().toISOString(), threadId)
     },
     setPermissionMode(threadId, mode) {
       ctx.storage.db
@@ -143,15 +143,18 @@ export const apply: ThreadsPlugin = (ctx) => {
 
 apply.inject = inject
 
-/** 把 threads 表的行映射为领域对象。 */
+/**
+ * 把 threads 表的行映射为领域对象。列名是 default_agent_id / last_agent_id，Thread 的字段名
+ * 沿用旧名字（defaultProviderId / lastProviderId），因为它随 RPC 发给界面，界面迁移（#34）时改名。
+ */
 function mapThread(row: unknown): Thread {
   const value = row as Record<string, string | null>
   return {
     id: value.id!,
     projectId: value.project_id!,
     title: value.title!,
-    defaultProviderId: value.default_provider_id!,
-    lastProviderId: value.last_provider_id ?? null,
+    defaultProviderId: value.default_agent_id!,
+    lastProviderId: value.last_agent_id ?? null,
     lastModelId: value.last_model_id ?? null,
     permissionMode: value.permission_mode as Thread["permissionMode"],
     createdAt: value.created_at!,

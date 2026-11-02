@@ -96,8 +96,8 @@ my-ui-plugin/
 agent 是 `kind` 为 `provider` 的插件：它在 Host 里注册一个 driver，把某个 coding agent
 （CLI、SDK 或远程服务）接到 Pigcode 的会话、审批和时间线上。
 
-- **内置**：Claude Code（[`packages/provider-claude`](../packages/provider-claude)）和 Codex
-  （[`packages/provider-codex`](../packages/provider-codex)）随应用发布，列在核心 profile 的
+- **内置**：Claude Code（[`packages/agent-claude`](../packages/agent-claude)）和 Codex
+  （[`packages/agent-codex`](../packages/agent-codex)）随应用发布，列在核心 profile 的
   `builtinPlugins` 里。它们可以在 **设置 → Agent** 里停用，但不能卸载。
 - **按需安装**：其他 agent 在 **设置 → Agent → 安装 agent** 里安装（npm 包、tarball 或本地目录）。
   装好后和内置 agent 一样出现在设置页和输入框的模型选择器里，也可以随时卸载。

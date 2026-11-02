@@ -1,7 +1,7 @@
 /** 验证 run.respondApproval RPC 决议审批并持久化结果。 */
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
@@ -16,12 +16,12 @@ async function setup() {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   const project = ctx.projects.add("/tmp/pigcode-m1")
   const thread = ctx.threads.create(project.id, "M1", "fake")
   ctx.storage.db
     .prepare(
-      `INSERT INTO runs (id, thread_id, provider_session_id, status, started_at)
+      `INSERT INTO runs (id, thread_id, agent_session_id, status, started_at)
        VALUES (?, ?, ?, 'running', ?)`,
     )
     .run("run-1", thread.id, "ps-1", new Date().toISOString())
@@ -34,7 +34,7 @@ async function setup() {
 describe("approval rpc", () => {
   it("resolves a pending approval through run.respondApproval", async () => {
     const { ctx, thread, transport, server } = await setup()
-    const pending = ctx.providers.requestApproval(thread.id, "run-1", {
+    const pending = ctx.agents.requestApproval(thread.id, "run-1", {
       toolName: "Bash",
       input: { command: "echo hi" },
       title: "Run a command?",
@@ -59,7 +59,7 @@ describe("approval rpc", () => {
       .prepare(`SELECT status FROM pending_requests WHERE id = ?`)
       .get(pending.requestId) as { status: string }
     expect(row.status).toBe("resolved")
-    expect(ctx.providers.getRunStatus("run-1")).toBe("running")
+    expect(ctx.agents.getRunStatus("run-1")).toBe("running")
     const resolved = ctx.sessions
       .read(thread.id, 0)
       .find((event) => event.type === "approval.resolved")
@@ -73,11 +73,11 @@ describe("approval rpc", () => {
 
   it("rejects an approval that is no longer pending", async () => {
     const { ctx, thread, transport, server } = await setup()
-    const pending = ctx.providers.requestApproval(thread.id, "run-1", {
+    const pending = ctx.agents.requestApproval(thread.id, "run-1", {
       toolName: "Bash",
       input: { command: "echo hi" },
     })
-    ctx.providers.respondApproval(thread.id, "run-1", pending.requestId, "deny")
+    ctx.agents.respondApproval(thread.id, "run-1", pending.requestId, "deny")
     await pending.decision
 
     transport.client.send({

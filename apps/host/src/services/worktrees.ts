@@ -145,7 +145,7 @@ export const apply: WorktreesPlugin = (ctx) => {
 
 apply.inject = inject
 
-/** 读取线程当前的活动 worktree 路径；供 provider cwd 解析复用同一查询。 */
+/** 读取线程当前的活动 worktree 路径；供 Agent 会话的 cwd 解析复用同一查询。 */
 export function activeWorktreePath(db: PigcodeDatabase, threadId: string): string | null {
   return activeRow(db, threadId)?.path ?? null
 }

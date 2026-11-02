@@ -1,7 +1,7 @@
 /** Host utilityProcess 入口：接收 main 转交的端口并启动 RPC。 */
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { createHostAppFromProfile } from "./kernel/app"
+import { createHostAppFromProfile, requireCoreService } from "./kernel/app"
 import { writeBootGraph } from "./kernel/boot"
 import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
@@ -17,6 +17,7 @@ interface ParentPortMessageEvent {
 /** parentPort 的最小接口，避免 Host 依赖 Electron 类型。 */
 interface ParentPortLike {
   on(event: "message", listener: (event: ParentPortMessageEvent) => void): void
+  postMessage(message: unknown): void
 }
 
 const parentPort = (process as unknown as { parentPort?: ParentPortLike }).parentPort
@@ -27,9 +28,12 @@ if (!parentPort) {
 
 parentPort.on("message", (event) => {
   void bootstrap(event).catch((error: unknown) => {
-    // 启动失败要留下原因再退出，main 会重新拉起 Host；静默的未处理拒绝无从排查。
+    // 启动失败要留下原因再退出；静默的未处理拒绝无从排查。原因同时交给 main：连续失败时 main 停止重启，
+    // 把它显示在错误对话框里。稍等一下再退出，让这条消息送到 main。
     console.error("[host] bootstrap failed:", error)
-    process.exit(1)
+    const message = error instanceof Error ? error.message : String(error)
+    parentPort.postMessage({ type: "fatal", message })
+    setTimeout(() => process.exit(1), 200)
   })
 })
 
@@ -55,9 +59,13 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
     "core.settings": { path: join(profileDir, "settings.json") },
   })
+  // 数据库打不开（备份或迁移失败、数据库比应用新）时 storage 不会起来，其后的服务也都缺席；
+  // 在这里带着真正的原因失败，而不是等到下面 ctx.agents 报 TypeError。
+  await requireCoreService(ctx, "core.storage", "storage")
+  await requireCoreService(ctx, "core.agents", "agents")
   // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
-  ctx.providers.recoverAfterRestart()
-  // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 provider。
+  ctx.agents.recoverAfterRestart()
+  // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 Agent。
   await ctx.plugin(pluginsPlugin, { profileDir, builtin: profile.builtinPlugins })
   await ctx.plugins.loadAll()
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins })

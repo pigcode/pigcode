@@ -1,5 +1,5 @@
 /**
- * 真实 provider 冒烟：用已安装、已登录的 CLI 跑最小 prompt，验证流式、结果和用量。
+ * 真实 Agent 冒烟：用已安装、已登录的 CLI 跑最小 prompt，验证流式、结果和用量。
  * 用法：node scripts/real-smoke.ts <claude | codex | codex-multi>
  * 没有设置对应的 PIGCODE_REAL_* 时直接跳过，默认不消耗额度。
  */
@@ -17,18 +17,18 @@ const targets: Record<string, SmokeTarget> = {
   claude: {
     flag: "PIGCODE_REAL_CLAUDE",
     description: "real Claude smoke test",
-    testFile: "apps/host/src/providers/claude/real-smoke.test.ts",
+    testFile: "packages/agent-claude/src/real-smoke.test.ts",
   },
   codex: {
     flag: "PIGCODE_REAL_CODEX",
     description: "real Codex smoke test",
-    testFile: "apps/host/src/providers/codex/real-smoke.test.ts",
+    testFile: "packages/agent-codex/src/real-smoke.test.ts",
   },
   // 两个线程并行运行，默认使用 gpt-6.1-sol。
   "codex-multi": {
     flag: "PIGCODE_REAL_CODEX",
     description: "real Codex multi-session test",
-    testFile: "apps/host/src/providers/multi-session.real.test.ts",
+    testFile: "apps/host/src/agents/multi-session.real.test.ts",
     env: { PIGCODE_CODEX_MODEL: process.env.PIGCODE_CODEX_MODEL ?? "gpt-6.1-sol" },
   },
 }

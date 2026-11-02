@@ -1,6 +1,8 @@
 /**
- * 设置页的 agent 列表与设置校验：把 provider 插件的 manifest、已注册的 driver 与保存的值合在一起。
- * agent 来自 provider 插件（内置或用户安装）；没有插件的 driver（开发用的 fake）也会列出。
+ * 设置页的 agent 列表与设置校验：把 Agent 插件的 manifest、已注册的 driver 与保存的值合在一起。
+ * agent 来自 Agent 插件（内置或用户安装）；没有插件的 driver（开发用的 fake）也会列出。
+ * AgentSummary 的 providerId、capabilities 与 AgentList 的 defaultProviderId 是发给界面的字段名，
+ * 界面迁移（#34）时改名。
  */
 import type { Context } from "cordis"
 import {
@@ -9,13 +11,13 @@ import {
   environmentEntriesSchema,
   type AgentList,
   type AgentSummary,
-  type ProviderSettingField,
+  type AgentSettingField,
 } from "@pigcode/contracts"
-import { isAgentPlugin, readProviderContribution } from "@pigcode/plugin-sdk"
+import { isAgentPlugin, readAgentContribution } from "@pigcode/plugin-sdk"
 
 /** 列出全部 agent；插件服务不在时只列已注册的 driver。 */
 export async function listAgents(ctx: Context): Promise<AgentList> {
-  const registered = new Map(ctx.providers.list().map((driver) => [driver.id, driver]))
+  const registered = new Map(ctx.agents.list().map((driver) => [driver.id, driver]))
   const plugins = ctx.get("plugins")
   const [records, summaries] = plugins
     ? await Promise.all([plugins.records(), plugins.list()])
@@ -26,7 +28,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
   for (const record of records) {
     const manifest = record.manifest
     if (!manifest || !isAgentPlugin(manifest)) continue
-    const contribution = readProviderContribution(manifest)
+    const contribution = readAgentContribution(manifest)
     if (!contribution || listed.has(contribution.id)) continue
     listed.add(contribution.id)
     const driver = registered.get(contribution.id)
@@ -38,13 +40,13 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       builtin: record.builtin,
       enabled: !record.disabled,
       registered: driver !== undefined,
-      capabilities: driver?.capabilities ?? null,
+      capabilities: driver?.features ?? null,
       description: contribution.description ?? manifest.description ?? null,
       homepage: contribution.homepage ?? null,
       installHint: contribution.installHint ?? null,
       fields: contribution.settings,
       customModels: contribution.customModels,
-      values: ctx.providers.getSettings(contribution.id),
+      values: ctx.agents.getSettings(contribution.id),
       error: errors.get(record.id) ?? null,
     })
   }
@@ -58,17 +60,17 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       builtin: true,
       enabled: true,
       registered: true,
-      capabilities: driver.capabilities,
+      capabilities: driver.features,
       description: null,
       homepage: null,
       installHint: null,
       fields: [],
       customModels: true,
-      values: ctx.providers.getSettings(driver.id),
+      values: ctx.agents.getSettings(driver.id),
       error: null,
     })
   }
-  return { agents, defaultProviderId: ctx.providers.configuredDefaultProvider() }
+  return { agents, defaultProviderId: ctx.agents.configuredDefaultAgent() }
 }
 
 /**
@@ -79,15 +81,15 @@ export async function uninstallPluginAndClearDefault(ctx: Context, id: string): 
   const record = (await ctx.plugins.records()).find((item) => item.id === id)
   await ctx.plugins.uninstall(id)
   const manifest = record?.manifest
-  const providerId =
-    manifest && isAgentPlugin(manifest) ? readProviderContribution(manifest)?.id : undefined
-  if (providerId && ctx.providers.configuredDefaultProvider() === providerId) {
-    ctx.providers.setDefaultProvider(null)
+  const agentId =
+    manifest && isAgentPlugin(manifest) ? readAgentContribution(manifest)?.id : undefined
+  if (agentId && ctx.agents.configuredDefaultAgent() === agentId) {
+    ctx.agents.setDefaultAgent(null)
   }
 }
 
 /** 一个设置值是否符合字段声明的类型；留空（null、空字符串、空数组）总是允许。 */
-function matchesField(field: ProviderSettingField, value: unknown): boolean {
+function matchesField(field: AgentSettingField, value: unknown): boolean {
   if (value === null || value === "") return true
   switch (field.type) {
     case "boolean":

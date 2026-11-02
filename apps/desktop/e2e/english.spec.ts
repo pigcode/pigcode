@@ -7,7 +7,7 @@
  * 片段（比如「文件」「新建」）只在整行都是脚本里的一行时才算用户内容，所以界面文案漏翻时不会被放过。
  */
 import { expect, test, type Page } from "@playwright/test"
-import { fakeShowcaseScript } from "../../host/src/providers/fake-showcase"
+import { fakeShowcaseScript } from "../../host/src/agents/fake-showcase"
 import { zhCN } from "../../../packages/ui-primitives/src/locale/messages.zh-CN"
 import {
   launch,

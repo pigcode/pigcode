@@ -31,7 +31,7 @@ function agent(overrides: Partial<AgentSummary>): AgentSummary {
   return {
     providerId: "claude",
     displayName: "Claude Code",
-    pluginId: "provider.@pigcode/provider-claude",
+    pluginId: "agent.@pigcode/agent-claude",
     version: "0.1.0",
     builtin: true,
     enabled: true,
@@ -73,7 +73,7 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
       agent({
         providerId: "echo",
         displayName: "Echo",
-        pluginId: "provider.pigcode-provider-echo",
+        pluginId: "agent.pigcode-provider-echo",
         builtin: false,
         fields: [],
         description: null,

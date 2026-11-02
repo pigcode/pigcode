@@ -25,7 +25,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true })
 })
 
-/** 写一个带相对导入、enum 与类型标注的 TypeScript provider 插件。 */
+/** 写一个带相对导入、enum 与类型标注的 TypeScript Agent 插件。 */
 async function writeTypeScriptPlugin(dir: string): Promise<void> {
   await mkdir(join(dir, "lib"), { recursive: true })
   await writeFile(
@@ -35,7 +35,7 @@ async function writeTypeScriptPlugin(dir: string): Promise<void> {
       version: "0.1.0",
       type: "module",
       main: "./index.ts",
-      pigcode: { apiVersion: 1, kind: "provider", host: "./index.ts" },
+      pigcode: { apiVersion: 1, kind: "agent", host: "./index.ts" },
     }),
   )
   await writeFile(
@@ -43,7 +43,7 @@ async function writeTypeScriptPlugin(dir: string): Promise<void> {
     [
       'import type { PluginHostContext } from "@pigcode/plugin-sdk"',
       'import { greet, Level } from "./lib/greet.ts"',
-      'export const inject: string[] = ["providers"]',
+      'export const inject: string[] = ["agents"]',
       "export function apply(_ctx: PluginHostContext): string {",
       "  return greet(Level.High)",
       "}",
@@ -117,7 +117,7 @@ describe("compileTypeScriptPlugin", () => {
       inject: string[]
       apply: (ctx: unknown) => string
     }
-    expect(plugin.inject).toEqual(["providers"])
+    expect(plugin.inject).toEqual(["agents"])
     expect(plugin.apply({})).toBe("level 3")
   })
 
@@ -126,7 +126,7 @@ describe("compileTypeScriptPlugin", () => {
     const manifest = {
       name: "pigcode-provider-js",
       version: "0.1.0",
-      pigcode: { apiVersion: 1, kind: "provider", host: "./index.mjs" },
+      pigcode: { apiVersion: 1, kind: "agent", host: "./index.mjs" },
     }
     await writeFile(join(dir, "package.json"), JSON.stringify(manifest))
     await writeFile(join(dir, "index.mjs"), "export function apply() {}\n")
@@ -159,7 +159,7 @@ describe("compileTypeScriptPlugin", () => {
 
     const entry = await installLocalPlugin(profile, source)
 
-    expect(entry.id).toBe("provider.pigcode-provider-ts")
+    expect(entry.id).toBe("agent.pigcode-provider-ts")
     const installed = join(profile, "node_modules", "pigcode-provider-ts")
     expect(existsSync(join(installed, "index.mjs"))).toBe(true)
     expect(existsSync(join(source, "index.mjs"))).toBe(false)

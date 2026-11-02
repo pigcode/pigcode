@@ -6,11 +6,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
-import { ClaudeDriver } from "@pigcode/provider-claude/driver"
-import { CodexDriver } from "@pigcode/provider-codex/driver"
-import type { CreateSessionInput, ProviderDriver } from "../providers/driver"
-import { FakeProviderDriver } from "../providers/fake"
-import { apply as providers } from "../providers/registry"
+import { ClaudeDriver } from "@pigcode/agent-claude/driver"
+import { CodexDriver } from "@pigcode/agent-codex/driver"
+import type { CreateSessionInput, AgentDriver } from "../agents/driver"
+import { FakeAgentDriver } from "../agents/fake"
+import { apply as agentsPlugin } from "../agents/registry"
 import { apply as mcpBridge } from "./mcp-bridge"
 import { installLocalPlugin } from "./plugin-manager"
 import { apply as pluginsPlugin } from "./plugins"
@@ -40,7 +40,7 @@ async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
   await ctx.plugin(mcpBridge)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   await ctx.plugin(pluginsPlugin, { profileDir })
   return { ctx, profileDir }
 }
@@ -85,21 +85,21 @@ describe("capability clock sample", () => {
   })
 })
 
-describe("built-in provider MCP capability", () => {
+describe("built-in agents support MCP", () => {
   it("advertises mcp for Claude and Codex", () => {
-    expect(new ClaudeDriver().capabilities.mcp).toBe(true)
-    expect(new CodexDriver().capabilities.mcp).toBe(true)
+    expect(new ClaudeDriver().features.mcp).toBe(true)
+    expect(new CodexDriver().features.mcp).toBe(true)
   })
 })
 
-describe("provider MCP injection", () => {
+describe("agent MCP injection", () => {
   it("passes thread-scoped MCP handles into createSession", async () => {
     const { ctx, pluginId } = await installClockSample()
     let captured: CreateSessionInput | undefined
-    const driver: ProviderDriver = {
+    const driver: AgentDriver = {
       id: "capture-mcp",
       displayName: "Capture MCP",
-      capabilities: new FakeProviderDriver().capabilities,
+      features: new FakeAgentDriver().features,
       createSession: async (input) => {
         captured = input
         return {
@@ -118,11 +118,11 @@ describe("provider MCP injection", () => {
       interrupt: async () => undefined,
       dispose: async () => undefined,
     }
-    ctx.providers.register(driver)
+    ctx.agents.register(driver)
     const project = ctx.projects.add(await mkdtemp(join(tmpdir(), "pigcode-clock-project-")))
     const thread = ctx.threads.create(project.id, "Clock", driver.id)
     try {
-      const { done } = await ctx.providers.startRun(thread.id, "what time is it")
+      const { done } = await ctx.agents.startRun(thread.id, "what time is it")
       await done
 
       expect(captured?.mcp?.tools.map((tool) => tool.name)).toContain("clock_now")

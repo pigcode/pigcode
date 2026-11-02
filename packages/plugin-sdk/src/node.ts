@@ -18,7 +18,7 @@ export function expandHome(path: string, home: string = homedir()): string {
  * 生成子进程环境：继承 base，叠加设置页里的环境变量，再叠加 driver 自己的覆盖项
  * （例如 CODEX_HOME）。覆盖项为 undefined 时不写入，保留继承来的值。
  */
-export function providerEnvironment(
+export function agentEnvironment(
   entries: readonly EnvironmentEntry[],
   overrides: Readonly<Record<string, string | undefined>> = {},
   base: NodeJS.ProcessEnv = process.env,
@@ -30,6 +30,9 @@ export function providerEnvironment(
   }
   return env
 }
+
+/** @deprecated use agentEnvironment */
+export const providerEnvironment = agentEnvironment
 
 /**
  * 从 GUI 启动的应用拿不到登录 shell 的 PATH（macOS 尤其如此），

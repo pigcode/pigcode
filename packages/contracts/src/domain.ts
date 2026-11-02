@@ -87,11 +87,11 @@ export const runStatusSchema = z.enum([
   "interrupted",
 ])
 
-/** 运行实体，记录 provider 会话与终态信息。 */
+/** 运行实体，记录 Agent 会话与终态信息。 */
 export const runSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
-  providerSessionId: z.string().min(1),
+  agentSessionId: z.string().min(1),
   status: runStatusSchema,
   startedAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
@@ -123,11 +123,11 @@ export const executionItemSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
-/** 一个 provider 原生会话的持久记录。 */
-export const providerSessionSchema = z.object({
+/** 一个 Agent 原生会话的持久记录。 */
+export const agentSessionSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
-  providerId: z.string().min(1),
+  agentId: z.string().min(1),
   nativeSessionId: z.string().nullable(),
   cwd: z.string().min(1),
   status: z.enum(["active", "stopped", "orphaned"]),
@@ -141,6 +141,7 @@ export const pendingRequestSchema = z.object({
   threadId: z.string().min(1),
   runId: z.string().min(1),
   kind: z.enum(["approval", "question"]),
+  /** Agent 自己的请求 id；随订阅快照发给界面，字段名沿用旧名字，界面迁移（#34）时改名。 */
   providerRequestId: z.string().nullable(),
   payload: z.unknown(),
   status: z.enum(["pending", "resolved", "orphaned"]),
@@ -196,8 +197,8 @@ export type Run = z.infer<typeof runSchema>
 export type RunStatus = z.infer<typeof runStatusSchema>
 /** 执行条目的类型。 */
 export type ExecutionItem = z.infer<typeof executionItemSchema>
-/** provider 原生会话记录的类型。 */
-export type ProviderSession = z.infer<typeof providerSessionSchema>
+/** Agent 原生会话记录的类型。 */
+export type AgentSession = z.infer<typeof agentSessionSchema>
 /** 待审批/待回答请求的类型。 */
 export type PendingRequest = z.infer<typeof pendingRequestSchema>
 /** GitHub PR 状态的类型。 */

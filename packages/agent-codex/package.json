@@ -1,0 +1,110 @@
+{
+  "name": "@pigcode/agent-codex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Codex agent for Pigcode",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "pigcode": ">=0.1.0"
+  },
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "agent",
+    "displayName": "Codex",
+    "host": "./src/index.ts",
+    "inject": [
+      "agents"
+    ],
+    "provides": [
+      "agent:codex"
+    ],
+    "permissions": [
+      "process:spawn",
+      "fs:workspace"
+    ],
+    "contributes": {
+      "agent": {
+        "id": "codex",
+        "description": {
+          "zh-CN": "OpenAI 的 Codex CLI，通过 app-server 协议提供审批、计划与原生会话恢复。",
+          "en-US": "OpenAI's Codex CLI over the app-server protocol, with approvals, plans and native session resume."
+        },
+        "homepage": "https://developers.openai.com/codex/cli",
+        "installHint": {
+          "zh-CN": "安装 Codex CLI（npm i -g @openai/codex），然后运行 codex login 登录。",
+          "en-US": "Install the Codex CLI (npm i -g @openai/codex), then run codex login."
+        },
+        "settings": [
+          {
+            "key": "binaryPath",
+            "type": "path",
+            "pathKind": "file",
+            "label": {
+              "zh-CN": "可执行文件",
+              "en-US": "Binary path"
+            },
+            "placeholder": "codex",
+            "description": {
+              "zh-CN": "留空时在 PATH 与常见安装目录中查找 codex。",
+              "en-US": "Leave blank to look up codex on PATH and in common install locations."
+            }
+          },
+          {
+            "key": "homePath",
+            "type": "path",
+            "pathKind": "directory",
+            "label": "CODEX_HOME",
+            "placeholder": "~/.codex",
+            "description": {
+              "zh-CN": "Codex 读取配置与登录信息的目录；留空使用默认位置。",
+              "en-US": "Where Codex keeps its config and credentials; blank uses the default."
+            }
+          },
+          {
+            "key": "launchArgs",
+            "type": "text",
+            "monospace": true,
+            "label": {
+              "zh-CN": "启动参数",
+              "en-US": "Launch arguments"
+            },
+            "placeholder": "-c model_reasoning_summary=detailed",
+            "description": {
+              "zh-CN": "追加在 codex app-server 之后的参数。",
+              "en-US": "Extra arguments appended after codex app-server."
+            }
+          },
+          {
+            "key": "environment",
+            "type": "env",
+            "label": {
+              "zh-CN": "环境变量",
+              "en-US": "Environment variables"
+            },
+            "description": {
+              "zh-CN": "启动 Codex 时额外设置的环境变量，例如代理或 API 密钥。",
+              "en-US": "Extra environment variables for the Codex process, such as a proxy or API key."
+            }
+          }
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
+  }
+}

@@ -36,7 +36,7 @@ const coreEntries: Record<string, string> = {
   sessions: join(root, "apps/host/src/services/sessions.ts"),
   "mcp-bridge": join(root, "apps/host/src/services/mcp-bridge.ts"),
   browser: join(root, "apps/host/src/services/browser.ts"),
-  providers: join(root, "apps/host/src/providers/registry.ts"),
+  agents: join(root, "apps/host/src/agents/registry.ts"),
   workspace: join(root, "apps/host/src/services/workspace.ts"),
   git: join(root, "apps/host/src/services/git.ts"),
   github: join(root, "apps/host/src/services/github.ts"),
@@ -48,12 +48,12 @@ const coreEntries: Record<string, string> = {
 
 /** 核心条目的固定配置；storage 与 settings 的路径由 Host 启动时按用户 profile 填入。 */
 const coreConfig: Record<string, string[]> = {
-  // 随应用发布时不注册 fake agent；E2E 用 PIGCODE_PROVIDER=fake 打开。
-  providers: ["    config:", "      fake: false"],
+  // 随应用发布时不注册 fake agent；E2E 用 PIGCODE_AGENT=fake（或旧名字 PIGCODE_PROVIDER=fake）打开。
+  agents: ["    config:", "      fake: false"],
 }
 
 /** 随应用内置的 agent 插件：包目录名即产物目录名。 */
-const builtinPlugins = ["provider-claude", "provider-codex"]
+const builtinPlugins = ["agent-claude", "agent-codex"]
 
 await rm(outDir, { recursive: true, force: true })
 

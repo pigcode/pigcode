@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { installLocalPlugin } from "./plugin-manager"
 import { apply as pluginsPlugin } from "./plugins"
 import { apply as projects } from "./projects"
@@ -34,7 +34,7 @@ async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   await ctx.plugin(pluginsPlugin, { profileDir })
   return { ctx, profileDir }
 }

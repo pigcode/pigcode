@@ -9,14 +9,14 @@ import {
 } from "./manifest"
 
 const base = {
-  name: "@pigcode/provider-fake",
+  name: "@pigcode/agent-fake",
   version: "0.0.0",
   pigcode: {
     apiVersion: 1,
-    kind: "provider",
+    kind: "agent",
     host: "./index.mjs",
-    inject: ["providers"],
-    provides: ["provider:fake"],
+    inject: ["agents"],
+    provides: ["agent:fake"],
     contributes: {},
     permissions: ["process:spawn"],
   },
@@ -25,7 +25,7 @@ const base = {
 describe("plugin manifest", () => {
   it("accepts a valid manifest", () => {
     const manifest = pluginManifestSchema.parse(base)
-    expect(manifest.pigcode.kind).toBe("provider")
+    expect(manifest.pigcode.kind).toBe("agent")
   })
 
   it("rejects a plugin without host or client entry", () => {
@@ -46,13 +46,13 @@ describe("plugin manifest", () => {
     ).toThrow()
   })
 
-  it("reads the provider contribution with its settings fields", () => {
+  it("reads the agent contribution with its settings fields", () => {
     const manifest = pluginManifestSchema.parse({
       ...base,
       pigcode: {
         ...base.pigcode,
         contributes: {
-          provider: {
+          agent: {
             id: "fake",
             description: { "zh-CN": "测试用", "en-US": "For tests" },
             settings: [
@@ -63,22 +63,22 @@ describe("plugin manifest", () => {
         },
       },
     })
-    const provider = readProviderContribution(manifest)
-    expect(provider?.id).toBe("fake")
-    expect(provider?.customModels).toBe(true)
-    expect(provider?.settings.map((field) => field.key)).toEqual(["binaryPath", "environment"])
-    expect(provider?.settings[0]).toMatchObject({ type: "path", pathKind: "file" })
+    const agent = readAgentContribution(manifest)
+    expect(agent?.id).toBe("fake")
+    expect(agent?.customModels).toBe(true)
+    expect(agent?.settings.map((field) => field.key)).toEqual(["binaryPath", "environment"])
+    expect(agent?.settings[0]).toMatchObject({ type: "path", pathKind: "file" })
   })
 
-  it("infers a bare provider contribution from provides", () => {
-    const provider = readProviderContribution(pluginManifestSchema.parse(base))
-    expect(provider).toMatchObject({ id: "fake", settings: [], customModels: true })
+  it("infers a bare agent contribution from provides", () => {
+    const agent = readAgentContribution(pluginManifestSchema.parse(base))
+    expect(agent).toMatchObject({ id: "fake", settings: [], customModels: true })
   })
 
   it("rejects duplicate or reserved setting keys", () => {
     const withSettings = (settings: unknown[]) => ({
       ...base,
-      pigcode: { ...base.pigcode, contributes: { provider: { id: "fake", settings } } },
+      pigcode: { ...base.pigcode, contributes: { agent: { id: "fake", settings } } },
     })
     expect(() =>
       pluginManifestSchema.parse(
@@ -96,10 +96,10 @@ describe("plugin manifest", () => {
   it("only accepts an https homepage, the only kind the desktop app opens", () => {
     const withHomepage = (homepage: string) => ({
       ...base,
-      pigcode: { ...base.pigcode, contributes: { provider: { id: "fake", homepage } } },
+      pigcode: { ...base.pigcode, contributes: { agent: { id: "fake", homepage } } },
     })
     const manifest = pluginManifestSchema.parse(withHomepage("https://example.com/agent"))
-    expect(readProviderContribution(manifest)?.homepage).toBe("https://example.com/agent")
+    expect(readAgentContribution(manifest)?.homepage).toBe("https://example.com/agent")
     expect(() => pluginManifestSchema.parse(withHomepage("http://example.com"))).toThrow()
     expect(() => pluginManifestSchema.parse(withHomepage("javascript:alert(1)"))).toThrow()
   })
@@ -122,21 +122,21 @@ describe("agent names in the manifest", () => {
     },
   })
 
-  it("parses the agent names into the same result as the provider names", () => {
+  it("parses the provider names into the same result as the agent names", () => {
     const agent = pluginManifestSchema.parse(withNames("agent"))
     const provider = pluginManifestSchema.parse(withNames("provider"))
-    expect(agent).toEqual(provider)
-    expect(agent.pigcode.kind).toBe("provider")
-    expect(agent.pigcode.provides).toEqual(["provider:fake", "capability:other"])
-    expect(Object.keys(agent.pigcode.contributes).sort()).toEqual(["commands", "provider"])
+    expect(provider).toEqual(agent)
+    expect(provider.pigcode.kind).toBe("agent")
+    expect(provider.pigcode.provides).toEqual(["agent:fake", "capability:other"])
+    expect(Object.keys(provider.pigcode.contributes).sort()).toEqual(["agent", "commands"])
     expect(readAgentContribution(agent)).toEqual(readAgentContribution(provider))
     expect(readAgentContribution(agent)?.settings[0]).toMatchObject({ pathKind: "file" })
   })
 
-  it("infers a bare contribution from provides agent:<id>", () => {
+  it("infers a bare contribution from the old provides provider:<id>", () => {
     const manifest = pluginManifestSchema.parse({
       ...base,
-      pigcode: { ...base.pigcode, kind: "agent", provides: ["agent:fake"] },
+      pigcode: { ...base.pigcode, kind: "provider", provides: ["provider:fake"] },
     })
     expect(readAgentContribution(manifest)).toMatchObject({ id: "fake", settings: [] })
   })
@@ -201,7 +201,7 @@ describe("agent names in the manifest", () => {
 
   it("treats both kinds as Agent plugins", () => {
     expect(isAgentPlugin({ pigcode: { kind: "agent" } })).toBe(true)
-    expect(isAgentPlugin(pluginManifestSchema.parse(withNames("agent")))).toBe(true)
+    expect(isAgentPlugin(pluginManifestSchema.parse(withNames("provider")))).toBe(true)
     expect(isAgentPlugin(pluginManifestSchema.parse(base))).toBe(true)
     expect(isAgentPlugin({ pigcode: { kind: "capability" } })).toBe(false)
   })

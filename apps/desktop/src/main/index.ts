@@ -18,6 +18,8 @@ import {
   readPathKind,
 } from "./folder-picker"
 import { startHostProcess, type HostProcess } from "./host-process"
+import { decideRestart, readHostFatal } from "./host-restart"
+import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
 import { appIcon } from "./app-icons"
 import { appDefsFor, detectApps } from "./open-apps"
@@ -52,6 +54,9 @@ let host: HostProcess | undefined
 let mainWindow: BrowserWindow | undefined
 let quitting = false
 let unsavedLabels: UnsavedGuardLabels = DEFAULT_UNSAVED_LABELS
+/** 连续快速失败的次数与最近一次 Host 报告的失败原因，见 host-restart.ts。 */
+let hostQuickFailures = 0
+let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
 /** 把应用内相对路径解析到 app.getAppPath() 之下。 */
@@ -182,15 +187,43 @@ function registerNativeBridge(): void {
 
 registerNativeBridge()
 
+/** 连续启动失败后不再重启 Host，弹出错误对话框说明原因。 */
+function showHostFailure(count: number): void {
+  const text = hostFailureText(app.getLocale())
+  const options = {
+    type: "error" as const,
+    message: text.message,
+    detail: hostFailureDetail(text, count, lastHostFatal),
+  }
+  if (mainWindow && !mainWindow.isDestroyed()) void dialog.showMessageBox(mainWindow, options)
+  else void dialog.showMessageBox(options)
+}
+
+/** 启动 Host；退出后按 host-restart.ts 的策略退避重启，连续快速失败太多次时停下并报错。 */
 function startHost(): HostProcess {
   const next = startHostProcess(resolveAppPath("out/host/index.mjs"), profileDir())
+  const startedAt = Date.now()
   browser.attachControlPort(next.controlPort)
+  next.child.on("message", (message: unknown) => {
+    lastHostFatal = readHostFatal(message) ?? lastHostFatal
+  })
   next.child.on("exit", () => {
     if (quitting) return
-    host = startHost()
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-      mainWindow.webContents.postMessage("pigcode:port", null, [host.appPort])
+    const decision = decideRestart(hostQuickFailures, Date.now() - startedAt)
+    hostQuickFailures = decision.quickFailures
+    if (decision.quickFailures === 0) lastHostFatal = null
+    if (decision.action === "give-up") {
+      host = undefined
+      showHostFailure(decision.quickFailures)
+      return
     }
+    setTimeout(() => {
+      if (quitting) return
+      host = startHost()
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.postMessage("pigcode:port", null, [host.appPort])
+      }
+    }, decision.delayMs)
   })
   return next
 }

@@ -6,13 +6,13 @@ import {
   environmentEntriesSchema,
   reasoningEffortSchema,
   type EnvironmentEntry,
-  type ProviderSettingsValues,
+  type AgentSettingsValues,
   type ReasoningEffort,
 } from "@pigcode/contracts"
 
 /** 读取字符串设置；空白视为未填。 */
 export function settingString(
-  settings: ProviderSettingsValues | undefined,
+  settings: AgentSettingsValues | undefined,
   key: string,
 ): string | undefined {
   const value = settings?.[key]
@@ -23,7 +23,7 @@ export function settingString(
 
 /** 读取布尔设置；不是布尔值时视为未填。 */
 export function settingBoolean(
-  settings: ProviderSettingsValues | undefined,
+  settings: AgentSettingsValues | undefined,
   key: string,
 ): boolean | undefined {
   const value = settings?.[key]
@@ -32,7 +32,7 @@ export function settingBoolean(
 
 /** 读取环境变量设置；名称不合法或重复的条目被丢弃，后写的覆盖先写的。 */
 export function settingEnvironment(
-  settings: ProviderSettingsValues | undefined,
+  settings: AgentSettingsValues | undefined,
   key = "environment",
 ): EnvironmentEntry[] {
   const value = settings?.[key]

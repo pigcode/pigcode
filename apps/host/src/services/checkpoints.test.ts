@@ -7,8 +7,8 @@ import { promisify } from "node:util"
 import type { ThreadEvent } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it } from "vitest"
-import { apply as providers } from "../providers/registry"
-import { FAKE_LONG_RUN_TEXT } from "../providers/fake"
+import { apply as agentsPlugin } from "../agents/registry"
+import { FAKE_LONG_RUN_TEXT } from "../agents/fake"
 import { apply as checkpoints } from "./checkpoints"
 import { apply as git } from "./git"
 import { apply as projects } from "./projects"
@@ -44,7 +44,7 @@ async function workspace(gitRepo = true): Promise<string> {
   return root
 }
 
-/** 建立带 git 与 fake provider 的内存 Host。 */
+/** 建立带 git 与 fake agent 的内存 Host。 */
 async function setupGitThread(gitRepo = true) {
   const root = await workspace(gitRepo)
   const ctx = new Context()
@@ -55,7 +55,7 @@ async function setupGitThread(gitRepo = true) {
   await ctx.plugin(sessions)
   await ctx.plugin(git)
   await ctx.plugin(checkpoints)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   const project = ctx.projects.add(root)
   const thread = ctx.threads.create(project.id, "Checkpoints", "fake")
   return { ctx, thread, root }
@@ -71,7 +71,7 @@ afterEach(async () => {
 describe("checkpoints service", () => {
   it("captures baseline and final checkpoints for a run", async () => {
     const { ctx, thread } = await setupGitThread()
-    const { runId, done } = await ctx.providers.startRun(thread.id, "hello")
+    const { runId, done } = await ctx.agents.startRun(thread.id, "hello")
     await done
     await waitFor(() => ctx.checkpoints.list(thread.id).length === 2)
 
@@ -92,7 +92,7 @@ describe("checkpoints service", () => {
 
   it("restores the workspace and emits thread.updated", async () => {
     const { ctx, thread, root } = await setupGitThread()
-    const { done } = await ctx.providers.startRun(thread.id, "hello")
+    const { done } = await ctx.agents.startRun(thread.id, "hello")
     await done
     await waitFor(() => ctx.checkpoints.list(thread.id).length === 2)
     const baseline = ctx.checkpoints.list(thread.id)[0]!
@@ -130,11 +130,11 @@ describe("checkpoints service", () => {
 
   it("captures a final checkpoint when a run is interrupted", async () => {
     const { ctx, thread } = await setupGitThread()
-    const { runId, done } = await ctx.providers.startRun(thread.id, FAKE_LONG_RUN_TEXT)
+    const { runId, done } = await ctx.agents.startRun(thread.id, FAKE_LONG_RUN_TEXT)
     await waitFor(() =>
       ctx.sessions.read(thread.id, 0).some((event) => event.type === "run.started"),
     )
-    expect(ctx.providers.cancelRun(runId)).toBe(true)
+    expect(ctx.agents.cancelRun(runId)).toBe(true)
     await done
     await waitFor(() => ctx.checkpoints.list(thread.id).length === 2)
 
@@ -143,11 +143,11 @@ describe("checkpoints service", () => {
 
   it("skips automatic capture outside git without blocking the run", async () => {
     const { ctx, thread } = await setupGitThread(false)
-    const { runId, done } = await ctx.providers.startRun(thread.id, "hello")
+    const { runId, done } = await ctx.agents.startRun(thread.id, "hello")
     await done
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(ctx.providers.getRunStatus(runId)).toBe("completed")
+    expect(ctx.agents.getRunStatus(runId)).toBe("completed")
     expect(ctx.checkpoints.list(thread.id)).toEqual([])
   })
 

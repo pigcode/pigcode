@@ -44,7 +44,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     const settings = JSON.parse(
       readFileSync(join(process.env.PIGCODE_PROFILE_DIR ?? "", "settings.json"), "utf8"),
     ) as Record<string, unknown>
-    expect(settings["providers.codex"]).toEqual({
+    expect(settings["agents.codex"]).toEqual({
       launchArgs: "-c model_reasoning_summary=detailed",
       environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
       customModels: ["gpt-pigcode-e2e"],

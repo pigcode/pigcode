@@ -52,6 +52,28 @@ export async function createHostAppFromProfile(
   return ctx
 }
 
+/**
+ * 确认一个核心服务真的起来了。Cordis 加载条目时插件抛出的错误只记日志、不往外抛，服务缺席要到后面
+ * 用到它时才变成一个看不出原因的 TypeError；这里把条目启动失败的真正原因（例如数据库备份或迁移失败、
+ * 数据库比应用新）重新抛出来。
+ */
+export async function requireCoreService(
+  ctx: Context,
+  entryId: string,
+  service: string,
+): Promise<void> {
+  if (ctx.get(service) !== undefined) return
+  const fiber = ctx.loader.store[entryId]?.fiber
+  try {
+    // 条目还在等依赖时 await 不会结束；loader 已经 await 过，等一小会儿足够拿到已经发生的错误。
+    await Promise.race([fiber?.await(), new Promise((resolve) => setTimeout(resolve, 1000))])
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`${entryId} failed to start: ${reason}`, { cause: error })
+  }
+  throw new Error(`${entryId} failed to start: the ${service} service is not available`)
+}
+
 /** 读取 profile 并创建 kernel。 */
 export async function createHostApp(options: CreateHostAppOptions): Promise<Context> {
   const profile = await loadProfile(options.profileDir, options.profileName)

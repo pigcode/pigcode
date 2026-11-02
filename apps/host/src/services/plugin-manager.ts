@@ -6,15 +6,18 @@
  * 都记在 profile 目录的 `plugins.yml` 里；内置插件的包目录由 Host 启动时传入。
  */
 import { createHash } from "node:crypto"
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, readFile, rm } from "node:fs/promises"
 import { dirname, join, win32 } from "node:path"
 import { pathToFileURL } from "node:url"
 import { parse, stringify } from "yaml"
 import {
   checkPluginCompatibility,
   pluginManifestSchema,
+  type PluginKind,
   type PluginManifest,
 } from "@pigcode/plugin-sdk"
+import { writeFileAtomic } from "./atomic-write"
+import { backupBeforeRename, migrateLegacyPluginEntries } from "./legacy-names"
 import {
   defaultPnpmRunner,
   ensureProfilePackage,
@@ -80,6 +83,7 @@ export interface PluginSummary {
   displayName: string
   description: string | null
   version: string
+  /** 界面的插件种类还叫 provider：Agent 插件在这里报 `provider`，界面迁移（#34）时改成 `agent`。 */
   kind: "provider" | "capability" | "ui" | "bundle"
   enabled: boolean
   /** 随应用内置：可以停用，不能卸载。 */
@@ -114,13 +118,18 @@ export class PluginConflictError extends Error {
 }
 
 /** 合法的插件种类，用于 manifest 缺失时从 id 前缀推断。 */
-const PLUGIN_KINDS: readonly PluginSummary["kind"][] = ["provider", "capability", "ui", "bundle"]
+const PLUGIN_KINDS: readonly PluginKind[] = ["agent", "capability", "ui", "bundle"]
 
 /** 从 `<kind>.<name>` 形式的 id 推断插件种类；无法识别时按 bundle 处理。 */
-function kindFromId(id: string): PluginSummary["kind"] {
+function kindFromId(id: string): PluginKind {
   const separator = id.indexOf(".")
   const prefix = separator === -1 ? id : id.slice(0, separator)
   return PLUGIN_KINDS.find((kind) => kind === prefix) ?? "bundle"
+}
+
+/** 摘要里给界面的种类，见 PluginSummary.kind。 */
+function summaryKind(kind: PluginKind): PluginSummary["kind"] {
+  return kind === "agent" ? "provider" : kind
 }
 
 /** 插件列表文件名。 */
@@ -131,22 +140,46 @@ export function pluginIdOf(manifest: PluginManifest): string {
   return `${manifest.pigcode.kind}.${manifest.name}`
 }
 
-/** 读取插件列表；文件不存在时从空列表开始。 */
+/**
+ * 读取插件列表；文件不存在时从空列表开始。还用旧插件 id（`provider.<包名>`）的列表就地迁移并写回，
+ * 写回前先备份原文件（见 legacy-names.ts）。备份或写回失败时只记日志，这次照样返回迁移后的列表，
+ * 下次读取或下一次修改插件列表时再写。
+ */
 async function readPluginList(profileDir: string): Promise<InstalledPluginEntry[]> {
+  let plugins: InstalledPluginEntry[]
   try {
     const parsed = parse(await readFile(join(profileDir, PLUGINS_FILE), "utf8")) as {
       plugins?: InstalledPluginEntry[]
     } | null
-    return Array.isArray(parsed?.plugins) ? parsed.plugins : []
+    plugins = Array.isArray(parsed?.plugins) ? parsed.plugins : []
   } catch {
     return []
   }
+  const migrated = migrateLegacyPluginEntries(plugins)
+  if (migrated.changed) await persistMigratedPluginList(profileDir, migrated.entries)
+  return migrated.entries
 }
 
-/** 写回插件列表，必要时先创建目录。 */
+/** 迁移后的插件列表写回文件；失败只记日志，见 readPluginList。 */
+async function persistMigratedPluginList(
+  profileDir: string,
+  plugins: InstalledPluginEntry[],
+): Promise<void> {
+  const path = join(profileDir, PLUGINS_FILE)
+  try {
+    if (!(await backupBeforeRename(path))) {
+      console.error(`[host] could not back up ${path}; keeping the migrated plugin list in memory`)
+      return
+    }
+    await writePluginList(profileDir, plugins)
+  } catch (error) {
+    console.error(`[host] could not write the migrated plugin list to ${path}:`, error)
+  }
+}
+
+/** 原子写回插件列表（临时文件 + fsync + 改名），进程中途退出也不会留下空的或半个文件。 */
 async function writePluginList(profileDir: string, plugins: InstalledPluginEntry[]): Promise<void> {
-  await mkdir(profileDir, { recursive: true })
-  await writeFile(join(profileDir, PLUGINS_FILE), stringify({ plugins }), "utf8")
+  await writeFileAtomic(join(profileDir, PLUGINS_FILE), stringify({ plugins }))
 }
 
 /** 读取一个包目录里的 manifest，保留失败原因供界面展示。 */
@@ -398,7 +431,7 @@ export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[
       displayName: manifest?.pigcode.displayName ?? manifest?.name ?? record.name,
       description: manifest?.description ?? null,
       version: manifest?.version ?? "0.0.0",
-      kind: manifest?.pigcode.kind ?? kindFromId(record.id),
+      kind: summaryKind(manifest?.pigcode.kind ?? kindFromId(record.id)),
       enabled: !record.disabled,
       builtin: record.builtin,
       apiVersion: manifest?.pigcode.apiVersion ?? 0,

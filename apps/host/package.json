@@ -7,7 +7,7 @@
     ".": "./src/index.ts",
     "./kernel/*": "./src/kernel/*.ts",
     "./services/*": "./src/services/*.ts",
-    "./providers/*": "./src/providers/*.ts",
+    "./agents/*": "./src/agents/*.ts",
     "./rpc/*": "./src/rpc/*.ts"
   },
   "scripts": {
@@ -26,8 +26,8 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.304",
-    "@pigcode/provider-claude": "workspace:*",
-    "@pigcode/provider-codex": "workspace:*",
+    "@pigcode/agent-claude": "workspace:*",
+    "@pigcode/agent-codex": "workspace:*",
     "@types/better-sqlite3": "7.6.13",
     "typescript": "5.9.3",
     "vitest": "4.0.16"

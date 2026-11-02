@@ -11,7 +11,7 @@ describe("migration v6", () => {
       (row) => row.name,
     )
     expect(columns).toContain("parent_thread_id")
-    expect(db.pragma("user_version", { simple: true })).toBe(6)
+    expect(db.pragma("user_version", { simple: true })).toBeGreaterThanOrEqual(6)
     db.close()
   })
 
@@ -23,7 +23,7 @@ describe("migration v6", () => {
     `)
     db.pragma("user_version = 5")
 
-    migrate(db)
+    migrate(db, 6)
 
     expect(db.prepare(`SELECT id, parent_thread_id FROM threads`).all()).toEqual([
       { id: "th_1", parent_thread_id: null },

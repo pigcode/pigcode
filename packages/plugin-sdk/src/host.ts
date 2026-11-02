@@ -1,7 +1,7 @@
 /** Host 侧插件的稳定入口类型；插件不直接依赖 Cordis 内部实现。 */
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { McpToolDefinition } from "./mcp"
-import type { ProviderPluginDriver } from "./provider"
+import type { AgentDriver, ProviderDriver } from "./provider"
 
 /** capability 插件可用的只读会话视图；Host 的 sessions 服务结构上满足该契约。 */
 export interface PluginSessions {
@@ -25,6 +25,13 @@ export interface McpBridgeApi {
   listTools(): McpToolDefinition[]
 }
 
+/** Agent 插件注册 driver 的入口；Host 以 Cordis 服务 `agents` 提供。 */
+export interface AgentRegistry {
+  /** 旧写法的 driver（Agent 功能写在 `capabilities` 里）同样接受，#35 起只接受 AgentDriver。 */
+  register(driver: AgentDriver | ProviderDriver): void
+  unregister(id: string): void
+}
+
 /** Host 插件可用的最小上下文；只暴露稳定契约，不暴露 Host 内部服务。 */
 export interface PluginHostContext {
   /** 只读会话访问；未在 manifest.inject 声明 sessions 时不可用。 */
@@ -33,10 +40,10 @@ export interface PluginHostContext {
   provide(name: string, value: unknown): void
   /** 注册随插件卸载执行的清理逻辑。 */
   effect(setup: () => (() => void) | void): void
-  providers: {
-    register(driver: ProviderPluginDriver): void
-    unregister(id: string): void
-  }
+  /** 注册 Agent driver；manifest.inject 或插件导出的 inject 里写 `agents`。 */
+  agents: AgentRegistry
+  /** @deprecated 旧名字，inject 写 `providers` 时可用；改用 `agents`。 */
+  providers: AgentRegistry
   /** MCP 工具注册；Host 以 Cordis 服务 `mcp` 提供。 */
   readonly mcp: McpBridgeApi
 }

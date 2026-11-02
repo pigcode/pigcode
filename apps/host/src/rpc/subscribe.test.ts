@@ -2,7 +2,7 @@
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
 import type { ThreadEvent } from "@pigcode/contracts"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
@@ -37,14 +37,14 @@ function delay(ms: number): Promise<null> {
   return new Promise((resolve) => setTimeout(() => resolve(null), ms))
 }
 
-/** 建立带 providers 的内存 Host。 */
+/** 建立带 agents 服务的内存 Host。 */
 async function setup() {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   const project = ctx.projects.add("/tmp/pigcode-m5")
   const thread = ctx.threads.create(project.id, "M5", "fake")
   const transport = new MemoryTransport()

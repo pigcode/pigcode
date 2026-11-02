@@ -6,7 +6,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { installLocalPlugin } from "./plugin-manager"
 import { apply as pluginsPlugin } from "./plugins"
 import { apply as projects } from "./projects"
@@ -14,7 +14,7 @@ import { apply as sessions } from "./sessions"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/** 创建带 loader、providers 与 plugins 服务的 Host 测试上下文。 */
+/** 创建带 loader、agents 与 plugins 服务的 Host 测试上下文。 */
 async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   const profileDir = await mkdtemp(join(tmpdir(), "pigcode-dynamic-"))
   // loader 以 profileDir 为解析作用域；package.json 让裸包名解析到 node_modules。
@@ -29,14 +29,14 @@ async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   await ctx.plugin(pluginsPlugin, { profileDir })
   return { ctx, profileDir }
 }
 
-/** 写入一个注册 echo provider 的最小 Host 插件源目录。 */
-async function fixtureProviderPlugin(): Promise<string> {
-  const source = await mkdtemp(join(tmpdir(), "pigcode-fixture-provider-"))
+/** 写入一个注册 echo agent 的最小 Host 插件源目录；整个插件用旧名字写（kind、inject、ctx.providers、capabilities）。 */
+async function fixtureLegacyAgentPlugin(): Promise<string> {
+  const source = await mkdtemp(join(tmpdir(), "pigcode-fixture-agent-"))
   await mkdir(source, { recursive: true })
   await writeFile(
     join(source, "package.json"),
@@ -80,15 +80,15 @@ async function fixtureProviderPlugin(): Promise<string> {
 describe("dynamic host plugin", () => {
   it("loads and unloads a host plugin without restart", async () => {
     const { ctx, profileDir } = await setupHost()
-    const plugin = await installLocalPlugin(profileDir, await fixtureProviderPlugin())
+    const plugin = await installLocalPlugin(profileDir, await fixtureLegacyAgentPlugin())
 
     await ctx.plugins.enable(plugin.id)
     await ctx.loader.await()
-    expect(ctx.providers.list().some((provider) => provider.id === "echo")).toBe(true)
+    expect(ctx.agents.list().some((agent) => agent.id === "echo")).toBe(true)
 
     await ctx.plugins.disable(plugin.id)
     await ctx.loader.await()
-    expect(ctx.providers.list().some((provider) => provider.id === "echo")).toBe(false)
+    expect(ctx.agents.list().some((agent) => agent.id === "echo")).toBe(false)
 
     await ctx.fiber.dispose()
   })

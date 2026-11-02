@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { localizeText } from "@pigcode/contracts"
-import { expandHome, findExecutable, providerEnvironment, resolveExecutable } from "./node"
+import { expandHome, findExecutable, agentEnvironment, resolveExecutable } from "./node"
 import {
   asReasoningEffort,
   parseCliArgs,
@@ -85,7 +85,7 @@ describe("node helpers", () => {
   })
 
   it("layers settings environment and driver overrides over the base env", () => {
-    const env = providerEnvironment(
+    const env = agentEnvironment(
       [{ name: "FOO", value: "from-settings" }],
       { CODEX_HOME: "/tmp/codex", SKIP: undefined },
       { PATH: "/bin", FOO: "inherited", SKIP: "kept" },

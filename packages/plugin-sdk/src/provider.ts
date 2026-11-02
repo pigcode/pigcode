@@ -21,7 +21,7 @@ export type {
 /** 审批决议；界面只提交这三种。 */
 export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny"
 
-/** provider 发起的一次审批请求；字段用于持久化与界面展示。 */
+/** Agent 发起的一次审批请求；字段用于持久化与界面展示。 */
 export interface ApprovalRequest {
   toolName: string
   input: unknown
@@ -55,7 +55,7 @@ export interface AgentSessionHandle {
   model: string | null
 }
 
-/** 创建 provider 会话所需的输入。 */
+/** 创建 Agent 会话所需的输入。 */
 export interface CreateSessionInput {
   threadId: string
   cwd: string
@@ -68,11 +68,11 @@ export interface CreateSessionInput {
   model?: string | null
   /** 插件注册给模型的 MCP 工具；不支持 MCP 的 driver 可以忽略。 */
   mcp?: SessionMcp | undefined
-  /** 用户在设置页给这个 agent 填的值；字段由 manifest 的 `contributes.provider.settings` 声明。 */
+  /** 用户在设置页给这个 agent 填的值；字段由 manifest 的 `contributes.agent.settings` 声明。 */
   settings?: AgentSettingsValues
 }
 
-/** 用户发送给 provider 的一条输入；handoff 在切换 provider 后注入一次。 */
+/** 用户发送给 Agent 的一条输入；handoff 在切换 Agent 后注入一次。 */
 export interface UserInput {
   text: string
   handoff?: string
@@ -108,8 +108,8 @@ export interface AgentModelInfo {
 export interface AgentDriver {
   readonly id: string
   readonly displayName: string
-  /** Agent 功能；字段沿用 capabilities 这个旧名字。 */
-  readonly capabilities: AgentFeatures
+  /** Agent 功能：这个 Agent 支持哪些功能，界面据此隐藏不支持的控件。 */
+  readonly features: AgentFeatures
   /** 只读检测：是否安装、版本与登录状态；不能触发登录或创建会话。没实现时视为可用。 */
   detect?(settings: AgentSettingsValues): Promise<AgentStatus>
   /** 动态模型目录；没实现时目录为空，只列出用户添加的自定义模型。 */
@@ -123,16 +123,29 @@ export interface AgentDriver {
   dispose(session: AgentSessionHandle): Promise<void>
 }
 
-/** @deprecated use AgentDriver */
-export type ProviderDriver = AgentDriver
+/**
+ * @deprecated 旧写法的 driver：Agent 功能写在 `capabilities` 里。Host 仍然接受它，#35 起删除；
+ * 改用 AgentDriver，把 `capabilities` 改名为 `features`。
+ */
+export type LegacyAgentDriver = Omit<AgentDriver, "features"> & {
+  readonly capabilities: AgentFeatures
+}
+
+/** driver 的 Agent 功能；旧写法的 driver 从 `capabilities` 读。 */
+export function agentFeaturesOf(driver: AgentDriver | LegacyAgentDriver): AgentFeatures {
+  return "features" in driver ? driver.features : driver.capabilities
+}
+
+/** @deprecated use AgentDriver（旧名字对应旧写法：Agent 功能写在 `capabilities` 里） */
+export type ProviderDriver = LegacyAgentDriver
 /** @deprecated use AgentSessionHandle */
 export type ProviderSessionHandle = AgentSessionHandle
 /** @deprecated use AgentRuntime */
 export type ProviderRuntime = AgentRuntime
 /** @deprecated use AgentModelInfo */
 export type ProviderModelInfo = AgentModelInfo
-/** @deprecated use AgentDriver */
-export type ProviderPluginDriver = AgentDriver
+/** @deprecated use AgentDriver（旧名字对应旧写法：Agent 功能写在 `capabilities` 里） */
+export type ProviderPluginDriver = LegacyAgentDriver
 /** @deprecated use AgentSessionHandle */
 export type PluginProviderSession = AgentSessionHandle
 /** @deprecated use AgentRuntime */

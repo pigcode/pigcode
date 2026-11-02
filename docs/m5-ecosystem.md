@@ -210,7 +210,7 @@ cd frontend
 PIGCODE_REAL_CODEX=1 PIGCODE_CODEX_MODEL=gpt-6.1-sol pnpm real:codex:multi
 ```
 
-`apps/host/src/providers/multi-session.real.test.ts` 会创建两个 Codex 线程，
+`apps/host/src/agents/multi-session.real.test.ts` 会创建两个 Codex 线程，
 用 `Promise.all` 并行启动两个 run，分别发送 `Reply with exactly OK-1` 和
 `Reply with exactly OK-2`，等待两个 `done` 后断言两个 run 都是 `completed`，且各自
 线程的 assistant 文本包含 `OK-1` / `OK-2`。测试结束会中断残留 turn 并 dispose

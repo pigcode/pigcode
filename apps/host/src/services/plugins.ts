@@ -28,7 +28,7 @@ export interface PluginsConfig {
 /** Host 侧插件管理服务；支持本地目录、npm 包名/版本与 tarball 安装。 */
 export interface PluginsService {
   list(): Promise<PluginSummary[]>
-  /** 合并后的插件记录（含 manifest），供 agent 设置页读取 provider 贡献。 */
+  /** 合并后的插件记录（含 manifest），供 agent 设置页读取 Agent 插件的贡献。 */
   records(): Promise<PluginRecord[]>
   install(spec: string): Promise<InstalledPluginEntry>
   installLocal(sourceDir: string): Promise<InstalledPluginEntry>

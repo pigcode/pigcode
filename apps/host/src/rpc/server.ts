@@ -10,7 +10,7 @@ import {
   rpcSuccessSchema,
 } from "@pigcode/contracts"
 import type { CommandMethod, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
-import { buildSubagentBrief } from "../providers/switching"
+import { buildSubagentBrief } from "../agents/switching"
 import { listAgents, uninstallPluginAndClearDefault, validateAgentSettings } from "./agents"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
@@ -93,9 +93,9 @@ export class RpcServer {
         const project = this.ctx.projects.remove(value.projectId)
         if (!project) throw new Error(`project not found: ${value.projectId}`)
         // 项目的会话随项目一起从侧栏消失，还在跑的 run 同样先停下。
-        for (const run of this.ctx.providers.listRuns()) {
+        for (const run of this.ctx.agents.listRuns()) {
           if (this.ctx.threads.get(run.threadId)?.projectId === value.projectId) {
-            this.ctx.providers.cancelRun(run.runId)
+            this.ctx.agents.cancelRun(run.runId)
           }
         }
         return project
@@ -124,8 +124,8 @@ export class RpcServer {
           value.threadId,
           ...this.ctx.threads.children(value.threadId).map((child) => child.id),
         ])
-        for (const run of this.ctx.providers.listRuns()) {
-          if (archived.has(run.threadId)) this.ctx.providers.cancelRun(run.runId)
+        for (const run of this.ctx.agents.listRuns()) {
+          if (archived.has(run.threadId)) this.ctx.agents.cancelRun(run.runId)
         }
         const thread = this.ctx.threads.archive(value.threadId)
         if (!thread) throw new Error(`thread not found: ${value.threadId}`)
@@ -185,7 +185,7 @@ export class RpcServer {
             thread: this.ctx.threads.get(value.threadId) ?? null,
             runs: [],
             items: [],
-            pendingRequests: this.ctx.providers.listPendingRequests(value.threadId),
+            pendingRequests: this.ctx.agents.listPendingRequests(value.threadId),
           },
           cursor: events.at(-1)?.seq ?? value.cursor,
           events,
@@ -199,11 +199,7 @@ export class RpcServer {
       }
       case "thread.switchProvider": {
         const value = parsed as { threadId: string; providerId: string; modelId?: string | null }
-        return this.ctx.providers.switchProvider(
-          value.threadId,
-          value.providerId,
-          value.modelId ?? null,
-        )
+        return this.ctx.agents.switchAgent(value.threadId, value.providerId, value.modelId ?? null)
       }
       case "thread.setPermissionMode": {
         const value = parsed as { threadId: string; permissionMode: PermissionMode }
@@ -221,7 +217,7 @@ export class RpcServer {
       }
       case "run.start": {
         const value = parsed as { threadId: string; text: string; effort?: ReasoningEffort }
-        const { runId } = await this.ctx.providers.startRun(
+        const { runId } = await this.ctx.agents.startRun(
           value.threadId,
           value.text,
           (event) => {
@@ -236,10 +232,10 @@ export class RpcServer {
         return { runId }
       }
       case "run.list":
-        return { runs: this.ctx.providers.listRuns() }
+        return { runs: this.ctx.agents.listRuns() }
       case "run.interrupt": {
         const value = parsed as { runId: string }
-        return { interrupted: this.ctx.providers.cancelRun(value.runId) }
+        return { interrupted: this.ctx.agents.cancelRun(value.runId) }
       }
       case "run.respondApproval": {
         const value = parsed as {
@@ -248,7 +244,7 @@ export class RpcServer {
           requestId: string
           decision: "allow-once" | "allow-for-session" | "deny"
         }
-        this.ctx.providers.respondApproval(
+        this.ctx.agents.respondApproval(
           value.threadId,
           value.runId,
           value.requestId,
@@ -263,22 +259,23 @@ export class RpcServer {
           requestId: string
           answers: string[]
         }
-        this.ctx.providers.answerQuestion(
-          value.threadId,
-          value.runId,
-          value.requestId,
-          value.answers,
-        )
+        this.ctx.agents.answerQuestion(value.threadId, value.runId, value.requestId, value.answers)
         return { ok: true }
       }
-      case "agent.detect":
-        return this.ctx.providers.detect(parsed as { providerId?: string; refresh?: boolean })
+      case "agent.detect": {
+        // 请求参数的 providerId 是界面用的字段名，界面迁移（#34）时改名。
+        const value = parsed as { providerId?: string; refresh?: boolean }
+        return this.ctx.agents.detect({ agentId: value.providerId, refresh: value.refresh })
+      }
       case "agent.registered":
-        return this.ctx.providers.list()
+        // 返回给界面的字段名还是 capabilities，界面迁移（#34）时改成 features。
+        return this.ctx.agents
+          .list()
+          .map(({ features, ...agent }) => ({ ...agent, capabilities: features }))
       case "agent.default":
-        return { id: await this.ctx.providers.defaultProvider() }
+        return { id: await this.ctx.agents.defaultAgent() }
       case "agent.models":
-        return this.ctx.providers.models((parsed as { providerId: string }).providerId)
+        return this.ctx.agents.models((parsed as { providerId: string }).providerId)
       case "agent.list":
         return listAgents(this.ctx)
       case "agent.updateSettings": {
@@ -288,11 +285,11 @@ export class RpcServer {
         )
         if (!agent) throw new Error(`agent not found: ${value.providerId}`)
         validateAgentSettings(agent, value.values)
-        return { values: this.ctx.providers.updateSettings(value.providerId, value.values) }
+        return { values: this.ctx.agents.updateSettings(value.providerId, value.values) }
       }
       case "agent.setDefault": {
         const value = parsed as { providerId: string | null }
-        this.ctx.providers.setDefaultProvider(value.providerId)
+        this.ctx.agents.setDefaultAgent(value.providerId)
         return { defaultProviderId: value.providerId }
       }
       case "plugin.list":

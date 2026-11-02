@@ -19,7 +19,7 @@ export interface UpdateScheduleInput {
   enabled?: boolean
 }
 
-/** 定时任务触发时所需的 provider 能力；测试可注入替身。 */
+/** 定时任务触发时所需的 agents 服务方法；测试可注入替身。 */
 export interface ScheduleRunner {
   startRun(threadId: string, text: string): Promise<{ runId: string }>
   /** 返回运行中与排队中的 run，用于判断线程是否忙。 */
@@ -32,12 +32,12 @@ declare module "cordis" {
   }
 }
 
-/** schedules 插件依赖的存储与 provider 服务。 */
-export const inject = ["storage", "providers"]
+/** schedules 插件依赖的存储与 agents 服务。 */
+export const inject = ["storage", "agents"]
 
 /** 注册 schedules 服务；timer 的启停由 Host 入口显式控制。 */
 export function apply(ctx: Context): void {
-  const schedules = new SchedulesService(ctx.storage.db, () => ctx.providers)
+  const schedules = new SchedulesService(ctx.storage.db, () => ctx.agents)
   ctx.provide("schedules", schedules)
   ctx.effect(() => () => schedules.stop())
 }

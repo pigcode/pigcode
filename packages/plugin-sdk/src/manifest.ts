@@ -3,8 +3,11 @@ import semver from "semver"
 import { z } from "zod"
 import { agentContributionSchema, type AgentContribution } from "@pigcode/contracts"
 
-/** 解析后的插件种类；manifest 里写的 `agent` 解析成 `provider`，插件 id 与已保存的数据不变。 */
-export const pluginKindSchema = z.enum(["provider", "capability", "ui", "bundle"])
+/**
+ * 解析后的插件种类。manifest 里的旧名字 `provider` 解析成 `agent`，插件 id 因此是 `agent.<包名>`；
+ * 旧 id `provider.<包名>` 由 Host 启动时的数据迁移改写。
+ */
+export const pluginKindSchema = z.enum(["agent", "capability", "ui", "bundle"])
 
 /**
  * 一个 manifest 只能用一套名字：新名字（`kind: "agent"`、`contributes.agent`、`provides` 里的
@@ -35,7 +38,7 @@ export const pluginManifestSchema = z
     engines: z.object({ pigcode: z.string().min(1) }).optional(),
     pigcode: z.object({
       apiVersion: z.literal(1),
-      kind: z.enum([...pluginKindSchema.options, "agent"]),
+      kind: z.enum([...pluginKindSchema.options, "provider"]),
       displayName: z.string().min(1).optional(),
       host: z.string().min(1).optional(),
       client: z.string().min(1).optional(),
@@ -73,18 +76,18 @@ export const pluginManifestSchema = z
       })
     }
   })
-  // 新名字解析成旧名字：下游代码拿到的结果和写旧名字时完全一样。
+  // 旧名字解析成新名字：下游代码拿到的结果和写新名字时完全一样。
   .transform(({ pigcode, ...rest }) => {
-    const { agent, ...contributes } = pigcode.contributes
+    const { provider, ...contributes } = pigcode.contributes
     return {
       ...rest,
       pigcode: {
         ...pigcode,
-        kind: pigcode.kind === "agent" ? "provider" : pigcode.kind,
+        kind: pigcode.kind === "provider" ? "agent" : pigcode.kind,
         provides: pigcode.provides.map((item) =>
-          item.startsWith("agent:") ? `provider:${item.slice("agent:".length)}` : item,
+          item.startsWith("provider:") ? `agent:${item.slice("provider:".length)}` : item,
         ),
-        contributes: agent === undefined ? contributes : { ...contributes, provider: agent },
+        contributes: provider === undefined ? contributes : { ...contributes, agent: provider },
       },
     }
   })

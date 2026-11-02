@@ -1,6 +1,6 @@
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
-import { apply as providers } from "../providers/registry"
+import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
@@ -15,7 +15,7 @@ async function createServer() {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(providers)
+  await ctx.plugin(agentsPlugin)
   const transport = new MemoryTransport()
   const server = new RpcServer(ctx, transport.host)
   server.start()
@@ -95,8 +95,8 @@ describe("rpc server", () => {
     const project = ctx.projects.add("/tmp/pigcode-archive-running")
     const thread = ctx.threads.create(project.id, "Busy", "fake")
     const other = ctx.threads.create(project.id, "Also busy", "fake")
-    const busy = await ctx.providers.startRun(thread.id, "long")
-    const untouched = await ctx.providers.startRun(other.id, "long")
+    const busy = await ctx.agents.startRun(thread.id, "long")
+    const untouched = await ctx.agents.startRun(other.id, "long")
 
     transport.client.send({
       jsonrpc: "2.0",
@@ -106,8 +106,8 @@ describe("rpc server", () => {
     })
     expect(await transport.client.next()).toMatchObject({ id: "1", result: { id: thread.id } })
     await busy.done
-    expect(ctx.providers.getRunStatus(busy.runId)).toBe("interrupted")
-    expect(ctx.providers.getRunStatus(untouched.runId)).toBe("running")
+    expect(ctx.agents.getRunStatus(busy.runId)).toBe("interrupted")
+    expect(ctx.agents.getRunStatus(untouched.runId)).toBe("running")
     await ctx.fiber.dispose()
   })
 
@@ -115,14 +115,11 @@ describe("rpc server", () => {
     const { ctx, transport } = await createServer()
     const kept = ctx.projects.add("/tmp/pigcode-kept")
     const removed = ctx.projects.add("/tmp/pigcode-removed")
-    const busy = await ctx.providers.startRun(
+    const busy = await ctx.agents.startRun(
       ctx.threads.create(removed.id, "Busy", "fake").id,
       "long",
     )
-    const other = await ctx.providers.startRun(
-      ctx.threads.create(kept.id, "Other", "fake").id,
-      "long",
-    )
+    const other = await ctx.agents.startRun(ctx.threads.create(kept.id, "Other", "fake").id, "long")
     const send = async (id: string, method: string, params: unknown) => {
       transport.client.send({ jsonrpc: "2.0", id, method, params })
       return transport.client.next()
@@ -140,8 +137,8 @@ describe("rpc server", () => {
       result: { id: removed.id },
     })
     await busy.done
-    expect(ctx.providers.getRunStatus(busy.runId)).toBe("interrupted")
-    expect(ctx.providers.getRunStatus(other.runId)).toBe("running")
+    expect(ctx.agents.getRunStatus(busy.runId)).toBe("interrupted")
+    expect(ctx.agents.getRunStatus(other.runId)).toBe("running")
     expect(await send("4", "project.list", {})).toMatchObject({ result: [{ id: kept.id }] })
     expect(await send("5", "project.remove", { projectId: "missing" })).toMatchObject({
       error: expect.anything(),
