@@ -1,5 +1,6 @@
 /** 真实 Codex 多会话：两个线程并行运行，分别得到 OK-1 与 OK-2。 */
 import type { ThreadEvent } from "@pigcode/contracts"
+import { CodexDriver } from "@pigcode/agent-codex/driver"
 import { Context } from "cordis"
 import { mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -40,6 +41,9 @@ it.skipIf(!enabled)(
     await ctx.plugin(threads)
     await ctx.plugin(sessions)
     await ctx.plugin(agentsPlugin)
+    // Codex 是 Agent 插件，不在 registry 里内置；这里直接注册它的 driver，和 parallel.test.ts 一样。
+    const codex = new CodexDriver()
+    ctx.agents.register(codex)
     const project = ctx.projects.add(root)
     const first = ctx.threads.create(project.id, "Codex A", "codex")
     const second = ctx.threads.create(project.id, "Codex B", "codex")
@@ -69,6 +73,7 @@ it.skipIf(!enabled)(
       await ctx.agents.switchAgent(first.id, "fake", null).catch(() => undefined)
       await ctx.agents.switchAgent(second.id, "fake", null).catch(() => undefined)
       await ctx.fiber.dispose()
+      codex.close()
     }
   },
   180_000,
