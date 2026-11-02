@@ -47,7 +47,7 @@ export class CodexDriver implements AgentDriver {
   readonly id = "codex"
   readonly displayName = "Codex"
   // M2 桥接审批、计划、用量与 resume；M5 起通过 `config.mcp_servers` 注入插件工具。
-  // questions/fork/rollback/checkpoint/subagents 尚未实现，对应能力位保持 false。
+  // questions/fork/rollback/checkpoint/subagents 尚未实现，对应的 Agent 功能保持 false。
   readonly features: AgentFeatures = {
     streaming: true,
     approvals: true,

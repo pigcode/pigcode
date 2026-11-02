@@ -307,6 +307,28 @@ Capability 插件注册的 MCP 工具通过 `input.mcp` 交给声明了 `feature
 `settingEnvironment`、`tokenizeCliArgs`、`resolveExecutable`、`agentEnvironment` 等）
 供随应用打包的内置 agent 使用。第三方插件需要同样的逻辑时，把代码复制过去或者自己打包进入口。
 
+### 从 provider 迁移
+
+Agent 插件以前叫 provider 插件。现在的 Host 不再接受旧写法，这是一项不兼容的变更：
+manifest 里出现下表前三项中的任何一项都会校验失败。已安装的旧插件仍会显示在插件列表里，
+状态为失败，错误信息写明要改成什么，例如
+`kind "provider" was renamed to "agent" (see docs/plugin-authoring.md)`；
+它的 Host 入口不会加载，但可以照常卸载。
+
+| 旧写法                                                                     | 新写法                                                                     |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `"kind": "provider"`                                                       | `"kind": "agent"`                                                          |
+| `contributes.provider`                                                     | `contributes.agent`                                                        |
+| `provides` 里的 `provider:<id>`                                            | `agent:<id>`                                                               |
+| 入口的 `inject = ["providers"]` 与 `ctx.providers`                         | `inject = ["agents"]` 与 `ctx.agents`                                      |
+| driver 的 `capabilities`                                                   | `features`                                                                 |
+| SDK 的 `Provider*` 类型、`providerEnvironment`、`readProviderContribution` | `Agent*` 类型、`agentEnvironment`、`readAgentContribution`                 |
+| RPC 命令 `provider.*`、`thread.switchProvider`                             | `agent.*`（`provider.list` 改为 `agent.registered`）、`thread.switchAgent` |
+| 环境变量 `PIGCODE_PROVIDER`                                                | `PIGCODE_AGENT`                                                            |
+
+用户 profile 里的旧数据（`settings.json`、`plugins.yml` 与数据库）由 Host 启动时自动迁移，
+插件作者不需要处理。
+
 ## Capability 插件
 
 完整示例见 [`examples/capability-session-info`](../examples/capability-session-info)。

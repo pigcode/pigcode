@@ -1,13 +1,13 @@
 /** 全局运行队列、排队条目与内存中的 run 句柄。 */
 import type { AgentEvent, RunStatus } from "@pigcode/contracts"
-import type { RegisteredAgentDriver, AgentSessionHandle, SessionMcp, UserInput } from "./driver"
+import type { AgentDriver, AgentSessionHandle, SessionMcp, UserInput } from "./driver"
 
 /** 运行期内存状态；终态事件到达后从 activeRuns 移除。 */
 export interface ActiveRun {
   runId: string
   threadId: string
   session: AgentSessionHandle
-  driver: RegisteredAgentDriver
+  driver: AgentDriver
   controller: AbortController
   emitLive: ((event: AgentEvent) => void) | undefined
   status: RunStatus
@@ -27,7 +27,7 @@ export interface ActiveRun {
 export interface QueuedRun {
   runId: string
   threadId: string
-  driver: RegisteredAgentDriver
+  driver: AgentDriver
   input: UserInput
   emitLive: ((event: AgentEvent) => void) | undefined
   controller: AbortController

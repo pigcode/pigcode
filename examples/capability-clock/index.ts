@@ -1,4 +1,4 @@
-/** 示例 capability 插件：通过 MCP 向模型暴露当前时间。 */
+/** 示例 Capability 插件：通过 MCP 向模型暴露当前时间。 */
 import type { PluginHostContext } from "@pigcode/plugin-sdk"
 
 export const name = "capability-clock"

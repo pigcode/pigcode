@@ -1,4 +1,4 @@
-/** 验证 capability 样例：安装启用后提供 sessionInfo，停用后服务随之消失。 */
+/** 验证 Capability 样例：安装启用后提供 sessionInfo，停用后服务随之消失。 */
 import Loader from "@cordisjs/plugin-loader"
 import { Context } from "cordis"
 import { mkdtemp, writeFile } from "node:fs/promises"
@@ -14,7 +14,7 @@ import { apply as sessions } from "./sessions"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/** 仓库内的 capability 样例目录；测试按安装路径复制，走真实的本地安装流程。 */
+/** 仓库内的 Capability 样例目录；测试按安装路径复制，走真实的本地安装流程。 */
 const SAMPLE_SOURCE = fileURLToPath(
   new URL("../../../../examples/capability-session-info", import.meta.url),
 )
@@ -39,7 +39,7 @@ async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   return { ctx, profileDir }
 }
 
-/** 安装并启用 capability 样例。 */
+/** 安装并启用 Capability 样例。 */
 async function installCapabilitySample(): Promise<{ ctx: Context }> {
   const { ctx, profileDir } = await setupHost()
   const plugin = await installLocalPlugin(profileDir, SAMPLE_SOURCE)
@@ -48,8 +48,8 @@ async function installCapabilitySample(): Promise<{ ctx: Context }> {
   return { ctx }
 }
 
-describe("capability plugin sample", () => {
-  it("loads and unloads the capability sample", async () => {
+describe("Capability plugin sample", () => {
+  it("loads and unloads the Capability sample", async () => {
     const { ctx } = await installCapabilitySample()
     try {
       expect(ctx.reflect.get("sessionInfo")).toBeTruthy()

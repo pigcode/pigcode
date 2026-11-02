@@ -68,7 +68,6 @@ describe("create-plugin", () => {
     expect(registered).toHaveLength(1)
     expect(registered[0]).toMatchObject({ id: "demo-echo", displayName: "Demo Echo" })
     expect(registered[0]).toHaveProperty("features.streaming", true)
-    expect(registered[0]).not.toHaveProperty("capabilities")
   })
 
   it("generates a Capability plugin that provides the service its manifest declares", async () => {

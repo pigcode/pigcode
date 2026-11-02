@@ -1,9 +1,9 @@
 /** Host 侧插件的稳定入口类型；插件不直接依赖 Cordis 内部实现。 */
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { McpToolDefinition } from "./mcp"
-import type { AgentDriver, LegacyAgentDriver } from "./agent"
+import type { AgentDriver } from "./agent"
 
-/** capability 插件可用的只读会话视图；Host 的 sessions 服务结构上满足该契约。 */
+/** Capability 插件可用的只读会话视图；Host 的 sessions 服务结构上满足该契约。 */
 export interface PluginSessions {
   /** 读取指定线程从 cursor 开始的事件；只读，不允许插件改写事件日志。 */
   read(threadId: string, cursor: number): readonly ThreadEvent[]
@@ -27,8 +27,7 @@ export interface McpBridgeApi {
 
 /** Agent 插件注册 driver 的入口；Host 以 Cordis 服务 `agents` 提供。 */
 export interface AgentRegistry {
-  /** 旧写法的 driver（Agent 功能写在 `capabilities` 里）同样接受，#35 起只接受 AgentDriver。 */
-  register(driver: AgentDriver | LegacyAgentDriver): void
+  register(driver: AgentDriver): void
   unregister(id: string): void
 }
 
@@ -42,8 +41,6 @@ export interface PluginHostContext {
   effect(setup: () => (() => void) | void): void
   /** 注册 Agent driver；manifest.inject 或插件导出的 inject 里写 `agents`。 */
   agents: AgentRegistry
-  /** @deprecated 旧名字，inject 写 `providers` 时可用；改用 `agents`。 */
-  providers: AgentRegistry
   /** MCP 工具注册；Host 以 Cordis 服务 `mcp` 提供。 */
   readonly mcp: McpBridgeApi
 }

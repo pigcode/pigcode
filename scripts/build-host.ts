@@ -48,7 +48,7 @@ const coreEntries: Record<string, string> = {
 
 /** 核心条目的固定配置；storage 与 settings 的路径由 Host 启动时按用户 profile 填入。 */
 const coreConfig: Record<string, string[]> = {
-  // 随应用发布时不注册 fake agent；E2E 用 PIGCODE_AGENT=fake（或旧名字 PIGCODE_PROVIDER=fake）打开。
+  // 随应用发布时不注册 fake agent；E2E 用 PIGCODE_AGENT=fake 打开。
   agents: ["    config:", "      fake: false"],
 }
 

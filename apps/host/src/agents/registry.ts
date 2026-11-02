@@ -7,10 +7,9 @@ import type {
   ApprovalRequest,
   AgentRunConfig,
   AgentRuntime,
-  RegisteredAgentDriver,
+  AgentDriver,
   UserInput,
 } from "./driver"
-import { agentFeaturesOf } from "./driver"
 import { FakeAgentDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
 import { forcedAgentId } from "./agent-settings"
@@ -45,7 +44,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   const maxConcurrentRuns = config.maxConcurrentRuns ?? 4
   const maxQueuedRuns = config.maxQueuedRuns ?? 32
   // Claude Code、Codex 与第三方 agent 都由各自的插件注册；Host 只自带开发与测试用的 fake。
-  const drivers = new Map<string, RegisteredAgentDriver>()
+  const drivers = new Map<string, AgentDriver>()
   if (config.fake !== false || forcedAgentId() === "fake") {
     const fake = new FakeAgentDriver({
       callTool: (threadId, name, input) => {
@@ -290,7 +289,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       return [...drivers.values()].map((driver) => ({
         id: driver.id,
         displayName: driver.displayName,
-        features: agentFeaturesOf(driver),
+        features: driver.features,
       }))
     },
     detect: (options) => agents.detect(options),
@@ -441,8 +440,6 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   }
 
   ctx.provide("agents", service)
-  // 旧名字：第三方插件 inject `providers` 后调用 ctx.providers.register；#35 删除。
-  ctx.provide("providers", service)
   ctx.effect(() => () => {
     // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。
     interruptAll()

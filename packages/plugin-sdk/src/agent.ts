@@ -11,12 +11,7 @@ import type {
 } from "@pigcode/contracts"
 import type { SessionMcp } from "./mcp"
 
-export type {
-  AgentSettingsValues,
-  AgentStatus,
-  ProviderSettingsValues,
-  ProviderStatus,
-} from "@pigcode/contracts"
+export type { AgentSettingsValues, AgentStatus } from "@pigcode/contracts"
 
 /** 审批决议；界面只提交这三种。 */
 export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny"
@@ -122,31 +117,3 @@ export interface AgentDriver {
   /** 释放会话资源；插件卸载或切换 Agent 时调用。 */
   dispose(session: AgentSessionHandle): Promise<void>
 }
-
-/**
- * @deprecated 旧写法的 driver：Agent 功能写在 `capabilities` 里。Host 仍然接受它，#35 起删除；
- * 改用 AgentDriver，把 `capabilities` 改名为 `features`。
- */
-export type LegacyAgentDriver = Omit<AgentDriver, "features"> & {
-  readonly capabilities: AgentFeatures
-}
-
-/** driver 的 Agent 功能；旧写法的 driver 从 `capabilities` 读。 */
-export function agentFeaturesOf(driver: AgentDriver | LegacyAgentDriver): AgentFeatures {
-  return "features" in driver ? driver.features : driver.capabilities
-}
-
-/** @deprecated use AgentDriver（旧名字对应旧写法：Agent 功能写在 `capabilities` 里） */
-export type ProviderDriver = LegacyAgentDriver
-/** @deprecated use AgentSessionHandle */
-export type ProviderSessionHandle = AgentSessionHandle
-/** @deprecated use AgentRuntime */
-export type ProviderRuntime = AgentRuntime
-/** @deprecated use AgentModelInfo */
-export type ProviderModelInfo = AgentModelInfo
-/** @deprecated use AgentDriver（旧名字对应旧写法：Agent 功能写在 `capabilities` 里） */
-export type ProviderPluginDriver = LegacyAgentDriver
-/** @deprecated use AgentSessionHandle */
-export type PluginProviderSession = AgentSessionHandle
-/** @deprecated use AgentRuntime */
-export type PluginProviderRuntime = AgentRuntime

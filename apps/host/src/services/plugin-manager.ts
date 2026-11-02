@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url"
 import { parse, stringify } from "yaml"
 import {
   checkPluginCompatibility,
-  pluginManifestSchema,
+  parsePluginManifest,
   type PluginKind,
   type PluginManifest,
 } from "@pigcode/plugin-sdk"
@@ -135,7 +135,7 @@ export function pluginIdOf(manifest: PluginManifest): string {
 }
 
 /**
- * 读取插件列表；文件不存在时从空列表开始。还用旧插件 id（`provider.<包名>`）的列表就地迁移并写回，
+ * 读取插件列表；文件不存在时从空列表开始。还用改名前插件 id 的列表就地迁移并写回，
  * 写回前先备份原文件（见 legacy-names.ts）。备份或写回失败时只记日志，这次照样返回迁移后的列表，
  * 下次读取或下一次修改插件列表时再写。
  */
@@ -182,7 +182,7 @@ async function readManifestAt(
 ): Promise<{ manifest: PluginManifest | null; error: string | null }> {
   try {
     const raw: unknown = JSON.parse(await readFile(join(dir, "package.json"), "utf8"))
-    const manifest = pluginManifestSchema.parse(raw)
+    const manifest = parsePluginManifest(raw)
     // 不兼容时仍返回 manifest 供界面展示版本与权限，但把原因写进 error。
     return { manifest, error: checkPluginCompatibility(manifest) }
   } catch (error) {
@@ -272,7 +272,7 @@ export async function installLocalPlugin(
   sourceDir: string,
 ): Promise<InstalledPluginEntry> {
   const env = toEnv(input)
-  const manifest = pluginManifestSchema.parse(
+  const manifest = parsePluginManifest(
     JSON.parse(await readFile(join(sourceDir, "package.json"), "utf8")),
   )
   await assertNotBuiltin(env, manifest.name)
@@ -309,7 +309,7 @@ export async function installPlugin(
   const after = await readProfilePackage(env.profileDir)
   const name = resolveInstalledName(spec, before.dependencies ?? {}, after.dependencies ?? {})
   const packageDir = join(env.profileDir, "node_modules", name)
-  const manifest = pluginManifestSchema.parse(
+  const manifest = parsePluginManifest(
     JSON.parse(await readFile(join(packageDir, "package.json"), "utf8")),
   )
   await assertNotBuiltin(env, manifest.name)

@@ -225,21 +225,17 @@ describe("default agent", () => {
     await expect(pickDefaultAgent({ ...input, registered: [] })).resolves.toBeNull()
   })
 
-  it("reads the forced agent from PIGCODE_AGENT before the old PIGCODE_PROVIDER", () => {
+  it("reads the forced agent from PIGCODE_AGENT", () => {
     expect(forcedAgentId({})).toBeUndefined()
-    expect(forcedAgentId({ PIGCODE_PROVIDER: "codex" })).toBe("codex")
     expect(forcedAgentId({ PIGCODE_AGENT: "claude" })).toBe("claude")
-    expect(forcedAgentId({ PIGCODE_AGENT: "claude", PIGCODE_PROVIDER: "codex" })).toBe("claude")
     // 空值当作没设。
-    expect(forcedAgentId({ PIGCODE_AGENT: "", PIGCODE_PROVIDER: "codex" })).toBe("codex")
-    expect(forcedAgentId({ PIGCODE_AGENT: "", PIGCODE_PROVIDER: "" })).toBeUndefined()
+    expect(forcedAgentId({ PIGCODE_AGENT: "" })).toBeUndefined()
   })
 
   it("forces the default agent and the fake agent through PIGCODE_AGENT", async () => {
-    vi.stubEnv("PIGCODE_PROVIDER", "codex")
     vi.stubEnv("PIGCODE_AGENT", "fake")
     try {
-      // 随应用发布的 profile 不注册 fake；PIGCODE_AGENT=fake 重新打开它，并压过 PIGCODE_PROVIDER。
+      // 随应用发布的 profile 不注册 fake；PIGCODE_AGENT=fake 重新打开它。
       const ctx = await setup({ fake: false })
       ctx.agents.register(recordingDriver("codex").driver)
       expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["fake", "codex"])

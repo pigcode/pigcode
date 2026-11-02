@@ -48,9 +48,10 @@ test("installs, enables, and disables plugins without restart", async () => {
   await debug.getByRole("switch").click()
   await expect(page.getByText("Debug Panel")).toBeHidden()
 
-  // capability 插件没有可见 UI，用列表状态验证启停热生效；详情里是包名与类型。
-  const capability = new URL("../../../examples/capability-session-info", import.meta.url).pathname
-  await installPlugin(page, capability)
+  // Capability 插件没有可见 UI，用列表状态验证启停热生效；详情里是包名与类型。
+  const capabilityPlugin = new URL("../../../examples/capability-session-info", import.meta.url)
+    .pathname
+  await installPlugin(page, capabilityPlugin)
   const capabilityItem = page
     .locator(".ext-item")
     .filter({ hasText: "pigcode-capability-session-info" })

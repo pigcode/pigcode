@@ -19,9 +19,6 @@ export const agentFeaturesSchema = z.object({
   nativeSessionId: z.boolean(),
 })
 
-/** @deprecated use agentFeaturesSchema */
-export const providerCapabilitiesSchema = agentFeaturesSchema
-
 /** 线程的执行权限模式。 */
 export const permissionModeSchema = z.enum([
   "read-only",
@@ -47,9 +44,6 @@ export const agentModelSchema = z.object({
   /** 用户在 agent 设置里添加的模型 id，不在 agent 自己的目录里。 */
   custom: z.boolean().optional(),
 })
-
-/** @deprecated use agentModelSchema */
-export const providerModelSchema = agentModelSchema
 
 /** 项目实体，对应一个被 Pigcode 打开的本地根目录。 */
 export const projectSchema = z.object({
@@ -177,16 +171,12 @@ export const scheduleSchema = z.object({
 
 /** Agent 功能的类型。 */
 export type AgentFeatures = z.infer<typeof agentFeaturesSchema>
-/** @deprecated use AgentFeatures */
-export type ProviderCapabilities = AgentFeatures
 /** 权限模式的类型。 */
 export type PermissionMode = z.infer<typeof permissionModeSchema>
 /** 推理强度的类型。 */
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>
 /** 模型目录条目的类型。 */
 export type AgentModel = z.infer<typeof agentModelSchema>
-/** @deprecated use AgentModel */
-export type ProviderModel = AgentModel
 /** 项目的类型。 */
 export type Project = z.infer<typeof projectSchema>
 /** 线程的类型。 */

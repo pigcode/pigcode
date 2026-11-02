@@ -7,7 +7,7 @@ export interface AppRendererProps extends ShellProps {
   locale: Locale
 }
 
-/** 组合全局 context provider（locale、tooltip、toast）与 Shell；具体页面由调用方通过 children 注入。 */
+/** 组合全局 context（LocaleProvider、Tooltip.Provider、ToastProvider）与 Shell；具体页面由调用方通过 children 注入。 */
 export function AppRenderer({ locale, ...shellProps }: AppRendererProps) {
   return (
     <LocaleProvider locale={locale}>

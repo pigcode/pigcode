@@ -9,8 +9,8 @@ import { ChatView } from "./chat-view"
 
 afterEach(cleanup)
 
-/** 全部能力开启的基准，测试只覆盖需要关闭的单项。 */
-const enabledCapabilities: AgentFeatures = {
+/** 全部 Agent 功能开启的基准，测试只覆盖需要关闭的单项。 */
+const enabledFeatures: AgentFeatures = {
   streaming: true,
   approvals: true,
   questions: false,
@@ -27,9 +27,9 @@ const enabledCapabilities: AgentFeatures = {
   nativeSessionId: true,
 }
 
-/** 在基准能力上覆盖指定字段。 */
+/** 在基准 Agent 功能上覆盖指定字段。 */
 function featuresWith(overrides: Partial<AgentFeatures>): AgentFeatures {
-  return { ...enabledCapabilities, ...overrides }
+  return { ...enabledFeatures, ...overrides }
 }
 
 /** 测试用线程。 */

@@ -1,4 +1,4 @@
-/** 验证 thread.switchAgent 的会话停止、handoff 生成与下一次 run 注入，以及旧名字 thread.switchProvider。 */
+/** 验证 thread.switchAgent 的会话停止、handoff 生成与下一次 run 注入。 */
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
 import type { CreateSessionInput, AgentDriver, AgentSessionHandle, UserInput } from "./driver"
@@ -229,26 +229,21 @@ describe("agent switching", () => {
     expect(prompts).toEqual(["context\n\nhello"])
   })
 
-  it("dispatches thread.switchAgent and its old name thread.switchProvider over RPC", async () => {
+  it("dispatches thread.switchAgent over RPC", async () => {
     const { ctx, thread } = await setup()
     const transport = new MemoryTransport()
     const server = new RpcServer(ctx, transport.host)
     server.start()
-    for (const [id, method] of [
-      ["1", "thread.switchAgent"],
-      ["2", "thread.switchProvider"],
-    ]) {
-      transport.client.send({
-        jsonrpc: "2.0",
-        id,
-        method,
-        params: { threadId: thread.id, agentId: "claude", modelId: null },
-      })
-      const response = (await transport.client.next()) as {
-        result: { agentId: string; modelId: string | null }
-      }
-      expect(response.result, method).toMatchObject({ agentId: "claude", modelId: null })
+    transport.client.send({
+      jsonrpc: "2.0",
+      id: "1",
+      method: "thread.switchAgent",
+      params: { threadId: thread.id, agentId: "claude", modelId: null },
+    })
+    const response = (await transport.client.next()) as {
+      result: { agentId: string; modelId: string | null }
     }
+    expect(response.result).toMatchObject({ agentId: "claude", modelId: null })
     server.stop()
     await ctx.fiber.dispose()
   })

@@ -31,9 +31,6 @@ export function agentEnvironment(
   return env
 }
 
-/** @deprecated use agentEnvironment */
-export const providerEnvironment = agentEnvironment
-
 /**
  * 从 GUI 启动的应用拿不到登录 shell 的 PATH（macOS 尤其如此），
  * 所以除了 PATH 还要看这些常见的 CLI 安装目录。

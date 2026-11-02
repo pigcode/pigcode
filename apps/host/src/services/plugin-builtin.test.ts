@@ -24,18 +24,8 @@ import { apply as settings } from "./settings"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/**
- * 写一个注册 agent 的 Host 插件包；settings 进入 contributes.agent。names 为 provider 时整个插件
- * 改用旧名字：manifest 的 kind、contributes 与 provides，入口的 inject、ctx.providers 与 capabilities。
- */
-async function writeAgentPackage(
-  dir: string,
-  name: string,
-  agentId: string,
-  names: "agent" | "provider" = "agent",
-): Promise<string> {
-  const legacy = names === "provider"
-  const registry = legacy ? "providers" : "agents"
+/** 写一个注册 agent 的 Host 插件包；settings 进入 contributes.agent。 */
+async function writeAgentPackage(dir: string, name: string, agentId: string): Promise<string> {
   await mkdir(dir, { recursive: true })
   await writeFile(
     join(dir, "package.json"),
@@ -45,12 +35,12 @@ async function writeAgentPackage(
       type: "module",
       pigcode: {
         apiVersion: 1,
-        kind: names,
+        kind: "agent",
         displayName: agentId.toUpperCase(),
         host: "./index.mjs",
-        provides: [`${names}:${agentId}`],
+        provides: [`agent:${agentId}`],
         contributes: {
-          [names]: {
+          agent: {
             id: agentId,
             settings: [{ key: "binaryPath", type: "path", label: "Binary path" }],
           },
@@ -61,18 +51,18 @@ async function writeAgentPackage(
   await writeFile(
     join(dir, "index.mjs"),
     [
-      `export const inject = ["${registry}"]`,
+      'export const inject = ["agents"]',
       "export function apply(ctx) {",
-      `  ctx.${registry}.register({`,
+      "  ctx.agents.register({",
       `    id: ${JSON.stringify(agentId)},`,
       `    displayName: ${JSON.stringify(agentId.toUpperCase())},`,
-      `    ${legacy ? "capabilities" : "features"}: {},`,
+      "    features: {},",
       "    createSession: async () => ({}),",
       "    send: async () => {},",
       "    interrupt: async () => {},",
       "    dispose: async () => {},",
       "  })",
-      `  ctx.effect(() => () => ctx.${registry}.unregister(${JSON.stringify(agentId)}))`,
+      `  ctx.effect(() => () => ctx.agents.unregister(${JSON.stringify(agentId)}))`,
       "}",
       "",
     ].join("\n"),
@@ -133,24 +123,6 @@ describe("built-in plugins", () => {
       "agent.@pigcode/agent-alpha",
     ])
     await expect(stat(join(env.profileDir, "node_modules", "pigcode-beta"))).rejects.toThrow()
-  })
-
-  it("gives an Agent plugin written with the old provider names the same id and conflicts", async () => {
-    const { root, env } = await fixture()
-    const source = await writeAgentPackage(
-      join(root, "src-gamma"),
-      "pigcode-gamma",
-      "alpha",
-      "provider",
-    )
-    const entry = await installLocalPlugin(env, source)
-    expect(entry.id).toBe("agent.pigcode-gamma")
-    const gamma = (await listPlugins(env)).find((plugin) => plugin.id === entry.id)
-    // 旧写法的 manifest 解析成新名字：kind、provides 与 contributes 都是 agent。
-    expect(gamma).toMatchObject({ kind: "agent", provides: ["agent:alpha"] })
-    expect(Object.keys(gamma?.contributes ?? {})).toEqual(["agent"])
-    // provider:alpha 和内置插件的 agent:alpha 是同一个声明，算冲突。
-    expect(gamma?.conflict).toContain("agent:alpha is provided by")
   })
 })
 
@@ -238,33 +210,54 @@ describe("plugins service", () => {
     await ctx.fiber.dispose()
   })
 
-  it("lists, loads and uninstalls an Agent plugin written with the old provider names", async () => {
-    const { ctx, root } = await host()
-    await ctx.plugins.loadAll()
-    // 旧写法：inject providers、ctx.providers.register、Agent 功能写在 capabilities 里。
-    const source = await writeAgentPackage(
-      join(root, "src-gamma"),
-      "pigcode-gamma",
-      "gamma",
-      "provider",
+  it("lists an installed plugin still written with kind provider as failed and uninstalls it", async () => {
+    const { ctx, env } = await host()
+    // 改名前装好的插件：plugins.yml 的条目已由 legacy-names.ts 改成 agent. id，包本身没改。
+    const dir = join(env.profileDir, "node_modules", "pigcode-old")
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, "package.json"),
+      JSON.stringify({
+        name: "pigcode-old",
+        version: "1.0.0",
+        pigcode: { apiVersion: 1, kind: "provider", host: "./index.mjs" },
+      }),
     )
-    await ctx.plugins.installLocal(source)
-    expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["alpha", "gamma"])
+    await writeFile(join(dir, "index.mjs"), "export function apply() {}\n")
+    await writeFile(
+      join(env.profileDir, "plugins.yml"),
+      "plugins:\n  - id: provider.pigcode-old\n    name: pigcode-old\n",
+    )
+    await ctx.plugins.loadAll()
+    expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["alpha"])
+
     const transport = new MemoryTransport()
     new RpcServer(ctx, transport.host).start()
-    transport.client.send({ jsonrpc: "2.0", id: "1", method: "agent.list", params: {} })
+    transport.client.send({ jsonrpc: "2.0", id: "1", method: "plugin.list", params: {} })
     const listed = (await transport.client.next()) as {
-      result: { agents: Array<{ agentId: string; pluginId: string; fields: unknown[] }> }
+      result: Array<{ id: string; kind: string; enabled: boolean; error: string | null }>
     }
-    expect(listed.result.agents[1]).toMatchObject({
-      agentId: "gamma",
-      pluginId: "agent.pigcode-gamma",
-      fields: [{ key: "binaryPath", type: "path" }],
+    expect(listed.result[1]).toEqual(
+      expect.objectContaining({
+        id: "agent.pigcode-old",
+        kind: "agent",
+        enabled: true,
+        error:
+          'invalid plugin manifest: pigcode.kind: kind "provider" was renamed to "agent" (see docs/plugin-authoring.md)',
+      }),
+    )
+
+    transport.client.send({
+      jsonrpc: "2.0",
+      id: "2",
+      method: "plugin.uninstall",
+      params: { id: "agent.pigcode-old" },
     })
-    // 卸载默认 agent 的插件时，kind 写 provider 的插件同样清掉默认选择。
-    ctx.agents.setDefaultAgent("gamma")
-    await uninstallPluginAndClearDefault(ctx, "agent.pigcode-gamma")
-    expect(ctx.agents.configuredDefaultAgent()).toBeNull()
+    expect(((await transport.client.next()) as { error?: unknown }).error).toBeUndefined()
+    expect((await listPlugins(env)).map((plugin) => plugin.id)).toEqual([
+      "agent.@pigcode/agent-alpha",
+    ])
+    await expect(stat(dir)).rejects.toThrow()
     await ctx.fiber.dispose()
   })
 

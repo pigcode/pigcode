@@ -14,7 +14,7 @@ import {
   agentSettingsKey,
   readAgentSettings,
 } from "./agent-settings"
-import type { RegisteredAgentDriver, AgentSettingsValues } from "./driver"
+import type { AgentDriver, AgentSettingsValues } from "./driver"
 import { createModelCatalogCache, normalizeModels, withCustomModels } from "./model-catalog"
 import { listAgentModels } from "./switching"
 
@@ -38,7 +38,7 @@ export interface AgentCatalog {
 }
 
 /** 没实现 detect 的 driver 视为可用；未注册的 agent 明确报告找不到。 */
-function fallbackStatus(driver: RegisteredAgentDriver | undefined, agentId: string): AgentStatus {
+function fallbackStatus(driver: AgentDriver | undefined, agentId: string): AgentStatus {
   return driver
     ? { installed: true, version: null, authenticated: null }
     : {
@@ -52,7 +52,7 @@ function fallbackStatus(driver: RegisteredAgentDriver | undefined, agentId: stri
 /** 创建 agent 目录；drivers 由 registry 维护，这里只读。 */
 export function createAgentCatalog(
   ctx: Context,
-  drivers: ReadonlyMap<string, RegisteredAgentDriver>,
+  drivers: ReadonlyMap<string, AgentDriver>,
 ): AgentCatalog {
   const catalogs = createModelCatalogCache()
   const detections = createDetectionCache()

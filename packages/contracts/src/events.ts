@@ -117,9 +117,6 @@ export const agentEventSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("run.interrupted") }),
 ])
 
-/** @deprecated use agentEventSchema */
-export const providerEventSchema = agentEventSchema
-
 /** 终端输出通知；只走实时通道，不写入事件日志。 */
 export const terminalOutputSchema = z.object({
   terminalId: z.string().min(1),
@@ -138,8 +135,6 @@ export const threadSnapshotSchema = z.object({
 export type ThreadEvent = z.infer<typeof threadEventSchema>
 /** 规范化 Agent 事件的类型。 */
 export type AgentEvent = z.infer<typeof agentEventSchema>
-/** @deprecated use AgentEvent */
-export type ProviderEvent = AgentEvent
 /** 线程订阅快照的类型。 */
 export type ThreadSnapshot = z.infer<typeof threadSnapshotSchema>
 /** 终端输出通知的类型。 */

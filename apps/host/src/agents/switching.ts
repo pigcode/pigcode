@@ -2,11 +2,11 @@
 import type { Context } from "cordis"
 import type { AgentSession } from "@pigcode/contracts"
 import type { AgentSessionStore } from "./session-store"
-import type { RegisteredAgentDriver, AgentModelInfo, AgentSettingsValues } from "./driver"
+import type { AgentDriver, AgentModelInfo, AgentSettingsValues } from "./driver"
 
 /** 取 driver 的模型目录；不支持动态目录的 Agent 返回空数组。 */
 export async function listAgentModels(
-  driver: RegisteredAgentDriver | undefined,
+  driver: AgentDriver | undefined,
   settings: AgentSettingsValues = {},
 ): Promise<AgentModelInfo[]> {
   if (!driver) throw new Error("agent not found")
@@ -15,7 +15,7 @@ export async function listAgentModels(
 
 /** 切换前关闭旧 Agent 的 session，避免 app-server 子进程泄漏。 */
 export async function disposeSession(
-  drivers: Map<string, RegisteredAgentDriver>,
+  drivers: Map<string, AgentDriver>,
   session: AgentSession,
 ): Promise<void> {
   const driver = drivers.get(session.agentId)

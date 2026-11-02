@@ -56,9 +56,6 @@ export const agentSettingFieldSchema = z.discriminatedUnion("type", [
   z.object({ ...fieldBase, type: z.literal("env") }),
 ])
 
-/** @deprecated use agentSettingFieldSchema */
-export const providerSettingFieldSchema = agentSettingFieldSchema
-
 /** 一组环境变量；名称遵循 POSIX 规则，值原样传给子进程。 */
 export const environmentEntriesSchema = z.array(
   z.object({ name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), value: z.string() }),
@@ -94,14 +91,8 @@ export const agentContributionSchema = z
     }
   })
 
-/** @deprecated use agentContributionSchema */
-export const providerContributionSchema = agentContributionSchema
-
 /** agent 的设置值：键为字段 key，另加 Host 处理的 customModels。 */
 export const agentSettingsValuesSchema = z.record(z.string(), z.unknown())
-
-/** @deprecated use agentSettingsValuesSchema */
-export const providerSettingsValuesSchema = agentSettingsValuesSchema
 
 /** 一次只读检测的结果；authenticated 为 null 表示无法判断登录状态。 */
 export const agentStatusSchema = z.object({
@@ -114,9 +105,6 @@ export const agentStatusSchema = z.object({
   command: z.string().nullable().optional(),
   error: z.string().nullable().optional(),
 })
-
-/** @deprecated use agentStatusSchema */
-export const providerStatusSchema = agentStatusSchema
 
 /** 设置页里的一个 agent：插件信息、Agent 功能、设置字段与当前值。 */
 export const agentSummarySchema = z.object({
@@ -155,16 +143,6 @@ export type EnvironmentEntry = z.infer<typeof environmentEntriesSchema>[number]
 export type AgentContribution = z.infer<typeof agentContributionSchema>
 export type AgentSettingsValues = z.infer<typeof agentSettingsValuesSchema>
 export type AgentStatus = z.infer<typeof agentStatusSchema>
-/** @deprecated use AgentSettingField */
-export type ProviderSettingField = AgentSettingField
-/** @deprecated use AgentSettingFieldInput */
-export type ProviderSettingFieldInput = AgentSettingFieldInput
-/** @deprecated use AgentContribution */
-export type ProviderContribution = AgentContribution
-/** @deprecated use AgentSettingsValues */
-export type ProviderSettingsValues = AgentSettingsValues
-/** @deprecated use AgentStatus */
-export type ProviderStatus = AgentStatus
 export type AgentSummary = z.infer<typeof agentSummarySchema>
 export type AgentList = z.infer<typeof agentListSchema>
 

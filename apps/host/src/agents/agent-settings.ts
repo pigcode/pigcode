@@ -1,7 +1,7 @@
 /**
  * agent 设置在 Host 里的存取：每个 Agent 的值存在 settings 服务的 `agents.<id>` 下，
  * 默认 Agent 存在 `defaultAgent`。只读检测的结果按 Agent 短时缓存。
- * 旧版本的键（`providers.<id>`、`agents.defaultProvider`）由 settings 服务启动时迁移，见 legacy-names.ts。
+ * 改名前的旧键由 settings 服务启动时迁移，见 legacy-names.ts。
  */
 import {
   CUSTOM_MODELS_KEY,
@@ -11,12 +11,9 @@ import {
 } from "@pigcode/contracts"
 import type { SettingsService } from "../services/settings"
 
-/**
- * 环境变量强制指定的 agent（E2E 与手动冒烟用）：`PIGCODE_AGENT`，旧名字 `PIGCODE_PROVIDER`；
- * 两个都设了时用 `PIGCODE_AGENT`。空值视为没设。
- */
+/** 环境变量 `PIGCODE_AGENT` 强制指定的 agent（E2E 与手动冒烟用）；空值视为没设。 */
 export function forcedAgentId(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  return env.PIGCODE_AGENT || env.PIGCODE_PROVIDER || undefined
+  return env.PIGCODE_AGENT || undefined
 }
 
 /** 用户选择的默认 agent。不放在 `agents.` 下：agent id 可以叫 default。 */

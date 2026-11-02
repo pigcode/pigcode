@@ -1,4 +1,4 @@
-/** 验证 MCP capability 样例：安装启用后暴露 clock_now，停用后工具消失。 */
+/** 验证 MCP Capability 样例：安装启用后暴露 clock_now，停用后工具消失。 */
 import Loader from "@cordisjs/plugin-loader"
 import { Context } from "cordis"
 import { mkdtemp, writeFile } from "node:fs/promises"
@@ -19,7 +19,7 @@ import { apply as sessions } from "./sessions"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/** 仓库内的 MCP capability 样例目录；测试走真实的本地安装流程。 */
+/** 仓库内的 MCP Capability 样例目录；测试走真实的本地安装流程。 */
 const CLOCK_SOURCE = fileURLToPath(
   new URL("../../../../examples/capability-clock", import.meta.url),
 )
@@ -59,7 +59,7 @@ async function settleSocket(ctx: Context): Promise<void> {
   await ctx.mcpBridge.createSocketServer().catch(() => undefined)
 }
 
-describe("capability clock sample", () => {
+describe("Capability clock sample", () => {
   it("exposes clock_now while enabled and removes it on disable", async () => {
     const { ctx, pluginId } = await installClockSample()
     try {
@@ -129,7 +129,7 @@ describe("agent MCP injection", () => {
       const result = (await captured?.mcp?.callTool("clock_now", {})) as { now?: string }
       expect(typeof result.now).toBe("string")
       expect(captured?.mcp?.stdioServer()).toMatchObject({ command: "node" })
-      // 样例插件 id 已随启用的 capability 注册到 bridge。
+      // 样例插件 id 已随启用的 Capability 插件注册到 bridge。
       expect(pluginId).toBe("capability.pigcode-capability-clock")
     } finally {
       await settleSocket(ctx)

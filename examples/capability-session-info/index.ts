@@ -1,4 +1,4 @@
-/** 示例 capability 插件：暴露当前线程事件数量。 */
+/** 示例 Capability 插件：暴露当前线程事件数量。 */
 import type { PluginHostContext } from "@pigcode/plugin-sdk"
 
 export const name = "capability-session-info"

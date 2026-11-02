@@ -3,31 +3,15 @@ import semver from "semver"
 import { z } from "zod"
 import { agentContributionSchema, type AgentContribution } from "@pigcode/contracts"
 
-/**
- * 解析后的插件种类。manifest 里的旧名字 `provider` 解析成 `agent`，插件 id 因此是 `agent.<包名>`；
- * 旧 id `provider.<包名>` 由 Host 启动时的数据迁移改写。
- */
+/** 插件种类；插件 id 是 `<kind>.<包名>`。 */
 export const pluginKindSchema = z.enum(["agent", "capability", "ui", "bundle"])
 
 /**
- * 一个 manifest 只能用一套名字：新名字（`kind: "agent"`、`contributes.agent`、`provides` 里的
- * `agent:<id>`）或旧名字（`provider`）。两套混用时返回用到的写法，否则返回 null。
+ * Agent 插件改名前的写法（`kind: "provider"`、`contributes.provider`、`provides` 里的 `provider:<id>`）
+ * 不再接受；校验错误说明改成什么，插件作者照着改就行。
  */
-function mixedAgentNames(pigcode: {
-  kind: string
-  provides: string[]
-  contributes: Record<string, unknown>
-}): { agent: string[]; provider: string[] } | null {
-  const used = (name: "agent" | "provider") => [
-    ...(pigcode.kind === name ? [`kind "${name}"`] : []),
-    ...(pigcode.contributes[name] !== undefined ? [`contributes.${name}`] : []),
-    ...pigcode.provides
-      .filter((item) => item.startsWith(`${name}:`))
-      .map((item) => `provides "${item}"`),
-  ]
-  const agent = used("agent")
-  const provider = used("provider")
-  return agent.length > 0 && provider.length > 0 ? { agent, provider } : null
+function renamed(from: string, to: string): string {
+  return `${from} was renamed to ${to} (see docs/plugin-authoring.md)`
 }
 
 export const pluginManifestSchema = z
@@ -38,13 +22,35 @@ export const pluginManifestSchema = z
     engines: z.object({ pigcode: z.string().min(1) }).optional(),
     pigcode: z.object({
       apiVersion: z.literal(1),
-      kind: z.enum([...pluginKindSchema.options, "provider"]),
+      kind: z.enum(pluginKindSchema.options, {
+        error: (issue) =>
+          issue.input === "provider" ? renamed('kind "provider"', '"agent"') : undefined,
+      }),
       displayName: z.string().min(1).optional(),
       host: z.string().min(1).optional(),
       client: z.string().min(1).optional(),
       inject: z.array(z.string().min(1)).default([]),
-      provides: z.array(z.string().min(1)).default([]),
-      contributes: z.record(z.string(), z.unknown()).default({}),
+      provides: z
+        .array(
+          z
+            .string()
+            .min(1)
+            .refine((item) => !item.startsWith("provider:"), {
+              error: (issue) =>
+                renamed(
+                  `provides "${String(issue.input)}"`,
+                  `"agent:${String(issue.input).slice("provider:".length)}"`,
+                ),
+            }),
+        )
+        .default([]),
+      contributes: z
+        .record(z.string(), z.unknown())
+        .refine((value) => value.provider === undefined, {
+          error: renamed("contributes.provider", "contributes.agent"),
+          path: ["provider"],
+        })
+        .default({}),
       permissions: z.array(z.string().min(1)).default([]),
     }),
   })
@@ -53,18 +59,8 @@ export const pluginManifestSchema = z
     path: ["pigcode"],
   })
   .superRefine((value, context) => {
-    const mixed = mixedAgentNames(value.pigcode)
-    if (mixed) {
-      context.addIssue({
-        code: "custom",
-        message: `use either the agent names or the old provider names, not both: found ${mixed.agent.join(", ")} and ${mixed.provider.join(", ")}`,
-        path: ["pigcode"],
-      })
-      return
-    }
     // agent 的设置表单由这份贡献生成，声明不合法时安装阶段就拒绝。
-    const key = value.pigcode.contributes.agent === undefined ? "provider" : "agent"
-    const contribution = value.pigcode.contributes[key]
+    const contribution = value.pigcode.contributes.agent
     if (contribution === undefined) return
     const parsed = agentContributionSchema.safeParse(contribution)
     if (parsed.success) return
@@ -72,23 +68,8 @@ export const pluginManifestSchema = z
       context.addIssue({
         code: "custom",
         message: issue.message,
-        path: ["pigcode", "contributes", key, ...issue.path.map(String)],
+        path: ["pigcode", "contributes", "agent", ...issue.path.map(String)],
       })
-    }
-  })
-  // 旧名字解析成新名字：下游代码拿到的结果和写新名字时完全一样。
-  .transform(({ pigcode, ...rest }) => {
-    const { provider, ...contributes } = pigcode.contributes
-    return {
-      ...rest,
-      pigcode: {
-        ...pigcode,
-        kind: pigcode.kind === "provider" ? "agent" : pigcode.kind,
-        provides: pigcode.provides.map((item) =>
-          item.startsWith("provider:") ? `agent:${item.slice("provider:".length)}` : item,
-        ),
-        contributes: provider === undefined ? contributes : { ...contributes, agent: provider },
-      },
     }
   })
 
@@ -113,27 +94,35 @@ export function checkPluginCompatibility(manifest: PluginManifest): string | nul
   return null
 }
 
-/** 是不是接入 Agent 的插件；`kind` 写 `agent` 或旧名字 `provider` 都算。 */
+/** 是不是接入 Agent 的插件。 */
 export function isAgentPlugin(manifest: { pigcode: { kind: string } }): boolean {
-  return manifest.pigcode.kind === "agent" || manifest.pigcode.kind === "provider"
+  return manifest.pigcode.kind === "agent"
 }
 
 /**
- * Agent 插件贡献的 agent：优先读 `contributes.agent`（旧名 `contributes.provider`），没有时从
- * `provides` 里的 `agent:<id>`（旧名 `provider:<id>`）推断出只有 id 的贡献；都没有时返回 null。
+ * Agent 插件贡献的 agent：优先读 `contributes.agent`，没有时从 `provides` 里的 `agent:<id>`
+ * 推断出只有 id 的贡献；都没有时返回 null。
  */
 export function readAgentContribution(manifest: PluginManifest): AgentContribution | null {
   const { contributes, provides } = manifest.pigcode
-  const declared = agentContributionSchema.safeParse(contributes.agent ?? contributes.provider)
+  const declared = agentContributionSchema.safeParse(contributes.agent)
   if (declared.success) return declared.data
-  const provided = provides.find(
-    (item) => item.startsWith("agent:") || item.startsWith("provider:"),
-  )
-  const id = provided?.slice(provided.indexOf(":") + 1)
+  const provided = provides.find((item) => item.startsWith("agent:"))
+  const id = provided?.slice("agent:".length)
   if (!id) return null
   const inferred = agentContributionSchema.safeParse({ id })
   return inferred.success ? inferred.data : null
 }
 
-/** @deprecated use readAgentContribution */
-export const readProviderContribution = readAgentContribution
+/**
+ * 校验 manifest；不合法时抛出的 Error 逐条列出原因（`路径: 说明`），插件管理界面直接展示，
+ * 不展示 zod 的原始 JSON。
+ */
+export function parsePluginManifest(raw: unknown): PluginManifest {
+  const result = pluginManifestSchema.safeParse(raw)
+  if (result.success) return result.data
+  const reasons = result.error.issues.map((issue) =>
+    issue.path.length > 0 ? `${issue.path.join(".")}: ${issue.message}` : issue.message,
+  )
+  throw new Error(`invalid plugin manifest: ${reasons.join("; ")}`)
+}

@@ -34,8 +34,8 @@ async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
   return { ctx, profileDir }
 }
 
-/** 写入一个注册 echo agent 的最小 Host 插件源目录；整个插件用旧名字写（kind、inject、ctx.providers、capabilities）。 */
-async function fixtureLegacyAgentPlugin(): Promise<string> {
+/** 写入一个注册 echo agent 的最小 Host 插件源目录。 */
+async function fixtureAgentPlugin(): Promise<string> {
   const source = await mkdtemp(join(tmpdir(), "pigcode-fixture-agent-"))
   await mkdir(source, { recursive: true })
   await writeFile(
@@ -47,10 +47,10 @@ async function fixtureLegacyAgentPlugin(): Promise<string> {
       main: "./index.mjs",
       pigcode: {
         apiVersion: 1,
-        kind: "provider",
+        kind: "agent",
         displayName: "Echo",
         host: "./index.mjs",
-        provides: ["provider:echo"],
+        provides: ["agent:echo"],
         permissions: [],
       },
     }),
@@ -58,18 +58,18 @@ async function fixtureLegacyAgentPlugin(): Promise<string> {
   await writeFile(
     join(source, "index.mjs"),
     [
-      'export const inject = ["providers"]',
+      'export const inject = ["agents"]',
       "export function apply(ctx) {",
-      "  ctx.providers.register({",
+      "  ctx.agents.register({",
       '    id: "echo",',
       '    displayName: "Echo",',
-      "    capabilities: {},",
+      "    features: {},",
       "    createSession: async () => ({}),",
       "    send: async () => {},",
       "    interrupt: async () => {},",
       "    dispose: async () => {},",
       "  })",
-      '  ctx.effect(() => () => ctx.providers.unregister("echo"))',
+      '  ctx.effect(() => () => ctx.agents.unregister("echo"))',
       "}",
       "",
     ].join("\n"),
@@ -80,7 +80,7 @@ async function fixtureLegacyAgentPlugin(): Promise<string> {
 describe("dynamic host plugin", () => {
   it("loads and unloads a host plugin without restart", async () => {
     const { ctx, profileDir } = await setupHost()
-    const plugin = await installLocalPlugin(profileDir, await fixtureLegacyAgentPlugin())
+    const plugin = await installLocalPlugin(profileDir, await fixtureAgentPlugin())
 
     await ctx.plugins.enable(plugin.id)
     await ctx.loader.await()

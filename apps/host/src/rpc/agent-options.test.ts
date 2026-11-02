@@ -1,4 +1,4 @@
-/** 验证输入框里的 agent 选项走到 Host：模型目录、思考深度、权限模式与首次切换不带 handoff；以及 agent.* 命令和旧的 provider.* 名字。 */
+/** 验证输入框里的 agent 选项走到 Host：模型目录、思考深度、权限模式与首次切换不带 handoff；以及 agent.* 命令和改名前命令名的拒绝。 */
 import type { AgentModel } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { describe, expect, it, vi } from "vitest"
@@ -168,8 +168,8 @@ describe("agent options over RPC", () => {
   })
 })
 
-describe("agent.* commands and their provider.* names", () => {
-  it("serves registered agents, detection, models and the default agent under both names", async () => {
+describe("agent.* commands", () => {
+  it("serves registered agents, detection, models and the default agent", async () => {
     const { ctx, call } = await setup()
     const detect = vi.fn(async () => ({ installed: true, version: "1.0.0", authenticated: true }))
     ctx.agents.register({ ...recordingDriver(async () => [SAGE]).driver, detect })
@@ -183,18 +183,20 @@ describe("agent.* commands and their provider.* names", () => {
     await expect(call("agent.models", { agentId: "rec" })).resolves.toEqual([SAGE])
     await expect(call("agent.default", {})).resolves.toEqual({ id: "rec" })
 
-    const pairs = [
-      ["agent.registered", "provider.list", {}],
-      ["agent.detect", "provider.detect", { agentId: "rec" }],
-      ["agent.models", "provider.models", { agentId: "rec" }],
-      ["agent.default", "provider.default", {}],
-    ] as const
-    for (const [name, alias, params] of pairs) {
-      expect(await call(alias, params), alias).toEqual(await call(name, params))
+    await ctx.fiber.dispose()
+  })
+
+  it("rejects the old provider.* and thread.switchProvider names as unknown methods", async () => {
+    const { ctx, call } = await setup()
+    for (const method of [
+      "provider.list",
+      "provider.detect",
+      "provider.models",
+      "provider.default",
+      "thread.switchProvider",
+    ]) {
+      await expect(call(method, {}), method).rejects.toThrow(`unknown method: ${method}`)
     }
-    // 参数校验也是同一份：缺 agentId 时两个名字报同样的错。
-    const failure = (method: string) => call(method, {}).catch((error: Error) => error.message)
-    expect(await failure("provider.models")).toBe(await failure("agent.models"))
     await ctx.fiber.dispose()
   })
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { ClaudeDriver } from "@pigcode/agent-claude/driver"
 import { CodexDriver } from "@pigcode/agent-codex/driver"
 
-/** Claude Code 的完整能力快照；AskUserQuestion 由提问卡片作答。 */
+/** Claude Code 的完整 Agent 功能快照；AskUserQuestion 由提问卡片作答。 */
 const claudeFeatures: AgentFeatures = {
   streaming: true,
   approvals: true,
@@ -22,7 +22,7 @@ const claudeFeatures: AgentFeatures = {
   nativeSessionId: true,
 }
 
-/** Codex 的完整能力快照；未实现的特性必须保持 false。 */
+/** Codex 的完整 Agent 功能快照；未实现的特性必须保持 false。 */
 const codexFeatures: AgentFeatures = {
   streaming: true,
   approvals: true,

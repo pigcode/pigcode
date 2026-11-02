@@ -49,8 +49,6 @@ export const commandSchemas = {
   }),
   "thread.archive": z.object({ threadId: z.string().min(1) }),
   "thread.switchAgent": threadSwitchAgentParams,
-  /** 旧名字，转到 `thread.switchAgent`；见 commandAliases。 */
-  "thread.switchProvider": threadSwitchAgentParams,
   /** 下一次 run 起生效；运行中的 run 保持启动时的权限。 */
   "thread.setPermissionMode": z.object({
     threadId: z.string().min(1),
@@ -80,11 +78,6 @@ export const commandSchemas = {
   "agent.registered": agentRegisteredParams,
   "agent.default": agentDefaultParams,
   "agent.models": agentModelsParams,
-  /** 旧名字，转到 `agent.*`；见 commandAliases。 */
-  "provider.detect": agentDetectParams,
-  "provider.list": agentRegisteredParams,
-  "provider.default": agentDefaultParams,
-  "provider.models": agentModelsParams,
   /** 设置页的 agent 列表：插件、Agent 功能、设置字段与当前值。 */
   "agent.list": z.object({}),
   /** 整体替换一个 agent 的设置值；对之后新建的会话、检测与模型目录生效。 */
@@ -189,32 +182,8 @@ export const commandSchemas = {
   "terminal.close": z.object({ terminalId: z.string().min(1) }),
 } as const
 
-/**
- * 旧命令名到新命令名：Host 按新名字处理，旧名字和新名字共用参数 schema 与返回值。
- * `provider.list` 对应 `agent.registered`，不是 `agent.list`：后者是设置页的列表，形状不同。
- */
-export const commandAliases = {
-  "provider.detect": "agent.detect",
-  "provider.list": "agent.registered",
-  "provider.default": "agent.default",
-  "provider.models": "agent.models",
-  "thread.switchProvider": "thread.switchAgent",
-} as const satisfies Partial<Record<keyof typeof commandSchemas, keyof typeof commandSchemas>>
-
 /** 所有命令方法名的联合类型。 */
 export type CommandMethod = keyof typeof commandSchemas
-/** 只是别名的旧命令名。 */
-export type CommandAlias = keyof typeof commandAliases
-/** Host 实际处理的命令名。 */
-export type CanonicalCommandMethod = Exclude<CommandMethod, CommandAlias>
-
-/** 把旧命令名换成它转到的新命令名；其余原样返回。 */
-export function resolveCommandMethod(method: CommandMethod): CanonicalCommandMethod {
-  return method in commandAliases
-    ? commandAliases[method as CommandAlias]
-    : (method as CanonicalCommandMethod)
-}
-
 /** 指定命令方法的参数类型。 */
 export type CommandParams<M extends CommandMethod> = z.infer<(typeof commandSchemas)[M]>
 

@@ -11,7 +11,7 @@ import type {
   RunStatus,
 } from "@pigcode/contracts"
 import type { DetectOptions } from "./agent-catalog"
-import type { ApprovalDecision, ApprovalRequest, RegisteredAgentDriver } from "./driver"
+import type { ApprovalDecision, ApprovalRequest, AgentDriver } from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
 import type { Switch } from "./switching"
@@ -35,7 +35,7 @@ export interface ApprovalHandle {
 
 /** Agent 注册表与运行生命周期入口。 */
 export interface AgentsService {
-  register(driver: RegisteredAgentDriver): void
+  register(driver: AgentDriver): void
   /** 移除插件注册的 driver；插件卸载时由其 effect 清理调用。 */
   unregister(driverId: string): void
   /** 已注册的 Agent 与它们的 Agent 功能。 */

@@ -1,4 +1,4 @@
-// 单个 agent 展开后的编辑区：检测详情、运行设置、环境变量、自定义模型、能力与操作。
+// 单个 agent 展开后的编辑区：检测详情、运行设置、环境变量、自定义模型、Agent 功能与操作。
 import { useEffect, useMemo, useState } from "react"
 import { ExternalLink } from "lucide-react"
 import {

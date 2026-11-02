@@ -6,7 +6,6 @@ import {
   isHostErrorCode,
   parseRpcRequest,
   rpcFailureSchema,
-  resolveCommandMethod,
   rpcSuccessSchema,
 } from "@pigcode/contracts"
 import type { CommandMethod, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
@@ -71,8 +70,7 @@ export class RpcServer {
 
   private async dispatch(method: string, params: unknown): Promise<unknown> {
     if (!(method in commandSchemas)) throw new Error(`unknown method: ${method}`)
-    // 旧命令名（provider.*、thread.switchProvider）转到新命令名，两者共用参数 schema 与下面同一个分支。
-    const command = resolveCommandMethod(method as CommandMethod)
+    const command = method as CommandMethod
     const parsed = commandSchemas[command].parse(params)
 
     switch (command) {
