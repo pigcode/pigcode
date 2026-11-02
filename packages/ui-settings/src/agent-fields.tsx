@@ -5,7 +5,7 @@ import {
   environmentEntriesSchema,
   localizeText,
   type EnvironmentEntry,
-  type ProviderSettingField,
+  type AgentSettingField,
 } from "@pigcode/contracts"
 import { Button, Input, Select, Switch, useLocale } from "@pigcode/ui-primitives"
 
@@ -41,7 +41,7 @@ export function FieldControl({
   onChange,
   onPickPath,
 }: {
-  field: Exclude<ProviderSettingField, { type: "env" }>
+  field: Exclude<AgentSettingField, { type: "env" }>
   value: unknown
   onChange: (value: unknown) => void
   onPickPath?: PickPath | undefined

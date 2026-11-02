@@ -3,9 +3,9 @@ import { z } from "zod"
 import { agentSettingsValuesSchema } from "./agents"
 import { permissionModeSchema, reasoningEffortSchema } from "./domain"
 
-/** 只读检测；refresh 跳过缓存重新运行，providerId 只检测这一个 agent。 */
+/** 只读检测；refresh 跳过缓存重新运行，agentId 只检测这一个 agent。 */
 const agentDetectParams = z.object({
-  providerId: z.string().min(1).optional(),
+  agentId: z.string().min(1).optional(),
   refresh: z.boolean().optional(),
 })
 /** `agent.registered` 不带参数，返回已注册 driver 的 agent：id、名字与 Agent 功能。 */
@@ -13,7 +13,13 @@ const agentRegisteredParams = z.object({})
 /** `agent.default` 不带参数，返回新会话默认使用的 agent `{ id }`；没有可用的 agent 时 id 为 null。 */
 const agentDefaultParams = z.object({})
 /** 一个 agent 的模型目录，含用户添加的自定义模型。 */
-const agentModelsParams = z.object({ providerId: z.string().min(1) })
+const agentModelsParams = z.object({ agentId: z.string().min(1) })
+/** 换 Agent 或模型；返回 `{ agentId, modelId, handoff, forkFromNativeSessionId }`。 */
+const threadSwitchAgentParams = z.object({
+  threadId: z.string().min(1),
+  agentId: z.string().min(1),
+  modelId: z.string().min(1).nullish(),
+})
 
 /** 命令方法到参数 schema 的映射。 */
 export const commandSchemas = {
@@ -32,7 +38,7 @@ export const commandSchemas = {
   "thread.create": z.object({
     projectId: z.string().min(1),
     title: z.string().min(1).default("New thread"),
-    providerId: z.string().min(1).default("fake"),
+    agentId: z.string().min(1).default("fake"),
     /** 在这个主会话下添加子代理；子代理继承主会话的项目、工作目录与最近的对话摘要。 */
     parentThreadId: z.string().min(1).optional(),
   }),
@@ -42,11 +48,9 @@ export const commandSchemas = {
     title: z.string().min(1).max(120),
   }),
   "thread.archive": z.object({ threadId: z.string().min(1) }),
-  "thread.switchProvider": z.object({
-    threadId: z.string().min(1),
-    providerId: z.string().min(1),
-    modelId: z.string().min(1).nullish(),
-  }),
+  "thread.switchAgent": threadSwitchAgentParams,
+  /** 旧名字，转到 `thread.switchAgent`；见 commandAliases。 */
+  "thread.switchProvider": threadSwitchAgentParams,
   /** 下一次 run 起生效；运行中的 run 保持启动时的权限。 */
   "thread.setPermissionMode": z.object({
     threadId: z.string().min(1),
@@ -81,15 +85,15 @@ export const commandSchemas = {
   "provider.list": agentRegisteredParams,
   "provider.default": agentDefaultParams,
   "provider.models": agentModelsParams,
-  /** 设置页的 agent 列表：插件、能力、设置字段与当前值。 */
+  /** 设置页的 agent 列表：插件、Agent 功能、设置字段与当前值。 */
   "agent.list": z.object({}),
   /** 整体替换一个 agent 的设置值；对之后新建的会话、检测与模型目录生效。 */
   "agent.updateSettings": z.object({
-    providerId: z.string().min(1),
+    agentId: z.string().min(1),
     values: agentSettingsValuesSchema,
   }),
-  /** 新会话默认使用的 agent；null 表示自动挑选第一个可用的。 */
-  "agent.setDefault": z.object({ providerId: z.string().min(1).nullable() }),
+  /** 新会话默认使用的 agent；null 表示自动挑选第一个可用的。返回 `{ defaultAgentId }`。 */
+  "agent.setDefault": z.object({ agentId: z.string().min(1).nullable() }),
   "thread.subscribe": z.object({
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),
@@ -194,6 +198,7 @@ export const commandAliases = {
   "provider.list": "agent.registered",
   "provider.default": "agent.default",
   "provider.models": "agent.models",
+  "thread.switchProvider": "thread.switchAgent",
 } as const satisfies Partial<Record<keyof typeof commandSchemas, keyof typeof commandSchemas>>
 
 /** 所有命令方法名的联合类型。 */

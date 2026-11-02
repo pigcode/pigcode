@@ -120,9 +120,9 @@ export function CommandPalette(props: CommandPaletteProps) {
         id: `thread-${thread.id}`,
         group: "threads" as const,
         label: thread.title,
-        hint: thread.defaultProviderId,
+        hint: thread.defaultAgentId,
         icon: "chat",
-        keywords: `${thread.title} ${thread.defaultProviderId}`,
+        keywords: `${thread.title} ${thread.defaultAgentId}`,
         run: () => props.onOpenThread(thread.id),
       }))
     const projects = props.projects.map((project) => ({

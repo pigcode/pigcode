@@ -26,7 +26,7 @@ import {
 import { fuzzyScore } from "./fuzzy"
 import { modelKey, useModelPreferences } from "./model-preferences"
 
-/** 收藏页在左栏里的 id；不会与 provider id 冲突。 */
+/** 收藏页在左栏里的 id；不会与 agent id 冲突。 */
 const FAVORITES = "__favorites__"
 
 /** 模型选择器的属性；目录由调用方按 agent 懒加载。 */

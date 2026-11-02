@@ -71,7 +71,7 @@ export class RpcServer {
 
   private async dispatch(method: string, params: unknown): Promise<unknown> {
     if (!(method in commandSchemas)) throw new Error(`unknown method: ${method}`)
-    // 旧命令名（provider.*）转到新命令名，两者共用参数 schema 与下面同一个分支。
+    // 旧命令名（provider.*、thread.switchProvider）转到新命令名，两者共用参数 schema 与下面同一个分支。
     const command = resolveCommandMethod(method as CommandMethod)
     const parsed = commandSchemas[command].parse(params)
 
@@ -135,13 +135,13 @@ export class RpcServer {
         const value = parsed as {
           projectId: string
           title: string
-          providerId: string
+          agentId: string
           parentThreadId?: string
         }
         const thread = this.ctx.threads.create(
           value.projectId,
           value.title,
-          value.providerId,
+          value.agentId,
           value.parentThreadId,
         )
         const now = new Date().toISOString()
@@ -197,9 +197,9 @@ export class RpcServer {
         this.subscriptions.delete(value.threadId)
         return { ok: true }
       }
-      case "thread.switchProvider": {
-        const value = parsed as { threadId: string; providerId: string; modelId?: string | null }
-        return this.ctx.agents.switchAgent(value.threadId, value.providerId, value.modelId ?? null)
+      case "thread.switchAgent": {
+        const value = parsed as { threadId: string; agentId: string; modelId?: string | null }
+        return this.ctx.agents.switchAgent(value.threadId, value.agentId, value.modelId ?? null)
       }
       case "thread.setPermissionMode": {
         const value = parsed as { threadId: string; permissionMode: PermissionMode }
@@ -263,34 +263,30 @@ export class RpcServer {
         return { ok: true }
       }
       case "agent.detect": {
-        // 请求参数的 providerId 是界面用的字段名，界面迁移（#34）时改名。
-        const value = parsed as { providerId?: string; refresh?: boolean }
-        return this.ctx.agents.detect({ agentId: value.providerId, refresh: value.refresh })
+        const value = parsed as { agentId?: string; refresh?: boolean }
+        return this.ctx.agents.detect({ agentId: value.agentId, refresh: value.refresh })
       }
       case "agent.registered":
-        // 返回给界面的字段名还是 capabilities，界面迁移（#34）时改成 features。
-        return this.ctx.agents
-          .list()
-          .map(({ features, ...agent }) => ({ ...agent, capabilities: features }))
+        return this.ctx.agents.list()
       case "agent.default":
         return { id: await this.ctx.agents.defaultAgent() }
       case "agent.models":
-        return this.ctx.agents.models((parsed as { providerId: string }).providerId)
+        return this.ctx.agents.models((parsed as { agentId: string }).agentId)
       case "agent.list":
         return listAgents(this.ctx)
       case "agent.updateSettings": {
-        const value = parsed as { providerId: string; values: Record<string, unknown> }
+        const value = parsed as { agentId: string; values: Record<string, unknown> }
         const agent = (await listAgents(this.ctx)).agents.find(
-          (item) => item.providerId === value.providerId,
+          (item) => item.agentId === value.agentId,
         )
-        if (!agent) throw new Error(`agent not found: ${value.providerId}`)
+        if (!agent) throw new Error(`agent not found: ${value.agentId}`)
         validateAgentSettings(agent, value.values)
-        return { values: this.ctx.agents.updateSettings(value.providerId, value.values) }
+        return { values: this.ctx.agents.updateSettings(value.agentId, value.values) }
       }
       case "agent.setDefault": {
-        const value = parsed as { providerId: string | null }
-        this.ctx.agents.setDefaultAgent(value.providerId)
-        return { defaultProviderId: value.providerId }
+        const value = parsed as { agentId: string | null }
+        this.ctx.agents.setDefaultAgent(value.agentId)
+        return { defaultAgentId: value.agentId }
       }
       case "plugin.list":
         return this.ctx.plugins.list()

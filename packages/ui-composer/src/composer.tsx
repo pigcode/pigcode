@@ -50,7 +50,7 @@ export interface ComposerProps {
   menuSide?: "top" | "bottom"
   /** 覆盖默认的 locale 占位文案。 */
   placeholder?: string
-  /** 可选的 agent（provider）与当前选择；agents 为空时不显示模型胶囊。 */
+  /** 可选的 agent 与当前选择；agents 为空时不显示模型胶囊。 */
   agents?: readonly ComposerAgent[]
   agentId?: string | null
   modelId?: string | null
@@ -60,9 +60,9 @@ export interface ComposerProps {
   onSelectModel?: (agentId: string, modelId: string) => void
   permissionMode?: PermissionMode
   onPermissionMode?: (mode: PermissionMode) => void
-  /** provider 不支持计划模式时隐藏该权限选项。 */
+  /** agent 不支持计划模式时隐藏该权限选项。 */
   canPlan?: boolean
-  /** provider 不支持中断时隐藏停止按钮。 */
+  /** agent 不支持中断时隐藏停止按钮。 */
   canInterrupt?: boolean
   /** 是否启用智能标点；默认开启。 */
   smartPunctuation?: boolean

@@ -1,16 +1,16 @@
-/** 验证聊天页渲染用户消息、流式文本、审批按钮与 capability 驱动的控件。 */
+/** 验证聊天页渲染用户消息、流式文本、审批按钮与按 Agent 功能显示的控件。 */
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { ProviderCapabilities } from "@pigcode/contracts"
+import type { AgentFeatures } from "@pigcode/contracts"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { ChatView } from "./chat-view"
 
 afterEach(cleanup)
 
 /** 全部能力开启的基准，测试只覆盖需要关闭的单项。 */
-const enabledCapabilities: ProviderCapabilities = {
+const enabledCapabilities: AgentFeatures = {
   streaming: true,
   approvals: true,
   questions: false,
@@ -28,7 +28,7 @@ const enabledCapabilities: ProviderCapabilities = {
 }
 
 /** 在基准能力上覆盖指定字段。 */
-function capabilitiesWith(overrides: Partial<ProviderCapabilities>): ProviderCapabilities {
+function featuresWith(overrides: Partial<AgentFeatures>): AgentFeatures {
   return { ...enabledCapabilities, ...overrides }
 }
 
@@ -37,8 +37,8 @@ const thread = {
   id: "t1",
   projectId: "p1",
   title: "First thread",
-  defaultProviderId: "fake",
-  lastProviderId: null,
+  defaultAgentId: "fake",
+  lastAgentId: null,
   lastModelId: null,
   permissionMode: "workspace-write" as const,
   createdAt: "2026-10-20T00:00:00.000Z",
@@ -185,7 +185,7 @@ describe("ChatView", () => {
       <LocaleProvider locale="zh-CN">
         <ChatView
           thread={thread}
-          capabilities={capabilitiesWith({ approvals: false })}
+          features={featuresWith({ approvals: false })}
           events={[
             {
               seq: 1,
@@ -209,12 +209,7 @@ describe("ChatView", () => {
   it("hides interrupt controls when streaming is unsupported", () => {
     const { rerender } = render(
       <LocaleProvider locale="zh-CN">
-        <ChatView
-          thread={thread}
-          capabilities={capabilitiesWith({})}
-          events={[]}
-          streamingText="partial"
-        />
+        <ChatView thread={thread} features={featuresWith({})} events={[]} streamingText="partial" />
       </LocaleProvider>,
     )
     expect(screen.getAllByRole("button", { name: "中断" }).length).toBeGreaterThan(0)
@@ -223,7 +218,7 @@ describe("ChatView", () => {
       <LocaleProvider locale="zh-CN">
         <ChatView
           thread={thread}
-          capabilities={capabilitiesWith({ streaming: false })}
+          features={featuresWith({ streaming: false })}
           events={[]}
           streamingText="partial"
         />
@@ -238,8 +233,8 @@ describe("ChatView", () => {
     render(
       <LocaleProvider locale="zh-CN">
         <ChatView
-          thread={{ ...thread, lastProviderId: "codex", lastModelId: "gpt-5" }}
-          capabilities={capabilitiesWith({})}
+          thread={{ ...thread, lastAgentId: "codex", lastModelId: "gpt-5" }}
+          features={featuresWith({})}
           events={[]}
           agents={[
             { id: "codex", label: "Codex" },
@@ -271,7 +266,7 @@ describe("ChatView", () => {
       <LocaleProvider locale="zh-CN">
         <ChatView
           thread={thread}
-          capabilities={capabilitiesWith({ plan: false })}
+          features={featuresWith({ plan: false })}
           events={[]}
           onPermissionMode={() => {}}
         />

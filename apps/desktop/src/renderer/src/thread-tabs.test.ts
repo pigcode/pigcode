@@ -22,8 +22,8 @@ function thread(id: string, patch: Partial<Thread> = {}): Thread {
     id,
     projectId: "p1",
     title: id,
-    defaultProviderId: "fake",
-    lastProviderId: null,
+    defaultAgentId: "fake",
+    lastAgentId: null,
     lastModelId: null,
     permissionMode: "workspace-write",
     createdAt: "2026-10-21T00:00:00.000Z",
@@ -78,7 +78,7 @@ describe("thread tabs", () => {
     const tabs = buildThreadTabs({
       main: thread("main", { title: "修登录" }),
       projectName: "demo",
-      children: [thread("c1", { title: "Codex 子代理", lastProviderId: "codex" })],
+      children: [thread("c1", { title: "Codex 子代理", lastAgentId: "codex" })],
       statuses: { c1: "waiting-approval" },
       spawned: [spawned("s1", "run_1", "running")],
     })

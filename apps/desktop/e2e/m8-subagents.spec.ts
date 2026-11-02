@@ -1,4 +1,4 @@
-/** 线程头标签：主 agent 派生的子代理、用户添加的子代理会话（fake provider）。 */
+/** 线程头标签：主 agent 派生的子代理、用户添加的子代理会话（fake agent）。 */
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 
@@ -47,14 +47,12 @@ test("a sub-agent added from + is its own conversation next to the main thread",
     await page.locator(".tiptap").click()
     await page.keyboard.type("检查登录流程")
     await page.keyboard.press("Enter")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
 
     await page.getByRole("button", { name: "添加子代理" }).click()
-    await page.getByRole("menuitem", { name: /Fake Provider/ }).click()
+    await page.getByRole("menuitem", { name: /Fake Agent/ }).click()
     const child = page.locator(".thread-tab[data-kind='agent']")
-    await expect(child).toHaveText(/Fake Provider 子代理/)
+    await expect(child).toHaveText(/Fake Agent 子代理/)
     await expect(child).toHaveAttribute("data-active", "true")
     await expect(page.getByText("和主会话并行工作")).toBeVisible()
     await expect(page.getByText("已附上主会话的近况")).toBeVisible()
@@ -75,7 +73,7 @@ test("a sub-agent added from + is its own conversation next to the main thread",
     await expect(child.locator(".dot-matrix")).toHaveCount(0)
 
     // 关闭子代理标签即归档它，回到主会话。
-    await page.getByRole("button", { name: "关闭 Fake Provider 子代理" }).click()
+    await page.getByRole("button", { name: "关闭 Fake Agent 子代理" }).click()
     await expect(child).toHaveCount(0)
     await expect(page.locator(".msg-user")).toHaveText(["检查登录流程"])
   } finally {

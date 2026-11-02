@@ -1,4 +1,4 @@
-/** 右栏内置浏览器：agent 通过 MCP 工具操作它，用户能看到并自己使用（fake provider）。 */
+/** 右栏内置浏览器：agent 通过 MCP 工具操作它，用户能看到并自己使用（fake agent）。 */
 import { expect, test, type ElectronApplication } from "@playwright/test"
 import { startDemoSite } from "./demo-site"
 import { openThread } from "./projects"

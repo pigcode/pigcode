@@ -101,7 +101,7 @@ describe("sub-agent threads", () => {
     const child = (await call("thread.create", {
       projectId: project.id,
       title: "Codex 子代理",
-      providerId: "rec",
+      agentId: "rec",
       parentThreadId: main.id,
     })) as { id: string; parentThreadId: string | null }
     expect(child.parentThreadId).toBe(main.id)
@@ -132,7 +132,7 @@ describe("sub-agent threads", () => {
     const child = (await call("thread.create", {
       projectId: project.id,
       title: "子代理",
-      providerId: "rec",
+      agentId: "rec",
       parentThreadId: main.id,
     })) as { id: string }
     await call("run.start", { threadId: child.id, text: "hi" })
@@ -147,7 +147,7 @@ describe("sub-agent threads", () => {
     const main = ctx.threads.create(project.id, "主会话", "rec")
     const child = ctx.threads.create(project.id, "子代理", "rec", main.id)
     const create = (projectId: string, parentThreadId: string) =>
-      call("thread.create", { projectId, title: "x", providerId: "rec", parentThreadId })
+      call("thread.create", { projectId, title: "x", agentId: "rec", parentThreadId })
 
     await expect(create(project.id, "th_missing")).rejects.toThrow("thread not found")
     await expect(create(other.id, main.id)).rejects.toThrow("THREAD_PARENT_PROJECT_MISMATCH")

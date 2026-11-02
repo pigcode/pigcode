@@ -98,12 +98,12 @@ describe("agent options over RPC", () => {
     const listModels = vi.fn(async () => [SAGE, { ...SAGE, displayName: "dup" }])
     ctx.agents.register(recordingDriver(listModels).driver)
 
-    await expect(call("provider.models", { providerId: "rec" })).resolves.toEqual([SAGE])
-    await call("provider.models", { providerId: "rec" })
+    await expect(call("agent.models", { agentId: "rec" })).resolves.toEqual([SAGE])
+    await call("agent.models", { agentId: "rec" })
     expect(listModels).toHaveBeenCalledTimes(1)
     // 重新注册（插件重载）后目录重新读取。
     ctx.agents.register(recordingDriver(listModels).driver)
-    await call("provider.models", { providerId: "rec" })
+    await call("agent.models", { agentId: "rec" })
     expect(listModels).toHaveBeenCalledTimes(2)
     await ctx.fiber.dispose()
   })
@@ -154,9 +154,9 @@ describe("agent options over RPC", () => {
     ctx.agents.register(recorder.driver)
     const thread = ctx.threads.create(project.id, "Fresh", "fake")
 
-    const switched = (await call("thread.switchProvider", {
+    const switched = (await call("thread.switchAgent", {
       threadId: thread.id,
-      providerId: "rec",
+      agentId: "rec",
       modelId: "sage",
     })) as { handoff: string | null }
     expect(switched.handoff).toBeNull()
@@ -176,23 +176,23 @@ describe("agent.* commands and their provider.* names", () => {
 
     const registered = (await call("agent.registered", {})) as Array<{ id: string }>
     expect(registered.map((agent) => agent.id)).toEqual(["fake", "rec"])
-    expect(registered[1]).toMatchObject({ displayName: "Recorder", capabilities: { plan: true } })
-    await expect(call("agent.detect", { providerId: "rec" })).resolves.toEqual({
+    expect(registered[1]).toMatchObject({ displayName: "Recorder", features: { plan: true } })
+    await expect(call("agent.detect", { agentId: "rec" })).resolves.toEqual({
       rec: { installed: true, version: "1.0.0", authenticated: true },
     })
-    await expect(call("agent.models", { providerId: "rec" })).resolves.toEqual([SAGE])
+    await expect(call("agent.models", { agentId: "rec" })).resolves.toEqual([SAGE])
     await expect(call("agent.default", {})).resolves.toEqual({ id: "rec" })
 
     const pairs = [
       ["agent.registered", "provider.list", {}],
-      ["agent.detect", "provider.detect", { providerId: "rec" }],
-      ["agent.models", "provider.models", { providerId: "rec" }],
+      ["agent.detect", "provider.detect", { agentId: "rec" }],
+      ["agent.models", "provider.models", { agentId: "rec" }],
       ["agent.default", "provider.default", {}],
     ] as const
     for (const [name, alias, params] of pairs) {
       expect(await call(alias, params), alias).toEqual(await call(name, params))
     }
-    // 参数校验也是同一份：缺 providerId 时两个名字报同样的错。
+    // 参数校验也是同一份：缺 agentId 时两个名字报同样的错。
     const failure = (method: string) => call(method, {}).catch((error: Error) => error.message)
     expect(await failure("provider.models")).toBe(await failure("agent.models"))
     await ctx.fiber.dispose()
@@ -202,11 +202,11 @@ describe("agent.* commands and their provider.* names", () => {
     const { ctx, call } = await setup()
     ctx.agents.register(recordingDriver(async () => [SAGE]).driver)
     const list = (await call("agent.list", {})) as {
-      agents: Array<{ providerId: string; registered: boolean }>
-      defaultProviderId: string | null
+      agents: Array<{ agentId: string; registered: boolean }>
+      defaultAgentId: string | null
     }
-    expect(list.defaultProviderId).toBeNull()
-    expect(list.agents.map((agent) => [agent.providerId, agent.registered])).toEqual([
+    expect(list.defaultAgentId).toBeNull()
+    expect(list.agents.map((agent) => [agent.agentId, agent.registered])).toEqual([
       ["fake", true],
       ["rec", true],
     ])

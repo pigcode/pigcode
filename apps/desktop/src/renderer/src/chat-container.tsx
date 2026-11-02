@@ -11,7 +11,7 @@ import { ChatView, collectSubagents, type ApprovalDecision } from "@pigcode/ui-c
 import type { ComposerCommand } from "@pigcode/ui-composer"
 import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
-import { useAgents, useModelCatalog, useProviderCapabilities } from "./agents"
+import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
 import {
   buildThreadTabs,
   childThreads,
@@ -84,9 +84,9 @@ export function ChatViewContainer({
   const mainId = main?.id ?? null
   const project = state.projects.find((item) => item.id === main?.projectId)
   const connected = state.status === "connected"
-  const agents = useAgents(deps.connection, state.providerRevision, connected)
-  const capabilityMap = useProviderCapabilities(deps.connection, state.providerRevision, connected)
-  const { catalog, load } = useModelCatalog(deps.connection, state.providerRevision, connected)
+  const agents = useAgents(deps.connection, state.agentRevision, connected)
+  const featuresByAgent = useAgentFeatures(deps.connection, state.agentRevision, connected)
+  const { catalog, load } = useModelCatalog(deps.connection, state.agentRevision, connected)
   const [notice, setNotice] = useState<string | null>(null)
   const tabState = useThreadTabState(mainId)
   const children = useMemo(() => childThreads(state.threads, mainId), [state.threads, mainId])
@@ -149,9 +149,8 @@ export function ChatViewContainer({
     : mainId
       ? (state.threadStates[mainId]?.liveReasoning ?? "")
       : ""
-  const viewProviderId = thread ? (thread.lastProviderId ?? thread.defaultProviderId) : null
-  const capabilities =
-    (viewProviderId ? capabilityMap[viewProviderId] : undefined) ?? state.providerCapabilities
+  const viewAgentId = thread ? (thread.lastAgentId ?? thread.defaultAgentId) : null
+  const features = (viewAgentId ? featuresByAgent[viewAgentId] : undefined) ?? state.agentFeatures
 
   const statuses = useMemo(
     () =>
@@ -195,14 +194,14 @@ export function ChatViewContainer({
   /** 切换 agent 与模型；换了 agent 时提示上下文以摘要交接。 */
   function selectModel(agentId: string, modelId: string): void {
     if (!thread) return
-    const previousAgent = thread.lastProviderId ?? thread.defaultProviderId
+    const previousAgent = thread.lastAgentId ?? thread.defaultAgentId
     void deps.connection
-      .call("thread.switchProvider", { threadId: thread.id, providerId: agentId, modelId })
+      .call("thread.switchAgent", { threadId: thread.id, agentId, modelId })
       .then(() => {
-        patchThread(deps.store, thread.id, { lastProviderId: agentId, lastModelId: modelId })
+        patchThread(deps.store, thread.id, { lastAgentId: agentId, lastModelId: modelId })
         if (agentId !== previousAgent) {
           const name = agents.find((agent) => agent.id === agentId)?.label ?? agentId
-          setNotice(`${t("chat.provider.next")} ${name}`)
+          setNotice(`${t("chat.agent.next")} ${name}`)
         }
       })
       .catch(fail)
@@ -227,7 +226,7 @@ export function ChatViewContainer({
       const child = (await deps.connection.call("thread.create", {
         projectId: main.projectId,
         title: t("chat.subagent.defaultTitle").replace("{agent}", label),
-        providerId: agentId,
+        agentId,
         parentThreadId: main.id,
       })) as Thread
       deps.store.update({ threads: [...deps.store.getSnapshot().threads, child] })
@@ -312,7 +311,7 @@ export function ChatViewContainer({
         streamingText={streamingText}
         liveReasoning={liveReasoning}
         liveOutput={liveOutput}
-        capabilities={capabilities}
+        features={features}
         agents={agents}
         catalog={catalog}
         onLoadModels={load}

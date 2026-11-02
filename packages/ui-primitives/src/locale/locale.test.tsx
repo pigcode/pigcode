@@ -1,4 +1,4 @@
-/** 验证 locale provider 在中文与英文之间切换。 */
+/** 验证 LocaleProvider 在中文与英文之间切换。 */
 // @vitest-environment jsdom
 import { render, screen } from "@testing-library/react"
 import { describe, expect, it } from "vitest"

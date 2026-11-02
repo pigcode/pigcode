@@ -1,10 +1,5 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
-import type {
-  ProviderEvent,
-  ReasoningEffort,
-  TerminalOutput,
-  ThreadEvent,
-} from "@pigcode/contracts"
+import type { AgentEvent, ReasoningEffort, TerminalOutput, ThreadEvent } from "@pigcode/contracts"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
 
@@ -16,7 +11,7 @@ export interface ConnectionHandlers {
   onEvent(event: ThreadEvent): void
   /** 订阅回放的一整段历史；提供时一次交出，不提供时逐条调用 onEvent。 */
   onEvents?(events: ThreadEvent[]): void
-  onDelta(event: { threadId: string; event: ProviderEvent }): void
+  onDelta(event: { threadId: string; event: AgentEvent }): void
   onStatus(status: ConnectionStatus): void
 }
 
@@ -100,14 +95,14 @@ export class Connection {
     this.subscriptions.set(threadId, nextCursor)
   }
 
-  /** 分发服务端推送的线程事件与 provider delta。 */
+  /** 分发服务端推送的线程事件与 Agent 的 delta。 */
   private handleNotification(message: unknown): void {
     const value = message as {
       method?: string
       params?: {
         seq?: number
         threadId?: string
-        event?: ProviderEvent
+        event?: AgentEvent
         terminalId?: unknown
         data?: unknown
       }

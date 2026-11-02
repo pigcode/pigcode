@@ -146,8 +146,8 @@ describe("built-in plugins", () => {
     const entry = await installLocalPlugin(env, source)
     expect(entry.id).toBe("agent.pigcode-gamma")
     const gamma = (await listPlugins(env)).find((plugin) => plugin.id === entry.id)
-    // 界面的插件种类还叫 provider（#34 改），provides 与 contributes 是新名字。
-    expect(gamma).toMatchObject({ kind: "provider", provides: ["agent:alpha"] })
+    // 旧写法的 manifest 解析成新名字：kind、provides 与 contributes 都是 agent。
+    expect(gamma).toMatchObject({ kind: "agent", provides: ["agent:alpha"] })
     expect(Object.keys(gamma?.contributes ?? {})).toEqual(["agent"])
     // provider:alpha 和内置插件的 agent:alpha 是同一个声明，算冲突。
     expect(gamma?.conflict).toContain("agent:alpha is provided by")
@@ -197,29 +197,27 @@ describe("plugins service", () => {
     expect((await call("plugin.installLocal", { sourceDir: source })).error).toBeUndefined()
     const listed = (await call("agent.list", {})).result as {
       agents: Array<{
-        providerId: string
+        agentId: string
         builtin: boolean
         registered: boolean
         fields: unknown[]
       }>
     }
-    expect(
-      listed.agents.map((agent) => [agent.providerId, agent.builtin, agent.registered]),
-    ).toEqual([
+    expect(listed.agents.map((agent) => [agent.agentId, agent.builtin, agent.registered])).toEqual([
       ["alpha", true, true],
       ["beta", false, true],
     ])
     expect(listed.agents[1]?.fields).toHaveLength(1)
 
     const saved = await call("agent.updateSettings", {
-      providerId: "beta",
+      agentId: "beta",
       values: { binaryPath: "/opt/beta", customModels: ["beta-large"] },
     })
     expect(saved.result).toEqual({
       values: { binaryPath: "/opt/beta", customModels: ["beta-large"] },
     })
     const rejected = await call("agent.updateSettings", {
-      providerId: "beta",
+      agentId: "beta",
       values: { launchArgs: "--x" },
     })
     expect(rejected.error?.message).toContain("unknown setting for beta: launchArgs")
@@ -227,12 +225,12 @@ describe("plugins service", () => {
     expect(
       (await call("plugin.uninstall", { id: "agent.@pigcode/agent-alpha" })).error?.message,
     ).toContain("PLUGIN_BUILTIN")
-    expect((await call("agent.setDefault", { providerId: "beta" })).error).toBeUndefined()
+    expect((await call("agent.setDefault", { agentId: "beta" })).error).toBeUndefined()
     expect((await call("plugin.uninstall", { id: "agent.pigcode-beta" })).error).toBeUndefined()
     expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["alpha"])
     // 卸载默认 agent 的插件后默认回到自动；它的设置值保留，重新安装还在。
-    const after = (await call("agent.list", {})).result as { defaultProviderId: string | null }
-    expect(after.defaultProviderId).toBeNull()
+    const after = (await call("agent.list", {})).result as { defaultAgentId: string | null }
+    expect(after.defaultAgentId).toBeNull()
     expect(ctx.agents.getSettings("beta")).toEqual({
       binaryPath: "/opt/beta",
       customModels: ["beta-large"],
@@ -256,10 +254,10 @@ describe("plugins service", () => {
     new RpcServer(ctx, transport.host).start()
     transport.client.send({ jsonrpc: "2.0", id: "1", method: "agent.list", params: {} })
     const listed = (await transport.client.next()) as {
-      result: { agents: Array<{ providerId: string; pluginId: string; fields: unknown[] }> }
+      result: { agents: Array<{ agentId: string; pluginId: string; fields: unknown[] }> }
     }
     expect(listed.result.agents[1]).toMatchObject({
-      providerId: "gamma",
+      agentId: "gamma",
       pluginId: "agent.pigcode-gamma",
       fields: [{ key: "binaryPath", type: "path" }],
     })

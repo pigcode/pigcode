@@ -7,8 +7,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 
 /** 支持的插件种类；bundle 需要作者自行组合入口，不在脚手架里生成。 */
-type Kind = "provider" | "capability" | "ui"
-const KINDS: readonly Kind[] = ["provider", "capability", "ui"]
+type Kind = "agent" | "capability" | "ui"
+const KINDS: readonly Kind[] = ["agent", "capability", "ui"]
 
 /** 插件标识只允许小写字母开头，避免生成非法 npm 包名。 */
 const NAME_PATTERN = /^[a-z][a-z0-9._-]*$/
@@ -20,7 +20,7 @@ const USAGE = `用法:
 
 参数:
   dir   目标目录；不存在时创建，同名文件内容不同则拒绝覆盖
-  kind  provider | capability | ui
+  kind  agent | capability | ui
   name  插件标识（小写字母开头，可含数字、点、下划线、连字符）
 
 示例:
@@ -63,6 +63,15 @@ function humanize(name: string): string {
     .join(" ")
 }
 
+/**
+ * Capability 插件提供的服务名：插件标识转成 camelCase（session-info → sessionInfo），
+ * 和 Host 的服务名同一种写法。manifest 的 provides 与入口里的 ctx.provide 用的都是它。
+ */
+function serviceIdOf(name: string): string {
+  const [first = "", ...rest] = name.split(/[._-]+/).filter(Boolean)
+  return first + rest.map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("")
+}
+
 /** 按 kind 生成 manifest；Host 侧插件声明 main 与 host，UI 插件只声明 client。 */
 function manifestFor(
   kind: Kind,
@@ -72,7 +81,7 @@ function manifestFor(
 ): GeneratedManifest {
   const base = { name: pkgName, version: "0.1.0", type: "module" as const }
   const engines = { pigcode: ">=0.1.0" }
-  if (kind === "provider") {
+  if (kind === "agent") {
     return {
       ...base,
       main: "./index.ts",
@@ -82,10 +91,10 @@ function manifestFor(
         kind,
         displayName,
         host: "./index.ts",
-        inject: ["providers"],
-        provides: [`provider:${name}`],
+        inject: ["agents"],
+        provides: [`agent:${name}`],
         permissions: [],
-        contributes: { provider: { id: name } },
+        contributes: { agent: { id: name } },
       },
     }
   }
@@ -100,7 +109,7 @@ function manifestFor(
         displayName,
         host: "./index.ts",
         inject: ["sessions"],
-        provides: [`capability:${name}`],
+        provides: [serviceIdOf(name)],
         permissions: [],
       },
     }
@@ -120,20 +129,20 @@ function manifestFor(
   }
 }
 
-/** provider 入口：一个把输入原样回显的最小 driver。 */
-function providerEntry(pkgName: string, name: string, displayName: string): string {
-  return `/** ${pkgName}：最小 agent（provider）插件，把用户输入原样回显。 */
-import type { PluginHostContext, ProviderPluginDriver } from "@pigcode/plugin-sdk"
+/** Agent 入口：一个把输入原样回显的最小 driver。 */
+function agentEntry(pkgName: string, name: string, displayName: string): string {
+  return `/** ${pkgName}：最小 Agent 插件，把用户输入原样回显。 */
+import type { AgentDriver, PluginHostContext } from "@pigcode/plugin-sdk"
 
 export const name = "${name}"
-export const inject = ["providers"]
+export const inject = ["agents"]
 
-/** 注册 provider；停用时通过 ctx.effect 注销，避免热停用后仍可被选中。 */
+/** 注册 agent；停用时通过 ctx.effect 注销，避免热停用后仍可被选中。 */
 export function apply(ctx: PluginHostContext): void {
-  const driver: ProviderPluginDriver = {
+  const driver: AgentDriver = {
     id: "${name}",
     displayName: "${displayName}",
-    capabilities: {
+    features: {
       streaming: true,
       approvals: false,
       questions: false,
@@ -169,23 +178,23 @@ export function apply(ctx: PluginHostContext): void {
     async interrupt() {},
     async dispose() {},
   }
-  ctx.providers.register(driver)
-  ctx.effect(() => () => ctx.providers.unregister("${name}"))
+  ctx.agents.register(driver)
+  ctx.effect(() => () => ctx.agents.unregister("${name}"))
 }
 `
 }
 
-/** capability 入口：通过 ctx.provide 暴露只读会话信息。 */
+/** Capability 入口：通过 ctx.provide 暴露只读会话信息，服务名与 manifest 的 provides 一致。 */
 function capabilityEntry(pkgName: string, name: string): string {
-  return `/** ${pkgName}：最小 capability 插件，暴露当前线程的事件数量。 */
+  return `/** ${pkgName}：最小 Capability 插件，以 \`${serviceIdOf(name)}\` 服务暴露当前线程的事件数量。 */
 import type { PluginHostContext } from "@pigcode/plugin-sdk"
 
 export const name = "${name}"
 export const inject = ["sessions"]
 
-/** 注册 capability；插件卸载时 Host 会清理它注册的服务。 */
+/** 注册服务；名字和 package.json 的 provides 相同。插件卸载时 Host 会清理它注册的服务。 */
 export function apply(ctx: PluginHostContext): void {
-  ctx.provide("${name}", {
+  ctx.provide("${serviceIdOf(name)}", {
     count(threadId: string): number {
       return ctx.sessions.read(threadId, 0).length
     },
@@ -249,8 +258,8 @@ async function writeFiles(
   const manifest = manifestFor(kind, pkgName, name, displayName)
   await writeGenerated(join(target, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`)
   const [file, content] =
-    kind === "provider"
-      ? ["index.ts", providerEntry(pkgName, name, displayName)]
+    kind === "agent"
+      ? ["index.ts", agentEntry(pkgName, name, displayName)]
       : kind === "capability"
         ? ["index.ts", capabilityEntry(pkgName, name)]
         : ["client.ts", uiEntry(pkgName, name, displayName)]
@@ -268,7 +277,7 @@ function printResult(target: string, kind: Kind, pkgName: string, files: string[
   console.log(`  ${target}`)
   console.log("")
   console.log("安装方式:")
-  if (kind === "provider") {
+  if (kind === "agent") {
     console.log("  桌面端: 设置 → Agent → 安装 agent，填入上面的路径")
   } else {
     console.log("  桌面端: 设置 → 插件 → 在“插件目录或 npm 包”中填入上面的路径")

@@ -46,7 +46,7 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
   const base = `http://127.0.0.1:${(site.address() as AddressInfo).port}`
   const app = await electron.launch({
     args: ["."],
-    env: { ...launchEnv(), PIGCODE_PROVIDER: "fake" },
+    env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   try {
     const page = await app.firstWindow()

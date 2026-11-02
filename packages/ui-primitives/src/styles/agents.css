@@ -140,7 +140,7 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.agent-section .cap-list {
+.agent-section .agent-feature-list {
   justify-content: flex-start;
 }
 .agent-field {

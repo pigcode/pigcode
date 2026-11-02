@@ -105,23 +105,23 @@ Threads open in tabs and keep running in the background when you switch away. Ru
 the concurrency limit enter a FIFO queue (`run.list` / `run.queued`), and every tab shows
 its own queued, running, waiting-approval, completed, failed, or interrupted state.
 
-M5 also adds subagent timelines, thread-scoped MCP tools from capability plugins, GitHub
+M5 also adds subagent timelines, thread-scoped MCP tools from Capability plugins, GitHub
 PR creation through the `gh` CLI, loopback-only browser previews, and interval schedules
 persisted in SQLite. See [docs/m5-ecosystem.md](docs/m5-ecosystem.md) for commands,
 limits, and prerequisites.
 
 ## Agents and plugins
 
-Plugins are ordinary npm packages with a `pigcode` manifest field. Agent (provider),
-capability, and UI plugins load and unload without restarting the app.
+Plugins are ordinary npm packages with a `pigcode` manifest field. Agent, Capability,
+and UI plugins load and unload without restarting the app.
 
 Every agent is a plugin. Claude Code and Codex ship with the app as built-in plugins:
 they can be disabled but not uninstalled. Other agents are installed on demand from
 Settings → Agent → Install agent (an npm spec, a tarball, or a local folder), and any
 plugin can be installed from Settings → Plugins.
 
-Settings → Agent shows each agent's status (installed, version, signed in), its
-capabilities, and the settings its plugin declares. The built-in agents have the same
+Settings → Agent shows each agent's status (installed, version, signed in), the Agent
+features it supports, and the settings its plugin declares. The built-in agents have the same
 settings as t3code: binary path, `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, launch arguments,
 and environment variables, plus custom model ids that appear in the composer's picker.
 Changes apply to the next run; running sessions are not interrupted. The page also picks
@@ -157,7 +157,7 @@ Environment overrides:
 - `PIGCODE_PROFILE_DIR`: use another user profile directory.
 - `PIGCODE_DB_PATH`: use another database file, or `:memory:` for a throwaway one.
 - `PIGCODE_CORE_PROFILE_DIR`: load the core profile from another directory.
-- `PIGCODE_PROVIDER`: force the default agent (`claude`, `codex`, or `fake` for the
+- `PIGCODE_AGENT`: force the default agent (`claude`, `codex`, or `fake` for the
   scripted development agent, which is otherwise not registered).
 - `PIGCODE_CLAUDE_PATH`: Claude Code executable used when its binary path setting is blank.
 - `PIGCODE_CODEX_PATH`: Codex executable used when its binary path setting is blank.

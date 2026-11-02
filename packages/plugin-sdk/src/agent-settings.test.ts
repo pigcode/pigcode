@@ -13,9 +13,9 @@ import {
   settingString,
   sortEfforts,
   tokenizeCliArgs,
-} from "./provider-settings"
+} from "./agent-settings"
 
-describe("provider settings readers", () => {
+describe("agent settings readers", () => {
   it("treats blank or mistyped values as unset", () => {
     const settings = { binaryPath: "  /opt/claude  ", empty: "   ", count: 3, flag: true }
     expect(settingString(settings, "binaryPath")).toBe("/opt/claude")

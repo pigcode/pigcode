@@ -30,12 +30,9 @@ export async function disposeSession(
   })
 }
 
-/**
- * 切换结果，也是 `thread.switchProvider` 的返回；换 Agent 时写 handoff，同一个 Agent 优先写原生 fork 源。
- * providerId 是返回给界面的字段，界面迁移（#34）时改名。
- */
+/** 切换结果，也是 `thread.switchAgent` 的返回；换 Agent 时写 handoff，同一个 Agent 优先写原生 fork 源。 */
 export interface Switch {
-  providerId: string
+  agentId: string
   modelId: string | null
   /** 换 Agent 时写入的上下文摘要；使用原生 fork 时为 null。 */
   handoff: string | null
@@ -96,7 +93,7 @@ function contextLines(context: ReturnType<typeof recentContext>): string[] {
  */
 export function buildHandoff(ctx: Context, threadId: string): string {
   const thread = ctx.threads.get(threadId)
-  const previousAgent = thread?.lastProviderId ?? thread?.defaultProviderId ?? "unknown"
+  const previousAgent = thread?.lastAgentId ?? thread?.defaultAgentId ?? "unknown"
   return [
     `Previous agent: ${previousAgent}`,
     ...contextLines(recentContext(ctx, threadId)),
@@ -111,7 +108,7 @@ export function buildHandoff(ctx: Context, threadId: string): string {
 export function buildSubagentBrief(ctx: Context, parentThreadId: string): string | null {
   if (!hasConversation(ctx, parentThreadId)) return null
   const parent = ctx.threads.get(parentThreadId)
-  const mainAgent = parent?.lastProviderId ?? parent?.defaultProviderId ?? "unknown"
+  const mainAgent = parent?.lastAgentId ?? parent?.defaultAgentId ?? "unknown"
   return [
     `You are a sub-agent working next to the main agent (${mainAgent}) of the task "${parent?.title ?? ""}", in the same working directory.`,
     ...contextLines(recentContext(ctx, parentThreadId)),
@@ -189,14 +186,13 @@ export async function switchAgent(
     threadId,
     runId: null,
     type: "thread.updated",
-    // 事件 payload 是界面读取的持久数据，字段名沿用旧名字，界面迁移（#34）时一起改。
     payload: {
-      providerId: agentId,
+      agentId,
       modelId,
       ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : { handoff }),
     },
     schemaVersion: 1,
     createdAt: now,
   })
-  return { providerId: agentId, modelId, handoff, forkFromNativeSessionId }
+  return { agentId, modelId, handoff, forkFromNativeSessionId }
 }

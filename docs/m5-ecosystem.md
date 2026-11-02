@@ -22,10 +22,10 @@ M5 把 Pigcode 从“单线程工作台”扩展成可以同时处理多个会�
 
 ### 队列
 
-Host 的 `providers` 服务维护一个全局 FIFO 队列：
+Host 的 `agents` 服务维护一个全局 FIFO 队列：
 
 - 默认最多同时运行 4 个 run，默认最多排队 32 个 run。两个上限由 registry 的
-  `ProviderRunConfig`（`maxConcurrentRuns`、`maxQueuedRuns`）控制；桌面 profile
+  `AgentRunConfig`（`maxConcurrentRuns`、`maxQueuedRuns`）控制；桌面 profile
   当前没有暴露用户配置项。
 - 达到并发上限时，`run.start` 仍然返回 `runId`，run 以 `queued` 状态进入队列，
   并追加一条 `run.queued` 事件；此时不抛 `TOO_MANY_ACTIVE_RUNS`。
@@ -48,7 +48,7 @@ Host 的 `providers` 服务维护一个全局 FIFO 队列：
 
 ## 子 agent 时间线
 
-子 agent 事件由 provider 归一化层产生，Renderer 将其渲染为可折叠卡片：
+子 agent 事件由各 Agent driver 的事件归一化产生，Renderer 将其渲染为可折叠卡片：
 
 - `subagent.started`：`{ toolCallId, name, description?, model?, parentToolUseId? }`
 - `subagent.completed`：`{ toolCallId, output?, isError, status }`，`status` 为
@@ -59,7 +59,7 @@ Host 的 `providers` 服务维护一个全局 FIFO 队列：
 卡片，不再作为主时间线的顶层消息；卡片默认折叠，点击 `<summary>` 展开子消息与工具
 调用。父 run 仍然只产生一次 `run.completed`。
 
-两个 provider 的来源不同：
+两个 Agent 的来源不同：
 
 - **Claude**：`Task` / `Agent` 的 `tool_use` 产生 `subagent.started`；driver 开启
   `forwardSubagentText`，带 `parent_tool_use_id` 的文本和工具事件携带
@@ -69,13 +69,13 @@ Host 的 `providers` 服务维护一个全局 FIFO 队列：
   `completed` / `interrupted` 产生 `subagent.completed`；`collabAgentToolCall` /
   `collabToolCall` 会按 `receiverThreadIds` 逐个产生子 agent 卡片。
 
-## MCP 工具（capability 插件）
+## MCP 工具（Capability 插件）
 
-capability 插件通过 `ctx.mcp.registerTool` 把自己的工具暴露给模型。工具的
+Capability 插件通过 `ctx.mcp.registerTool` 把自己的工具暴露给模型。工具的
 `inputSchema` 使用 JSON Schema，handler 的第二个参数带有调用方的线程上下文：
 
 ```js
-/** 示例：返回当前时间的 capability 插件。 */
+/** 示例：返回当前时间的 Capability 插件。 */
 export const name = "capability-clock"
 export const inject = ["mcp"]
 
@@ -111,7 +111,7 @@ JSON 序列化；Host 会把它转成 MCP 的文本内容交给模型。工具�
   执行。
 - 工具注册表是 Host 全局的，因此所有插件工具对所有线程可见；隔离发生在**调用**层：
   handler 收到的 `threadId` 始终是发起该 run 的线程，不会跨线程共享可变调用状态。
-- 没有任何注册工具时，`sessionMcp()` 返回 `undefined`，provider 不会注入空配置。
+- 没有任何注册工具时，`sessionMcp()` 返回 `undefined`，Agent 不会注入空配置。
 - 跨进程通信只使用 stdio 与 Unix domain socket / 命名管道，不监听 TCP 端口。
 
 ## GitHub PR
@@ -189,14 +189,14 @@ RPC：
 | `schedule.delete` | `{ id }`                                          | `{ deleted }`               |
 | `schedule.runNow` | `{ id }`                                          | `{ runId: string \| null }` |
 
-`runNow` 在线程忙或 provider 不可用时返回 `runId: null`。桌面端在
+`runNow` 在线程忙或 Agent 不可用时返回 `runId: null`。桌面端在
 **设置 → 定时任务** 中管理任务、启停和立即运行。
 
-## Provider 切换：原生 fork 优先
+## Agent 切换：原生 fork 优先
 
-同一 provider 内切换模型时，如果线程存在活动的原生会话，Host 写入
-`forkFromNativeSessionId`，下一次 run 让 provider 原生 fork 该会话，不注入 handoff
-文本。跨 provider 切换时改为生成 handoff：最近 3 条 user/assistant 文本和最近 3 个
+切换用 `thread.switchAgent`（参数 `{ threadId, agentId, modelId? }`）。同一 Agent 内切换模型时，
+如果线程存在活动的原生会话，Host 写入 `forkFromNativeSessionId`，下一次 run 让 Agent 原生 fork
+该会话，不注入 handoff 文本。换 Agent 时改为生成 handoff：最近 3 条 user/assistant 文本和最近 3 个
 工具名，只在下一次 run 注入一次。两种标记都通过 `thread.updated` 事件持久化，并在
 `run.started` 之前读取。
 
@@ -218,7 +218,7 @@ app-server 子进程。
 
 真实 Codex E2E（`apps/desktop/e2e/m5-real-codex.spec.ts`）同样受
 `PIGCODE_REAL_CODEX=1` 控制。它逐线程验证 UI 链路，因为真实模型同时跑两个 turn
-可能触发 provider 容量限制；两个真实 run 的并行覆盖以上面的 vitest 为准。
+可能触发模型服务的容量限制；两个真实 run 的并行覆盖以上面的 vitest 为准。
 
 ## 确定性验收
 
@@ -240,7 +240,7 @@ PIGCODE_E2E=1 pnpm exec playwright test \
   e2e/m5-multi-session.spec.ts
 ```
 
-`m5-multi-session.spec.ts` 使用 fake provider，并通过 `PIGCODE_FAKE_DELAY_MS=800`
+`m5-multi-session.spec.ts` 使用 fake agent，并通过 `PIGCODE_FAKE_DELAY_MS=800`
 制造可观察的后台运行窗口，覆盖：两个 tab 同时打开、切换 tab 后后台线程继续运行、
 完成后切回看到结果、关闭后台 tab 与关闭活动 tab。视觉基线如有变化，需要在同一
 提交中更新并说明原因。

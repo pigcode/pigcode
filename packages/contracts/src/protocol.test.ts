@@ -23,8 +23,8 @@ describe("protocol", () => {
     const failure = rpcFailureSchema.parse({
       jsonrpc: "2.0",
       id: "req-1",
-      error: { code: "PROVIDER_NOT_INSTALLED", message: "missing", retryable: false },
+      error: { code: "AGENT_NOT_INSTALLED", message: "missing", retryable: false },
     })
-    expect(failure.error.code).toBe("PROVIDER_NOT_INSTALLED")
+    expect(failure.error.code).toBe("AGENT_NOT_INSTALLED")
   })
 })

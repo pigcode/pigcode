@@ -1,4 +1,4 @@
-/** 输入框、按轮时间线、运行指示与「用…打开」的端到端验收（fake provider）。 */
+/** 输入框、按轮时间线、运行指示与「用…打开」的端到端验收（fake agent）。 */
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
@@ -19,11 +19,11 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await expect(efforts.getByRole("radio")).toHaveText(["低", "中", "高", "最高"])
     await efforts.getByRole("radio", { name: "中", exact: true }).click()
     await expect(chip).toContainText("中")
-    await expect(page.getByRole("tab", { name: "Fake Provider" })).toHaveAttribute(
+    await expect(page.getByRole("tab", { name: "Fake Agent" })).toHaveAttribute(
       "aria-selected",
       "true",
     )
-    const list = page.getByRole("listbox", { name: "Fake Provider" })
+    const list = page.getByRole("listbox", { name: "Fake Agent" })
     await expect(list.getByRole("option")).toHaveCount(2)
     // 其他 agent 只有选中后才列出自己的模型。
     await page.getByRole("tab", { name: "Claude Code" }).click()
@@ -31,10 +31,10 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     // Codex 启动失败时读取目录也失败；Host 不能因此崩溃，列表只是为空。
     await page.getByRole("tab", { name: "Codex" }).click()
     await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没有匹配的模型")
-    await page.getByRole("tab", { name: "Fake Provider" }).click()
+    await page.getByRole("tab", { name: "Fake Agent" }).click()
     await efforts.getByRole("radio", { name: "最高" }).click()
     await expect(chip).toContainText("最高")
-    await page.getByRole("listbox", { name: "Fake Provider" }).getByText("Fake Swift").click()
+    await page.getByRole("listbox", { name: "Fake Agent" }).getByText("Fake Swift").click()
     await expect(chip).toContainText("Fake Swift")
     await expect(chip).not.toContainText("最高")
 
@@ -55,9 +55,7 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     const sent = page.locator(".msg-user").filter({ hasText: "look at" })
     await expect(sent).toHaveText("look at index.ts please")
     await expect(sent.locator(".mention-file")).toHaveAttribute("title", "src/index.ts")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
 
     // ↑ 取回刚发送的消息；/ 命令切换权限。
     await page.locator(".tiptap").click()

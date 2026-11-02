@@ -1,7 +1,4 @@
-/**
- * 持久化待审批请求；Host 重启时统一标记 orphaned。列名是 agent_request_id，PendingRequest 的字段名
- * 沿用 providerRequestId：它随订阅快照发给界面，界面迁移（#34）时改名。
- */
+/** 持久化待审批请求；Host 重启时统一标记 orphaned。 */
 import type { PendingRequest } from "@pigcode/contracts"
 import type { PigcodeDatabase } from "./database"
 
@@ -23,7 +20,7 @@ export class PendingRequestStore {
         request.threadId,
         request.runId,
         request.kind,
-        request.providerRequestId,
+        request.agentRequestId,
         JSON.stringify(request.payload),
         request.status,
         request.createdAt,
@@ -60,7 +57,7 @@ export class PendingRequestStore {
       threadId: row.thread_id!,
       runId: row.run_id!,
       kind: row.kind as PendingRequest["kind"],
-      providerRequestId: row.agent_request_id ?? null,
+      agentRequestId: row.agent_request_id ?? null,
       payload: JSON.parse(row.payload_json!) as unknown,
       status: row.status as PendingRequest["status"],
       createdAt: row.created_at!,

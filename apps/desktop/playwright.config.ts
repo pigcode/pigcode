@@ -12,15 +12,14 @@ process.env.PIGCODE_E2E = "1"
 process.env.PIGCODE_PROFILE_DIR = join(repoRoot, "apps/desktop/out-e2e/profile")
 process.env.PIGCODE_DB_PATH = ":memory:"
 
-/** 真实 provider 需要等待模型响应，超时单独放宽；其余 E2E 保持原有上限。 */
-const realProvider =
-  process.env.PIGCODE_REAL_CLAUDE === "1" || process.env.PIGCODE_REAL_CODEX === "1"
+/** 真实 Agent 需要等待模型响应，超时单独放宽；其余 E2E 保持原有上限。 */
+const realAgent = process.env.PIGCODE_REAL_CLAUDE === "1" || process.env.PIGCODE_REAL_CODEX === "1"
 
 export default defineConfig({
   testDir: ".",
   testMatch: ["e2e/**/*.spec.ts", "visual/**/*.spec.ts"],
-  timeout: realProvider ? 180_000 : 60_000,
-  expect: { timeout: realProvider ? 120_000 : 15_000 },
+  timeout: realAgent ? 180_000 : 60_000,
+  expect: { timeout: realAgent ? 120_000 : 15_000 },
   fullyParallel: false,
   workers: 1,
   reporter: "line",

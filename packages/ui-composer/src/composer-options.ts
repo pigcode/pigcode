@@ -68,7 +68,7 @@ export function nextPermissionMode(
   return cycle[(index + 1) % cycle.length] ?? "workspace-write"
 }
 
-/** 输入框里可选的一个 agent（provider）。 */
+/** 输入框里可选的一个 agent。 */
 export interface ComposerAgent {
   id: string
   label: string

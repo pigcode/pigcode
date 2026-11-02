@@ -6,7 +6,7 @@ import { AppearancePage } from "./appearance-page"
 import { GeneralPage } from "./general-page"
 
 /** 设置页的分区。 */
-export type SettingsSection = "general" | "appearance" | "providers" | "schedules" | "plugins"
+export type SettingsSection = "general" | "appearance" | "agents" | "schedules" | "plugins"
 
 /** 设置视图需要的状态。 */
 export interface SettingsViewProps {
@@ -35,7 +35,7 @@ export function SettingsView({
       <div className="panel-scroll">
         {section === "general" ? <GeneralPage /> : null}
         {section === "appearance" ? <AppearancePage appearance={appearance} /> : null}
-        {section === "providers" ? agentsPage : null}
+        {section === "agents" ? agentsPage : null}
         {section === "schedules" ? schedulesPage : null}
         {section === "plugins" ? pluginManager : null}
       </div>

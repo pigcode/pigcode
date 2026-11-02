@@ -19,11 +19,8 @@ import {
 import { FAKE_BROWSER_PREFIX, runFakeBrowser, type FakeToolCaller } from "./fake-browser"
 import { FAKE_SHOWCASE_TEXT, fakeShowcaseScript } from "./fake-showcase"
 
-/**
- * fake agent 固定输出的文本分片。这段文字和下面的 displayName 显示在界面上，E2E 与视觉基线都按它匹配，
- * 改名留给界面迁移（#34）。
- */
-const CHUNKS = ["Hello", " from", " fake", " provider"]
+/** fake agent 固定输出的文本分片。这段文字和下面的 displayName 显示在界面上，E2E 与视觉基线都按它匹配。 */
+const CHUNKS = ["Hello", " from", " fake", " agent"]
 
 /** 长跑输入的标记；用于验证 run 中断与进程清理。 */
 export const FAKE_LONG_RUN_TEXT = "long"
@@ -65,7 +62,7 @@ export interface FakeAgentOptions {
 /** 不依赖外部进程的确定性 Agent 实现。 */
 export class FakeAgentDriver implements AgentDriver {
   readonly id = "fake"
-  readonly displayName = "Fake Provider"
+  readonly displayName = "Fake Agent"
   readonly features: AgentFeatures = {
     streaming: true,
     approvals: false,

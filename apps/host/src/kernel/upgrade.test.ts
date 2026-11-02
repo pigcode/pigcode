@@ -24,7 +24,7 @@ import { migrate } from "../storage/migrations"
 
 /** 随应用内置的两个 Agent 插件，按 profile 里的顺序。 */
 const BUILTIN = ["agent-claude", "agent-codex"]
-const ECHO_SOURCE = fileURLToPath(new URL("../../../../examples/provider-echo", import.meta.url))
+const ECHO_SOURCE = fileURLToPath(new URL("../../../../examples/agent-echo", import.meta.url))
 const NOW = "2026-10-30T00:00:00.000Z"
 
 /**
@@ -63,7 +63,7 @@ async function writeBuiltins(root: string): Promise<string[]> {
   return dirs
 }
 
-/** 上一个版本（schema v6、旧名字）留在用户 profile 里的数据。 */
+/** 改名以前的版本（schema v6、旧名字）留在用户 profile 里的数据，包括旧字段名的事件。 */
 async function writeOldProfile(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "pigcode-upgrade-"))
   const profileDir = join(root, "profile")
@@ -79,8 +79,8 @@ async function writeOldProfile(): Promise<string> {
     stringify({
       plugins: [
         {
-          id: "provider.pigcode-provider-echo",
-          name: "pigcode-provider-echo",
+          id: "provider.pigcode-agent-echo",
+          name: "pigcode-agent-echo",
           config: {},
           disabled: false,
         },
@@ -116,7 +116,10 @@ async function writeOldProfile(): Promise<string> {
     INSERT INTO runs (id, thread_id, provider_session_id, status, started_at)
       VALUES ('run_1', 'th_echo', 'ps_1', 'completed', '${NOW}');
     INSERT INTO thread_events (thread_id, run_id, type, payload_json, schema_version, created_at)
-      VALUES ('th_echo', 'run_1', 'message.completed', '{"role":"user","text":"hi"}', 1, '${NOW}');
+      VALUES
+      ('th_echo', NULL, 'thread.updated', '{"providerId":"echo","modelId":null,"handoff":"summary"}', 1, '${NOW}'),
+      ('th_echo', 'run_1', 'run.started', '{"providerId":"echo","providerSessionId":"ps_1"}', 1, '${NOW}'),
+      ('th_echo', 'run_1', 'message.completed', '{"role":"user","text":"hi"}', 1, '${NOW}');
   `)
   db.close()
   return profileDir
@@ -157,15 +160,18 @@ describe("upgrading from the provider names", () => {
     // 项目、线程、会话都在；线程上的 agent id 能找到已注册的 driver。
     expect(ctx.projects.list().map((project) => project.id)).toEqual(["pr_1"])
     const echoThread = ctx.threads.get("th_echo")
-    expect(echoThread).toMatchObject({ defaultProviderId: "codex", lastProviderId: "echo" })
-    expect(ctx.threads.get("th_codex")).toMatchObject({ defaultProviderId: "codex" })
+    expect(echoThread).toMatchObject({ defaultAgentId: "codex", lastAgentId: "echo" })
+    expect(ctx.threads.get("th_codex")).toMatchObject({ defaultAgentId: "codex" })
     const registered = ctx.agents.list().map((agent) => agent.id)
     expect(registered).toEqual(["codex", "echo"])
     expect(ctx.agents.listSessions("th_echo")).toMatchObject([
       { id: "ps_1", agentId: "echo", nativeSessionId: "native-1", status: "stopped" },
     ])
-    expect(ctx.sessions.read("th_echo", 0).map((event) => event.type)).toEqual([
-      "message.completed",
+    // 旧版本写下的事件还在，payload 里的旧字段名改成了新的。
+    expect(ctx.sessions.read("th_echo", 0).map((event) => [event.type, event.payload])).toEqual([
+      ["thread.updated", { agentId: "echo", modelId: null, handoff: "summary" }],
+      ["run.started", { agentId: "echo", agentSessionId: "ps_1" }],
+      ["message.completed", { role: "user", text: "hi" }],
     ])
     const runs = ctx.storage.db.prepare(`SELECT id, agent_session_id FROM runs`).all()
     expect(runs).toEqual([{ id: "run_1", agent_session_id: "ps_1" }])
@@ -189,14 +195,14 @@ describe("upgrading from the provider names", () => {
     expect(plugins.map((plugin) => [plugin.id, plugin.builtin, plugin.enabled])).toEqual([
       ["agent.@pigcode/agent-claude", true, false],
       ["agent.@pigcode/agent-codex", true, true],
-      ["agent.pigcode-provider-echo", false, true],
+      ["agent.pigcode-agent-echo", false, true],
     ])
     expect(plugins.every((plugin) => plugin.error === null)).toBe(true)
     const yml = parse(await readFile(join(profileDir, "plugins.yml"), "utf8")) as {
       plugins: Array<{ id: string; name: string }>
     }
     expect(yml.plugins.map((entry) => [entry.id, entry.name])).toEqual([
-      ["agent.pigcode-provider-echo", "pigcode-provider-echo"],
+      ["agent.pigcode-agent-echo", "pigcode-agent-echo"],
       ["agent.@pigcode/agent-claude", "@pigcode/agent-claude"],
     ])
 
@@ -212,7 +218,7 @@ describe("upgrading from the provider names", () => {
     const before = await snapshot(profileDir)
     const again = await start(profileDir)
     expect(await snapshot(profileDir)).toEqual(before)
-    expect(again.storage.db.pragma("user_version", { simple: true })).toBe(7)
+    expect(again.storage.db.pragma("user_version", { simple: true })).toBe(8)
     expect(
       again.threads
         .list()

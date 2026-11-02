@@ -30,7 +30,7 @@ test("runs two real codex threads from the sidebar", async () => {
     await expect(project).toBeVisible()
 
     const row = (title: string) => project.locator(".sess").filter({ hasText: title })
-    // 真实模型同时跑两个 turn 会触发 provider 的容量限制；E2E 逐线程验证 UI 链路，
+    // 真实模型同时跑两个 turn 会触发模型服务的容量限制；E2E 逐线程验证 UI 链路，
     // 两个真实 run 的并行覆盖由 multi-session.real.test.ts 负责。
     await project.locator(".proj-add").click()
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")

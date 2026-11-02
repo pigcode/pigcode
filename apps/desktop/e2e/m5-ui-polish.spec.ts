@@ -18,7 +18,7 @@ test("polished shell: auto title, command palette and shortcuts", async () => {
   mkdirSync(projectRoot, { recursive: true })
   const app = await electron.launch({
     args: ["."],
-    env: { ...launchEnv(), PIGCODE_PROVIDER: "fake" },
+    env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   try {
     const page = await app.firstWindow()

@@ -123,7 +123,7 @@ export function buildThreadTabs(input: {
       id: `agent:${child.id}`,
       kind: "agent",
       title: child.title,
-      agentId: child.lastProviderId ?? child.defaultProviderId,
+      agentId: child.lastAgentId ?? child.defaultAgentId,
       running: isBusy(statuses[child.id]),
       waiting: statuses[child.id] === "waiting-approval",
       closable: true,

@@ -1,8 +1,6 @@
 /**
  * 设置页的 agent 列表与设置校验：把 Agent 插件的 manifest、已注册的 driver 与保存的值合在一起。
  * agent 来自 Agent 插件（内置或用户安装）；没有插件的 driver（开发用的 fake）也会列出。
- * AgentSummary 的 providerId、capabilities 与 AgentList 的 defaultProviderId 是发给界面的字段名，
- * 界面迁移（#34）时改名。
  */
 import type { Context } from "cordis"
 import {
@@ -33,14 +31,14 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
     listed.add(contribution.id)
     const driver = registered.get(contribution.id)
     agents.push({
-      providerId: contribution.id,
+      agentId: contribution.id,
       displayName: driver?.displayName ?? manifest.pigcode.displayName ?? manifest.name,
       pluginId: record.id,
       version: manifest.version,
       builtin: record.builtin,
       enabled: !record.disabled,
       registered: driver !== undefined,
-      capabilities: driver?.features ?? null,
+      features: driver?.features ?? null,
       description: contribution.description ?? manifest.description ?? null,
       homepage: contribution.homepage ?? null,
       installHint: contribution.installHint ?? null,
@@ -53,14 +51,14 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
   for (const driver of registered.values()) {
     if (listed.has(driver.id)) continue
     agents.push({
-      providerId: driver.id,
+      agentId: driver.id,
       displayName: driver.displayName,
       pluginId: null,
       version: null,
       builtin: true,
       enabled: true,
       registered: true,
-      capabilities: driver.features,
+      features: driver.features,
       description: null,
       homepage: null,
       installHint: null,
@@ -70,7 +68,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       error: null,
     })
   }
-  return { agents, defaultProviderId: ctx.agents.configuredDefaultAgent() }
+  return { agents, defaultAgentId: ctx.agents.configuredDefaultAgent() }
 }
 
 /**
@@ -108,14 +106,14 @@ function matchesField(field: AgentSettingField, value: unknown): boolean {
  * 避免把界面或脚本传来的杂项写进 settings.json。
  */
 export function validateAgentSettings(
-  agent: Pick<AgentSummary, "providerId" | "fields" | "customModels">,
+  agent: Pick<AgentSummary, "agentId" | "fields" | "customModels">,
   values: Record<string, unknown>,
 ): void {
   const fields = new Map(agent.fields.map((field) => [field.key, field]))
   for (const [key, value] of Object.entries(values)) {
     if (key === CUSTOM_MODELS_KEY) {
       if (!agent.customModels && Array.isArray(value) && value.length > 0) {
-        throw new Error(`${agent.providerId} does not accept custom models`)
+        throw new Error(`${agent.agentId} does not accept custom models`)
       }
       if (value !== null && !customModelsSchema.safeParse(value).success) {
         throw new Error("customModels must be a list of model ids")
@@ -123,7 +121,7 @@ export function validateAgentSettings(
       continue
     }
     const field = fields.get(key)
-    if (!field) throw new Error(`unknown setting for ${agent.providerId}: ${key}`)
-    if (!matchesField(field, value)) throw new Error(`invalid value for ${agent.providerId}.${key}`)
+    if (!field) throw new Error(`unknown setting for ${agent.agentId}: ${key}`)
+    if (!matchesField(field, value)) throw new Error(`invalid value for ${agent.agentId}.${key}`)
   }
 }

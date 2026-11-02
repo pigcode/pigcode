@@ -19,7 +19,7 @@ export interface ToolCall {
   /** 开始与结束时间（事件的 createdAt），用来显示耗时。 */
   startedAt?: string | undefined
   endedAt?: string | undefined
-  /** 命令的退出码；provider 不报告时缺省。 */
+  /** 命令的退出码；Agent 不报告时缺省。 */
   exitCode?: number | undefined
 }
 

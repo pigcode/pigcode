@@ -62,6 +62,42 @@ function renameAgentColumns(db: Database.Database): void {
   }
 }
 
+/**
+ * v8 的改名：持久事件 payload 里的旧字段名（#34）。界面直接读这些事件，旧事件和新事件要用同一套字段名。
+ */
+const EVENT_PAYLOAD_RENAMES = [
+  ["run.started", "providerId", "agentId"],
+  ["run.started", "providerSessionId", "agentSessionId"],
+  ["thread.updated", "providerId", "agentId"],
+] as const
+
+/**
+ * v8：按 EVENT_PAYLOAD_RENAMES 改写 thread_events 的 payload_json。只改还带旧字段的事件，重复执行不改动；
+ * 新旧字段同时存在时保留新字段的值，删掉旧字段。payload 不是合法 JSON 的事件原样保留。
+ * 没有 thread_events 表（只造了部分 schema 的测试库）时什么都不做。
+ */
+function renameEventPayloadKeys(db: Database.Database): void {
+  const exists = db
+    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_events'`)
+    .get()
+  if (!exists) return
+  const rename = db.prepare(`
+    UPDATE thread_events
+    SET payload_json = json_remove(
+      CASE
+        WHEN json_type(payload_json, '$.' || :to) IS NULL
+          THEN json_set(payload_json, '$.' || :to, json(payload_json -> ('$.' || :from)))
+        ELSE payload_json
+      END,
+      '$.' || :from
+    )
+    WHERE type = :type
+      AND (CASE WHEN json_valid(payload_json) THEN json_type(payload_json, '$.' || :from) END)
+        IS NOT NULL
+  `)
+  for (const [type, from, to] of EVENT_PAYLOAD_RENAMES) rename.run({ type, from, to })
+}
+
 const MIGRATIONS: Migration[] = [
   `
   CREATE TABLE IF NOT EXISTS projects (
@@ -194,6 +230,7 @@ const MIGRATIONS: Migration[] = [
   CREATE INDEX IF NOT EXISTS idx_threads_parent ON threads(parent_thread_id);
   `,
   renameAgentColumns,
+  renameEventPayloadKeys,
 ]
 
 /** 最新的 schema 版本，也就是迁移的个数。 */

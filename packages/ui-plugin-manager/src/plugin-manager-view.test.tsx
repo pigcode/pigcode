@@ -60,17 +60,17 @@ describe("PluginManagerView", () => {
     renderView([
       {
         ...DEMO,
-        id: "provider.demo",
-        kind: "provider",
+        id: "agent.demo",
+        kind: "agent",
         permissions: ["process:spawn"],
-        provides: ["provider:demo"],
-        conflict: "provides conflict: provider:demo",
+        provides: ["agent:demo"],
+        conflict: "provides conflict: agent:demo",
       },
     ])
     expect(screen.getByRole("button", { name: "Demo 的详情" }).textContent).toContain("有冲突")
     await userEvent.click(screen.getByRole("button", { name: "Demo 的详情" }))
     expect(screen.getByText("process:spawn")).toBeTruthy()
-    expect(screen.getByText("provider:demo")).toBeTruthy()
+    expect(screen.getByText("agent:demo")).toBeTruthy()
     expect(screen.getByText(/冲突: provides conflict/)).toBeTruthy()
   })
 
@@ -94,7 +94,7 @@ describe("PluginManagerView", () => {
     const installs = screen.getAllByRole("button", { name: "安装插件" })
     expect(installs).toHaveLength(2)
     await user.click(installs[1] as HTMLElement)
-    const spec = "pigcode-provider-demo@1.0.0"
+    const spec = "pigcode-agent-demo@1.0.0"
     await user.type(screen.getByLabelText("插件目录或 npm 包"), spec)
     await user.click(screen.getByRole("button", { name: "安装" }))
     expect(onInstall).toHaveBeenCalledWith(spec)

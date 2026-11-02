@@ -92,8 +92,8 @@
     align-items: flex-start;
   }
 }
-/* 插件能力的标签列表 */
-.cap-list {
+/* Agent 功能的标签列表 */
+.agent-feature-list {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

@@ -24,7 +24,7 @@ export interface WorkspaceSidebarProps {
   threads: Thread[]
   activeThreadId: string | null
   threadStatus?: Record<string, ThreadStatus> | undefined
-  /** agent 的显示名，按 provider id；会话行上的 agent 缩写由它得出，缺少时用 id。 */
+  /** agent 的显示名，按 agent id；会话行上的 agent 缩写由它得出，缺少时用 id。 */
   agentNames?: Readonly<Record<string, string>> | undefined
   expandedProjects: Record<string, boolean>
   onAddProject: () => void
@@ -295,17 +295,17 @@ export function WorkspaceSidebar({
                     <EmptyState size="compact" title={t("sidebar.noThreads")} />
                   ) : null}
                   {projectThreads.map((thread) => {
-                    const providerId = thread.lastProviderId ?? thread.defaultProviderId
-                    const agentName = agentNames[providerId] ?? providerId
+                    const agentId = thread.lastAgentId ?? thread.defaultAgentId
+                    const agentName = agentNames[agentId] ?? agentId
                     // 缩写只是装饰；读屏器读 agent 的全名。
                     return row(
                       thread,
                       <>
                         <EntityAvatar
-                          id={providerId}
+                          id={agentId}
                           name={agentName}
                           size="inline"
-                          className="sess-provider"
+                          className="sess-agent"
                         />
                         <span className="sr-only">{agentName}</span>
                       </>,

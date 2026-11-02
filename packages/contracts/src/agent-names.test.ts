@@ -63,12 +63,13 @@ describe("agent type names", () => {
 })
 
 describe("agent command names", () => {
-  it("forwards each provider.* command to an agent.* command with the same params schema", () => {
+  it("forwards each old command name to its new name with the same params schema", () => {
     expect(commandAliases).toEqual({
       "provider.detect": "agent.detect",
       "provider.list": "agent.registered",
       "provider.default": "agent.default",
       "provider.models": "agent.models",
+      "thread.switchProvider": "thread.switchAgent",
     })
     for (const [alias, target] of Object.entries(commandAliases)) {
       expect(commandSchemas[alias as keyof typeof commandAliases]).toBe(commandSchemas[target])
@@ -76,8 +77,8 @@ describe("agent command names", () => {
     }
     // agent.list 是设置页的列表，不是 provider.list 的新名字。
     expect(resolveCommandMethod("agent.list")).toBe("agent.list")
-    expect(parseCommandParams("provider.models", { providerId: "codex" })).toEqual(
-      parseCommandParams("agent.models", { providerId: "codex" }),
+    expect(parseCommandParams("provider.models", { agentId: "codex" })).toEqual(
+      parseCommandParams("agent.models", { agentId: "codex" }),
     )
     expect(() => parseCommandParams("agent.models", {})).toThrow()
   })
@@ -91,6 +92,9 @@ describe("agent command names", () => {
       CommandParams<"agent.default">
     >()
     expectTypeOf<CommandParams<"provider.models">>().toEqualTypeOf<CommandParams<"agent.models">>()
+    expectTypeOf<CommandParams<"thread.switchProvider">>().toEqualTypeOf<
+      CommandParams<"thread.switchAgent">
+    >()
     expectTypeOf(resolveCommandMethod).returns.toEqualTypeOf<CanonicalCommandMethod>()
     expectTypeOf<"provider.list">().not.toExtend<CanonicalCommandMethod>()
   })

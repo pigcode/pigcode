@@ -43,7 +43,7 @@ function scriptedRun(runId = "run_1", base = 0): ThreadEvent[] {
   ]
   return [
     e(1, "message.completed", { role: "user", text: "fix the answer" }, 0),
-    e(2, "run.started", { providerId: "claude" }, 0),
+    e(2, "run.started", { agentId: "claude" }, 0),
     e(3, "reasoning.completed", { text: "Need to find the constant.", durationMs: 2100 }, 1),
     e(4, "message.completed", { role: "assistant", text: "Looking around." }, 1),
     e(5, "tool.started", { id: "r1", name: "Read", input: { file_path: "/repo/README.md" } }, 2),
@@ -162,7 +162,7 @@ describe("buildTimeline", () => {
     const entries = buildTimeline(
       [
         ...scriptedRun(),
-        event(30, "thread.updated", { providerId: "codex", handoff: "summary" }, null),
+        event(30, "thread.updated", { agentId: "codex", handoff: "summary" }, null),
       ],
       true,
     )
@@ -234,10 +234,10 @@ describe("turn rendering", () => {
       event(1, "run.started", { text: "go" }),
       event(2, "tool.started", { id: "b1", name: "Bash", input: { command: "make" } }),
       event(3, "tool.completed", { id: "b1", name: "Bash", output: "boom", isError: true }),
-      event(4, "run.failed", { message: "provider crashed" }),
+      event(4, "run.failed", { message: "agent crashed" }),
     ]
     renderList(failed)
-    expect(screen.getByRole("alert").textContent).toBe("provider crashed")
+    expect(screen.getByRole("alert").textContent).toBe("agent crashed")
     expect(screen.getByRole("button", { name: /终端/ })).toBeTruthy()
     cleanup()
     renderList([
@@ -276,7 +276,7 @@ describe("turn rendering", () => {
   })
 
   it("draws a marker divider when the agent changes", () => {
-    renderList([...scriptedRun(), event(30, "thread.updated", { providerId: "codex" }, null)])
+    renderList([...scriptedRun(), event(30, "thread.updated", { agentId: "codex" }, null)])
     expect(screen.getByRole("separator").textContent).toBe("已切换到 codex")
   })
 })

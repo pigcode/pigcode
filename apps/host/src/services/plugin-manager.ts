@@ -83,8 +83,7 @@ export interface PluginSummary {
   displayName: string
   description: string | null
   version: string
-  /** 界面的插件种类还叫 provider：Agent 插件在这里报 `provider`，界面迁移（#34）时改成 `agent`。 */
-  kind: "provider" | "capability" | "ui" | "bundle"
+  kind: PluginKind
   enabled: boolean
   /** 随应用内置：可以停用，不能卸载。 */
   builtin: boolean
@@ -92,7 +91,7 @@ export interface PluginSummary {
   apiVersion: number
   /** 安装时需要展示给用户的权限列表。 */
   permissions: string[]
-  /** 插件声明提供的能力标识，用于冲突检测与展示。 */
+  /** 插件声明提供的服务标识，用于冲突检测与展示。 */
   provides: string[]
   /** 插件声明的贡献点，原样透传给界面展示。 */
   contributes: Record<string, unknown>
@@ -104,15 +103,15 @@ export interface PluginSummary {
 /** provides 冲突；code 供 RPC 调用方与界面识别，message 直接展示给用户。 */
 export class PluginConflictError extends Error {
   readonly code = "PROVIDES_CONFLICT"
-  /** 发生重复的能力标识。 */
-  readonly capability: string
-  /** 声明了同一能力的插件 id，按加载顺序排列。 */
+  /** 被重复声明的 provides 标识。 */
+  readonly service: string
+  /** 声明了同一标识的插件 id，按加载顺序排列。 */
   readonly pluginIds: string[]
 
-  constructor(capability: string, pluginIds: string[]) {
-    super(`PROVIDES_CONFLICT: ${capability} is provided by ${pluginIds.join(", ")}`)
+  constructor(service: string, pluginIds: string[]) {
+    super(`PROVIDES_CONFLICT: ${service} is provided by ${pluginIds.join(", ")}`)
     this.name = "PluginConflictError"
-    this.capability = capability
+    this.service = service
     this.pluginIds = pluginIds
   }
 }
@@ -125,11 +124,6 @@ function kindFromId(id: string): PluginKind {
   const separator = id.indexOf(".")
   const prefix = separator === -1 ? id : id.slice(0, separator)
   return PLUGIN_KINDS.find((kind) => kind === prefix) ?? "bundle"
-}
-
-/** 摘要里给界面的种类，见 PluginSummary.kind。 */
-function summaryKind(kind: PluginKind): PluginSummary["kind"] {
-  return kind === "agent" ? "provider" : kind
 }
 
 /** 插件列表文件名。 */
@@ -351,17 +345,17 @@ export async function uninstallPlugin(
 }
 
 /**
- * 汇总启用插件的 provides：能力标识 -> 声明它的插件 id。
+ * 汇总启用插件的 provides：服务标识 -> 声明它的插件 id。
  * manifest 不可用的条目没有可读声明，不参与冲突计算。
  */
 export function collectProvides(records: readonly PluginRecord[]): Map<string, string[]> {
   const provides = new Map<string, string[]>()
   for (const record of records) {
     if (record.disabled) continue
-    for (const capability of record.manifest?.pigcode.provides ?? []) {
-      const owners = provides.get(capability) ?? []
+    for (const service of record.manifest?.pigcode.provides ?? []) {
+      const owners = provides.get(service) ?? []
       owners.push(record.id)
-      provides.set(capability, owners)
+      provides.set(service, owners)
     }
   }
   return provides
@@ -370,19 +364,19 @@ export function collectProvides(records: readonly PluginRecord[]): Map<string, s
 /** 返回第一组重复的 provides；没有冲突时返回 null。 */
 function findProvidesConflict(
   provides: Map<string, string[]>,
-): { capability: string; pluginIds: string[] } | null {
-  for (const [capability, pluginIds] of provides) {
-    if (pluginIds.length > 1) return { capability, pluginIds }
+): { service: string; pluginIds: string[] } | null {
+  for (const [service, pluginIds] of provides) {
+    if (pluginIds.length > 1) return { service, pluginIds }
   }
   return null
 }
 
 /** 生成可展示给用户的冲突描述；插件自身的 provides 重复同样会命中。 */
-function describeConflict(provides: Map<string, string[]>, capabilities: string[]): string | null {
-  const conflicts = capabilities
-    .map((capability) => [capability, provides.get(capability) ?? []] as const)
+function describeConflict(provides: Map<string, string[]>, services: string[]): string | null {
+  const conflicts = services
+    .map((service) => [service, provides.get(service) ?? []] as const)
     .filter(([, pluginIds]) => pluginIds.length > 1)
-    .map(([capability, pluginIds]) => `${capability} is provided by ${pluginIds.join(", ")}`)
+    .map(([service, pluginIds]) => `${service} is provided by ${pluginIds.join(", ")}`)
   return conflicts.length > 0 ? `PROVIDES_CONFLICT: ${conflicts.join("; ")}` : null
 }
 
@@ -402,7 +396,7 @@ export async function setPluginEnabled(
   if (enabled) {
     const effective = records.map((item) => (item.id === id ? { ...item, disabled: false } : item))
     const conflict = findProvidesConflict(collectProvides(effective))
-    if (conflict) throw new PluginConflictError(conflict.capability, conflict.pluginIds)
+    if (conflict) throw new PluginConflictError(conflict.service, conflict.pluginIds)
   }
   const list = await readPluginList(env.profileDir)
   const existing = list.find((item) => item.id === id)
@@ -431,7 +425,7 @@ export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[
       displayName: manifest?.pigcode.displayName ?? manifest?.name ?? record.name,
       description: manifest?.description ?? null,
       version: manifest?.version ?? "0.0.0",
-      kind: summaryKind(manifest?.pigcode.kind ?? kindFromId(record.id)),
+      kind: manifest?.pigcode.kind ?? kindFromId(record.id),
       enabled: !record.disabled,
       builtin: record.builtin,
       apiVersion: manifest?.pigcode.apiVersion ?? 0,

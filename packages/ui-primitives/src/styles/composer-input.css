@@ -158,7 +158,7 @@
   opacity: 1;
 }
 
-/* ─── 模型胶囊：provider 或模型名 + 思考深度，菜单里分组切换 ─── */
+/* ─── 模型胶囊：agent 或模型名 + 思考深度，菜单里分组切换 ─── */
 .chip-btn.model-chip {
   gap: 6px;
   max-width: 300px;

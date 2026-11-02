@@ -59,13 +59,13 @@ export const projectSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
-/** 线程实体，保存会话级 provider 与模型的最近选择。 */
+/** 线程实体，保存会话级 Agent 与模型的最近选择。 */
 export const threadSchema = z.object({
   id: z.string().min(1),
   projectId: z.string().min(1),
   title: z.string().min(1),
-  defaultProviderId: z.string().min(1),
-  lastProviderId: z.string().nullable(),
+  defaultAgentId: z.string().min(1),
+  lastAgentId: z.string().nullable(),
   lastModelId: z.string().nullable(),
   permissionMode: permissionModeSchema,
   createdAt: z.string().datetime(),
@@ -141,8 +141,8 @@ export const pendingRequestSchema = z.object({
   threadId: z.string().min(1),
   runId: z.string().min(1),
   kind: z.enum(["approval", "question"]),
-  /** Agent 自己的请求 id；随订阅快照发给界面，字段名沿用旧名字，界面迁移（#34）时改名。 */
-  providerRequestId: z.string().nullable(),
+  /** Agent 自己的请求 id。 */
+  agentRequestId: z.string().nullable(),
   payload: z.unknown(),
   status: z.enum(["pending", "resolved", "orphaned"]),
   createdAt: z.string().datetime(),

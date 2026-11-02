@@ -1,7 +1,7 @@
 // Agent 设置页：默认 agent、已安装的 agent 列表（状态与启用开关），点开一项编辑它的设置。
 import { useState } from "react"
 import { Bot, ChevronDown, Plus, RefreshCw } from "lucide-react"
-import type { AgentSummary, ProviderSettingsValues, ProviderStatus } from "@pigcode/contracts"
+import type { AgentSummary, AgentSettingsValues, AgentStatus } from "@pigcode/contracts"
 import {
   Badge,
   Button,
@@ -24,21 +24,21 @@ import { agentHeadline } from "./agent-status"
 /** Agent 页的数据与操作；操作失败时抛错，页面展示原因。 */
 export interface AgentsPageProps {
   agents: readonly AgentSummary[]
-  defaultProviderId: string | null
-  /** 按 provider id 的检测结果；缺少表示还在检测。 */
-  statuses: Readonly<Record<string, ProviderStatus | undefined>>
+  defaultAgentId: string | null
+  /** 按 agent id 的检测结果；缺少表示还在检测。 */
+  statuses: Readonly<Record<string, AgentStatus | undefined>>
   detecting?: boolean
   onDetect: () => Promise<void>
   onSetEnabled: (agent: AgentSummary, enabled: boolean) => Promise<void>
-  onSaveSettings: (agent: AgentSummary, values: ProviderSettingsValues) => Promise<void>
-  onSetDefault: (providerId: string | null) => Promise<void>
+  onSaveSettings: (agent: AgentSummary, values: AgentSettingsValues) => Promise<void>
+  onSetDefault: (agentId: string | null) => Promise<void>
   onInstall: (spec: string) => Promise<void>
   onUninstall: (agent: AgentSummary) => Promise<void>
   onPickPath?: PickPath | undefined
   onOpenExternal?: ((url: string) => void) | undefined
 }
 
-/** 「自动」在 Select 里的值；provider id 不会以冒号开头。 */
+/** 「自动」在 Select 里的值；agent id 不会以冒号开头。 */
 const AUTO = ":auto"
 
 /** 列表里的一行：头像、名称、徽标、状态与启用开关；整行可点开编辑区。 */
@@ -51,7 +51,7 @@ function AgentRow({
   onSetEnabled,
 }: {
   agent: AgentSummary
-  status: ProviderStatus | undefined
+  status: AgentStatus | undefined
   expanded: boolean
   pending: boolean
   onToggle: () => void
@@ -69,7 +69,7 @@ function AgentRow({
         "aria-label": t("agents.expand").replace("{agent}", agent.displayName),
         onClick: onToggle,
       }}
-      leading={<EntityAvatar id={agent.providerId} name={agent.displayName} />}
+      leading={<EntityAvatar id={agent.agentId} name={agent.displayName} />}
       title={
         <span className="ext-row-title">
           <span className="truncate">{agent.displayName}</span>
@@ -104,7 +104,7 @@ function AgentRow({
 /** 渲染 Agent 设置页。 */
 export function AgentsPage({
   agents,
-  defaultProviderId,
+  defaultAgentId,
   statuses,
   detecting = false,
   onDetect,
@@ -123,8 +123,8 @@ export function AgentsPage({
   const [error, setError] = useState<string | null>(null)
   const selectable = agents.filter((agent) => agent.enabled && agent.registered)
   // 默认 agent 停用或不在了时，新会话按“自动”挑选；选择框显示实际生效的那一项。
-  const effectiveDefault = selectable.some((agent) => agent.providerId === defaultProviderId)
-    ? defaultProviderId
+  const effectiveDefault = selectable.some((agent) => agent.agentId === defaultAgentId)
+    ? defaultAgentId
     : null
 
   async function run(key: string, action: () => Promise<void>): Promise<void> {
@@ -142,7 +142,7 @@ export function AgentsPage({
 
   return (
     <SettingPage
-      title={t("settings.providers")}
+      title={t("settings.agents")}
       sub={t("agents.sub")}
       actions={
         <>
@@ -182,7 +182,7 @@ export function AgentsPage({
                 {(value: string) =>
                   value === AUTO
                     ? t("agents.default.auto")
-                    : (agents.find((agent) => agent.providerId === value)?.displayName ?? value)
+                    : (agents.find((agent) => agent.agentId === value)?.displayName ?? value)
                 }
               </Select.Value>
               <ChevronDown className="ic ic-sm" aria-hidden="true" />
@@ -194,7 +194,7 @@ export function AgentsPage({
                     <Select.ItemText>{t("agents.default.auto")}</Select.ItemText>
                   </Select.Item>
                   {selectable.map((agent) => (
-                    <Select.Item key={agent.providerId} value={agent.providerId}>
+                    <Select.Item key={agent.agentId} value={agent.agentId}>
                       <Select.ItemText>{agent.displayName}</Select.ItemText>
                     </Select.Item>
                   ))}
@@ -224,27 +224,27 @@ export function AgentsPage({
         ) : (
           <div className="group ext-list">
             {agents.map((agent) => {
-              const open = expanded === agent.providerId
+              const open = expanded === agent.agentId
               return (
-                <div className="ext-item" key={agent.providerId}>
+                <div className="ext-item" key={agent.agentId}>
                   <AgentRow
                     agent={agent}
-                    status={statuses[agent.providerId]}
+                    status={statuses[agent.agentId]}
                     expanded={open}
-                    pending={pending === agent.providerId}
-                    onToggle={() => setExpanded(open ? null : agent.providerId)}
+                    pending={pending === agent.agentId}
+                    onToggle={() => setExpanded(open ? null : agent.agentId)}
                     onSetEnabled={(enabled) =>
-                      void run(agent.providerId, () => onSetEnabled(agent, enabled))
+                      void run(agent.agentId, () => onSetEnabled(agent, enabled))
                     }
                   />
                   {open ? (
                     <AgentEditor
                       agent={agent}
-                      status={statuses[agent.providerId]}
+                      status={statuses[agent.agentId]}
                       onSave={(values) => onSaveSettings(agent, values)}
                       onUninstall={
                         agent.pluginId && !agent.builtin
-                          ? () => run(agent.providerId, () => onUninstall(agent))
+                          ? () => run(agent.agentId, () => onUninstall(agent))
                           : undefined
                       }
                       onPickPath={onPickPath}

@@ -2,7 +2,7 @@
  * 英文界面：用 en-US 走一遍视觉用例覆盖的所有界面（流程见 visual/screens.ts），不截图，只收集每一步
  * 页面上的文字（document.body.innerText 与 aria-label、title、placeholder），要求里面没有汉字。
  *
- * 用户内容不算：项目、提示词和会话标题本来就没有汉字；fake provider 的 showcase 脚本是 agent 的回答，
+ * 用户内容不算：项目、提示词和会话标题本来就没有汉字；fake agent 的 showcase 脚本是 agent 的回答，
  * 按已知字符串排除——页面上每一段连续的汉字都必须和脚本里的某一段完全相同。脚本里和中文界面文案相同的
  * 片段（比如「文件」「新建」）只在整行都是脚本里的一行时才算用户内容，所以界面文案漏翻时不会被放过。
  */

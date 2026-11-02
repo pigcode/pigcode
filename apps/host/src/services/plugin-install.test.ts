@@ -60,37 +60,37 @@ describe("plugin install", () => {
     const calls: string[][] = []
     const runner: PnpmRunner = async (args) => {
       calls.push(args)
-      await writeNpmInstall(profileDir, "pigcode-provider-echo")
+      await writeNpmInstall(profileDir, "pigcode-agent-echo")
     }
 
-    const entry = await installPlugin(profileDir, "pigcode-provider-echo@0.1.0", runner)
+    const entry = await installPlugin(profileDir, "pigcode-agent-echo@0.1.0", runner)
 
-    expect(calls[0]).toEqual(["add", "pigcode-provider-echo@0.1.0", "--dir", profileDir])
+    expect(calls[0]).toEqual(["add", "pigcode-agent-echo@0.1.0", "--dir", profileDir])
     expect(entry).toEqual({
-      id: "agent.pigcode-provider-echo",
-      name: "pigcode-provider-echo",
+      id: "agent.pigcode-agent-echo",
+      name: "pigcode-agent-echo",
       config: {},
       disabled: false,
     })
     expect((await listPlugins(profileDir)).map((plugin) => plugin.name)).toEqual([
-      "pigcode-provider-echo",
+      "pigcode-agent-echo",
     ])
   })
 
   it("installs a tarball through pnpm instead of copying it", async () => {
     const profileDir = await mkdtemp(join(tmpdir(), "pigcode-install-"))
-    const tarball = join(profileDir, "pigcode-provider-echo-0.1.0.tgz")
+    const tarball = join(profileDir, "pigcode-agent-echo-0.1.0.tgz")
     await writeFile(tarball, "")
     const calls: string[][] = []
     const runner: PnpmRunner = async (args) => {
       calls.push(args)
-      await writeNpmInstall(profileDir, "pigcode-provider-echo")
+      await writeNpmInstall(profileDir, "pigcode-agent-echo")
     }
 
     const entry = await installPlugin(profileDir, tarball, runner)
 
     expect(calls[0]).toEqual(["add", tarball, "--dir", profileDir])
-    expect(entry.name).toBe("pigcode-provider-echo")
+    expect(entry.name).toBe("pigcode-agent-echo")
   })
 
   it("copies a local directory installed with the file: prefix", async () => {
@@ -147,22 +147,22 @@ describe("plugin install", () => {
           version: "0.0.0",
           private: true,
           dependencies: {
-            "pigcode-provider-echo": "0.1.0",
+            "pigcode-agent-echo": "0.1.0",
             "zzz-existing": "1.0.0",
           },
         }),
       )
-      const target = join(profileDir, "node_modules", "pigcode-provider-echo")
+      const target = join(profileDir, "node_modules", "pigcode-agent-echo")
       await mkdir(target, { recursive: true })
       await writeFile(
         join(target, "package.json"),
-        JSON.stringify(agentManifest("pigcode-provider-echo")),
+        JSON.stringify(agentManifest("pigcode-agent-echo")),
       )
       await writeFile(join(target, "index.mjs"), "export function apply() {}\n")
     }
 
-    const entry = await installPlugin(profileDir, "pigcode-provider-echo@0.1.0", runner)
+    const entry = await installPlugin(profileDir, "pigcode-agent-echo@0.1.0", runner)
 
-    expect(entry.name).toBe("pigcode-provider-echo")
+    expect(entry.name).toBe("pigcode-agent-echo")
   })
 })

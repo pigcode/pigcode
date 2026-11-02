@@ -73,7 +73,7 @@ test("agents are plugins with settings that reach the composer", async () => {
 
     // 从对话框安装 echo agent，再卸载。
     await page.getByRole("button", { name: "安装 agent" }).click()
-    const echo = new URL("../../../examples/provider-echo", import.meta.url).pathname
+    const echo = new URL("../../../examples/agent-echo", import.meta.url).pathname
     await page.getByRole("textbox", { name: "npm 包或插件目录" }).fill(echo)
     await page.getByRole("dialog").getByRole("button", { name: "安装", exact: true }).click()
     const echoRow = list.locator(".ext-row").filter({ hasText: "Echo" })
@@ -113,9 +113,7 @@ test("projects, threads and agent settings survive a restart", async () => {
     await page.locator(".tiptap").click()
     await page.keyboard.type("remember me")
     await page.keyboard.press("Enter")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
     await openAgents(page)
     await page.getByRole("button", { name: "展开 Claude Code 的设置" }).click()
     await page.getByRole("textbox", { name: "启动参数" }).fill("--chrome")

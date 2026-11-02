@@ -164,9 +164,7 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     await page.locator(".tiptap").click()
     await page.keyboard.type("hello")
     await page.keyboard.press("Enter")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
     await page.getByRole("button", { name: "显示文件树" }).click()
     await expect(row(page, ".file-surface-aside", "NEW_FROM_AGENT.md")).toBeVisible()
     await page.getByRole("button", { name: "隐藏文件树" }).click()
@@ -220,9 +218,7 @@ test("closing the window with unsaved file changes asks first", async () => {
     await page.locator(".tiptap").click()
     await page.keyboard.type("still there?")
     await page.keyboard.press("Enter")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
 
     // 关窗口时选「放弃修改」：应用退出，磁盘上的文件没被改动。
     const exit = new Promise((resolve) => app.process().once("exit", resolve))

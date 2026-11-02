@@ -1,6 +1,6 @@
 /**
  * agent 提问：时间线里出现提问卡片，选好后提交，agent 按回答继续；回答过的提问留在工作区里，
- * 是一行「已询问」（fake provider）。
+ * 是一行「已询问」（fake agent）。
  */
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"

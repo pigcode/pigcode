@@ -35,7 +35,7 @@ export interface ShellProps {
   activeThreadId: string | null
   /** 线程运行状态；用于侧栏的状态点。 */
   threadStatus?: Record<string, ThreadStatus>
-  /** agent 的显示名，按 provider id；侧栏会话行的 agent 缩写由它得出。 */
+  /** agent 的显示名，按 agent id；侧栏会话行的 agent 缩写由它得出。 */
   agentNames?: Readonly<Record<string, string>>
   expandedProjects?: Record<string, boolean>
   sidebarOpen?: boolean

@@ -17,7 +17,7 @@ import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
 /** 仓库内的 echo 样例目录；测试按安装路径复制，走真实的本地安装流程。 */
-const ECHO_SOURCE = fileURLToPath(new URL("../../../../examples/provider-echo", import.meta.url))
+const ECHO_SOURCE = fileURLToPath(new URL("../../../../examples/agent-echo", import.meta.url))
 
 /** 创建带 loader、agents 与 plugins 服务的 Host 测试上下文。 */
 async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {

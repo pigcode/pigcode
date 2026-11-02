@@ -1,6 +1,6 @@
 /**
  * Agent（由 Agent 插件接入）的设置字段、检测状态与设置页摘要；Host、插件与界面共用。
- * 设置字段由插件在 manifest 的 `contributes.provider.settings` 里声明，界面据此生成表单，
+ * 设置字段由插件在 manifest 的 `contributes.agent.settings` 里声明，界面据此生成表单，
  * Host 原样保存用户填的值，并在检测、读取模型目录和创建会话时交给 driver。
  */
 import { z } from "zod"
@@ -118,9 +118,9 @@ export const agentStatusSchema = z.object({
 /** @deprecated use agentStatusSchema */
 export const providerStatusSchema = agentStatusSchema
 
-/** 设置页里的一个 agent：插件信息、能力、设置字段与当前值。 */
+/** 设置页里的一个 agent：插件信息、Agent 功能、设置字段与当前值。 */
 export const agentSummarySchema = z.object({
-  providerId: z.string().min(1),
+  agentId: z.string().min(1),
   displayName: z.string().min(1),
   /** 提供它的插件；Host 自带的开发用 agent（fake）为 null。 */
   pluginId: z.string().nullable(),
@@ -130,7 +130,8 @@ export const agentSummarySchema = z.object({
   enabled: z.boolean(),
   /** driver 已注册；插件启用但加载失败时为 false。 */
   registered: z.boolean(),
-  capabilities: agentFeaturesSchema.nullable(),
+  /** Agent 功能；driver 没注册时为 null。 */
+  features: agentFeaturesSchema.nullable(),
   description: localizedTextSchema.nullable(),
   homepage: z.string().nullable(),
   installHint: localizedTextSchema.nullable(),
@@ -144,7 +145,7 @@ export const agentSummarySchema = z.object({
 export const agentListSchema = z.object({
   agents: z.array(agentSummarySchema),
   /** 用户选择的默认 agent；为 null 时 Host 自动挑选第一个可用的。 */
-  defaultProviderId: z.string().nullable(),
+  defaultAgentId: z.string().nullable(),
 })
 
 export type LocalizedText = z.infer<typeof localizedTextSchema>

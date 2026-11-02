@@ -13,7 +13,7 @@ function launchEnv(): Record<string, string> {
 }
 
 test("keeps background runs alive across threads", async () => {
-  // fake provider 增加延迟，保证切换线程时仍能观察第一个线程的运行状态。
+  // fake agent 增加延迟，保证切换线程时仍能观察第一个线程的运行状态。
   const projectRoot = "/tmp/pigcode-m5-e2e"
   rmSync(projectRoot, { recursive: true, force: true })
   mkdirSync(projectRoot, { recursive: true })
@@ -21,7 +21,7 @@ test("keeps background runs alive across threads", async () => {
     args: ["."],
     env: {
       ...launchEnv(),
-      PIGCODE_PROVIDER: "fake",
+      PIGCODE_AGENT: "fake",
       PIGCODE_FAKE_DELAY_MS: "800",
     },
   })
@@ -58,9 +58,7 @@ test("keeps background runs alive across threads", async () => {
     await row("hello one").click()
     await expect(row("hello one")).toHaveAttribute("aria-current", "page")
     await expect(page.locator(".msg-user").filter({ hasText: "hello one" })).toBeVisible()
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toBeVisible()
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
 
     // 切回第二个线程，确认它自己的结果与状态，并且还能继续发送。
     await row("hello two").click()
@@ -69,9 +67,9 @@ test("keeps background runs alive across threads", async () => {
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
     await page.getByRole("textbox").fill("hello three")
     await page.keyboard.press("Enter")
-    await expect(
-      page.locator(".msg-ai").filter({ hasText: "Hello from fake provider" }),
-    ).toHaveCount(2)
+    await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toHaveCount(
+      2,
+    )
   } finally {
     await app.close()
   }

@@ -1,4 +1,4 @@
-/** M4 验收：安装/启用/停用第三方 provider、UI、capability 插件。 */
+/** M4 验收：安装/启用/停用第三方 Agent、UI、Capability 插件。 */
 import { mkdirSync, rmSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { addProject, installPlugin } from "./projects"
@@ -13,28 +13,28 @@ test("installs, enables, and disables plugins without restart", async () => {
       (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   )
-  const app = await electron.launch({ args: ["."], env: { ...env, PIGCODE_PROVIDER: "echo" } })
+  const app = await electron.launch({ args: ["."], env: { ...env, PIGCODE_AGENT: "echo" } })
   const page = await app.firstWindow()
-  // 安装 provider 插件
+  // 安装 Agent 插件
   await addProject(app, page, projectRoot)
   await page.getByRole("button", { name: "设置", exact: true }).click()
   await page.getByRole("button", { name: "插件", exact: true }).first().click()
-  const provider = new URL("../../../examples/provider-echo", import.meta.url).pathname
-  await installPlugin(page, provider)
-  const echo = page.locator(".ext-item").filter({ hasText: "pigcode-provider-echo" })
+  const agent = new URL("../../../examples/agent-echo", import.meta.url).pathname
+  await installPlugin(page, agent)
+  const echo = page.locator(".ext-item").filter({ hasText: "pigcode-agent-echo" })
   await expect(echo).toBeVisible()
   await expect(echo.getByRole("switch")).toBeChecked()
   // 设置页的侧栏和内容区各有一个返回入口，取侧栏那个。
   await page.getByRole("button", { name: "返回应用" }).first().click()
 
-  // 新建会话，默认 provider 由 PIGCODE_PROVIDER=echo 强制
+  // 新建会话，默认 agent 由 PIGCODE_AGENT=echo 强制
   await page.getByRole("button", { name: "新会话" }).first().click()
   // 线程创建是异步 RPC；等 composer 可编辑后再输入。
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await page.getByRole("textbox").fill("hello echo")
   await page.keyboard.press("Enter")
   await expect(page.locator(".msg-user").filter({ hasText: "hello echo" })).toBeVisible()
-  // echo provider 把输入原样回传，确认插件 provider 真的接管了这次 run。
+  // echo agent 把输入原样回传，确认插件提供的 agent 真的接管了这次 run。
   await expect(page.locator(".msg-ai").filter({ hasText: "hello echo" })).toBeVisible()
 
   // 安装 UI 插件，面板出现；停用后消失

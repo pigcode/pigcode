@@ -10,7 +10,7 @@ test("chat, plugin panel, and reconnect", async () => {
   )
   const app = await electron.launch({
     args: ["."],
-    env: { ...env, PIGCODE_PROVIDER: "fake" },
+    env: { ...env, PIGCODE_AGENT: "fake" },
   })
   const page = await app.firstWindow()
   await addProject(app, page, "/tmp/pigcode-m0b")
@@ -23,7 +23,7 @@ test("chat, plugin panel, and reconnect", async () => {
   await page.getByRole("textbox").fill("hello")
   await page.keyboard.press("Enter")
   await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
-  await expect(page.getByText("Hello from fake provider")).toBeVisible()
+  await expect(page.getByText("Hello from fake agent")).toBeVisible()
 
   await page.getByRole("button", { name: "设置", exact: true }).click()
   // 窗口侧栏与设置页各自有一套分区导航，取窗口侧栏的入口。

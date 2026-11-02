@@ -10,7 +10,7 @@ describe("entityMark", () => {
   it("gives Claude Code and Codex two distinct letters", () => {
     expect(entityMark("claude", "Claude Code").initials).toBe("CC")
     expect(entityMark("codex", "Codex").initials).toBe("CO")
-    expect(entityMark("fake", "Fake Provider").initials).toBe("FP")
+    expect(entityMark("fake", "Fake Agent").initials).toBe("FA")
   })
 
   it("splits on spaces, dashes, underscores and punctuation", () => {

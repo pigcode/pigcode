@@ -5,9 +5,9 @@ import {
   CUSTOM_MODELS_KEY,
   localizeText,
   type AgentSummary,
-  type ProviderSettingField,
-  type ProviderSettingsValues,
-  type ProviderStatus,
+  type AgentSettingField,
+  type AgentSettingsValues,
+  type AgentStatus,
 } from "@pigcode/contracts"
 import { Badge, Button, useLocale } from "@pigcode/ui-primitives"
 import {
@@ -18,13 +18,13 @@ import {
   readEnvironment,
   type PickPath,
 } from "./agent-fields"
-import { capabilityKeys } from "./capabilities"
+import { agentFeatureKeys } from "./agent-features"
 
 /** 编辑区需要的回调；保存失败时抛错，由编辑区展示原因。 */
 export interface AgentEditorProps {
   agent: AgentSummary
-  status: ProviderStatus | undefined
-  onSave: (values: ProviderSettingsValues) => Promise<void>
+  status: AgentStatus | undefined
+  onSave: (values: AgentSettingsValues) => Promise<void>
   onUninstall?: (() => Promise<void>) | undefined
   onPickPath?: PickPath | undefined
   /** 打开外部链接（官网）；没有时不显示链接。 */
@@ -35,11 +35,8 @@ export interface AgentEditorProps {
  * 保存前整理：去掉没填名字的环境变量行，其余原样交给 Host 规范化。
  * 有不合法的变量名时返回 null，编辑区提示后不提交。
  */
-function cleanValues(
-  agent: AgentSummary,
-  values: ProviderSettingsValues,
-): ProviderSettingsValues | null {
-  const next: ProviderSettingsValues = { ...values }
+function cleanValues(agent: AgentSummary, values: AgentSettingsValues): AgentSettingsValues | null {
+  const next: AgentSettingsValues = { ...values }
   for (const field of agent.fields) {
     if (field.type !== "env" || values[field.key] === undefined) continue
     const entries = finalEnvironment(values[field.key])
@@ -50,8 +47,8 @@ function cleanValues(
 }
 
 /** 两份设置是否相同；对象键顺序不影响结果。 */
-function sameValues(left: ProviderSettingsValues, right: ProviderSettingsValues): boolean {
-  const normalize = (values: ProviderSettingsValues) =>
+function sameValues(left: AgentSettingsValues, right: AgentSettingsValues): boolean {
+  const normalize = (values: AgentSettingsValues) =>
     JSON.stringify(
       Object.keys(values)
         .sort()
@@ -60,7 +57,7 @@ function sameValues(left: ProviderSettingsValues, right: ProviderSettingsValues)
   return normalize(left) === normalize(right)
 }
 
-function customModelsOf(values: ProviderSettingsValues): string[] {
+function customModelsOf(values: AgentSettingsValues): string[] {
   const models = values[CUSTOM_MODELS_KEY]
   return Array.isArray(models)
     ? models.filter((item): item is string => typeof item === "string")
@@ -77,7 +74,7 @@ export function AgentEditor({
   onOpenExternal,
 }: AgentEditorProps) {
   const { locale, t } = useLocale()
-  const [draft, setDraft] = useState<ProviderSettingsValues>(agent.values)
+  const [draft, setDraft] = useState<AgentSettingsValues>(agent.values)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [confirmUninstall, setConfirmUninstall] = useState(false)
@@ -87,7 +84,7 @@ export function AgentEditor({
 
   const dirty = useMemo(() => !sameValues(draft, agent.values), [draft, agent.values])
   const runtimeFields = agent.fields.filter(
-    (field): field is Exclude<ProviderSettingField, { type: "env" }> => field.type !== "env",
+    (field): field is Exclude<AgentSettingField, { type: "env" }> => field.type !== "env",
   )
   const envFields = agent.fields.filter((field) => field.type === "env")
   const set = (key: string, value: unknown) => {
@@ -214,16 +211,13 @@ export function AgentEditor({
         </section>
       ) : null}
 
-      {agent.capabilities ? (
-        <section className="agent-section" aria-label={t("agents.capabilities")}>
-          <h3>{t("agents.capabilities")}</h3>
-          <div className="cap-list">
-            {capabilityKeys.map((capability) => (
-              <Badge
-                key={capability.key}
-                variant={agent.capabilities?.[capability.key] ? "ok" : "neutral"}
-              >
-                {t(capability.labelKey)}
+      {agent.features ? (
+        <section className="agent-section" aria-label={t("agents.features")}>
+          <h3>{t("agents.features")}</h3>
+          <div className="agent-feature-list">
+            {agentFeatureKeys.map((feature) => (
+              <Badge key={feature.key} variant={agent.features?.[feature.key] ? "ok" : "neutral"}>
+                {t(feature.labelKey)}
               </Badge>
             ))}
           </div>

@@ -10,7 +10,7 @@ import {
 import { Icon } from "./icon"
 
 /** 设置页的分区。 */
-export type SettingsSection = "general" | "appearance" | "providers" | "schedules" | "plugins"
+export type SettingsSection = "general" | "appearance" | "agents" | "schedules" | "plugins"
 
 interface SettingsNavItem {
   id: SettingsSection
@@ -22,7 +22,7 @@ interface SettingsNavItem {
 const settingsNav: SettingsNavItem[] = [
   { id: "general", icon: "toggle", labelKey: "settings.general" },
   { id: "appearance", icon: "contrast", labelKey: "settings.appearance" },
-  { id: "providers", icon: "server", labelKey: "settings.providers" },
+  { id: "agents", icon: "server", labelKey: "settings.agents" },
   { id: "schedules", icon: "clock", labelKey: "settings.schedules" },
   { id: "plugins", icon: "cube", labelKey: "settings.plugins" },
 ]

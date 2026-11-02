@@ -32,7 +32,7 @@ export function LocaleProvider({ locale, children }: { locale: Locale; children:
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>
 }
 
-/** 读取当前 locale；未挂 provider 时抛错。 */
+/** 读取当前 locale；外面没有 LocaleProvider 时抛错。 */
 export function useLocale(): LocaleValue {
   const value = useContext(LocaleContext)
   if (!value) throw new Error("useLocale must be used inside LocaleProvider")

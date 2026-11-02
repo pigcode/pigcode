@@ -1,4 +1,4 @@
-/** 定义持久线程事件、规范化 provider 事件和订阅快照。 */
+/** 定义持久线程事件、规范化 Agent 事件和订阅快照。 */
 import { z } from "zod"
 
 /** 持久线程事件的类型枚举。 */
@@ -78,7 +78,7 @@ export const agentEventSchema = z.discriminatedUnion("type", [
     name: z.string(),
     output: z.unknown(),
     isError: z.boolean(),
-    /** 命令类工具的退出码；provider 不报告时缺省。 */
+    /** 命令类工具的退出码；Agent 不报告时缺省。 */
     exitCode: z.number().int().nullable().optional(),
     parentToolUseId: z.string().optional(),
   }),

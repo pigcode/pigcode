@@ -3,7 +3,7 @@
  * 右上角浮着状态面板，离开底部时出现圆形的「滚动到底部」按钮。
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import type { ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
+import type { AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
 import { ArrowDown, ArrowLeft, Ellipsis, PanelRight } from "lucide-react"
 import {
   Composer,
@@ -24,8 +24,8 @@ import { ThreadTabs, type ThreadTabsProps } from "./thread-tabs"
 import { TurnNavigator } from "./turn-navigator"
 import { buildTimeline } from "./turns"
 
-/** 线程头切换入口需要的 provider 展示信息。 */
-export interface ProviderOption {
+/** 线程头切换入口需要的 agent 展示信息。 */
+export interface AgentOption {
   id: string
   displayName: string
 }
@@ -45,14 +45,14 @@ export interface ChatViewProps {
   onSubmit?: (text: string, options: ComposerSubmitOptions) => void
   onInterrupt?: () => void
   onApproval?: (requestId: string, decision: ApprovalDecision) => void
-  /** 当前 provider 的能力；未提供时按全部可用处理，保持旧行为。 */
-  capabilities?: ProviderCapabilities | null
+  /** 当前 agent 的 Agent 功能；未提供时按全部可用处理，保持旧行为。 */
+  features?: AgentFeatures | null
   /** 可选的 agent；输入框的模型选择器按 agent 分组列出各自的模型。 */
   agents?: readonly ComposerAgent[]
   /** 各 agent 的模型目录；选择器展开到某个 agent 时通过 onLoadModels 懒加载。 */
   catalog?: ComposerModelCatalog
   onLoadModels?: (agentId: string) => void
-  /** 切换 agent 与模型；容器应调用 thread.switchProvider。 */
+  /** 切换 agent 与模型；容器应调用 thread.switchAgent。 */
   onSelectModel?: (agentId: string, modelId: string) => void
   /** 修改线程权限模式；容器应调用 thread.setPermissionMode。 */
   onPermissionMode?: (mode: PermissionMode) => void
@@ -115,7 +115,7 @@ export function ChatView({
   onSubmit,
   onInterrupt,
   onApproval,
-  capabilities = null,
+  features = null,
   agents = [],
   catalog = {},
   onLoadModels,
@@ -142,10 +142,10 @@ export function ChatView({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const threadRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
-  // capability 为 false 时隐藏对应控件；未加载能力时保持旧行为。
-  const canInterrupt = capabilities?.streaming ?? true
-  const canPlan = capabilities?.plan ?? true
-  const canApprove = capabilities?.approvals ?? true
+  // Agent 功能为 false 时隐藏对应控件；还没读到 Agent 功能时保持旧行为。
+  const canInterrupt = features?.streaming ?? true
+  const canPlan = features?.plan ?? true
+  const canApprove = features?.approvals ?? true
   // 事件数组只在有新事件时变化；流式增量不触发这些整表扫描。
   const visibleEvents = useMemo(
     () =>
@@ -163,14 +163,14 @@ export function ChatView({
     () => buildTimeline(visibleEvents, streaming),
     [visibleEvents, streaming],
   )
-  const providerId = thread?.lastProviderId ?? thread?.defaultProviderId ?? null
+  const agentId = thread?.lastAgentId ?? thread?.defaultAgentId ?? null
   const modelId = thread?.lastModelId ?? null
   const agentName = useCallback(
     (agentId: string) => agents.find((agent) => agent.id === agentId)?.label ?? agentId,
     [agents],
   )
   const environment: EnvironmentInfo = {
-    providerId: providerId ?? t("chat.environment.unknown"),
+    agentId: agentId ?? t("chat.environment.unknown"),
     cwd,
     modelId,
     permissionMode: thread?.permissionMode ?? "workspace-write",
@@ -308,7 +308,7 @@ export function ChatView({
             autoFocus={Boolean(thread) && visibleEvents.length === 0 && !running}
             draftKey={thread?.id ?? null}
             agents={agents}
-            agentId={providerId}
+            agentId={agentId}
             modelId={modelId}
             catalog={catalog}
             {...(onLoadModels ? { onLoadModels } : {})}

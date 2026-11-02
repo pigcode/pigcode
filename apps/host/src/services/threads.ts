@@ -52,8 +52,8 @@ export const apply: ThreadsPlugin = (ctx) => {
         id: `th_${randomUUID()}`,
         projectId,
         title,
-        defaultProviderId: agentId,
-        lastProviderId: null,
+        defaultAgentId: agentId,
+        lastAgentId: null,
         lastModelId: null,
         permissionMode: "workspace-write",
         createdAt: now,
@@ -73,8 +73,8 @@ export const apply: ThreadsPlugin = (ctx) => {
           thread.id,
           thread.projectId,
           thread.title,
-          thread.defaultProviderId,
-          thread.lastProviderId,
+          thread.defaultAgentId,
+          thread.lastAgentId,
           thread.lastModelId,
           thread.permissionMode,
           thread.createdAt,
@@ -143,18 +143,15 @@ export const apply: ThreadsPlugin = (ctx) => {
 
 apply.inject = inject
 
-/**
- * 把 threads 表的行映射为领域对象。列名是 default_agent_id / last_agent_id，Thread 的字段名
- * 沿用旧名字（defaultProviderId / lastProviderId），因为它随 RPC 发给界面，界面迁移（#34）时改名。
- */
+/** 把 threads 表的行映射为领域对象。 */
 function mapThread(row: unknown): Thread {
   const value = row as Record<string, string | null>
   return {
     id: value.id!,
     projectId: value.project_id!,
     title: value.title!,
-    defaultProviderId: value.default_agent_id!,
-    lastProviderId: value.last_agent_id ?? null,
+    defaultAgentId: value.default_agent_id!,
+    lastAgentId: value.last_agent_id ?? null,
     lastModelId: value.last_model_id ?? null,
     permissionMode: value.permission_mode as Thread["permissionMode"],
     createdAt: value.created_at!,

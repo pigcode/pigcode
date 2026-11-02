@@ -1,4 +1,4 @@
-/** 把线程事件的 payload 解析成时间线组件需要的结构；字段名兼容各 provider 的变体。 */
+/** 把线程事件的 payload 解析成时间线组件需要的结构；字段名兼容各 Agent 的变体。 */
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { ApprovalDecision, ApprovalRequest } from "./approval-card"
 import type { QuestionRequestView, QuestionView } from "./question-card"

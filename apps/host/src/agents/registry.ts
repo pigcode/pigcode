@@ -156,7 +156,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       threadId,
       runId,
       kind: "approval",
-      providerRequestId: null,
+      agentRequestId: null,
       payload: request,
       createdAt: new Date().toISOString(),
     })
@@ -313,7 +313,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       if (!thread) throw new Error(`thread not found: ${threadId}`)
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
       // 切换后使用线程最近选择的 Agent，未切换过时回退到创建时的默认值。
-      const agentId = thread.lastProviderId ?? thread.defaultProviderId
+      const agentId = thread.lastAgentId ?? thread.defaultAgentId
       const driver = drivers.get(agentId)
       if (!driver) throw new Error(`agent not found: ${agentId}`)
       const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns

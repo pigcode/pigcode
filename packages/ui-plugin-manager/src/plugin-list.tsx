@@ -15,7 +15,7 @@ import {
 } from "@pigcode/ui-primitives"
 
 /** 插件类型，与 Host 的 boot graph 保持一致。 */
-export type PluginKind = "provider" | "capability" | "ui" | "bundle"
+export type PluginKind = "agent" | "capability" | "ui" | "bundle"
 
 /** 插件管理页展示的插件摘要；字段与 Host 的 PluginSummary 对齐。 */
 export interface PluginSummary {
@@ -33,7 +33,7 @@ export interface PluginSummary {
   apiVersion: number
   /** 安装时需要展示给用户的权限列表。 */
   permissions: string[]
-  /** 插件声明提供的能力标识，用于冲突检测与展示。 */
+  /** 插件声明提供的服务标识，用于冲突检测与展示。 */
   provides: string[]
   /** 插件声明的贡献点，原样透传。 */
   contributes: Record<string, unknown>
@@ -44,7 +44,7 @@ export interface PluginSummary {
 
 /** 类型的本地化文案。 */
 const kindKeys: Record<PluginKind, MessageKey> = {
-  provider: "plugins.kind.provider",
+  agent: "plugins.kind.agent",
   capability: "plugins.kind.capability",
   ui: "plugins.kind.ui",
   bundle: "plugins.kind.bundle",

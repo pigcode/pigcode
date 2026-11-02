@@ -10,7 +10,7 @@ export function createCommands(client: RpcClient) {
       client.call("project.add", name ? { rootPath, name } : { rootPath }) as Promise<Project>,
     listThreads: (projectId?: string) =>
       client.call("thread.list", { projectId }) as Promise<Thread[]>,
-    createThread: (projectId: string, title: string, providerId: string) =>
-      client.call("thread.create", { projectId, title, providerId }) as Promise<Thread>,
+    createThread: (projectId: string, title: string, agentId: string) =>
+      client.call("thread.create", { projectId, title, agentId }) as Promise<Thread>,
   }
 }

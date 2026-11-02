@@ -3,14 +3,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { AgentSummary, ProviderStatus } from "@pigcode/contracts"
+import type { AgentSummary, AgentStatus } from "@pigcode/contracts"
 import { LocaleProvider, entityMark } from "@pigcode/ui-primitives"
 import { AgentsPage, type AgentsPageProps } from "./agents-page"
 import { agentHeadline } from "./agent-status"
 
 afterEach(cleanup)
 
-const CAPABILITIES = {
+const FEATURES = {
   streaming: true,
   approvals: true,
   questions: false,
@@ -29,14 +29,14 @@ const CAPABILITIES = {
 
 function agent(overrides: Partial<AgentSummary>): AgentSummary {
   return {
-    providerId: "claude",
+    agentId: "claude",
     displayName: "Claude Code",
     pluginId: "agent.@pigcode/agent-claude",
     version: "0.1.0",
     builtin: true,
     enabled: true,
     registered: true,
-    capabilities: CAPABILITIES,
+    features: FEATURES,
     description: { "zh-CN": "Claude Code CLI", "en-US": "Claude Code CLI" },
     homepage: "https://claude.com/product/claude-code",
     installHint: { "zh-CN": "安装 Claude Code", "en-US": "Install Claude Code" },
@@ -58,7 +58,7 @@ function agent(overrides: Partial<AgentSummary>): AgentSummary {
   }
 }
 
-const READY: ProviderStatus = {
+const READY: AgentStatus = {
   installed: true,
   version: "2.1.304",
   authenticated: true,
@@ -71,9 +71,9 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
     agents: [
       agent({}),
       agent({
-        providerId: "echo",
+        agentId: "echo",
         displayName: "Echo",
-        pluginId: "agent.pigcode-provider-echo",
+        pluginId: "agent.pigcode-agent-echo",
         builtin: false,
         fields: [],
         description: null,
@@ -81,7 +81,7 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
         installHint: null,
       }),
     ],
-    defaultProviderId: null,
+    defaultAgentId: null,
     statuses: { claude: READY },
     onDetect: vi.fn(async () => undefined),
     onSetEnabled: vi.fn(async () => undefined),
@@ -112,17 +112,17 @@ describe("AgentsPage", () => {
 
   it("shows the default agent, or Automatic when it is disabled or gone", () => {
     const selector = () => screen.getByRole("combobox", { name: "新会话使用" })
-    renderPage({ defaultProviderId: "echo" })
+    renderPage({ defaultAgentId: "echo" })
     expect(selector().textContent).toContain("Echo")
     cleanup()
 
     const claude = agent({})
-    const echo = agent({ providerId: "echo", displayName: "Echo", enabled: false })
-    renderPage({ agents: [claude, echo], defaultProviderId: "echo" })
+    const echo = agent({ agentId: "echo", displayName: "Echo", enabled: false })
+    renderPage({ agents: [claude, echo], defaultAgentId: "echo" })
     expect(selector().textContent).toContain("自动")
     cleanup()
 
-    renderPage({ defaultProviderId: "removed-agent" })
+    renderPage({ defaultAgentId: "removed-agent" })
     expect(selector().textContent).toContain("自动")
     expect(selector().textContent).not.toContain("removed-agent")
   })
@@ -132,7 +132,7 @@ describe("AgentsPage", () => {
     await userEvent.click(screen.getByRole("switch", { name: "启用 Echo" }))
     await waitFor(() =>
       expect(props.onSetEnabled).toHaveBeenCalledWith(
-        expect.objectContaining({ providerId: "echo" }),
+        expect.objectContaining({ agentId: "echo" }),
         false,
       ),
     )
@@ -159,7 +159,7 @@ describe("AgentsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     await waitFor(() => expect(props.onSaveSettings).toHaveBeenCalledTimes(1))
     expect(props.onSaveSettings).toHaveBeenCalledWith(
-      expect.objectContaining({ providerId: "claude" }),
+      expect.objectContaining({ agentId: "claude" }),
       {
         binaryPath: "/opt/claude",
         launchArgs: "--chrome",
@@ -195,9 +195,7 @@ describe("AgentsPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "卸载" }))
     await userEvent.click(screen.getByRole("button", { name: "确认卸载" }))
     await waitFor(() =>
-      expect(props.onUninstall).toHaveBeenCalledWith(
-        expect.objectContaining({ providerId: "echo" }),
-      ),
+      expect(props.onUninstall).toHaveBeenCalledWith(expect.objectContaining({ agentId: "echo" })),
     )
   })
 

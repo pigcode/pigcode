@@ -63,10 +63,9 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     // 切换 Agent 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
     const handoff = pendingHandoff(deps.ctx, run.threadId)
     deps.runs.setStatus(run.runId, "running")
-    // 事件 payload 是界面读取的持久数据，字段名沿用旧名字，界面迁移（#34）时一起改。
     deps.append(run.threadId, run.runId, "run.started", {
-      providerId: run.driver.id,
-      providerSessionId: run.session.id,
+      agentId: run.driver.id,
+      agentSessionId: run.session.id,
     })
     deps.activeRuns.set(run.runId, run)
     void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })

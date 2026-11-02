@@ -1,15 +1,15 @@
 /** 输入框模型选择器的数据：已注册的 agent、各自的安装状态与按需读取的模型目录。 */
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { AgentList, ProviderCapabilities, ProviderModel } from "@pigcode/contracts"
+import type { AgentFeatures, AgentList, AgentModel } from "@pigcode/contracts"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ComposerAgent, ComposerModel, ComposerModelCatalog } from "@pigcode/ui-composer"
-import { listProviders } from "./providers"
+import { listRegisteredAgents } from "./agent-context"
 
-/** provider.detect 的返回；只关心是否安装。 */
+/** agent.detect 的返回；只关心是否安装。 */
 type Detection = Record<string, { installed?: unknown } | undefined>
 
 /** 把协议里的模型条目转成输入框的形状。 */
-export function toComposerModel(model: ProviderModel): ComposerModel {
+export function toComposerModel(model: AgentModel): ComposerModel {
   return {
     id: model.id,
     label: model.displayName,
@@ -34,11 +34,11 @@ export function useAgents(
   useEffect(() => {
     if (!connected) return undefined
     let cancelled = false
-    void listProviders(connection)
-      .then(async (providers) => {
-        const base = providers.map((provider) => ({ id: provider.id, label: provider.displayName }))
+    void listRegisteredAgents(connection)
+      .then(async (registered) => {
+        const base = registered.map((agent) => ({ id: agent.id, label: agent.displayName }))
         if (!cancelled) setAgents(base)
-        const detection = (await connection.call("provider.detect", {})) as Detection
+        const detection = (await connection.call("agent.detect", {})) as Detection
         if (cancelled) return
         setAgents(
           base.map((agent) => {
@@ -56,7 +56,7 @@ export function useAgents(
 }
 
 /**
- * agent 的显示名，按 provider id；侧栏会话行上的 agent 缩写由它得出。取自 agent.list，停用或注册失败的
+ * agent 的显示名，按 agent id；侧栏会话行上的 agent 缩写由它得出。取自 agent.list，停用或注册失败的
  * agent 也在里面，和设置页的缩写一致。连上 Host 与插件启停后重新读取。
  */
 export function useAgentNames(
@@ -71,9 +71,7 @@ export function useAgentNames(
     void (connection.call("agent.list", {}) as Promise<AgentList>)
       .then((list) => {
         if (cancelled) return
-        setNames(
-          Object.fromEntries(list.agents.map((agent) => [agent.providerId, agent.displayName])),
-        )
+        setNames(Object.fromEntries(list.agents.map((agent) => [agent.agentId, agent.displayName])))
       })
       .catch(() => undefined)
     return () => {
@@ -83,29 +81,27 @@ export function useAgentNames(
   return names
 }
 
-/** 各 agent 的能力；子代理标签可能和主会话用不同的 agent，按标签所在会话的 agent 取能力。 */
-export function useProviderCapabilities(
+/** 各 agent 的 Agent 功能；子代理标签可能和主会话用不同的 agent，按标签所在会话的 agent 取。 */
+export function useAgentFeatures(
   connection: Connection,
   revision: number,
   connected: boolean,
-): Readonly<Record<string, ProviderCapabilities>> {
-  const [capabilities, setCapabilities] = useState<Record<string, ProviderCapabilities>>({})
+): Readonly<Record<string, AgentFeatures>> {
+  const [features, setFeatures] = useState<Record<string, AgentFeatures>>({})
   useEffect(() => {
     if (!connected) return undefined
     let cancelled = false
-    void listProviders(connection)
-      .then((providers) => {
+    void listRegisteredAgents(connection)
+      .then((registered) => {
         if (cancelled) return
-        setCapabilities(
-          Object.fromEntries(providers.map((provider) => [provider.id, provider.capabilities])),
-        )
+        setFeatures(Object.fromEntries(registered.map((agent) => [agent.id, agent.features])))
       })
       .catch(() => undefined)
     return () => {
       cancelled = true
     }
   }, [connection, revision, connected])
-  return capabilities
+  return features
 }
 
 /**
@@ -127,7 +123,7 @@ export function useModelCatalog(
     (agentId: string) => {
       if (!connected || pending.current.has(agentId)) return
       pending.current.add(agentId)
-      void (connection.call("provider.models", { providerId: agentId }) as Promise<ProviderModel[]>)
+      void (connection.call("agent.models", { agentId }) as Promise<AgentModel[]>)
         .then((models) => models.map(toComposerModel))
         .catch((): ComposerModel[] => [])
         .then((models) => setCatalog((current) => ({ ...current, [agentId]: models })))

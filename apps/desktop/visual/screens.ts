@@ -86,7 +86,7 @@ export async function launch(
       env: {
         ...env,
         PIGCODE_PROFILE_DIR: join(work, "profile"),
-        PIGCODE_PROVIDER: "fake",
+        PIGCODE_AGENT: "fake",
         PIGCODE_FAKE_STEP_MS: "40",
         PIGCODE_CLAUDE_PATH: join(MISSING_CLI, "claude"),
         PIGCODE_CODEX_PATH: join(MISSING_CLI, "codex"),
@@ -164,9 +164,7 @@ export async function walkShell(walk: Walk): Promise<void> {
   await step("thread-new")
 
   await page.getByRole("button", { name: contains(t("composer.modelMenu")) }).click()
-  await expect(
-    page.getByRole("listbox", { name: "Fake Provider" }).getByRole("option"),
-  ).toHaveCount(2)
+  await expect(page.getByRole("listbox", { name: "Fake Agent" }).getByRole("option")).toHaveCount(2)
   await step("menu-agent-model")
   await page.keyboard.press("Escape")
 
@@ -211,7 +209,7 @@ export async function walkShell(walk: Walk): Promise<void> {
   await page.keyboard.press("Escape")
 }
 
-/** 一轮完整的工作（fake provider 的 showcase）和右栏的每一种 Surface。 */
+/** 一轮完整的工作（fake agent 的 showcase）和右栏的每一种 Surface。 */
 export async function walkWorkbench(walk: Walk): Promise<void> {
   const { page, step } = walk
   const t = translator(walk.locale)
@@ -308,11 +306,11 @@ export async function walkSettings(walk: Walk): Promise<void> {
   ).toBeVisible()
   await step("settings-appearance")
 
-  await section("settings.providers")
+  await section("settings.agents")
   await expect(
-    page.getByRole("heading", { level: 1, name: t("settings.providers"), exact: true }),
+    page.getByRole("heading", { level: 1, name: t("settings.agents"), exact: true }),
   ).toBeVisible()
-  await expect(page.locator(".ext-list").first()).toContainText("Fake Provider")
+  await expect(page.locator(".ext-list").first()).toContainText("Fake Agent")
   await expect(page.locator(".ext-list").first()).not.toContainText(
     withoutEllipsis(t("agents.status.checking")),
   )
@@ -334,7 +332,7 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(page.locator(".ext-item")).toHaveCount(2)
   await step("settings-plugins")
 
-  for (const name of ["ui-debug-panel", "provider-echo", "capability-clock"]) {
+  for (const name of ["ui-debug-panel", "agent-echo", "capability-clock"]) {
     await page
       .locator(".page-head")
       .getByRole("button", { name: t("plugins.install") })

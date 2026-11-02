@@ -8,7 +8,7 @@ import {
   type Page,
 } from "@playwright/test"
 
-/** 过滤 undefined，满足 Playwright env 的 string 值约束；默认用 fake provider。 */
+/** 过滤 undefined，满足 Playwright env 的 string 值约束；默认用 fake agent。 */
 export function launchEnv(extra: Record<string, string>): Record<string, string> {
   return {
     ...Object.fromEntries(
@@ -16,7 +16,7 @@ export function launchEnv(extra: Record<string, string>): Record<string, string>
         (entry): entry is [string, string] => entry[1] !== undefined,
       ),
     ),
-    PIGCODE_PROVIDER: "fake",
+    PIGCODE_AGENT: "fake",
     ...extra,
   }
 }

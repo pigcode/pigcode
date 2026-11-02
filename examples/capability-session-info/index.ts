@@ -4,7 +4,7 @@ import type { PluginHostContext } from "@pigcode/plugin-sdk"
 export const name = "capability-session-info"
 export const inject = ["sessions"]
 
-/** 其他插件通过 `sessionInfo` 服务读取的能力。 */
+/** 其他插件通过 `sessionInfo` 服务读取的接口。 */
 export interface SessionInfo {
   count(threadId: string): number
 }

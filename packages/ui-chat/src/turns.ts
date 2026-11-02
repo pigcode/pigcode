@@ -141,7 +141,7 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
   for (const event of sorted) {
     const payload = asRecord(event.payload)
     if (event.type === "thread.updated" && event.runId === null) {
-      const agentId = asText(payload?.providerId)
+      const agentId = asText(payload?.agentId)
       if (agentId) {
         entries.push({
           kind: "switch",
@@ -166,7 +166,7 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
       case "run.started":
         turn.status = "running"
         turn.startedAt = event.createdAt
-        turn.agentId = asText(payload?.providerId) ?? turn.agentId
+        turn.agentId = asText(payload?.agentId) ?? turn.agentId
         turn.userText = asText(payload?.text) ?? turn.userText
         break
       case "message.completed": {

@@ -1,11 +1,11 @@
-/** 会话环境抽屉：只展示 provider、工作目录、模型与权限，不含账号或代理字段。 */
+/** 会话环境抽屉：只展示 agent、工作目录、模型与权限，不含账号或代理字段。 */
 import { X } from "lucide-react"
 import type { PermissionMode } from "@pigcode/contracts"
 import { Button, SettingRow, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 
 /** 抽屉需要的会话环境数据。 */
 export interface EnvironmentInfo {
-  providerId: string
+  agentId: string
   cwd: string | undefined
   modelId: string | null
   permissionMode: PermissionMode
@@ -51,7 +51,7 @@ export function EnvironmentDrawer({
         </Button>
       </div>
       <div className="group">
-        <EnvironmentItem label={t("chat.environment.provider")} value={info.providerId} />
+        <EnvironmentItem label={t("chat.environment.agent")} value={info.agentId} />
         <EnvironmentItem
           label={t("chat.environment.cwd")}
           value={info.cwd ?? t("chat.environment.unknown")}

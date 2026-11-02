@@ -8,7 +8,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { backupPathFor, openDatabase } from "./database"
-import { SCHEMA_VERSION, migrate } from "./migrations"
+import { migrate } from "./migrations"
 
 const NOW = "2026-10-30T00:00:00.000Z"
 
@@ -37,9 +37,8 @@ describe("migration v7", () => {
   it("renames the provider tables and columns and keeps the rows", () => {
     const db = new Database(":memory:")
     seedV6(db)
-    migrate(db)
-    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION)
-    expect(SCHEMA_VERSION).toBe(7)
+    migrate(db, 7)
+    expect(db.pragma("user_version", { simple: true })).toBe(7)
     expect(columns(db, "threads")).toEqual(
       expect.arrayContaining(["default_agent_id", "last_agent_id"]),
     )

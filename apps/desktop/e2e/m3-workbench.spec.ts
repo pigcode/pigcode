@@ -27,7 +27,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
 
   const app = await electron.launch({
     args: ["."],
-    env: { ...launchEnv(), PIGCODE_PROVIDER: "fake" },
+    env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   const page = await app.firstWindow()
   await addProject(app, page, root)

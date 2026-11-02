@@ -1,20 +1,20 @@
 {
-  "name": "pigcode-provider-echo",
+  "name": "pigcode-agent-echo",
   "version": "0.1.0",
   "description": "Example agent that echoes your message back",
   "type": "module",
   "main": "./index.ts",
   "pigcode": {
     "apiVersion": 1,
-    "kind": "provider",
+    "kind": "agent",
     "displayName": "Echo",
     "host": "./index.ts",
     "provides": [
-      "provider:echo"
+      "agent:echo"
     ],
     "permissions": [],
     "contributes": {
-      "provider": {
+      "agent": {
         "id": "echo",
         "description": {
           "zh-CN": "示例 agent：把你的消息原样回显，用来试插件与设置。",

@@ -41,7 +41,7 @@ async function fixtureLegacyAgentPlugin(): Promise<string> {
   await writeFile(
     join(source, "package.json"),
     JSON.stringify({
-      name: "pigcode-provider-echo-fixture",
+      name: "pigcode-agent-echo-fixture",
       version: "0.1.0",
       type: "module",
       main: "./index.mjs",

@@ -41,7 +41,7 @@ export function createQuestionFlow(deps: QuestionDeps) {
         threadId: run.threadId,
         runId: run.runId,
         kind: "question",
-        providerRequestId: null,
+        agentRequestId: null,
         payload: request,
         createdAt: new Date().toISOString(),
       })

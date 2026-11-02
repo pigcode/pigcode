@@ -31,7 +31,7 @@ async function writeTypeScriptPlugin(dir: string): Promise<void> {
   await writeFile(
     join(dir, "package.json"),
     JSON.stringify({
-      name: "pigcode-provider-ts",
+      name: "pigcode-agent-ts",
       version: "0.1.0",
       type: "module",
       main: "./index.ts",
@@ -124,7 +124,7 @@ describe("compileTypeScriptPlugin", () => {
   it("leaves JavaScript plugins untouched", async () => {
     const dir = await tempDir("pigcode-js-plugin-")
     const manifest = {
-      name: "pigcode-provider-js",
+      name: "pigcode-agent-js",
       version: "0.1.0",
       pigcode: { apiVersion: 1, kind: "agent", host: "./index.mjs" },
     }
@@ -159,8 +159,8 @@ describe("compileTypeScriptPlugin", () => {
 
     const entry = await installLocalPlugin(profile, source)
 
-    expect(entry.id).toBe("agent.pigcode-provider-ts")
-    const installed = join(profile, "node_modules", "pigcode-provider-ts")
+    expect(entry.id).toBe("agent.pigcode-agent-ts")
+    const installed = join(profile, "node_modules", "pigcode-agent-ts")
     expect(existsSync(join(installed, "index.mjs"))).toBe(true)
     expect(existsSync(join(source, "index.mjs"))).toBe(false)
     const sourceManifest = JSON.parse(await readFile(join(source, "package.json"), "utf8")) as {

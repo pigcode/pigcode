@@ -1,10 +1,10 @@
 /** 设置、Agent 与插件容器：从 Host 拉取状态，注入设置视图。 */
 import { useCallback, useEffect, useState } from "react"
-import type { AgentList, ProviderStatus } from "@pigcode/contracts"
+import type { AgentList, AgentStatus } from "@pigcode/contracts"
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
 import { AgentsPage, SettingsView } from "@pigcode/ui-settings"
 import type { CoreDeps, SettingsSlotProps } from "./app"
-import { refreshProviderViews } from "./providers"
+import { refreshAgentViews } from "./agent-context"
 import { SchedulesContainer } from "./schedules"
 
 /** 插件管理容器：列表来自 Host，安装/启停/卸载后同步刷新 agent 与 client bundle。 */
@@ -23,7 +23,7 @@ export function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
   async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
     await action()
     await refresh()
-    await refreshProviderViews(deps)
+    await refreshAgentViews(deps)
     await deps.plugins.reload()
   }
 
@@ -42,8 +42,8 @@ export function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
 
 /** Agent 页容器：列表与设置来自 agent.list，状态来自只读检测；改动后刷新输入框里的 agent。 */
 export function AgentsContainer({ deps }: { deps: CoreDeps }) {
-  const [list, setList] = useState<AgentList>({ agents: [], defaultProviderId: null })
-  const [statuses, setStatuses] = useState<Record<string, ProviderStatus>>({})
+  const [list, setList] = useState<AgentList>({ agents: [], defaultAgentId: null })
+  const [statuses, setStatuses] = useState<Record<string, AgentStatus>>({})
   const [detecting, setDetecting] = useState(false)
   const { connection } = deps
 
@@ -52,14 +52,14 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   }, [connection])
 
   const detect = useCallback(
-    async (options: { providerId?: string; refresh?: boolean } = {}): Promise<void> => {
+    async (options: { agentId?: string; refresh?: boolean } = {}): Promise<void> => {
       setDetecting(true)
       try {
-        const result = (await connection.call("provider.detect", options)) as Record<
+        const result = (await connection.call("agent.detect", options)) as Record<
           string,
-          ProviderStatus
+          AgentStatus
         >
-        setStatuses((current) => (options.providerId ? { ...current, ...result } : result))
+        setStatuses((current) => (options.agentId ? { ...current, ...result } : result))
       } finally {
         setDetecting(false)
       }
@@ -78,13 +78,13 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   async function afterPluginChange(): Promise<void> {
     await refresh()
     setStatuses({})
-    await Promise.all([detect(), refreshProviderViews(deps), deps.plugins.reload()])
+    await Promise.all([detect(), refreshAgentViews(deps), deps.plugins.reload()])
   }
 
   return (
     <AgentsPage
       agents={list.agents}
-      defaultProviderId={list.defaultProviderId}
+      defaultAgentId={list.defaultAgentId}
       statuses={statuses}
       detecting={detecting}
       onDetect={() => detect({ refresh: true })}
@@ -94,16 +94,16 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         await afterPluginChange()
       }}
       onSaveSettings={async (agent, values) => {
-        await connection.call("agent.updateSettings", { providerId: agent.providerId, values })
+        await connection.call("agent.updateSettings", { agentId: agent.agentId, values })
         await refresh()
         // 新设置可能换了可执行文件或配置目录：重新检测这个 agent，并让输入框重读模型目录。
         await Promise.all([
-          detect({ providerId: agent.providerId, refresh: true }),
-          refreshProviderViews(deps),
+          detect({ agentId: agent.agentId, refresh: true }),
+          refreshAgentViews(deps),
         ])
       }}
-      onSetDefault={async (providerId) => {
-        await connection.call("agent.setDefault", { providerId })
+      onSetDefault={async (agentId) => {
+        await connection.call("agent.setDefault", { agentId })
         await refresh()
       }}
       onInstall={async (spec) => {

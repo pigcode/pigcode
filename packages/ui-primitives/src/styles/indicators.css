@@ -271,7 +271,7 @@
 .entity-avatar[data-size="md"] {
   --avatar-size: var(--avatar-md);
 }
-/* 一行文字里的缩写：只留颜色，字体与字号由所在的位置给（侧栏是 .sess-provider） */
+/* 一行文字里的缩写：只留颜色，字体与字号由所在的位置给（侧栏是 .sess-agent） */
 .entity-avatar[data-size="inline"] {
   display: inline;
   width: auto;

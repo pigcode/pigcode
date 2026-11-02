@@ -10,7 +10,7 @@ function Controlled() {
   const [value, setValue] = useState("claude")
   return (
     <Select.Root value={value} onValueChange={(next) => setValue(String(next))}>
-      <Select.Trigger aria-label="Provider">{value}</Select.Trigger>
+      <Select.Trigger aria-label="Agent">{value}</Select.Trigger>
       <Select.Portal>
         <Select.Positioner>
           <Select.Popup>
@@ -26,8 +26,8 @@ function Controlled() {
 describe("Select", () => {
   it("selects an option", async () => {
     render(<Controlled />)
-    await userEvent.click(screen.getByRole("combobox", { name: "Provider" }))
+    await userEvent.click(screen.getByRole("combobox", { name: "Agent" }))
     await userEvent.click(screen.getByText("Codex"))
-    expect(screen.getByRole("combobox", { name: "Provider" }).textContent).toContain("codex")
+    expect(screen.getByRole("combobox", { name: "Agent" }).textContent).toContain("codex")
   })
 })

@@ -1,6 +1,6 @@
 /** Renderer 的应用状态；组件通过 useSyncExternalStore 订阅。 */
 import { useSyncExternalStore } from "react"
-import type { Project, ProviderCapabilities, Thread, ThreadEvent } from "@pigcode/contracts"
+import type { Project, AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
 import type { ConnectionStatus } from "./connection"
 
 /** 单个线程在 Renderer 中的运行状态。 */
@@ -34,10 +34,10 @@ export interface AppState {
   error: string | null
   /** 首次连接后是否发生过 Host 重连；供界面显示重连提示。 */
   reconnected: boolean
-  /** 当前线程 provider 的能力描述；尚未加载时为 null。 */
-  providerCapabilities: ProviderCapabilities | null
-  /** 插件启停后递增，通知依赖 provider 列表的界面重新拉取。 */
-  providerRevision: number
+  /** 当前线程 agent 的 Agent 功能；尚未加载时为 null。 */
+  agentFeatures: AgentFeatures | null
+  /** 插件启停后递增，通知依赖 agent 列表的界面重新拉取。 */
+  agentRevision: number
   /** 按 threadId 索引的线程视图状态。 */
   threadStates: Record<string, ThreadViewState>
   /** 当前以 tab 打开并订阅的线程顺序。 */
@@ -114,7 +114,7 @@ const PERMISSION_MODES = new Set<string>([
 ])
 
 /**
- * 从 thread.updated 的 payload 中读出线程字段的变化：标题、权限模式、切换后的 provider 与模型。
+ * 从 thread.updated 的 payload 中读出线程字段的变化：标题、权限模式、切换后的 agent 与模型。
  * 没有可用字段时返回 null。
  */
 function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
@@ -122,7 +122,7 @@ function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
   const value = payload as {
     title?: unknown
     permissionMode?: unknown
-    providerId?: unknown
+    agentId?: unknown
     modelId?: unknown
   }
   const patch: Partial<Thread> = {}
@@ -130,8 +130,8 @@ function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
   if (typeof value.permissionMode === "string" && PERMISSION_MODES.has(value.permissionMode)) {
     patch.permissionMode = value.permissionMode as Thread["permissionMode"]
   }
-  if (typeof value.providerId === "string" && value.providerId.length > 0) {
-    patch.lastProviderId = value.providerId
+  if (typeof value.agentId === "string" && value.agentId.length > 0) {
+    patch.lastAgentId = value.agentId
     patch.lastModelId = typeof value.modelId === "string" ? value.modelId : null
   }
   return Object.keys(patch).length > 0 ? patch : null
@@ -163,8 +163,8 @@ const initialState: AppState = {
   streamingText: "",
   error: null,
   reconnected: false,
-  providerCapabilities: null,
-  providerRevision: 0,
+  agentFeatures: null,
+  agentRevision: 0,
   threadStates: {},
   openThreadIds: [],
 }

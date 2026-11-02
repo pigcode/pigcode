@@ -36,8 +36,8 @@ const thread: Thread = {
   id: "th_1",
   projectId: "p1",
   title: "Old",
-  defaultProviderId: "claude",
-  lastProviderId: null,
+  defaultAgentId: "claude",
+  lastAgentId: null,
   lastModelId: null,
   permissionMode: "workspace-write",
   createdAt: "2026-10-21T00:00:00.000Z",
@@ -134,7 +134,7 @@ describe("AppStore batching", () => {
         "th_1",
         3,
         "thread.updated",
-        { providerId: "codex", modelId: "gpt-6.1-sol", handoff: "x" },
+        { agentId: "codex", modelId: "gpt-6.1-sol", handoff: "x" },
         null,
       ),
       threadEvent("th_1", 4, "thread.updated", { permissionMode: "everything" }, null),
@@ -142,7 +142,7 @@ describe("AppStore batching", () => {
     expect(store.getSnapshot().threads[0]).toMatchObject({
       title: "New title",
       permissionMode: "plan",
-      lastProviderId: "codex",
+      lastAgentId: "codex",
       lastModelId: "gpt-6.1-sol",
     })
   })

@@ -37,7 +37,7 @@ import {
   type NavHistory,
   type NavLocation,
 } from "./navigation"
-import { loadProviderContext, pickProviderId } from "./providers"
+import { loadAgentFeatures, pickAgentId } from "./agent-context"
 import { workspaceRevision } from "./workspace-revision"
 
 // 工作台（xterm、diff）与底部终端在第一次打开时才加载，冷启动只加载聊天需要的代码。
@@ -100,7 +100,7 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
   const pluginSurfaces = useRegistry(plugins.surfaces)
-  const agentNames = useAgentNames(connection, state.providerRevision, state.status === "connected")
+  const agentNames = useAgentNames(connection, state.agentRevision, state.status === "connected")
   const [view, setView] = useState<ShellView>("chat")
   const [section, setSection] = useState<SettingsSection>("general")
   const [rightOpen, setRightOpen] = useState(false)
@@ -141,20 +141,20 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
     })
   }, [state.status, connection, store])
 
-  // 当前线程或它的 provider 变化时刷新能力，驱动按 capability 隐藏控件。
-  // 只依赖 provider id：线程标题、更新时间这类变化不需要重新查询。
+  // 当前线程或它的 agent 变化时刷新 Agent 功能，界面据此隐藏不支持的控件。
+  // 只依赖 agent id：线程标题、更新时间这类变化不需要重新查询。
   const activeThread = state.threads.find((item) => item.id === state.activeThreadId)
-  const activeProviderId = activeThread
-    ? (activeThread.lastProviderId ?? activeThread.defaultProviderId)
+  const activeAgentId = activeThread
+    ? (activeThread.lastAgentId ?? activeThread.defaultAgentId)
     : null
   useEffect(() => {
-    if (state.status !== "connected" || !activeProviderId) return
+    if (state.status !== "connected" || !activeAgentId) return
     const thread = store.getSnapshot().threads.find((item) => item.id === state.activeThreadId)
     if (!thread) return
-    void loadProviderContext(connection, store, thread).catch((error: unknown) =>
+    void loadAgentFeatures(connection, store, thread).catch((error: unknown) =>
       store.update({ error: messageOf(error) }),
     )
-  }, [state.status, state.activeThreadId, activeProviderId, connection, store])
+  }, [state.status, state.activeThreadId, activeAgentId, connection, store])
 
   /** 新建会话；没指定项目时放进当前会话所在的项目，再退回第一个项目。 */
   async function createThread(projectId?: string): Promise<void> {
@@ -167,15 +167,15 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
       : (snapshot.projects.find((item) => item.id === activeProjectId) ?? snapshot.projects[0])
     if (!project) return
     try {
-      const providerId = await pickProviderId(connection)
-      if (!providerId) {
+      const agentId = await pickAgentId(connection)
+      if (!agentId) {
         store.update({ error: translate(locale, "app.noAgent") })
         return
       }
       const thread = (await connection.call("thread.create", {
         projectId: project.id,
         title: translate(locale, "thread.defaultTitle"),
-        providerId,
+        agentId,
       })) as Thread
       store.update({
         threads: [thread, ...store.getSnapshot().threads],

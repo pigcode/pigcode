@@ -9,7 +9,7 @@ import { apply as threads } from "../services/threads"
 import { FakeAgentDriver } from "./fake"
 import { apply as agentsPlugin } from "./registry"
 
-async function setup(providerId = "fake") {
+async function setup(agentId = "fake") {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
   await ctx.plugin(projects)
@@ -17,7 +17,7 @@ async function setup(providerId = "fake") {
   await ctx.plugin(sessions)
   await ctx.plugin(agentsPlugin)
   const project = ctx.projects.add("/tmp/pigcode-m1")
-  const thread = ctx.threads.create(project.id, "M1", providerId)
+  const thread = ctx.threads.create(project.id, "M1", agentId)
   return { ctx, thread }
 }
 

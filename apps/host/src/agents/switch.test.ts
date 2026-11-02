@@ -1,4 +1,4 @@
-/** 验证 thread.switchProvider 的会话停止、handoff 生成与下一次 run 注入。 */
+/** 验证 thread.switchAgent 的会话停止、handoff 生成与下一次 run 注入，以及旧名字 thread.switchProvider。 */
 import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
 import type { CreateSessionInput, AgentDriver, AgentSessionHandle, UserInput } from "./driver"
@@ -67,7 +67,7 @@ function recordingDriver(
 }
 
 /** 建立内存 Host；claude 用记录型 driver 覆盖，避免测试启动真实进程。 */
-async function setup(providerId = "fake") {
+async function setup(agentId = "fake") {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
   await ctx.plugin(projects)
@@ -77,7 +77,7 @@ async function setup(providerId = "fake") {
   const claude = recordingDriver("claude")
   ctx.agents.register(claude.driver)
   const project = ctx.projects.add("/tmp/pigcode-m2")
-  const thread = ctx.threads.create(project.id, "M2", providerId)
+  const thread = ctx.threads.create(project.id, "M2", agentId)
   return { ctx, thread, claude }
 }
 
@@ -88,14 +88,14 @@ describe("agent switching", () => {
     await first.done
 
     const switched = await ctx.agents.switchAgent(thread.id, "claude", "claude-sonnet")
-    expect(switched.providerId).toBe("claude")
+    expect(switched.agentId).toBe("claude")
     expect(switched.modelId).toBe("claude-sonnet")
     expect(switched.forkFromNativeSessionId).toBeNull()
 
     const events = ctx.sessions.read(thread.id, 0)
     const handoffEvent = events.find((event) => event.type === "thread.updated")
     expect(handoffEvent?.payload).toMatchObject({
-      providerId: "claude",
+      agentId: "claude",
       modelId: "claude-sonnet",
     })
     const handoff = (handoffEvent?.payload as { handoff: string }).handoff
@@ -104,7 +104,7 @@ describe("agent switching", () => {
         "Previous agent: fake",
         "Recent conversation:",
         "- user: build the login page",
-        "- assistant: Hello from fake provider",
+        "- assistant: Hello from fake agent",
         "Recent tools: (none)",
         "Continue from here. Do not repeat completed work.",
       ].join("\n"),
@@ -112,7 +112,7 @@ describe("agent switching", () => {
     expect(switched.handoff).toBe(handoff)
 
     const updated = ctx.threads.get(thread.id)
-    expect(updated?.lastProviderId).toBe("claude")
+    expect(updated?.lastAgentId).toBe("claude")
     expect(updated?.lastModelId).toBe("claude-sonnet")
 
     const oldSession = ctx.agents
@@ -146,7 +146,7 @@ describe("agent switching", () => {
     // 同一个 Agent 且存在 active 原生会话：切换时记录 fork 源，而不是生成 handoff。
     const switched = await ctx.agents.switchAgent(thread.id, "claude", "claude-sonnet")
     expect(switched).toMatchObject({
-      providerId: "claude",
+      agentId: "claude",
       modelId: "claude-sonnet",
       handoff: null,
       forkFromNativeSessionId: "native_parent",
@@ -157,7 +157,7 @@ describe("agent switching", () => {
       .filter((event) => event.type === "thread.updated")
       .at(-1)
     expect(updated?.payload).toMatchObject({
-      providerId: "claude",
+      agentId: "claude",
       modelId: "claude-sonnet",
       forkFromNativeSessionId: "native_parent",
     })
@@ -229,21 +229,26 @@ describe("agent switching", () => {
     expect(prompts).toEqual(["context\n\nhello"])
   })
 
-  it("dispatches thread.switchProvider over RPC with a nullable model", async () => {
+  it("dispatches thread.switchAgent and its old name thread.switchProvider over RPC", async () => {
     const { ctx, thread } = await setup()
     const transport = new MemoryTransport()
     const server = new RpcServer(ctx, transport.host)
     server.start()
-    transport.client.send({
-      jsonrpc: "2.0",
-      id: "1",
-      method: "thread.switchProvider",
-      params: { threadId: thread.id, providerId: "claude", modelId: null },
-    })
-    const response = (await transport.client.next()) as {
-      result: { providerId: string; modelId: string | null }
+    for (const [id, method] of [
+      ["1", "thread.switchAgent"],
+      ["2", "thread.switchProvider"],
+    ]) {
+      transport.client.send({
+        jsonrpc: "2.0",
+        id,
+        method,
+        params: { threadId: thread.id, agentId: "claude", modelId: null },
+      })
+      const response = (await transport.client.next()) as {
+        result: { agentId: string; modelId: string | null }
+      }
+      expect(response.result, method).toMatchObject({ agentId: "claude", modelId: null })
     }
-    expect(response.result).toMatchObject({ providerId: "claude", modelId: null })
     server.stop()
     await ctx.fiber.dispose()
   })
