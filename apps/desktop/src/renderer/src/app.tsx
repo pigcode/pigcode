@@ -2,17 +2,14 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
 import { SlotHost, useAppStore, useContributions, type SlotRegistry } from "@pigcode/client-runtime"
-import {
-  translate,
-  useAppearance,
-  type AppearanceController,
-  type Locale,
-} from "@pigcode/ui-primitives"
+import { translate, useAppearance, type Locale } from "@pigcode/ui-primitives"
 export type { ChatSlotProps, CoreDeps } from "./chat-container"
 export { ChatViewContainer } from "./chat-container"
 import {
   AppRenderer,
-  type SettingsSection,
+  DEFAULT_SETTINGS_PAGE,
+  SettingsView,
+  settingsPageOrFallback,
   type ShellView,
   type ThreadStatus,
 } from "@pigcode/ui-shell"
@@ -27,6 +24,7 @@ import {
 } from "@pigcode/ui-workbench"
 import { useAgentNames } from "./agents"
 import { BrowserHost } from "./browser-host"
+import { AppearanceContext } from "./builtin-settings-pages"
 import type { ChatSlotProps, CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
 import { UnsavedGuard } from "./unsaved-guard"
@@ -60,12 +58,6 @@ import {
   renameProject,
   renameThread,
 } from "./workspace-actions"
-
-/** settings.section slot 传给核心设置视图的属性。 */
-export interface SettingsSlotProps {
-  section: SettingsSection
-  appearance: AppearanceController
-}
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
@@ -105,9 +97,12 @@ export function App({ store, slots, connection, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
   const surfaceContributions = useContributions("surface")
+  const settingsPages = useContributions("settingsPage")
   const agentNames = useAgentNames(connection, state.agentRevision, state.status === "connected")
   const [view, setView] = useState<ShellView>("chat")
-  const [section, setSection] = useState<SettingsSection>("general")
+  const [selectedPage, setSelectedPage] = useState<string>(DEFAULT_SETTINGS_PAGE)
+  // 选中的设置页被移除（插件停用或卸载）时退回通用页，内容区不留空白。
+  const settingsPage = settingsPageOrFallback(settingsPages, selectedPage)
   const [rightOpen, setRightOpen] = useState(false)
   // 右栏第一次打开后才挂载（按需加载工作台代码），之后收起只隐藏，终端与浏览器标签保留。
   const [rightStarted, setRightStarted] = useState(false)
@@ -137,6 +132,12 @@ export function App({ store, slots, connection, locale }: AppProps) {
     })
   }, [surfaceContributions])
 
+  // 只在用户正看着设置时把退回的页记下来：不在设置里时页面暂时不在（插件重新加载、停用后又启用），
+  // 选中的仍是原来的页，它回来后再打开设置还是它。
+  useEffect(() => {
+    if (view === "settings" && settingsPage !== selectedPage) setSelectedPage(settingsPage)
+  }, [view, settingsPage, selectedPage])
+
   useEffect(() => {
     if (rightOpen) setRightStarted(true)
   }, [rightOpen])
@@ -147,12 +148,12 @@ export function App({ store, slots, connection, locale }: AppProps) {
       view === "plugins"
         ? { kind: "plugins" }
         : view === "settings"
-          ? { kind: "settings", section }
+          ? { kind: "settings", page: settingsPage }
           : state.activeThreadId
             ? { kind: "thread", threadId: state.activeThreadId }
             : null
     if (location) setHistory((current) => pushLocation(current, location))
-  }, [view, section, state.activeThreadId])
+  }, [view, settingsPage, state.activeThreadId])
 
   // 首次连上 Host 后拉取项目与线程；重连时保留当前界面状态。
   useEffect(() => {
@@ -224,7 +225,7 @@ export function App({ store, slots, connection, locale }: AppProps) {
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
   }
 
-  /** 沿历史后退或前进；先去掉已经不存在的会话。 */
+  /** 沿历史后退或前进；先去掉已经不存在的会话和已经移除的设置页。 */
   function travel(direction: "back" | "forward"): void {
     const live = new Set(
       store
@@ -232,9 +233,11 @@ export function App({ store, slots, connection, locale }: AppProps) {
         .threads.filter((thread) => thread.archivedAt === null)
         .map((thread) => thread.id),
     )
-    const pruned = pruneHistory(
-      history,
-      (location) => location.kind !== "thread" || live.has(location.threadId),
+    const pages = new Set(settingsPages.map((page) => page.id))
+    const pruned = pruneHistory(history, (location) =>
+      location.kind === "thread"
+        ? live.has(location.threadId)
+        : location.kind !== "settings" || pages.has(location.page),
     )
     const next = direction === "back" ? goBack(pruned) : goForward(pruned)
     setHistory(next)
@@ -242,12 +245,12 @@ export function App({ store, slots, connection, locale }: AppProps) {
     if (!target || next === pruned) return
     if (target.kind === "thread") openThread(target.threadId)
     else if (target.kind === "settings") {
-      setSection(target.section)
+      setSelectedPage(target.page)
       setView("settings")
     } else setView("plugins")
   }
 
-  const effectiveSection: SettingsSection = view === "plugins" ? "plugins" : section
+  const activeSettingsPage = view === "plugins" ? "plugins" : settingsPage
   // 子代理只在主会话的标签栏里出现；侧栏和命令面板只列主会话。
   const mainThreads = useMemo(
     () => state.threads.filter((thread) => !thread.parentThreadId),
@@ -377,9 +380,9 @@ export function App({ store, slots, connection, locale }: AppProps) {
       canGoForward={canGoForward(history)}
       onBack={() => travel("back")}
       onForward={() => travel("forward")}
-      settingsSection={effectiveSection}
+      settingsPage={activeSettingsPage}
       onView={setView}
-      onSettingsSection={setSection}
+      onSettingsPage={setSelectedPage}
       onAddProject={(path, name) => {
         void addProject(connection, store, path, name).catch((error: unknown) =>
           store.update({ error: messageOf(error) }),
@@ -468,11 +471,9 @@ export function App({ store, slots, connection, locale }: AppProps) {
           }}
         />
       ) : (
-        <SlotHost<SettingsSlotProps>
-          registry={slots}
-          name="settings.section"
-          props={{ section: effectiveSection, appearance }}
-        />
+        <AppearanceContext.Provider value={appearance}>
+          <SettingsView page={activeSettingsPage} />
+        </AppearanceContext.Provider>
       )}
     </AppRenderer>
   )

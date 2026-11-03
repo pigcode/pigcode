@@ -15,7 +15,7 @@ import {
 const a: NavLocation = { kind: "thread", threadId: "a" }
 const b: NavLocation = { kind: "thread", threadId: "b" }
 const c: NavLocation = { kind: "thread", threadId: "c" }
-const settings: NavLocation = { kind: "settings", section: "general" }
+const settings: NavLocation = { kind: "settings", page: "general" }
 
 describe("navigation history", () => {
   it("records locations once and walks back and forward", () => {
@@ -43,10 +43,10 @@ describe("navigation history", () => {
     expect(canGoForward(history)).toBe(false)
   })
 
-  it("treats different settings sections as different places", () => {
+  it("treats different settings pages as different places", () => {
     const history = pushLocation(pushLocation(EMPTY_HISTORY, settings), {
       kind: "settings",
-      section: "plugins",
+      page: "plugins",
     })
     expect(history.entries).toHaveLength(2)
   })

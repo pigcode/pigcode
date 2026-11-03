@@ -1,9 +1,10 @@
 /**
- * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel 与 Surface 登记到扩展点
- * 注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel、Surface 与设置页登记到
+ * 扩展点注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
  *
  * reload 先把新出现和换了版本的 bundle 都 import 完，再在同一个同步步骤里卸载、应用：
- * - 从 boot graph 消失（停用、卸载）的插件按 owner 移除全部 Contribution，打开着的 Surface 随之关闭；
+ * - 从 boot graph 消失（停用、卸载）的插件按 owner 移除全部 Contribution，打开着的 Surface 随之关闭，
+ *   正在看的设置页退回通用页；
  * - 换了版本的插件先卸载旧的、再应用新的，Surface 的 id 在界面渲染前就回来了，打开的标签不受影响；
  * - 和刚卸载的插件冲突、被拒绝过的插件重新应用一次，拿到现在空出来的 id；
  * - 其余插件保持原样。import 失败的插件记一条错误、不算已加载，下次 reload 重试。
@@ -27,6 +28,7 @@ import {
   observeTheme,
 } from "@pigcode/client-runtime"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+import { SettingPage } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 
 /** 当前 UI 宿主认识的全部 slot。 */
@@ -59,7 +61,7 @@ export interface PluginErrorRegistry {
   subscribe(listener: () => void): () => void
 }
 
-/** Renderer 持有的第三方插件控制器。Panel 与 Surface 在扩展点注册表里，不在这里。 */
+/** Renderer 持有的第三方插件控制器。Panel、Surface 与设置页在扩展点注册表里，不在这里。 */
 export interface ClientPluginController {
   /** 加载与注册时出的错，插件页按插件显示。 */
   errors: PluginErrorRegistry
@@ -77,6 +79,27 @@ interface LoadedPlugin {
 /** 把 unknown 错误转成可展示文本。 */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * 检查插件传来的 Panel、Surface 或设置页。插件可以是没有类型检查的 JS，缺了 id、标题或 render 的登记
+ * 会让侧栏或搜索在用到它时出错；这里直接抛出，在 apply 里登记时就记成这个插件的界面代码错误。
+ */
+function checkContribution(
+  api: string,
+  item: { id?: unknown; title?: unknown; order?: unknown; render?: unknown },
+): void {
+  const problem =
+    typeof item.id !== "string" || item.id === ""
+      ? "id must be a non-empty string"
+      : typeof item.title !== "string"
+        ? "title must be a string"
+        : typeof item.render !== "function"
+          ? "render must be a function"
+          : item.order !== undefined && !Number.isFinite(item.order)
+            ? "order must be a number"
+            : null
+  if (problem) throw new TypeError(`${api}.register: ${problem}`)
 }
 
 /** 去掉 PluginError 的 id 字段，用来描述一条要记的错误。 */
@@ -164,6 +187,7 @@ export function createClientPluginController(deps: {
       },
       panels: {
         register(panel) {
+          checkContribution("panels", panel)
           return deps.extensions.register("panel", {
             id: panel.id,
             owner,
@@ -175,6 +199,7 @@ export function createClientPluginController(deps: {
       },
       surfaces: {
         register(surface) {
+          checkContribution("surfaces", surface)
           return deps.extensions.register("surface", {
             id: surface.id,
             owner,
@@ -186,6 +211,24 @@ export function createClientPluginController(deps: {
               <div className="surface-pane surface-scroll">
                 <PluginContentHost id={surface.id} render={surface.render} kind="surface" />
               </div>
+            ),
+          })
+        },
+      },
+      settingsPages: {
+        register(page) {
+          checkContribution("settingsPages", page)
+          return deps.extensions.register("settingsPage", {
+            id: page.id,
+            owner,
+            order: page.order ?? 0,
+            title: { text: page.title },
+            icon: Puzzle,
+            // 宿主画和内置设置页一样的页面与标题，插件只画标题下面的内容。
+            render: () => (
+              <SettingPage title={page.title}>
+                <PluginContentHost id={page.id} render={page.render} kind="settings" />
+              </SettingPage>
             ),
           })
         },

@@ -10,7 +10,8 @@ import { CommandPalette } from "./command-palette"
 import { Icon } from "./icon"
 import { PanelResizer, useRightWidth } from "./panel-resizer"
 import { SidebarPanels } from "./plugin-panel"
-import { SettingsSidebar, type SettingsSection } from "./settings-sidebar"
+import { SettingsSidebar } from "./settings-sidebar"
+import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
 import type { ThreadStatus } from "./thread-status"
 import { TitleBar } from "./title-bar"
 import { titleBarMenus } from "./title-bar-menus"
@@ -54,12 +55,13 @@ export interface ShellProps {
   onToggleTerminal?: () => void
   canGoBack?: boolean
   canGoForward?: boolean
-  settingsSection?: SettingsSection
+  /** 当前设置页的 id（设置页扩展点）。 */
+  settingsPage?: string
   onToggleSidebar?: () => void
   onBack?: () => void
   onForward?: () => void
   onView: (view: ShellView) => void
-  onSettingsSection?: (section: SettingsSection) => void
+  onSettingsPage?: (page: string) => void
   /** 创建项目；name 为 undefined 时用文件夹名。 */
   onAddProject: (path: string, name?: string) => void
   onToggleProject?: (projectId: string, expanded: boolean) => void
@@ -115,12 +117,12 @@ export function Shell({
   onToggleTerminal,
   canGoBack = false,
   canGoForward = false,
-  settingsSection,
+  settingsPage,
   onToggleSidebar,
   onBack,
   onForward,
   onView,
-  onSettingsSection,
+  onSettingsPage,
   onAddProject,
   onToggleProject,
   onNewThread,
@@ -145,7 +147,7 @@ export function Shell({
   const shortcutHints = useModifierHints() && !inSettings
   const expanded = expandedProjects ?? localExpanded
   const open = sidebarOpen ?? localSidebarOpen
-  const section: SettingsSection = settingsSection ?? (view === "plugins" ? "plugins" : "general")
+  const activePage = settingsPage ?? (view === "plugins" ? "plugins" : DEFAULT_SETTINGS_PAGE)
 
   // 抽屉只在窄窗口里有意义；变宽后复位，下次变窄时从收起开始。
   useEffect(() => {
@@ -155,7 +157,7 @@ export function Shell({
   // 切到别的会话或页面后收起抽屉，回到内容。
   useEffect(() => {
     setDrawerOpen(false)
-  }, [activeThreadId, view, settingsSection])
+  }, [activeThreadId, view, settingsPage])
 
   useEffect(() => {
     if (!drawerOpen) return
@@ -280,9 +282,10 @@ export function Shell({
     onToggleProject?.(projectId, next)
   }
 
-  function selectSection(next: SettingsSection): void {
-    onSettingsSection?.(next)
-    onView(next === "plugins" ? "plugins" : "settings")
+  /** 打开一个设置页；插件页有自己的顶层视图，命令面板与侧栏底部也直接打开它。 */
+  function selectPage(page: string): void {
+    onSettingsPage?.(page)
+    onView(page === "plugins" ? "plugins" : "settings")
   }
 
   const showRight = rightPanel !== undefined && rightOpen
@@ -303,7 +306,7 @@ export function Shell({
         newThread: () => onNewThread(),
         addProject: () => setDialogOpen(true),
         settings: () => onView("settings"),
-        about: () => selectSection("general"),
+        about: () => selectPage("general"),
         palette: () => setPaletteOpen(true),
         toggleSidebar,
         toggleRight: onToggleRight,
@@ -331,8 +334,8 @@ export function Shell({
         <div className="side-scroll">
           {inSettings ? (
             <SettingsSidebar
-              activeSection={section}
-              onSelect={selectSection}
+              activePage={activePage}
+              onSelect={selectPage}
               onExit={() => onView("chat")}
             />
           ) : (
@@ -353,8 +356,8 @@ export function Shell({
                 setDrawerOpen(false)
                 onNewThread(projectId)
               }}
-              onOpenSchedules={() => selectSection("schedules")}
-              onOpenPlugins={() => selectSection("plugins")}
+              onOpenSchedules={() => selectPage("schedules")}
+              onOpenPlugins={() => selectPage("plugins")}
               onRenameThread={onRenameThread}
               onArchiveThread={onArchiveThread}
               onRenameProject={onRenameProject}

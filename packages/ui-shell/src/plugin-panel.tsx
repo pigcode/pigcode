@@ -1,6 +1,6 @@
 /**
- * 左侧栏的 Panel，以及插件 DOM 内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel
- * 与 Surface 共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；重画或移除前
+ * 左侧栏的 Panel，以及插件 DOM 内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel、
+ * Surface 与设置页共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；重画或移除前
  * 调用插件返回的清理函数。渲染出错时显示原因，不影响宿主。
  */
 import { useEffect, useRef, useState } from "react"
@@ -9,7 +9,7 @@ import { contributionText, useContributions, type PanelContribution } from "@pig
 import type { ClientRender } from "@pigcode/plugin-sdk"
 import { useLocale } from "@pigcode/ui-primitives"
 
-/** 挂载一段插件内容；kind 区分侧栏面板与右栏标签的排版。 */
+/** 挂载一段插件内容；kind 区分侧栏面板、右栏标签与设置页的排版。 */
 export function PluginContentHost({
   id,
   render,
@@ -17,7 +17,7 @@ export function PluginContentHost({
 }: {
   id: string
   render: ClientRender
-  kind: "panel" | "surface"
+  kind: "panel" | "surface" | "settings"
 }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {

@@ -1,12 +1,23 @@
-/** 设置、Agent 与插件容器：从 Host 拉取状态，注入设置视图。 */
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
+/**
+ * 内置设置页的内容：外观页接 App 的外观控制器，Agent 与插件页从 Host 拉取状态。
+ * 这个模块在第一次打开设置页时才加载，登记信息在 builtin-settings-pages。
+ */
+import { useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { useContributionConflicts } from "@pigcode/client-runtime"
 import type { AgentList, AgentStatus } from "@pigcode/contracts"
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
-import { AgentsPage, SettingsView } from "@pigcode/ui-settings"
-import type { CoreDeps, SettingsSlotProps } from "./app"
+import { AgentsPage, AppearancePage } from "@pigcode/ui-settings"
+import type { CoreDeps } from "./app"
 import { refreshAgentViews } from "./agent-context"
-import { SchedulesContainer } from "./schedules"
+import { AppearanceContext } from "./builtin-settings-pages"
+
+export { GeneralPage } from "@pigcode/ui-settings"
+export { SchedulesContainer } from "./schedules"
+
+/** 外观页：用 App 持有的外观控制器，改动立即作用到整个窗口。 */
+export function AppearanceContainer() {
+  return <AppearancePage appearance={useContext(AppearanceContext) ?? undefined} />
+}
 
 /**
  * 插件管理容器：列表来自 Host，安装/启停/卸载后同步刷新 agent 与 client bundle。
@@ -157,23 +168,6 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       }}
       onPickPath={(kind) => window.pigcodeNative?.pickPath?.(kind) ?? Promise.resolve(null)}
       onOpenExternal={(url) => void window.pigcodeNative?.openExternal?.(url)}
-    />
-  )
-}
-
-/** 设置容器：Agent、定时任务与插件分区由各自的容器渲染。 */
-export function SettingsContainer({
-  deps,
-  section,
-  appearance,
-}: SettingsSlotProps & { deps: CoreDeps }) {
-  return (
-    <SettingsView
-      section={section}
-      appearance={appearance}
-      agentsPage={<AgentsContainer deps={deps} />}
-      pluginManager={<PluginManagerContainer deps={deps} />}
-      schedulesPage={<SchedulesContainer deps={deps} />}
     />
   )
 }

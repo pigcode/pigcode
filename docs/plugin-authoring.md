@@ -410,22 +410,26 @@ export function apply(ctx: PluginHostContext): void {
 完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)。UI 插件只拿到受限 facade，
 不依赖 React；界面和宿主保持一致的做法是：**宿主画外框，插件只画内容，内容用 `ctx.ui` 拼**。
 
-### Panel 与 Surface
+### Panel、Surface 与设置页
 
-UI 插件在两个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签。
-内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface），
-遵守同样的规则：
+UI 插件在三个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
+设置页是设置里的一页。内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的
+Surface；通用、外观、Agent、定时任务、插件都是内置的设置页），遵守同样的规则：
 
-- `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)` 返回注销函数。登记的归属由宿主按插件自动填写，
-  插件不需要也不能自己指定。
-- `id` 在同一个扩展点上唯一，内置的 Surface 也算在内。和已有的 id 重名时，这次登记不生效、返回一个什么也不做的
+- `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)`、`ctx.settingsPages.register(page)` 返回注销函数。
+  登记的归属由宿主按插件自动填写，插件不需要也不能自己指定。
+- `id` 在同一个扩展点上唯一，内置的 Surface 和设置页（`general`、`appearance`、`agents`、`schedules`、`plugins`）
+  也算在内。和已有的 id 重名时，这次登记不生效、返回一个什么也不做的
   注销函数，先登记的一方保持不变；插件页里这个插件的状态是「有冲突」，详情里写明扩展点、id 和先登记的一方。
 - 可选的 `order` 决定排列顺序（小的在前，缺省 0），相同时按 `id` 排。插件的 Surface 列在启动器和「+」菜单的
-  「插件」组里。
+  「插件」组里；插件的设置页列在设置侧栏内置页后面的「插件设置」组里，设置里的搜索也会搜到它的名称。
 - `file` 是文件标签的种类，Surface 不能用这个 id；用了按和工作台冲突处理。
-- 插件停用或卸载时，它登记的全部 Panel 与 Surface 一起移除（没有自己注销的也一样）；各个会话里已经打开的
-  这种 Surface 标签随之关闭，当前标签改选相邻的标签。被它挤掉过同名登记的插件会重新应用一次，拿到空出来的 id。
-- 插件更新到新版本时，新版本加载完才替换旧版本，已经打开的 Surface 标签保留。其余插件的界面不动。
+- 插件停用或卸载时，它登记的全部 Panel、Surface 与设置页一起移除（没有自己注销的也一样）；各个会话里已经打开的
+  这种 Surface 标签随之关闭，当前标签改选相邻的标签；正在看它的设置页时回到通用页，前进后退也会跳过这一页。被它挤掉过同名登记的插件会重新应用一次，拿到空出来的 id。
+- 插件更新到新版本时，新版本加载完才替换旧版本，已经打开的 Surface 标签保留，正在看的设置页也不变。
+  这要求在 `apply` 里同步登记：`await` 之后才登记的话，新版本登记之前那一刻这一页不存在，正在看它的用户会
+  回到通用页。其余插件的界面不动。
+- `id`、`title` 不是字符串或 `render` 不是函数时，`register` 直接抛错，插件页把它显示成界面代码错误。
 - client bundle 没有加载成功时，插件页显示「加载失败」和原因；下一次重新加载插件时会再试。
 
 ```ts
@@ -456,9 +460,28 @@ export function apply(ctx: ClientPluginContext): () => void {
       return ctx.theme.subscribe(() => undefined)
     },
   })
+  // 设置：出现在设置侧栏的「插件设置」组里；宿主画页面标题（就是 title），插件画标题下面的内容。
+  const disposeSettings = ctx.settingsPages.register({
+    id: "demo-settings",
+    title: "Demo",
+    render(container) {
+      container.append(
+        ctx.ui.section({
+          title: "日志",
+          children: [
+            ctx.ui.row({
+              title: "详细日志",
+              control: ctx.ui.toggle({ label: "详细日志", checked: false }),
+            }),
+          ],
+        }),
+      )
+    },
+  })
   return () => {
     disposePanel()
     disposeSurface()
+    disposeSettings()
   }
 }
 ```
@@ -466,8 +489,8 @@ export function apply(ctx: ClientPluginContext): () => void {
 - `render(container)` 可以返回清理函数；宿主在移除或重画前调用它，然后清空容器。
   `render` 抛出的错误显示在内容区里，不影响宿主。
 - 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
-  右栏标签（`pg-surface`）带内边距、最宽 720px。
-- 以后的设置页、Command 与工具渲染器扩展点会以同样的形式出现在 `ctx` 上。
+  右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样。
+- 以后的 Command 与工具渲染器扩展点会以同样的形式出现在 `ctx` 上。
 
 ### 和宿主一致的组件：`ctx.ui`
 
@@ -515,11 +538,11 @@ export function apply(ctx: ClientPluginContext): () => void {
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
 export function apply(ctx: ClientPluginContext): () => void {
-  const dispose = ctx.slots.register("settings.section", {
-    id: "demo-settings",
+  const dispose = ctx.slots.register("status.bar", {
+    id: "demo-status",
     order: 20,
     // 返回值交给 React 渲染；纯 DOM 内容请用 ctx.panels.register。
-    render: (props: { section?: string }) => `Demo section: ${props?.section ?? "general"}`,
+    render: () => "Demo status",
   })
   return () => dispose()
 }
@@ -528,12 +551,14 @@ export function apply(ctx: ClientPluginContext): () => void {
 slot 规则：
 
 - 允许的名称：`sidebar.section`、`chat.view`、`settings.section`、`panel.right`、`status.bar`。
-  当前主界面实际挂载的是 `chat.view` 与 `settings.section`；其余名称需要对应宿主挂载点才会显示。
+  当前主界面实际挂载的只有 `chat.view`，被内置的聊天视图占用；其余名称需要对应宿主挂载点才会显示。
+  设置不再经过 `settings.section`，要在设置里加一页请用 `ctx.settingsPages.register`。
 - 未注册的名称会被忽略，不会抛异常。
 - 同一 slot 内 `id` 必须唯一。重复注册会显式失败：第二次注册被拒绝，并记录
   `SLOT_CONFLICT`（控制台和插件错误表），不会静默覆盖。
 - 第三方 client bundle 无法解析裸 `react` 导入，因此需要真实 DOM 界面时用
-  `ctx.panels.register` 或 `ctx.surfaces.register`；`ctx.slots.register` 适合返回字符串等 React 可渲染的原始值。
+  `ctx.panels.register`、`ctx.surfaces.register` 或 `ctx.settingsPages.register`；`ctx.slots.register`
+  适合返回字符串等 React 可渲染的原始值。
 - `ctx.host.call(method, params)` 通过现有 MessagePort RPC 调用 Host，不引入 HTTP/WebSocket/token。
 
 UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
@@ -545,9 +570,10 @@ UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
 1. 启用时先计算“当前已启用插件 + 目标插件”的 `provides`。只要有一个服务标识被多个插件声明
    （包括同一插件重复声明），就抛出 `PROVIDES_CONFLICT`，附带冲突的标识和插件 id，并拒绝启用。
 2. 检查通过后，Host 入口被动态挂载，agent 与 Capability 插件的服务立即可用。
-3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface 和 slot 条目出现。
+3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页和 slot 条目出现。
 4. 停用时会卸载 Host 入口并等待 `ctx.effect` 清理，agent 与 Capability 插件的服务立即消失；
-   boot graph 重写后，它的 Panel、Surface 和 slot 条目也会移除，已经打开的 Surface 标签关闭。停用 agent 还会取消它排队中的 run、
+   boot graph 重写后，它的 Panel、Surface、设置页和 slot 条目也会移除，已经打开的 Surface 标签关闭，
+   正在看的设置页回到通用页。停用 agent 还会取消它排队中的 run、
    中断运行中的 run 并释放会话。
 
 因此插件必须正确清理自己注册的东西：agent 用

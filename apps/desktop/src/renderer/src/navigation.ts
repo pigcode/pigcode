@@ -1,11 +1,8 @@
-/** 前进后退的历史：会话、设置分区与插件页都是可以回去的位置。 */
-import type { SettingsSection } from "@pigcode/ui-shell"
+/** 前进后退的历史：会话、设置页与插件页都是可以回去的位置。 */
 
 /** 一个可以回去的位置。 */
 export type NavLocation =
-  | { kind: "thread"; threadId: string }
-  | { kind: "settings"; section: SettingsSection }
-  | { kind: "plugins" }
+  { kind: "thread"; threadId: string } | { kind: "settings"; page: string } | { kind: "plugins" }
 
 /** 历史记录与当前所在的下标；没有记录时 index 为 -1。 */
 export interface NavHistory {
@@ -22,7 +19,7 @@ const MAX_ENTRIES = 50
 export function sameLocation(a: NavLocation | null, b: NavLocation | null): boolean {
   if (!a || !b || a.kind !== b.kind) return false
   if (a.kind === "thread" && b.kind === "thread") return a.threadId === b.threadId
-  if (a.kind === "settings" && b.kind === "settings") return a.section === b.section
+  if (a.kind === "settings" && b.kind === "settings") return a.page === b.page
   return true
 }
 

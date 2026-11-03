@@ -203,9 +203,9 @@ export function apply(ctx: PluginHostContext): void {
 `
 }
 
-/** UI 入口：一个 Panel 与一个 Surface，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
+/** UI 入口：一个 Panel、一个 Surface 与一个设置页，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
 function uiEntry(pkgName: string, name: string, displayName: string): string {
-  return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface。 */
+  return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface、在设置里添加一页。 */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
 export function apply(ctx: ClientPluginContext): () => void {
@@ -228,9 +228,26 @@ export function apply(ctx: ClientPluginContext): () => void {
       )
     },
   })
+  const disposeSettings = ctx.settingsPages.register({
+    id: "${name}-settings",
+    title: "${displayName}",
+    render(container) {
+      container.append(
+        ctx.ui.section({
+          children: [
+            ctx.ui.row({
+              title: "Verbose logging",
+              control: ctx.ui.toggle({ label: "Verbose logging", checked: false }),
+            }),
+          ],
+        }),
+      )
+    },
+  })
   return () => {
     disposePanel()
     disposeSurface()
+    disposeSettings()
   }
 }
 `

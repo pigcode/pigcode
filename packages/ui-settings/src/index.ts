@@ -1,10 +1,8 @@
 /** 设置页面的公开入口。 */
 export * from "./appearance-page"
 export * from "./general-page"
-export * from "./plugin"
 export * from "./agent-fields"
 export * from "./agent-status"
 export * from "./agents-page"
 export * from "./agent-features"
 export * from "./schedules-page"
-export * from "./settings-view"

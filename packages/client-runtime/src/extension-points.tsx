@@ -81,10 +81,15 @@ export interface SurfaceContribution extends ContributionBase {
   render(props: SurfaceRenderProps): ReactNode
 }
 
-/** 设置页：设置侧栏里的一页（#37 接入）。 */
+/**
+ * 设置页：设置侧栏里的一项和它对应的内容。侧栏导航与搜索都从这里生成；内置的页列在「设置」组，
+ * 插件的列在后面的「插件设置」组。
+ */
 export interface SettingsPageContribution extends ContributionBase {
+  /** 侧栏里的名称，也是搜索比对的文字。 */
   title: ContributionText
-  icon?: ContributionIcon
+  icon: ContributionIcon
+  /** 页面内容，画在设置的内容区里。 */
   render(): ReactNode
 }
 

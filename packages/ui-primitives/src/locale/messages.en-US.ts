@@ -94,6 +94,8 @@ export const enUS = {
   "settings.search": "Search settings",
   "settings.clear": "Clear search",
   "settings.noMatches": "No matching settings",
+  "settings.pageError": "This settings page couldn't be shown",
+  "settings.pluginPages": "Plugin settings",
   "settings.about": "About",
   "settings.about.description": "Pigcode desktop",
   "settings.about.version": "Version",

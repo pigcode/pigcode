@@ -82,6 +82,10 @@ const pointKeys: Record<PluginExtensionPoint, MessageKey> = {
 /** 有名字的内置功能（扩展点冲突的先登记方）；其余的显示为「内置功能 id」。 */
 const builtinOwnerKeys: Readonly<Record<string, MessageKey>> = {
   workbench: "plugins.owner.workbench",
+  settings: "plugins.owner.settings",
+  agents: "plugins.owner.agents",
+  schedules: "plugins.owner.schedules",
+  plugins: "plugins.owner.plugins",
 }
 
 /** 界面代码错误的文案。 */

@@ -4,18 +4,12 @@
  * 和已有 id 冲突时不覆盖；插件从 boot graph 消失时按 owner 移除，其余插件不动。
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
-import {
-  Connection,
-  createExtensionRegistry,
-  createSlotRegistry,
-  type BootEntry,
-  type ClientModule,
-} from "@pigcode/client-runtime"
+import type { ClientModule } from "@pigcode/client-runtime"
 import { registerBuiltinSurfaces } from "./builtin-surfaces"
+import { deferred, entry, serve, setup, surfaceCall } from "./client-plugins.fixtures"
 
 // builtin-surfaces 只从工作台包里取文件标签的种类；整个包会加载 xterm，jsdom 里没有 canvas。
 vi.mock("@pigcode/ui-workbench", () => ({ FILE_SURFACE_KIND: "file" }))
-import { createClientPluginController } from "./client-plugins"
 
 /** 生成一个只注册单个 slot 条目的 client bundle data URL。 */
 function clientModule(slot: string, id: string): string {
@@ -26,46 +20,6 @@ function clientModule(slot: string, id: string): string {
     })
   }`
   return `data:text/javascript,${encodeURIComponent(source)}`
-}
-
-/** 控制器只在 reload 时使用 connection.call，这里不会真正发起 RPC。 */
-const connection = new Connection({ onEvent() {}, onDelta() {}, onStatus() {} })
-
-/** 一个 apply 体为 body 的 client bundle 入口。 */
-function entry(id: string, body: string, revision = "1"): BootEntry {
-  const source = `export function apply(ctx) {\n${body}\n}`
-  return { id, revision, inject: [], url: `data:text/javascript,${encodeURIComponent(source)}` }
-}
-
-/** 让 reload 读到给定的 boot graph。 */
-function serve(entries: BootEntry[]): void {
-  vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => ({ entries }) }))
-}
-
-/** 控制器与它用的 slot、扩展点注册表；importModule 缺省时真的 import data URL。 */
-function setup(importModule?: (url: string) => Promise<ClientModule>) {
-  const slots = createSlotRegistry()
-  const extensions = createExtensionRegistry()
-  const controller = createClientPluginController({
-    slots,
-    extensions,
-    connection,
-    ...(importModule ? { importModule } : {}),
-  })
-  return { slots, extensions, controller }
-}
-
-/** 一个 Surface 的登记语句。 */
-const surfaceCall = (id: string, title: string) =>
-  `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, render() {} })`
-
-/** 一个可以从外面完成的 promise。 */
-function deferred<T>() {
-  let resolve: (value: T) => void = () => undefined
-  const promise = new Promise<T>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
 }
 
 afterEach(() => {

@@ -11,6 +11,7 @@ import {
 } from "@pigcode/client-runtime"
 import "@pigcode/ui-primitives/styles/globals.css"
 import { App } from "./app"
+import { registerBuiltinSettingsPages } from "./builtin-settings-pages"
 import { registerBuiltinSurfaces } from "./builtin-surfaces"
 import { createClientPluginController } from "./client-plugins"
 import { registerCorePlugins } from "./core-plugins"
@@ -46,6 +47,7 @@ const connection = new Connection({
 
 const plugins = createClientPluginController({ slots, extensions, connection })
 registerCorePlugins(slots, { connection, store, plugins })
+registerBuiltinSettingsPages(extensions, { connection, store, plugins })
 
 let attached = false
 
@@ -84,7 +86,7 @@ const root = document.querySelector("#root")
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      {/* Panel 与 Surface 从扩展点注册表读取。 */}
+      {/* Panel、Surface 与设置页从扩展点注册表读取。 */}
       <ExtensionRegistryScope registry={extensions}>
         <App
           store={store}

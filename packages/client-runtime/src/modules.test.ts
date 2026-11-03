@@ -11,6 +11,7 @@ function stubContext(): ClientPluginContext {
     host: { call: async () => undefined },
     panels: { register: () => () => {} },
     surfaces: { register: () => () => {} },
+    settingsPages: { register: () => () => {} },
     ui: {} as ClientUiKit,
     theme: fixed<ClientTheme>("light"),
     locale: fixed("zh-CN"),

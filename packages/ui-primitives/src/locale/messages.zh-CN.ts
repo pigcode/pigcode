@@ -93,6 +93,8 @@ export const zhCN = {
   "settings.search": "搜索设置",
   "settings.clear": "清除搜索",
   "settings.noMatches": "没有匹配的设置",
+  "settings.pageError": "这个设置页没有显示出来",
+  "settings.pluginPages": "插件设置",
   "settings.about": "关于",
   "settings.about.description": "Pigcode 桌面端",
   "settings.about.version": "版本",

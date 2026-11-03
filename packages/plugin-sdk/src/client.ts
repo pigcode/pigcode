@@ -1,5 +1,5 @@
 /**
- * 浏览器侧插件可见的能力：在扩展点上登记的 Panel 与 Surface（内容是 DOM）、和宿主一致的界面组件
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface 与设置页（内容是 DOM）、和宿主一致的界面组件
  * （pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
  */
 
@@ -24,6 +24,22 @@ export interface ClientSurface {
   /** 一句说明，鼠标悬停在启动器条目上时显示。 */
   description?: string
   /** 小的在前；相同时按 id 排。缺省 0。 */
+  order?: number
+  render: ClientRender
+}
+
+/**
+ * 设置页：设置侧栏「插件设置」组里的一页。宿主画侧栏条目和页面标题，内容区用宿主的字体、颜色与间距；
+ * 插件停用时这一页随之移除，正在看它的用户回到通用页。
+ * 在 apply 里同步登记：插件更新时新版本同步替换旧版本，正在看这一页的用户留在这一页；await 之后才登记的话，
+ * 中间有一刻这一页不存在，用户会回到通用页。
+ */
+export interface ClientSettingsPage {
+  /** 在全部设置页里唯一（包括内置的 general、appearance、agents、schedules、plugins）。 */
+  id: string
+  /** 侧栏里的名称，也是页面标题。 */
+  title: string
+  /** 在「插件设置」组里小的在前；相同时按 id 排。缺省 0。 */
   order?: number
   render: ClientRender
 }
@@ -116,6 +132,8 @@ export interface ClientPluginContext {
   panels: ClientContributionApi<ClientPanel>
   /** Surface 扩展点：在 Workbench 添加一种标签；注销或插件停用时，已经打开的这种标签随之关闭。 */
   surfaces: ClientContributionApi<ClientSurface>
+  /** 设置页扩展点：在设置里添加一页。 */
+  settingsPages: ClientContributionApi<ClientSettingsPage>
   ui: ClientUiKit
   theme: ClientObservable<ClientTheme>
   /** 界面语言，例如 `zh-CN`、`en-US`。 */

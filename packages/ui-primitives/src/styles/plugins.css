@@ -48,6 +48,12 @@
   gap: 18px;
   padding: 16px 18px 24px;
 }
+/* 设置页：宿主的 SettingPage 已经给了页宽与边距，分组之间和内置设置页的分组一样隔开。 */
+.pg-root.pg-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
 
 .pg-root > .btn,
 .pg-section-body > .btn {

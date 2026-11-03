@@ -1,6 +1,6 @@
 /**
- * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface，界面都用 ctx.ui 拼出来，和宿主的控件一模一样；
- * 文案随 ctx.locale 切换，主题变化时面板里的状态跟着更新。
+ * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface、设置里一页，界面都用 ctx.ui 拼出来，
+ * 和宿主的控件一模一样；文案随 ctx.locale 切换，主题变化时面板里的状态跟着更新。
  */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
@@ -18,6 +18,7 @@ const TEXT = {
     emptyDesc: "添加一个项目后再读取。",
     verbose: "详细日志",
     verboseDesc: "示例开关：只保存在这个标签里。",
+    settingsDesc: "示例开关：只保存在这一页里。",
   },
   "en-US": {
     hello: "Hello from pigcode-ui-debug-panel",
@@ -32,6 +33,7 @@ const TEXT = {
     emptyDesc: "Add a project, then load again.",
     verbose: "Verbose logging",
     verboseDesc: "A sample switch that lives only in this tab.",
+    settingsDesc: "A sample switch that lives only on this page.",
   },
 }
 
@@ -117,8 +119,35 @@ export function apply(ctx: ClientPluginContext): () => void {
     },
   })
 
+  const disposeSettings = ctx.settingsPages.register({
+    id: "debug-settings",
+    title: "Debug Settings",
+    render(container) {
+      const theme = ui.badge(ctx.theme.get(), "accent")
+      container.append(
+        ui.section({
+          title: text.host,
+          description: text.hostDesc,
+          children: [
+            ui.row({ title: text.theme, control: theme }),
+            ui.row({ title: text.locale, control: ui.badge(ctx.locale.get()) }),
+            ui.row({
+              title: text.verbose,
+              description: text.settingsDesc,
+              control: ui.toggle({ label: text.verbose, checked: false }),
+            }),
+          ],
+        }),
+      )
+      return ctx.theme.subscribe((next) => {
+        theme.textContent = next
+      })
+    },
+  })
+
   return () => {
     disposePanel()
     disposeSurface()
+    disposeSettings()
   }
 }

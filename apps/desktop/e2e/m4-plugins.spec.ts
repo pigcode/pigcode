@@ -37,7 +37,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   // echo agent 把输入原样回传，确认插件提供的 agent 真的接管了这次 run。
   await expect(page.locator(".msg-ai").filter({ hasText: "hello echo" })).toBeVisible()
 
-  // 安装 UI 插件：它的 Panel 出现在侧栏，Surface 出现在右侧面板的「+」菜单里。
+  // 安装 UI 插件：它的 Panel 出现在侧栏，Surface 出现在右侧面板的「+」菜单里，设置页出现在设置侧栏里。
   const openPlugins = async () => {
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "插件", exact: true }).first().click()
@@ -50,6 +50,32 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(debug.getByRole("switch")).toBeChecked()
   const debugPanel = page.locator(".plugin-panel-head").filter({ hasText: "Debug Panel" })
   await expect(debugPanel).toBeVisible()
+
+  // 设置页列在内置页后面的「插件设置」组里；宿主画页面标题，插件画下面的内容。设置里的搜索也搜得到它。
+  const sidebar = page.locator(".sidebar")
+  const settingsNav = sidebar.locator(".nav-item:not(.back)")
+  const debugSettings = sidebar.getByRole("button", { name: "Debug Settings", exact: true })
+  const debugSettingsTitle = page.getByRole("heading", { level: 1, name: "Debug Settings" })
+  await expect(settingsNav).toHaveText([
+    "通用",
+    "外观",
+    "Agent",
+    "定时任务",
+    "插件",
+    "Debug Settings",
+  ])
+  await expect(sidebar.locator(".side-group")).toHaveText(["设置", "插件设置"])
+  await debugSettings.click()
+  await expect(debugSettingsTitle).toBeVisible()
+  await expect(
+    page
+      .locator("[data-plugin-content='debug-settings']")
+      .getByRole("switch", { name: "详细日志" }),
+  ).toBeVisible()
+  const search = page.getByPlaceholder("搜索设置")
+  await search.fill("debug")
+  await expect(settingsNav).toHaveText(["Debug Settings"])
+  await search.fill("")
   await backToApp()
   await expect(debugPanel).toBeVisible()
 
@@ -69,12 +95,24 @@ test("installs, enables, and disables plugins without restart", async () => {
   )
   await expect(page.locator("[data-plugin-content='debug-inspector']")).toBeVisible()
 
-  // 停用后 Panel 消失，打开着的 Surface 标签关闭，当前标签改选终端，「+」菜单里也不再有它。
-  await openPlugins()
+  // 设置记得上次看的页：再打开设置时回到 Debug 设置页。从命令面板打开插件页，设置里选中的仍是
+  // Debug 设置页，就在这时停用它。
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await expect(debugSettingsTitle).toBeVisible()
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("插件")
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("heading", { level: 1, name: "插件管理" })).toBeVisible()
+
+  // 停用后 Panel 和设置页消失，打开着的 Surface 标签关闭，当前标签改选终端，「+」菜单里也不再有它。
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).not.toBeChecked()
   await expect(debugPanel).toBeHidden()
-  await backToApp()
+  await expect(debugSettings).toHaveCount(0)
+  await expect(sidebar.locator(".side-group")).toHaveText(["设置"])
+  // 后退跳过已经移除的 Debug 设置页，直接回到会话，不会停在空白的设置页上。
+  await page.getByRole("button", { name: "后退" }).click()
+  await expect(page.locator(".tiptap")).toBeVisible()
   await expect(tabs).toHaveText(["终端 1"])
   await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
   await expect(debugPanel).toHaveCount(0)
@@ -83,11 +121,20 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toHaveCount(0)
   await page.keyboard.press("Escape")
 
-  // 重新启用：Panel 与 Surface 回来。
-  await openPlugins()
+  // 选中的 Debug 设置页已经没有了：再打开设置时是通用页，不是空白页。
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await expect(page.getByRole("heading", { level: 1, name: "通用设置" })).toBeVisible()
+  await expect(sidebar.getByRole("button", { name: "通用", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  )
+
+  // 重新启用：Panel、设置页与 Surface 回来。
+  await page.getByRole("button", { name: "插件", exact: true }).first().click()
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).toBeChecked()
   await expect(debugPanel).toBeVisible()
+  await expect(debugSettings).toBeVisible()
   await backToApp()
   await addSurface.click()
   await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toBeVisible()
