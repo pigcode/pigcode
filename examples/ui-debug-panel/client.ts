@@ -1,6 +1,7 @@
 /**
- * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface、设置里一页，界面都用 ctx.ui 拼出来，
- * 和宿主的控件一模一样；文案随 ctx.locale 切换，主题变化时面板里的状态跟着更新。
+ * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface、设置里一页，再加一条 Command（命令面板与
+ * 输入框 `/` 都能执行）；界面都用 ctx.ui 拼出来，和宿主的控件一模一样；文案随 ctx.locale 切换，
+ * 主题变化时面板里的状态跟着更新。
  */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
@@ -19,6 +20,10 @@ const TEXT = {
     verbose: "详细日志",
     verboseDesc: "示例开关：只保存在这个标签里。",
     settingsDesc: "示例开关：只保存在这一页里。",
+    command: "运行示例命令",
+    commandDesc: "面板与输入框 / 共用同一条命令。",
+    commandKeyword: "调试 debug",
+    runs: (count: number) => `示例命令已执行 ${count} 次`,
   },
   "en-US": {
     hello: "Hello from pigcode-ui-debug-panel",
@@ -34,6 +39,10 @@ const TEXT = {
     verbose: "Verbose logging",
     verboseDesc: "A sample switch that lives only in this tab.",
     settingsDesc: "A sample switch that lives only on this page.",
+    command: "Run the sample command",
+    commandDesc: "One command shared by the palette and the composer's / list.",
+    commandKeyword: "debug sample",
+    runs: (count: number) => `Sample command ran ${count} times`,
   },
 }
 
@@ -46,6 +55,9 @@ function copyFor(locale: string): Copy {
 export function apply(ctx: ClientPluginContext): () => void {
   const { ui } = ctx
   const text = copyFor(ctx.locale.get())
+  // 命令执行次数：面板里显示出来，E2E 用它确认命令面板与输入框 `/` 跑的是同一条命令。
+  let runs = 0
+  const listeners = new Set<() => void>()
 
   const disposePanel = ctx.panels.register({
     id: "debug-panel",
@@ -58,10 +70,30 @@ export function apply(ctx: ClientPluginContext): () => void {
             { title: text.theme, meta: ctx.theme.get() },
             { title: text.locale, meta: ctx.locale.get() },
           ]),
+          // 命令跑过才多这一行：插件没用它时界面和以前一样。
+          ...(runs > 0 ? [ui.text(text.runs(runs), { tone: "muted", size: "sm" })] : []),
         )
       }
       draw()
-      return ctx.theme.subscribe(draw)
+      listeners.add(draw)
+      const unsubscribeTheme = ctx.theme.subscribe(draw)
+      return () => {
+        listeners.delete(draw)
+        unsubscribeTheme()
+      }
+    },
+  })
+
+  // 一条命令同时出现在命令面板和输入框的 `/` 里；停用插件后两处都消失。
+  const disposeCommand = ctx.commands.register({
+    id: "debug-run",
+    title: text.command,
+    keywords: [text.commandKeyword],
+    icon: "spark",
+    slash: "debug",
+    run() {
+      runs += 1
+      for (const notify of [...listeners]) notify()
     },
   })
 
@@ -147,6 +179,7 @@ export function apply(ctx: ClientPluginContext): () => void {
 
   return () => {
     disposePanel()
+    disposeCommand()
     disposeSurface()
     disposeSettings()
   }

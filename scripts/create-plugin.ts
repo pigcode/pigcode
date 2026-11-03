@@ -203,9 +203,9 @@ export function apply(ctx: PluginHostContext): void {
 `
 }
 
-/** UI 入口：一个 Panel、一个 Surface 与一个设置页，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
+/** UI 入口：一个 Panel、一个 Surface、一个设置页与一条 Command，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
 function uiEntry(pkgName: string, name: string, displayName: string): string {
-  return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface、在设置里添加一页。 */
+  return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface、在设置里添加一页，再加一条命令。 */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
 export function apply(ctx: ClientPluginContext): () => void {
@@ -214,6 +214,15 @@ export function apply(ctx: ClientPluginContext): () => void {
     title: "${displayName}",
     render(container) {
       container.append(ctx.ui.text("Hello from ${pkgName}", { tone: "muted", size: "sm" }))
+    },
+  })
+  // 命令面板与输入框的 / 共用这一条；slash 给了触发名。
+  const disposeCommand = ctx.commands.register({
+    id: "${name}-run",
+    title: "${displayName}",
+    slash: "${name}",
+    run() {
+      console.info("${pkgName} ran")
     },
   })
   const disposeSurface = ctx.surfaces.register({
@@ -246,6 +255,7 @@ export function apply(ctx: ClientPluginContext): () => void {
   })
   return () => {
     disposePanel()
+    disposeCommand()
     disposeSurface()
     disposeSettings()
   }

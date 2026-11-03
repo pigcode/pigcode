@@ -106,6 +106,11 @@ const marks: Record<string, string> = {
     '<path d="M14.5 6.5l3-3a2.1 2.1 0 0 1 3 3l-3 3"/><path d="M12.5 7.5l4 4M14.5 9.5L7 17l-2.5.5.5-2.5L12.5 7.5"/>',
 }
 
+/** 图标表里有没有这个名字；插件传来的名字用它判断，没有时换成通用图标。 */
+export function hasIcon(name: string): boolean {
+  return Object.hasOwn(marks, name)
+}
+
 type IconProps = SVGProps<SVGSVGElement> & { name: keyof typeof marks | string; small?: boolean }
 
 /** 画出设计稿里的线性图标。未知名字不渲染图形。 */

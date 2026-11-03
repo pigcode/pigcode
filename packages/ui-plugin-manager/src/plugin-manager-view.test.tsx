@@ -137,6 +137,15 @@ describe("PluginManagerView", () => {
     expect(screen.getByText("界面代码运行出错：boom")).toBeTruthy()
   })
 
+  it("lists a command that threw without marking the plugin as failed", async () => {
+    renderView([{ ...DEMO, clientErrors: [{ kind: "command", detail: "debug-run: boom" }] }])
+    expect(screen.getByRole("button", { name: "Demo 的详情" }).textContent).not.toContain(
+      "加载失败",
+    )
+    await userEvent.click(screen.getByRole("button", { name: "Demo 的详情" }))
+    expect(screen.getByText("命令执行出错：debug-run: boom")).toBeTruthy()
+  })
+
   it("toggles a plugin and uninstalls after confirming", async () => {
     const onDisable = vi.fn(async () => {})
     const onUninstall = vi.fn(async () => {})

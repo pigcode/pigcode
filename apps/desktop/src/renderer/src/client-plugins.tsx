@@ -49,10 +49,11 @@ function isSlotName(name: string): name is SlotName {
  * 插件在窗口里出的错；id 用作快照内的稳定 key。
  * - import：client bundle 没有加载成功（detail 是原因）；
  * - apply：apply 抛了错（detail 是原因）；
+ * - command：插件的 Command 在执行或判断能否执行时抛了错（detail 是 `命令 id: 原因`）；
  * - slotConflict：slot 条目和另一个插件重名（detail 是 `slot:id`，owner 是先注册的插件）。
  */
 export type PluginError =
-  | { id: string; pluginId: string; kind: "import" | "apply"; detail: string }
+  | { id: string; pluginId: string; kind: "import" | "apply" | "command"; detail: string }
   | { id: string; pluginId: string; kind: "slotConflict"; detail: string; owner: string }
 
 /** 插件错误的只读快照与订阅入口。 */
@@ -102,6 +103,53 @@ function checkContribution(
   if (problem) throw new TypeError(`${api}.register: ${problem}`)
 }
 
+/** 是不是一个可选的字符串字段：没给，或者给的是字符串。 */
+function optionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string"
+}
+
+/**
+ * 检查插件传来的 Command。插件可以是没有类型检查的 JS：缺了 id、标题或 run 的登记会让命令面板
+ * 在打开时出错，这里直接抛出，在 apply 里登记时就记成这个插件的界面代码错误。
+ */
+function checkCommand(command: {
+  id?: unknown
+  title?: unknown
+  order?: unknown
+  run?: unknown
+  slash?: unknown
+  available?: unknown
+  keywords?: unknown
+  icon?: unknown
+  shortcut?: unknown
+}): void {
+  const checks: Array<[boolean, string]> = [
+    [typeof command.id === "string" && command.id !== "", "id must be a non-empty string"],
+    [typeof command.title === "string" && command.title !== "", "title must be a non-empty string"],
+    [typeof command.run === "function", "run must be a function"],
+    [command.order === undefined || Number.isFinite(command.order), "order must be a number"],
+    [
+      command.slash === undefined ||
+        (typeof command.slash === "string" && /^[^\s/]+$/.test(command.slash)),
+      "slash must be a non-empty string without spaces or slashes",
+    ],
+    [
+      command.available === undefined || typeof command.available === "function",
+      "available must be a function",
+    ],
+    [
+      command.keywords === undefined ||
+        (Array.isArray(command.keywords) &&
+          command.keywords.every((keyword) => typeof keyword === "string")),
+      "keywords must be an array of strings",
+    ],
+    [optionalString(command.icon), "icon must be a string"],
+    [optionalString(command.shortcut), "shortcut must be a string"],
+  ]
+  const problem = checks.find(([ok]) => !ok)?.[1]
+  if (problem) throw new TypeError(`commands.register: ${problem}`)
+}
+
 /** 去掉 PluginError 的 id 字段，用来描述一条要记的错误。 */
 type ErrorInput = PluginError extends infer E
   ? E extends PluginError
@@ -139,9 +187,10 @@ export function createClientPluginController(deps: {
   }
 
   function reportError(error: ErrorInput): void {
-    // 同样内容只保留一条；console.error 带上插件 id 便于定位。
+    // 同样内容只记一条、只打印一次（available() 每次按键都可能抛同样的错）；console.error 带上插件 id。
     const id = `${error.pluginId}:${error.kind}:${error.detail}`
-    if (!errors.some((item) => item.id === id)) setErrors([...errors, { ...error, id }])
+    if (errors.some((item) => item.id === id)) return
+    setErrors([...errors, { ...error, id }])
     console.error(`[plugin:${error.pluginId}] ${error.kind}: ${error.detail}`)
   }
 
@@ -150,7 +199,11 @@ export function createClientPluginController(deps: {
     if (next.length !== errors.length) setErrors(next)
   }
 
-  function createContext(pluginId: string, bucket: Array<() => void>): ClientPluginContext {
+  function createContext(
+    pluginId: string,
+    bucket: Array<() => void>,
+    live: { current: boolean },
+  ): ClientPluginContext {
     const owner: ContributionOwner = { kind: "plugin", id: pluginId }
     return {
       slots: {
@@ -233,6 +286,65 @@ export function createClientPluginController(deps: {
           })
         },
       },
+      commands: {
+        register(command) {
+          checkCommand(command)
+          // `/` 重名不拒绝登记：输入框只显示排在前面的一条（内置命令总在前面），
+          // 前面那条消失后（例如它的插件停用）这一条自动出现。
+          const slash = command.slash?.toLowerCase()
+          const taken = slash
+            ? deps.extensions.get("command").find((item) => item.slash?.toLowerCase() === slash)
+            : undefined
+          if (taken) {
+            console.warn(
+              `[plugin:${pluginId}] /${command.slash} is already used by the command "${taken.id}"; ` +
+                `"${command.id}" stays out of the / list while that command is registered`,
+            )
+          }
+          // 命令在宿主的点击或按键里执行：插件抛的错记成这个插件的错误，不冒到宿主。
+          // available() 可能在渲染期间被调用，错误推迟到渲染之后再记。
+          // 插件已经停用或换了版本时不再记：错误属于已经卸载的那次应用。
+          const report = (error: unknown) =>
+            queueMicrotask(() => {
+              if (!live.current) return
+              reportError({
+                pluginId,
+                kind: "command",
+                detail: `${command.id}: ${messageOf(error)}`,
+              })
+            })
+          const { available } = command
+          return deps.extensions.register("command", {
+            id: command.id,
+            owner,
+            order: command.order ?? 0,
+            title: { text: command.title },
+            ...(command.keywords ? { keywords: command.keywords } : {}),
+            ...(command.icon ? { icon: command.icon } : {}),
+            ...(command.shortcut ? { shortcut: command.shortcut } : {}),
+            ...(available
+              ? {
+                  available: () => {
+                    try {
+                      return Boolean(available.call(command))
+                    } catch (error) {
+                      report(error)
+                      return false
+                    }
+                  },
+                }
+              : {}),
+            ...(command.slash ? { slash: command.slash } : {}),
+            async run() {
+              try {
+                await command.run()
+              } catch (error) {
+                report(error)
+              }
+            },
+          })
+        },
+      },
       ui,
       theme,
       locale,
@@ -242,9 +354,11 @@ export function createClientPluginController(deps: {
   /** 应用一个插件；apply 抛错时记一条错误，已经登记的内容照常保留到卸载。 */
   function apply(entry: BootEntry, module: ClientModule): LoadedPlugin {
     const bucket: Array<() => void> = []
+    // 这次应用还在不在；卸载后才到的命令错误靠它丢掉。
+    const live = { current: true }
     let cleanup: () => void = () => undefined
     try {
-      cleanup = applyClientPlugin(module, createContext(entry.id, bucket))
+      cleanup = applyClientPlugin(module, createContext(entry.id, bucket, live))
     } catch (error) {
       reportError({ pluginId: entry.id, kind: "apply", detail: messageOf(error) })
     }
@@ -252,6 +366,7 @@ export function createClientPluginController(deps: {
       revision: entry.revision,
       module,
       unload() {
+        live.current = false
         try {
           cleanup()
         } catch (error) {

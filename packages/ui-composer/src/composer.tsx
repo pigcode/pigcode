@@ -88,6 +88,17 @@ function setPlainText(editor: Editor, text: string): void {
   editor.commands.focus("end")
 }
 
+/** 每个 label（`/` 名字，不分大小写）只保留第一条命令。 */
+function firstPerLabel(commands: readonly ComposerCommand[]): ComposerCommand[] {
+  const seen = new Set<string>()
+  return commands.filter((command) => {
+    const key = command.label.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
 export function Composer({
   onSubmit,
@@ -148,6 +159,9 @@ export function Composer({
       : []),
   ]
 
+  // 同一个 `/` 名字只留第一条：输入框自己的命令在前，外面传进来的重名命令不显示。
+  const allCommands = firstPerLabel([...builtinCommands, ...commands])
+
   // 编辑器只创建一次；回调与配置通过 ref 读取最新值。
   const latest = useRef({
     onSubmit,
@@ -161,7 +175,7 @@ export function Composer({
     inputLabel: t("composer.input"),
     smartPunctuation,
     files,
-    commands: [...builtinCommands, ...commands],
+    commands: allCommands,
   })
   latest.current = {
     onSubmit,
@@ -175,7 +189,7 @@ export function Composer({
     inputLabel: t("composer.input"),
     smartPunctuation,
     files,
-    commands: [...builtinCommands, ...commands],
+    commands: allCommands,
   }
   const editorRef = useRef<Editor | null>(null)
   const draftKeyRef = useRef<string | null>(draftKey)

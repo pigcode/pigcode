@@ -2,10 +2,19 @@
  * 应用外壳：Windows/Linux 的标题栏、侧栏顶行按钮、工作区/设置侧栏与内容区。
  * 窗口按钮全部由系统绘制：macOS 的交通灯落在侧栏顶行，Windows/Linux 的按钮叠在标题栏上。
  */
-import { useEffect, useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react"
 import type { Project, Thread } from "@pigcode/contracts"
+import { useExtensionRegistry } from "@pigcode/client-runtime"
 import { Button, formatShortcut, useLocale, useSidebarGrouping } from "@pigcode/ui-primitives"
 import { AddProjectDialog } from "./add-project-dialog"
+import { registerBuiltinCommands } from "./builtin-commands"
 import { CommandPalette } from "./command-palette"
 import { Icon } from "./icon"
 import { PanelResizer, useRightWidth } from "./panel-resizer"
@@ -134,6 +143,7 @@ export function Shell({
   children,
 }: ShellProps) {
   const { t } = useLocale()
+  const registry = useExtensionRegistry()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [rightWidth, setRightWidth] = useRightWidth()
@@ -288,6 +298,30 @@ export function Shell({
     onView(page === "plugins" ? "plugins" : "settings")
   }
 
+  // 内置命令走 Command 扩展点：命令面板和输入框 `/` 都从注册表读取。调用方每次渲染都可能传来新的
+  // 回调，命令通过 ref 调用最新的那个；只有语言变化（关键词跟着变）或右侧面板开关出现、消失时才重新登记。
+  const commandActions = useRef({ onNewThread, onView, onToggleRight, toggleSidebar })
+  useLayoutEffect(() => {
+    commandActions.current = { onNewThread, onView, onToggleRight, toggleSidebar }
+  })
+  const hasToggleRight = onToggleRight !== undefined
+  useEffect(() => {
+    if (!registry) return undefined
+    const latest = () => commandActions.current
+    return registerBuiltinCommands(
+      registry,
+      {
+        onNewThread: () => latest().onNewThread(),
+        onAddProject: () => setDialogOpen(true),
+        onSettings: () => latest().onView("settings"),
+        onPlugins: () => latest().onView("plugins"),
+        onToggleSidebar: () => latest().toggleSidebar(),
+        ...(hasToggleRight ? { onToggleWorkbench: () => latest().onToggleRight?.() } : {}),
+      },
+      t,
+    )
+  }, [registry, t, hasToggleRight])
+
   const showRight = rightPanel !== undefined && rightOpen
   const appClass = [
     "app",
@@ -416,11 +450,6 @@ export function Shell({
         activeThreadId={activeThreadId}
         onNewThread={() => onNewThread()}
         onOpenThread={onOpenThread}
-        onAddProject={() => setDialogOpen(true)}
-        onSettings={() => onView("settings")}
-        onPlugins={() => onView("plugins")}
-        onToggleSidebar={toggleSidebar}
-        {...(onToggleRight ? { onToggleWorkbench: () => onToggleRight() } : {})}
       />
     </div>
   )

@@ -116,6 +116,57 @@ describe("Composer", () => {
     await waitFor(() => expect(screen.getByRole("textbox").textContent).toBe("draft for b"))
   })
 
+  it("lists / commands that are available now, one per name", async () => {
+    const user = userEvent.setup()
+    let ready = false
+    const { editor } = renderComposer({
+      commands: [
+        { id: "a", label: "/debug", description: "First", run: () => {} },
+        { id: "b", label: "/debug", description: "Second", run: () => {} },
+        {
+          id: "c",
+          label: "/dev",
+          description: "Dev server",
+          available: () => ready,
+          run: () => {},
+        },
+      ],
+    })
+
+    await user.click(editor)
+    await user.keyboard("/d")
+    const list = await screen.findByRole("listbox", { name: "命令" })
+    expect(list.textContent).toContain("First")
+    expect(list.textContent).not.toContain("Second")
+    expect(list.textContent).not.toContain("Dev server")
+
+    // available() 在每次弹出建议时重新判断。
+    await user.keyboard("{Escape}{Control>}a{/Control}{Backspace}")
+    ready = true
+    await user.keyboard("/d")
+    expect((await screen.findByRole("listbox", { name: "命令" })).textContent).toContain(
+      "Dev server",
+    )
+  })
+
+  it("keeps the typed text when the chosen / command went away while the list was open", async () => {
+    const user = userEvent.setup()
+    const run = vi.fn()
+    const { editor, rerenderWith } = renderComposer({
+      commands: [{ id: "a", label: "/debug", description: "Debug", run }],
+    })
+
+    await user.click(editor)
+    await user.keyboard("/de")
+    await screen.findByRole("listbox", { name: "命令" })
+    // 例如它的插件在列表打开期间被停用。
+    rerenderWith({ commands: [] })
+    await user.keyboard("{Enter}")
+
+    expect(run).not.toHaveBeenCalled()
+    expect(editor.textContent).toContain("/de")
+  })
+
   it("does not submit empty content", async () => {
     const onSubmit = vi.fn()
     const { editor } = renderComposer({ onSubmit })

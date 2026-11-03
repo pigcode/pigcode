@@ -223,8 +223,6 @@ export const zhCN = {
   "composer.permission.full.confirm": "开启完全访问",
   "composer.command.model": "切换 agent 与模型",
   "composer.command.model.keyword": "模型",
-  "composer.command.new.keyword": "新会话",
-  "composer.command.panel.keyword": "工作台",
   "composer.suggest.files": "文件",
   "composer.suggest.commands": "命令",
   "composer.suggest.noFiles": "没有匹配的文件",

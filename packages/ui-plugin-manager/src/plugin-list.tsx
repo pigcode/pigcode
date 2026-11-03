@@ -29,7 +29,7 @@ export interface PluginContributionConflict {
 
 /** 插件的界面代码在窗口里出的错：没有加载成功，或 apply 抛了错。detail 是原因。 */
 export interface PluginClientError {
-  kind: "import" | "apply"
+  kind: "import" | "apply" | "command"
   detail: string
 }
 
@@ -81,6 +81,8 @@ const pointKeys: Record<PluginExtensionPoint, MessageKey> = {
 
 /** 有名字的内置功能（扩展点冲突的先登记方）；其余的显示为「内置功能 id」。 */
 const builtinOwnerKeys: Readonly<Record<string, MessageKey>> = {
+  shell: "plugins.owner.shell",
+  projects: "plugins.owner.projects",
   workbench: "plugins.owner.workbench",
   settings: "plugins.owner.settings",
   agents: "plugins.owner.agents",
@@ -92,6 +94,7 @@ const builtinOwnerKeys: Readonly<Record<string, MessageKey>> = {
 const clientErrorKeys: Record<PluginClientError["kind"], MessageKey> = {
   import: "plugins.clientError.import",
   apply: "plugins.clientError.apply",
+  command: "plugins.clientError.command",
 }
 
 /** 一次替换模板里的全部 {name}：替换进去的值原样显示，不会再被当成占位符或 $ 替换模式。 */
@@ -101,11 +104,14 @@ function fill(template: string, values: Readonly<Record<string, string>>): strin
   )
 }
 
-/** 一行的状态：加载失败 > 冲突 > 启用 > 停用。 */
+/**
+ * 一行的状态：加载失败 > 冲突 > 启用 > 停用。命令执行出错不算加载失败：插件照常在用，
+ * 错误只在行里列出来。
+ */
 function statusOf(plugin: PluginSummary): { tone: StatusTone; label: MessageKey } {
   if (
     (plugin.error && plugin.error !== plugin.conflict) ||
-    (plugin.clientErrors?.length ?? 0) > 0
+    (plugin.clientErrors ?? []).some((error) => error.kind !== "command")
   ) {
     return { tone: "error", label: "plugins.status.failed" }
   }

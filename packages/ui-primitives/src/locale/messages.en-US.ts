@@ -229,8 +229,6 @@ export const enUS = {
   "composer.permission.full.confirm": "Turn on full access",
   "composer.command.model": "Switch agent and model",
   "composer.command.model.keyword": "model",
-  "composer.command.new.keyword": "new chat",
-  "composer.command.panel.keyword": "workbench",
   "composer.suggest.files": "Files",
   "composer.suggest.commands": "Commands",
   "composer.suggest.noFiles": "No matching files",

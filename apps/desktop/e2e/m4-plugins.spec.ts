@@ -79,7 +79,21 @@ test("installs, enables, and disables plugins without restart", async () => {
   await backToApp()
   await expect(debugPanel).toBeVisible()
 
-  // 先开一个终端，再打开插件的 Surface：它成为当前标签，内容由插件画出。
+  // 插件命令在命令面板和输入框 `/` 里都能执行：面板里的计数由同一条命令递增。
+  const debugRunCount = page
+    .locator("[data-plugin-content='debug-panel']")
+    .getByText(/示例命令已执行/)
+  await expect(debugRunCount).toHaveCount(0)
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("示例命令")
+  await page.getByRole("option", { name: /运行示例命令/ }).click()
+  await expect(debugRunCount).toHaveText("示例命令已执行 1 次")
+  await page.locator(".tiptap").click()
+  await page.keyboard.type("/debug")
+  await expect(page.getByRole("listbox", { name: "命令" })).toContainText("/debug")
+  await page.keyboard.press("Enter")
+  await expect(debugRunCount).toHaveText("示例命令已执行 2 次")
+
   await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
   const tabs = page.locator(".right-panel").getByRole("tab")
   const addSurface = page.getByRole("button", { name: "添加面板" })
@@ -116,6 +130,19 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(tabs).toHaveText(["终端 1"])
   await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
   await expect(debugPanel).toHaveCount(0)
+  // 命令也随插件停用：命令面板和输入框 `/` 里都不再有它。
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("示例命令")
+  await expect(page.locator(".palette")).toContainText("没有匹配结果")
+  await page.keyboard.press("Escape")
+  await page.locator(".tiptap").click()
+  await page.keyboard.type("/debug")
+  await expect(page.getByRole("listbox", { name: "命令" })).toContainText("没有匹配的命令")
+  await page.keyboard.press("Escape")
+  // 没有匹配时触发词留在输入框里，像 @ 一样要自己删掉。
+  await page.keyboard.press("ControlOrMeta+a")
+  await page.keyboard.press("Backspace")
+  await expect(page.locator(".tiptap")).toHaveText("")
   await addSurface.click()
   await expect(page.getByRole("menuitem", { name: /终端/ })).toBeVisible()
   await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toHaveCount(0)

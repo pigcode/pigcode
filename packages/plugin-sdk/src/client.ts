@@ -49,6 +49,30 @@ export interface ClientContributionApi<T> {
   register(contribution: T): () => void
 }
 
+/**
+ * Command：命令面板和输入框 `/` 共用的一个具名操作。提供了 `slash` 的命令同时出现在 `/` 建议里，
+ * 触发名就是它；命令面板按标题与关键词过滤。
+ */
+export interface ClientCommand {
+  /** 在全部命令里唯一（包括内置的新会话、侧栏、右栏、设置、插件、添加项目）。 */
+  id: string
+  /** 命令面板里的名称，也是 `/` 建议里的名称。 */
+  title: string
+  /** 在全部命令里小的在前；相同时按 id 排。缺省 0。 */
+  order?: number
+  /** 额外的搜索词。 */
+  keywords?: readonly string[]
+  /** 命令面板里的图标名，见宿主图标表；缺省用通用图标。 */
+  icon?: string
+  /** 快捷键提示，例如 `Mod+n`；只用于显示，快捷键本身由宿主注册。 */
+  shortcut?: string
+  /** 现在能不能执行；缺省为能。返回 false 时命令面板和 `/` 都不列出它。 */
+  available?: () => boolean
+  /** `/` 触发名，例如 `debug` 对应 `/debug`；缺省时只出现在命令面板。 */
+  slash?: string
+  run(): void | Promise<void>
+}
+
 /** client bundle 可以注册的 slot 条目；不依赖 React 类型。 */
 export interface ClientSlotEntry {
   id: string
@@ -134,6 +158,8 @@ export interface ClientPluginContext {
   surfaces: ClientContributionApi<ClientSurface>
   /** 设置页扩展点：在设置里添加一页。 */
   settingsPages: ClientContributionApi<ClientSettingsPage>
+  /** Command 扩展点：在命令面板和输入框 `/` 里添加一个命令。 */
+  commands: ClientContributionApi<ClientCommand>
   ui: ClientUiKit
   theme: ClientObservable<ClientTheme>
   /** 界面语言，例如 `zh-CN`、`en-US`。 */

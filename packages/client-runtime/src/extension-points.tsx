@@ -93,11 +93,22 @@ export interface SettingsPageContribution extends ContributionBase {
   render(): ReactNode
 }
 
-/** Command：命令面板和输入框里的 `/` 共用的一个具名操作（#38 接入）。 */
+/**
+ * Command：命令面板和输入框里的 `/` 共用的一个具名操作。命令面板按 title 与 keywords 过滤并显示
+ * shortcut；提供了 slash 的命令同时出现在 `/` 建议里，触发名就是 slash。
+ */
 export interface CommandContribution extends ContributionBase {
   title: ContributionText
   /** 额外的搜索词。 */
   keywords?: readonly string[]
+  /** 快捷键提示，例如 `Mod+n`；只用于显示，快捷键本身由宿主注册。 */
+  shortcut?: string
+  /** 命令面板里的图标名；缺省用通用的闪电图标。 */
+  icon?: string
+  /** 现在能不能执行；缺省为能。不能执行时命令面板与 `/` 都不列出。 */
+  available?: () => boolean
+  /** `/` 触发名，例如 `new` 对应 `/new`；缺省时只出现在命令面板。 */
+  slash?: string
   run(): void | Promise<void>
 }
 
@@ -298,6 +309,11 @@ export function ExtensionRegistryScope({
       {children}
     </ExtensionRegistryContext.Provider>
   )
+}
+
+/** 当前作用域里的注册表；没有 ExtensionRegistryScope 时是 null。改注册表本身（登记、注销）时用它。 */
+export function useExtensionRegistry(): ExtensionRegistry | null {
+  return useContext(ExtensionRegistryContext)
 }
 
 /**

@@ -23,6 +23,8 @@ export interface ComposerCommand {
   label: string
   description?: string | undefined
   keywords?: readonly string[] | undefined
+  /** 现在能不能执行；`/` 建议每次更新时判断，返回 false 时不列出。缺省为能。 */
+  available?: (() => boolean) | undefined
   run: () => void
 }
 
@@ -129,18 +131,21 @@ export function composerExtensions(
           pluginKey: COMMAND_SUGGESTION_KEY,
           startOfLine: true,
           items: ({ query }) =>
-            matchByLabel(sources.commands(), query).map((command): SuggestionItem => ({
+            matchByLabel(
+              sources.commands().filter((command) => command.available?.() ?? true),
+              query,
+            ).map((command): SuggestionItem => ({
               id: command.id,
               label: command.label,
               detail: command.description,
               kind: "command",
             })),
           command: ({ editor, range, props }) => {
+            // 列表打开期间命令可能已经消失（例如它的插件被停用）：不删用户敲的字，也不执行。
+            const selected = sources.commands().find((command) => command.id === props.id)
+            if (!selected) return
             editor.chain().focus().deleteRange(range).run()
-            sources
-              .commands()
-              .find((command) => command.id === props.id)
-              ?.run()
+            selected.run()
           },
           render: renderInto(store, "command", COMMAND_SUGGESTION_KEY),
         },

@@ -368,4 +368,91 @@ describe("Shell", () => {
     act(() => registry.removeOwner(owner))
     expect(screen.queryByLabelText("插件管理")).toBeNull()
   })
+
+  it("puts the built-in commands in the palette from the registry, before a plugin's", async () => {
+    const registry = createExtensionRegistry()
+    const onPlugin = vi.fn()
+    const onNewThread = vi.fn()
+    registry.register("command", {
+      id: "plugin-run",
+      owner: { kind: "plugin", id: "ui.demo" },
+      order: 0,
+      title: { text: "Run the sample command" },
+      keywords: ["debug"],
+      slash: "debug",
+      run: onPlugin,
+    })
+    render(
+      <ExtensionRegistryScope registry={registry}>
+        <LocaleProvider locale="zh-CN">
+          <Shell
+            view="chat"
+            projects={[]}
+            threads={[]}
+            activeThreadId={null}
+            onView={() => {}}
+            onAddProject={() => {}}
+            onNewThread={onNewThread}
+            onOpenThread={() => {}}
+          />
+        </LocaleProvider>
+      </ExtensionRegistryScope>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }))
+    const dialog = screen.getByRole("dialog", { name: "行动" })
+    const input = dialog.querySelector("input") as HTMLInputElement
+    // 内置命令由 Shell 登记，order 小于 0；缺省 order 的插件命令排在它们后面。
+    const labels = screen.getAllByRole("option").map((item) => item.textContent ?? "")
+    expect(labels).toHaveLength(6)
+    expect(labels[0]).toContain("新会话")
+    expect(labels[5]).toContain("Run the sample command")
+    // 空面板里回车执行的仍然是新会话。
+    fireEvent.keyDown(input, { key: "Enter" })
+    expect(onNewThread).toHaveBeenCalledTimes(1)
+    expect(onPlugin).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }))
+    fireEvent.change(screen.getByRole("dialog", { name: "行动" }).querySelector("input")!, {
+      target: { value: "debug" },
+    })
+    fireEvent.click(screen.getByRole("option", { name: /Run the sample command/ }))
+    expect(onPlugin).toHaveBeenCalledTimes(1)
+  })
+
+  it("registers the built-in commands once, not again on every render of its caller", () => {
+    const registry = createExtensionRegistry()
+    let changes = 0
+    registry.subscribe("command", () => changes++)
+    const calls: number[] = []
+    const shell = (round: number) => (
+      <ExtensionRegistryScope registry={registry}>
+        <LocaleProvider locale="zh-CN">
+          <Shell
+            view="chat"
+            projects={[]}
+            threads={[]}
+            activeThreadId={null}
+            onView={() => {}}
+            onAddProject={() => {}}
+            // 调用方每次渲染都传新的回调，命令仍然调用最新的那个。
+            onNewThread={() => calls.push(round)}
+            onOpenThread={() => {}}
+            onToggleRight={() => {}}
+          />
+        </LocaleProvider>
+      </ExtensionRegistryScope>
+    )
+    const { rerender } = render(shell(1))
+    const afterMount = changes
+    rerender(shell(2))
+    rerender(shell(3))
+
+    expect(changes).toBe(afterMount)
+    void registry
+      .get("command")
+      .find((command) => command.id === "new-thread")
+      ?.run()
+    expect(calls).toEqual([3])
+  })
 })

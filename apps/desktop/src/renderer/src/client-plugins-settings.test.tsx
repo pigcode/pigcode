@@ -145,4 +145,163 @@ describe("client plugin settings pages", () => {
     ])
     controller.dispose()
   })
+
+  it("registers a plugin's Command under the plugin's owner and drops it when the plugin is disabled", async () => {
+    const { extensions, controller } = setup()
+    serve([
+      entry(
+        "ui.cmd",
+        `const dispose = ctx.commands.register({
+          id: "debug-run",
+          title: "Run the sample command",
+          keywords: ["debug"],
+          icon: "spark",
+          shortcut: "Mod+Shift+d",
+          slash: "debug",
+          available: () => true,
+          run() {},
+        })
+        return dispose`,
+      ),
+    ])
+
+    await controller.reload()
+
+    expect(extensions.get("command")).toMatchObject([
+      {
+        id: "debug-run",
+        owner: { kind: "plugin", id: "ui.cmd" },
+        order: 0,
+        title: { text: "Run the sample command" },
+        keywords: ["debug"],
+        icon: "spark",
+        shortcut: "Mod+Shift+d",
+        slash: "debug",
+      },
+    ])
+    expect(extensions.get("command")[0]?.available?.()).toBe(true)
+
+    // 插件没有在清理函数里注销：停用后按 owner 一并移除。
+    serve([])
+    await controller.reload()
+    expect(extensions.get("command")).toEqual([])
+    controller.dispose()
+  })
+
+  it("rejects a Command with a missing id, title or run, or a slash with spaces, instead of registering it", async () => {
+    const { extensions, controller } = setup()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const command = (body: string) => `ctx.commands.register({ ${body} })`
+    serve([
+      entry("ui.id", command(`title: "T", run() {}`)),
+      entry("ui.title", command(`id: "c", run() {}`)),
+      entry("ui.run", command(`id: "c", title: "T"`)),
+      entry("ui.slash", command(`id: "c", title: "T", slash: "two words", run() {}`)),
+      entry("ui.keywords", command(`id: "c", title: "T", keywords: [1], run() {}`)),
+    ])
+
+    await controller.reload()
+
+    expect(extensions.get("command")).toEqual([])
+    expect(controller.errors.get()).toMatchObject([
+      { pluginId: "ui.id", kind: "apply", detail: expect.stringContaining("id must be") },
+      { pluginId: "ui.title", kind: "apply", detail: expect.stringContaining("title must be") },
+      { pluginId: "ui.run", kind: "apply", detail: expect.stringContaining("run must be") },
+      { pluginId: "ui.slash", kind: "apply", detail: expect.stringContaining("slash must be") },
+      {
+        pluginId: "ui.keywords",
+        kind: "apply",
+        detail: expect.stringContaining("keywords must be an array of strings"),
+      },
+    ])
+    controller.dispose()
+  })
+  it("keeps a Command whose / name is taken, warning instead of stopping the plugin", async () => {
+    const { extensions, controller } = setup()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    extensions.register("command", {
+      id: "new-thread",
+      owner: { kind: "builtin", id: "shell" },
+      order: -60,
+      title: { text: "New chat" },
+      slash: "new",
+      run() {},
+    })
+    serve([
+      entry(
+        "ui.new",
+        `ctx.commands.register({ id: "mine", title: "Mine", slash: "New", run() {} })
+        ctx.commands.register({ id: "after", title: "After", run() {} })`,
+      ),
+    ])
+
+    await controller.reload()
+
+    // 后面的登记照常进行；`/` 建议里谁显示由排序决定（内置命令在前）。
+    expect(extensions.get("command").map((command) => command.id)).toEqual([
+      "new-thread",
+      "after",
+      "mine",
+    ])
+    expect(controller.errors.get()).toEqual([])
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('/New is already used by the command "new-thread"'),
+    )
+    controller.dispose()
+  })
+
+  it("drops a Command error that arrives after its plugin was disabled", async () => {
+    const { extensions, controller } = setup()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([
+      entry(
+        "ui.late",
+        `ctx.commands.register({ id: "slow", title: "Slow", async run() {
+          await new Promise((resolve) => setTimeout(resolve, 10))
+          throw new Error("too late")
+        } })`,
+      ),
+    ])
+    await controller.reload()
+    const running = extensions.get("command")[0]!.run()
+
+    serve([])
+    await controller.reload()
+    await running
+    await Promise.resolve()
+
+    expect(controller.errors.get()).toEqual([])
+    controller.dispose()
+  })
+
+  it("records errors thrown by a Command's run or available as the plugin's, not the host's", async () => {
+    const { extensions, controller } = setup()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([
+      entry(
+        "ui.bad",
+        `ctx.commands.register({ id: "sync", title: "Sync", run() { throw new Error("boom") } })
+        ctx.commands.register({ id: "async", title: "Async", async run() { throw new Error("later") } })
+        ctx.commands.register({ id: "gate", title: "Gate", available() { throw new Error("gate") }, run() {} })`,
+      ),
+    ])
+    await controller.reload()
+    const byId = (id: string) => extensions.get("command").find((command) => command.id === id)!
+
+    await expect(byId("sync").run()).resolves.toBeUndefined()
+    await expect(byId("async").run()).resolves.toBeUndefined()
+    expect(byId("gate").available?.()).toBe(false)
+    await Promise.resolve()
+
+    expect(controller.errors.get()).toMatchObject([
+      { pluginId: "ui.bad", kind: "command", detail: "sync: boom" },
+      { pluginId: "ui.bad", kind: "command", detail: "async: later" },
+      { pluginId: "ui.bad", kind: "command", detail: "gate: gate" },
+    ])
+    // 停用插件后这些错误一并清掉。
+    serve([])
+    await controller.reload()
+    expect(controller.errors.get()).toEqual([])
+    controller.dispose()
+  })
 })

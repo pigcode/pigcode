@@ -5,7 +5,13 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import type { PermissionMode, Thread } from "@pigcode/contracts"
-import { useAppStore, type AppStore, type Connection } from "@pigcode/client-runtime"
+import {
+  contributionText,
+  useAppStore,
+  useContributions,
+  type AppStore,
+  type Connection,
+} from "@pigcode/client-runtime"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ChatView, collectSubagents, type ApprovalDecision } from "@pigcode/ui-chat"
 import type { ComposerCommand } from "@pigcode/ui-composer"
@@ -35,7 +41,6 @@ export interface ChatSlotProps {
   onToggleRight?: () => void
   /** 线程头末尾的布局按钮；右栏展开时为 null，按钮在右栏标签栏里。 */
   layoutControls?: ReactNode
-  onNewThread?: () => void
   /** 在右栏的文件标签里打开项目内的文件（相对路径）。 */
   onOpenFile?: (path: string) => void
   /** 在右栏打开 Diff。 */
@@ -70,12 +75,13 @@ export function ChatViewContainer({
   rightOpen = false,
   onToggleRight,
   layoutControls,
-  onNewThread,
   onOpenFile,
   onOpenDiff,
 }: { deps: CoreDeps } & ChatSlotProps) {
   const state = useAppStore(deps.store)
   const { t } = useLocale()
+  // 输入框的 `/` 和命令面板用同一份 Command：下面只取登记了 slash 的那几条。
+  const registeredCommands = useContributions("command")
   const active = state.threads.find((item) => item.id === state.activeThreadId) ?? null
   // 子代理不在侧栏里；从历史或命令面板落到子代理时，按它的主会话显示并选中它的标签。
   const main = active?.parentThreadId
@@ -271,31 +277,20 @@ export function ChatViewContainer({
   )
 
   const commands = useMemo<ComposerCommand[]>(
-    () => [
-      ...(onNewThread
-        ? [
-            {
-              id: "new",
-              label: "/new",
-              description: t("nav.newThread"),
-              keywords: [t("composer.command.new.keyword")],
-              run: onNewThread,
-            },
-          ]
-        : []),
-      ...(onToggleRight
-        ? [
-            {
-              id: "panel",
-              label: "/panel",
-              description: t("panel.toggleRight"),
-              keywords: [t("composer.command.panel.keyword")],
-              run: onToggleRight,
-            },
-          ]
-        : []),
-    ],
-    [onNewThread, onToggleRight, t],
+    () =>
+      registeredCommands
+        .filter((command) => command.slash !== undefined)
+        .map((command) => ({
+          // 加前缀：不和输入框自己的命令（model、permission-*）撞 id。
+          id: `command-${command.id}`,
+          label: `/${command.slash}`,
+          description: contributionText(t, command.title),
+          ...(command.keywords ? { keywords: command.keywords } : {}),
+          // `/` 建议更新时才判断，不在这里缓存结果。
+          available: command.available,
+          run: () => void command.run(),
+        })),
+    [registeredCommands, t],
   )
 
   return (

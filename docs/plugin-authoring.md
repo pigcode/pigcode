@@ -410,11 +410,12 @@ export function apply(ctx: PluginHostContext): void {
 完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)。UI 插件只拿到受限 facade，
 不依赖 React；界面和宿主保持一致的做法是：**宿主画外框，插件只画内容，内容用 `ctx.ui` 拼**。
 
-### Panel、Surface 与设置页
+### Panel、Surface、设置页与 Command
 
-UI 插件在三个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
-设置页是设置里的一页。内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的
-Surface；通用、外观、Agent、定时任务、插件都是内置的设置页），遵守同样的规则：
+UI 插件在四个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
+设置页是设置里的一页，Command 是命令面板与输入框 `/` 共用的一个操作。内置功能也通过同一个扩展点注册表登记
+（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface；通用、外观、Agent、定时任务、插件都是内置的设置页；
+新会话、侧栏、右侧面板、设置、插件、添加项目都是内置的命令），遵守同样的规则：
 
 - `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)`、`ctx.settingsPages.register(page)` 返回注销函数。
   登记的归属由宿主按插件自动填写，插件不需要也不能自己指定。
@@ -490,7 +491,44 @@ export function apply(ctx: ClientPluginContext): () => void {
   `render` 抛出的错误显示在内容区里，不影响宿主。
 - 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
   右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样。
-- 以后的 Command 与工具渲染器扩展点会以同样的形式出现在 `ctx` 上。
+- 工具渲染器扩展点以后会以同样的形式出现在 `ctx` 上。
+
+### Command：命令面板与输入框 `/`
+
+`ctx.commands.register(command)` 登记的 Command 同时出现在命令面板（⌘K）和输入框的 `/` 建议里；两处执行的是
+同一个 `run`。内置的新会话、侧栏、右侧面板、设置、插件、添加项目也是这么登记的，插件的和它们走同一条路：
+
+- `id` 在全部命令里唯一（包括内置命令）。重名时按扩展点的规则拒绝，先登记的一方保留。
+- `title` 是命令面板和 `/` 建议里的名称；`keywords` 是额外的搜索词。可选的 `order` 决定命令面板里的顺序
+  （小的在前，缺省 0），相同时按 `id` 排。内置命令的 `order` 都小于 0，所以插件命令缺省排在它们后面，
+  空的命令面板里按回车执行的仍然是新会话。
+- `slash` 是 `/` 的触发名，例如 `slash: "debug"` 对应输入框里的 `/debug`，不能含空格和 `/`。不给 `slash` 的
+  命令只出现在命令面板，例如设置、插件这类入口。`/` 名字不分大小写；重名时 `/` 建议里只显示排在前面的一条
+  （内置命令总在前面，`/new`、`/panel` 已被占用），控制台会有一条警告，命令本身照常出现在命令面板里。
+  输入框自己的 `/model`、`/plan`、`/ask`、`/readonly` 依赖输入框当前的 agent 与权限状态，不是 Command，
+  也不出现在命令面板；它们同样排在插件命令前面。
+- `icon` 是命令面板里的图标名（宿主图标表里的名字），缺省或不认识时用通用的闪电图标；`shortcut` 只是显示用的提示
+  （例如 `Mod+n`），快捷键本身由宿主注册，插件登记它不会真的绑定按键。
+- `available()` 返回 false 时两处都不列出这条命令，例如依赖的开发服务器没有启动。它在每次打开命令面板、
+  `/` 建议每次更新（每敲一个字）时调用，要快，不能有副作用。
+- 插件停用或卸载时命令一并移除，命令面板和 `/` 里同时消失。`id`、`title` 不是非空字符串、`run` 不是函数、
+  `slash` 不合规时，`register` 直接抛错，插件页把它显示成界面代码错误。
+- `run` 或 `available` 抛出的错误（包括 `run` 返回的 Promise 被拒绝）不会影响宿主，插件页在这个插件的行里列出
+  命令执行出错，插件状态不变成加载失败；`available` 出错时这条命令按不能执行处理。
+
+```ts
+const disposeCommand = ctx.commands.register({
+  id: "demo-run",
+  title: "运行示例命令",
+  keywords: ["调试", "debug"],
+  icon: "spark",
+  slash: "demo",
+  run() {
+    console.info("demo command ran")
+  },
+})
+return () => disposeCommand()
+```
 
 ### 和宿主一致的组件：`ctx.ui`
 

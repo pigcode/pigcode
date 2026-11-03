@@ -465,7 +465,6 @@ export function App({ store, slots, connection, locale }: AppProps) {
             rightOpen,
             onToggleRight: toggleRight,
             layoutControls: rightOpen && activeThreadId ? null : layoutControls(false),
-            onNewThread: () => void createThread(),
             onOpenFile: (path: string) => openSurface("file", path),
             onOpenDiff: () => openSurface("diff"),
           }}

@@ -1,15 +1,9 @@
-/** 命令面板：会话切换、主操作与快捷键入口。 */
+/** 命令面板：命令来自 Command 扩展点，后面接会话切换与项目。 */
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
-import {
-  EmptyState,
-  ListRow,
-  SearchField,
-  formatShortcut,
-  useLocale,
-  type MessageKey,
-} from "@pigcode/ui-primitives"
-import { Icon } from "./icon"
+import { contributionText, useContributions } from "@pigcode/client-runtime"
+import { EmptyState, ListRow, SearchField, formatShortcut, useLocale } from "@pigcode/ui-primitives"
+import { Icon, hasIcon } from "./icon"
 
 /** 命令面板中的一条可执行项。 */
 export interface PaletteItem {
@@ -22,7 +16,7 @@ export interface PaletteItem {
   run: () => void
 }
 
-/** 命令面板属性；所有动作由 Shell 注入。 */
+/** 命令面板属性；会话与项目数据由调用方传入，命令来自扩展点注册表。 */
 export interface CommandPaletteProps {
   open: boolean
   onClose: () => void
@@ -31,85 +25,34 @@ export interface CommandPaletteProps {
   activeThreadId: string | null
   onNewThread: () => void
   onOpenThread: (threadId: string) => void
-  onAddProject: () => void
-  onSettings: () => void
-  onPlugins: () => void
-  onToggleSidebar?: () => void
-  onToggleWorkbench?: () => void
-}
-
-/** 行动项固定顺序；会话和项目按最近使用排在后面。 */
-function actionItems(t: (key: MessageKey) => string, props: CommandPaletteProps): PaletteItem[] {
-  return [
-    {
-      id: "new-thread",
-      group: "actions",
-      label: t("nav.newThread"),
-      hint: formatShortcut("Mod+n"),
-      icon: "plus",
-      keywords: t("palette.keywords.newThread"),
-      run: props.onNewThread,
-    },
-    ...(props.onToggleSidebar
-      ? [
-          {
-            id: "toggle-sidebar",
-            group: "actions" as const,
-            label: t("palette.toggleSidebar"),
-            hint: formatShortcut("Mod+b"),
-            icon: "sidebar",
-            keywords: t("palette.keywords.toggleSidebar"),
-            run: props.onToggleSidebar,
-          },
-        ]
-      : []),
-    ...(props.onToggleWorkbench
-      ? [
-          {
-            id: "toggle-workbench",
-            group: "actions" as const,
-            label: t("palette.toggleWorkbench"),
-            hint: formatShortcut("Mod+j"),
-            icon: "tray",
-            keywords: t("palette.keywords.toggleWorkbench"),
-            run: props.onToggleWorkbench,
-          },
-        ]
-      : []),
-    {
-      id: "settings",
-      group: "actions",
-      label: t("settings.title"),
-      hint: formatShortcut("Mod+,"),
-      icon: "gear",
-      keywords: t("palette.keywords.settings"),
-      run: props.onSettings,
-    },
-    {
-      id: "plugins",
-      group: "actions",
-      label: t("settings.plugins"),
-      icon: "cube",
-      keywords: t("palette.keywords.plugins"),
-      run: props.onPlugins,
-    },
-    {
-      id: "add-project",
-      group: "actions",
-      label: t("nav.addProject"),
-      icon: "folder-plus",
-      keywords: t("palette.keywords.addProject"),
-      run: props.onAddProject,
-    },
-  ]
 }
 
 /** 渲染居中的命令面板；↑↓ 移动，回车执行，Esc 关闭。 */
 export function CommandPalette(props: CommandPaletteProps) {
   const { t } = useLocale()
+  const commands = useContributions("command")
   const [query, setQuery] = useState("")
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // available() 在每次打开面板时重新判断：它可能依赖注册表以外的状态（例如开发服务器有没有启动）。
+  const actions = useMemo<PaletteItem[]>(
+    () =>
+      (props.open ? commands : [])
+        .filter((command) => command.available?.() ?? true)
+        .map((command) => ({
+          id: `command-${command.id}`,
+          group: "actions" as const,
+          label: contributionText(t, command.title),
+          // 插件给的图标名不在图标表里时用通用图标，不留空白。
+          icon: command.icon && hasIcon(command.icon) ? command.icon : "spark",
+          keywords: (command.keywords ?? []).join(" "),
+          ...(command.shortcut ? { hint: formatShortcut(command.shortcut) } : {}),
+          // 命令返回值不用等：面板关掉后它继续跑。
+          run: () => void command.run(),
+        })),
+    [commands, props.open, t],
+  )
 
   const items = useMemo<PaletteItem[]>(() => {
     // 与侧栏一致：已归档的会话和已从侧栏移除的项目里的会话都不列出。
@@ -134,8 +77,8 @@ export function CommandPalette(props: CommandPaletteProps) {
       keywords: `${project.name} ${project.rootPath}`,
       run: props.onNewThread,
     }))
-    return [...actionItems(t, props), ...threads, ...projects]
-  }, [props, t])
+    return [...actions, ...threads, ...projects]
+  }, [actions, props, t])
 
   const needle = query.trim().toLowerCase()
   const visible = needle
