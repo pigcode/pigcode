@@ -1,7 +1,7 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
-import { AppRenderer, SlotHost, useAppStore, type SlotRegistry } from "@pigcode/client-runtime"
+import { SlotHost, useAppStore, useContributions, type SlotRegistry } from "@pigcode/client-runtime"
 import {
   translate,
   useAppearance,
@@ -10,18 +10,23 @@ import {
 } from "@pigcode/ui-primitives"
 export type { ChatSlotProps, CoreDeps } from "./chat-container"
 export { ChatViewContainer } from "./chat-container"
-import type { SettingsSection, ShellView, ThreadStatus } from "@pigcode/ui-shell"
+import {
+  AppRenderer,
+  type SettingsSection,
+  type ShellView,
+  type ThreadStatus,
+} from "@pigcode/ui-shell"
 import {
   EMPTY_SURFACE_STATE,
   PanelLayoutControls,
   addSurface,
+  closeRemovedSurfaces,
   openFileSurface,
   updateSurface,
   type PanelSurfaceState,
 } from "@pigcode/ui-workbench"
 import { useAgentNames } from "./agents"
 import { BrowserHost } from "./browser-host"
-import { PluginPanels, useRegistry } from "./client-plugins"
 import type { ChatSlotProps, CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
 import { UnsavedGuard } from "./unsaved-guard"
@@ -96,10 +101,10 @@ export function mergeChildStatus(
 }
 
 /** 应用根组件。 */
-export function App({ store, slots, connection, plugins, locale }: AppProps) {
+export function App({ store, slots, connection, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
-  const pluginSurfaces = useRegistry(plugins.surfaces)
+  const surfaceContributions = useContributions("surface")
   const agentNames = useAgentNames(connection, state.agentRevision, state.status === "connected")
   const [view, setView] = useState<ShellView>("chat")
   const [section, setSection] = useState<SettingsSection>("general")
@@ -113,6 +118,24 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
   const [panels, setPanels] = useState<Record<string, PanelSurfaceState>>({})
   const [history, setHistory] = useState<NavHistory>(EMPTY_HISTORY)
   const initialLoadDone = useRef(false)
+  const registeredSurfaces = useRef<ReadonlySet<string>>(new Set())
+
+  // Surface 注销（插件停用或卸载）时关掉每个线程里它已经打开的标签，当前标签改选邻居。
+  useEffect(() => {
+    const current = new Set(surfaceContributions.map((surface) => surface.id))
+    const removed = new Set([...registeredSurfaces.current].filter((id) => !current.has(id)))
+    registeredSurfaces.current = current
+    if (removed.size === 0) return
+    setPanels((panels) => {
+      let changed = false
+      const next: Record<string, PanelSurfaceState> = {}
+      for (const [threadId, panel] of Object.entries(panels)) {
+        next[threadId] = closeRemovedSurfaces(panel, removed)
+        if (next[threadId] !== panel) changed = true
+      }
+      return changed ? next : panels
+    })
+  }, [surfaceContributions])
 
   useEffect(() => {
     if (rightOpen) setRightStarted(true)
@@ -388,7 +411,6 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
           })
           .catch((error: unknown) => store.update({ error: messageOf(error) }))
       }}
-      sidebarExtra={<PluginPanels controller={plugins} />}
       rightOpen={rightOpen}
       rightMaximized={rightMaximized}
       rightPanel={
@@ -404,7 +426,6 @@ export function App({ store, slots, connection, plugins, locale }: AppProps) {
               onError={(message) => store.update({ error: message })}
               projectName={activeProjectName}
               workspaceRevision={activeRevision}
-              pluginSurfaces={pluginSurfaces}
             />
           </Suspense>
         ) : undefined

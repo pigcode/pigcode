@@ -1,4 +1,4 @@
-/** 读取 boot graph、动态加载 client bundle、应用并返回 disposer。 */
+/** boot graph 的形状与单个 client bundle 的应用；按插件加载、卸载由宿主的插件控制器负责。 */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
 /** boot graph 中的单个客户端入口。 */
@@ -19,30 +19,8 @@ export interface ClientModule {
   apply?: (ctx: ClientPluginContext) => void | (() => void)
 }
 
-/** 加载器依赖；load 与 context 由调用方注入，便于测试与替换。 */
-export interface LoadClientPluginsOptions {
-  boot: BootGraph
-  load: (url: string) => Promise<ClientModule>
-  /** 传入当前条目，宿主可据此把注册行为归属到具体插件。 */
-  context: (entry: BootEntry) => ClientPluginContext
-}
-
-/** 按 boot graph 顺序应用插件；返回统一卸载函数（逆序执行）。 */
-export async function loadClientPlugins(
-  options: LoadClientPluginsOptions,
-): Promise<{ dispose(): void }> {
-  const disposers: Array<() => void> = []
-  for (const entry of options.boot.entries) {
-    const module = await options.load(entry.url)
-    const result = module.apply?.(options.context(entry))
-    if (typeof result === "function") disposers.push(result)
-  }
-  let disposed = false
-  return {
-    dispose() {
-      if (disposed) return
-      disposed = true
-      for (const dispose of disposers.reverse()) dispose()
-    },
-  }
+/** 应用一个插件模块；返回它的清理函数（没有时是空函数）。apply 抛出的错误原样抛出。 */
+export function applyClientPlugin(module: ClientModule, ctx: ClientPluginContext): () => void {
+  const result = module.apply?.(ctx)
+  return typeof result === "function" ? result : () => undefined
 }

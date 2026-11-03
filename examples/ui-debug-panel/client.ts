@@ -1,5 +1,5 @@
 /**
- * 示例 UI 插件：侧栏里一个面板、右栏里一种标签，界面都用 ctx.ui 拼出来，和宿主的控件一模一样；
+ * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface，界面都用 ctx.ui 拼出来，和宿主的控件一模一样；
  * 文案随 ctx.locale 切换，主题变化时面板里的状态跟着更新。
  */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
@@ -45,7 +45,7 @@ export function apply(ctx: ClientPluginContext): () => void {
   const { ui } = ctx
   const text = copyFor(ctx.locale.get())
 
-  const disposePanel = ctx.registerPanel({
+  const disposePanel = ctx.panels.register({
     id: "debug-panel",
     title: "Debug Panel",
     render(container) {
@@ -63,7 +63,7 @@ export function apply(ctx: ClientPluginContext): () => void {
     },
   })
 
-  const disposeSurface = ctx.registerSurface({
+  const disposeSurface = ctx.surfaces.register({
     id: "debug-inspector",
     title: "Debug Inspector",
     description: text.hostDesc,

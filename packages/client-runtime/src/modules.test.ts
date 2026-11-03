@@ -1,7 +1,7 @@
-/** 验证 boot graph 加载、apply 与卸载。 */
+/** 验证插件模块的 apply 与清理。 */
 import type { ClientPluginContext, ClientTheme, ClientUiKit } from "@pigcode/plugin-sdk"
 import { describe, expect, it, vi } from "vitest"
-import { loadClientPlugins } from "./modules"
+import { applyClientPlugin } from "./modules"
 
 /** 什么也不做的插件上下文。 */
 function stubContext(): ClientPluginContext {
@@ -9,62 +9,27 @@ function stubContext(): ClientPluginContext {
   return {
     slots: { register: () => () => {} },
     host: { call: async () => undefined },
-    registerPanel: () => () => {},
-    registerSurface: () => () => {},
+    panels: { register: () => () => {} },
+    surfaces: { register: () => () => {} },
     ui: {} as ClientUiKit,
     theme: fixed<ClientTheme>("light"),
     locale: fixed("zh-CN"),
   }
 }
 
-describe("loadClientPlugins", () => {
-  it("applies and disposes a client plugin", async () => {
+describe("applyClientPlugin", () => {
+  it("applies a client plugin and returns its cleanup", () => {
     const dispose = vi.fn()
+    const ctx = stubContext()
     const applied = vi.fn(() => dispose)
-    const load = vi.fn(async () => ({ apply: applied }))
-    const contextIds: string[] = []
-    const result = await loadClientPlugins({
-      boot: {
-        entries: [
-          { id: "demo", url: "pigcode-plugin://demo/client.js", revision: "1", inject: [] },
-        ],
-      },
-      load,
-      context: (entry) => {
-        contextIds.push(entry.id)
-        return stubContext()
-      },
-    })
-    expect(applied).toHaveBeenCalledOnce()
-    expect(contextIds).toEqual(["demo"])
-    result.dispose()
+    const cleanup = applyClientPlugin({ apply: applied }, ctx)
+    expect(applied).toHaveBeenCalledWith(ctx)
+    cleanup()
     expect(dispose).toHaveBeenCalledOnce()
   })
 
-  it("loads in boot order and disposes in reverse order", async () => {
-    const calls: string[] = []
-    const result = await loadClientPlugins({
-      boot: {
-        entries: [
-          { id: "first", url: "pigcode-plugin://first/client.js", revision: "1", inject: [] },
-          { id: "second", url: "pigcode-plugin://second/client.js", revision: "1", inject: [] },
-        ],
-      },
-      load: async (url) => ({
-        apply: () => {
-          calls.push(url)
-          return () => calls.push(`dispose:${url}`)
-        },
-      }),
-      context: stubContext,
-    })
-
-    result.dispose()
-    expect(calls).toEqual([
-      "pigcode-plugin://first/client.js",
-      "pigcode-plugin://second/client.js",
-      "dispose:pigcode-plugin://second/client.js",
-      "dispose:pigcode-plugin://first/client.js",
-    ])
+  it("returns a no-op cleanup when the module has no apply or apply returns nothing", () => {
+    expect(() => applyClientPlugin({}, stubContext())()).not.toThrow()
+    expect(() => applyClientPlugin({ apply: () => undefined }, stubContext())()).not.toThrow()
   })
 })

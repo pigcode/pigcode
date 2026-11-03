@@ -37,16 +37,62 @@ test("installs, enables, and disables plugins without restart", async () => {
   // echo agent 把输入原样回传，确认插件提供的 agent 真的接管了这次 run。
   await expect(page.locator(".msg-ai").filter({ hasText: "hello echo" })).toBeVisible()
 
-  // 安装 UI 插件，面板出现；停用后消失
-  await page.getByRole("button", { name: "设置", exact: true }).click()
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  // 安装 UI 插件：它的 Panel 出现在侧栏，Surface 出现在右侧面板的「+」菜单里。
+  const openPlugins = async () => {
+    await page.getByRole("button", { name: "设置", exact: true }).click()
+    await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  }
+  const backToApp = () => page.getByRole("button", { name: "返回应用" }).first().click()
+  await openPlugins()
   const ui = new URL("../../../examples/ui-debug-panel", import.meta.url).pathname
   await installPlugin(page, ui)
   const debug = page.locator(".ext-item").filter({ hasText: "pigcode-ui-debug-panel" })
   await expect(debug.getByRole("switch")).toBeChecked()
-  await expect(page.getByText("Debug Panel")).toBeVisible()
+  const debugPanel = page.locator(".plugin-panel-head").filter({ hasText: "Debug Panel" })
+  await expect(debugPanel).toBeVisible()
+  await backToApp()
+  await expect(debugPanel).toBeVisible()
+
+  // 先开一个终端，再打开插件的 Surface：它成为当前标签，内容由插件画出。
+  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  const tabs = page.locator(".right-panel").getByRole("tab")
+  const addSurface = page.getByRole("button", { name: "添加面板" })
+  await addSurface.click()
+  await page.getByRole("menuitem", { name: /终端/ }).click()
+  await expect(tabs).toHaveText(["终端 1"])
+  await addSurface.click()
+  await page.getByRole("menuitem", { name: "Debug Inspector" }).click()
+  await expect(tabs).toHaveText(["终端 1", "Debug Inspector"])
+  await expect(page.getByRole("tab", { name: "Debug Inspector" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  )
+  await expect(page.locator("[data-plugin-content='debug-inspector']")).toBeVisible()
+
+  // 停用后 Panel 消失，打开着的 Surface 标签关闭，当前标签改选终端，「+」菜单里也不再有它。
+  await openPlugins()
   await debug.getByRole("switch").click()
-  await expect(page.getByText("Debug Panel")).toBeHidden()
+  await expect(debug.getByRole("switch")).not.toBeChecked()
+  await expect(debugPanel).toBeHidden()
+  await backToApp()
+  await expect(tabs).toHaveText(["终端 1"])
+  await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
+  await expect(debugPanel).toHaveCount(0)
+  await addSurface.click()
+  await expect(page.getByRole("menuitem", { name: /终端/ })).toBeVisible()
+  await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toHaveCount(0)
+  await page.keyboard.press("Escape")
+
+  // 重新启用：Panel 与 Surface 回来。
+  await openPlugins()
+  await debug.getByRole("switch").click()
+  await expect(debug.getByRole("switch")).toBeChecked()
+  await expect(debugPanel).toBeVisible()
+  await backToApp()
+  await addSurface.click()
+  await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await openPlugins()
 
   // Capability 插件没有可见 UI，用列表状态验证启停热生效；详情里是包名与类型。
   const capabilityPlugin = new URL("../../../examples/capability-session-info", import.meta.url)

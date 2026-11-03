@@ -203,20 +203,20 @@ export function apply(ctx: PluginHostContext): void {
 `
 }
 
-/** UI 入口：一个侧栏面板与一个右栏标签，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
+/** UI 入口：一个 Panel 与一个 Surface，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
 function uiEntry(pkgName: string, name: string, displayName: string): string {
-  return `/** ${pkgName}：最小 UI 插件，在侧栏添加一个面板、在右栏添加一种标签。 */
+  return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface。 */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
 export function apply(ctx: ClientPluginContext): () => void {
-  const disposePanel = ctx.registerPanel({
+  const disposePanel = ctx.panels.register({
     id: "${name}-panel",
     title: "${displayName}",
     render(container) {
       container.append(ctx.ui.text("Hello from ${pkgName}", { tone: "muted", size: "sm" }))
     },
   })
-  const disposeSurface = ctx.registerSurface({
+  const disposeSurface = ctx.surfaces.register({
     id: "${name}-surface",
     title: "${displayName}",
     render(container) {

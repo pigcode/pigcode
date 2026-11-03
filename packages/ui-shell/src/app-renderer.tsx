@@ -1,6 +1,7 @@
 /** 应用渲染器：统一挂载 locale、tooltip、toast 与窗口外壳。 */
 import { LocaleProvider, Tooltip, type Locale } from "@pigcode/ui-primitives"
-import { Shell, ToastProvider, type ShellProps } from "@pigcode/ui-shell"
+import { Shell, type ShellProps } from "./shell"
+import { ToastProvider } from "./toast"
 
 /** AppRenderer 在外壳 props 之上增加当前语言。 */
 export interface AppRendererProps extends ShellProps {

@@ -1,25 +1,33 @@
 /**
- * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把侧栏面板与右栏标签接入 React，
- * 并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel 与 Surface 登记到扩展点
+ * 注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ *
+ * reload 先把新出现和换了版本的 bundle 都 import 完，再在同一个同步步骤里卸载、应用：
+ * - 从 boot graph 消失（停用、卸载）的插件按 owner 移除全部 Contribution，打开着的 Surface 随之关闭；
+ * - 换了版本的插件先卸载旧的、再应用新的，Surface 的 id 在界面渲染前就回来了，打开的标签不受影响；
+ * - 和刚卸载的插件冲突、被拒绝过的插件重新应用一次，拿到现在空出来的 id；
+ * - 其余插件保持原样。import 失败的插件记一条错误、不算已加载，下次 reload 重试。
  */
-import { useState, useSyncExternalStore, type ReactNode } from "react"
-import { ChevronRight } from "lucide-react"
+import type { ReactNode } from "react"
+import { Puzzle } from "lucide-react"
 import type {
+  BootEntry,
   BootGraph,
   ClientModule,
   Connection,
+  ContributionOwner,
+  ExtensionRegistry,
   SlotName,
   SlotRegistry,
 } from "@pigcode/client-runtime"
 import {
+  applyClientPlugin,
   createUiKit,
-  loadClientPlugins,
   observeLocale,
   observeTheme,
 } from "@pigcode/client-runtime"
-import type { ClientPanel, ClientPluginContext, ClientSurface } from "@pigcode/plugin-sdk"
-import { useLocale } from "@pigcode/ui-primitives"
-import { PluginPanelHost } from "@pigcode/ui-shell"
+import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+import { PluginContentHost } from "@pigcode/ui-shell"
 
 /** 当前 UI 宿主认识的全部 slot。 */
 const SLOT_NAMES: readonly SlotName[] = [
@@ -35,135 +43,100 @@ function isSlotName(name: string): name is SlotName {
   return (SLOT_NAMES as readonly string[]).includes(name)
 }
 
-/** 只读快照与订阅入口。 */
-export interface SnapshotRegistry<T> {
-  get(): T[]
-  subscribe(listener: () => void): () => void
-}
-
-/** 插件面板的只读快照与订阅入口。 */
-export type PanelRegistry = SnapshotRegistry<ClientPanel>
-
-/** slot 注册冲突等插件错误；id 用作快照内的稳定 key。 */
-export interface PluginError {
-  id: string
-  pluginId: string
-  message: string
-}
+/**
+ * 插件在窗口里出的错；id 用作快照内的稳定 key。
+ * - import：client bundle 没有加载成功（detail 是原因）；
+ * - apply：apply 抛了错（detail 是原因）；
+ * - slotConflict：slot 条目和另一个插件重名（detail 是 `slot:id`，owner 是先注册的插件）。
+ */
+export type PluginError =
+  | { id: string; pluginId: string; kind: "import" | "apply"; detail: string }
+  | { id: string; pluginId: string; kind: "slotConflict"; detail: string; owner: string }
 
 /** 插件错误的只读快照与订阅入口。 */
 export interface PluginErrorRegistry {
-  get(): PluginError[]
+  get(): readonly PluginError[]
   subscribe(listener: () => void): () => void
 }
 
-/** Renderer 持有的第三方插件控制器。 */
+/** Renderer 持有的第三方插件控制器。Panel 与 Surface 在扩展点注册表里，不在这里。 */
 export interface ClientPluginController {
-  panels: PanelRegistry
-  /** 插件注册的右栏标签。 */
-  surfaces: SnapshotRegistry<ClientSurface>
-  /** 加载/注册时被跳过的错误，供插件管理界面按需展示。 */
+  /** 加载与注册时出的错，插件页按插件显示。 */
   errors: PluginErrorRegistry
   reload(): Promise<void>
   dispose(): void
 }
 
-/** 创建按 key 去重的只读快照注册表；快照变化时才替换，满足 useSyncExternalStore。 */
-function createSnapshotRegistry<T>(keyOf: (item: T) => string): {
-  registry: { get(): T[]; subscribe(listener: () => void): () => void }
-  add(item: T): () => void
-  clear(): void
-} {
-  const items = new Map<string, T>()
-  const listeners = new Set<() => void>()
-  let snapshot: T[] = []
-
-  function emit(): void {
-    snapshot = [...items.values()]
-    for (const listener of listeners) listener()
-  }
-
-  return {
-    registry: {
-      get: () => snapshot,
-      subscribe(listener) {
-        listeners.add(listener)
-        return () => {
-          listeners.delete(listener)
-        }
-      },
-    },
-    add(item) {
-      items.set(keyOf(item), item)
-      emit()
-      return () => {
-        if (!items.delete(keyOf(item))) return
-        emit()
-      }
-    },
-    clear() {
-      if (items.size === 0) return
-      items.clear()
-      emit()
-    },
-  }
+/** 一个已经应用的插件：boot graph 里的版本、模块（重新应用时用）与卸载函数。 */
+interface LoadedPlugin {
+  revision: string
+  module: ClientModule
+  unload(): void
 }
 
-/**
- * 创建插件控制器。每次 reload 都会先卸载上一代模块与面板，再按 boot graph 重新应用；
- * generation 用来丢弃过期的异步结果，避免快速启停时旧模块复活。
- */
+/** 把 unknown 错误转成可展示文本。 */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/** 去掉 PluginError 的 id 字段，用来描述一条要记的错误。 */
+type ErrorInput = PluginError extends infer E
+  ? E extends PluginError
+    ? Omit<E, "id">
+    : never
+  : never
+
+/** 创建插件控制器。 */
 export function createClientPluginController(deps: {
   slots: SlotRegistry
+  extensions: ExtensionRegistry
   connection: Connection
+  /** 加载 client bundle；测试里替换。 */
+  importModule?: (url: string) => Promise<ClientModule>
 }): ClientPluginController {
-  const {
-    registry: panels,
-    add: addPanel,
-    clear: clearPanels,
-  } = createSnapshotRegistry<ClientPanel>((panel) => panel.id)
-  const {
-    registry: surfaces,
-    add: addSurface,
-    clear: clearSurfaces,
-  } = createSnapshotRegistry<ClientSurface>((surface) => surface.id)
-  const {
-    registry: errors,
-    add: addError,
-    clear: clearErrors,
-  } = createSnapshotRegistry<PluginError>((error) => error.id)
+  const importModule =
+    deps.importModule ?? ((url: string) => import(/* @vite-ignore */ url) as Promise<ClientModule>)
+  let errors: readonly PluginError[] = []
+  const errorListeners = new Set<() => void>()
   // 插件拿到的组件、主题与语言都只读宿主的根元素，所有插件共用一份。
   const ui = createUiKit()
   const theme = observeTheme()
   const locale = observeLocale()
   /** slot 条目归属：key 为 `slot:id`，用于拒绝重复注册并记录冲突双方。 */
   const slotOwners = new Map<string, { pluginId: string; token: symbol }>()
+  const loaded = new Map<string, LoadedPlugin>()
+  /** 每次 reload 领一个号；只有拿到 boot graph、而且比已经拿到的都新的那次才会继续。 */
+  let requested = 0
+  /** 正在生效的 reload 的号；更新的 reload 拿到 boot graph（或 dispose）后，旧的在下一个 await 处停下。 */
   let generation = 0
-  let disposers: Array<() => void> = []
-  let cleanups: Array<() => void> = []
 
-  function clearCurrent(): void {
-    for (const dispose of [...disposers].reverse()) dispose()
-    disposers = []
-    for (const cleanup of [...cleanups].reverse()) cleanup()
-    cleanups = []
+  function setErrors(next: readonly PluginError[]): void {
+    errors = next
+    for (const listener of [...errorListeners]) listener()
   }
 
-  function reportError(pluginId: string, message: string): void {
+  function reportError(error: ErrorInput): void {
     // 同样内容只保留一条；console.error 带上插件 id 便于定位。
-    addError({ id: `${pluginId}:${message}`, pluginId, message })
-    console.error(`[plugin:${pluginId}] ${message}`)
+    const id = `${error.pluginId}:${error.kind}:${error.detail}`
+    if (!errors.some((item) => item.id === id)) setErrors([...errors, { ...error, id }])
+    console.error(`[plugin:${error.pluginId}] ${error.kind}: ${error.detail}`)
+  }
+
+  function dropErrors(keep: (error: PluginError) => boolean): void {
+    const next = errors.filter(keep)
+    if (next.length !== errors.length) setErrors(next)
   }
 
   function createContext(pluginId: string, bucket: Array<() => void>): ClientPluginContext {
+    const owner: ContributionOwner = { kind: "plugin", id: pluginId }
     return {
       slots: {
         register(name, entry) {
           if (!isSlotName(name)) return () => undefined
           const key = `${name}:${entry.id}`
-          const owner = slotOwners.get(key)
-          if (owner) {
-            reportError(pluginId, `SLOT_CONFLICT: ${key} already registered by ${owner.pluginId}`)
+          const existing = slotOwners.get(key)
+          if (existing) {
+            reportError({ pluginId, kind: "slotConflict", detail: key, owner: existing.pluginId })
             return () => undefined
           }
           const token = Symbol(key)
@@ -174,7 +147,7 @@ export function createClientPluginController(deps: {
             render: (props: never) => entry.render(props) as ReactNode,
           })
           let active = true
-          // 只释放本次注册；旧 generation 的清理不能误删新注册的归属。
+          // 只释放本次注册；旧插件的清理不能误删新注册的归属。
           const release = () => {
             if (!active) return
             active = false
@@ -189,15 +162,33 @@ export function createClientPluginController(deps: {
       host: {
         call: (method, params) => deps.connection.call(method, params),
       },
-      registerPanel(panel) {
-        const dispose = addPanel(panel)
-        bucket.push(dispose)
-        return dispose
+      panels: {
+        register(panel) {
+          return deps.extensions.register("panel", {
+            id: panel.id,
+            owner,
+            order: panel.order ?? 0,
+            title: { text: panel.title },
+            render: () => <PluginContentHost id={panel.id} render={panel.render} kind="panel" />,
+          })
+        },
       },
-      registerSurface(surface) {
-        const dispose = addSurface(surface)
-        bucket.push(dispose)
-        return dispose
+      surfaces: {
+        register(surface) {
+          return deps.extensions.register("surface", {
+            id: surface.id,
+            owner,
+            order: surface.order ?? 0,
+            title: { text: surface.title },
+            ...(surface.description ? { description: { text: surface.description } } : {}),
+            icon: Puzzle,
+            render: () => (
+              <div className="surface-pane surface-scroll">
+                <PluginContentHost id={surface.id} render={surface.render} kind="surface" />
+              </div>
+            ),
+          })
+        },
       },
       ui,
       theme,
@@ -205,98 +196,139 @@ export function createClientPluginController(deps: {
     }
   }
 
-  async function reload(): Promise<void> {
-    const current = ++generation
-    clearCurrent()
-    clearPanels()
-    clearSurfaces()
-    clearErrors()
+  /** 应用一个插件；apply 抛错时记一条错误，已经登记的内容照常保留到卸载。 */
+  function apply(entry: BootEntry, module: ClientModule): LoadedPlugin {
+    const bucket: Array<() => void> = []
+    let cleanup: () => void = () => undefined
+    try {
+      cleanup = applyClientPlugin(module, createContext(entry.id, bucket))
+    } catch (error) {
+      reportError({ pluginId: entry.id, kind: "apply", detail: messageOf(error) })
+    }
+    return {
+      revision: entry.revision,
+      module,
+      unload() {
+        try {
+          cleanup()
+        } catch (error) {
+          console.error(`[plugin:${entry.id}] ${messageOf(error)}`)
+        }
+        for (const release of bucket.reverse()) release()
+        // 插件没有自己注销的 Contribution 在这里一并移除；打开着的 Surface 随之关闭。
+        deps.extensions.removeOwner({ kind: "plugin", id: entry.id })
+        // import 错误属于 boot graph 里的条目，不属于这次应用：重试或条目消失时才清掉。
+        dropErrors((error) => error.pluginId !== entry.id || error.kind === "import")
+      },
+    }
+  }
 
+  function unload(pluginId: string): void {
+    const plugin = loaded.get(pluginId)
+    if (!plugin) return
+    loaded.delete(pluginId)
+    plugin.unload()
+  }
+
+  /** 插件有没有因为和 removed 里的某个插件重名而被拒绝过（扩展点或 slot）。 */
+  function lostTo(pluginId: string, removed: ReadonlySet<string>): boolean {
+    const extensionConflict = deps.extensions
+      .conflicts()
+      .some(
+        (conflict) =>
+          conflict.rejected.kind === "plugin" &&
+          conflict.rejected.id === pluginId &&
+          conflict.existing.kind === "plugin" &&
+          removed.has(conflict.existing.id),
+      )
+    return (
+      extensionConflict ||
+      errors.some(
+        (error) =>
+          error.pluginId === pluginId && error.kind === "slotConflict" && removed.has(error.owner),
+      )
+    )
+  }
+
+  async function reload(): Promise<void> {
+    const ticket = ++requested
     let boot: BootGraph
     try {
       const response = await fetch("pigcode-plugin://boot.json")
       if (!response.ok) return
       boot = (await response.json()) as BootGraph
     } catch {
+      // 读不到 boot graph 时什么也不改，正在进行的 reload 照常完成。
       return
     }
-    if (current !== generation) return
+    // 更晚发起的 reload 已经拿到了 boot graph：这份是旧的。
+    if (ticket < generation) return
+    generation = ticket
 
-    const bucket: Array<() => void> = []
-    try {
-      const loaded = await loadClientPlugins({
-        boot,
-        // 单个插件加载失败只跳过该插件，不影响核心 UI。
-        load: async (url) => {
-          try {
-            return (await import(/* @vite-ignore */ url)) as ClientModule
-          } catch {
-            return {}
-          }
-        },
-        context: (entry) => createContext(entry.id, bucket),
-      })
-      if (current !== generation) {
-        loaded.dispose()
-        for (const cleanup of [...bucket].reverse()) cleanup()
-        return
+    // 1. 新出现和换了版本的 bundle 先全部 import；这期间界面上的插件保持原样。
+    const imported = new Map<string, ClientModule>()
+    for (const entry of boot.entries) {
+      if (loaded.get(entry.id)?.revision === entry.revision) continue
+      dropErrors((error) => !(error.pluginId === entry.id && error.kind === "import"))
+      try {
+        imported.set(entry.id, await importModule(entry.url))
+      } catch (error) {
+        if (generation !== ticket) return
+        // 没有加载成功的插件不算已加载，下次 reload 重试；换版本失败时旧版本继续用。
+        reportError({ pluginId: entry.id, kind: "import", detail: messageOf(error) })
+        continue
       }
-      disposers.push(() => loaded.dispose())
-      cleanups.push(...bucket)
-    } catch {
-      for (const cleanup of [...bucket].reverse()) cleanup()
+      if (generation !== ticket) return
+    }
+
+    // 2. 同步完成卸载与应用，中间没有 await，界面只看到最终结果。先全部卸载，再按 boot 顺序应用。
+    const wanted = new Map(boot.entries.map((entry) => [entry.id, entry]))
+    const removed = new Set<string>()
+    for (const [id, plugin] of [...loaded]) {
+      const entry = wanted.get(id)
+      if (entry && (entry.revision === plugin.revision || !imported.has(id))) continue
+      unload(id)
+      removed.add(id)
+    }
+    dropErrors((error) => wanted.has(error.pluginId))
+    // 被刚卸载的插件挤掉过 id 的插件重新应用；它们卸载后又可能空出别的 id，直到没有新的。
+    const reapply = new Map<string, LoadedPlugin>()
+    for (let found = true; found;) {
+      found = false
+      for (const [id, plugin] of [...loaded]) {
+        if (!lostTo(id, removed)) continue
+        reapply.set(id, plugin)
+        unload(id)
+        removed.add(id)
+        found = true
+      }
+    }
+    for (const entry of boot.entries) {
+      if (loaded.has(entry.id)) continue
+      const module = imported.get(entry.id)
+      const previous = reapply.get(entry.id)
+      if (module) loaded.set(entry.id, apply(entry, module))
+      // 重新应用的插件用它原来的模块与版本；它的新版本没有加载成功时，下次 reload 照常重试。
+      else if (previous)
+        loaded.set(entry.id, apply({ ...entry, revision: previous.revision }, previous.module))
     }
   }
 
   return {
-    panels,
-    surfaces,
-    errors,
+    errors: {
+      get: () => errors,
+      subscribe(listener) {
+        errorListeners.add(listener)
+        return () => {
+          errorListeners.delete(listener)
+        }
+      },
+    },
     reload,
     dispose() {
-      generation += 1
-      clearCurrent()
-      clearPanels()
-      clearSurfaces()
-      clearErrors()
+      generation = ++requested
+      for (const id of [...loaded.keys()].reverse()) unload(id)
+      setErrors([])
     },
   }
-}
-
-/** 读取注册表的快照，变化时重渲染。 */
-export function useRegistry<T>(registry: SnapshotRegistry<T>): T[] {
-  return useSyncExternalStore(registry.subscribe, registry.get, registry.get)
-}
-
-/** 侧栏里的一个插件面板：和「项目」同样的分组标题，点击收起或展开。 */
-function PluginSidebarPanel({ panel }: { panel: ClientPanel }) {
-  const [open, setOpen] = useState(true)
-  return (
-    <section className="proj-block plugin-panel" data-open={open || undefined}>
-      <button
-        type="button"
-        className="side-label plugin-panel-head"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="truncate">{panel.title}</span>
-        <ChevronRight className="ic ic-xs plugin-panel-chev" aria-hidden="true" />
-      </button>
-      {open ? <PluginPanelHost panel={panel} /> : null}
-    </section>
-  )
-}
-
-/** 把已注册的第三方面板画进侧栏；没有面板时不占用空间。 */
-export function PluginPanels({ controller }: { controller: ClientPluginController }) {
-  const panels = useRegistry(controller.panels)
-  const { t } = useLocale()
-  if (panels.length === 0) return null
-  return (
-    <div className="plugin-panels" aria-label={t("plugins.title")}>
-      {panels.map((panel) => (
-        <PluginSidebarPanel key={panel.id} panel={panel} />
-      ))}
-    </div>
-  )
 }

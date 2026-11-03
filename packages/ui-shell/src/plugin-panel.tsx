@@ -1,9 +1,13 @@
 /**
- * 插件 DOM 内容的挂载点：侧栏面板与右栏标签共用。容器带 pg-root，插件的内容使用宿主的字体、
- * 颜色与 pg-* 组件样式；重画或移除前调用插件返回的清理函数。渲染出错时显示原因，不影响宿主。
+ * 左侧栏的 Panel，以及插件 DOM 内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel
+ * 与 Surface 共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；重画或移除前
+ * 调用插件返回的清理函数。渲染出错时显示原因，不影响宿主。
  */
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { ChevronRight } from "lucide-react"
+import { contributionText, useContributions, type PanelContribution } from "@pigcode/client-runtime"
 import type { ClientRender } from "@pigcode/plugin-sdk"
+import { useLocale } from "@pigcode/ui-primitives"
 
 /** 挂载一段插件内容；kind 区分侧栏面板与右栏标签的排版。 */
 export function PluginContentHost({
@@ -40,7 +44,36 @@ export function PluginContentHost({
   return <div ref={ref} className={`pg-root pg-${kind}`} data-plugin-content={id} />
 }
 
-/** 为侧栏插件面板提供挂载点。 */
-export function PluginPanelHost({ panel }: { panel: { id: string; render: ClientRender } }) {
-  return <PluginContentHost id={panel.id} render={panel.render} kind="panel" />
+/** 侧栏里的一个 Panel：和「项目」同样的分组标题，点击收起或展开。 */
+function SidebarPanel({ panel }: { panel: PanelContribution }) {
+  const { t } = useLocale()
+  const [open, setOpen] = useState(true)
+  return (
+    <section className="proj-block plugin-panel" data-open={open || undefined}>
+      <button
+        type="button"
+        className="side-label plugin-panel-head"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="truncate">{contributionText(t, panel.title)}</span>
+        <ChevronRight className="ic ic-xs plugin-panel-chev" aria-hidden="true" />
+      </button>
+      {open ? panel.render() : null}
+    </section>
+  )
+}
+
+/** Panel 扩展点上登记的全部 Panel；没有时不占用空间。 */
+export function SidebarPanels() {
+  const panels = useContributions("panel")
+  const { t } = useLocale()
+  if (panels.length === 0) return null
+  return (
+    <div className="plugin-panels" aria-label={t("plugins.title")}>
+      {panels.map((panel) => (
+        <SidebarPanel key={panel.id} panel={panel} />
+      ))}
+    </div>
+  )
 }

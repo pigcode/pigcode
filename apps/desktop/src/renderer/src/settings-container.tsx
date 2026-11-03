@@ -1,5 +1,6 @@
 /** 设置、Agent 与插件容器：从 Host 拉取状态，注入设置视图。 */
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useContributionConflicts } from "@pigcode/client-runtime"
 import type { AgentList, AgentStatus } from "@pigcode/contracts"
 import { PluginManagerView, type PluginSummary } from "@pigcode/ui-plugin-manager"
 import { AgentsPage, SettingsView } from "@pigcode/ui-settings"
@@ -7,9 +8,48 @@ import type { CoreDeps, SettingsSlotProps } from "./app"
 import { refreshAgentViews } from "./agent-context"
 import { SchedulesContainer } from "./schedules"
 
-/** 插件管理容器：列表来自 Host，安装/启停/卸载后同步刷新 agent 与 client bundle。 */
+/**
+ * 插件管理容器：列表来自 Host，安装/启停/卸载后同步刷新 agent 与 client bundle。
+ * 扩展点注册表里被拒绝的登记、界面代码加载或运行出的错按插件并进对应的行，
+ * 和 Host 报的冲突与错误一样显示在状态与详情里。
+ */
 export function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
-  const [plugins, setPlugins] = useState<PluginSummary[]>([])
+  const [hostPlugins, setPlugins] = useState<PluginSummary[]>([])
+  const conflicts = useContributionConflicts()
+  const clientErrors = useSyncExternalStore(
+    deps.plugins.errors.subscribe,
+    deps.plugins.errors.get,
+    deps.plugins.errors.get,
+  )
+  const plugins = useMemo(
+    () =>
+      hostPlugins.map((plugin) => {
+        const own = conflicts.filter(
+          (conflict) => conflict.rejected.kind === "plugin" && conflict.rejected.id === plugin.id,
+        )
+        // slot 冲突只记在控制台和错误表里：slot 由 #40 删除，不在插件页显示。
+        const failures = clientErrors.flatMap((error) =>
+          error.pluginId === plugin.id && error.kind !== "slotConflict"
+            ? [{ kind: error.kind, detail: error.detail }]
+            : [],
+        )
+        if (own.length === 0 && failures.length === 0) return plugin
+        return {
+          ...plugin,
+          ...(own.length > 0
+            ? {
+                contributionConflicts: own.map(({ point, id, existing }) => ({
+                  point,
+                  id,
+                  owner: existing,
+                })),
+              }
+            : {}),
+          ...(failures.length > 0 ? { clientErrors: failures } : {}),
+        }
+      }),
+    [hostPlugins, conflicts, clientErrors],
+  )
 
   const refresh = useCallback(async (): Promise<void> => {
     const list = (await deps.connection.call("plugin.list", {})) as PluginSummary[]

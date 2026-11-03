@@ -74,6 +74,69 @@ describe("PluginManagerView", () => {
     expect(screen.getByText(/冲突: provides conflict/)).toBeTruthy()
   })
 
+  it("shows extension point conflicts with the point, the id and the owner that kept it", async () => {
+    const other: PluginSummary = {
+      ...DEMO,
+      id: "ui.other",
+      name: "pigcode-ui-other",
+      displayName: "Other",
+    }
+    renderView([
+      {
+        ...DEMO,
+        contributionConflicts: [
+          { point: "surface", id: "terminal", owner: { kind: "builtin", id: "workbench" } },
+          { point: "panel", id: "status", owner: { kind: "plugin", id: "ui.other" } },
+        ],
+      },
+      other,
+    ])
+    expect(screen.getByRole("button", { name: "Demo 的详情" }).textContent).toContain("有冲突")
+    expect(screen.getByRole("button", { name: "Other 的详情" }).textContent).toContain("已启用")
+    await userEvent.click(screen.getByRole("button", { name: "Demo 的详情" }))
+    expect(
+      screen.getByText(
+        "右侧面板的 Surface「terminal」已经属于工作台，这个插件的同名登记没有生效。",
+      ),
+    ).toBeTruthy()
+    expect(
+      screen.getByText("侧栏 Panel「status」已经属于插件 Other，这个插件的同名登记没有生效。"),
+    ).toBeTruthy()
+  })
+
+  it("fills conflict text in one pass, so ids with $ patterns or placeholders stay literal", async () => {
+    renderView([
+      {
+        ...DEMO,
+        contributionConflicts: [
+          { point: "command", id: "$&-{owner}-$'", owner: { kind: "builtin", id: "chat" } },
+        ],
+      },
+    ])
+    await userEvent.click(screen.getByRole("button", { name: "Demo 的详情" }))
+    expect(
+      screen.getByText(
+        "Command「$&-{owner}-$'」已经属于内置功能 chat，这个插件的同名登记没有生效。",
+      ),
+    ).toBeTruthy()
+  })
+
+  it("shows UI code that failed to load or run as a failure in the row and the details", async () => {
+    renderView([
+      {
+        ...DEMO,
+        clientErrors: [
+          { kind: "import", detail: "Failed to fetch $1" },
+          { kind: "apply", detail: "boom" },
+        ],
+      },
+    ])
+    expect(screen.getByRole("button", { name: "Demo 的详情" }).textContent).toContain("加载失败")
+    await userEvent.click(screen.getByRole("button", { name: "Demo 的详情" }))
+    expect(screen.getByText("界面代码没有加载成功：Failed to fetch $1")).toBeTruthy()
+    expect(screen.getByText("界面代码运行出错：boom")).toBeTruthy()
+  })
+
   it("toggles a plugin and uninstalls after confirming", async () => {
     const onDisable = vi.fn(async () => {})
     const onUninstall = vi.fn(async () => {})

@@ -17,6 +17,22 @@ import {
 /** 插件类型，与 Host 的 boot graph 保持一致。 */
 export type PluginKind = "agent" | "capability" | "ui" | "bundle"
 
+/** 扩展点名称，与 client-runtime 的 ExtensionPoint 一致。 */
+export type PluginExtensionPoint = "panel" | "surface" | "settingsPage" | "command" | "toolRenderer"
+
+/** 插件在某个扩展点上被拒绝的一次登记：id 已经属于 owner。 */
+export interface PluginContributionConflict {
+  point: PluginExtensionPoint
+  id: string
+  owner: { kind: "builtin" | "plugin"; id: string }
+}
+
+/** 插件的界面代码在窗口里出的错：没有加载成功，或 apply 抛了错。detail 是原因。 */
+export interface PluginClientError {
+  kind: "import" | "apply"
+  detail: string
+}
+
 /** 插件管理页展示的插件摘要；字段与 Host 的 PluginSummary 对齐。 */
 export interface PluginSummary {
   id: string
@@ -40,6 +56,10 @@ export interface PluginSummary {
   /** provides 冲突原因；无冲突时为 null。 */
   conflict: string | null
   error: string | null
+  /** 窗口里扩展点登记的冲突；由宿主从扩展点注册表填入，Host 的列表里没有。 */
+  contributionConflicts?: readonly PluginContributionConflict[]
+  /** 窗口里界面代码出的错；由宿主的插件控制器填入。 */
+  clientErrors?: readonly PluginClientError[]
 }
 
 /** 类型的本地化文案。 */
@@ -50,12 +70,44 @@ const kindKeys: Record<PluginKind, MessageKey> = {
   bundle: "plugins.kind.bundle",
 }
 
+/** 扩展点的本地化名称。 */
+const pointKeys: Record<PluginExtensionPoint, MessageKey> = {
+  panel: "extensionPoint.panel",
+  surface: "extensionPoint.surface",
+  settingsPage: "extensionPoint.settingsPage",
+  command: "extensionPoint.command",
+  toolRenderer: "extensionPoint.toolRenderer",
+}
+
+/** 有名字的内置功能（扩展点冲突的先登记方）；其余的显示为「内置功能 id」。 */
+const builtinOwnerKeys: Readonly<Record<string, MessageKey>> = {
+  workbench: "plugins.owner.workbench",
+}
+
+/** 界面代码错误的文案。 */
+const clientErrorKeys: Record<PluginClientError["kind"], MessageKey> = {
+  import: "plugins.clientError.import",
+  apply: "plugins.clientError.apply",
+}
+
+/** 一次替换模板里的全部 {name}：替换进去的值原样显示，不会再被当成占位符或 $ 替换模式。 */
+function fill(template: string, values: Readonly<Record<string, string>>): string {
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    Object.hasOwn(values, name) ? (values[name] ?? match) : match,
+  )
+}
+
 /** 一行的状态：加载失败 > 冲突 > 启用 > 停用。 */
 function statusOf(plugin: PluginSummary): { tone: StatusTone; label: MessageKey } {
-  if (plugin.error && plugin.error !== plugin.conflict) {
+  if (
+    (plugin.error && plugin.error !== plugin.conflict) ||
+    (plugin.clientErrors?.length ?? 0) > 0
+  ) {
     return { tone: "error", label: "plugins.status.failed" }
   }
-  if (plugin.conflict) return { tone: "warning", label: "plugins.status.conflict" }
+  if (plugin.conflict || (plugin.contributionConflicts?.length ?? 0) > 0) {
+    return { tone: "warning", label: "plugins.status.conflict" }
+  }
   return plugin.enabled
     ? { tone: "ready", label: "plugins.enabled" }
     : { tone: "idle", label: "plugins.disabled" }
@@ -76,14 +128,39 @@ export interface PluginListProps {
 
 function PluginDetails({
   plugin,
+  plugins,
   pending,
   onUninstall,
 }: {
   plugin: PluginSummary
+  /** 全部插件；冲突的另一方是插件时用它的显示名。 */
+  plugins: readonly PluginSummary[]
   pending: boolean
   onUninstall?: (() => void) | undefined
 }) {
   const { t } = useLocale()
+
+  /** 一条扩展点冲突的说明，写明被拒绝的登记和先登记的一方。 */
+  function conflictText(conflict: PluginContributionConflict): string {
+    const other = plugins.find((item) => item.id === conflict.owner.id)
+    const builtinKey = Object.hasOwn(builtinOwnerKeys, conflict.owner.id)
+      ? builtinOwnerKeys[conflict.owner.id]
+      : undefined
+    const owner =
+      conflict.owner.kind === "plugin"
+        ? fill(t("plugins.owner.plugin"), {
+            plugin: other?.displayName ?? other?.name ?? conflict.owner.id,
+          })
+        : builtinKey
+          ? t(builtinKey)
+          : fill(t("plugins.owner.builtin"), { id: conflict.owner.id })
+    return fill(t("plugins.contributionConflict"), {
+      point: t(pointKeys[conflict.point]),
+      id: conflict.id,
+      owner,
+    })
+  }
+
   const [confirming, setConfirming] = useState(false)
   const showError = plugin.error !== null && plugin.error !== plugin.conflict
   return (
@@ -117,6 +194,16 @@ function PluginDetails({
         </p>
       ) : null}
       {showError ? <p className="ext-error">{plugin.error}</p> : null}
+      {plugin.clientErrors?.map((error, index) => (
+        <p key={`${error.kind}:${index}`} className="ext-error">
+          {fill(t(clientErrorKeys[error.kind]), { reason: error.detail })}
+        </p>
+      ))}
+      {plugin.contributionConflicts?.map((conflict, index) => (
+        <p key={`${conflict.point}:${conflict.id}:${index}`} className="ext-error">
+          {conflictText(conflict)}
+        </p>
+      ))}
       {onUninstall ? (
         <div className="ext-actions">
           {confirming ? (
@@ -231,6 +318,7 @@ export function PluginList({
                 {open ? (
                   <PluginDetails
                     plugin={plugin}
+                    plugins={plugins}
                     pending={pending}
                     onUninstall={
                       onUninstall && !plugin.builtin ? () => onUninstall(plugin.id) : undefined

@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { ExtensionRegistryScope, createExtensionRegistry } from "@pigcode/client-runtime"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { Shell } from "./shell"
 
@@ -321,5 +322,50 @@ describe("Shell", () => {
       fireEvent.keyDown(window, { key: "1", code: "Digit1", ctrlKey: true })
       expect(onOpenThread).not.toHaveBeenCalled()
     })
+  })
+
+  it("draws the Panels registered on the extension point in the sidebar, in order, and drops removed ones", () => {
+    const registry = createExtensionRegistry()
+    const owner = { kind: "plugin", id: "ui.demo" } as const
+    registry.register("panel", {
+      id: "b",
+      owner,
+      order: 0,
+      title: { text: "Second" },
+      render: () => <p>second body</p>,
+    })
+    registry.register("panel", {
+      id: "a",
+      owner,
+      order: 0,
+      title: { text: "First" },
+      render: () => <p>first body</p>,
+    })
+    render(
+      <ExtensionRegistryScope registry={registry}>
+        <LocaleProvider locale="zh-CN">
+          <Shell
+            view="chat"
+            projects={[]}
+            threads={[]}
+            activeThreadId={null}
+            onView={() => {}}
+            onAddProject={() => {}}
+            onNewThread={() => {}}
+            onOpenThread={() => {}}
+          />
+        </LocaleProvider>
+      </ExtensionRegistryScope>,
+    )
+    const group = screen.getByLabelText("插件管理")
+    const heads = Array.from(group.querySelectorAll(".plugin-panel-head"))
+    expect(heads.map((head) => head.textContent)).toEqual(["First", "Second"])
+    expect(screen.getByText("first body")).toBeTruthy()
+
+    fireEvent.click(screen.getByRole("button", { name: "First" }))
+    expect(screen.queryByText("first body")).toBeNull()
+
+    act(() => registry.removeOwner(owner))
+    expect(screen.queryByLabelText("插件管理")).toBeNull()
   })
 })

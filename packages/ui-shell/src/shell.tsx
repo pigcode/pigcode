@@ -9,6 +9,7 @@ import { AddProjectDialog } from "./add-project-dialog"
 import { CommandPalette } from "./command-palette"
 import { Icon } from "./icon"
 import { PanelResizer, useRightWidth } from "./panel-resizer"
+import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar, type SettingsSection } from "./settings-sidebar"
 import type { ThreadStatus } from "./thread-status"
 import { TitleBar } from "./title-bar"
@@ -70,8 +71,6 @@ export interface ShellProps {
   /** 项目行右键菜单的重命名与从侧栏移除；两个都传时才有右键菜单。 */
   onRenameProject?: (projectId: string, name: string) => void
   onRemoveProject?: (projectId: string) => void
-  /** 侧栏底部扩展区，用于宿主渲染第三方 UI 插件面板。 */
-  sidebarExtra?: ReactNode
   children?: ReactNode
 }
 
@@ -130,7 +129,6 @@ export function Shell({
   onArchiveThread,
   onRenameProject,
   onRemoveProject,
-  sidebarExtra,
   children,
 }: ShellProps) {
   const { t } = useLocale()
@@ -364,7 +362,7 @@ export function Shell({
               shortcutHints={shortcutHints}
             />
           )}
-          {sidebarExtra}
+          <SidebarPanels />
         </div>
         {!inSettings ? (
           <div className="side-foot">

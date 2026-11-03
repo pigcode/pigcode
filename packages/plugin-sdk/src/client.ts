@@ -1,25 +1,36 @@
 /**
- * 浏览器侧插件可见的能力：DOM 面板与右栏标签、和宿主一致的界面组件（pg-* 样式）、
- * 宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel 与 Surface（内容是 DOM）、和宿主一致的界面组件
+ * （pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
  */
 
 /** 把内容画进容器；可以返回清理函数，面板移除或重画前调用。 */
 export type ClientRender = (container: HTMLElement) => void | (() => void)
 
-/** 侧栏里的一个 DOM 面板：宿主画标题栏，内容区用宿主的字体、颜色与间距。 */
+/** Panel：左侧栏里的一个区块。宿主画可以收起的标题，内容区用宿主的字体、颜色与间距。 */
 export interface ClientPanel {
+  /** 在全部 Panel 里唯一；和已有的重名时这次登记不生效，插件页显示冲突。 */
   id: string
   title: string
+  /** 小的在前；相同时按 id 排。缺省 0。 */
+  order?: number
   render: ClientRender
 }
 
-/** 右栏里的一种插件标签：出现在右栏的启动器与「+」菜单里，打开后是宿主的标签外框。 */
+/** Surface：Workbench（右侧面板）里的一种标签，列在启动器与「+」菜单的插件组里，打开后是宿主的标签外框。 */
 export interface ClientSurface {
+  /** 在全部 Surface 里唯一（包括内置的 browser、terminal、files、diff、pr、checkpoint）。 */
   id: string
   title: string
   /** 一句说明，鼠标悬停在启动器条目上时显示。 */
   description?: string
+  /** 小的在前；相同时按 id 排。缺省 0。 */
+  order?: number
   render: ClientRender
+}
+
+/** 一个扩展点的登记入口；register 返回注销函数。归属由宿主按插件自动填写。 */
+export interface ClientContributionApi<T> {
+  register(contribution: T): () => void
 }
 
 /** client bundle 可以注册的 slot 条目；不依赖 React 类型。 */
@@ -101,10 +112,10 @@ export interface ClientUiKit {
 export interface ClientPluginContext {
   slots: ClientSlotApi
   host: { call(method: string, params: unknown): Promise<unknown> }
-  /** 在侧栏添加一个面板；返回注销函数。 */
-  registerPanel(panel: ClientPanel): () => void
-  /** 在右栏添加一种标签；返回注销函数，已经打开的标签随之关闭。 */
-  registerSurface(surface: ClientSurface): () => void
+  /** Panel 扩展点：在左侧栏添加区块。 */
+  panels: ClientContributionApi<ClientPanel>
+  /** Surface 扩展点：在 Workbench 添加一种标签；注销或插件停用时，已经打开的这种标签随之关闭。 */
+  surfaces: ClientContributionApi<ClientSurface>
   ui: ClientUiKit
   theme: ClientObservable<ClientTheme>
   /** 界面语言，例如 `zh-CN`、`en-US`。 */

@@ -1,4 +1,4 @@
-/** 插件管理页与插件界面的文案：与 Agent 页同样的列表、详情与安装对话框，右栏里的插件标签。 */
+/** 插件管理页与插件界面的文案：与 Agent 页同样的列表、详情与安装对话框，扩展点冲突，右栏里的插件组。 */
 export const pluginsZhCN = {
   "plugins.sub": "插件可以添加 agent、工具与界面，安装与启停立即生效。内置插件可以停用，不能卸载。",
   "plugins.expand": "{plugin} 的详情",
@@ -15,8 +15,17 @@ export const pluginsZhCN = {
   "plugins.facts.api": "API 版本",
   "plugins.facts.provides": "提供",
   "plugins.facts.none": "无",
-  "plugins.surfaceGone": "插件标签不可用",
-  "plugins.surfaceGoneHint": "插件已停用或卸载。重新启用插件后，这个标签会恢复。",
+  "plugins.contributionConflict": "{point}「{id}」已经属于{owner}，这个插件的同名登记没有生效。",
+  "plugins.owner.workbench": "工作台",
+  "plugins.owner.builtin": "内置功能 {id}",
+  "plugins.owner.plugin": "插件 {plugin}",
+  "plugins.clientError.import": "界面代码没有加载成功：{reason}",
+  "plugins.clientError.apply": "界面代码运行出错：{reason}",
+  "extensionPoint.panel": "侧栏 Panel",
+  "extensionPoint.surface": "右侧面板的 Surface",
+  "extensionPoint.settingsPage": "设置页",
+  "extensionPoint.command": "Command",
+  "extensionPoint.toolRenderer": "工具渲染器",
   "panel.plugins": "插件",
 } as const
 
@@ -37,8 +46,17 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
   "plugins.facts.api": "API version",
   "plugins.facts.provides": "Provides",
   "plugins.facts.none": "None",
-  "plugins.surfaceGone": "Plugin tab unavailable",
-  "plugins.surfaceGoneHint":
-    "The plugin was disabled or removed. Enable it again to bring this tab back.",
+  "plugins.contributionConflict":
+    '{point} "{id}" is already registered by {owner}, so this plugin\'s one with the same id was skipped.',
+  "plugins.owner.workbench": "the Workbench",
+  "plugins.owner.builtin": "the built-in {id}",
+  "plugins.owner.plugin": "the plugin {plugin}",
+  "plugins.clientError.import": "The UI code didn't load: {reason}",
+  "plugins.clientError.apply": "The UI code threw an error: {reason}",
+  "extensionPoint.panel": "Sidebar panel",
+  "extensionPoint.surface": "Side panel surface",
+  "extensionPoint.settingsPage": "Settings page",
+  "extensionPoint.command": "Command",
+  "extensionPoint.toolRenderer": "Tool renderer",
   "panel.plugins": "Plugins",
 }

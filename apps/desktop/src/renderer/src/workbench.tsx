@@ -1,46 +1,30 @@
 /**
- * 右侧面板容器：把浏览器、终端、文件、Diff、PR 与检查点 surface 接到 Host RPC，
- * 插件注册的标签挂在同样的标签栏与外框里。
+ * 右侧面板（Workbench）容器：标签状态由 App 按线程保存，可以打开的 Surface 来自扩展点注册表。
+ * 内置 Surface 的数据（文件、Diff、PR、检查点、worktree）在这里接到 Host RPC，经 WorkbenchContext
+ * 交给它们登记的 render；插件的 Surface 用同样的标签栏与外框。
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
-import { ChevronDown, Loader2, Plus, Trash2, Unplug } from "lucide-react"
-import type { Connection } from "@pigcode/client-runtime"
-import type { ClientSurface } from "@pigcode/plugin-sdk"
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { contributionText, useContributions, type Connection } from "@pigcode/client-runtime"
+import { useLocale } from "@pigcode/ui-primitives"
 import {
-  Button,
-  EmptyState,
-  Select,
-  formatDateTime,
-  translate,
-  useLocale,
-  type Locale,
-} from "@pigcode/ui-primitives"
-import { PluginContentHost } from "@pigcode/ui-shell"
-import {
-  CHECKPOINT_PHASE_LABELS,
-  CheckpointPanel,
-  DiffView,
-  PrPanel,
+  FILE_SURFACE_KIND,
   RightPanel,
-  WorktreePicker,
-  addPluginSurface,
   addSurface,
   closeSurface,
   openFileSurface,
-  type CheckpointPhase,
   type PanelSurface,
-  type PanelSurfaceKind,
   type PanelSurfaceState,
-  type SurfaceKind,
 } from "@pigcode/ui-workbench"
-import { BrowserSurface } from "./browser-surface"
 import { DiscardDraftDialog } from "./discard-draft-dialog"
 import { getDraft, setDraft, useDraftVersion } from "./file-drafts"
-import { FileSurface, FilesSurface } from "./files-surface"
-import { TerminalSurface } from "./terminal-surface"
+import { FileSurface } from "./files-surface"
 import { usePullRequest } from "./use-pull-request"
 import { useWorktrees } from "./use-worktrees"
-import { surfaceTitle } from "./workbench-labels"
+import {
+  WorkbenchContext,
+  type CheckpointRecord,
+  type WorkbenchContextValue,
+} from "./workbench-context"
 
 /** 右侧面板属性；标签状态由 App 按线程保存，线程切换时父组件用 key 重新挂载以释放终端。 */
 export interface WorkbenchPanelProps {
@@ -55,8 +39,6 @@ export interface WorkbenchPanelProps {
   projectName: string
   /** agent 改过文件（工具调用结束、run 结束）时递增，文件树与打开的文件据此重读。 */
   workspaceRevision: number
-  /** 插件注册的右栏标签。 */
-  pluginSurfaces?: readonly ClientSurface[]
 }
 
 let surfaceSeq = 0
@@ -65,22 +47,6 @@ let surfaceSeq = 0
 function nextSurfaceId(): string {
   surfaceSeq += 1
   return `surface-${surfaceSeq}`
-}
-
-/** checkpoint.list 返回的记录；只保留 UI 需要的字段。 */
-interface CheckpointRecord {
-  id: string
-  runId: string | null
-  phase: CheckpointPhase
-  commitSha: string | null
-  label: string | null
-  createdAt: string
-}
-
-/** Diff 基准下拉里一个 checkpoint 的文字：标签或阶段，加创建时间。 */
-function checkpointLabel(checkpoint: CheckpointRecord, locale: Locale): string {
-  const name = checkpoint.label ?? translate(locale, CHECKPOINT_PHASE_LABELS[checkpoint.phase])
-  return `${name} · ${formatDateTime(checkpoint.createdAt, locale)}`
 }
 
 /** 把 unknown 错误转成可展示文本。 */
@@ -103,10 +69,10 @@ export function WorkbenchPanel({
   onError,
   projectName,
   workspaceRevision,
-  pluginSurfaces = [],
 }: WorkbenchPanelProps) {
-  const { t, locale } = useLocale()
-  const tab: PanelSurfaceKind | null =
+  const { t } = useLocale()
+  const surfaceContributions = useContributions("surface")
+  const tab: string | null =
     panel.surfaces.find((surface) => surface.id === panel.activeId)?.kind ?? null
   // 保存文件、恢复检查点、切换 worktree 都会改动工作目录，与 agent 改文件一样要让文件树、
   // git 标记与打开的文件重读。
@@ -215,15 +181,15 @@ export function WorkbenchPanel({
     }
   }
 
-  function add(kind: SurfaceKind): void {
+  function add(kind: string): void {
+    const surface = surfaceContributions.find((item) => item.id === kind)
+    if (!surface) return
+    const name = contributionText(t, surface.title)
     onPanelChange((state) =>
-      addSurface(state, kind, nextSurfaceId(), (index) => surfaceTitle(t, kind, index)),
+      addSurface(state, kind, nextSurfaceId(), (index) => surface.tabTitle?.(name, index) ?? name, {
+        multiInstance: surface.multiInstance,
+      }),
     )
-  }
-
-  function addPlugin(id: string): void {
-    const plugin = pluginSurfaces.find((surface) => surface.id === id)
-    if (plugin) onPanelChange((state) => addPluginSurface(state, plugin, nextSurfaceId()))
   }
 
   /** 关闭标签；有未保存修改的文件标签先确认。 */
@@ -262,202 +228,78 @@ export function WorkbenchPanel({
     onSaved: () => setLocalRevision((count) => count + 1),
   }
 
-  const content: Record<"diff" | "checkpoint" | "pr", ReactNode> = {
-    diff: (
-      <div className="workbench-diff">
-        {committed.length > 0 ? (
-          <div className="workbench-diff-base">
-            <Select.Root
-              value={baseSha ?? null}
-              onValueChange={(next) => setDiffBase(typeof next === "string" && next ? next : null)}
-            >
-              <Select.Label>{t("workbench.diffBase")}</Select.Label>
-              <Select.Trigger className="input select-trigger workbench-diff-base-select">
-                <Select.Value className="grow truncate">
-                  {(value: string | null) => {
-                    const checkpoint = committed.find((item) => item.commitSha === value)
-                    return checkpoint ? checkpointLabel(checkpoint, locale) : "HEAD"
-                  }}
-                </Select.Value>
-                <ChevronDown className="ic ic-sm" aria-hidden="true" />
-              </Select.Trigger>
-              <Select.Portal>
-                <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
-                  <Select.Popup>
-                    {[...committed].reverse().map((checkpoint) => (
-                      <Select.Item key={checkpoint.id} value={checkpoint.commitSha ?? ""}>
-                        <Select.ItemText>{checkpointLabel(checkpoint, locale)}</Select.ItemText>
-                      </Select.Item>
-                    ))}
-                  </Select.Popup>
-                </Select.Positioner>
-              </Select.Portal>
-            </Select.Root>
-          </div>
-        ) : null}
-        {diffError ? (
-          <p className="workbench-error">{diffError}</p>
-        ) : diffLoading ? (
-          <EmptyState icon={<Loader2 className="ic spin" />} title={t("workbench.diff.loading")} />
-        ) : (
-          <DiffView diff={diff} />
-        )}
-      </div>
-    ),
-    checkpoint: (
-      <div className="workbench-checkpoints">
-        <header className="workbench-section-header">
-          <span>{t("workbench.checkpoint")}</span>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={checkpointBusy}
-            onClick={() => void createCheckpoint()}
-          >
-            {t("workbench.createCheckpoint")}
-          </Button>
-        </header>
-        {checkpointError ? <p className="workbench-error">{checkpointError}</p> : null}
-        <CheckpointPanel
-          checkpoints={checkpoints}
-          onRestore={restoreCheckpoint}
-          restoring={checkpointBusy}
-        />
-      </div>
-    ),
-    pr: (
-      <PrPanel
-        pullRequest={pr.pullRequest}
-        loading={pr.loading}
-        creating={pr.creating}
-        error={pr.error}
-        onCreate={pr.create}
-      />
-    ),
+  const context: WorkbenchContextValue = {
+    connection,
+    threadId,
+    add,
+    close,
+    openFile,
+    fileProps,
+    worktrees,
+    diff: {
+      committed,
+      baseSha,
+      setBase: setDiffBase,
+      text: diff,
+      loading: diffLoading,
+      error: diffError,
+    },
+    checkpoints: {
+      list: checkpoints,
+      error: checkpointError,
+      busy: checkpointBusy,
+      create: createCheckpoint,
+      restore: restoreCheckpoint,
+    },
+    pr,
   }
 
   return (
-    <div className="workbench">
-      <RightPanel
-        threadId={threadId}
-        surfaces={surfaces}
-        activeId={panel.activeId}
-        onActivate={(id) => onPanelChange((state) => ({ ...state, activeId: id }))}
-        onClose={close}
-        onAdd={add}
-        plugins={pluginSurfaces}
-        onAddPlugin={addPlugin}
-        controls={controls}
-      >
-        {panel.surfaces.map((surface) => {
-          const active = surface.id === panel.activeId
-          if (surface.kind === "terminal") {
-            return (
-              <div key={surface.id} className="surface-pane" hidden={!active}>
-                <TerminalSurface
-                  connection={connection}
-                  threadId={threadId}
-                  active={active}
-                  tools={
-                    <>
-                      <Button
-                        variant="plain"
-                        size="icon"
-                        type="button"
-                        aria-label={t("terminal.new")}
-                        title={t("terminal.new")}
-                        onClick={() => add("terminal")}
-                      >
-                        <Plus className="ic ic-sm" aria-hidden="true" />
-                      </Button>
-                      <Button
-                        variant="plain"
-                        size="icon"
-                        type="button"
-                        aria-label={t("terminal.kill")}
-                        title={t("terminal.kill")}
-                        onClick={() => close(surface.id)}
-                      >
-                        <Trash2 className="ic ic-sm" aria-hidden="true" />
-                      </Button>
-                    </>
-                  }
-                />
-              </div>
-            )
-          }
-          if (surface.kind === "browser") {
-            return (
-              <div key={surface.id} className="surface-pane" hidden={!active}>
-                <BrowserSurface id={surface.id} />
-              </div>
-            )
-          }
-          if (!active) return null
-          if (surface.kind === "files") {
-            return (
-              <div key={surface.id} className="surface-pane workbench-files">
-                <div className="workbench-worktree-compact">
-                  <WorktreePicker
-                    worktrees={worktrees.worktrees}
-                    activePath={worktrees.activePath}
-                    onCreate={worktrees.create}
-                    onSwitch={worktrees.switchTo}
-                    onRemove={worktrees.remove}
-                    busy={worktrees.busy}
-                    compact
+    <WorkbenchContext.Provider value={context}>
+      <div className="workbench">
+        <RightPanel
+          threadId={threadId}
+          surfaces={surfaces}
+          activeId={panel.activeId}
+          onActivate={(id) => onPanelChange((state) => ({ ...state, activeId: id }))}
+          onClose={close}
+          onAdd={add}
+          controls={controls}
+        >
+          {panel.surfaces.map((surface) => {
+            const active = surface.id === panel.activeId
+            if (surface.kind === FILE_SURFACE_KIND) {
+              return active ? (
+                <div key={surface.id} className="surface-pane">
+                  <FileSurface
+                    {...fileProps}
+                    path={surface.path ?? ""}
+                    line={surface.line}
+                    onOpenFile={(path) => openFile(path)}
                   />
                 </div>
-                <FilesSurface {...fileProps} onOpenFile={(path) => openFile(path, surface.id)} />
-              </div>
-            )
-          }
-          if (surface.kind === "file") {
+              ) : null
+            }
+            // 已经注销的 Surface（插件刚停用）不渲染；App 随即关掉它的标签。
+            const contribution = surfaceContributions.find((item) => item.id === surface.kind)
+            if (!contribution || (!active && !contribution.keepMounted)) return null
             return (
-              <div key={surface.id} className="surface-pane">
-                <FileSurface
-                  {...fileProps}
-                  path={surface.path ?? ""}
-                  line={surface.line}
-                  onOpenFile={(path) => openFile(path)}
-                />
-              </div>
+              <Fragment key={surface.id}>{contribution.render({ tab: surface, active })}</Fragment>
             )
-          }
-          if (surface.kind === "plugin") {
-            const plugin = pluginSurfaces.find((item) => item.id === surface.plugin)
-            return (
-              <div key={surface.id} className="surface-pane surface-scroll">
-                {plugin ? (
-                  <PluginContentHost id={plugin.id} render={plugin.render} kind="surface" />
-                ) : (
-                  <EmptyState
-                    icon={<Unplug className="ic" />}
-                    title={t("plugins.surfaceGone")}
-                    description={t("plugins.surfaceGoneHint")}
-                  />
-                )}
-              </div>
-            )
-          }
-          return (
-            <div key={surface.id} className="surface-pane surface-scroll">
-              {content[surface.kind]}
-            </div>
-          )
-        })}
-      </RightPanel>
-      <DiscardDraftDialog
-        file={pendingClose?.title ?? null}
-        onCancel={() => setPendingClose(null)}
-        onDiscard={() => {
-          const surface = pendingClose
-          setPendingClose(null)
-          if (!surface) return
-          if (surface.path) setDraft(threadId, surface.path, null)
-          onPanelChange((state) => closeSurface(state, surface.id))
-        }}
-      />
-    </div>
+          })}
+        </RightPanel>
+        <DiscardDraftDialog
+          file={pendingClose?.title ?? null}
+          onCancel={() => setPendingClose(null)}
+          onDiscard={() => {
+            const surface = pendingClose
+            setPendingClose(null)
+            if (!surface) return
+            if (surface.path) setDraft(threadId, surface.path, null)
+            onPanelChange((state) => closeSurface(state, surface.id))
+          }}
+        />
+      </div>
+    </WorkbenchContext.Provider>
   )
 }

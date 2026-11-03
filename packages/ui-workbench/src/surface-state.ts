@@ -1,41 +1,16 @@
 /**
- * 右侧面板的标签状态：可以打开的 surface 种类、快捷键，以及打开、关闭、替换与更新标签的纯函数。
- * 内置 surface、单个文件与插件注册的标签都放在同一组标签里。
+ * Workbench 的标签状态：打开、关闭、替换与更新标签的纯函数。可以打开哪些 Surface 由扩展点注册表决定；
+ * 内置 Surface、插件的 Surface 与单个文件都放在同一组标签里。
  */
 
-/** 可以打开的 surface 种类；顺序即启动器与添加菜单里的顺序。 */
-export const SURFACE_KINDS = ["browser", "terminal", "files", "diff", "pr", "checkpoint"] as const
-
-/** surface 种类标识。 */
-export type SurfaceKind = (typeof SURFACE_KINDS)[number]
-
-/** 启动器与添加菜单里的单键快捷键。 */
-export const SURFACE_SHORTCUTS: Record<SurfaceKind, string> = {
-  browser: "B",
-  terminal: "T",
-  files: "F",
-  diff: "D",
-  pr: "P",
-  checkpoint: "C",
-}
-
-/** 可以同时打开多个实例的种类；其余种类再次打开时切到已有标签。 */
-export const MULTI_INSTANCE_KINDS: ReadonlySet<SurfaceKind> = new Set(["browser", "terminal"])
-
-/** 标签的种类：启动器里的 surface、从文件树或聊天里打开的单个文件，以及插件的标签。 */
-export type PanelSurfaceKind = SurfaceKind | "file" | "plugin"
-
-/** 插件注册的一种标签。 */
-export interface PluginSurfaceOption {
-  id: string
-  title: string
-  description?: string | undefined
-}
+/** 文件标签的种类：从文件树或聊天里打开的单个文件，不是登记在扩展点上的 Surface。 */
+export const FILE_SURFACE_KIND = "file"
 
 /** 右侧面板里的一个标签。 */
 export interface PanelSurface {
   id: string
-  kind: PanelSurfaceKind
+  /** 标签对应的 Surface 的 id；文件标签是 FILE_SURFACE_KIND。 */
+  kind: string
   title: string
   /** 浏览器最近一次导航的地址；面板随会话重新挂载时用它恢复页面。 */
   url?: string
@@ -45,8 +20,6 @@ export interface PanelSurface {
   line?: number
   /** 有未保存的修改；标签上显示圆点。 */
   dirty?: boolean
-  /** 插件标签对应的插件 surface id。 */
-  plugin?: string
 }
 
 /** 一组标签与当前激活的标签；没有标签时 activeId 为 null，面板显示启动器。 */
@@ -59,16 +32,17 @@ export interface PanelSurfaceState {
 export const EMPTY_SURFACE_STATE: PanelSurfaceState = { surfaces: [], activeId: null }
 
 /**
- * 打开一个 surface：单实例种类已存在时只切换过去；多实例种类追加新标签。
- * title 收到同种类的序号（从 1 开始），用于生成「终端 2」这样的标题。
+ * 打开一个 Surface：单实例的 Surface 已经打开时只切换过去；多实例的追加新标签。
+ * title 收到同种标签的序号（从 1 开始），用于生成「终端 2」这样的标题。
  */
 export function addSurface(
   state: PanelSurfaceState,
-  kind: SurfaceKind,
+  kind: string,
   id: string,
   title: (index: number) => string,
+  options: { multiInstance?: boolean | undefined } = {},
 ): PanelSurfaceState {
-  if (!MULTI_INSTANCE_KINDS.has(kind)) {
+  if (!options.multiInstance) {
     const existing = state.surfaces.find((surface) => surface.kind === kind)
     if (existing) return { ...state, activeId: existing.id }
   }
@@ -79,22 +53,6 @@ export function addSurface(
   while (used.has(title(index))) index += 1
   return {
     surfaces: [...state.surfaces, { id, kind, title: title(index) }],
-    activeId: id,
-  }
-}
-
-/** 打开一个插件标签：每种插件标签只开一个，已经打开时切过去。 */
-export function addPluginSurface(
-  state: PanelSurfaceState,
-  plugin: PluginSurfaceOption,
-  id: string,
-): PanelSurfaceState {
-  const existing = state.surfaces.find(
-    (surface) => surface.kind === "plugin" && surface.plugin === plugin.id,
-  )
-  if (existing) return { ...state, activeId: existing.id }
-  return {
-    surfaces: [...state.surfaces, { id, kind: "plugin", title: plugin.title, plugin: plugin.id }],
     activeId: id,
   }
 }
@@ -146,6 +104,19 @@ export function openFileSurface(
       ? [...state.surfaces, surface]
       : [...state.surfaces.slice(0, index), surface, ...state.surfaces.slice(index + 1)]
   return { surfaces, activeId: id }
+}
+
+/**
+ * 关闭 Surface 已经注销的标签（插件停用或卸载时）：每关一个都按 closeSurface 的规则改选当前标签。
+ * 文件标签不是 Surface，从不在这里关闭（未保存的修改要先经过确认）。没有要关的标签时原样返回。
+ */
+export function closeRemovedSurfaces(
+  state: PanelSurfaceState,
+  removed: ReadonlySet<string>,
+): PanelSurfaceState {
+  return state.surfaces
+    .filter((surface) => surface.kind !== FILE_SURFACE_KIND && removed.has(surface.kind))
+    .reduce((next, surface) => closeSurface(next, surface.id), state)
 }
 
 /** 修改某个标签的标题、地址、文件或未保存状态，例如浏览器加载页面后显示主机名。 */

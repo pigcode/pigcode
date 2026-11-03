@@ -1,7 +1,20 @@
 // @vitest-environment jsdom
-/** 验证第三方 UI 插件重复 slot id 时跳过并记录错误，不静默覆盖。 */
+/**
+ * 验证第三方 UI 插件：重复 slot id 时跳过并记录错误；Panel 与 Surface 登记到扩展点注册表并归属到插件，
+ * 和已有 id 冲突时不覆盖；插件从 boot graph 消失时按 owner 移除，其余插件不动。
+ */
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { Connection, createSlotRegistry } from "@pigcode/client-runtime"
+import {
+  Connection,
+  createExtensionRegistry,
+  createSlotRegistry,
+  type BootEntry,
+  type ClientModule,
+} from "@pigcode/client-runtime"
+import { registerBuiltinSurfaces } from "./builtin-surfaces"
+
+// builtin-surfaces 只从工作台包里取文件标签的种类；整个包会加载 xterm，jsdom 里没有 canvas。
+vi.mock("@pigcode/ui-workbench", () => ({ FILE_SURFACE_KIND: "file" }))
 import { createClientPluginController } from "./client-plugins"
 
 /** 生成一个只注册单个 slot 条目的 client bundle data URL。 */
@@ -18,6 +31,43 @@ function clientModule(slot: string, id: string): string {
 /** 控制器只在 reload 时使用 connection.call，这里不会真正发起 RPC。 */
 const connection = new Connection({ onEvent() {}, onDelta() {}, onStatus() {} })
 
+/** 一个 apply 体为 body 的 client bundle 入口。 */
+function entry(id: string, body: string, revision = "1"): BootEntry {
+  const source = `export function apply(ctx) {\n${body}\n}`
+  return { id, revision, inject: [], url: `data:text/javascript,${encodeURIComponent(source)}` }
+}
+
+/** 让 reload 读到给定的 boot graph。 */
+function serve(entries: BootEntry[]): void {
+  vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => ({ entries }) }))
+}
+
+/** 控制器与它用的 slot、扩展点注册表；importModule 缺省时真的 import data URL。 */
+function setup(importModule?: (url: string) => Promise<ClientModule>) {
+  const slots = createSlotRegistry()
+  const extensions = createExtensionRegistry()
+  const controller = createClientPluginController({
+    slots,
+    extensions,
+    connection,
+    ...(importModule ? { importModule } : {}),
+  })
+  return { slots, extensions, controller }
+}
+
+/** 一个 Surface 的登记语句。 */
+const surfaceCall = (id: string, title: string) =>
+  `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, render() {} })`
+
+/** 一个可以从外面完成的 promise。 */
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
@@ -25,8 +75,7 @@ afterEach(() => {
 
 describe("client plugin slot conflicts", () => {
   it("skips a duplicate slot id and records the plugin id", async () => {
-    const slots = createSlotRegistry()
-    const controller = createClientPluginController({ slots, connection })
+    const { slots, controller } = setup()
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
     const boot = {
       entries: [
@@ -52,9 +101,12 @@ describe("client plugin slot conflicts", () => {
     expect(slots.get("sidebar.section").map((entry) => entry.id)).toEqual(["shared"])
     const errors = controller.errors.get()
     expect(errors).toHaveLength(1)
-    expect(errors[0]?.pluginId).toBe("ui.b")
-    expect(errors[0]?.message).toContain("SLOT_CONFLICT")
-    expect(errors[0]?.message).toContain("ui.a")
+    expect(errors[0]).toMatchObject({
+      pluginId: "ui.b",
+      kind: "slotConflict",
+      detail: "sidebar.section:shared",
+      owner: "ui.a",
+    })
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("ui.b"))
 
     controller.dispose()
@@ -62,8 +114,7 @@ describe("client plugin slot conflicts", () => {
   })
 
   it("allows the same id in different slots", async () => {
-    const slots = createSlotRegistry()
-    const controller = createClientPluginController({ slots, connection })
+    const { slots, controller } = setup()
     const boot = {
       entries: [
         {
@@ -87,44 +138,236 @@ describe("client plugin slot conflicts", () => {
 })
 
 describe("client plugin panels and surfaces", () => {
-  it("registers right-panel surfaces built with the host's ui kit and drops them on dispose", async () => {
-    const source = `export function apply(ctx) {
-      ctx.registerSurface({
-        id: "inspector",
-        title: "Inspector",
-        render(container) {
-          container.append(ctx.ui.row({ title: ctx.theme.get(), control: ctx.ui.badge(ctx.locale.get()) }))
-        },
-      })
-      ctx.registerPanel({ id: "status", title: "Status", render() {} })
-    }`
-    const slots = createSlotRegistry()
-    const controller = createClientPluginController({ slots, connection })
-    const boot = {
-      entries: [
-        {
-          id: "ui.inspector",
-          revision: "1",
-          inject: [],
-          url: `data:text/javascript,${encodeURIComponent(source)}`,
-        },
-      ],
-    }
-    vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => boot }))
+  it("registers Panels and Surfaces owned by the plugin, built with the host's ui kit", async () => {
+    const { extensions, controller } = setup()
+    serve([
+      entry(
+        "ui.inspector",
+        `ctx.surfaces.register({
+          id: "inspector",
+          title: "Inspector",
+          description: "Host state",
+          render(container) {
+            container.append(ctx.ui.row({ title: ctx.theme.get(), control: ctx.ui.badge(ctx.locale.get()) }))
+          },
+        })
+        ctx.panels.register({ id: "status", title: "Status", order: 5, render() {} })`,
+      ),
+    ])
     document.documentElement.setAttribute("data-theme", "dark")
     document.documentElement.setAttribute("lang", "en-US")
 
     await controller.reload()
 
-    const [surface] = controller.surfaces.get()
-    expect(surface?.title).toBe("Inspector")
-    const container = document.createElement("div")
-    surface?.render(container)
-    expect(container.querySelector(".pg-row-title")?.textContent).toBe("dark")
-    expect(container.querySelector(".badge")?.textContent).toBe("en-US")
-    expect(controller.panels.get().map((panel) => panel.id)).toEqual(["status"])
+    const [surface] = extensions.get("surface")
+    expect(surface).toMatchObject({
+      id: "inspector",
+      owner: { kind: "plugin", id: "ui.inspector" },
+      order: 0,
+      title: { text: "Inspector" },
+      description: { text: "Host state" },
+    })
+    expect(extensions.get("panel")).toMatchObject([
+      { id: "status", owner: { kind: "plugin", id: "ui.inspector" }, order: 5 },
+    ])
     controller.dispose()
-    expect(controller.surfaces.get()).toEqual([])
-    expect(controller.panels.get()).toEqual([])
+    expect(extensions.get("surface")).toEqual([])
+    expect(extensions.get("panel")).toEqual([])
+  })
+
+  it("rejects a Surface whose id a built-in or another plugin already has, naming both owners", async () => {
+    const { extensions, controller } = setup()
+    registerBuiltinSurfaces(extensions)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const surface = (id: string, title: string) =>
+      `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, render() {} })`
+    serve([
+      entry("ui.a", surface("terminal", "Fake terminal") + "\n" + surface("shared", "A")),
+      entry("ui.b", surface("shared", "B")),
+    ])
+
+    await controller.reload()
+
+    const surfaces = extensions.get("surface")
+    expect(surfaces.find((item) => item.id === "terminal")?.owner).toEqual({
+      kind: "builtin",
+      id: "workbench",
+    })
+    expect(surfaces.find((item) => item.id === "shared")?.title).toEqual({ text: "A" })
+    expect(extensions.conflicts()).toEqual([
+      {
+        point: "surface",
+        id: "terminal",
+        existing: { kind: "builtin", id: "workbench" },
+        rejected: { kind: "plugin", id: "ui.a" },
+      },
+      {
+        point: "surface",
+        id: "shared",
+        existing: { kind: "plugin", id: "ui.a" },
+        rejected: { kind: "plugin", id: "ui.b" },
+      },
+    ])
+
+    // ui.b 停用：它的冲突记录随之清除，ui.a 的登记不受影响。
+    serve([entry("ui.a", surface("terminal", "Fake terminal") + "\n" + surface("shared", "A"))])
+    await controller.reload()
+    expect(extensions.conflicts().map((conflict) => conflict.rejected.id)).toEqual(["ui.a"])
+    controller.dispose()
+  })
+
+  it("removes only the disabled plugin's contributions on reload and keeps the others in place", async () => {
+    const { extensions, controller } = setup()
+    const panel = (id: string) =>
+      `ctx.panels.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(id)}, render() {} })`
+    const keep = entry("ui.keep", panel("keep"))
+    // 插件没有在清理函数里注销自己的 Surface：卸载时按 owner 一并移除。
+    const gone = entry(
+      "ui.gone",
+      `${panel("gone")}
+      ctx.surfaces.register({ id: "gone-surface", title: "Gone", render() {} })
+      return () => {}`,
+    )
+    serve([keep, gone])
+    await controller.reload()
+    const kept = extensions.get("panel").find((item) => item.id === "keep")
+    expect(extensions.get("panel").map((item) => item.id)).toEqual(["gone", "keep"])
+    expect(extensions.get("surface").map((item) => item.id)).toEqual(["gone-surface"])
+
+    serve([keep])
+    await controller.reload()
+    expect(extensions.get("panel").map((item) => item.id)).toEqual(["keep"])
+    // 没有停用的插件不会重新应用：仍是同一个 Contribution。
+    expect(extensions.get("panel")[0]).toBe(kept)
+    expect(extensions.get("surface")).toEqual([])
+
+    // 换了版本的插件重新应用。
+    serve([entry("ui.keep", panel("keep"), "2")])
+    await controller.reload()
+    expect(extensions.get("panel")[0]).not.toBe(kept)
+    controller.dispose()
+  })
+
+  it("rejects a Surface with a reserved tab kind as a conflict with the Workbench", async () => {
+    const { extensions, controller } = setup()
+    registerBuiltinSurfaces(extensions)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([entry("ui.a", surfaceCall("file", "Not a file"))])
+
+    await controller.reload()
+
+    expect(extensions.get("surface").map((item) => item.id)).not.toContain("file")
+    expect(extensions.conflicts()).toEqual([
+      {
+        point: "surface",
+        id: "file",
+        existing: { kind: "builtin", id: "workbench" },
+        rejected: { kind: "plugin", id: "ui.a" },
+      },
+    ])
+    controller.dispose()
+  })
+
+  it("gives the id to a plugin it was rejected for once the winner is disabled", async () => {
+    const { slots, extensions, controller } = setup()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const slot = `ctx.slots.register("sidebar.section", { id: "shared", render: () => null })`
+    const a = entry("ui.a", `${surfaceCall("x", "A")}\n${slot}`)
+    const b = entry("ui.b", `${surfaceCall("x", "B")}\n${slot}`)
+    serve([a, b])
+    await controller.reload()
+    expect(extensions.get("surface")).toMatchObject([{ id: "x", title: { text: "A" } }])
+    expect(extensions.conflicts().map((conflict) => conflict.rejected.id)).toEqual(["ui.b"])
+    expect(controller.errors.get()).toMatchObject([{ pluginId: "ui.b", kind: "slotConflict" }])
+
+    // 停用 A：B 重新应用，拿到 Surface 与 slot 条目，冲突记录随之清掉。
+    serve([b])
+    await controller.reload()
+    expect(extensions.get("surface")).toMatchObject([
+      { id: "x", title: { text: "B" }, owner: { kind: "plugin", id: "ui.b" } },
+    ])
+    expect(slots.get("sidebar.section").map((item) => item.id)).toEqual(["shared"])
+    expect(extensions.conflicts()).toEqual([])
+    expect(controller.errors.get()).toEqual([])
+    controller.dispose()
+  })
+
+  it("reports a bundle that fails to import and retries it on the next reload", async () => {
+    let fail = true
+    const importModule = vi.fn(async (url: string) => {
+      if (fail) throw new Error(`cannot load ${url}`)
+      return (await import(/* @vite-ignore */ url)) as ClientModule
+    })
+    const { extensions, controller } = setup(importModule)
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([entry("ui.a", surfaceCall("a", "A"))])
+
+    await controller.reload()
+    expect(extensions.get("surface")).toEqual([])
+    expect(controller.errors.get()).toMatchObject([
+      { pluginId: "ui.a", kind: "import", detail: expect.stringContaining("cannot load") },
+    ])
+
+    fail = false
+    await controller.reload()
+    expect(importModule).toHaveBeenCalledTimes(2)
+    expect(extensions.get("surface").map((item) => item.id)).toEqual(["a"])
+    expect(controller.errors.get()).toEqual([])
+    controller.dispose()
+  })
+
+  it("finishes a pending reload when a later reload cannot read the boot graph", async () => {
+    const gate = deferred<void>()
+    const { extensions, controller } = setup(async (url) => {
+      if (url.includes("B%22")) await gate.promise
+      return (await import(/* @vite-ignore */ url)) as ClientModule
+    })
+    serve([entry("ui.a", surfaceCall("a", "A"), "1")])
+    await controller.reload()
+
+    // 第一次 reload 正在等新版本 import；第二次读 boot graph 失败。
+    serve([entry("ui.a", surfaceCall("a", "B"), "2")])
+    const updating = controller.reload()
+    vi.stubGlobal("fetch", async () => {
+      throw new Error("offline")
+    })
+    await controller.reload()
+    gate.resolve()
+    await updating
+
+    expect(extensions.get("surface")).toMatchObject([{ id: "a", title: { text: "B" } }])
+    controller.dispose()
+  })
+
+  it("keeps a plugin's Surface registered while its new revision loads, so open tabs survive", async () => {
+    const gate = deferred<void>()
+    const { extensions, controller } = setup(async (url) => {
+      if (url.includes("v2")) await gate.promise
+      return (await import(/* @vite-ignore */ url)) as ClientModule
+    })
+    serve([entry("ui.a", surfaceCall("a", "v1"), "1")])
+    await controller.reload()
+
+    // React 在微任务里读取快照：记下每次变化之后、下一个微任务里看到的 Surface。
+    const seen: string[][] = []
+    extensions.subscribe("surface", () =>
+      queueMicrotask(() => seen.push(extensions.get("surface").map((item) => item.id))),
+    )
+    serve([entry("ui.a", surfaceCall("a", "v2"), "2")])
+    const updating = controller.reload()
+    await new Promise((done) => setTimeout(done, 10))
+    expect(extensions.get("surface")).toMatchObject([{ id: "a", title: { text: "v1" } }])
+    gate.resolve()
+    await updating
+
+    expect(extensions.get("surface")).toMatchObject([{ id: "a", title: { text: "v2" } }])
+    expect(seen.length).toBeGreaterThan(0)
+    expect(seen.every((ids) => ids.includes("a"))).toBe(true)
+
+    // 停用照样移除。
+    serve([])
+    await controller.reload()
+    expect(extensions.get("surface")).toEqual([])
+    controller.dispose()
   })
 })

@@ -10,9 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@pigcode/client-runtime": "workspace:*",
     "@pigcode/contracts": "workspace:*",
     "@pigcode/plugin-sdk": "workspace:*",
-    "@pigcode/ui-primitives": "workspace:*"
+    "@pigcode/ui-primitives": "workspace:*",
+    "lucide-react": "1.0.1"
   },
   "peerDependencies": {
     "react": "^19",
