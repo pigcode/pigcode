@@ -130,7 +130,9 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(tabs).toHaveText(["终端 1"])
   await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
   await expect(debugPanel).toHaveCount(0)
-  // 命令也随插件停用：命令面板和输入框 `/` 里都不再有它。
+  // 命令也随插件停用：命令面板和输入框 `/` 里都不再有它。改选的终端拿着焦点，Windows/Linux 上
+  // Ctrl+K 归终端里的 shell；先把焦点放回输入框（输入框里 Ctrl+K 照样打开命令面板）。
+  await page.locator(".tiptap").click()
   await page.keyboard.press("ControlOrMeta+k")
   await page.locator(".palette input").fill("示例命令")
   await expect(page.locator(".palette")).toContainText("没有匹配结果")
