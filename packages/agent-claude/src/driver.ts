@@ -24,7 +24,7 @@ import type {
   UserInput,
 } from "@pigcode/plugin-sdk"
 import { detectClaude, type ClaudeDetection } from "./detect"
-import { claudeLaunch, type ClaudeLaunch } from "./launch"
+import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
 import { createNormalizeState, normalizeSdkMessage } from "./normalize"
@@ -109,7 +109,7 @@ export class ClaudeDriver implements AgentDriver {
     const launch = claudeLaunch(settings, this.fixedExecutable)
     return listClaudeModels({
       queryFn: this.queryFn,
-      executable: launch.executable,
+      executable: sdkExecutable(launch.executable),
       env: launch.env,
       detect: () => this.probe(launch),
     })
@@ -175,7 +175,9 @@ export class ClaudeDriver implements AgentDriver {
         includePartialMessages: true,
         // 子 agent 的文本/思考块也作为带 parent_tool_use_id 的消息转发，供时间线归组。
         forwardSubagentText: true,
-        ...(launch.executable ? { pathToClaudeCodeExecutable: launch.executable } : {}),
+        ...(launch.executable
+          ? { pathToClaudeCodeExecutable: sdkExecutable(launch.executable) ?? launch.executable }
+          : {}),
         ...(launch.env ? { env: launch.env } : {}),
         ...(Object.keys(launch.extraArgs).length > 0 ? { extraArgs: launch.extraArgs } : {}),
         // 插件工具以进程内 SDK MCP server 暴露，生命周期跟随本次 Query。

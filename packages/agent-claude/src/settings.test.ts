@@ -1,13 +1,13 @@
 /** 验证设置页的值如何作用到 Claude Code：可执行文件、CLAUDE_CONFIG_DIR、环境变量与启动参数。 */
 import type { Options } from "@anthropic-ai/claude-agent-sdk"
-import { chmod, mkdtemp, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import type { PluginHostContext } from "@pigcode/plugin-sdk"
 import { describe, expect, it, vi } from "vitest"
 import { ClaudeDriver } from "./driver"
 import { apply } from "./index"
-import { claudeLaunch } from "./launch"
+import { claudeLaunch, sdkExecutable } from "./launch"
 import { claudeMcpServer } from "./mcp"
 import { replayQuery } from "./replay"
 
@@ -74,19 +74,52 @@ describe("Claude launch settings", () => {
   })
 })
 
+describe("Claude SDK executable", () => {
+  // npm 在 Windows 上把 claude 装成 .cmd shim；SDK 只能直接启动它背后的文件。
+  it.runIf(process.platform === "win32")("unwraps an npm shim", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-sdk-"))
+    const bin = join(dir, "bin")
+    await mkdir(bin, { recursive: true })
+    const exe = join(bin, "claude.exe")
+    await writeFile(exe, "")
+    const shim = join(dir, "claude.cmd")
+    await writeFile(
+      shim,
+      ["@ECHO off", "SET dp0=%~dp0", '"%dp0%\\bin\\claude.exe"   %*'].join("\r\n"),
+    )
+
+    expect(sdkExecutable(shim)).toBe(exe)
+    // 已经是可执行文件、或解析不出来时保持原样。
+    expect(sdkExecutable("/opt/claude/bin/claude")).toBe("/opt/claude/bin/claude")
+    expect(sdkExecutable(undefined)).toBeUndefined()
+  })
+})
+
 describe("Claude detection", () => {
-  // fixture 是 /bin/sh 脚本，Windows 上不能直接执行。
-  it.skipIf(process.platform === "win32")(
-    "probes the configured binary with the configured environment",
-    async () => {
-      const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-settings-"))
-      const bin = join(dir, "claude-custom")
-      await writeFile(
-        bin,
-        `#!/bin/sh
+  /**
+   * 写一个假的 CLI：Windows 上写成 npm 装出来的 .cmd shim（检测必须经 shell 启动它），
+   * 其他平台写成 /bin/sh 脚本。
+   */
+  async function writeCli(dir: string, name: string, unix: string, windows: string[]) {
+    const onWindows = process.platform === "win32"
+    const path = join(dir, onWindows ? `${name}.cmd` : name)
+    await writeFile(path, onWindows ? `${windows.join("\r\n")}\r\n` : unix)
+    if (!onWindows) await chmod(path, 0o755)
+    return path
+  }
+
+  it("probes the configured binary with the configured environment", async () => {
+    // 目录带空格：Windows 上退回 shell 时路径必须自己加引号，否则 cmd 会在空格处断开。
+    const dir = join(await mkdtemp(join(tmpdir(), "pigcode-claude-settings-")), "space dir")
+    await mkdir(dir, { recursive: true })
+    const configDir = join(dir, "cfg")
+    const bin = await writeCli(
+      dir,
+      "claude-custom",
+      `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "9.9.9 (Claude Code)"; exit 0; fi
 if [ "$1" = "auth" ]; then
-  if [ "$CLAUDE_CONFIG_DIR" = "${dir}/cfg" ]; then
+  if [ "$CLAUDE_CONFIG_DIR" = "${configDir}" ]; then
     echo '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}'
   else
     echo '{"loggedIn":false}'
@@ -95,30 +128,38 @@ if [ "$1" = "auth" ]; then
 fi
 exit 1
 `,
-      )
-      await chmod(bin, 0o755)
-      const driver = new ClaudeDriver()
-      await expect(
-        driver.detect({ binaryPath: bin, configDir: join(dir, "cfg") }),
-      ).resolves.toEqual({
-        installed: true,
-        version: "9.9.9 (Claude Code)",
-        authenticated: true,
-        account: "max · claude.ai",
-        command: bin,
-        error: null,
-      })
-      await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
-        installed: true,
-        authenticated: false,
-      })
-      await expect(driver.detect({ binaryPath: join(dir, "missing") })).resolves.toMatchObject({
-        installed: false,
-        authenticated: null,
-        error: expect.stringContaining("not found"),
-      })
-    },
-  )
+      [
+        "@echo off",
+        'if "%1"=="--version" echo 9.9.9 (Claude Code)',
+        'if "%1"=="--version" exit /b 0',
+        'if not "%1"=="auth" exit /b 1',
+        `if "%CLAUDE_CONFIG_DIR%"=="${configDir}" (`,
+        '  echo {"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}',
+        ") else (",
+        '  echo {"loggedIn":false}',
+        ")",
+        "exit /b 0",
+      ],
+    )
+    const driver = new ClaudeDriver()
+    await expect(driver.detect({ binaryPath: bin, configDir })).resolves.toEqual({
+      installed: true,
+      version: "9.9.9 (Claude Code)",
+      authenticated: true,
+      account: "max · claude.ai",
+      command: bin,
+      error: null,
+    })
+    await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
+      installed: true,
+      authenticated: false,
+    })
+    await expect(driver.detect({ binaryPath: join(dir, "missing") })).resolves.toMatchObject({
+      installed: false,
+      authenticated: null,
+      error: expect.stringContaining("not found"),
+    })
+  })
 })
 
 describe("Claude MCP server", () => {

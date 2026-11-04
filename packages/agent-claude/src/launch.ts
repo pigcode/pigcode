@@ -13,6 +13,7 @@ import {
   findExecutable,
   agentEnvironment,
   resolveExecutable,
+  shimTarget,
 } from "@pigcode/plugin-sdk/node"
 
 /**
@@ -77,4 +78,19 @@ export function claudeLaunch(
     Object.entries(flags).filter(([flag]) => !MANAGED_FLAGS.has(flag)),
   )
   return { executable: fixedExecutable ?? claudeExecutable(settings), env, extraArgs }
+}
+
+/** SDK 当作脚本用 node 运行的后缀；其余交给它的路径都必须是原生二进制。 */
+const SDK_SCRIPT = /\.(?:js|jsx|mjs|ts|tsx)$/i
+
+/**
+ * 交给 SDK 的可执行文件。SDK 只能启动原生二进制或上表里的脚本（后者用 node 运行），
+ * 而 Windows 上 npm 装的 claude 是 .cmd shim，这里换成它实际启动的文件（当前的 npm 包是
+ * bin/claude.exe）；解析不出来时保持原样，让 SDK 报出它自己的错误。
+ */
+export function sdkExecutable(executable: string | undefined): string | undefined {
+  if (!executable) return undefined
+  const target = shimTarget(executable)
+  if (target && (/\.exe$/i.test(target) || SDK_SCRIPT.test(target))) return target
+  return executable
 }

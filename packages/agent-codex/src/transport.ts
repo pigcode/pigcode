@@ -1,6 +1,7 @@
 /** Codex 子进程的 NDJSON 传输；测试用 replay 实现。 */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { createInterface } from "node:readline"
+import { launchTarget } from "@pigcode/plugin-sdk/node"
 
 /** 按行收发 NDJSON 的最小传输接口；协议层不感知进程与回放的区别。 */
 export interface CodexTransport {
@@ -27,8 +28,12 @@ export class StdioCodexTransport implements CodexTransport {
     args = ["app-server", "--stdio"],
     env: NodeJS.ProcessEnv | undefined = undefined,
   ) {
-    this.child = spawn(command, args, {
+    // Windows 上 npm 装的 codex 是 .cmd；解析后直接启动它实际运行的 node 入口，
+    // 用户给的启动参数就不会被 cmd 重新切分或展开。
+    const target = launchTarget(command, args)
+    this.child = spawn(target.command, target.args, {
       stdio: ["pipe", "pipe", "pipe"],
+      ...(target.shell ? { shell: true } : {}),
       ...(env ? { env } : {}),
     })
     this.child.on("error", (error) =>

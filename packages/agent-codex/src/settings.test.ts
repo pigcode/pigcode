@@ -1,5 +1,5 @@
 /** 验证设置页的值如何作用到 Codex：可执行文件、CODEX_HOME、启动参数，以及设置变化后不复用旧进程。 */
-import { chmod, mkdtemp, writeFile } from "node:fs/promises"
+import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it, vi } from "vitest"
@@ -99,39 +99,59 @@ describe("Codex driver with settings", () => {
     tracked.close()
   })
 
-  // fixture 是 /bin/sh 脚本，Windows 上不能直接执行。
-  it.skipIf(process.platform === "win32")(
-    "detects the configured binary with CODEX_HOME",
-    async () => {
-      const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-settings-"))
-      const bin = join(dir, "codex-custom")
-      await writeFile(
-        bin,
-        `#!/bin/sh
+  /**
+   * 写一个假的 CLI：Windows 上写成 npm 装出来的 .cmd shim（检测必须经 shell 启动它），
+   * 其他平台写成 /bin/sh 脚本。
+   */
+  async function writeCli(dir: string, name: string, unix: string, windows: string[]) {
+    const onWindows = process.platform === "win32"
+    const path = join(dir, onWindows ? `${name}.cmd` : name)
+    await writeFile(path, onWindows ? `${windows.join("\r\n")}\r\n` : unix)
+    if (!onWindows) await chmod(path, 0o755)
+    return path
+  }
+
+  it("detects the configured binary with CODEX_HOME", async () => {
+    // 目录带空格：Windows 上退回 shell 时路径必须自己加引号，否则 cmd 会在空格处断开。
+    const dir = join(await mkdtemp(join(tmpdir(), "pigcode-codex-settings-")), "space dir")
+    await mkdir(dir, { recursive: true })
+    const home = join(dir, "home")
+    const bin = await writeCli(
+      dir,
+      "codex-custom",
+      `#!/bin/sh
 if [ "$1" = "--version" ]; then echo "codex-cli 9.0.0"; exit 0; fi
 if [ "$1" = "login" ]; then
-  if [ "$CODEX_HOME" = "${dir}/home" ]; then echo "Logged in using ChatGPT"; exit 0; fi
+  if [ "$CODEX_HOME" = "${home}" ]; then echo "Logged in using ChatGPT"; exit 0; fi
   echo "Not logged in"; exit 1
 fi
 exit 1
 `,
-      )
-      await chmod(bin, 0o755)
-      const driver = new CodexDriver()
-      await expect(
-        driver.detect({ binaryPath: bin, homePath: join(dir, "home") }),
-      ).resolves.toEqual({
-        installed: true,
-        version: "codex-cli 9.0.0",
-        authenticated: true,
-        account: "Logged in using ChatGPT",
-        command: bin,
-        error: null,
-      })
-      await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
-        authenticated: false,
-        error: null,
-      })
-    },
-  )
+      [
+        "@echo off",
+        'if "%1"=="--version" echo codex-cli 9.0.0',
+        'if "%1"=="--version" exit /b 0',
+        'if not "%1"=="login" exit /b 1',
+        `if "%CODEX_HOME%"=="${home}" (`,
+        "  echo Logged in using ChatGPT",
+        "  exit /b 0",
+        ")",
+        "echo Not logged in",
+        "exit /b 1",
+      ],
+    )
+    const driver = new CodexDriver()
+    await expect(driver.detect({ binaryPath: bin, homePath: home })).resolves.toEqual({
+      installed: true,
+      version: "codex-cli 9.0.0",
+      authenticated: true,
+      account: "Logged in using ChatGPT",
+      command: bin,
+      error: null,
+    })
+    await expect(driver.detect({ binaryPath: bin })).resolves.toMatchObject({
+      authenticated: false,
+      error: null,
+    })
+  })
 })

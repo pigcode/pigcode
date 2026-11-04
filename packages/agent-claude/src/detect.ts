@@ -1,6 +1,7 @@
 /** 只读检测 Claude Code：版本与 auth status，不触发登录。 */
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
+import { launchTarget } from "@pigcode/plugin-sdk/node"
 
 const exec = promisify(execFile)
 
@@ -33,8 +34,14 @@ export async function detectClaude(options: DetectClaudeOptions = {}): Promise<C
     subscriptionType: null,
     error: null,
   }
+  // Windows 上 npm 装的 CLI 是 .cmd；先解析成它实际启动的文件，解析不了才经 shell。
+  const target = launchTarget(command)
   const run = (args: string[]) =>
-    exec(command, args, { timeout: 5000, ...(options.env ? { env: options.env } : {}) })
+    exec(target.command, [...target.args, ...args], {
+      timeout: 5000,
+      ...(target.shell ? { shell: true } : {}),
+      ...(options.env ? { env: options.env } : {}),
+    })
   try {
     const version = await run(["--version"])
     base.installed = true
