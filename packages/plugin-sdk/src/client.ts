@@ -122,10 +122,17 @@ export interface ClientToolCall {
 export type ClientToolRender = (container: HTMLElement, call: ClientToolCall) => void | (() => void)
 
 /**
+ * 用宿主的 React 画一次工具调用（ADR-0002）。组件渲染在时间线里，`tool` 是这次调用；
+ * 调用的状态、输入或输出变化时宿主用新的 `tool` 重画。
+ */
+export type ClientToolComponent = ComponentType<{ tool: ClientToolCall }>
+
+/**
  * 工具渲染器：决定一类工具调用在对话时间线里怎么显示。匹配是声明式的：`tools` 和 `families` 至少给一个
  * 非空的，渲染时宿主只比较名字，不运行插件代码。
+ * 内容二选一：`Component`（React 组件，推荐）或 `render`（DOM 渲染函数，保留给已有插件）。
  */
-export interface ClientToolRenderer {
+export type ClientToolRenderer = {
   /** 在全部工具渲染器里唯一（内置的是 `builtin.<族名>`）。 */
   id: string
   /** 小的优先，第一个匹配的生效；相同时按 id 排。缺省 0；内置渲染器是 1000，大于它就排在内置的后面。 */
@@ -137,8 +144,7 @@ export interface ClientToolRenderer {
   tools?: readonly string[]
   /** 工具族。 */
   families?: readonly ClientToolFamily[]
-  render: ClientToolRender
-}
+} & ({ Component: ClientToolComponent } | { render: ClientToolRender })
 
 /** 宿主的当前值与变化通知。 */
 export interface ClientObservable<T> {

@@ -26,7 +26,7 @@ export const PROJECT_ROOT = "/tmp/pigcode-visual/demo-project"
 /** 不存在的 CLI：不管机器上装没装 Claude Code 和 Codex，检测结果都一样。 */
 const MISSING_CLI = "/tmp/pigcode-visual/missing"
 
-/** 示例 UI 插件右栏标签里的一段文字；插件按 ctx.locale 自己切换语言。 */
+/** 示例 UI 插件右栏标签里的一段文字；插件用 useLocale() 读到语言后自己切换文案。 */
 const PLUGIN_HOST_TEXT: Record<Locale, string> = { "zh-CN": "宿主", "en-US": "Host" }
 
 const examples = (name: string) => new URL(`../../../examples/${name}`, import.meta.url).pathname

@@ -1,7 +1,14 @@
 /** M4 验收：安装/启用/停用第三方 Agent、UI、Capability 插件。 */
-import { mkdirSync, rmSync } from "node:fs"
+import { execFileSync } from "node:child_process"
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { addProject, installPlugin, launchEnv } from "./projects"
+
+/** 仓库里的脚手架脚本：生成一个 UI 插件用到真实的模板，而不是复制的样例。 */
+const CREATE_PLUGIN = fileURLToPath(new URL("../../../scripts/create-plugin.ts", import.meta.url))
 
 test("installs, enables, and disables plugins without restart", async () => {
   // 每次从干净的项目目录开始，避免上一次失败残留影响结果。
@@ -94,6 +101,18 @@ test("installs, enables, and disables plugins without restart", async () => {
   await page.keyboard.press("Enter")
   await expect(debugRunCount).toHaveText("示例命令已执行 2 次")
 
+  // Panel 由插件的 React 组件渲染：宿主的 ListRow、Badge、Switch，hook 读到宿主的主题与语言。
+  const panel = page.locator("[data-plugin-content='debug-panel']")
+  await expect(panel.locator(".list-row-title").first()).toHaveText("主题")
+  await expect(panel.getByRole("switch", { name: "详细日志" })).toBeVisible()
+  await panel.getByRole("switch", { name: "详细日志" }).click()
+  await expect(panel.getByRole("switch", { name: "详细日志" })).toBeChecked()
+  // useTheme() 和宿主的 data-theme 一致，useLocale() 就是宿主的界面语言。
+  const hostLocale = await page.locator("html").getAttribute("lang")
+  const hostTheme = await page.evaluate(() => document.documentElement.dataset.theme ?? "light")
+  await expect(panel.getByText(hostTheme, { exact: true })).toBeVisible()
+  await expect(panel.getByText(hostLocale ?? "", { exact: true })).toBeVisible()
+
   await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
   const tabs = page.locator(".right-panel").getByRole("tab")
   const addSurface = page.getByRole("button", { name: "添加面板" })
@@ -108,6 +127,19 @@ test("installs, enables, and disables plugins without restart", async () => {
     "true",
   )
   await expect(page.locator("[data-plugin-content='debug-inspector']")).toBeVisible()
+  // Surface 和设置页一样是组装好的宿主分组：读项目按钮调 Host 的 project.list，结果显示成设置行。
+  const inspector = page.locator("[data-plugin-content='debug-inspector']")
+  await expect(inspector.locator(".section-head h2").first()).toHaveText("宿主")
+  await expect(inspector.locator(".empty-state").first()).toContainText("还没有项目")
+  await inspector.getByRole("button", { name: "读取项目" }).click()
+  // 分组下面那行是这一组的说明，之后才是读到的项目。
+  await expect(inspector.locator(".list-row-title")).toHaveText([
+    "主题",
+    "语言",
+    "通过 ctx.host.call 调用 Host 的 project.list。",
+    "pigcode-m4-e2e",
+  ])
+  await expect(inspector.locator(".empty-state")).toHaveCount(0)
 
   // 设置记得上次看的页：再打开设置时回到 Debug 设置页。从命令面板打开插件页，设置里选中的仍是
   // Debug 设置页，就在这时停用它。
@@ -310,6 +342,52 @@ test("a plugin's contributions on all five extension points come and go with it"
   await openPlugins()
   await clock.getByRole("switch").click()
   await expect(clock.getByRole("switch")).not.toBeChecked()
+
+  await app.close()
+})
+
+test("a generated UI plugin is a React plugin and runs right after generating", async () => {
+  const projectRoot = "/tmp/pigcode-m4-e2e-generated"
+  rmSync(projectRoot, { recursive: true, force: true })
+  mkdirSync(projectRoot, { recursive: true })
+  // 真的跑一次脚手架，不只是读模板：生成出来的目录要能直接安装、运行。
+  const generated = join(mkdtempSync(join(tmpdir(), "pigcode-generated-ui-")), "demo")
+  execFileSync(process.execPath, [CREATE_PLUGIN, generated, "ui", "demo"], { stdio: "pipe" })
+
+  const app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  const page = await app.firstWindow()
+  await addProject(app, page, projectRoot)
+
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await installPlugin(page, generated)
+  const item = page.locator(".ext-item").filter({ hasText: "pigcode-ui-demo" })
+  await expect(item.getByRole("switch")).toBeChecked()
+  await page.getByRole("button", { name: "返回应用" }).first().click()
+
+  // Panel 由生成的 React 组件渲染：ui-primitives 的 ListRow、Badge 与 Button，hook 读到宿主的主题与语言。
+  const panel = page.locator("[data-plugin-content='demo-panel']")
+  await expect(panel.locator(".list-row-title")).toHaveText(["主题", "语言"])
+  await expect(panel.getByText("来自 pigcode-ui-demo 的问候")).toBeVisible()
+  const hostTheme = await page.evaluate(() => document.documentElement.dataset.theme ?? "light")
+  await expect(panel.getByText(hostTheme, { exact: true })).toBeVisible()
+  await panel.getByRole("button", { name: "点了 0 次" }).click()
+  await expect(panel.getByRole("button", { name: "点了 1 次" })).toBeVisible()
+
+  // 生成的 Surface 与设置页也由组件渲染。
+  await page.getByRole("button", { name: "新会话" }).first().click()
+  await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.getByRole("button", { name: "添加面板" }).click()
+  await page.getByRole("menuitem", { name: "Demo" }).click()
+  await expect(page.locator("[data-plugin-content='demo-surface']")).toBeVisible()
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  // 侧栏里 Panel 的标题也叫 Demo，取设置导航里的那一项。
+  await page.locator(".sidebar .nav-item").filter({ hasText: "Demo" }).click()
+  await expect(page.getByRole("heading", { level: 1, name: "Demo" })).toBeVisible()
+  await expect(
+    page.locator("[data-plugin-content='demo-settings']").getByRole("switch", { name: "详细日志" }),
+  ).toBeVisible()
 
   await app.close()
 })

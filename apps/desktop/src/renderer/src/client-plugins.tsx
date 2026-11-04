@@ -323,8 +323,11 @@ export function createClientPluginController(deps: {
       },
       toolRenderers: {
         register(renderer) {
-          checkToolRenderer(renderer)
-          return deps.extensions.register("toolRenderer", pluginToolRenderer(renderer, owner))
+          const content = checkToolRenderer(renderer)
+          return deps.extensions.register(
+            "toolRenderer",
+            pluginToolRenderer(renderer, content, owner),
+          )
         },
       },
       ui,

@@ -65,7 +65,8 @@ The work stays open while running and when a run fails or is stopped.
 Everything is TypeScript, including scripts and configs. Scripts run with Node's built-in
 type stripping (Node 22.18 or newer), for example `pnpm build:host` or
 `node scripts/create-plugin.ts`. Plugins can point `main`, `pigcode.host`, and
-`pigcode.client` at `.ts` files; see [docs/plugin-authoring.md](docs/plugin-authoring.md).
+`pigcode.client` at `.ts` / `.tsx` files; the Host transpiles `.tsx` on install, so a React
+UI plugin runs straight from source. See [docs/plugin-authoring.md](docs/plugin-authoring.md).
 
 ## Workbench
 
@@ -131,8 +132,9 @@ signed in.
 Settings → Plugins uses the same list as the Agent page: a switch per plugin, and its
 package, kind, permissions and conflicts when expanded. UI plugins draw inside host chrome:
 sidebar panels get the sidebar's group header, right-panel surfaces open as regular tabs
-from the launcher, and `ctx.ui` builds buttons, inputs, switches and badges with the host's
-own control styles, following its theme and language.
+from the launcher, and plugins build their UI with the host's own React and
+`@pigcode/ui-primitives`, so buttons, rows, settings groups and switches look exactly like
+the host's and follow its theme and language.
 
 See [docs/plugin-authoring.md](docs/plugin-authoring.md) for writing agent and other
 plugins.

@@ -32,7 +32,8 @@ test("chat, plugin panel, and reconnect", async () => {
   await installPlugin(page, samplePlugin)
   await expect(page.getByText("Debug Panel")).toBeVisible()
 
-  // 插件的右栏标签和内置标签一样列在启动器里，内容用宿主的控件与 pg-* 排版。
+  // 插件的右栏标签和内置标签一样列在启动器里，内容由宿主的 React 与 ui-primitives 渲染，
+  // 分组标题、设置行和按钮都是宿主自己的组件。
   await page.getByRole("button", { name: "返回应用" }).first().click()
   await page.getByRole("button", { name: "切换右侧面板" }).first().click()
   await page.getByRole("button", { name: "Debug Inspector" }).click()
@@ -41,9 +42,9 @@ test("chat, plugin panel, and reconnect", async () => {
     "true",
   )
   const surface = page.locator(".pg-root.pg-surface")
-  await expect(surface.locator(".pg-section-title").first()).toHaveText("宿主")
-  await surface.locator(".btn.btn-primary").filter({ hasText: "读取项目" }).click()
-  await expect(surface.locator(".pg-list-title")).toContainText(["pigcode-m0b"])
+  await expect(surface.locator(".section-head h2").first()).toHaveText("宿主")
+  await surface.getByRole("button", { name: "读取项目" }).click()
+  await expect(surface.locator(".list-row-title")).toContainText(["pigcode-m0b"])
 
   // 核心 profile 条目也会出现在插件列表里，按插件包名定位到示例插件所在行。
   await page.getByRole("button", { name: "设置", exact: true }).click()

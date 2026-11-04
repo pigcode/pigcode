@@ -61,7 +61,7 @@ my-ui-plugin/
     "kind": "agent",
     "displayName": "Echo",
     "host": "./index.ts",
-    "client": "./client.ts",
+    "client": "./client.tsx",
     "inject": ["agents"],
     "provides": ["agent:echo"],
     "contributes": {
@@ -413,15 +413,16 @@ export function apply(ctx: PluginHostContext): void {
 
 ## UI 插件
 
-完整示例见 [`examples/ui-react-panel`](../examples/ui-react-panel)（React + ui-primitives）和
-[`examples/ui-debug-panel`](../examples/ui-debug-panel)（`ctx.ui` 的 DOM 写法）。UI 插件拿到受限 facade，
-界面和宿主保持一致的做法有两种：
+完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)：它在五个扩展点上都登记内容，界面全部用
+宿主的 React 和 `@pigcode/ui-primitives` 写。UI 插件写界面的推荐做法只有一种：
 
-- **React（推荐）**：直接 `import "react"` 和 `import "@pigcode/ui-primitives"`，拿到的是宿主的同一个实例，
-  插件界面和宿主用同一套组件、同一份主题与语言。
-- **DOM**：用 `ctx.ui` 拼普通元素，和宿主共用类名与设计 token。这条路径为已有插件保留。
+- **React**：直接 `import "react"` 和 `import "@pigcode/ui-primitives"`，拿到的是宿主的同一个实例，
+  插件界面和宿主用同一套组件（`Button`、`ListRow`、`SettingRow`、`SettingSection`、`Badge`、`Switch`、
+  `EmptyState` 等）、同一份主题与语言。`examples/ui-react-panel` 是一个更小的 React 示例。
 
-两条路径都遵守「宿主画外框，插件只画内容」：Panel 的可收起标题、Surface 的标签、设置页的导航与标题都由宿主画。
+旧的 `ctx.ui` DOM 工具包只留给已有插件（见[和宿主一致的组件：`ctx.ui`](#和宿主一致的组件ctxui)），新插件不要再用。
+
+所有路径都遵守「宿主画外框，插件只画内容」：Panel 的可收起标题、Surface 的标签、设置页的导航与标题都由宿主画。
 
 ### 使用宿主的 React
 
@@ -453,36 +454,75 @@ export function apply(ctx: PluginHostContext): void {
 `ctx.panels.register`、`ctx.surfaces.register` 和 `ctx.settingsPages.register` 的内容二选一：
 
 - `Component`：一个 React 组件（不接收 props），宿主在自己的 React 树里渲染它。推荐。
-- `render(container)`：DOM 渲染函数，拿到容器自己往里填。已有插件继续可用。
+- `render(container)`：DOM 渲染函数，拿到容器自己往里填。已有插件继续可用，新插件不要用。
+
+组件里用宿主 ui-primitives 的组件和宿主设置页的分组，Panel、Surface 和设置页因此和宿主长得一样：
 
 ```tsx
 import { useState } from "react"
-import { Badge, Button, ListRow, useLocale, useTheme } from "@pigcode/ui-primitives"
+import {
+  Badge,
+  Button,
+  ListRow,
+  SettingRow,
+  SettingSection,
+  Switch,
+  useLocale,
+  useTheme,
+} from "@pigcode/ui-primitives"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
-function DemoPanel() {
+/** Panel 与 Surface 共用的内容：列表行、徽标与按钮都来自宿主。 */
+function DemoContent() {
   const { locale } = useLocale()
   const theme = useTheme()
   const [count, setCount] = useState(0)
   return (
-    <div>
-      <ListRow title="Theme" meta={<Badge variant="info">{theme}</Badge>} />
+    <>
+      <ListRow title="Theme" meta={<Badge variant="primary">{theme}</Badge>} />
       <ListRow title="Locale" meta={<Badge>{locale}</Badge>} />
       <Button variant="primary" onClick={() => setCount((value) => value + 1)}>
         Clicked {count}
       </Button>
-    </div>
+    </>
+  )
+}
+
+/** 设置页用和宿主设置页一样的分组与设置行。 */
+function DemoSettings() {
+  const [verbose, setVerbose] = useState(false)
+  return (
+    <SettingSection title="Demo">
+      <SettingRow title="Verbose logging">
+        <Switch checked={verbose} onCheckedChange={setVerbose} aria-label="Verbose logging" />
+      </SettingRow>
+    </SettingSection>
   )
 }
 
 export function apply(ctx: ClientPluginContext): () => void {
-  return ctx.panels.register({ id: "demo-panel", title: "Demo", Component: DemoPanel })
+  const disposePanel = ctx.panels.register({
+    id: "demo-panel",
+    title: "Demo",
+    Component: DemoContent,
+  })
+  const disposeSettings = ctx.settingsPages.register({
+    id: "demo-settings",
+    title: "Demo",
+    Component: DemoSettings,
+  })
+  return () => {
+    disposePanel()
+    disposeSettings()
+  }
 }
 ```
 
 - 给 `Component` 就不能再给 `render`，反过来也一样；两个都给或都不给时 `register` 抛错，插件页显示成界面代码错误。
 - 组件渲染时抛出的错误只在内容区显示原因，时间线、侧栏和窗口其余部分照常可用。
   React 的错误边界接不到事件处理和异步回调里的错误，那些仍会冒到窗口；需要时自己 try/catch。
+- 插件的文案仍然由插件自己按界面语言选择（组件里用 `useLocale()` 读语言）；宿主语言包只覆盖宿主自己的文字。
+- 工具渲染器也接受 `Component`：组件收到 `{ tool }`，是这次调用的状态、输入与输出，见[工具渲染器](#工具渲染器)。
 
 ### 构建时的 external
 
@@ -577,51 +617,58 @@ UI 插件在五个扩展点上登记内容：Panel 是左侧栏里的一个区�
 - `id`、`title` 不是字符串，或 `render` / `Component` 没按要求二选一时，`register` 直接抛错，插件页把它显示成界面代码错误。
 - client bundle 没有加载成功时，插件页显示「加载失败」和原因；下一次重新加载插件时会再试。
 
-```ts
+```tsx
+import { useState } from "react"
+import {
+  Badge,
+  ListRow,
+  SettingRow,
+  SettingSection,
+  Switch,
+  useTheme,
+} from "@pigcode/ui-primitives"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+
+function DemoContent() {
+  const theme = useTheme()
+  const [verbose, setVerbose] = useState(false)
+  return (
+    <>
+      <ListRow title="主题" meta={<Badge variant="primary">{theme}</Badge>} />
+      <Switch checked={verbose} onCheckedChange={setVerbose} aria-label="详细日志" />
+    </>
+  )
+}
+
+function DemoSurface() {
+  return (
+    <SettingSection title="状态">
+      <SettingRow title="主题">
+        <Badge variant="primary">{useTheme()}</Badge>
+      </SettingRow>
+    </SettingSection>
+  )
+}
 
 export function apply(ctx: ClientPluginContext): () => void {
   // 侧栏：标题由宿主画成和「项目」一样的分组标题，点击可以收起。
   const disposePanel = ctx.panels.register({
     id: "demo-panel",
     title: "Demo",
-    render(container) {
-      container.append(ctx.ui.text("Hello from my UI plugin", { tone: "muted", size: "sm" }))
-    },
+    Component: DemoContent,
   })
   // 右侧面板：出现在启动器和「+」菜单的「插件」组里，打开后是和文件、终端一样的标签。
   const disposeSurface = ctx.surfaces.register({
     id: "demo-inspector",
     title: "Demo Inspector",
     description: "启动器里悬停显示的一句说明",
-    render(container) {
-      container.append(
-        ctx.ui.section({
-          title: "状态",
-          children: [ctx.ui.row({ title: "主题", control: ctx.ui.badge(ctx.theme.get()) })],
-        }),
-      )
-      // 返回的函数在标签关闭、插件停用或内容重画前调用。
-      return ctx.theme.subscribe(() => undefined)
-    },
+    Component: DemoSurface,
   })
   // 设置：出现在设置侧栏的「插件设置」组里；宿主画页面标题（就是 title），插件画标题下面的内容。
   const disposeSettings = ctx.settingsPages.register({
     id: "demo-settings",
     title: "Demo",
-    render(container) {
-      container.append(
-        ctx.ui.section({
-          title: "日志",
-          children: [
-            ctx.ui.row({
-              title: "详细日志",
-              control: ctx.ui.toggle({ label: "详细日志", checked: false }),
-            }),
-          ],
-        }),
-      )
-    },
+    Component: DemoContent,
   })
   return () => {
     disposePanel()
@@ -632,10 +679,10 @@ export function apply(ctx: ClientPluginContext): () => void {
 ```
 
 - `render(container)` 可以返回清理函数；宿主在移除或重画前调用它，然后清空容器。
-  `render` 抛出的错误显示在内容区里，不影响宿主。
+  `render` 抛出的错误显示在内容区里，不影响宿主。传 `Component` 时这些都由宿主负责。
 - 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
   右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样，
-  时间线里的工具行（`pg-tool`）没有内边距，多个元素纵向排开。
+  时间线里的工具行（`pg-tool`）没有内边距，多个元素纵向排开。传 `Component` 时也同样套着这层外框。
 
 ### Command：命令面板与输入框 `/`
 
@@ -677,16 +724,24 @@ return () => disposeCommand()
 ### 工具渲染器
 
 `ctx.toolRenderers.register(renderer)` 决定一类工具调用在对话时间线里怎么显示，主时间线和子 agent 的标签页都生效。
-完整示例见 [`examples/capability-clock/client.ts`](../examples/capability-clock/client.ts)：它是带界面代码的
-Capability 插件，`package.json` 里同时声明 `host` 和 `client`。
+完整示例见 [`examples/capability-clock/client.tsx`](../examples/capability-clock/client.tsx)：它是带界面代码的
+Capability 插件，`package.json` 里同时声明 `host` 和 `client`。内容和 Panel 一样二选一：`Component`（React 组件，
+推荐）或 `render(container, call)`（DOM 渲染函数，保留给已有插件）。
 
-```ts
+```tsx
+import { useLocale } from "@pigcode/ui-primitives"
+import type { ClientPluginContext, ClientToolCall } from "@pigcode/plugin-sdk"
+
+/** 组件收到这次调用；调用的状态、输入或输出变化时宿主用新的 tool 重画。 */
+function ClockNow({ tool }: { tool: ClientToolCall }) {
+  const { locale } = useLocale()
+  return <p className="hint">{`${locale}: ${tool.status} ${tool.output ?? ""}`}</p>
+}
+
 const dispose = ctx.toolRenderers.register({
   id: "clock-now",
   tools: ["clock_now"],
-  render(container, call) {
-    container.append(ctx.ui.text(`${call.status}: ${call.output ?? ""}`, { size: "sm" }))
-  },
+  Component: ClockNow,
 })
 ```
 
@@ -712,14 +767,15 @@ const dispose = ctx.toolRenderers.register({
 一般用 1 到 999，这样按工具名登记的渲染器（缺省 0）仍然优先，又排在所有内置渲染器前面；想接管 `unknown` 的用
 大于 1000 的。正好等于 1000 时按 `id` 和内置渲染器决胜负，不要用。
 
-**内容是 DOM。** `render(container, call)` 和 Panel 的 `render` 一样可以返回清理函数：
+**内容是 React 组件或 DOM。** 传 `Component` 时组件收到 `tool`；传 `render(container, call)` 时拿到容器自己往里填，
+和 Panel 的 `render` 一样可以返回清理函数（`ctx.ui` 留给已有插件）：
 
-- `call` 有 `id`、`name`、`status`（`running`、`completed`、`failed`、`stopped`）、`input`、`output`（文字形式，还没有时是
+- `tool` / `call` 有 `id`、`name`、`status`（`running`、`completed`、`failed`、`stopped`）、`input`、`output`（文字形式，还没有时是
   `undefined`）、`inputValue`、`outputValue`（事件里原样的值，形状由 Agent 决定，比如同一个 MCP 工具的结果可能是 JSON
   文字，也可能是内容块数组）、`startedAt`、`endedAt`、`exitCode`。
-- 调用的状态、输入或输出变化时，宿主先调用清理函数、清空容器，再用新的 `call` 调用 `render`；其余时候不重画。
-- `render` 抛错时，错误显示在这一行里；清理函数抛错时写进控制台。两者都不影响时间线的其余部分。
-- 运行中的命令，流出来的输出不传给插件渲染器，`call.output` 要等调用结束才有内容；内置的命令行会实时显示。
+- 调用的状态、输入或输出变化时，宿主用新的 `tool` 重画（DOM 写法先调用清理函数、清空容器）；其余时候不重画。
+- 渲染抛错时，错误显示在这一行里（组件由错误边界接住，DOM 写法的清理函数抛错写进控制台）。两者都不影响时间线的其余部分。
+- 运行中的命令，流出来的输出不传给插件渲染器，`tool.output` 要等调用结束才有内容；内置的命令行会实时显示。
 - 插件停用或卸载时渲染器一起移除，已经显示的调用立即回到内置渲染器（`mcp__` 工具是内置的 MCP 行）或通用渲染器。
 
 **合并分组。** 连续的读文件、搜索、网页抓取和只读命令合成「查阅」，连续的终端命令合成「终端」，连续的浏览器操作合成
@@ -728,12 +784,14 @@ const dispose = ctx.toolRenderers.register({
 `todo`（显示在状态面板）、`plan-guidance`（不显示）、有子 agent 卡片的 `agent` 调用，以及已经显示成提问卡片的
 `ask-user-question` 调用。
 
-`id` 冲突、抛错和清理的规则与其它扩展点相同；内置渲染器的 `id` 是 `builtin.<族名>`。`id`、`render`、`order`、`tools`、
-`families` 不合规，或者 `tools` 和 `families` 都是空的，`register` 直接抛错，插件页把它显示成界面代码错误。
+`id` 冲突、抛错和清理的规则与其它扩展点相同；内置渲染器的 `id` 是 `builtin.<族名>`。`id`、`order`、`tools`、`families`
+不合规，`Component` 和 `render` 没按要求二选一，或者 `tools` 和 `families` 都是空的，`register` 直接抛错，插件页把它
+显示成界面代码错误。
 
 ### 和宿主一致的组件：`ctx.ui`
 
-`ctx.ui` 返回普通的 DOM 元素，插件自己 `append` 到容器里。按钮、输入框、开关和徽标直接用宿主控件的类
+`ctx.ui` 是给已有插件的 DOM 工具包，新插件用宿主的 React 与 ui-primitives（见[使用宿主的 React](#使用宿主的-react)）。
+它返回普通的 DOM 元素，插件自己 `append` 到容器里。按钮、输入框、开关和徽标直接用宿主控件的类
 （`btn`、`input`、`switch`、`badge`），跟随宿主的主题、强调色与字号；其余用 `pg-*` 排版：
 
 | 方法                                                | 生成的元素                                                            |
@@ -853,8 +911,11 @@ pnpm create-plugin /tmp/pigcode-plugin-demo ui demo
 
 ```text
 /tmp/pigcode-plugin-demo/
-├── package.json   # name: pigcode-ui-demo
-└── client.ts      # 侧栏面板与右栏标签
+├── package.json   # name: pigcode-ui-demo，pigcode.client 指向 client.tsx
+├── client.tsx     # React 插件：侧栏 Panel、右栏 Surface、设置页与一条 Command
+├── build.ts       # 打包脚本（esbuild，宿主的共享模块标为 external）
+├── env.d.ts      # 插件自带的全局类型补充（window、import.meta、?raw）
+└── tsconfig.json  # tsc --noEmit 检查 client.tsx
 ```
 
 `agent` 与 `capability` 会生成 `package.json` 和 `index.ts`：
@@ -863,6 +924,13 @@ pnpm create-plugin /tmp/pigcode-plugin-demo ui demo
   `contributes.agent.id` 为 `<name>`；`index.ts` 在 `ctx.agents` 上注册一个带 `features` 的回显 driver。
 - Capability 插件：服务名是插件标识的 camelCase（`session-info` → `sessionInfo`），
   `provides` 声明的就是它，`index.ts` 用同一个名字 `ctx.provide`。
+
+`ui` 生成的是一个 React 插件，不需要先构建就能安装：入口是 `client.tsx`，安装时 Host 用 esbuild 编译它，
+Panel、Surface、设置页都用宿主的 React 和 `@pigcode/ui-primitives`（`ListRow`、`Badge`、`Button`、`Switch`、
+`SettingRow`、`SettingSection`、`useLocale`、`useTheme`）写，和宿主界面是同一套组件。`package.json` 的
+`devDependencies` 里有 React、`@types/react`、TypeScript 和 esbuild：只为类型检查和打包，运行时拿到的是宿主的
+那一份（ADR-0002）。两个 `@pigcode/*` 包没有发布到 npm，所以不写进依赖：直接安装源码目录不需要它们；要在仓库
+里自己打包时才需要（用仓库根目录的 workspace 版本）。打包后把 `pigcode.client` 指向 `./dist/client.js`。
 
 脚本结束时打印本地安装路径：
 agent 填进 **设置 → Agent → 安装 agent**，其他插件填进 **设置 → 插件** 的“插件目录或 npm 包”。

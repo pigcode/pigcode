@@ -1,6 +1,7 @@
 /**
  * 脚手架：每种插件生成到临时目录，manifest 能被 SDK 解析且用新名字；生成的入口真的按 manifest 注册：
- * Agent 插件注册的 driver 用 features，Capability 插件 ctx.provide 的服务名就是它 provides 里声明的那个。
+ * Agent 插件注册的 driver 用 features，Capability 插件 ctx.provide 的服务名就是它 provides 里声明的那个，
+ * UI 插件是 React 插件（client.tsx + 构建配置），生成的入口能编译成 Host 加载的 .mjs。
  */
 import { execFileSync } from "node:child_process"
 import { mkdtemp, readFile, readdir } from "node:fs/promises"
@@ -13,6 +14,7 @@ import {
   readAgentContribution,
   type PluginManifest,
 } from "../packages/plugin-sdk/src/manifest.ts"
+import { transpileTypeScript } from "../apps/host/src/services/plugin-typescript.ts"
 
 const SCRIPT = fileURLToPath(new URL("./create-plugin.ts", import.meta.url))
 
@@ -89,18 +91,70 @@ describe("create-plugin", () => {
     expect(service.count("th_1")).toBe(0)
   })
 
-  it("generates a UI plugin with only a client entry", async () => {
+  it("generates a React UI plugin with build config, and its entry compiles like a Host install", async () => {
     const dir = await generate("ui", "demo")
-    expect((await readdir(dir)).sort()).toEqual(["client.ts", "package.json"])
+    expect((await readdir(dir)).sort()).toEqual([
+      "build.ts",
+      "client.tsx",
+      "env.d.ts",
+      "package.json",
+      "tsconfig.json",
+    ])
     const manifest = await manifestOf(dir)
     expect(manifest.name).toBe("pigcode-ui-demo")
     expect(manifest.pigcode).toMatchObject({
       kind: "ui",
-      client: "./client.ts",
+      displayName: "Demo",
+      client: "./client.tsx",
       inject: [],
       provides: [],
     })
     expect(manifest.pigcode.host).toBeUndefined()
+
+    // 构建配置：React 与 ui-primitives 是插件自己的开发依赖，运行时用宿主的那一份（ADR-0002）。
+    // scripts 与 devDependencies 不属于 manifest schema，直接读生成的 package.json。
+    const raw = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
+      scripts?: Record<string, string>
+      devDependencies?: Record<string, string>
+    }
+    expect(raw.scripts).toMatchObject({ build: expect.any(String) })
+    expect(raw.devDependencies).toMatchObject({
+      react: "19.2.3",
+      "@types/react": expect.any(String),
+      esbuild: expect.any(String),
+      typescript: expect.any(String),
+    })
+    // 两个 @pigcode/* 没有发布到 npm：写进依赖会让仓库外 `pnpm install` 直接失败，运行时由宿主提供。
+    expect(
+      Object.keys(raw.devDependencies ?? {}).filter((key) => key.startsWith("@pigcode/")),
+    ).toEqual([])
+    // 类型配置带上插件自带的全局声明，tsc 检查 ui-primitives 的类型时不会缺 window / import.meta。
+    const tsconfig = await readFile(join(dir, "tsconfig.json"), "utf8")
+    expect(tsconfig).toContain("env.d.ts")
+
+    // 入口用宿主的 React 与 ui-primitives 写，Panel、Surface、设置页都传组件；不再用 ctx.ui 的 DOM 工具包。
+    const source = await readFile(join(dir, "client.tsx"), "utf8")
+    expect(source).toContain('from "react"')
+    expect(source).toContain('from "@pigcode/ui-primitives"')
+    expect(source.match(/Component:/g)).toHaveLength(3)
+    expect(source).not.toContain("ctx.ui")
+
+    // 构建脚本把宿主的共享模块标为 external：发布打包时也不会带上第二份 React。
+    const build = await readFile(join(dir, "build.ts"), "utf8")
+    expect(build).toContain('"@pigcode/ui-primitives"')
+    expect(build).toContain('"react/jsx-runtime"')
+    expect(build).toContain('"react"')
+
+    // 和 Host 安装时的转换一样：自动 JSX runtime，宿主的模块保留裸 import，产物里不再有 JSX。
+    const compiled = await transpileTypeScript(source, "client.tsx")
+    expect(compiled).toContain('from "react/jsx-runtime"')
+    expect(compiled).toContain('from "react"')
+    expect(compiled).toContain('from "@pigcode/ui-primitives"')
+    expect(compiled).not.toContain("<ListRow")
+    expect(compiled).toContain("panels.register")
+    expect(compiled).toContain("surfaces.register")
+    expect(compiled).toContain("settingsPages.register")
+    expect(compiled).toContain("commands.register")
   })
 
   it("rejects an unknown kind", async () => {

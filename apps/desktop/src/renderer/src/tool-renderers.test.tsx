@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * 验证工具渲染器扩展点：内置渲染器按族登记；插件按声明的工具名或工具族匹配、优先于内置渲染器，
- * 调用变化时重画，出错不影响时间线，停用后立即回到内置或通用的显示。clock 样例用的是仓库里真实的 client.ts。
+ * 调用变化时重画，出错不影响时间线，停用后立即回到内置或通用的显示。clock 样例用的是仓库里真实的 client.tsx。
  */
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -374,7 +374,7 @@ describe("plugin tool renderers", () => {
     ["a non-array", `tools: "clock_now", render() {}`, "tools must be an array"],
     ["an empty name", `tools: [""], render() {}`, "tools must be an array"],
     ["an unknown family", `families: ["shells"], render() {}`, "families must be an array"],
-    ["no render", `tools: ["t"]`, "render must be a function"],
+    ["no content", `tools: ["t"]`, "give exactly one of render or Component"],
     ["a bad order", `tools: ["t"], order: "1", render() {}`, "order must be a number"],
   ])("reject %s as an apply error", async (_name, fields, message) => {
     vi.spyOn(console, "error").mockImplementation(() => {})

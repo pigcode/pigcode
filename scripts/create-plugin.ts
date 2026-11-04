@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * 生成一个最小的 TypeScript Pigcode 插件目录；只依赖 Node 内置模块，不引入额外依赖。
- * 入口是 .ts 源码，安装时 Host 会把它转成 .mjs，不需要单独的构建步骤。
+ * 入口是源码，安装时 Host 会把它转成 .mjs，不需要先构建：Host / Capability 插件是 `.ts`，
+ * UI 插件是 React 写的 `.tsx`，并附带打包用的构建配置。
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
@@ -33,6 +34,8 @@ interface GeneratedManifest {
   type: "module"
   main?: string
   engines: { pigcode: string }
+  scripts?: Record<string, string>
+  devDependencies?: Record<string, string>
   pigcode: {
     apiVersion: 1
     kind: Kind
@@ -44,6 +47,19 @@ interface GeneratedManifest {
     permissions: string[]
     contributes?: Record<string, unknown>
   }
+}
+
+/**
+ * UI 插件的开发依赖。React、`@types/react` 和 TypeScript 只为类型检查与本地打包：运行时拿到的是宿主的
+ * 同一份实例（ADR-0002），插件不把它们打进产物。两个 `@pigcode/*` 包没有发布到 npm，所以这里不写进依赖：
+ * 在仓库里开发时用根目录的 workspace 版本，在仓库外直接安装源码目录、不运行 `pnpm install` 也能用，
+ * 因为运行时由宿主提供。只有要自己打包时才需要在仓库里安装依赖。
+ */
+const UI_DEV_DEPENDENCIES: Readonly<Record<string, string>> = {
+  "@types/react": "19.2.2",
+  esbuild: "^0.28.2",
+  react: "19.2.3",
+  typescript: "5.9.3",
 }
 
 /** 打印错误与用法后退出；脚手架失败时不要留下半成品。 */
@@ -114,14 +130,18 @@ function manifestFor(
       },
     }
   }
+  // UI 插件：入口是 React 组件（.tsx），安装时由 Host 编译；宿主的 React 与 ui-primitives 在运行时提供，
+  // 插件自己不依赖它们的运行时版本，只在开发时用它们做类型检查与打包。
   return {
     ...base,
     engines,
+    scripts: { build: "node build.ts", typecheck: "tsc --noEmit" },
+    devDependencies: { ...UI_DEV_DEPENDENCIES },
     pigcode: {
       apiVersion: 1,
       kind,
       displayName,
-      client: "./client.ts",
+      client: "./client.tsx",
       inject: [],
       provides: [],
       permissions: [],
@@ -203,18 +223,91 @@ export function apply(ctx: PluginHostContext): void {
 `
 }
 
-/** UI 入口：一个 Panel、一个 Surface、一个设置页与一条 Command，登记到扩展点，用 ctx.ui 拼出和宿主一致的界面，不依赖 React。 */
+/**
+ * UI 入口：一个 Panel、一个 Surface、一个设置页与一条 Command，全部用宿主的 React 和
+ * `@pigcode/ui-primitives` 写（ADR-0002），和宿主界面是同一套组件。`.tsx` 安装时由 Host 编译，
+ * 不需要单独构建；要自己打包时，把 esbuild 配置里的宿主共享模块标为 external。
+ */
 function uiEntry(pkgName: string, name: string, displayName: string): string {
   return `/** ${pkgName}：最小 UI 插件，在左侧栏添加一个 Panel、在右侧面板添加一种 Surface、在设置里添加一页，再加一条命令。 */
+import { useState } from "react"
+import {
+  Badge,
+  Button,
+  ListRow,
+  SettingRow,
+  SettingSection,
+  Switch,
+  useLocale,
+  useTheme,
+} from "@pigcode/ui-primitives"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+
+/** 插件自己的文案按界面语言选择；组件里不写死界面文字。 */
+const TEXT = {
+  "zh-CN": {
+    hello: "来自 ${pkgName} 的问候",
+    theme: "主题",
+    locale: "语言",
+    clicks: (count: number) => \`点了 \${count} 次\`,
+    increment: "点我加一",
+    verbose: "详细日志",
+  },
+  "en-US": {
+    hello: "Hello from ${pkgName}",
+    theme: "Theme",
+    locale: "Language",
+    clicks: (count: number) => \`Clicked \${count} times\`,
+    increment: "Click me",
+    verbose: "Verbose logging",
+  },
+}
+
+/** 按界面语言取一份文案。 */
+function copyFor(locale: string) {
+  return locale.startsWith("en") ? TEXT["en-US"] : TEXT["zh-CN"]
+}
+
+/** Panel 和 Surface 共用的内容：宿主的 ListRow、Badge 与 Button，主题和语言来自宿主的 hook。 */
+function DemoContent() {
+  const { locale } = useLocale()
+  const theme = useTheme()
+  const text = copyFor(locale)
+  const [count, setCount] = useState(0)
+  return (
+    <>
+      <p className="hint">{text.hello}</p>
+      <ListRow title={text.theme} meta={<Badge variant="primary">{theme}</Badge>} />
+      <ListRow title={text.locale} meta={<Badge>{locale}</Badge>} />
+      <Button variant="primary" onClick={() => setCount((value) => value + 1)}>
+        {text.clicks(count)}
+      </Button>
+    </>
+  )
+}
+
+/** 设置页：和宿主设置页一样用分组与设置行。 */
+function DemoSettings() {
+  const { locale } = useLocale()
+  const theme = useTheme()
+  const text = copyFor(locale)
+  const [verbose, setVerbose] = useState(false)
+  return (
+    <SettingSection>
+      <SettingRow title={text.theme} value={<Badge variant="primary">{theme}</Badge>} />
+      <SettingRow title={text.locale} value={<Badge>{locale}</Badge>} />
+      <SettingRow title={text.verbose}>
+        <Switch checked={verbose} onCheckedChange={setVerbose} aria-label={text.verbose} />
+      </SettingRow>
+    </SettingSection>
+  )
+}
 
 export function apply(ctx: ClientPluginContext): () => void {
   const disposePanel = ctx.panels.register({
     id: "${name}-panel",
     title: "${displayName}",
-    render(container) {
-      container.append(ctx.ui.text("Hello from ${pkgName}", { tone: "muted", size: "sm" }))
-    },
+    Component: DemoContent,
   })
   // 命令面板与输入框的 / 共用这一条；slash 给了触发名。
   const disposeCommand = ctx.commands.register({
@@ -228,30 +321,12 @@ export function apply(ctx: ClientPluginContext): () => void {
   const disposeSurface = ctx.surfaces.register({
     id: "${name}-surface",
     title: "${displayName}",
-    render(container) {
-      container.append(
-        ctx.ui.section({
-          title: "${displayName}",
-          children: [ctx.ui.row({ title: "Theme", control: ctx.ui.badge(ctx.theme.get()) })],
-        }),
-      )
-    },
+    Component: DemoContent,
   })
   const disposeSettings = ctx.settingsPages.register({
     id: "${name}-settings",
     title: "${displayName}",
-    render(container) {
-      container.append(
-        ctx.ui.section({
-          children: [
-            ctx.ui.row({
-              title: "Verbose logging",
-              control: ctx.ui.toggle({ label: "Verbose logging", checked: false }),
-            }),
-          ],
-        }),
-      )
-    },
+    Component: DemoSettings,
   })
   return () => {
     disposePanel()
@@ -261,6 +336,81 @@ export function apply(ctx: ClientPluginContext): () => void {
   }
 }
 `
+}
+
+/** 插件目录自带的类型声明：补上 ui-primitives 用到的 Vite 环境与 preload 全局，`tsc` 才检查得动入口。 */
+function uiAmbientTypes(): string {
+  return `/** 插件自带的类型补充：ui-primitives 的类型引用了这里声明的全局。 */
+interface Window {
+  /** preload 暴露的最小原生桥；插件不直接访问 Node。 */
+  pigcodeNative?: { platform: string }
+}
+interface ImportMetaEnv {
+  readonly DEV: boolean
+}
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+declare module "*?raw" {
+  const content: string
+  export default content
+}
+`
+}
+
+/**
+ * UI 插件自带构建配置：作者要发布到 npm 时用它打包成 `dist/client.js`，并把宿主的共享模块
+ * （React、JSX runtime、ui-primitives、插件 SDK）标为 external（ADR-0002）。不打包也能直接安装：
+ * 安装时 Host 会转换 `client.tsx`，这期间用不到 esbuild。
+ */
+function uiBuildScript(): string {
+  return `/**
+ * 打包 UI 插件：产物是 dist/client.js，宿主的共享模块保留裸 import，运行时由宿主用同一份实例提供。
+ * 只有这一步需要 esbuild（devDependencies）；直接安装源码目录时不用打包，安装时 Host 会转换 client.tsx。
+ * 打包后把 package.json 里的 pigcode.client 指向 ./dist/client.js。
+ */
+import { build } from "esbuild"
+
+await build({
+  entryPoints: ["client.tsx"],
+  outfile: "dist/client.js",
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  jsx: "automatic",
+  external: [
+    "react",
+    "react-dom",
+    "react-dom/client",
+    "react/jsx-runtime",
+    "react/jsx-dev-runtime",
+    "@pigcode/ui-primitives",
+    "@pigcode/plugin-sdk",
+  ],
+})
+`
+}
+
+/** UI 插件的类型配置：React JSX、严格模式；`tsc --noEmit` 就能检查入口与组件。 */
+function uiTsconfig(): string {
+  return `${JSON.stringify(
+    {
+      compilerOptions: {
+        target: "ES2022",
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        strict: true,
+        noEmit: true,
+        jsx: "react-jsx",
+        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        skipLibCheck: true,
+        verbatimModuleSyntax: true,
+      },
+      include: ["client.tsx", "env.d.ts"],
+    },
+    null,
+    2,
+  )}\n`
 }
 
 /** 写入生成文件；同名文件内容一致时跳过，内容不同则拒绝覆盖。 */
@@ -284,12 +434,18 @@ async function writeFiles(
 ): Promise<string[]> {
   const manifest = manifestFor(kind, pkgName, name, displayName)
   await writeGenerated(join(target, "package.json"), `${JSON.stringify(manifest, null, 2)}\n`)
+  if (kind === "ui") {
+    // UI 插件是 React 插件：入口、构建配置与类型配置都一起生成，生成后直接能装、也能自己打包。
+    await writeGenerated(join(target, "client.tsx"), uiEntry(pkgName, name, displayName))
+    await writeGenerated(join(target, "build.ts"), uiBuildScript())
+    await writeGenerated(join(target, "tsconfig.json"), uiTsconfig())
+    await writeGenerated(join(target, "env.d.ts"), uiAmbientTypes())
+    return ["package.json", "client.tsx", "build.ts", "tsconfig.json", "env.d.ts"]
+  }
   const [file, content] =
     kind === "agent"
       ? ["index.ts", agentEntry(pkgName, name, displayName)]
-      : kind === "capability"
-        ? ["index.ts", capabilityEntry(pkgName, name)]
-        : ["client.ts", uiEntry(pkgName, name, displayName)]
+      : ["index.ts", capabilityEntry(pkgName, name)]
   await writeGenerated(join(target, file), content)
   return ["package.json", file]
 }
@@ -310,6 +466,15 @@ function printResult(target: string, kind: Kind, pkgName: string, files: string[
     console.log("  桌面端: 设置 → 插件 → 在“插件目录或 npm 包”中填入上面的路径")
   }
   console.log(`  RPC:    plugin.installLocal { "sourceDir": "${target}" }`)
+  if (kind === "ui") {
+    console.log("")
+    console.log(
+      "UI 插件用宿主的 React 和 @pigcode/ui-primitives 写界面，安装时由 Host 编译 client.tsx。",
+    )
+    console.log(
+      "发布前要自己打包时: pnpm install && pnpm build，再把 pigcode.client 指向 ./dist/client.js。",
+    )
+  }
 }
 
 /** 入口：校验参数、生成目录并打印安装路径。 */

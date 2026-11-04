@@ -205,6 +205,15 @@ importers:
       '@pigcode/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui-primitives
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
 
   examples/capability-session-info:
     devDependencies:
@@ -217,6 +226,15 @@ importers:
       '@pigcode/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui-primitives
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
 
   examples/ui-react-panel:
     devDependencies:
