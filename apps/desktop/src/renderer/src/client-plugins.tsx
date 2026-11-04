@@ -1,6 +1,9 @@
 /**
  * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel、Surface、设置页、Command 与工具渲染器
- * 登记到扩展点注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ * 登记到扩展点注册表（归属自动填成这个插件），并给插件宿主的主题与语言。
+ *
+ * 插件界面只有一种写法：React 组件（ADR-0002）。还在传旧 `render(container)` 的插件在登记时被拒绝，
+ * 错误写进插件页，名字里给出替代写法 `Component`。
  *
  * reload 先把新出现和换了版本的 bundle 都 import 完，再在同一个同步步骤里卸载、应用：
  * - 从 boot graph 消失（停用、卸载）的插件按 owner 移除全部 Contribution，打开着的 Surface 随之关闭，
@@ -19,13 +22,8 @@ import type {
   ContributionOwner,
   ExtensionRegistry,
 } from "@pigcode/client-runtime"
-import {
-  applyClientPlugin,
-  createUiKit,
-  observeLocale,
-  observeTheme,
-} from "@pigcode/client-runtime"
-import type { ClientPluginContext, ClientRender } from "@pigcode/plugin-sdk"
+import { applyClientPlugin, observeLocale, observeTheme } from "@pigcode/client-runtime"
+import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 import { SettingPage } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 import { checkToolRenderer, pluginToolRenderer } from "./plugin-tool-renderers"
@@ -70,9 +68,10 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * 检查插件传来的 Panel、Surface 或设置页。插件可以是没有类型检查的 JS，缺了 id、标题或内容
+ * 检查插件传来的 Panel、Surface 或设置页。插件可以是没有类型检查的 JS，缺了 id、标题或组件
  * 会让侧栏或搜索在用到它时出错；这里直接抛出，在 apply 里登记时就记成这个插件的界面代码错误。
- * 内容必须恰好给一种：`render`（DOM 渲染函数）或 `Component`（宿主的 React 组件）。
+ * 内容必须是宿主的 React 组件（`Component`）；旧的 `render(container)` DOM 渲染函数已删除，
+ * 还在传的插件在这里被拒绝，报错里写出替代写法。
  */
 function checkContribution(
   api: string,
@@ -83,37 +82,32 @@ function checkContribution(
     render?: unknown
     Component?: unknown
   },
-): PluginContent {
-  const hasRender = typeof item.render === "function"
-  const hasComponent = isComponent(item.Component)
+): ComponentType {
   const problem =
     typeof item.id !== "string" || item.id === ""
       ? "id must be a non-empty string"
       : typeof item.title !== "string"
         ? "title must be a string"
-        : hasRender === hasComponent
-          ? "give exactly one of render or Component"
-          : item.order !== undefined && !Number.isFinite(item.order)
-            ? "order must be a number"
-            : null
+        : item.render !== undefined
+          ? "render is no longer supported; pass the content as a React component in Component"
+          : !isComponent(item.Component)
+            ? "Component must be a React component"
+            : item.order !== undefined && !Number.isFinite(item.order)
+              ? "order must be a number"
+              : null
   if (problem) throw new TypeError(`${api}.register: ${problem}`)
-  return hasRender
-    ? { render: item.render as ClientRender }
-    : { Component: item.Component as ComponentType }
+  return item.Component as ComponentType
 }
 
 /**
  * 是不是一个 React 组件。`memo`、`forwardRef`、`lazy` 返回的是带 `$$typeof` 的对象，不是函数；
  * 它们都是合法的 ComponentType，所以插件按类型写的组件不能在这里被当成「没给」。
- * 登记分支和渲染分支用同一个判断，不会验过了却在另一边走进另一条路。
+ * 登记时的检查和渲染时用的是同一个类型。
  */
 function isComponent(value: unknown): value is object {
   if (typeof value === "function") return true
   return typeof value === "object" && value !== null && "$$typeof" in value
 }
-
-/** 一段检查过的插件内容：组件，或者 DOM 渲染函数。 */
-type PluginContent = { Component: ComponentType } | { render: ClientRender }
 
 /** 是不是一个可选的字符串字段：没给，或者给的是字符串。 */
 function optionalString(value: unknown): boolean {
@@ -180,8 +174,7 @@ export function createClientPluginController(deps: {
     deps.importModule ?? ((url: string) => import(/* @vite-ignore */ url) as Promise<ClientModule>)
   let errors: readonly PluginError[] = []
   const errorListeners = new Set<() => void>()
-  // 插件拿到的组件、主题与语言都只读宿主的根元素，所有插件共用一份。
-  const ui = createUiKit()
+  // 插件拿到的主题与语言都只读宿主的根元素，所有插件共用一份。
   const theme = observeTheme()
   const locale = observeLocale()
   const loaded = new Map<string, LoadedPlugin>()
@@ -216,19 +209,19 @@ export function createClientPluginController(deps: {
       },
       panels: {
         register(panel) {
-          const content = checkContribution("panels", panel)
+          const Component = checkContribution("panels", panel)
           return deps.extensions.register("panel", {
             id: panel.id,
             owner,
             order: panel.order ?? 0,
             title: { text: panel.title },
-            render: () => <PluginContentHost id={panel.id} {...content} kind="panel" />,
+            render: () => <PluginContentHost id={panel.id} Component={Component} kind="panel" />,
           })
         },
       },
       surfaces: {
         register(surface) {
-          const content = checkContribution("surfaces", surface)
+          const Component = checkContribution("surfaces", surface)
           return deps.extensions.register("surface", {
             id: surface.id,
             owner,
@@ -238,7 +231,7 @@ export function createClientPluginController(deps: {
             icon: Puzzle,
             render: () => (
               <div className="surface-pane surface-scroll">
-                <PluginContentHost id={surface.id} {...content} kind="surface" />
+                <PluginContentHost id={surface.id} Component={Component} kind="surface" />
               </div>
             ),
           })
@@ -246,7 +239,7 @@ export function createClientPluginController(deps: {
       },
       settingsPages: {
         register(page) {
-          const content = checkContribution("settingsPages", page)
+          const Component = checkContribution("settingsPages", page)
           return deps.extensions.register("settingsPage", {
             id: page.id,
             owner,
@@ -256,7 +249,7 @@ export function createClientPluginController(deps: {
             // 宿主画和内置设置页一样的页面与标题，插件只画标题下面的内容。
             render: () => (
               <SettingPage title={page.title}>
-                <PluginContentHost id={page.id} {...content} kind="settings" />
+                <PluginContentHost id={page.id} Component={Component} kind="settings" />
               </SettingPage>
             ),
           })
@@ -323,14 +316,13 @@ export function createClientPluginController(deps: {
       },
       toolRenderers: {
         register(renderer) {
-          const content = checkToolRenderer(renderer)
+          const Component = checkToolRenderer(renderer)
           return deps.extensions.register(
             "toolRenderer",
-            pluginToolRenderer(renderer, content, owner),
+            pluginToolRenderer(renderer, Component, owner),
           )
         },
       },
-      ui,
       theme,
       locale,
     }

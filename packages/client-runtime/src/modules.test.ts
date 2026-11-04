@@ -1,5 +1,5 @@
 /** 验证插件模块的 apply 与清理。 */
-import type { ClientPluginContext, ClientTheme, ClientUiKit } from "@pigcode/plugin-sdk"
+import type { ClientPluginContext, ClientTheme } from "@pigcode/plugin-sdk"
 import { describe, expect, it, vi } from "vitest"
 import { applyClientPlugin } from "./modules"
 
@@ -13,7 +13,6 @@ function stubContext(): ClientPluginContext {
     settingsPages: { register: () => () => {} },
     commands: { register: () => () => {} },
     toolRenderers: { register: () => () => {} },
-    ui: {} as ClientUiKit,
     theme: fixed<ClientTheme>("light"),
     locale: fixed("zh-CN"),
   }

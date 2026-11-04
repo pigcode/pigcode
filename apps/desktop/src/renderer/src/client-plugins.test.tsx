@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 验证第三方 UI 插件：Panel 与 Surface 登记到扩展点注册表并归属到插件，和已有 id 冲突时不覆盖；
- * 插件从 boot graph 消失时按 owner 移除，其余插件不动；slot 登记函数已删除。
+ * 验证第三方 UI 插件：Panel、Surface 与设置页的组件登记到扩展点注册表并归属到插件，和已有 id 冲突时不覆盖；
+ * 旧的 DOM 渲染函数写法在登记时被拒绝；插件从 boot graph 消失时按 owner 移除，其余插件不动；slot 登记函数已删除。
  */
 import { forwardRef, memo } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -25,7 +25,11 @@ describe("the removed slot API", () => {
     serve([
       entry(
         "ui.old",
-        `ctx.panels.register({ id: "status", title: "Status", render() {} })
+        `ctx.panels.register({
+          id: "status",
+          title: "Status",
+          Component() { return null },
+        })
         ctx.slots.register("status.bar", { id: "status", render: () => null })`,
       ),
     ])
@@ -41,7 +45,7 @@ describe("the removed slot API", () => {
 })
 
 describe("client plugin panels and surfaces", () => {
-  it("registers Panels and Surfaces owned by the plugin, built with the host's ui kit", async () => {
+  it("registers Panels and Surfaces owned by the plugin, built from the plugin's React components", async () => {
     const { extensions, controller } = setup()
     serve([
       entry(
@@ -50,15 +54,16 @@ describe("client plugin panels and surfaces", () => {
           id: "inspector",
           title: "Inspector",
           description: "Host state",
-          render(container) {
-            container.append(ctx.ui.row({ title: ctx.theme.get(), control: ctx.ui.badge(ctx.locale.get()) }))
-          },
+          Component() { return null },
         })
-        ctx.panels.register({ id: "status", title: "Status", order: 5, render() {} })`,
+        ctx.panels.register({
+          id: "status",
+          title: "Status",
+          order: 5,
+          Component() { return null },
+        })`,
       ),
     ])
-    document.documentElement.setAttribute("data-theme", "dark")
-    document.documentElement.setAttribute("lang", "en-US")
 
     await controller.reload()
 
@@ -82,11 +87,9 @@ describe("client plugin panels and surfaces", () => {
     const { extensions, controller } = setup()
     registerBuiltinSurfaces(extensions)
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const surface = (id: string, title: string) =>
-      `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, render() {} })`
     serve([
-      entry("ui.a", surface("terminal", "Fake terminal") + "\n" + surface("shared", "A")),
-      entry("ui.b", surface("shared", "B")),
+      entry("ui.a", surfaceCall("terminal", "Fake terminal") + "\n" + surfaceCall("shared", "A")),
+      entry("ui.b", surfaceCall("shared", "B")),
     ])
 
     await controller.reload()
@@ -113,7 +116,9 @@ describe("client plugin panels and surfaces", () => {
     ])
 
     // ui.b 停用：它的冲突记录随之清除，ui.a 的登记不受影响。
-    serve([entry("ui.a", surface("terminal", "Fake terminal") + "\n" + surface("shared", "A"))])
+    serve([
+      entry("ui.a", surfaceCall("terminal", "Fake terminal") + "\n" + surfaceCall("shared", "A")),
+    ])
     await controller.reload()
     expect(extensions.conflicts().map((conflict) => conflict.rejected.id)).toEqual(["ui.a"])
     controller.dispose()
@@ -122,13 +127,13 @@ describe("client plugin panels and surfaces", () => {
   it("removes only the disabled plugin's contributions on reload and keeps the others in place", async () => {
     const { extensions, controller } = setup()
     const panel = (id: string) =>
-      `ctx.panels.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(id)}, render() {} })`
+      `ctx.panels.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(id)}, Component() { return null } })`
     const keep = entry("ui.keep", panel("keep"))
     // 插件没有在清理函数里注销自己的 Surface：卸载时按 owner 一并移除。
     const gone = entry(
       "ui.gone",
       `${panel("gone")}
-      ctx.surfaces.register({ id: "gone-surface", title: "Gone", render() {} })
+      ctx.surfaces.register({ id: "gone-surface", title: "Gone", Component() { return null } })
       return () => {}`,
     )
     serve([keep, gone])
@@ -174,7 +179,7 @@ describe("client plugin panels and surfaces", () => {
   it("gives the id to a plugin it was rejected for once the winner is disabled", async () => {
     const { extensions, controller } = setup()
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const panel = `ctx.panels.register({ id: "status", title: "Status", render() {} })`
+    const panel = `ctx.panels.register({ id: "status", title: "Status", Component() { return null } })`
     const a = entry("ui.a", `${surfaceCall("x", "A")}\n${panel}`)
     const b = entry("ui.b", `${surfaceCall("x", "B")}\n${panel}`)
     serve([a, b])
@@ -301,7 +306,7 @@ describe("client plugin panels and surfaces", () => {
 })
 
 describe("React contributions", () => {
-  it("accepts a Component instead of a DOM render function on Panel, Surface and settings page", async () => {
+  it("accepts a Component on Panel, Surface and settings page", async () => {
     const { extensions, controller } = setup()
     const register = (api: string, id: string) =>
       `ctx.${api}.register({ id: ${JSON.stringify(id)}, title: "T", Component() { return null } })`
@@ -342,14 +347,20 @@ describe("React contributions", () => {
     controller.dispose()
   })
 
-  it("rejects a contribution that gives neither render nor Component, or both", async () => {
+  it("rejects a contribution with no Component, and one that still passes render", async () => {
     const { extensions, controller } = setup()
     vi.spyOn(console, "error").mockImplementation(() => {})
     serve([
       entry("ui.none", `ctx.panels.register({ id: "p", title: "T" })`),
       entry(
+        "ui.render",
+        `ctx.surfaces.register({ id: "s", title: "T", render(container) { container.textContent = "x" } })`,
+      ),
+      entry(
         "ui.both",
-        `ctx.surfaces.register({ id: "s", title: "T", render() {}, Component() { return null } })`,
+        `ctx.settingsPages.register({
+          id: "g", title: "T", render() {}, Component() { return null },
+        })`,
       ),
     ])
 
@@ -357,16 +368,26 @@ describe("React contributions", () => {
 
     expect(extensions.get("panel")).toEqual([])
     expect(extensions.get("surface")).toEqual([])
+    expect(extensions.get("settingsPage")).toEqual([])
     expect(controller.errors.get()).toMatchObject([
       {
         pluginId: "ui.none",
         kind: "apply",
-        detail: expect.stringContaining("give exactly one of render or Component"),
+        detail: expect.stringContaining("Component must be a React component"),
+      },
+      {
+        pluginId: "ui.render",
+        kind: "apply",
+        detail: expect.stringContaining(
+          "render is no longer supported; pass the content as a React component in Component",
+        ),
       },
       {
         pluginId: "ui.both",
         kind: "apply",
-        detail: expect.stringContaining("give exactly one of render or Component"),
+        detail: expect.stringContaining(
+          "render is no longer supported; pass the content as a React component in Component",
+        ),
       },
     ])
     controller.dispose()

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 验证插件内容的两种写法（ADR-0002）：`Component` 在宿主树里渲染、出错时只在内容区显示原因；
- * `render` 仍是 DOM 渲染函数，容器清空、清理函数照常调用。
+ * 验证插件内容的写法只有一种（ADR-0002）：`Component` 在宿主树里渲染、出错时只在内容区显示原因、
+ * 插件换版本后错误不再挡住新组件。
  */
 import { render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -12,21 +12,20 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-/** 宿主外壳：插件组件读 useLocale 时依赖它。 */
-function host(children: React.ReactNode) {
-  return render(<LocaleProvider locale="zh-CN">{children}</LocaleProvider>)
-}
-
 describe("PluginContentHost", () => {
   it("renders a plugin Component inside the host tree, inside the host's locale context", () => {
     function Panel() {
       return <p>inside host</p>
     }
-    const view = host(<PluginContentHost id="react" Component={Panel} kind="panel" />)
+    const view = render(
+      <LocaleProvider locale="zh-CN">
+        <PluginContentHost id="react" Component={Panel} kind="panel" />
+      </LocaleProvider>,
+    )
 
     expect(screen.getByText("inside host")).toBeTruthy()
     const container = view.container.querySelector("[data-plugin-content='react']")
-    expect(container?.className).toBe("pg-root pg-panel")
+    expect(container?.className).toBe("plugin-content plugin-content-panel")
   })
 
   it("shows a component's error in the content area without unmounting the host around it", () => {
@@ -46,23 +45,6 @@ describe("PluginContentHost", () => {
     expect(view.container.querySelector("[data-plugin-content='broken']")?.textContent).toContain(
       "plugin crashed",
     )
-  })
-
-  it("keeps the DOM render function path: fills the container and runs its cleanup", () => {
-    const cleanup = vi.fn()
-    const draw = vi.fn((container: HTMLElement) => {
-      const node = document.createElement("span")
-      node.textContent = "dom content"
-      container.append(node)
-      return cleanup
-    })
-    const view = host(<PluginContentHost id="dom" render={draw} kind="settings" />)
-
-    expect(draw).toHaveBeenCalledTimes(1)
-    expect(screen.getByText("dom content")).toBeTruthy()
-
-    view.unmount()
-    expect(cleanup).toHaveBeenCalledTimes(1)
   })
 })
 

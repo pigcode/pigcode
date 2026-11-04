@@ -33,9 +33,9 @@ export function setup(importModule?: (url: string) => Promise<ClientModule>) {
   return { extensions, controller }
 }
 
-/** 一个 Surface 的登记语句。 */
+/** 一个 Surface 的登记语句；内容是组件，和真实插件的写法一致。 */
 export const surfaceCall = (id: string, title: string) =>
-  `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, render() {} })`
+  `ctx.surfaces.register({ id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, Component() { return null } })`
 
 /** 一个可以从外面完成的 promise。 */
 export function deferred<T>() {

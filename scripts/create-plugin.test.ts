@@ -132,7 +132,7 @@ describe("create-plugin", () => {
     const tsconfig = await readFile(join(dir, "tsconfig.json"), "utf8")
     expect(tsconfig).toContain("env.d.ts")
 
-    // 入口用宿主的 React 与 ui-primitives 写，Panel、Surface、设置页都传组件；不再用 ctx.ui 的 DOM 工具包。
+    // 入口用宿主的 React 与 ui-primitives 写，Panel、Surface、设置页都传组件；插件只有这一种界面写法。
     const source = await readFile(join(dir, "client.tsx"), "utf8")
     expect(source).toContain('from "react"')
     expect(source).toContain('from "@pigcode/ui-primitives"')

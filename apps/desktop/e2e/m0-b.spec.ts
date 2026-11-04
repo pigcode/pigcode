@@ -41,7 +41,7 @@ test("chat, plugin panel, and reconnect", async () => {
     "aria-selected",
     "true",
   )
-  const surface = page.locator(".pg-root.pg-surface")
+  const surface = page.locator("[data-plugin-content='debug-inspector']")
   await expect(surface.locator(".section-head h2").first()).toHaveText("宿主")
   await surface.getByRole("button", { name: "读取项目" }).click()
   await expect(surface.locator(".list-row-title")).toContainText(["pigcode-m0b"])

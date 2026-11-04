@@ -1,16 +1,11 @@
 /**
  * 左侧栏的 Panel，以及插件内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel、
- * Surface、设置页与工具渲染器共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；
- * 重画或移除前调用插件返回的清理函数。渲染或清理出错时不影响宿主：渲染的错误显示在内容区，清理的错误写进控制台。
- *
- * 插件内容有两种写法（ADR-0002）：
- * - `Component`：插件用宿主的 React 写组件，在宿主外壳里直接渲染，能用 useLocale、useTheme 等 hook；
- * - `render`：DOM 渲染函数，保留给已有的插件，拿到容器自己往里填。
+ * Surface、设置页与工具渲染器共用：内容是插件的 React 组件（ADR-0002），在宿主外壳里直接渲染，
+ * 能用 useLocale、useTheme 等 hook。渲染出错时不影响宿主：错误显示在内容区。
  */
-import { Component, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react"
+import { Component, useState, type ComponentType, type ReactNode } from "react"
 import { ChevronRight } from "lucide-react"
 import { contributionText, useContributions, type PanelContribution } from "@pigcode/client-runtime"
-import type { ClientRender } from "@pigcode/plugin-sdk"
 import { useLocale } from "@pigcode/ui-primitives"
 
 /**
@@ -38,79 +33,34 @@ class PluginErrorBoundary extends Component<
   }
 }
 
-/** 一段插件内容：组件或 DOM 渲染函数，二选一。 */
-export interface PluginContent {
-  Component?: ComponentType
-  render?: ClientRender
-}
-
 /**
- * 挂载一段插件内容；kind 区分侧栏面板、右栏标签、设置页与时间线工具行的排版。
- * 组件直接渲染在宿主树里；DOM 渲染函数挂到一个 div 上，render 换了就重画。
+ * 挂载一段插件内容。组件在宿主树里直接渲染；外层只负责这个挂载点的宽度、纵向间距与长串换行，
+ * 内边距来自侧栏、右栏、设置页各自的容器，卡片和文字样式由插件用 ui-primitives 给出。
  */
 export function PluginContentHost({
   id,
-  render,
-  Component,
-  kind,
-}: PluginContent & { id: string; kind: "panel" | "surface" | "settings" | "tool" }) {
-  if (Component) {
-    return (
-      <div className={`pg-root pg-${kind}`} data-plugin-content={id}>
-        <PluginErrorBoundary
-          key={id}
-          resetKey={Component}
-          fallback={(reason) => (
-            <p className="pg-error" role="alert">
-              {reason}
-            </p>
-          )}
-        >
-          <Component />
-        </PluginErrorBoundary>
-      </div>
-    )
-  }
-  // checkContribution 保证二选一，这里 render 一定有值。
-  return <PluginDomContent id={id} render={render as ClientRender} kind={kind} />
-}
-
-/** DOM 渲染函数：插件拿到容器自己往里填，重画或移除前调用它返回的清理函数。 */
-function PluginDomContent({
-  id,
-  render,
+  Component: Content,
   kind,
 }: {
   id: string
-  render: ClientRender
+  Component: ComponentType
   kind: "panel" | "surface" | "settings" | "tool"
 }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const container = ref.current
-    if (!container) return undefined
-    container.replaceChildren()
-    let cleanup: void | (() => void)
-    try {
-      cleanup = render(container)
-    } catch (error) {
-      const message = document.createElement("p")
-      message.className = "pg-error"
-      message.textContent = error instanceof Error ? error.message : String(error)
-      container.replaceChildren(message)
-    }
-    return () => {
-      try {
-        if (typeof cleanup === "function") cleanup()
-      } catch (error) {
-        // 这里抛出去的话 React 会卸载外层的整棵树，时间线和侧栏都会跟着消失。
-        console.error(`[plugin-content:${id}]`, error)
-      } finally {
-        container.replaceChildren()
-      }
-    }
-  }, [render, id])
-  return <div ref={ref} className={`pg-root pg-${kind}`} data-plugin-content={id} />
+  return (
+    <div className={`plugin-content plugin-content-${kind}`} data-plugin-content={id}>
+      <PluginErrorBoundary
+        key={id}
+        resetKey={Content}
+        fallback={(reason) => (
+          <p className="error-text" role="alert">
+            {reason}
+          </p>
+        )}
+      >
+        <Content />
+      </PluginErrorBoundary>
+    </div>
+  )
 }
 
 /** 侧栏里的一个 Panel：和「项目」同样的分组标题，点击收起或展开。 */

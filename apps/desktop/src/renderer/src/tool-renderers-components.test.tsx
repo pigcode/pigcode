@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 工具渲染器的 React 写法（ADR-0002）：插件给 `Component`，组件由宿主的 React 渲染，调用变化时宿主用新的
- * `tool` 重画；组件自己的状态不因为无关的重渲染丢失；`Component` 与 `render` 必须二选一。
+ * 工具渲染器的写法只有一种（ADR-0002）：插件给 `Component`，组件由宿主的 React 渲染，调用变化时宿主用新的
+ * `tool` 重画；组件自己的状态不因为无关的重渲染丢失；还在传 `render` 的登记被拒绝。
  */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { useState, type ReactNode } from "react"
@@ -79,7 +79,7 @@ describe("tool renderers written as React components", () => {
     const { rerender, container } = render(tree(first))
     expect(screen.getByText("component running")).toBeTruthy()
     expect(container.querySelector("[data-plugin-content='component']")?.className).toBe(
-      "pg-root pg-tool",
+      "plugin-content plugin-content-tool",
     )
 
     rerender(tree({ ...first, status: "completed", output: "done" }))
@@ -120,24 +120,34 @@ describe("tool renderers written as React components", () => {
     expect(screen.getByRole("button", { name: "completed 1" })).toBeTruthy()
   })
 
-  it("reject a tool renderer that gives neither or both of Component and render", async () => {
+  it("reject a tool renderer with no Component, and one that still passes render", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const cases: Array<[string, string]> = [
-      ["neither", `ctx.toolRenderers.register({ id: "bad", tools: ["t"] })`],
+    const cases: Array<[string, string, string]> = [
+      [
+        "neither",
+        `ctx.toolRenderers.register({ id: "bad", tools: ["t"] })`,
+        "Component must be a React component",
+      ],
+      [
+        "render",
+        `ctx.toolRenderers.register({ id: "bad", tools: ["t"], render(container) { container.textContent = "x" } })`,
+        "render is no longer supported; pass the content as a React component in Component",
+      ],
       [
         "both",
         `ctx.toolRenderers.register({
           id: "bad", tools: ["t"], render() {}, Component: ({ tool }) => tool.name,
         })`,
+        "render is no longer supported; pass the content as a React component in Component",
       ],
     ]
-    for (const [, body] of cases) {
+    for (const [, body, message] of cases) {
       const { extensions, controller } = await withPlugin(body)
       expect(controller.errors.get()).toMatchObject([
         {
           pluginId: "ui.demo",
           kind: "apply",
-          detail: expect.stringContaining("give exactly one of render or Component"),
+          detail: expect.stringContaining(message),
         },
       ])
       expect(extensions.get("toolRenderer").some((item) => item.id === "bad")).toBe(false)

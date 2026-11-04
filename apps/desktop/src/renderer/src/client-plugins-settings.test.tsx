@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
 /**
  * 验证插件的设置页：登记到设置页扩展点并归属到插件、和内置页重名时记成冲突、插件更新时不中断；
- * 以及缺了标题或 render 的 Panel、Surface、设置页登记被拒绝并记成插件的界面代码错误。
+ * 以及缺了标题或组件的 Panel、Surface、设置页登记被拒绝并记成插件的界面代码错误。
  */
 import { render, screen } from "@testing-library/react"
+import { useState } from "react"
+import { Switch } from "@pigcode/ui-primitives"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ClientModule } from "@pigcode/client-runtime"
+import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 import { registerBuiltinSettingsPages } from "./builtin-settings-pages"
 import type { CoreDeps } from "./chat-container"
 import { deferred, entry, serve, setup } from "./client-plugins.fixtures"
@@ -20,25 +23,25 @@ afterEach(() => {
 
 describe("client plugin settings pages", () => {
   it("registers a settings page owned by the plugin under the host's page title", async () => {
-    const { extensions, controller } = setup()
+    // 设置页内容是一个 React 组件，用宿主 ui-primitives 的 Switch；组件在宿主的页面外框里渲染。
+    const module = {
+      apply(ctx: ClientPluginContext) {
+        const Verbose = () => {
+          const [checked, setChecked] = useState(false)
+          return <Switch checked={checked} onCheckedChange={setChecked} aria-label="Verbose" />
+        }
+        const page = (id: string, title: string) =>
+          ctx.settingsPages.register({ id, title, order: 3, Component: Verbose })
+        page("debug-settings", "Debug Settings")
+        // 和内置页重名：这次登记不生效，先登记的保持。
+        page("general", "Mine")
+      },
+    } as unknown as ClientModule
+    const { extensions, controller } = setup(async () => module)
     // 内置设置页只登记，内容不渲染，用不到这些依赖。
     registerBuiltinSettingsPages(extensions, {} as CoreDeps)
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const settingsPage = (id: string, title: string) =>
-      `ctx.settingsPages.register({
-        id: ${JSON.stringify(id)},
-        title: ${JSON.stringify(title)},
-        order: 3,
-        render(container) {
-          container.append(ctx.ui.row({ title: "Verbose", control: ctx.ui.toggle({ label: "Verbose", checked: false }) }))
-        },
-      })`
-    serve([
-      entry(
-        "ui.debug",
-        settingsPage("debug-settings", "Debug Settings") + "\n" + settingsPage("general", "Mine"),
-      ),
-    ])
+    serve([entry("ui.debug", "")])
 
     await controller.reload()
 
@@ -73,7 +76,7 @@ describe("client plugin settings pages", () => {
     const view = render(<>{page?.render()}</>)
     expect(screen.getByRole("heading", { level: 1, name: "Debug Settings" })).toBeTruthy()
     const content = view.container.querySelector("[data-plugin-content='debug-settings']")
-    expect(content?.className).toBe("pg-root pg-settings")
+    expect(content?.className).toBe("plugin-content plugin-content-settings")
     expect(screen.getByRole("switch", { name: "Verbose" })).toBeTruthy()
     view.unmount()
 
@@ -90,7 +93,7 @@ describe("client plugin settings pages", () => {
       return (await import(/* @vite-ignore */ url)) as ClientModule
     })
     const pageCall = (title: string) =>
-      `ctx.settingsPages.register({ id: "p", title: ${JSON.stringify(title)}, render() {} })`
+      `ctx.settingsPages.register({ id: "p", title: ${JSON.stringify(title)}, Component() { return null } })`
     serve([entry("ui.a", pageCall("v1"), "1")])
     await controller.reload()
 
@@ -112,13 +115,16 @@ describe("client plugin settings pages", () => {
     controller.dispose()
   })
 
-  it("reports a Panel, Surface or settings page with a missing title or render instead of registering it", async () => {
+  it("reports a Panel, Surface or settings page with a missing title or component instead of registering it", async () => {
     const { extensions, controller } = setup()
     vi.spyOn(console, "error").mockImplementation(() => {})
     serve([
       entry("ui.panel", `ctx.panels.register({ id: "p", title: "P" })`),
       entry("ui.surface", `ctx.surfaces.register({ id: "s", title: "S" })`),
-      entry("ui.page", `ctx.settingsPages.register({ id: "g", title: 3, render() {} })`),
+      entry(
+        "ui.page",
+        `ctx.settingsPages.register({ id: "g", title: 3, Component() { return null } })`,
+      ),
     ])
 
     await controller.reload()
@@ -130,12 +136,12 @@ describe("client plugin settings pages", () => {
       {
         pluginId: "ui.panel",
         kind: "apply",
-        detail: expect.stringContaining("give exactly one of render or Component"),
+        detail: expect.stringContaining("Component must be a React component"),
       },
       {
         pluginId: "ui.surface",
         kind: "apply",
-        detail: expect.stringContaining("give exactly one of render or Component"),
+        detail: expect.stringContaining("Component must be a React component"),
       },
       {
         pluginId: "ui.page",

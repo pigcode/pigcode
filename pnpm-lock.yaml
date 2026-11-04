@@ -554,9 +554,6 @@ importers:
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@pigcode/plugin-sdk':
-        specifier: workspace:*
-        version: link:../plugin-sdk
       '@pigcode/ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives

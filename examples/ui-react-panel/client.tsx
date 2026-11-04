@@ -6,7 +6,8 @@
  * - `useLocale()`、`useTheme()` 读到宿主的界面语言和当前主题，切换后自动重画；
  * - ui-primitives 的 Button、Badge、ListRow、EmptyState 和宿主界面完全一致。
  *
- * Panel、Surface 和设置页都传 `Component`；也可以继续用 `render(container)` 的 DOM 写法。
+ * Panel、Surface 和设置页都传 `Component`，这是插件界面的唯一写法（ADR-0002）；旧的
+ * `render(container)` DOM 写法已删除，还在传的插件在登记时被拒绝。
  */
 import { useState } from "react"
 import { Badge, Button, EmptyState, ListRow, useLocale, useTheme } from "@pigcode/ui-primitives"

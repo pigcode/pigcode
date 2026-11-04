@@ -2,8 +2,9 @@
 /**
  * 验证工具渲染器扩展点：内置渲染器按族登记；插件按声明的工具名或工具族匹配、优先于内置渲染器，
  * 调用变化时重画，出错不影响时间线，停用后立即回到内置或通用的显示。clock 样例用的是仓库里真实的 client.tsx。
+ * 插件渲染器的匹配与排序规则见 tool-renderers-plugins.test.tsx。
  */
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReactNode } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
@@ -15,18 +16,11 @@ import {
   type ClientModule,
   type ExtensionRegistry,
 } from "@pigcode/client-runtime"
-import type { ClientPluginContext } from "@pigcode/plugin-sdk"
-import {
-  CommandGroup,
-  SubagentView,
-  ToolBlock,
-  type SubagentCall,
-  type ToolCall,
-} from "@pigcode/ui-chat"
+import { SubagentView, ToolBlock, type SubagentCall, type ToolCall } from "@pigcode/ui-chat"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import * as clockSample from "../../../../../examples/capability-clock/client"
 import { registerBuiltinToolRenderers, ToolRenderersScope } from "./builtin-tool-renderers"
-import { entry, serve, setup } from "./client-plugins.fixtures"
+import { serve, setup } from "./client-plugins.fixtures"
 
 afterEach(() => {
   cleanup()
@@ -50,15 +44,6 @@ function timeline(extensions: ExtensionRegistry, node: ReactNode) {
 
 /** 一次插件 apply 的 boot 条目，模块由测试直接给出。 */
 const moduleEntry = (id: string): BootEntry => ({ id, revision: "1", inject: [], url: id })
-
-/** 带内置渲染器的控制器，加载一个 apply 体为 body 的插件。 */
-async function withPlugin(body: string) {
-  const { extensions, controller } = setup()
-  registerBuiltinToolRenderers(extensions)
-  serve([entry("ui.demo", body)])
-  await controller.reload()
-  return { extensions, controller }
-}
 
 describe("built-in tool renderers", () => {
   it("registers one renderer per family, all after the plugins' default order", () => {
@@ -255,235 +240,6 @@ describe("the clock sample's tool renderer", () => {
     const { container } = render(timeline(extensions, <SubagentView subagent={subagent} />))
     expect(container.querySelector("[data-plugin-content='clock-now']")?.textContent).toContain(
       "当前时间",
-    )
-  })
-})
-
-describe("plugin tool renderers", () => {
-  it("match by family and take priority over the built-in of that family", async () => {
-    const { extensions, controller } = await withPlugin(`ctx.toolRenderers.register({
-      id: "shells",
-      families: ["shell"],
-      render(container, call) { container.textContent = "plugin " + call.name },
-    })`)
-    expect(controller.errors.get()).toEqual([])
-    render(
-      timeline(
-        extensions,
-        <>
-          <ToolBlock tool={call("Bash")} />
-          <ToolBlock tool={call("exec_command", { id: "x" })} />
-          <ToolBlock tool={call("Read")} />
-        </>,
-      ),
-    )
-    expect(screen.getByText("plugin Bash")).toBeTruthy()
-    expect(screen.getByText("plugin exec_command")).toBeTruthy()
-    expect(screen.queryByText("plugin Read")).toBeNull()
-  })
-
-  it("lose to the built-in when their order is larger", async () => {
-    const { extensions } = await withPlugin(`ctx.toolRenderers.register({
-      id: "late",
-      order: 2000,
-      families: ["mcp"],
-      render(container) { container.textContent = "late" },
-    })`)
-    render(timeline(extensions, <ToolBlock tool={call("mcp__github__list_issues")} />))
-    expect(screen.queryByText("late")).toBeNull()
-    expect(screen.getByRole("button", { name: /MCP/ })).toBeTruthy()
-  })
-
-  it("beat a family renderer at the same order only by id, so families should ask for their own order", async () => {
-    // 审查发现的行为：同为 0 时按 id 排，和渲染器是按名字还是按族匹配无关。文档让按族匹配的用 1 到 999。
-    const { extensions } = await withPlugin(`
-      ctx.toolRenderers.register({
-        id: "a-family", families: ["mcp"],
-        render(container) { container.textContent = "family" },
-      })
-      ctx.toolRenderers.register({
-        id: "clock-now", tools: ["clock_now"],
-        render(container) { container.textContent = "named" },
-      })`)
-    render(timeline(extensions, <ToolBlock tool={call("mcp__pigcode__clock_now")} />))
-    expect(screen.getByText("family")).toBeTruthy()
-  })
-
-  it("let a named renderer at the default order beat a family one that follows the docs", async () => {
-    const { extensions } = await withPlugin(`
-      ctx.toolRenderers.register({
-        id: "a-family", order: 1, families: ["mcp"],
-        render(container) { container.textContent = "family" },
-      })
-      ctx.toolRenderers.register({
-        id: "clock-now", tools: ["clock_now"],
-        render(container) { container.textContent = "named" },
-      })`)
-    render(timeline(extensions, <ToolBlock tool={call("mcp__pigcode__clock_now")} />))
-    expect(screen.getByText("named")).toBeTruthy()
-  })
-
-  it("apply a plugin's family renderer to the children of an expanded command group", async () => {
-    const { extensions } = await withPlugin(`ctx.toolRenderers.register({
-      id: "shells",
-      families: ["shell"],
-      render(container, call) { container.textContent = "plugin " + call.name },
-    })`)
-    const { container } = render(
-      timeline(
-        extensions,
-        <CommandGroup tools={[call("Bash", { id: "a" }), call("Bash", { id: "b" })]} />,
-      ),
-    )
-    // 分组标题行由宿主画；展开后子项走插件的渲染器。
-    expect(container.querySelector("[data-plugin-content]")).toBeNull()
-    await userEvent.click(container.querySelector(".cmd-group .tool-row-head")!)
-    expect(screen.getAllByText("plugin Bash")).toHaveLength(2)
-  })
-
-  it("follow the plugin's order between themselves", async () => {
-    const { extensions } = await withPlugin(`
-      ctx.toolRenderers.register({
-        id: "a-second", order: 5, tools: ["t"],
-        render(container) { container.textContent = "second" },
-      })
-      ctx.toolRenderers.register({
-        id: "z-first", order: 1, tools: ["t"],
-        render(container) { container.textContent = "first" },
-      })`)
-    render(timeline(extensions, <ToolBlock tool={call("t")} />))
-    expect(screen.getByText("first")).toBeTruthy()
-    expect(screen.queryByText("second")).toBeNull()
-  })
-
-  it("ignore later changes to the arrays the plugin passed", async () => {
-    const { extensions } = await withPlugin(`
-      const tools = ["t"]
-      ctx.toolRenderers.register({
-        id: "r", tools,
-        render(container) { container.textContent = "plugin" },
-      })
-      tools.length = 0`)
-    render(timeline(extensions, <ToolBlock tool={call("t")} />))
-    expect(screen.getByText("plugin")).toBeTruthy()
-  })
-
-  it.each([
-    ["no match at all", `render() {}`, "tools or families must list at least one name"],
-    ["empty lists", `tools: [], families: [], render() {}`, "at least one name"],
-    ["a non-array", `tools: "clock_now", render() {}`, "tools must be an array"],
-    ["an empty name", `tools: [""], render() {}`, "tools must be an array"],
-    ["an unknown family", `families: ["shells"], render() {}`, "families must be an array"],
-    ["no content", `tools: ["t"]`, "give exactly one of render or Component"],
-    ["a bad order", `tools: ["t"], order: "1", render() {}`, "order must be a number"],
-  ])("reject %s as an apply error", async (_name, fields, message) => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    const { extensions, controller } = await withPlugin(
-      `ctx.toolRenderers.register({ id: "bad", ${fields} })`,
-    )
-    expect(controller.errors.get()).toMatchObject([
-      { pluginId: "ui.demo", kind: "apply", detail: expect.stringContaining(message) },
-    ])
-    expect(extensions.get("toolRenderer").some((item) => item.id === "bad")).toBe(false)
-  })
-
-  it("reject a missing id as an apply error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    const { controller } = await withPlugin(
-      `ctx.toolRenderers.register({ tools: ["t"], render() {} })`,
-    )
-    expect(controller.errors.get()[0]?.detail).toContain("id must be a non-empty string")
-  })
-
-  it("follow the id conflict rule and report the conflict", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    const { extensions } = await withPlugin(
-      `ctx.toolRenderers.register({ id: "builtin.mcp", tools: ["t"], render() {} })`,
-    )
-    expect(extensions.conflicts()).toMatchObject([
-      {
-        point: "toolRenderer",
-        id: "builtin.mcp",
-        existing: { kind: "builtin" },
-        rejected: { kind: "plugin", id: "ui.demo" },
-      },
-    ])
-  })
-
-  /** 登记一个测试直接给 render 函数的渲染器。 */
-  async function hosted(draw: (container: HTMLElement, tool: ToolCall) => void | (() => void)) {
-    const { extensions, controller } = setup(
-      async () =>
-        ({
-          apply(ctx: ClientPluginContext) {
-            ctx.toolRenderers.register({ id: "r", tools: ["t"], render: draw })
-          },
-        }) as ClientModule,
-    )
-    registerBuiltinToolRenderers(extensions)
-    serve([moduleEntry("ui.direct")])
-    await controller.reload()
-    return { extensions, controller }
-  }
-
-  it("clean up before re-rendering a changed call, and not on unrelated re-renders", async () => {
-    const log: string[] = []
-    const { extensions } = await hosted((container, tool) => {
-      log.push(`draw ${tool.status}`)
-      container.textContent = tool.status
-      return () => log.push(`clean ${tool.status}`)
-    })
-    const first = call("t", { status: "running" })
-    const tree = (tool: ToolCall) => timeline(extensions, <ToolBlock tool={tool} />)
-    const { rerender, unmount } = render(tree(first))
-    expect(log).toEqual(["draw running"])
-
-    // 内容相同的新对象（事件合并时常见）不打断插件的 DOM。
-    rerender(tree({ ...first }))
-    expect(log).toEqual(["draw running"])
-
-    rerender(tree({ ...first, status: "completed", output: "done" }))
-    expect(log).toEqual(["draw running", "clean running", "draw completed"])
-    expect(screen.getByText("completed")).toBeTruthy()
-
-    unmount()
-    expect(log.at(-1)).toBe("clean completed")
-  })
-
-  it("keep a throwing renderer inside its row", async () => {
-    const { extensions } = await hosted(() => {
-      throw new Error("renderer exploded")
-    })
-    render(
-      timeline(
-        extensions,
-        <>
-          <ToolBlock tool={call("t")} />
-          <ToolBlock tool={call("mcp__github__list_issues")} />
-        </>,
-      ),
-    )
-    expect(screen.getByText("renderer exploded").className).toBe("pg-error")
-    expect(screen.getByRole("button", { name: /MCP/ })).toBeTruthy()
-  })
-
-  it("keep a throwing cleanup away from the timeline, and still swap to the next drawing", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    const { extensions } = await hosted((container, tool) => {
-      container.textContent = tool.status
-      return () => {
-        throw new Error("cleanup exploded")
-      }
-    })
-    const first = call("t", { status: "running" })
-    const tree = (tool: ToolCall) => timeline(extensions, <ToolBlock tool={tool} />)
-    const { rerender } = render(tree(first))
-    rerender(tree({ ...first, status: "completed" }))
-    await waitFor(() => expect(screen.getByText("completed")).toBeTruthy())
-    expect(screen.queryByText("running")).toBeNull()
-    expect(consoleError).toHaveBeenCalledWith(
-      "[plugin-content:r]",
-      expect.objectContaining({ message: "cleanup exploded" }),
     )
   })
 })

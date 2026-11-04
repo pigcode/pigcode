@@ -1,29 +1,32 @@
 /**
- * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页、Command 与工具渲染器、
- * 和宿主一致的界面组件（pg-* 样式）、宿主的主题与语言。插件不接触宿主内部对象。
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页、Command 与工具渲染器，
+ * 以及宿主的主题与语言。插件不接触宿主内部对象。
  *
- * Panel 与 Surface 的内容可以是 React 组件，也可以继续用 DOM 渲染函数：两种写法拿到的是宿主的同一个
- * React（ADR-0002），组件里可以用 `useLocale`、`useTheme` 等 hook 读取宿主状态。
+ * 界面只有一种写法：React 组件（ADR-0002）。组件拿到的是宿主的同一个 React，可以用
+ * `useLocale`、`useTheme` 等 hook 读取宿主状态；旧的 `render(container)` DOM 渲染函数已删除，
+ * 登记时直接抛错。
  */
 import type { ComponentType } from "react"
-
-/** 把内容画进容器；可以返回清理函数，面板移除或重画前调用。 */
-export type ClientRender = (container: HTMLElement) => void | (() => void)
 
 /**
  * 用宿主的 React 渲染插件内容。组件在外壳的 LocaleProvider 之内渲染，所以 `useLocale()` 读到的是
  * 宿主的界面语言；`useTheme()` 读到宿主当前主题。组件不接收 props，需要的状态用 hook 取。
+ *
+ * 类型上用 `ComponentType` 覆盖 `memo`、`forwardRef`、`lazy`：它们有调用签名，按结构可赋给
+ * `FunctionComponent`。宿主在运行时不只看函数，也接受带 `$$typeof` 的对象（见 `isComponent`），
+ * 两边的判断保持一致。
  */
 export type ClientComponent = ComponentType
 
-/** Panel：左侧栏里的一个区块。宿主画可以收起的标题，内容区用宿主的字体、颜色与间距。 */
+/** Panel：左侧栏里的一个区块。宿主画可以收起的标题，内容区是宿主的字体、颜色与间距。 */
 export type ClientPanel = {
   /** 在全部 Panel 里唯一；和已有的重名时这次登记不生效，插件页显示冲突。 */
   id: string
   title: string
   /** 小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-} & ({ render: ClientRender } | { Component: ClientComponent })
+  Component: ClientComponent
+}
 
 /** Surface：Workbench（右侧面板）里的一种标签，列在启动器与「+」菜单的插件组里，打开后是宿主的标签外框。 */
 export type ClientSurface = {
@@ -34,7 +37,8 @@ export type ClientSurface = {
   description?: string
   /** 小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-} & ({ render: ClientRender } | { Component: ClientComponent })
+  Component: ClientComponent
+}
 
 /**
  * 设置页：设置侧栏「插件设置」组里的一页。宿主画侧栏条目和页面标题，内容区用宿主的字体、颜色与间距；
@@ -49,7 +53,8 @@ export type ClientSettingsPage = {
   title: string
   /** 在「插件设置」组里小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-} & ({ render: ClientRender } | { Component: ClientComponent })
+  Component: ClientComponent
+}
 
 /** 一个扩展点的登记入口；register 返回注销函数。归属由宿主按插件自动填写。 */
 export interface ClientContributionApi<T> {
@@ -118,9 +123,6 @@ export interface ClientToolCall {
   exitCode?: number | undefined
 }
 
-/** 把一次工具调用画进容器；可以返回清理函数，重画或移除前调用。调用变化（状态、输出）时重画。 */
-export type ClientToolRender = (container: HTMLElement, call: ClientToolCall) => void | (() => void)
-
 /**
  * 用宿主的 React 画一次工具调用（ADR-0002）。组件渲染在时间线里，`tool` 是这次调用；
  * 调用的状态、输入或输出变化时宿主用新的 `tool` 重画。
@@ -129,8 +131,7 @@ export type ClientToolComponent = ComponentType<{ tool: ClientToolCall }>
 
 /**
  * 工具渲染器：决定一类工具调用在对话时间线里怎么显示。匹配是声明式的：`tools` 和 `families` 至少给一个
- * 非空的，渲染时宿主只比较名字，不运行插件代码。
- * 内容二选一：`Component`（React 组件，推荐）或 `render`（DOM 渲染函数，保留给已有插件）。
+ * 非空的，渲染时宿主只比较名字，不运行插件代码。内容是 React 组件，用 `Component` 传。
  */
 export type ClientToolRenderer = {
   /** 在全部工具渲染器里唯一（内置的是 `builtin.<族名>`）。 */
@@ -144,7 +145,8 @@ export type ClientToolRenderer = {
   tools?: readonly string[]
   /** 工具族。 */
   families?: readonly ClientToolFamily[]
-} & ({ Component: ClientToolComponent } | { render: ClientToolRender })
+  Component: ClientToolComponent
+}
 
 /** 宿主的当前值与变化通知。 */
 export interface ClientObservable<T> {
@@ -154,59 +156,6 @@ export interface ClientObservable<T> {
 
 /** 宿主的明暗主题。 */
 export type ClientTheme = "light" | "dark"
-
-/** 按钮的样式。 */
-export type ClientButtonVariant = "primary" | "secondary" | "ghost" | "danger"
-
-/** 徽标的色调。 */
-export type ClientTone = "neutral" | "accent" | "success" | "warning" | "danger"
-
-/**
- * 和宿主界面一致的 DOM 组件：返回普通元素，由插件自己放进容器。样式来自宿主的 pg-* 类，
- * 跟随宿主的主题、字号与强调色；插件自己的样式可以用文档里列出的 --pg-* 变量。
- */
-export interface ClientUiKit {
-  /** 一组内容：可选的标题与说明，下面是 children。 */
-  section(options: { title?: string; description?: string; children?: Node[] }): HTMLElement
-  /** 设置行：左边标题与说明，右边是控件。 */
-  row(options: { title: string; description?: string; control?: Node }): HTMLElement
-  button(options: {
-    label: string
-    variant?: ClientButtonVariant
-    disabled?: boolean
-    onClick?: () => void
-  }): HTMLButtonElement
-  input(options: {
-    label: string
-    value?: string
-    placeholder?: string
-    onChange?: (value: string) => void
-  }): HTMLInputElement
-  /** 开关（role="switch"）。 */
-  toggle(options: {
-    label: string
-    checked: boolean
-    onChange?: (checked: boolean) => void
-  }): HTMLButtonElement
-  badge(label: string, tone?: ClientTone): HTMLElement
-  text(
-    content: string,
-    options?: { tone?: "default" | "muted" | "faint"; size?: "sm" | "md" },
-  ): HTMLElement
-  /** 等宽的代码块。 */
-  code(content: string): HTMLElement
-  /** 一列可点的条目：标题、说明与右侧的补充信息。 */
-  list(
-    items: ReadonlyArray<{
-      title: string
-      description?: string
-      meta?: string
-      onClick?: () => void
-    }>,
-  ): HTMLElement
-  /** 空状态：标题与一句说明。 */
-  empty(options: { title: string; description?: string }): HTMLElement
-}
 
 /** UI 插件拿到的全部能力；只暴露浏览器侧最小面。 */
 export interface ClientPluginContext {
@@ -221,9 +170,9 @@ export interface ClientPluginContext {
   commands: ClientContributionApi<ClientCommand>
   /** 工具渲染器扩展点：决定一类工具调用在对话时间线里怎么显示。 */
   toolRenderers: ClientContributionApi<ClientToolRenderer>
-  ui: ClientUiKit
+  /** 宿主的主题；组件里优先用 ui-primitives 的 `useTheme()`。 */
   theme: ClientObservable<ClientTheme>
-  /** 界面语言，例如 `zh-CN`、`en-US`。 */
+  /** 界面语言，例如 `zh-CN`、`en-US`；组件里优先用 ui-primitives 的 `useLocale()`。 */
   locale: ClientObservable<string>
 }
 

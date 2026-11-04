@@ -414,13 +414,15 @@ export function apply(ctx: PluginHostContext): void {
 ## UI 插件
 
 完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)：它在五个扩展点上都登记内容，界面全部用
-宿主的 React 和 `@pigcode/ui-primitives` 写。UI 插件写界面的推荐做法只有一种：
+宿主的 React 和 `@pigcode/ui-primitives` 写。UI 插件写界面只有这一种做法：
 
 - **React**：直接 `import "react"` 和 `import "@pigcode/ui-primitives"`，拿到的是宿主的同一个实例，
   插件界面和宿主用同一套组件（`Button`、`ListRow`、`SettingRow`、`SettingSection`、`Badge`、`Switch`、
   `EmptyState` 等）、同一份主题与语言。`examples/ui-react-panel` 是一个更小的 React 示例。
 
-旧的 `ctx.ui` DOM 工具包只留给已有插件（见[和宿主一致的组件：`ctx.ui`](#和宿主一致的组件ctxui)），新插件不要再用。
+旧的 `ctx.ui` DOM 工具包已经删除，`render(container)` 的 DOM 渲染函数也已经删除：Panel、Surface、设置页和
+工具渲染器只接受 React 组件（`Component`）。还在传 `render` 的插件在 `apply` 里第一次 `register` 时就抛错，
+插件页显示成这个插件的界面代码错误，错误写明改成 `Component`。
 
 所有路径都遵守「宿主画外框，插件只画内容」：Panel 的可收起标题、Surface 的标签、设置页的导航与标题都由宿主画。
 
@@ -449,12 +451,11 @@ export function apply(ctx: PluginHostContext): void {
 - **共享模块在插件加载前就位。** 插件 bundle 加载时这些包名已经能解析，不需要先等宿主初始化；插件也不用
   `await import()` 它们。
 
-### Panel、Surface 与设置页可以传组件
+### Panel、Surface 与设置页传组件
 
-`ctx.panels.register`、`ctx.surfaces.register` 和 `ctx.settingsPages.register` 的内容二选一：
-
-- `Component`：一个 React 组件（不接收 props），宿主在自己的 React 树里渲染它。推荐。
-- `render(container)`：DOM 渲染函数，拿到容器自己往里填。已有插件继续可用，新插件不要用。
+`ctx.panels.register`、`ctx.surfaces.register` 和 `ctx.settingsPages.register` 的内容都是 `Component`：
+一个 React 组件（不接收 props），宿主在自己的 React 树里渲染它。旧的 `render(container)` DOM 渲染函数
+已删除，传了会在 `register` 时抛错（见下）。
 
 组件里用宿主 ui-primitives 的组件和宿主设置页的分组，Panel、Surface 和设置页因此和宿主长得一样：
 
@@ -518,7 +519,7 @@ export function apply(ctx: ClientPluginContext): () => void {
 }
 ```
 
-- 给 `Component` 就不能再给 `render`，反过来也一样；两个都给或都不给时 `register` 抛错，插件页显示成界面代码错误。
+- 内容只有 `Component` 一种写法；还在传 `render` 的登记直接抛错，插件页显示成界面代码错误，报错写明改用 `Component`。
 - 组件渲染时抛出的错误只在内容区显示原因，时间线、侧栏和窗口其余部分照常可用。
   React 的错误边界接不到事件处理和异步回调里的错误，那些仍会冒到窗口；需要时自己 try/catch。
 - 插件的文案仍然由插件自己按界面语言选择（组件里用 `useLocale()` 读语言）；宿主语言包只覆盖宿主自己的文字。
@@ -614,7 +615,8 @@ UI 插件在五个扩展点上登记内容：Panel 是左侧栏里的一个区�
 - 插件更新到新版本时，新版本加载完才替换旧版本，已经打开的 Surface 标签保留，正在看的设置页也不变。
   这要求在 `apply` 里同步登记：`await` 之后才登记的话，新版本登记之前那一刻这一页不存在，正在看它的用户会
   回到通用页。其余插件的界面不动。
-- `id`、`title` 不是字符串，或 `render` / `Component` 没按要求二选一时，`register` 直接抛错，插件页把它显示成界面代码错误。
+- `id`、`title` 不是字符串，或者没有给合法的 `Component`（包括还在用已删除的 `render`），
+  `register` 直接抛错，插件页把它显示成界面代码错误。
 - client bundle 没有加载成功时，插件页显示「加载失败」和原因；下一次重新加载插件时会再试。
 
 ```tsx
@@ -678,11 +680,9 @@ export function apply(ctx: ClientPluginContext): () => void {
 }
 ```
 
-- `render(container)` 可以返回清理函数；宿主在移除或重画前调用它，然后清空容器。
-  `render` 抛出的错误显示在内容区里，不影响宿主。传 `Component` 时这些都由宿主负责。
-- 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
-  右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样，
-  时间线里的工具行（`pg-tool`）没有内边距，多个元素纵向排开。传 `Component` 时也同样套着这层外框。
+- 组件挂载在 `[data-plugin-content]` 容器里，外层只有这个挂载点的排版：宽度由挂载点决定，内边距来自侧栏、右栏、
+  设置页各自的容器，插件没有专用内边距。容器没有插件的专用样式类，字体、颜色、行高都来自宿主，卡片、分组、列表行、
+  按钮和空状态一律用 `@pigcode/ui-primitives` 的组件。
 
 ### Command：命令面板与输入框 `/`
 
@@ -725,8 +725,8 @@ return () => disposeCommand()
 
 `ctx.toolRenderers.register(renderer)` 决定一类工具调用在对话时间线里怎么显示，主时间线和子 agent 的标签页都生效。
 完整示例见 [`examples/capability-clock/client.tsx`](../examples/capability-clock/client.tsx)：它是带界面代码的
-Capability 插件，`package.json` 里同时声明 `host` 和 `client`。内容和 Panel 一样二选一：`Component`（React 组件，
-推荐）或 `render(container, call)`（DOM 渲染函数，保留给已有插件）。
+Capability 插件，`package.json` 里同时声明 `host` 和 `client`。内容是一个 React 组件，用 `Component` 传；
+`render(container, call)` 这个 DOM 写法已删除，还在传的插件在登记时抛错。
 
 ```tsx
 import { useLocale } from "@pigcode/ui-primitives"
@@ -767,14 +767,13 @@ const dispose = ctx.toolRenderers.register({
 一般用 1 到 999，这样按工具名登记的渲染器（缺省 0）仍然优先，又排在所有内置渲染器前面；想接管 `unknown` 的用
 大于 1000 的。正好等于 1000 时按 `id` 和内置渲染器决胜负，不要用。
 
-**内容是 React 组件或 DOM。** 传 `Component` 时组件收到 `tool`；传 `render(container, call)` 时拿到容器自己往里填，
-和 Panel 的 `render` 一样可以返回清理函数（`ctx.ui` 留给已有插件）：
+**内容是 React 组件。** 传 `Component`，组件收到这次调用 `tool`：
 
-- `tool` / `call` 有 `id`、`name`、`status`（`running`、`completed`、`failed`、`stopped`）、`input`、`output`（文字形式，还没有时是
+- `tool` 有 `id`、`name`、`status`（`running`、`completed`、`failed`、`stopped`）、`input`、`output`（文字形式，还没有时是
   `undefined`）、`inputValue`、`outputValue`（事件里原样的值，形状由 Agent 决定，比如同一个 MCP 工具的结果可能是 JSON
   文字，也可能是内容块数组）、`startedAt`、`endedAt`、`exitCode`。
-- 调用的状态、输入或输出变化时，宿主用新的 `tool` 重画（DOM 写法先调用清理函数、清空容器）；其余时候不重画。
-- 渲染抛错时，错误显示在这一行里（组件由错误边界接住，DOM 写法的清理函数抛错写进控制台）。两者都不影响时间线的其余部分。
+- 调用的状态、输入或输出变化时，宿主用新的 `tool` 重画；其余时候不重画，组件自己的状态保留。
+- 渲染抛错时，错误显示在这一行里（由错误边界接住），不影响时间线的其余部分。
 - 运行中的命令，流出来的输出不传给插件渲染器，`tool.output` 要等调用结束才有内容；内置的命令行会实时显示。
 - 插件停用或卸载时渲染器一起移除，已经显示的调用立即回到内置渲染器（`mcp__` 工具是内置的 MCP 行）或通用渲染器。
 
@@ -785,49 +784,22 @@ const dispose = ctx.toolRenderers.register({
 `ask-user-question` 调用。
 
 `id` 冲突、抛错和清理的规则与其它扩展点相同；内置渲染器的 `id` 是 `builtin.<族名>`。`id`、`order`、`tools`、`families`
-不合规，`Component` 和 `render` 没按要求二选一，或者 `tools` 和 `families` 都是空的，`register` 直接抛错，插件页把它
-显示成界面代码错误。
-
-### 和宿主一致的组件：`ctx.ui`
-
-`ctx.ui` 是给已有插件的 DOM 工具包，新插件用宿主的 React 与 ui-primitives（见[使用宿主的 React](#使用宿主的-react)）。
-它返回普通的 DOM 元素，插件自己 `append` 到容器里。按钮、输入框、开关和徽标直接用宿主控件的类
-（`btn`、`input`、`switch`、`badge`），跟随宿主的主题、强调色与字号；其余用 `pg-*` 排版：
-
-| 方法                                                | 生成的元素                                                            |
-| --------------------------------------------------- | --------------------------------------------------------------------- |
-| `section({ title?, description?, children? })`      | 带标题的分组，内容是一张卡片（侧栏里没有卡片背景）                    |
-| `row({ title, description?, control? })`            | 设置行：左边标题与说明，右边是控件                                    |
-| `button({ label, variant?, disabled?, onClick? })`  | 按钮；`variant` 为 `primary`、`secondary`（默认）、`ghost`、`danger`  |
-| `input({ label, value?, placeholder?, onChange? })` | 文本输入框，`label` 作为无障碍名称                                    |
-| `toggle({ label, checked, onChange? })`             | 开关（`role="switch"`）                                               |
-| `badge(label, tone?)`                               | 徽标；`tone` 为 `neutral`、`accent`、`success`、`warning`、`danger`   |
-| `text(content, { tone?, size? })`                   | 一段文字；`tone` 为 `default`、`muted`、`faint`，`size` 为 `md`、`sm` |
-| `code(content)`                                     | 等宽代码块                                                            |
-| `list(items)`                                       | 一列条目：`title`、`description`、`meta`，给 `onClick` 时整行可点     |
-| `empty({ title, description? })`                    | 空状态                                                                |
+不合规，没有给合法的 `Component`（包括还在用已删除的 `render`），或者 `tools` 和 `families` 都是空的，`register` 直接抛错，
+插件页把它显示成界面代码错误。
 
 ### 宿主的主题与语言
 
-React 组件里用 `useTheme()` 和 `useLocale()`，见 [使用宿主的 React](#使用宿主的-react)。DOM 写法用：
+React 组件里用 `useTheme()` 和 `useLocale()`，见 [使用宿主的 React](#使用宿主的-react)。不在组件里时用：
 
 - `ctx.theme.get()` 返回 `"light"` 或 `"dark"`，`ctx.theme.subscribe(listener)` 在切换时通知，返回取消订阅函数。
 - `ctx.locale.get()` 返回界面语言（`zh-CN`、`en-US`），`ctx.locale.subscribe` 同上。插件的文案自己按语言选择。
 
 ### 自己写样式
 
-需要 `ctx.ui` 以外的样式时，只用下面这些 CSS 变量，不要写死颜色——它们跟随宿主的主题、强调色与字号：
-
-| 变量                                                  | 用途                             |
-| ----------------------------------------------------- | -------------------------------- |
-| `--pg-font`、`--pg-mono`                              | 界面字体、等宽字体               |
-| `--pg-fs`、`--pg-fs-sm`                               | 正文字号、小字号                 |
-| `--pg-fg`、`--pg-fg-2`、`--pg-muted`、`--pg-faint`    | 文字：主要、次要、说明、最弱     |
-| `--pg-bg`、`--pg-surface`、`--pg-field`、`--pg-hover` | 背景：内容区、卡片、输入框、悬停 |
-| `--pg-border`、`--pg-divider`                         | 边框与分隔线                     |
-| `--pg-accent`、`--pg-accent-soft`                     | 强调色与它的浅色底               |
-| `--pg-success`、`--pg-warning`、`--pg-danger`         | 状态文字色                       |
-| `--pg-radius`、`--pg-radius-sm`                       | 卡片与控件圆角                   |
+插件没有自己的样式工具包，也没有 `pg-*` 类或 `--pg-*` 变量：界面用 `@pigcode/ui-primitives` 的组件搭，
+颜色、圆角、间距和字号都跟着宿主的设计 token 走。确实要写一小段样式时，用宿主 token 的同名 CSS 变量
+（`var(--fg)`、`var(--muted)`、`var(--space-4)`、`var(--r-md)` 等，见 `packages/ui-primitives/src/styles/tokens.css`），
+不要写死颜色。
 
 ### 调用 Host
 
