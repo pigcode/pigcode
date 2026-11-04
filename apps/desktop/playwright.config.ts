@@ -11,6 +11,9 @@ process.env.PIGCODE_E2E = "1"
 // 数据库留在内存里，每次启动都是干净的项目与会话。
 process.env.PIGCODE_PROFILE_DIR = join(repoRoot, "apps/desktop/out-e2e/profile")
 process.env.PIGCODE_DB_PATH = ":memory:"
+// Host 是 utilityProcess，输出默认没有人接管；写到 test-results 下，CI 失败时随产物上传，
+// 下次 Host 意外退出时能看到原因。
+process.env.PIGCODE_HOST_LOG = join(repoRoot, "apps/desktop/test-results/host.log")
 
 /** 真实 Agent 需要等待模型响应，超时单独放宽；其余 E2E 保持原有上限。 */
 const realAgent = process.env.PIGCODE_REAL_CLAUDE === "1" || process.env.PIGCODE_REAL_CODEX === "1"
