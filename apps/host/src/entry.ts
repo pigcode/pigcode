@@ -68,7 +68,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 Agent。
   await ctx.plugin(pluginsPlugin, { profileDir, builtin: profile.builtinPlugins })
   await ctx.plugins.loadAll()
-  await writeBootGraph({ profileDir, builtin: profile.builtinPlugins })
+  // Host 入口加载失败的插件也不加载界面代码；它的错误显示在插件页。
+  await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()

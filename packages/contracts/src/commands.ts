@@ -99,6 +99,8 @@ export const commandSchemas = {
   "plugin.disable": z.object({ id: z.string().min(1) }),
   /** 卸载用户安装的插件；内置插件只能停用。 */
   "plugin.uninstall": z.object({ id: z.string().min(1) }),
+  /** 重新读取插件列表，按当前状态补齐或卸下 Host 入口（插件页的「刷新」）。 */
+  "plugin.reload": z.object({}),
   "plugin.bootGraph": z.object({}),
   "workspace.tree": z.object({ threadId: z.string().min(1) }),
   /** 线程工作目录的绝对路径；复制完整路径、在文件管理器中显示时用。 */

@@ -298,6 +298,8 @@ export class RpcServer {
         return this.ctx.plugins.disable((parsed as { id: string }).id)
       case "plugin.uninstall":
         return uninstallPluginAndClearDefault(this.ctx, (parsed as { id: string }).id)
+      case "plugin.reload":
+        return this.ctx.plugins.reload()
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
       case "workspace.tree":

@@ -17,6 +17,7 @@ import {
   type PluginRecord,
   type PluginSummary,
 } from "./plugin-manager"
+import { providesConflictOf } from "./plugin-conflicts"
 
 /** plugins 插件的配置：用户 profile 目录与内置插件包目录。 */
 export interface PluginsConfig {
@@ -30,6 +31,8 @@ export interface PluginsService {
   list(): Promise<PluginSummary[]>
   /** 合并后的插件记录（含 manifest），供 agent 设置页读取 Agent 插件的贡献。 */
   records(): Promise<PluginRecord[]>
+  /** 记录变更前先取一份，卸载后界面仍能按它清理设置。 */
+  record(id: string): Promise<PluginRecord>
   install(spec: string): Promise<InstalledPluginEntry>
   installLocal(sourceDir: string): Promise<InstalledPluginEntry>
   /** 卸载用户安装的插件；内置插件只能停用。 */
@@ -37,8 +40,12 @@ export interface PluginsService {
   enable(id: string): Promise<void>
   disable(id: string): Promise<void>
   bootGraph(): Promise<{ entries: BootGraphEntry[] }>
-  /** Host 启动时加载全部已启用插件的 Host 入口；单个插件失败只记录错误。 */
+  /** 按当前插件列表让 Host 入口与之一致：该加载的加载，不该留下的卸掉。 */
   loadAll(): Promise<void>
+  /** 重新读取插件列表并让 Host 入口与之一致；插件页的「刷新」用。 */
+  reload(): Promise<void>
+  /** Host 入口 import 或 apply 失败的插件 id；它们的界面代码不进 boot graph。 */
+  hostFailures(): ReadonlySet<string>
 }
 
 declare module "cordis" {
@@ -69,36 +76,85 @@ export const apply: PluginsPlugin = (ctx, config) => {
   const env: PluginEnv = { profileDir: config.profileDir, builtin: config.builtin ?? [] }
   // 加载失败只记录在内存里，供 list 合并展示；重启后重新尝试。
   const loadErrors = new Map<string, string>()
+  // Host 入口 import 或 apply 失败的插件：它们的界面代码也不加载，错误显示在插件页。
+  const hostFailures = new Set<string>()
 
   /** 确认 loader 条目完成 apply；import 失败时 loader 只记日志不抛错。 */
-  async function settleEntry(id: string, name: string): Promise<void> {
+  async function settleEntry(id: string, url: string): Promise<void> {
     const entry = ctx.loader.store[id]
     if (!entry?.fiber) {
-      loadErrors.set(id, `plugin host entry failed to load: ${name}`)
+      hostFailures.add(id)
+      failedAt.set(id, { entry: ctx.loader.store[id]?.options?.name, url })
+      loadErrors.set(id, `plugin host entry failed to load: ${url}`)
       return
     }
     try {
       await entry.fiber.await()
+      hostFailures.delete(id)
+      failedAt.delete(id)
       loadErrors.delete(id)
     } catch (error) {
+      hostFailures.add(id)
+      failedAt.set(id, { entry: ctx.loader.store[id]?.options?.name, url })
       loadErrors.set(id, `plugin host entry failed to apply: ${errorMessage(error)}`)
     }
+  }
+
+  /**
+   * 这个插件现在应该加载 Host 入口：启用、有入口、没有 manifest 错误或 provides 冲突，
+   * 而且它声明的服务确实归它。最后一条覆盖了加载后列表又变了的情况（例如胜者被重装、去掉了那个服务）。
+   */
+  async function wantsHost(
+    record: PluginRecord,
+    records: readonly PluginRecord[],
+  ): Promise<boolean> {
+    if (record.disabled || hostEntryUrl(record) === null || record.error || record.conflict) {
+      return false
+    }
+    return providesConflictOf(record.id, records) === null
+  }
+
+  /**
+   * 加载过但 import / apply 失败的插件。失败的条目还留在 loader 里，先卸掉才能重试。
+   * Cordis 的 Fiber 不公开错误状态，所以这里是记下的失败原因，外加当时 loader 里那个条目的入口：
+   * 插件被重装、换了解包目录后这个入口和列表里的不一样，旧条目就不能再留着冒充新版本。
+   */
+  const failedAt = new Map<string, { entry: string | undefined; url: string }>()
+
+  /** 这个插件在 loader 里的条目是不是已经不是列表里的那个入口（重装、重新解包）。 */
+  function staleEntry(id: string): boolean {
+    const failed = failedAt.get(id)
+    if (failed === undefined) return false
+    const loaded = ctx.loader.store[id]?.options?.name
+    return failed.entry !== undefined && loaded !== undefined && loaded !== failed.entry
+  }
+
+  function failedEntry(record: PluginRecord): boolean {
+    const failed = failedAt.get(record.id)
+    if (failed === undefined) return false
+    if (failed.url === hostEntryUrl(record)) return true
+    // 入口路径变了：旧错误作废，旧条目在 reconcile 里按 staleEntry 卸掉后重建。
+    failedAt.delete(record.id)
+    loadErrors.delete(record.id)
+    hostFailures.delete(record.id)
+    return false
   }
 
   /** 为启用的插件创建 loader 条目；没有 Host 入口、已停用或不兼容的跳过。 */
   async function loadRecord(record: PluginRecord): Promise<void> {
     const url = hostEntryUrl(record)
     if (record.disabled || !url || ctx.loader.store[record.id]) return
-    if (record.error) {
-      loadErrors.set(record.id, record.error)
-      return
-    }
+    // 有错（不兼容、manifest 不可用、provides 冲突）的插件不加载 Host 入口；
+    // 原因都在记录里，list() 直接展示，不再重复记一条加载错误。
+    if (record.error || record.conflict) return
     const options: LoaderCreateOptions = { id: record.id, name: url, config: record.config ?? {} }
     try {
       await ctx.loader.create(options)
       await ctx.loader.await()
-      await settleEntry(record.id, record.name)
+      await settleEntry(record.id, url)
     } catch (error) {
+      hostFailures.add(record.id)
+      failedAt.set(record.id, { entry: ctx.loader.store[record.id]?.options?.name, url })
       loadErrors.set(record.id, `plugin failed to load: ${errorMessage(error)}`)
     }
   }
@@ -107,6 +163,8 @@ export const apply: PluginsPlugin = (ctx, config) => {
   async function unloadEntry(id: string): Promise<void> {
     const entry = ctx.loader.store[id]
     loadErrors.delete(id)
+    hostFailures.delete(id)
+    failedAt.delete(id)
     if (!entry) return
     const fiber = entry.fiber
     ctx.loader.remove(id)
@@ -119,17 +177,45 @@ export const apply: PluginsPlugin = (ctx, config) => {
     await ctx.loader.await()
   }
 
+  /** 写 boot graph；Host 入口失败的插件不写进界面启动图。 */
+  async function updateBootGraph(): Promise<void> {
+    await writeBootGraph(env, hostFailures)
+  }
+
   async function recordOf(id: string): Promise<PluginRecord> {
     const record = (await readPluginRecords(env)).find((item) => item.id === id)
     if (!record) throw new Error(`plugin not found: ${id}`)
     return record
   }
 
+  /**
+   * 让 Host 入口与插件列表一致：该加载的加载，不该留下的卸掉。
+   * 停用、卸载或重装冲突的一方后，原来因冲突没加载的插件在这里接上；
+   * 反过来，新判定为冲突的插件（例如赢家卸掉后它的另一个服务被占了）也在这里卸掉，
+   * 不会出现插件页说「冲突、不加载」而 Host 入口还在跑的情况。
+   * 加载过但 apply 失败的条目先卸掉再重建，修好插件后刷新一次就能恢复。
+   */
+  async function reconcile(): Promise<void> {
+    const records = await readPluginRecords(env)
+    for (const record of records) {
+      if (!(await wantsHost(record, records))) await unloadEntry(record.id)
+    }
+    for (const record of records) {
+      if (!(await wantsHost(record, records))) continue
+      // 失败的条目先卸掉再重建；换了入口的旧条目也卸掉，否则新版本不会真正 import。
+      // 先看旧条目：failedEntry 在入口路径变化时会清掉记录，之后再看就晚了。
+      const stale = staleEntry(record.id)
+      if (failedEntry(record) || stale) await unloadEntry(record.id)
+      await loadRecord(record)
+    }
+  }
+
   /** 安装后加载新条目；重装同一个插件时先卸下旧的入口。 */
   async function afterInstall(entry: InstalledPluginEntry): Promise<InstalledPluginEntry> {
+    // 重装可能去掉或增加一个 provides：整表重新对一遍，先卸掉旧入口再按新状态加载。
     await unloadEntry(entry.id)
-    await loadRecord(await recordOf(entry.id))
-    await writeBootGraph(env)
+    await reconcile()
+    await updateBootGraph()
     return entry
   }
 
@@ -143,28 +229,36 @@ export const apply: PluginsPlugin = (ctx, config) => {
       })
     },
     records: () => readPluginRecords(env),
+    record: recordOf,
     install: async (spec) => afterInstall(await installPlugin(env, spec)),
     installLocal: async (sourceDir) => afterInstall(await installLocalPlugin(env, sourceDir)),
     uninstall: async (id) => {
       const record = await recordOf(id)
       if (record.builtin) throw new Error(`PLUGIN_BUILTIN: ${record.name} can only be disabled`)
+      // 先卸掉自己的入口（它的 effect 要能正常收尾），再删记录：它声明的服务空出来，
+      // 原来因冲突没加载的插件在 reconcile 里接上。
       await unloadEntry(id)
       await uninstallPlugin(env, id)
-      await writeBootGraph(env)
+      await reconcile()
+      await updateBootGraph()
     },
     enable: async (id) => {
-      await loadRecord(await setPluginEnabled(env, id, true))
-      await writeBootGraph(env)
+      await setPluginEnabled(env, id, true)
+      await reconcile()
+      await updateBootGraph()
     },
     disable: async (id) => {
       await setPluginEnabled(env, id, false)
-      await unloadEntry(id)
-      await writeBootGraph(env)
+      await reconcile()
+      await updateBootGraph()
     },
-    bootGraph: () => buildBootGraph(env),
-    loadAll: async () => {
-      for (const record of await readPluginRecords(env)) await loadRecord(record)
+    reload: async () => {
+      await reconcile()
+      await updateBootGraph()
     },
+    bootGraph: () => buildBootGraph(env, hostFailures),
+    hostFailures: () => hostFailures,
+    loadAll: reconcile,
   })
 }
 

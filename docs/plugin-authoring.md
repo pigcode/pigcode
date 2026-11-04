@@ -72,13 +72,13 @@ my-ui-plugin/
 
 | 字段              | 必填 | 说明                                                                                                               |
 | ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------ |
-| `apiVersion`      | 是   | 当前只支持 `1`；其他值会让插件被拒绝加载。                                                                         |
+| `apiVersion`      | 是   | 当前只支持 `1`；其他值会让插件被拒绝加载，错误写明插件需要的版本和 Host 支持的版本。                               |
 | `kind`            | 是   | `agent`、`capability`、`ui` 或 `bundle`。                                                                          |
 | `displayName`     | 否   | 插件管理界面展示的名称，缺省使用包名。                                                                             |
 | `host`            | 否   | Host 入口的相对路径。`host` 与 `client` 至少要有一个。                                                             |
 | `client`          | 否   | UI 入口的相对路径。                                                                                                |
 | `inject`          | 否   | 依赖声明，默认 `[]`。Host 侧服务名如 `agents`、`sessions`。                                                        |
-| `provides`        | 否   | 提供的服务标识，默认 `[]`；用于启用时的冲突检测。                                                                  |
+| `provides`        | 否   | 提供的服务标识，默认 `[]`；用于安装、启动和启用时的冲突检测，先加载的保留。                                        |
 | `contributes`     | 否   | 贡献点元数据，默认 `{}`；只读取 `agent`，见下文。`settings`、`commands`、`slots`、`rpc` 会被拒绝，其它键原样保留。 |
 | `permissions`     | 否   | 权限声明，默认 `[]`；安装和列表界面会展示给用户。                                                                  |
 | `engines.pigcode` | 否   | semver 范围，按 Host 当前版本（`0.1.0`）校验；不满足时插件被标记错误。                                             |
@@ -659,16 +659,22 @@ UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
 
 1. 启用时先计算“当前已启用插件 + 目标插件”的 `provides`。只要有一个服务标识被多个插件声明
    （包括同一插件重复声明），就抛出 `PROVIDES_CONFLICT`，附带冲突的标识和插件 id，并拒绝启用。
-2. 检查通过后，Host 入口被动态挂载，agent 与 Capability 插件的服务立即可用。
-3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页、Command 与工具渲染器出现。
-4. 停用时会卸载 Host 入口并等待 `ctx.effect` 清理，agent 与 Capability 插件的服务立即消失；
+2. 安装和启动时同样检查 `provides`：先加载的插件保留，后加载的插件不加载 Host 入口与界面代码，
+   列表里标记为冲突并说明冲突的标识和先加载的插件。停用或卸载先加载的那个之后，后一个自动接上。
+3. 检查通过后，Host 入口被动态挂载，agent 与 Capability 插件的服务立即可用。
+4. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页、Command 与工具渲染器出现。
+   出错（`provides` 冲突、`engines`/`apiVersion` 不兼容、Host 入口 import 或 apply 失败）的插件不写进 boot graph。
+5. 停用时会卸载 Host 入口并等待 `ctx.effect` 清理，agent 与 Capability 插件的服务立即消失；
    boot graph 重写后，它的 Panel、Surface、设置页、Command 与工具渲染器也会移除，已经打开的 Surface 标签关闭，
    正在看的设置页回到通用页，时间线回到内置或通用的显示。停用 agent 还会取消它排队中的 run、
    中断运行中的 run 并释放会话。
 
 因此插件必须正确清理自己注册的东西：agent 用
 `ctx.effect(() => () => ctx.agents.unregister(id))`，UI 插件返回 `apply` 的清理函数。
-`apiVersion` 或 `engines.pigcode` 不兼容的插件不会被 Host 加载，列表里会显示错误原因。
+`apiVersion` 或 `engines.pigcode` 不兼容的插件不会被 Host 加载，列表里会显示错误原因，
+其中 `apiVersion` 不兼容的错误写明插件需要的版本和当前 Host 支持的版本。
+Host 入口 import 或 apply 抛错时 Host 照常启动，错误显示在插件页，这个插件的界面代码也不加载。
+插件页的「刷新」会重新对一遍：把插件文件修好并重新安装后，刷新就能重新加载，不用停用再启用或重启。
 
 ## 安装与卸载
 

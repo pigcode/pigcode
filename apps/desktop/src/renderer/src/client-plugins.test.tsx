@@ -194,6 +194,30 @@ describe("client plugin panels and surfaces", () => {
     controller.dispose()
   })
 
+  it("records a bundle whose apply throws as a plugin error and keeps the other plugins", async () => {
+    const { extensions, controller } = setup()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([
+      entry("ui.bad", `throw new Error("boom in apply")`),
+      entry("ui.good", surfaceCall("good", "Good")),
+    ])
+
+    await controller.reload()
+
+    // apply 抛错的插件登记不了内容，错误记成这个插件的；其余插件照常。
+    expect(extensions.get("surface").map((item) => item.id)).toEqual(["good"])
+    expect(controller.errors.get()).toMatchObject([
+      { pluginId: "ui.bad", kind: "apply", detail: "boom in apply" },
+    ])
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("ui.bad"))
+
+    // 停用后错误一并清掉。
+    serve([entry("ui.good", surfaceCall("good", "Good"))])
+    await controller.reload()
+    expect(controller.errors.get()).toEqual([])
+    controller.dispose()
+  })
+
   it("reports a bundle that fails to import and retries it on the next reload", async () => {
     let fail = true
     const importModule = vi.fn(async (url: string) => {

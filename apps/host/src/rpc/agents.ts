@@ -76,7 +76,8 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
  * 重新启用后照旧生效；卸载以后这个选择就没有对象了。
  */
 export async function uninstallPluginAndClearDefault(ctx: Context, id: string): Promise<void> {
-  const record = (await ctx.plugins.records()).find((item) => item.id === id)
+  // 先取记录：卸载后它就不在列表里了，而清理默认 Agent 要用它。
+  const record = await ctx.plugins.record(id).catch(() => undefined)
   await ctx.plugins.uninstall(id)
   const manifest = record?.manifest
   const agentId =

@@ -37,11 +37,23 @@ describe("plugin manifest", () => {
     ).toThrow()
   })
 
-  it("rejects an incompatible api version", () => {
+  it("reads an incompatible api version so the error can name both versions", () => {
+    // 不兼容的版本照常读出 manifest，由兼容性检查给出插件需要的版本和 Host 支持的版本。
+    const manifest = pluginManifestSchema.parse({
+      ...base,
+      pigcode: { ...base.pigcode, apiVersion: 2 },
+    })
+    expect(manifest.pigcode.apiVersion).toBe(2)
+    expect(checkPluginCompatibility(manifest)).toBe(
+      "unsupported plugin apiVersion: 2; this Host supports 1",
+    )
+  })
+
+  it("rejects an api version that is not an integer", () => {
     expect(() =>
       pluginManifestSchema.parse({
         ...base,
-        pigcode: { ...base.pigcode, apiVersion: 2 },
+        pigcode: { ...base.pigcode, apiVersion: "1" },
       }),
     ).toThrow()
   })

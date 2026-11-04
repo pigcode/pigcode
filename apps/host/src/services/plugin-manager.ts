@@ -17,6 +17,7 @@ import {
   type PluginManifest,
 } from "@pigcode/plugin-sdk"
 import { writeFileAtomic } from "./atomic-write"
+import { enableConflictOf, resolveProvidesConflicts } from "./plugin-conflicts"
 import { backupBeforeRename, migrateLegacyPluginEntries } from "./legacy-names"
 import {
   defaultPnpmRunner,
@@ -65,6 +66,11 @@ export interface PluginRecord {
   manifest: PluginManifest | null
   /** manifest 读取失败或与当前 Host 不兼容的原因。 */
   error: string | null
+  /**
+   * provides 冲突原因：同一个服务标识已由加载顺序更靠前的插件占用。
+   * 有冲突的插件不加载 Host 入口与界面代码；先加载的那个不受影响。
+   */
+  conflict: string | null
 }
 
 /** 渲染进程启动插件所需的单条 boot graph 记录。 */
@@ -100,19 +106,13 @@ export interface PluginSummary {
   error: string | null
 }
 
-/** provides 冲突；code 供 RPC 调用方与界面识别，message 直接展示给用户。 */
+/** provides 冲突；code 供 RPC 调用方与界面识别，message 与插件页上的原因相同。 */
 export class PluginConflictError extends Error {
   readonly code = "PROVIDES_CONFLICT"
-  /** 被重复声明的 provides 标识。 */
-  readonly service: string
-  /** 声明了同一标识的插件 id，按加载顺序排列。 */
-  readonly pluginIds: string[]
 
-  constructor(service: string, pluginIds: string[]) {
-    super(`PROVIDES_CONFLICT: ${service} is provided by ${pluginIds.join(", ")}`)
+  constructor(reason: string) {
+    super(`PROVIDES_CONFLICT: ${reason}`)
     this.name = "PluginConflictError"
-    this.service = service
-    this.pluginIds = pluginIds
   }
 }
 
@@ -211,6 +211,7 @@ export async function readPluginRecords(input: PluginEnvInput): Promise<PluginRe
       config: override?.config ?? {},
       manifest,
       error,
+      conflict: null,
     })
   }
   const builtinNames = new Set(records.map((record) => record.name))
@@ -227,8 +228,10 @@ export async function readPluginRecords(input: PluginEnvInput): Promise<PluginRe
       config: entry.config ?? {},
       manifest,
       error,
+      conflict: null,
     })
   }
+  resolveProvidesConflicts(records)
   return records
 }
 
@@ -345,44 +348,10 @@ export async function uninstallPlugin(
 }
 
 /**
- * 汇总启用插件的 provides：服务标识 -> 声明它的插件 id。
- * manifest 不可用的条目没有可读声明，不参与冲突计算。
- */
-export function collectProvides(records: readonly PluginRecord[]): Map<string, string[]> {
-  const provides = new Map<string, string[]>()
-  for (const record of records) {
-    if (record.disabled) continue
-    for (const service of record.manifest?.pigcode.provides ?? []) {
-      const owners = provides.get(service) ?? []
-      owners.push(record.id)
-      provides.set(service, owners)
-    }
-  }
-  return provides
-}
-
-/** 返回第一组重复的 provides；没有冲突时返回 null。 */
-function findProvidesConflict(
-  provides: Map<string, string[]>,
-): { service: string; pluginIds: string[] } | null {
-  for (const [service, pluginIds] of provides) {
-    if (pluginIds.length > 1) return { service, pluginIds }
-  }
-  return null
-}
-
-/** 生成可展示给用户的冲突描述；插件自身的 provides 重复同样会命中。 */
-function describeConflict(provides: Map<string, string[]>, services: string[]): string | null {
-  const conflicts = services
-    .map((service) => [service, provides.get(service) ?? []] as const)
-    .filter(([, pluginIds]) => pluginIds.length > 1)
-    .map(([service, pluginIds]) => `${service} is provided by ${pluginIds.join(", ")}`)
-  return conflicts.length > 0 ? `PROVIDES_CONFLICT: ${conflicts.join("; ")}` : null
-}
-
-/**
- * 切换插件的停用标记。启用前先按“当前启用集合 + 目标插件”计算 provides，重复时拒绝写入。
- * 返回更新后的记录，供调用方立即加载/卸载。
+ * 切换插件的停用标记。启用前先按“当前启用集合 + 目标插件”计算 provides，重复时拒绝写入
+ * （先加载的插件保留，启用失败的一方保持停用）。停用时反过来先让目标插件按“已停用”参与计算：
+ * 它让出的服务如果先被别的插件拿走，它就不能再一起启用，否则会出现一个处于启用状态、
+ * 却注定冲突不加载的插件。返回更新后的记录，供调用方立即加载/卸载。
  */
 export async function setPluginEnabled(
   input: PluginEnvInput,
@@ -394,9 +363,10 @@ export async function setPluginEnabled(
   const record = records.find((item) => item.id === id)
   if (!record) throw new Error(`plugin not found: ${id}`)
   if (enabled) {
-    const effective = records.map((item) => (item.id === id ? { ...item, disabled: false } : item))
-    const conflict = findProvidesConflict(collectProvides(effective))
-    if (conflict) throw new PluginConflictError(conflict.service, conflict.pluginIds)
+    // 只会被“当前真在提供服务的插件”挡住：已经因冲突不加载的插件不算（它并没占着服务），
+    // 停用的也不算。报错文案与插件页上的原因一致。
+    const conflict = enableConflictOf(record, records)
+    if (conflict) throw new PluginConflictError(conflict)
   }
   const list = await readPluginList(env.profileDir)
   const existing = list.find((item) => item.id === id)
@@ -412,13 +382,11 @@ export async function setPluginEnabled(
   return { ...record, disabled: !enabled }
 }
 
-/** 列出全部插件摘要；manifest 读取失败时保留错误信息。 */
+/** 列出全部插件摘要；manifest 读取失败、不兼容或 provides 冲突时保留错误信息。 */
 export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[]> {
   const records = await readPluginRecords(input)
-  const provides = collectProvides(records)
   return records.map((record) => {
     const manifest = record.manifest
-    const conflict = describeConflict(provides, manifest?.pigcode.provides ?? [])
     return {
       id: record.id,
       name: manifest?.name ?? record.name,
@@ -432,9 +400,9 @@ export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[
       permissions: manifest?.pigcode.permissions ?? [],
       provides: manifest?.pigcode.provides ?? [],
       contributes: manifest?.pigcode.contributes ?? {},
-      conflict,
-      // manifest/compat 错误优先展示，其次才是冲突。
-      error: record.error ?? conflict,
+      conflict: record.conflict,
+      // manifest/compat 错误优先展示，其次才是 provides 冲突。
+      error: record.error ?? record.conflict,
     }
   })
 }
@@ -442,14 +410,19 @@ export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[
 /**
  * 为已启用且带 client 入口的用户插件生成启动图。
  * main 的 pigcode-plugin:// 只伺服 profile 里的包，内置插件目前都只有 Host 入口。
+ * `hostFailures` 是 Host 入口 import 或 apply 失败的插件 id：它们也不加载界面代码。
  */
 export async function buildBootGraph(
   input: PluginEnvInput,
+  hostFailures: ReadonlySet<string> = new Set(),
 ): Promise<{ entries: BootGraphEntry[] }> {
   const entries: BootGraphEntry[] = []
   for (const record of await readPluginRecords(input)) {
     const manifest = record.manifest
-    if (record.disabled || record.builtin || !manifest?.pigcode.client) continue
+    // 出错（manifest 不可用、不兼容、provides 冲突、Host 入口加载失败）的插件不加载界面代码。
+    if (record.disabled || record.builtin || record.error || record.conflict) continue
+    if (hostFailures.has(record.id)) continue
+    if (!manifest?.pigcode.client) continue
     const revision = createHash("sha256")
       .update(await readFile(join(record.dir, manifest.pigcode.client)))
       .digest("hex")

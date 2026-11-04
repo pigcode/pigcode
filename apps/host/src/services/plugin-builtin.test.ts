@@ -6,7 +6,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
+import { stringify } from "yaml"
 import { apply as agentsPlugin } from "../agents/registry"
+import { writeBootGraph } from "../kernel/boot"
 import { uninstallPluginAndClearDefault } from "../rpc/agents"
 import { MemoryTransport } from "../rpc/memory-transport"
 import { RpcServer } from "../rpc/server"
@@ -68,6 +70,45 @@ async function writeAgentPackage(dir: string, name: string, agentId: string): Pr
     ].join("\n"),
   )
   return dir
+}
+
+/**
+ * 往 profile 的 node_modules 里写一个插件包：package.json 的 pigcode 声明与 Host 入口 + client 入口。
+ * body 缺省时 Host 入口是一个空的 apply。
+ */
+async function writePluginPackage(
+  dir: string,
+  options: {
+    name: string
+    provides?: string[]
+    apiVersion?: number
+    host?: string
+    /** Host 入口的文件名，缺省 index.mjs；换掉它才能让 Node 重新 import 改好的入口。 */
+    entry?: string
+    body?: string
+  },
+): Promise<void> {
+  await mkdir(dir, { recursive: true })
+  await writeFile(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: options.name,
+      version: "0.0.0",
+      type: "module",
+      pigcode: {
+        apiVersion: options.apiVersion ?? 1,
+        kind: "ui",
+        host: options.host ?? "./index.mjs",
+        client: "./client.mjs",
+        provides: options.provides ?? [],
+      },
+    }),
+  )
+  await writeFile(
+    join(dir, options.entry ?? "index.mjs"),
+    options.body ?? "export function apply() {}\n",
+  )
+  await writeFile(join(dir, "client.mjs"), "export function apply() {}\n")
 }
 
 async function fixture() {
@@ -139,7 +180,7 @@ describe("plugins service", () => {
     await ctx.plugin(sessions)
     await ctx.plugin(agentsPlugin, { fake: false })
     await ctx.plugin(pluginsPlugin, { profileDir, builtin: [...env.builtin] })
-    return { ctx, root, env }
+    return { ctx, root, profileDir, env }
   }
 
   it("loads built-in agents at startup and unloads them when disabled", async () => {
@@ -258,6 +299,174 @@ describe("plugins service", () => {
       "agent.@pigcode/agent-alpha",
     ])
     await expect(stat(dir)).rejects.toThrow()
+    await ctx.fiber.dispose()
+  })
+
+  it("keeps the first plugin that provides a service and leaves the later one out", async () => {
+    const { ctx, root } = await host()
+    // 两个插件声明同一个 provides；a 先装先启用，b 后装。
+    const a = await writeAgentPackage(join(root, "src-a"), "pigcode-a", "echo")
+    const b = await writeAgentPackage(join(root, "src-b"), "pigcode-b", "echo")
+    await ctx.plugins.installLocal(a)
+    await ctx.plugins.installLocal(b)
+    await ctx.plugins.loadAll()
+
+    // 先加载的 a 照常注册；b 不加载，摘要里标记为冲突。
+    expect(
+      ctx.agents
+        .list()
+        .map((agent) => agent.id)
+        .sort(),
+    ).toEqual(["alpha", "echo"])
+    const listed = await ctx.plugins.list()
+    expect(listed.find((plugin) => plugin.id === "agent.pigcode-a")?.conflict).toBeNull()
+    expect(listed.find((plugin) => plugin.id === "agent.pigcode-b")?.conflict).toBe(
+      "PROVIDES_CONFLICT: agent:echo is already provided by agent.pigcode-a",
+    )
+    expect(listed.find((plugin) => plugin.id === "agent.pigcode-b")?.error).toBe(
+      "PROVIDES_CONFLICT: agent:echo is already provided by agent.pigcode-a",
+    )
+
+    // 停用 a 后 b 不再冲突，Host 入口接上；这时再启用 a 会被拒绝，b 继续保留。
+    await ctx.plugins.disable("agent.pigcode-a")
+    expect(ctx.agents.list().map((agent) => agent.id)).toContain("echo")
+    await expect(ctx.plugins.enable("agent.pigcode-a")).rejects.toMatchObject({
+      code: "PROVIDES_CONFLICT",
+    })
+    expect(
+      (await ctx.plugins.list()).find((plugin) => plugin.id === "agent.pigcode-b")?.conflict,
+    ).toBeNull()
+
+    // 停用 b 再启用 a：a 成为唯一的声明者，照常加载。
+    await ctx.plugins.disable("agent.pigcode-b")
+    await expect(ctx.plugins.enable("agent.pigcode-a")).resolves.toBeUndefined()
+    expect(ctx.agents.list().map((agent) => agent.id)).toContain("echo")
+    await ctx.fiber.dispose()
+  })
+
+  it("resolves a provides conflict already on disk at startup", async () => {
+    const { ctx, profileDir } = await host()
+    // 两个插件在 plugins.yml 里都是启用状态，启动前就冲突。
+    for (const name of ["pigcode-a", "pigcode-b"]) {
+      await writePluginPackage(join(profileDir, "node_modules", name), {
+        name,
+        provides: ["ui:x"],
+      })
+    }
+    await writeFile(
+      join(profileDir, "plugins.yml"),
+      stringify({
+        plugins: [
+          { id: "ui.pigcode-a", name: "pigcode-a" },
+          { id: "ui.pigcode-b", name: "pigcode-b" },
+        ],
+      }),
+    )
+
+    await expect(ctx.plugins.loadAll()).resolves.toBeUndefined()
+
+    // 先加载的 a 保留；b 标记为冲突，Host 入口与界面代码都不加载。
+    const listed = await ctx.plugins.list()
+    expect(listed.find((plugin) => plugin.id === "ui.pigcode-a")?.conflict).toBeNull()
+    expect(listed.find((plugin) => plugin.id === "ui.pigcode-b")?.conflict).toBe(
+      "PROVIDES_CONFLICT: ui:x is already provided by ui.pigcode-a",
+    )
+    expect((await ctx.plugins.bootGraph()).entries.map((entry) => entry.id)).toEqual([
+      "ui.pigcode-a",
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it("keeps the host running when a host entry fails to import or apply, and leaves its UI code out", async () => {
+    const { ctx, profileDir } = await host()
+    // breaking：Host 入口 import 就失败；throwing：apply 抛错。两者都带 client 入口。
+    await writePluginPackage(join(profileDir, "node_modules", "pigcode-breaking"), {
+      name: "pigcode-breaking",
+      provides: ["ui:breaking"],
+      host: "missing.mjs",
+    })
+    await writePluginPackage(join(profileDir, "node_modules", "pigcode-throwing"), {
+      name: "pigcode-throwing",
+      provides: ["ui:throwing"],
+      host: "index.mjs",
+      body: 'export function apply() { throw new Error("apply blew up") }',
+    })
+    await writePluginPackage(join(profileDir, "node_modules", "pigcode-healthy"), {
+      name: "pigcode-healthy",
+      provides: ["ui:healthy"],
+      host: "index.mjs",
+      body: "export function apply() {}",
+    })
+    await writeFile(
+      join(profileDir, "plugins.yml"),
+      stringify({
+        plugins: [
+          { id: "ui.pigcode-breaking", name: "pigcode-breaking" },
+          { id: "ui.pigcode-throwing", name: "pigcode-throwing" },
+          { id: "ui.pigcode-healthy", name: "pigcode-healthy" },
+        ],
+      }),
+    )
+
+    // Host 照常启动。
+    await expect(ctx.plugins.loadAll()).resolves.toBeUndefined()
+    const listed = await ctx.plugins.list()
+    expect(listed.find((plugin) => plugin.id === "ui.pigcode-breaking")?.error).toContain(
+      "plugin host entry failed to load",
+    )
+    expect(listed.find((plugin) => plugin.id === "ui.pigcode-throwing")?.error).toContain(
+      "plugin host entry failed to apply: apply blew up",
+    )
+    expect(listed.find((plugin) => plugin.id === "ui.pigcode-healthy")?.error).toBeNull()
+    expect(ctx.plugins.hostFailures()).toEqual(
+      new Set(["ui.pigcode-breaking", "ui.pigcode-throwing"]),
+    )
+
+    // 出错的插件不加载界面代码；其余插件照常，写出的 boot.json 也一样。
+    expect((await ctx.plugins.bootGraph()).entries.map((entry) => entry.id)).toEqual([
+      "ui.pigcode-healthy",
+    ])
+    await writeBootGraph(profileDir, ctx.plugins.hostFailures())
+    const written = JSON.parse(await readFile(join(profileDir, "boot.json"), "utf8")) as {
+      entries: Array<{ id: string }>
+    }
+    expect(written.entries.map((entry) => entry.id)).toEqual(["ui.pigcode-healthy"])
+
+    // 换好 Host 入口后刷新一次，错误清掉，界面代码也回来。
+    // 换文件名是因为 Node 按 URL 缓存模块，同一个路径不会重新 import。
+    await writePluginPackage(join(profileDir, "node_modules", "pigcode-throwing"), {
+      name: "pigcode-throwing",
+      provides: ["ui:throwing"],
+      host: "./fixed.mjs",
+      entry: "fixed.mjs",
+    })
+    await ctx.plugins.reload()
+    expect(
+      (await ctx.plugins.list()).find((plugin) => plugin.id === "ui.pigcode-throwing")?.error,
+    ).toBeNull()
+    expect((await ctx.plugins.bootGraph()).entries.map((entry) => entry.id)).toContain(
+      "ui.pigcode-throwing",
+    )
+    await ctx.fiber.dispose()
+  })
+
+  it("reports the incompatible api version with both versions and loads no UI code", async () => {
+    const { ctx, profileDir } = await host()
+    await writePluginPackage(join(profileDir, "node_modules", "pigcode-future"), {
+      name: "pigcode-future",
+      apiVersion: 2,
+      provides: ["ui:future"],
+    })
+    await writeFile(
+      join(profileDir, "plugins.yml"),
+      stringify({ plugins: [{ id: "ui.pigcode-future", name: "pigcode-future" }] }),
+    )
+    await ctx.plugins.loadAll()
+
+    const summary = (await ctx.plugins.list()).find((plugin) => plugin.id === "ui.pigcode-future")
+    expect(summary?.apiVersion).toBe(2)
+    expect(summary?.error).toBe("unsupported plugin apiVersion: 2; this Host supports 1")
+    expect((await ctx.plugins.bootGraph()).entries).toEqual([])
     await ctx.fiber.dispose()
   })
 

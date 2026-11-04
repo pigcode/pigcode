@@ -41,7 +41,8 @@ export const pluginManifestSchema = z
     description: z.string().optional(),
     engines: z.object({ pigcode: z.string().min(1) }).optional(),
     pigcode: z.object({
-      apiVersion: z.literal(1),
+      // 只要求是整数：不兼容的版本也照常读出，由 checkPluginCompatibility 给出能读懂的原因。
+      apiVersion: z.number().int(),
       kind: z.enum(pluginKindSchema.options, {
         error: (issue) =>
           issue.input === "provider" ? renamed('kind "provider"', '"agent"') : undefined,
@@ -108,7 +109,8 @@ export const HOST_VERSION = "0.1.0"
 /** 返回 null 表示兼容；否则返回可直接展示给用户的原因。 */
 export function checkPluginCompatibility(manifest: PluginManifest): string | null {
   if (manifest.pigcode.apiVersion !== CURRENT_PLUGIN_API_VERSION) {
-    return `unsupported plugin apiVersion: ${manifest.pigcode.apiVersion} (expected ${CURRENT_PLUGIN_API_VERSION})`
+    // 同时写出插件需要的版本和 Host 支持的版本，插件作者据此决定改插件还是升级 Host。
+    return `unsupported plugin apiVersion: ${manifest.pigcode.apiVersion}; this Host supports ${CURRENT_PLUGIN_API_VERSION}`
   }
   const range = manifest.engines?.pigcode
   if (range && !semver.satisfies(HOST_VERSION, range)) {
