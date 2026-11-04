@@ -9,7 +9,12 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "rebuild:native": "electron-rebuild -f -w node-pty"
+    "rebuild:native": "electron-rebuild -f -w node-pty",
+    "build:host": "node ../../scripts/build-host.ts",
+    "package:mac": "pnpm build:host && pnpm build && electron-builder --mac --arm64 --publish never",
+    "package:win": "pnpm build:host && pnpm build && electron-builder --win --publish never",
+    "package:linux": "pnpm build:host && pnpm build && electron-builder --linux --publish never",
+    "package:mac:x64": "pnpm build:host && pnpm build && electron-builder --mac --x64 --publish never"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
@@ -40,9 +45,12 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "electron": "43.4.1",
+    "electron-builder": "26.0.12",
     "electron-vite": "5.0.0",
     "typescript": "5.9.3",
     "vite": "7.1.12",
     "vitest": "4.0.16"
-  }
+  },
+  "description": "Pigcode desktop",
+  "author": "Pigcode"
 }
