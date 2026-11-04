@@ -3,8 +3,10 @@
  * 验证第三方 UI 插件：Panel 与 Surface 登记到扩展点注册表并归属到插件，和已有 id 冲突时不覆盖；
  * 插件从 boot graph 消失时按 owner 移除，其余插件不动；slot 登记函数已删除。
  */
+import { forwardRef, memo } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ClientModule } from "@pigcode/client-runtime"
+import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 import { registerBuiltinSurfaces } from "./builtin-surfaces"
 import { deferred, entry, serve, setup, surfaceCall } from "./client-plugins.fixtures"
 
@@ -294,6 +296,79 @@ describe("client plugin panels and surfaces", () => {
     serve([])
     await controller.reload()
     expect(extensions.get("surface")).toEqual([])
+    controller.dispose()
+  })
+})
+
+describe("React contributions", () => {
+  it("accepts a Component instead of a DOM render function on Panel, Surface and settings page", async () => {
+    const { extensions, controller } = setup()
+    const register = (api: string, id: string) =>
+      `ctx.${api}.register({ id: ${JSON.stringify(id)}, title: "T", Component() { return null } })`
+    serve([
+      entry(
+        "ui.react",
+        [register("panels", "p"), register("surfaces", "s"), register("settingsPages", "g")].join(
+          "\n",
+        ),
+      ),
+    ])
+
+    await controller.reload()
+
+    expect(controller.errors.get()).toEqual([])
+    expect(extensions.get("panel").map((item) => item.id)).toEqual(["p"])
+    expect(extensions.get("surface").map((item) => item.id)).toEqual(["s"])
+    expect(extensions.get("settingsPage").map((item) => item.id)).toEqual(["g"])
+    controller.dispose()
+  })
+
+  it("accepts components that React wraps as objects, such as memo and forwardRef", async () => {
+    // 插件按 ComponentType 写：memo、forwardRef 返回的是带 $$typeof 的对象，不是函数。
+    const module = {
+      apply(ctx: ClientPluginContext) {
+        ctx.panels.register({ id: "m", title: "T", Component: memo(() => null) })
+        ctx.surfaces.register({ id: "f", title: "T", Component: forwardRef(() => null) })
+      },
+    } as unknown as ClientModule
+    const { extensions, controller } = setup(async () => module)
+    serve([entry("ui.wrapped", "")])
+
+    await controller.reload()
+
+    expect(controller.errors.get()).toEqual([])
+    expect(extensions.get("panel").map((item) => item.id)).toEqual(["m"])
+    expect(extensions.get("surface").map((item) => item.id)).toEqual(["f"])
+    controller.dispose()
+  })
+
+  it("rejects a contribution that gives neither render nor Component, or both", async () => {
+    const { extensions, controller } = setup()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    serve([
+      entry("ui.none", `ctx.panels.register({ id: "p", title: "T" })`),
+      entry(
+        "ui.both",
+        `ctx.surfaces.register({ id: "s", title: "T", render() {}, Component() { return null } })`,
+      ),
+    ])
+
+    await controller.reload()
+
+    expect(extensions.get("panel")).toEqual([])
+    expect(extensions.get("surface")).toEqual([])
+    expect(controller.errors.get()).toMatchObject([
+      {
+        pluginId: "ui.none",
+        kind: "apply",
+        detail: expect.stringContaining("give exactly one of render or Component"),
+      },
+      {
+        pluginId: "ui.both",
+        kind: "apply",
+        detail: expect.stringContaining("give exactly one of render or Component"),
+      },
+    ])
     controller.dispose()
   })
 })

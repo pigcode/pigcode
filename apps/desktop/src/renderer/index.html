@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pigcode</title>
+    <!--
+      共享模块（ADR-0002）：宿主和插件都按裸包名 import 这些模块，这里把包名指到宿主编译出的同一个
+      文件，所以两边拿到的是同一个实例，hooks 与 context 可以跨过插件边界。插件在加载前就已经能解析
+      这些包名，插件自己不打包 React。
+      入口文件 apps/desktop/src/renderer/src/shared/*.ts 产出 shared/*.js；路径相对 index.html。
+      以后启用严格 CSP 时，把这里的映射挪到主进程按 schema 注册的自定义 scheme，或改成
+      宿主的全局导出 + 插件侧的 CommonJS 兼容层，插件代码不用改。
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "./shared/react.js",
+          "react-dom": "./shared/react-dom.js",
+          "react-dom/client": "./shared/react-dom-client.js",
+          "react/jsx-runtime": "./shared/jsx-runtime.js",
+          "react/jsx-dev-runtime": "./shared/jsx-dev-runtime.js",
+          "@pigcode/ui-primitives": "./shared/ui-primitives.js",
+          "@pigcode/plugin-sdk": "./shared/plugin-sdk.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

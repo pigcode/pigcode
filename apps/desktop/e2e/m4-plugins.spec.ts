@@ -313,3 +313,65 @@ test("a plugin's contributions on all five extension points come and go with it"
 
   await app.close()
 })
+
+test("a plugin written with React renders the host's ui-primitives and reads the host context", async () => {
+  const projectRoot = "/tmp/pigcode-m4-e2e-react"
+  rmSync(projectRoot, { recursive: true, force: true })
+  mkdirSync(projectRoot, { recursive: true })
+  const app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  const page = await app.firstWindow()
+  await addProject(app, page, projectRoot)
+
+  // 安装用 React 写的 UI 插件（TSX 入口在安装时编译）。
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  const ui = new URL("../../../examples/ui-react-panel", import.meta.url).pathname
+  await installPlugin(page, ui)
+  const item = page.locator(".ext-item").filter({ hasText: "pigcode-ui-react-panel" })
+  await expect(item.getByRole("switch")).toBeChecked()
+  await page.getByRole("button", { name: "返回应用" }).first().click()
+
+  // Panel 由插件的 React 组件渲染：ui-primitives 的 Button 与 ListRow，hook 读到宿主的主题与语言。
+  const panel = page.locator("[data-plugin-content='react-panel']")
+  await expect(panel).toBeVisible()
+  await expect(panel.getByRole("button", { name: "点我加一" })).toBeVisible()
+  await expect(panel.getByText("主题", { exact: true })).toBeVisible()
+  await expect(panel.getByText("语言", { exact: true })).toBeVisible()
+  // useLocale() 读到的就是宿主的界面语言；useTheme() 和宿主的 data-theme 一致。
+  const hostLocale = await page.locator("html").getAttribute("lang")
+  const hostTheme = await page.evaluate(() => document.documentElement.dataset.theme ?? "light")
+  await expect(panel.getByText(hostTheme, { exact: true })).toBeVisible()
+  await expect(panel.getByText(hostLocale ?? "", { exact: true })).toBeVisible()
+
+  // useState 用的是宿主的 React：点击后组件自己重画，计数增加。
+  await panel.getByRole("button", { name: "点我加一" }).click()
+  await expect(panel.getByText("点了 1 次")).toBeVisible()
+  await panel.getByRole("button", { name: "点我加一" }).click()
+  await expect(panel.getByText("点了 2 次")).toBeVisible()
+
+  // Surface 用同一个 React 组件：在右侧面板里打开，ui-primitives 的组件照常显示。
+  // 右侧面板要先有会话才能切换。
+  await page.getByRole("button", { name: "新会话" }).first().click()
+  await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.getByRole("button", { name: "添加面板" }).click()
+  await page.getByRole("menuitem", { name: "React Inspector" }).click()
+  const surface = page.locator("[data-plugin-content='react-inspector']")
+  await expect(surface).toBeVisible()
+  await expect(surface.getByRole("button", { name: "点我加一" })).toBeVisible()
+
+  // 插件的设置页同样由组件渲染。
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await page
+    .locator(".sidebar")
+    .getByRole("button", { name: "React Settings", exact: true })
+    .click()
+  await expect(page.getByRole("heading", { level: 1, name: "React Settings" })).toBeVisible()
+  await expect(
+    page
+      .locator("[data-plugin-content='react-settings']")
+      .getByRole("button", { name: "点我加一" }),
+  ).toBeVisible()
+
+  await app.close()
+})

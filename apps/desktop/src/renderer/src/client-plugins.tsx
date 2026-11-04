@@ -9,6 +9,7 @@
  * - 和刚卸载的插件冲突、被拒绝过的插件重新应用一次，拿到现在空出来的 id；
  * - 其余插件保持原样。import 失败的插件记一条错误、不算已加载，下次 reload 重试。
  */
+import type { ComponentType } from "react"
 import { Puzzle } from "lucide-react"
 import type {
   BootEntry,
@@ -24,7 +25,7 @@ import {
   observeLocale,
   observeTheme,
 } from "@pigcode/client-runtime"
-import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+import type { ClientPluginContext, ClientRender } from "@pigcode/plugin-sdk"
 import { SettingPage } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 import { checkToolRenderer, pluginToolRenderer } from "./plugin-tool-renderers"
@@ -69,25 +70,50 @@ function messageOf(error: unknown): string {
 }
 
 /**
- * 检查插件传来的 Panel、Surface 或设置页。插件可以是没有类型检查的 JS，缺了 id、标题或 render 的登记
+ * 检查插件传来的 Panel、Surface 或设置页。插件可以是没有类型检查的 JS，缺了 id、标题或内容
  * 会让侧栏或搜索在用到它时出错；这里直接抛出，在 apply 里登记时就记成这个插件的界面代码错误。
+ * 内容必须恰好给一种：`render`（DOM 渲染函数）或 `Component`（宿主的 React 组件）。
  */
 function checkContribution(
   api: string,
-  item: { id?: unknown; title?: unknown; order?: unknown; render?: unknown },
-): void {
+  item: {
+    id?: unknown
+    title?: unknown
+    order?: unknown
+    render?: unknown
+    Component?: unknown
+  },
+): PluginContent {
+  const hasRender = typeof item.render === "function"
+  const hasComponent = isComponent(item.Component)
   const problem =
     typeof item.id !== "string" || item.id === ""
       ? "id must be a non-empty string"
       : typeof item.title !== "string"
         ? "title must be a string"
-        : typeof item.render !== "function"
-          ? "render must be a function"
+        : hasRender === hasComponent
+          ? "give exactly one of render or Component"
           : item.order !== undefined && !Number.isFinite(item.order)
             ? "order must be a number"
             : null
   if (problem) throw new TypeError(`${api}.register: ${problem}`)
+  return hasRender
+    ? { render: item.render as ClientRender }
+    : { Component: item.Component as ComponentType }
 }
+
+/**
+ * 是不是一个 React 组件。`memo`、`forwardRef`、`lazy` 返回的是带 `$$typeof` 的对象，不是函数；
+ * 它们都是合法的 ComponentType，所以插件按类型写的组件不能在这里被当成「没给」。
+ * 登记分支和渲染分支用同一个判断，不会验过了却在另一边走进另一条路。
+ */
+function isComponent(value: unknown): value is object {
+  if (typeof value === "function") return true
+  return typeof value === "object" && value !== null && "$$typeof" in value
+}
+
+/** 一段检查过的插件内容：组件，或者 DOM 渲染函数。 */
+type PluginContent = { Component: ComponentType } | { render: ClientRender }
 
 /** 是不是一个可选的字符串字段：没给，或者给的是字符串。 */
 function optionalString(value: unknown): boolean {
@@ -190,19 +216,19 @@ export function createClientPluginController(deps: {
       },
       panels: {
         register(panel) {
-          checkContribution("panels", panel)
+          const content = checkContribution("panels", panel)
           return deps.extensions.register("panel", {
             id: panel.id,
             owner,
             order: panel.order ?? 0,
             title: { text: panel.title },
-            render: () => <PluginContentHost id={panel.id} render={panel.render} kind="panel" />,
+            render: () => <PluginContentHost id={panel.id} {...content} kind="panel" />,
           })
         },
       },
       surfaces: {
         register(surface) {
-          checkContribution("surfaces", surface)
+          const content = checkContribution("surfaces", surface)
           return deps.extensions.register("surface", {
             id: surface.id,
             owner,
@@ -212,7 +238,7 @@ export function createClientPluginController(deps: {
             icon: Puzzle,
             render: () => (
               <div className="surface-pane surface-scroll">
-                <PluginContentHost id={surface.id} render={surface.render} kind="surface" />
+                <PluginContentHost id={surface.id} {...content} kind="surface" />
               </div>
             ),
           })
@@ -220,7 +246,7 @@ export function createClientPluginController(deps: {
       },
       settingsPages: {
         register(page) {
-          checkContribution("settingsPages", page)
+          const content = checkContribution("settingsPages", page)
           return deps.extensions.register("settingsPage", {
             id: page.id,
             owner,
@@ -230,7 +256,7 @@ export function createClientPluginController(deps: {
             // 宿主画和内置设置页一样的页面与标题，插件只画标题下面的内容。
             render: () => (
               <SettingPage title={page.title}>
-                <PluginContentHost id={page.id} render={page.render} kind="settings" />
+                <PluginContentHost id={page.id} {...content} kind="settings" />
               </SettingPage>
             ),
           })

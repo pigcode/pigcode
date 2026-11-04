@@ -10,6 +10,7 @@ import {
   compiledEntry,
   isTypeScriptEntry,
   rewriteRelativeImports,
+  transpileTypeScript,
 } from "./plugin-typescript"
 import { installLocalPlugin } from "./plugin-manager"
 
@@ -66,10 +67,13 @@ async function writeTypeScriptPlugin(dir: string): Promise<void> {
 describe("TypeScript plugin helpers", () => {
   it("recognises TypeScript entries and their compiled paths", () => {
     expect(isTypeScriptEntry("./index.ts")).toBe(true)
+    expect(isTypeScriptEntry("./client.tsx")).toBe(true)
     expect(isTypeScriptEntry("./client.mts")).toBe(true)
     expect(isTypeScriptEntry("./types.d.ts")).toBe(false)
+    expect(isTypeScriptEntry("./types.d.tsx")).toBe(false)
     expect(isTypeScriptEntry("./index.mjs")).toBe(false)
     expect(compiledEntry("./client.mts")).toBe("./client.mjs")
+    expect(compiledEntry("./client.tsx")).toBe("./client.mjs")
     expect(compiledEntry("./index.mjs")).toBe("./index.mjs")
   })
 
@@ -79,6 +83,7 @@ describe("TypeScript plugin helpers", () => {
         [
           'import { a } from "./a.ts"',
           "export * from '../b.mts'",
+          "export { Panel } from './panel.tsx'",
           'const c = await import("./c.ts")',
           'import "./side-effect.ts"',
           'import pkg from "some-package.ts"',
@@ -89,12 +94,37 @@ describe("TypeScript plugin helpers", () => {
       [
         'import { a } from "./a.mjs"',
         "export * from '../b.mjs'",
+        "export { Panel } from './panel.mjs'",
         'const c = await import("./c.mjs")',
         'import "./side-effect.mjs"',
         'import pkg from "some-package.ts"',
         'import { d } from "./d.js"',
       ].join("\n"),
     )
+  })
+
+  it("compiles TSX with the automatic JSX runtime and keeps shared packages external", async () => {
+    const output = await transpileTypeScript(
+      [
+        'import { useState } from "react"',
+        'import { Button } from "@pigcode/ui-primitives"',
+        "export function Panel() {",
+        "  const [count] = useState(0)",
+        "  return <Button>{count}</Button>",
+        "}",
+        "",
+      ].join("\n"),
+      "panel.tsx",
+    )
+
+    // 自动 runtime：编译结果从 react/jsx-runtime 取 jsx，运行时由宿主的共享模块解析。
+    expect(output).toContain('from "react/jsx-runtime"')
+    expect(output).toContain("jsx(Button")
+    expect(output).not.toContain('"react/jsx-dev-runtime"')
+    // 裸包名原样留在输出里，插件不打包宿主提供的模块。
+    expect(output).toContain('from "react"')
+    expect(output).toContain('from "@pigcode/ui-primitives"')
+    expect(output).not.toContain("<Button>")
   })
 })
 
@@ -135,6 +165,47 @@ describe("compileTypeScriptPlugin", () => {
     expect(JSON.parse(await readFile(join(dir, "package.json"), "utf8"))).toEqual(manifest)
   })
 
+  it("compiles a TSX client entry on local install so it can be loaded as .mjs", async () => {
+    const source = await tempDir("pigcode-tsx-source-")
+    const profile = await tempDir("pigcode-tsx-profile-")
+    await writeFile(
+      join(source, "package.json"),
+      JSON.stringify({
+        name: "pigcode-ui-tsx",
+        version: "0.1.0",
+        type: "module",
+        pigcode: { apiVersion: 1, kind: "ui", client: "./panel.tsx" },
+      }),
+    )
+    await writeFile(
+      join(source, "panel.tsx"),
+      [
+        'import { Button } from "@pigcode/ui-primitives"',
+        "export function Panel() {",
+        "  return <Button>Hello</Button>",
+        "}",
+        "",
+      ].join("\n"),
+    )
+
+    await expect(installLocalPlugin(profile, source)).resolves.toMatchObject({
+      id: "ui.pigcode-ui-tsx",
+    })
+
+    const installed = join(profile, "node_modules", "pigcode-ui-tsx")
+    expect(existsSync(join(installed, "panel.mjs"))).toBe(true)
+    expect(existsSync(join(installed, "panel.tsx"))).toBe(true)
+    const manifest = JSON.parse(await readFile(join(installed, "package.json"), "utf8")) as {
+      pigcode: { client: string }
+    }
+    expect(manifest.pigcode.client).toBe("./panel.mjs")
+    const compiled = await readFile(join(installed, "panel.mjs"), "utf8")
+    expect(compiled).toContain('from "react/jsx-runtime"')
+    expect(compiled).toContain('from "@pigcode/ui-primitives"')
+    // 源目录保持原样。
+    expect(existsSync(join(source, "panel.mjs"))).toBe(false)
+  })
+
   it("names the file when a source cannot be converted", async () => {
     const dir = await tempDir("pigcode-bad-ts-plugin-")
     await writeFile(
@@ -147,8 +218,9 @@ describe("compileTypeScriptPlugin", () => {
     )
     await writeFile(join(dir, "client.ts"), "export const broken: = 1\n")
 
+    // 错误里带上 esbuild 给出的原因和行号，插件页才说得出改哪里。
     await expect(compileTypeScriptPlugin(dir)).rejects.toThrow(
-      "PLUGIN_TYPESCRIPT_INVALID: client.ts",
+      /PLUGIN_TYPESCRIPT_INVALID: client\.ts: .+line \d+/,
     )
   })
 

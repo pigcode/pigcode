@@ -1,23 +1,32 @@
 /**
- * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页、Command 与工具渲染器（内容是 DOM）、
- * 和宿主一致的界面组件（pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页、Command 与工具渲染器、
+ * 和宿主一致的界面组件（pg-* 样式）、宿主的主题与语言。插件不接触宿主内部对象。
+ *
+ * Panel 与 Surface 的内容可以是 React 组件，也可以继续用 DOM 渲染函数：两种写法拿到的是宿主的同一个
+ * React（ADR-0002），组件里可以用 `useLocale`、`useTheme` 等 hook 读取宿主状态。
  */
+import type { ComponentType } from "react"
 
 /** 把内容画进容器；可以返回清理函数，面板移除或重画前调用。 */
 export type ClientRender = (container: HTMLElement) => void | (() => void)
 
+/**
+ * 用宿主的 React 渲染插件内容。组件在外壳的 LocaleProvider 之内渲染，所以 `useLocale()` 读到的是
+ * 宿主的界面语言；`useTheme()` 读到宿主当前主题。组件不接收 props，需要的状态用 hook 取。
+ */
+export type ClientComponent = ComponentType
+
 /** Panel：左侧栏里的一个区块。宿主画可以收起的标题，内容区用宿主的字体、颜色与间距。 */
-export interface ClientPanel {
+export type ClientPanel = {
   /** 在全部 Panel 里唯一；和已有的重名时这次登记不生效，插件页显示冲突。 */
   id: string
   title: string
   /** 小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-  render: ClientRender
-}
+} & ({ render: ClientRender } | { Component: ClientComponent })
 
 /** Surface：Workbench（右侧面板）里的一种标签，列在启动器与「+」菜单的插件组里，打开后是宿主的标签外框。 */
-export interface ClientSurface {
+export type ClientSurface = {
   /** 在全部 Surface 里唯一（包括内置的 browser、terminal、files、diff、pr、checkpoint）。 */
   id: string
   title: string
@@ -25,8 +34,7 @@ export interface ClientSurface {
   description?: string
   /** 小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-  render: ClientRender
-}
+} & ({ render: ClientRender } | { Component: ClientComponent })
 
 /**
  * 设置页：设置侧栏「插件设置」组里的一页。宿主画侧栏条目和页面标题，内容区用宿主的字体、颜色与间距；
@@ -34,15 +42,14 @@ export interface ClientSurface {
  * 在 apply 里同步登记：插件更新时新版本同步替换旧版本，正在看这一页的用户留在这一页；await 之后才登记的话，
  * 中间有一刻这一页不存在，用户会回到通用页。
  */
-export interface ClientSettingsPage {
+export type ClientSettingsPage = {
   /** 在全部设置页里唯一（包括内置的 general、appearance、agents、schedules、plugins）。 */
   id: string
   /** 侧栏里的名称，也是页面标题。 */
   title: string
   /** 在「插件设置」组里小的在前；相同时按 id 排。缺省 0。 */
   order?: number
-  render: ClientRender
-}
+} & ({ render: ClientRender } | { Component: ClientComponent })
 
 /** 一个扩展点的登记入口；register 返回注销函数。归属由宿主按插件自动填写。 */
 export interface ClientContributionApi<T> {

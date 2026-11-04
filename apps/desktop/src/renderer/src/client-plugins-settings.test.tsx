@@ -116,7 +116,7 @@ describe("client plugin settings pages", () => {
     const { extensions, controller } = setup()
     vi.spyOn(console, "error").mockImplementation(() => {})
     serve([
-      entry("ui.panel", `ctx.panels.register({ id: "p", render() {} })`),
+      entry("ui.panel", `ctx.panels.register({ id: "p", title: "P" })`),
       entry("ui.surface", `ctx.surfaces.register({ id: "s", title: "S" })`),
       entry("ui.page", `ctx.settingsPages.register({ id: "g", title: 3, render() {} })`),
     ])
@@ -130,12 +130,12 @@ describe("client plugin settings pages", () => {
       {
         pluginId: "ui.panel",
         kind: "apply",
-        detail: expect.stringContaining("title must be a string"),
+        detail: expect.stringContaining("give exactly one of render or Component"),
       },
       {
         pluginId: "ui.surface",
         kind: "apply",
-        detail: expect.stringContaining("render must be a function"),
+        detail: expect.stringContaining("give exactly one of render or Component"),
       },
       {
         pluginId: "ui.page",

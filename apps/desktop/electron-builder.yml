@@ -1,3 +1,8 @@
 # node-pty 携带原生二进制，留在 asar 内无法加载，打包时必须解包。
+# esbuild 的平台二进制由可执行文件启动，同样不能留在 asar 里（插件安装时的 TSX 编译用它）。
 asarUnpack:
   - node_modules/node-pty/**
+  - node_modules/esbuild/**
+  # pnpm 把 esbuild 的平台包放在 .pnpm 下的软链接后面，两条都解包。
+  - "**/@esbuild/**"
+  - "**/esbuild/**"

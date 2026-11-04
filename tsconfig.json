@@ -4,7 +4,17 @@
     "noEmit": true,
     "types": ["node"],
     "allowImportingTsExtensions": true,
-    "erasableSyntaxOnly": true
+    "erasableSyntaxOnly": true,
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["scripts/**/*.ts", "examples/**/*.ts", "*.config.ts", "vitest.setup.ts"]
+  "include": [
+    "scripts/**/*.ts",
+    "examples/**/*.ts",
+    "examples/**/*.tsx",
+    "*.config.ts",
+    "vitest.setup.ts",
+    "packages/ui-primitives/src/global.d.ts",
+    "packages/ui-primitives/src/vite-env.d.ts"
+  ]
 }

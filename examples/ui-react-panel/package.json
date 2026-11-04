@@ -1,0 +1,17 @@
+{
+  "name": "pigcode-ui-react-panel",
+  "version": "0.0.0",
+  "type": "module",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "ui",
+    "displayName": "React Panel",
+    "client": "./client.tsx"
+  },
+  "devDependencies": {
+    "@pigcode/plugin-sdk": "workspace:*",
+    "@pigcode/ui-primitives": "workspace:*",
+    "@types/react": "19.2.2",
+    "react": "19.2.3"
+  }
+}

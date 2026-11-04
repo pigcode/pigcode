@@ -22,24 +22,28 @@ my-plugin/
 ```text
 my-ui-plugin/
 ├── package.json   # pigcode.client 指向浏览器入口
-└── client.ts      # UI 入口（TypeScript），在渲染进程的受限 facade 中运行
+└── client.tsx     # UI 入口（TypeScript + JSX），在渲染进程里用宿主的 React 运行
 ```
 
-同时提供两类入口时，把 `index.ts` 与 `client.ts` 放在同一个包里，并在
+同时提供两类入口时，把 `index.ts` 与 `client.tsx` 放在同一个包里，并在
 `pigcode.host` 和 `pigcode.client` 中分别声明即可。
 
-## TypeScript
+## TypeScript 与 TSX
 
 插件直接用 TypeScript 编写，不需要单独的构建步骤：
 
-- `main`、`pigcode.host`、`pigcode.client` 可以直接指向 `.ts` / `.mts` 文件。
-- 安装时 Host 用 Node 内置的 `stripTypeScriptTypes` 把包里的 `.ts` / `.mts` 转成同名 `.mjs`，
+- `main`、`pigcode.host`、`pigcode.client` 可以直接指向 `.ts` / `.tsx` / `.mts` 文件。
+- 安装时 Host 用 esbuild 把包里的 `.ts` / `.tsx` / `.mts` 转成同名 `.mjs`，
   并把 profile 里那份副本的入口改指向转换结果；插件源目录保持不变。
-- 包内的相对导入写完整扩展名（`import { x } from "./util.ts"`），安装时会一起改成 `.mjs`。
+- `.tsx` 用自动 JSX runtime 编译（`jsx: "automatic"`）：编译结果从 `react/jsx-runtime` 取 `jsx`，
+  运行时由宿主的共享模块提供，插件不需要自带 React，见 [使用宿主的 React](#使用宿主的-react)。
+- 包内的相对导入写完整扩展名（`import { x } from "./panel.tsx"`），安装时会一起改成 `.mjs`。
 - 类型只用 `import type` 引入，例如 `import type { PluginHostContext } from "@pigcode/plugin-sdk"`；
   类型导入在转换时被擦除，运行时不依赖 SDK。
 - `enum`、`namespace` 等需要改写的语法也能转换，但推荐只用可擦除的语法（`erasableSyntaxOnly`）。
 - 已经编译成 `.js` / `.mjs` 的 npm 包照常可用；入口不是 TypeScript 时 Host 不做任何转换。
+- 如果插件用打包器自己构建，把宿主提供的模块标为 external（见
+  [构建时的 external](#构建时的-external)），不要把它们打进插件。
 
 ## package.json 的 pigcode 声明
 
@@ -299,7 +303,8 @@ Capability 插件注册的 MCP 工具通过 `input.mcp` 交给声明了 `feature
 
 ### 依赖与 SDK 辅助函数
 
-第三方插件只能 `import type` SDK：安装时类型导入被擦除，运行时没有 `@pigcode/plugin-sdk`，
+Host 侧只给第三方插件 `import type` SDK：安装时类型导入被擦除，运行时没有 Host 的 `@pigcode/plugin-sdk`；
+浏览器侧的 `@pigcode/plugin-sdk` 由宿主的共享模块提供，只有 `defineClientPlugin`，
 也不要 `import` `@pigcode/host` 的内部路径。运行时保持零依赖，或只依赖自己的 npm 依赖。
 设置值来自用户输入，读取时自己校验类型（例如示例里的 `text()`）。
 
@@ -408,8 +413,125 @@ export function apply(ctx: PluginHostContext): void {
 
 ## UI 插件
 
-完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)。UI 插件只拿到受限 facade，
-不依赖 React；界面和宿主保持一致的做法是：**宿主画外框，插件只画内容，内容用 `ctx.ui` 拼**。
+完整示例见 [`examples/ui-react-panel`](../examples/ui-react-panel)（React + ui-primitives）和
+[`examples/ui-debug-panel`](../examples/ui-debug-panel)（`ctx.ui` 的 DOM 写法）。UI 插件拿到受限 facade，
+界面和宿主保持一致的做法有两种：
+
+- **React（推荐）**：直接 `import "react"` 和 `import "@pigcode/ui-primitives"`，拿到的是宿主的同一个实例，
+  插件界面和宿主用同一套组件、同一份主题与语言。
+- **DOM**：用 `ctx.ui` 拼普通元素，和宿主共用类名与设计 token。这条路径为已有插件保留。
+
+两条路径都遵守「宿主画外框，插件只画内容」：Panel 的可收起标题、Surface 的标签、设置页的导航与标题都由宿主画。
+
+### 使用宿主的 React
+
+渲染进程在加载任何一个插件之前，就把下面这些模块作为共享模块准备好（ADR-0002）。插件按包名 import，
+拿到的是宿主的同一个实例，而不是插件自己的一份：
+
+| 包名                     | 拿到的东西                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `react`                  | 宿主的 React：hooks、context、`createElement`、`Fragment` 等                                                                                     |
+| `react-dom`              | `createPortal`、`flushSync` 等                                                                                                                   |
+| `react-dom/client`       | `createRoot`、`hydrateRoot`，插件可以把 React 挂到自己的容器里                                                                                   |
+| `react/jsx-runtime`      | 自动 JSX runtime；`.tsx` 安装时编译成从这里 import。产物里的 `react/jsx-dev-runtime` 是 React 的生产 stub，`jsxDEV` 是 `undefined`，插件不要用它 |
+| `@pigcode/ui-primitives` | 宿主的组件、设计 token，以及 `useLocale()`、`useTheme()`                                                                                         |
+| `@pigcode/plugin-sdk`    | 浏览器侧的 SDK（`defineClientPlugin`）；类型用 `import type` 引入即可                                                                            |
+
+要点：
+
+- **必须是同一份 React。** 插件不要自带 React，也不要在打包时把 React 打进去。两个 React 实例会让 hooks 报错，
+  context 也跨不过去。宿主的 import map 已经把包名指向宿主的模块，插件 bundle 里保留裸 import 就会落到同一份。
+- **hooks 读得到宿主的状态。** 插件组件渲染在宿主的 React 树里：`useLocale()` 返回宿主的界面语言，
+  `useTheme()` 返回 `"light"` 或 `"dark"`，切换后组件重画。`useState`、`useEffect`、`useContext` 等照常可用。
+- **ui-primitives 是插件的公开 API。** 它的破坏性改动按插件 `apiVersion` 处理；升级插件 apiVersion 时按发布说明迁移。
+- **绑定宿主的 React 大版本。** 当前是 React 19；插件声明的 `engines.pigcode` 把兼容范围写清楚。
+- **共享模块在插件加载前就位。** 插件 bundle 加载时这些包名已经能解析，不需要先等宿主初始化；插件也不用
+  `await import()` 它们。
+
+### Panel、Surface 与设置页可以传组件
+
+`ctx.panels.register`、`ctx.surfaces.register` 和 `ctx.settingsPages.register` 的内容二选一：
+
+- `Component`：一个 React 组件（不接收 props），宿主在自己的 React 树里渲染它。推荐。
+- `render(container)`：DOM 渲染函数，拿到容器自己往里填。已有插件继续可用。
+
+```tsx
+import { useState } from "react"
+import { Badge, Button, ListRow, useLocale, useTheme } from "@pigcode/ui-primitives"
+import type { ClientPluginContext } from "@pigcode/plugin-sdk"
+
+function DemoPanel() {
+  const { locale } = useLocale()
+  const theme = useTheme()
+  const [count, setCount] = useState(0)
+  return (
+    <div>
+      <ListRow title="Theme" meta={<Badge variant="info">{theme}</Badge>} />
+      <ListRow title="Locale" meta={<Badge>{locale}</Badge>} />
+      <Button variant="primary" onClick={() => setCount((value) => value + 1)}>
+        Clicked {count}
+      </Button>
+    </div>
+  )
+}
+
+export function apply(ctx: ClientPluginContext): () => void {
+  return ctx.panels.register({ id: "demo-panel", title: "Demo", Component: DemoPanel })
+}
+```
+
+- 给 `Component` 就不能再给 `render`，反过来也一样；两个都给或都不给时 `register` 抛错，插件页显示成界面代码错误。
+- 组件渲染时抛出的错误只在内容区显示原因，时间线、侧栏和窗口其余部分照常可用。
+  React 的错误边界接不到事件处理和异步回调里的错误，那些仍会冒到窗口；需要时自己 try/catch。
+
+### 构建时的 external
+
+如果插件用打包器（esbuild、Vite、Rollup 等）自己构建，把宿主的共享模块标为 external，
+让产物里保留裸 import：
+
+```ts
+// esbuild
+await build({
+  entryPoints: ["src/client.tsx"],
+  bundle: true,
+  format: "esm",
+  jsx: "automatic",
+  external: [
+    "react",
+    "react-dom",
+    "react-dom/client",
+    "react/jsx-runtime",
+    "react/jsx-dev-runtime",
+    "@pigcode/ui-primitives",
+    "@pigcode/plugin-sdk",
+  ],
+})
+```
+
+```ts
+// Vite
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      external: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@pigcode/ui-primitives",
+        "@pigcode/plugin-sdk",
+      ],
+    },
+  },
+})
+```
+
+`external` 要同时列出裸包名和 `react/*`：只写 `"react/*"` 不会外置裸 `react`，React 本体仍会被打进插件，
+和宿主分成两份；只写 `"react"` 又漏掉 `react/jsx-runtime`。
+
+不自己构建时，把 `.tsx` 入口直接写进 `pigcode.client` 即可：安装时 Host 用 esbuild 只做转换、不打包，
+裸包名原样留在产物里，由宿主的共享模块解析，不需要额外配置。
 
 ### 五个扩展点
 
@@ -452,7 +574,7 @@ UI 插件在五个扩展点上登记内容：Panel 是左侧栏里的一个区�
 - 插件更新到新版本时，新版本加载完才替换旧版本，已经打开的 Surface 标签保留，正在看的设置页也不变。
   这要求在 `apply` 里同步登记：`await` 之后才登记的话，新版本登记之前那一刻这一页不存在，正在看它的用户会
   回到通用页。其余插件的界面不动。
-- `id`、`title` 不是字符串或 `render` 不是函数时，`register` 直接抛错，插件页把它显示成界面代码错误。
+- `id`、`title` 不是字符串，或 `render` / `Component` 没按要求二选一时，`register` 直接抛错，插件页把它显示成界面代码错误。
 - client bundle 没有加载成功时，插件页显示「加载失败」和原因；下一次重新加载插件时会再试。
 
 ```ts
@@ -628,6 +750,8 @@ const dispose = ctx.toolRenderers.register({
 | `empty({ title, description? })`                    | 空状态                                                                |
 
 ### 宿主的主题与语言
+
+React 组件里用 `useTheme()` 和 `useLocale()`，见 [使用宿主的 React](#使用宿主的-react)。DOM 写法用：
 
 - `ctx.theme.get()` 返回 `"light"` 或 `"dark"`，`ctx.theme.subscribe(listener)` 在切换时通知，返回取消订阅函数。
 - `ctx.locale.get()` 返回界面语言（`zh-CN`、`en-US`），`ctx.locale.subscribe` 同上。插件的文案自己按语言选择。

@@ -98,6 +98,9 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       lucide-react:
         specifier: 1.0.1
         version: 1.0.1(react@19.2.3)
@@ -129,9 +132,6 @@ importers:
       electron-vite:
         specifier: 5.0.0
         version: 5.0.0(vite@7.1.12(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.30.1)(yaml@2.8.1))
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -184,6 +184,9 @@ importers:
       '@types/better-sqlite3':
         specifier: 7.6.13
         version: 7.6.13
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -214,6 +217,22 @@ importers:
       '@pigcode/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+
+  examples/ui-react-panel:
+    dependencies:
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui-primitives
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
+    devDependencies:
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
 
   packages/agent-claude:
     dependencies:
@@ -312,6 +331,9 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
       '@types/semver':
         specifier: 7.7.1
         version: 7.7.1

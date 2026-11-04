@@ -1,16 +1,82 @@
 /**
- * 左侧栏的 Panel，以及插件 DOM 内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel、
+ * 左侧栏的 Panel，以及插件内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel、
  * Surface、设置页与工具渲染器共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；
  * 重画或移除前调用插件返回的清理函数。渲染或清理出错时不影响宿主：渲染的错误显示在内容区，清理的错误写进控制台。
+ *
+ * 插件内容有两种写法（ADR-0002）：
+ * - `Component`：插件用宿主的 React 写组件，在宿主外壳里直接渲染，能用 useLocale、useTheme 等 hook；
+ * - `render`：DOM 渲染函数，保留给已有的插件，拿到容器自己往里填。
  */
-import { useEffect, useRef, useState } from "react"
+import { Component, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react"
 import { ChevronRight } from "lucide-react"
 import { contributionText, useContributions, type PanelContribution } from "@pigcode/client-runtime"
 import type { ClientRender } from "@pigcode/plugin-sdk"
 import { useLocale } from "@pigcode/ui-primitives"
 
-/** 挂载一段插件内容；kind 区分侧栏面板、右栏标签、设置页与时间线工具行的排版。render 换了就重画。 */
+/**
+ * 插件组件抛错时只在内容区显示原因，不把整棵树卸掉：时间线、侧栏和窗口其余部分照常可用。
+ * 插件换版本（resetKey 变了）后清掉上一版的错误，让新组件重新渲染。
+ */
+class PluginErrorBoundary extends Component<
+  { resetKey: unknown; fallback: (reason: string) => ReactNode; children: ReactNode },
+  { reason: string | null }
+> {
+  override state: { reason: string | null } = { reason: null }
+
+  static getDerivedStateFromError(error: unknown): { reason: string } {
+    return { reason: error instanceof Error ? error.message : String(error) }
+  }
+
+  override componentDidUpdate(previous: { resetKey: unknown }): void {
+    if (previous.resetKey !== this.props.resetKey && this.state.reason !== null) {
+      this.setState({ reason: null })
+    }
+  }
+
+  override render(): ReactNode {
+    return this.state.reason === null ? this.props.children : this.props.fallback(this.state.reason)
+  }
+}
+
+/** 一段插件内容：组件或 DOM 渲染函数，二选一。 */
+export interface PluginContent {
+  Component?: ComponentType
+  render?: ClientRender
+}
+
+/**
+ * 挂载一段插件内容；kind 区分侧栏面板、右栏标签、设置页与时间线工具行的排版。
+ * 组件直接渲染在宿主树里；DOM 渲染函数挂到一个 div 上，render 换了就重画。
+ */
 export function PluginContentHost({
+  id,
+  render,
+  Component,
+  kind,
+}: PluginContent & { id: string; kind: "panel" | "surface" | "settings" | "tool" }) {
+  if (Component) {
+    return (
+      <div className={`pg-root pg-${kind}`} data-plugin-content={id}>
+        <PluginErrorBoundary
+          key={id}
+          resetKey={Component}
+          fallback={(reason) => (
+            <p className="pg-error" role="alert">
+              {reason}
+            </p>
+          )}
+        >
+          <Component />
+        </PluginErrorBoundary>
+      </div>
+    )
+  }
+  // checkContribution 保证二选一，这里 render 一定有值。
+  return <PluginDomContent id={id} render={render as ClientRender} kind={kind} />
+}
+
+/** DOM 渲染函数：插件拿到容器自己往里填，重画或移除前调用它返回的清理函数。 */
+function PluginDomContent({
   id,
   render,
   kind,
@@ -43,7 +109,7 @@ export function PluginContentHost({
         container.replaceChildren()
       }
     }
-  }, [render])
+  }, [render, id])
   return <div ref={ref} className={`pg-root pg-${kind}`} data-plugin-content={id} />
 }
 

@@ -19,7 +19,9 @@ const shared: BuildOptions = {
   format: "esm",
   target: "node22",
   // node-pty 含原生二进制，交给打包阶段处理，不能打进 bundle。
-  external: ["better-sqlite3", "node-pty"],
+  // esbuild 自带平台二进制，并且会检查自己是否被打包（打包后找不到同目录的 bin），必须保持 external；
+  // 它在 apps/desktop 的 dependencies 里，随应用一起发布。
+  external: ["better-sqlite3", "node-pty", "esbuild"],
   sourcemap: true,
   outExtension: { ".js": ".mjs" },
   banner: {

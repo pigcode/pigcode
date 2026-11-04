@@ -1,4 +1,10 @@
-/** Renderer 入口：等待 MessagePort，建立连接，挂载 React 应用。 */
+/**
+ * Renderer 入口：等待 MessagePort，建立连接，挂载 React 应用。
+ *
+ * 共享模块（ADR-0002）在其余 import 之前先就位：宿主从这里初始化 React 与 ui-primitives，后面加载的
+ * 插件按包名 import 到的就是这两个实例。模块的副作用在第一次 import 时完成，顺序由这条 import 保证。
+ */
+import "./shared"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import {
