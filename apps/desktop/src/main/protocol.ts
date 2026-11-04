@@ -16,6 +16,20 @@ const contentTypes: Record<string, string> = {
   ".woff2": "font/woff2",
 }
 
+/**
+ * 实验（pigcode/pigcode#19）：在架构文档 §10.3 的 CSP 基础上，按探针收集到的拦截逐项放行。
+ * 只在 experiment/csp 分支上启用，用来找出能让全部用例通过的最小集合；不合并。
+ */
+const EXPERIMENT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' pigcode-plugin: 'sha256-iLXpQ9XBWgPLh1LManhXVesg6ELUr8GwQfusHG0DCMs='",
+  "style-src 'self' 'unsafe-inline' pigcode-plugin:",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self' pigcode-plugin:",
+  "worker-src 'self' blob:",
+].join("; ")
+
 /** 把请求路径解析到根目录内；越界时抛出错误。 */
 export function resolveInside(root: string, requestPath: string): string {
   const normalizedRoot = resolve(root)
@@ -51,6 +65,7 @@ export function registerAppProtocol(appRoot: string): void {
       headers: {
         "content-type": contentTypes[extname(file)] ?? "application/octet-stream",
         "access-control-allow-origin": "*",
+        "content-security-policy": EXPERIMENT_CSP,
       },
     })
   })
