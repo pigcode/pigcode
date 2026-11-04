@@ -25,9 +25,7 @@ const EXPERIMENT_CSP = [
   "script-src 'self' pigcode-plugin: 'sha256-iLXpQ9XBWgPLh1LManhXVesg6ELUr8GwQfusHG0DCMs='",
   "style-src 'self' 'unsafe-inline' pigcode-plugin:",
   "img-src 'self' data:",
-  "font-src 'self' data:",
   "connect-src 'self' pigcode-plugin:",
-  "worker-src 'self' blob:",
 ].join("; ")
 
 /** 把请求路径解析到根目录内；越界时抛出错误。 */
