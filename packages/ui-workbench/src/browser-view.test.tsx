@@ -132,11 +132,17 @@ describe("BrowserView", () => {
   })
 
   it("opens the current page in a separate window", async () => {
-    renderView({ page: { ...BLANK, url: "https://example.com/" } })
+    renderView({ page: { ...BLANK, url: "http://localhost:3000/" } })
     await userEvent.click(screen.getByRole("button", { name: "在新窗口打开" }))
-    expect(previewOpen).toHaveBeenCalledWith("https://example.com/")
+    expect(previewOpen).toHaveBeenCalledWith("http://localhost:3000/")
+  })
+
+  it("explains that preview windows only open local addresses", async () => {
+    renderView({ page: { ...BLANK, url: "https://example.com/" } })
     previewOpen.mockRejectedValueOnce(new Error("PREVIEW_URL_NOT_ALLOWED"))
     await userEvent.click(screen.getByRole("button", { name: "在新窗口打开" }))
-    expect((await screen.findByRole("alert")).textContent).toBe("只支持 http/https 网址")
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "预览窗口只支持本机地址（localhost、127.0.0.1、[::1]）",
+    )
   })
 })

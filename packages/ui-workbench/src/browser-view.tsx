@@ -88,7 +88,7 @@ function openInNativeWindow(url: string): Promise<{ id: string }> {
 /** 把主进程错误码映射成可读文案；未知错误原样展示。 */
 function openError(error: unknown, t: (key: MessageKey) => string): string {
   const message = error instanceof Error ? error.message : String(error)
-  if (message.includes("PREVIEW_URL_NOT_ALLOWED")) return t("preview.invalid")
+  if (message.includes("PREVIEW_URL_NOT_ALLOWED")) return t("preview.localOnly")
   if (message.includes("PREVIEW_BRIDGE_UNAVAILABLE")) return t("preview.bridgeMissing")
   return message
 }

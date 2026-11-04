@@ -156,6 +156,9 @@ RPC：
 - 远程主机、`file://`、`javascript:`、空串等非法输入会被拒绝，并抛出
   `PREVIEW_URL_NOT_ALLOWED`。
 
+窗口内的导航、302 重定向、子框架导航和 `window.open` 使用同一规则：离开 loopback 的
+跳转会被拦截，指向远程主机的弹窗被拒绝；`about:blank` 弹窗可以打开，它之后的跳转同样受限。
+
 合法的 URL 通过 preload 的 `previewOpen(url)` 打开一个独立的 Electron 窗口：
 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。
 `previewClose(id?)` 关闭指定窗口，省略 `id` 时关闭全部。Renderer 不内嵌 iframe，

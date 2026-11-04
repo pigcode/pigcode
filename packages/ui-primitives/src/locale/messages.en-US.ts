@@ -312,6 +312,7 @@ export const enUS = {
   "browser.action.evaluate": "Run script",
   "browser.action.screenshot": "Screenshot",
   "preview.invalid": "Only http and https URLs are supported",
+  "preview.localOnly": "Preview windows only open local addresses (localhost, 127.0.0.1, [::1])",
   "preview.bridgeMissing": "Preview windows are not available in this environment",
   "pr.card": "Pull request",
   "pr.empty": "No pull request is associated with this branch",

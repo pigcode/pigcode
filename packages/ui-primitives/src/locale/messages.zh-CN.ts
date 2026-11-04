@@ -306,6 +306,7 @@ export const zhCN = {
   "browser.action.evaluate": "执行脚本",
   "browser.action.screenshot": "截图",
   "preview.invalid": "只支持 http/https 网址",
+  "preview.localOnly": "预览窗口只支持本机地址（localhost、127.0.0.1、[::1]）",
   "preview.bridgeMissing": "当前环境不支持预览窗口",
   "pr.card": "Pull Request",
   "pr.empty": "还没有关联的 Pull Request",

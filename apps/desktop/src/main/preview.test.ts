@@ -23,14 +23,11 @@ const { FakeBrowserWindow } = vi.hoisted(() => {
   }
 
   class FakeWebContents {
-    private readonly listeners = new Map<
-      string,
-      (event: FakeNavigationEvent, url: string) => void
-    >()
+    private readonly listeners = new Map<string, (...args: unknown[]) => void>()
     openHandler: ((details: { url: string }) => { action: "allow" | "deny" }) | null = null
     readonly session = new FakeSession()
 
-    on(event: string, listener: (event: FakeNavigationEvent, url: string) => void): this {
+    on(event: string, listener: (...args: unknown[]) => void): this {
       this.listeners.set(event, listener)
       return this
     }
@@ -44,8 +41,24 @@ const { FakeBrowserWindow } = vi.hoisted(() => {
 
     emitNavigation(event: string, url: string): boolean {
       let prevented = false
-      this.listeners.get(event)?.({ preventDefault: () => (prevented = true) }, url)
+      const listener = this.listeners.get(event) as
+        ((event: FakeNavigationEvent, url: string) => void) | undefined
+      listener?.({ preventDefault: () => (prevented = true) }, url)
       return prevented
+    }
+
+    emitFrameNavigation(url: string, isMainFrame: boolean): boolean {
+      let prevented = false
+      const listener = this.listeners.get("will-frame-navigate") as
+        ((event: FakeNavigationEvent & { url: string; isMainFrame: boolean }) => void) | undefined
+      listener?.({ preventDefault: () => (prevented = true), url, isMainFrame })
+      return prevented
+    }
+
+    emitDidCreateWindow(window: FakeBrowserWindow): void {
+      const listener = this.listeners.get("did-create-window") as
+        ((window: FakeBrowserWindow) => void) | undefined
+      listener?.(window)
     }
   }
 
@@ -134,21 +147,57 @@ describe("openPreview", () => {
     })
   })
 
-  it("blocks navigation and popups that leave http and https", () => {
+  it("blocks navigation and popups that leave loopback", () => {
     openPreview("http://localhost:3000")
     const [window] = FakeBrowserWindow.instances
     const contents = window?.webContents
 
     expect(contents?.emitNavigation("will-navigate", "file:///etc/passwd")).toBe(true)
     expect(contents?.emitNavigation("will-redirect", "javascript:alert(1)")).toBe(true)
-    expect(contents?.emitNavigation("will-navigate", "https://example.com")).toBe(false)
+    expect(contents?.emitNavigation("will-navigate", "https://example.com")).toBe(true)
+    expect(contents?.emitNavigation("will-redirect", "https://example.com")).toBe(true)
+    expect(contents?.emitNavigation("will-navigate", "http://localhost.evil.com")).toBe(true)
     expect(contents?.openHandler?.({ url: "pigcode://app/index.html" })).toEqual({ action: "deny" })
+    expect(contents?.openHandler?.({ url: "https://example.com" })).toEqual({ action: "deny" })
+    expect(contents?.openHandler?.({ url: "about:blank" })).toEqual({ action: "allow" })
     expect(contents?.openHandler?.({ url: "http://localhost:5173" })).toEqual({ action: "allow" })
   })
 
-  it("throws PREVIEW_URL_NOT_ALLOWED for other protocols", () => {
+  it("blocks subframe navigation that leaves loopback", () => {
+    openPreview("http://localhost:3000")
+    const [window] = FakeBrowserWindow.instances
+    const contents = window?.webContents
+
+    // 子框架的初始地址与跳转不能指向远程主机，空白框架不拦。
+    expect(contents?.emitFrameNavigation("https://example.com", false)).toBe(true)
+    expect(contents?.emitFrameNavigation("http://127.0.0.1.evil.com", false)).toBe(true)
+    expect(contents?.emitFrameNavigation("about:blank", false)).toBe(false)
+    expect(contents?.emitFrameNavigation("http://localhost:3000/embed", false)).toBe(false)
+    // 主框架由 will-navigate 负责，这里不重复拦。
+    expect(contents?.emitFrameNavigation("https://example.com", true)).toBe(false)
+  })
+
+  it("applies the same rules to windows opened from a preview", () => {
+    openPreview("http://localhost:3000")
+    const [parent] = FakeBrowserWindow.instances
+    const child = new FakeBrowserWindow({})
+    parent?.webContents.emitDidCreateWindow(child)
+
+    expect(child.webContents.emitNavigation("will-navigate", "https://example.com")).toBe(true)
+    expect(child.webContents.emitFrameNavigation("https://example.com", false)).toBe(true)
+    expect(child.webContents.openHandler?.({ url: "https://example.com" })).toEqual({
+      action: "deny",
+    })
+
+    // 弹窗也在 previewClose 的管理范围内。
+    closePreview()
+    expect(child.closed).toBe(true)
+  })
+
+  it("throws PREVIEW_URL_NOT_ALLOWED for other protocols and remote hosts", () => {
     expect(() => openPreview("file:///tmp/index.html")).toThrow("PREVIEW_URL_NOT_ALLOWED")
     expect(() => openPreview("about:blank")).toThrow("PREVIEW_URL_NOT_ALLOWED")
+    expect(() => openPreview("https://example.com")).toThrow("PREVIEW_URL_NOT_ALLOWED")
     expect(FakeBrowserWindow.instances).toHaveLength(0)
   })
 
