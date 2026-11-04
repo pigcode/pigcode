@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@pigcode/plugin-sdk": "workspace:*",
     "@pigcode/ui-primitives": "workspace:*",
     "lucide-react": "1.0.1"
   },

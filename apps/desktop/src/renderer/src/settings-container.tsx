@@ -38,11 +38,9 @@ export function PluginManagerContainer({ deps }: { deps: CoreDeps }) {
         const own = conflicts.filter(
           (conflict) => conflict.rejected.kind === "plugin" && conflict.rejected.id === plugin.id,
         )
-        // slot 冲突只记在控制台和错误表里：slot 由 #40 删除，不在插件页显示。
+        // 窗口里界面代码出的错：加载失败、apply 抛错或命令执行出错。
         const failures = clientErrors.flatMap((error) =>
-          error.pluginId === plugin.id && error.kind !== "slotConflict"
-            ? [{ kind: error.kind, detail: error.detail }]
-            : [],
+          error.pluginId === plugin.id ? [{ kind: error.kind, detail: error.detail }] : [],
         )
         if (own.length === 0 && failures.length === 0) return plugin
         return {

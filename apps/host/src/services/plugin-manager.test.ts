@@ -21,7 +21,7 @@ async function fixture(engines?: { pigcode: string }) {
         client: "./client.mjs",
         permissions: ["ui:panel"],
         provides: ["ui:debug-panel"],
-        contributes: { slots: ["workbench.right"] },
+        contributes: { "x-note": "kept" },
       },
     }),
   )
@@ -53,7 +53,7 @@ describe("plugin manager", () => {
     expect(plugins[0]?.apiVersion).toBe(1)
     expect(plugins[0]?.permissions).toEqual(["ui:panel"])
     expect(plugins[0]?.provides).toEqual(["ui:debug-panel"])
-    expect(plugins[0]?.contributes).toEqual({ slots: ["workbench.right"] })
+    expect(plugins[0]?.contributes).toEqual({ "x-note": "kept" })
     expect(plugins[0]?.conflict).toBeNull()
     expect(plugins[0]?.error).toBeNull()
   })

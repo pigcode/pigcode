@@ -1,10 +1,9 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
-import { SlotHost, useAppStore, useContributions, type SlotRegistry } from "@pigcode/client-runtime"
+import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import { translate, useAppearance, type Locale } from "@pigcode/ui-primitives"
-export type { ChatSlotProps, CoreDeps } from "./chat-container"
-export { ChatViewContainer } from "./chat-container"
+export type { ChatControls, CoreDeps } from "./chat-container"
 import {
   AppRenderer,
   DEFAULT_SETTINGS_PAGE,
@@ -25,7 +24,7 @@ import {
 import { useAgentNames } from "./agents"
 import { BrowserHost } from "./browser-host"
 import { AppearanceContext } from "./builtin-settings-pages"
-import type { ChatSlotProps, CoreDeps } from "./chat-container"
+import { ChatViewContainer, type CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
 import { UnsavedGuard } from "./unsaved-guard"
 import {
@@ -61,7 +60,6 @@ import {
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
-  slots: SlotRegistry
   locale: Locale
 }
 
@@ -93,7 +91,7 @@ export function mergeChildStatus(
 }
 
 /** 应用根组件。 */
-export function App({ store, slots, connection, locale }: AppProps) {
+export function App({ store, connection, plugins, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
   const surfaceContributions = useContributions("surface")
@@ -458,16 +456,13 @@ export function App({ store, slots, connection, locale }: AppProps) {
         }
       />
       {view === "chat" ? (
-        <SlotHost<ChatSlotProps>
-          registry={slots}
-          name="chat.view"
-          props={{
-            rightOpen,
-            onToggleRight: toggleRight,
-            layoutControls: rightOpen && activeThreadId ? null : layoutControls(false),
-            onOpenFile: (path: string) => openSurface("file", path),
-            onOpenDiff: () => openSurface("diff"),
-          }}
+        <ChatViewContainer
+          deps={{ connection, store, plugins }}
+          rightOpen={rightOpen}
+          onToggleRight={toggleRight}
+          layoutControls={rightOpen && activeThreadId ? null : layoutControls(false)}
+          onOpenFile={(path: string) => openSurface("file", path)}
+          onOpenDiff={() => openSurface("diff")}
         />
       ) : (
         <AppearanceContext.Provider value={appearance}>

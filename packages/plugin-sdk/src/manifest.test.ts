@@ -130,6 +130,40 @@ describe("the old provider names in the manifest", () => {
   })
 })
 
+describe("contributes fields the host does not read", () => {
+  const withContributes = (contributes: Record<string, unknown>) => ({
+    ...base,
+    pigcode: { ...base.pigcode, contributes },
+  })
+
+  it.each([
+    ["settings", "ctx.settingsPages.register"],
+    ["commands", "ctx.commands.register"],
+    ["slots", "ctx.panels, ctx.surfaces or ctx.settingsPages"],
+    ["rpc", "plugins cannot add RPC methods"],
+  ])("rejects contributes.%s and says where to register instead", (key, hint) => {
+    expect(() => parsePluginManifest(withContributes({ [key]: {} }))).toThrow(
+      new RegExp(`pigcode\\.contributes\\.${key}: contributes\\.${key} is no longer read: `),
+    )
+    expect(() => parsePluginManifest(withContributes({ [key]: {} }))).toThrow(hint)
+  })
+
+  it("keeps other metadata and the agent contribution as they are", () => {
+    const manifest = pluginManifestSchema.parse(
+      withContributes({ agent: { id: "fake" }, "x-note": "kept" }),
+    )
+    expect(manifest.pigcode.contributes).toEqual({ agent: { id: "fake" }, "x-note": "kept" })
+  })
+
+  it("keeps metadata whose key is also a name on Object.prototype", () => {
+    const manifest = pluginManifestSchema.parse(withContributes({ constructor: 1, toString: 2 }))
+    expect(Object.entries(manifest.pigcode.contributes)).toEqual([
+      ["constructor", 1],
+      ["toString", 2],
+    ])
+  })
+})
+
 describe("plugin compatibility", () => {
   const compatibleBase = {
     name: "demo",

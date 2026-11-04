@@ -7,7 +7,6 @@ import { applyClientPlugin } from "./modules"
 function stubContext(): ClientPluginContext {
   const fixed = <T>(value: T) => ({ get: () => value, subscribe: () => () => {} })
   return {
-    slots: { register: () => () => {} },
     host: { call: async () => undefined },
     panels: { register: () => () => {} },
     surfaces: { register: () => () => {} },

@@ -1,6 +1,6 @@
 /**
- * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface 与设置页（内容是 DOM）、和宿主一致的界面组件
- * （pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页与 Command（内容是 DOM）、
+ * 和宿主一致的界面组件（pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
  */
 
 /** 把内容画进容器；可以返回清理函数，面板移除或重画前调用。 */
@@ -73,19 +73,6 @@ export interface ClientCommand {
   run(): void | Promise<void>
 }
 
-/** client bundle 可以注册的 slot 条目；不依赖 React 类型。 */
-export interface ClientSlotEntry {
-  id: string
-  order?: number
-  /** 参数声明为 never，使 React 侧带 props 的条目也能安全赋给该 facade。 */
-  render(props: never): unknown
-}
-
-/** 受限的 slot API；由 client-runtime 的 SlotRegistry 实现。 */
-export interface ClientSlotApi {
-  register(name: string, entry: ClientSlotEntry): () => void
-}
-
 /** 宿主的当前值与变化通知。 */
 export interface ClientObservable<T> {
   get(): T
@@ -150,7 +137,6 @@ export interface ClientUiKit {
 
 /** UI 插件拿到的全部能力；只暴露浏览器侧最小面。 */
 export interface ClientPluginContext {
-  slots: ClientSlotApi
   host: { call(method: string, params: unknown): Promise<unknown> }
   /** Panel 扩展点：在左侧栏添加区块。 */
   panels: ClientContributionApi<ClientPanel>

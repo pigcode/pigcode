@@ -9,7 +9,6 @@
  * - 和刚卸载的插件冲突、被拒绝过的插件重新应用一次，拿到现在空出来的 id；
  * - 其余插件保持原样。import 失败的插件记一条错误、不算已加载，下次 reload 重试。
  */
-import type { ReactNode } from "react"
 import { Puzzle } from "lucide-react"
 import type {
   BootEntry,
@@ -18,8 +17,6 @@ import type {
   Connection,
   ContributionOwner,
   ExtensionRegistry,
-  SlotName,
-  SlotRegistry,
 } from "@pigcode/client-runtime"
 import {
   applyClientPlugin,
@@ -31,30 +28,18 @@ import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 import { SettingPage } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
 
-/** 当前 UI 宿主认识的全部 slot。 */
-const SLOT_NAMES: readonly SlotName[] = [
-  "sidebar.section",
-  "chat.view",
-  "settings.section",
-  "panel.right",
-  "status.bar",
-]
-
-/** 只允许插件注册到已知 slot，避免把未知名称灌进 registry。 */
-function isSlotName(name: string): name is SlotName {
-  return (SLOT_NAMES as readonly string[]).includes(name)
-}
-
 /**
  * 插件在窗口里出的错；id 用作快照内的稳定 key。
  * - import：client bundle 没有加载成功（detail 是原因）；
  * - apply：apply 抛了错（detail 是原因）；
- * - command：插件的 Command 在执行或判断能否执行时抛了错（detail 是 `命令 id: 原因`）；
- * - slotConflict：slot 条目和另一个插件重名（detail 是 `slot:id`，owner 是先注册的插件）。
+ * - command：插件的 Command 在执行或判断能否执行时抛了错（detail 是 `命令 id: 原因`）。
  */
-export type PluginError =
-  | { id: string; pluginId: string; kind: "import" | "apply" | "command"; detail: string }
-  | { id: string; pluginId: string; kind: "slotConflict"; detail: string; owner: string }
+export type PluginError = {
+  id: string
+  pluginId: string
+  kind: "import" | "apply" | "command"
+  detail: string
+}
 
 /** 插件错误的只读快照与订阅入口。 */
 export interface PluginErrorRegistry {
@@ -159,7 +144,6 @@ type ErrorInput = PluginError extends infer E
 
 /** 创建插件控制器。 */
 export function createClientPluginController(deps: {
-  slots: SlotRegistry
   extensions: ExtensionRegistry
   connection: Connection
   /** 加载 client bundle；测试里替换。 */
@@ -173,8 +157,6 @@ export function createClientPluginController(deps: {
   const ui = createUiKit()
   const theme = observeTheme()
   const locale = observeLocale()
-  /** slot 条目归属：key 为 `slot:id`，用于拒绝重复注册并记录冲突双方。 */
-  const slotOwners = new Map<string, { pluginId: string; token: symbol }>()
   const loaded = new Map<string, LoadedPlugin>()
   /** 每次 reload 领一个号；只有拿到 boot graph、而且比已经拿到的都新的那次才会继续。 */
   let requested = 0
@@ -199,42 +181,9 @@ export function createClientPluginController(deps: {
     if (next.length !== errors.length) setErrors(next)
   }
 
-  function createContext(
-    pluginId: string,
-    bucket: Array<() => void>,
-    live: { current: boolean },
-  ): ClientPluginContext {
+  function createContext(pluginId: string, live: { current: boolean }): ClientPluginContext {
     const owner: ContributionOwner = { kind: "plugin", id: pluginId }
     return {
-      slots: {
-        register(name, entry) {
-          if (!isSlotName(name)) return () => undefined
-          const key = `${name}:${entry.id}`
-          const existing = slotOwners.get(key)
-          if (existing) {
-            reportError({ pluginId, kind: "slotConflict", detail: key, owner: existing.pluginId })
-            return () => undefined
-          }
-          const token = Symbol(key)
-          slotOwners.set(key, { pluginId, token })
-          const dispose = deps.slots.register(name, {
-            id: entry.id,
-            order: entry.order ?? 0,
-            render: (props: never) => entry.render(props) as ReactNode,
-          })
-          let active = true
-          // 只释放本次注册；旧插件的清理不能误删新注册的归属。
-          const release = () => {
-            if (!active) return
-            active = false
-            if (slotOwners.get(key)?.token !== token) return
-            slotOwners.delete(key)
-            dispose()
-          }
-          bucket.push(release)
-          return release
-        },
-      },
       host: {
         call: (method, params) => deps.connection.call(method, params),
       },
@@ -353,12 +302,11 @@ export function createClientPluginController(deps: {
 
   /** 应用一个插件；apply 抛错时记一条错误，已经登记的内容照常保留到卸载。 */
   function apply(entry: BootEntry, module: ClientModule): LoadedPlugin {
-    const bucket: Array<() => void> = []
     // 这次应用还在不在；卸载后才到的命令错误靠它丢掉。
     const live = { current: true }
     let cleanup: () => void = () => undefined
     try {
-      cleanup = applyClientPlugin(module, createContext(entry.id, bucket, live))
+      cleanup = applyClientPlugin(module, createContext(entry.id, live))
     } catch (error) {
       reportError({ pluginId: entry.id, kind: "apply", detail: messageOf(error) })
     }
@@ -372,7 +320,6 @@ export function createClientPluginController(deps: {
         } catch (error) {
           console.error(`[plugin:${entry.id}] ${messageOf(error)}`)
         }
-        for (const release of bucket.reverse()) release()
         // 插件没有自己注销的 Contribution 在这里一并移除；打开着的 Surface 随之关闭。
         deps.extensions.removeOwner({ kind: "plugin", id: entry.id })
         // import 错误属于 boot graph 里的条目，不属于这次应用：重试或条目消失时才清掉。
@@ -388,9 +335,9 @@ export function createClientPluginController(deps: {
     plugin.unload()
   }
 
-  /** 插件有没有因为和 removed 里的某个插件重名而被拒绝过（扩展点或 slot）。 */
+  /** 插件有没有因为和 removed 里的某个插件在同一个扩展点上重名而被拒绝过。 */
   function lostTo(pluginId: string, removed: ReadonlySet<string>): boolean {
-    const extensionConflict = deps.extensions
+    return deps.extensions
       .conflicts()
       .some(
         (conflict) =>
@@ -399,13 +346,6 @@ export function createClientPluginController(deps: {
           conflict.existing.kind === "plugin" &&
           removed.has(conflict.existing.id),
       )
-    return (
-      extensionConflict ||
-      errors.some(
-        (error) =>
-          error.pluginId === pluginId && error.kind === "slotConflict" && removed.has(error.owner),
-      )
-    )
   }
 
   async function reload(): Promise<void> {

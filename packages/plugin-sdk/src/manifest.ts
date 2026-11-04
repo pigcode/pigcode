@@ -14,6 +14,26 @@ function renamed(from: string, to: string): string {
   return `${from} was renamed to ${to} (see docs/plugin-authoring.md)`
 }
 
+/**
+ * manifest 里不再读取的贡献点：内容是代码登记的，写在 manifest 里没有任何效果。
+ * 校验时直接拒绝，并指出现在该在哪里登记。
+ */
+const REMOVED_CONTRIBUTIONS = new Map([
+  ["settings", "register the page with ctx.settingsPages.register in the client entry"],
+  ["commands", "register it with ctx.commands.register in the client entry"],
+  ["slots", "register it with ctx.panels, ctx.surfaces or ctx.settingsPages in the client entry"],
+  ["rpc", "plugins cannot add RPC methods"],
+])
+
+/** 改名或删掉的贡献点的报错；其它键返回 null。 */
+function contributionError(key: string): string | null {
+  if (key === "provider") return renamed("contributes.provider", "contributes.agent")
+  const hint = REMOVED_CONTRIBUTIONS.get(key)
+  return hint
+    ? `contributes.${key} is no longer read: ${hint} (see docs/plugin-authoring.md)`
+    : null
+}
+
 export const pluginManifestSchema = z
   .object({
     name: z.string().min(1),
@@ -46,9 +66,12 @@ export const pluginManifestSchema = z
         .default([]),
       contributes: z
         .record(z.string(), z.unknown())
-        .refine((value) => value.provider === undefined, {
-          error: renamed("contributes.provider", "contributes.agent"),
-          path: ["provider"],
+        .superRefine((value, context) => {
+          // 只拦改名和删掉的字段；manifest 里其它元数据原样保留，插件可以自己用。
+          for (const key of Object.keys(value)) {
+            const message = contributionError(key)
+            if (message) context.addIssue({ code: "custom", message, path: [key] })
+          }
         })
         .default({}),
       permissions: z.array(z.string().min(1)).default([]),

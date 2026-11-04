@@ -70,18 +70,18 @@ my-ui-plugin/
 }
 ```
 
-| 字段              | 必填 | 说明                                                                   |
-| ----------------- | ---- | ---------------------------------------------------------------------- |
-| `apiVersion`      | 是   | 当前只支持 `1`；其他值会让插件被拒绝加载。                             |
-| `kind`            | 是   | `agent`、`capability`、`ui` 或 `bundle`。                              |
-| `displayName`     | 否   | 插件管理界面展示的名称，缺省使用包名。                                 |
-| `host`            | 否   | Host 入口的相对路径。`host` 与 `client` 至少要有一个。                 |
-| `client`          | 否   | UI 入口的相对路径。                                                    |
-| `inject`          | 否   | 依赖声明，默认 `[]`。Host 侧服务名如 `agents`、`sessions`。            |
-| `provides`        | 否   | 提供的服务标识，默认 `[]`；用于启用时的冲突检测。                      |
-| `contributes`     | 否   | 贡献点元数据，默认 `{}`；Agent 插件的 `agent` 贡献会被校验，见下文。   |
-| `permissions`     | 否   | 权限声明，默认 `[]`；安装和列表界面会展示给用户。                      |
-| `engines.pigcode` | 否   | semver 范围，按 Host 当前版本（`0.1.0`）校验；不满足时插件被标记错误。 |
+| 字段              | 必填 | 说明                                                                                                               |
+| ----------------- | ---- | ------------------------------------------------------------------------------------------------------------------ |
+| `apiVersion`      | 是   | 当前只支持 `1`；其他值会让插件被拒绝加载。                                                                         |
+| `kind`            | 是   | `agent`、`capability`、`ui` 或 `bundle`。                                                                          |
+| `displayName`     | 否   | 插件管理界面展示的名称，缺省使用包名。                                                                             |
+| `host`            | 否   | Host 入口的相对路径。`host` 与 `client` 至少要有一个。                                                             |
+| `client`          | 否   | UI 入口的相对路径。                                                                                                |
+| `inject`          | 否   | 依赖声明，默认 `[]`。Host 侧服务名如 `agents`、`sessions`。                                                        |
+| `provides`        | 否   | 提供的服务标识，默认 `[]`；用于启用时的冲突检测。                                                                  |
+| `contributes`     | 否   | 贡献点元数据，默认 `{}`；只读取 `agent`，见下文。`settings`、`commands`、`slots`、`rpc` 会被拒绝，其它键原样保留。 |
+| `permissions`     | 否   | 权限声明，默认 `[]`；安装和列表界面会展示给用户。                                                                  |
+| `engines.pigcode` | 否   | semver 范围，按 Host 当前版本（`0.1.0`）校验；不满足时插件被标记错误。                                             |
 
 补充说明：
 
@@ -410,6 +410,26 @@ export function apply(ctx: PluginHostContext): void {
 完整示例见 [`examples/ui-debug-panel`](../examples/ui-debug-panel)。UI 插件只拿到受限 facade，
 不依赖 React；界面和宿主保持一致的做法是：**宿主画外框，插件只画内容，内容用 `ctx.ui` 拼**。
 
+### 五个扩展点
+
+窗口里只有五个扩展点。下表前四个的登记入口已经开放，插件和内置功能遵守同样的规则：
+
+| 扩展点     | 加什么                               | 登记方式                     |
+| ---------- | ------------------------------------ | ---------------------------- |
+| Panel      | 左侧栏里的一个区块                   | `ctx.panels.register`        |
+| Surface    | 右侧面板（Workbench）里的一种标签    | `ctx.surfaces.register`      |
+| 设置页     | 设置里的一页                         | `ctx.settingsPages.register` |
+| Command    | 命令面板与输入框 `/` 共用的一个操作  | `ctx.commands.register`      |
+| 工具渲染器 | 一类工具调用在对话时间线里的显示方式 | 即将开放                     |
+
+除此之外没有别的登记途径。manifest 里写 `contributes.settings`、`contributes.commands`、
+`contributes.slots` 或 `contributes.rpc` 会让整个插件不可用：安装时被拒绝；已经安装的插件升级后在插件页显示错误，
+Host 入口和界面代码都不加载。把这些字段删掉，改用上表的登记函数。`contributes` 只读取 `agent`
+（见 [Agent 插件](#agent-插件)），其它键作为插件自己的元数据原样保留。
+
+`ctx.slots` 已经删除。还在调用它的插件会在 `apply` 里抛错（`Cannot read properties of undefined`），
+错误显示在插件页；改用 `ctx.panels.register`、`ctx.surfaces.register` 或 `ctx.settingsPages.register`。
+
 ### Panel、Surface、设置页与 Command
 
 UI 插件在四个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
@@ -491,7 +511,7 @@ export function apply(ctx: ClientPluginContext): () => void {
   `render` 抛出的错误显示在内容区里，不影响宿主。
 - 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
   右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样。
-- 工具渲染器扩展点以后会以同样的形式出现在 `ctx` 上。
+- 工具渲染器的登记入口还没开放。
 
 ### Command：命令面板与输入框 `/`
 
@@ -568,36 +588,9 @@ return () => disposeCommand()
 | `--pg-success`、`--pg-warning`、`--pg-danger`         | 状态文字色                       |
 | `--pg-radius`、`--pg-radius-sm`                       | 卡片与控件圆角                   |
 
-### slot
+### 调用 Host
 
-也可以向内置 slot 注册条目：
-
-```ts
-import type { ClientPluginContext } from "@pigcode/plugin-sdk"
-
-export function apply(ctx: ClientPluginContext): () => void {
-  const dispose = ctx.slots.register("status.bar", {
-    id: "demo-status",
-    order: 20,
-    // 返回值交给 React 渲染；纯 DOM 内容请用 ctx.panels.register。
-    render: () => "Demo status",
-  })
-  return () => dispose()
-}
-```
-
-slot 规则：
-
-- 允许的名称：`sidebar.section`、`chat.view`、`settings.section`、`panel.right`、`status.bar`。
-  当前主界面实际挂载的只有 `chat.view`，被内置的聊天视图占用；其余名称需要对应宿主挂载点才会显示。
-  设置不再经过 `settings.section`，要在设置里加一页请用 `ctx.settingsPages.register`。
-- 未注册的名称会被忽略，不会抛异常。
-- 同一 slot 内 `id` 必须唯一。重复注册会显式失败：第二次注册被拒绝，并记录
-  `SLOT_CONFLICT`（控制台和插件错误表），不会静默覆盖。
-- 第三方 client bundle 无法解析裸 `react` 导入，因此需要真实 DOM 界面时用
-  `ctx.panels.register`、`ctx.surfaces.register` 或 `ctx.settingsPages.register`；`ctx.slots.register`
-  适合返回字符串等 React 可渲染的原始值。
-- `ctx.host.call(method, params)` 通过现有 MessagePort RPC 调用 Host，不引入 HTTP/WebSocket/token。
+`ctx.host.call(method, params)` 通过现有 MessagePort RPC 调用 Host，不引入 HTTP/WebSocket/token。
 
 UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
 
@@ -608,9 +601,9 @@ UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
 1. 启用时先计算“当前已启用插件 + 目标插件”的 `provides`。只要有一个服务标识被多个插件声明
    （包括同一插件重复声明），就抛出 `PROVIDES_CONFLICT`，附带冲突的标识和插件 id，并拒绝启用。
 2. 检查通过后，Host 入口被动态挂载，agent 与 Capability 插件的服务立即可用。
-3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页和 slot 条目出现。
+3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页与 Command 出现。
 4. 停用时会卸载 Host 入口并等待 `ctx.effect` 清理，agent 与 Capability 插件的服务立即消失；
-   boot graph 重写后，它的 Panel、Surface、设置页和 slot 条目也会移除，已经打开的 Surface 标签关闭，
+   boot graph 重写后，它的 Panel、Surface、设置页与 Command 也会移除，已经打开的 Surface 标签关闭，
    正在看的设置页回到通用页。停用 agent 还会取消它排队中的 run、
    中断运行中的 run 并释放会话。
 

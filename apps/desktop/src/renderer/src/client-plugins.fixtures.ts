@@ -3,7 +3,6 @@ import { vi } from "vitest"
 import {
   Connection,
   createExtensionRegistry,
-  createSlotRegistry,
   type BootEntry,
   type ClientModule,
 } from "@pigcode/client-runtime"
@@ -23,17 +22,15 @@ export function serve(entries: BootEntry[]): void {
   vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => ({ entries }) }))
 }
 
-/** 控制器与它用的 slot、扩展点注册表；importModule 缺省时真的 import data URL。 */
+/** 控制器与它用的扩展点注册表；importModule 缺省时真的 import data URL。 */
 export function setup(importModule?: (url: string) => Promise<ClientModule>) {
-  const slots = createSlotRegistry()
   const extensions = createExtensionRegistry()
   const controller = createClientPluginController({
-    slots,
     extensions,
     connection,
     ...(importModule ? { importModule } : {}),
   })
-  return { slots, extensions, controller }
+  return { extensions, controller }
 }
 
 /** 一个 Surface 的登记语句。 */

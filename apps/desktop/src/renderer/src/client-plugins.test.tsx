@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * 验证第三方 UI 插件：重复 slot id 时跳过并记录错误；Panel 与 Surface 登记到扩展点注册表并归属到插件，
- * 和已有 id 冲突时不覆盖；插件从 boot graph 消失时按 owner 移除，其余插件不动。
+ * 验证第三方 UI 插件：Panel 与 Surface 登记到扩展点注册表并归属到插件，和已有 id 冲突时不覆盖；
+ * 插件从 boot graph 消失时按 owner 移除，其余插件不动；slot 登记函数已删除。
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ClientModule } from "@pigcode/client-runtime"
@@ -11,82 +11,29 @@ import { deferred, entry, serve, setup, surfaceCall } from "./client-plugins.fix
 // builtin-surfaces 只从工作台包里取文件标签的种类；整个包会加载 xterm，jsdom 里没有 canvas。
 vi.mock("@pigcode/ui-workbench", () => ({ FILE_SURFACE_KIND: "file" }))
 
-/** 生成一个只注册单个 slot 条目的 client bundle data URL。 */
-function clientModule(slot: string, id: string): string {
-  const source = `export function apply(ctx) {
-    ctx.slots.register(${JSON.stringify(slot)}, {
-      id: ${JSON.stringify(id)},
-      render: () => null,
-    })
-  }`
-  return `data:text/javascript,${encodeURIComponent(source)}`
-}
-
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
-describe("client plugin slot conflicts", () => {
-  it("skips a duplicate slot id and records the plugin id", async () => {
-    const { slots, controller } = setup()
+describe("the removed slot API", () => {
+  it("records an apply error for a bundle that still calls ctx.slots, and keeps the rest", async () => {
+    const { extensions, controller } = setup()
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-    const boot = {
-      entries: [
-        {
-          id: "ui.a",
-          revision: "1",
-          inject: [],
-          url: clientModule("sidebar.section", "shared"),
-        },
-        {
-          id: "ui.b",
-          revision: "1",
-          inject: [],
-          url: clientModule("sidebar.section", "shared"),
-        },
-      ],
-    }
-    vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => boot }))
+    serve([
+      entry(
+        "ui.old",
+        `ctx.panels.register({ id: "status", title: "Status", render() {} })
+        ctx.slots.register("status.bar", { id: "status", render: () => null })`,
+      ),
+    ])
 
     await controller.reload()
 
-    // 先注册者保留，后注册者被跳过。
-    expect(slots.get("sidebar.section").map((entry) => entry.id)).toEqual(["shared"])
-    const errors = controller.errors.get()
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toMatchObject({
-      pluginId: "ui.b",
-      kind: "slotConflict",
-      detail: "sidebar.section:shared",
-      owner: "ui.a",
-    })
-    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("ui.b"))
-
-    controller.dispose()
-    expect(slots.get("sidebar.section")).toEqual([])
-  })
-
-  it("allows the same id in different slots", async () => {
-    const { slots, controller } = setup()
-    const boot = {
-      entries: [
-        {
-          id: "ui.a",
-          revision: "1",
-          inject: [],
-          url: clientModule("sidebar.section", "shared"),
-        },
-        { id: "ui.b", revision: "1", inject: [], url: clientModule("status.bar", "shared") },
-      ],
-    }
-    vi.stubGlobal("fetch", async () => ({ ok: true, json: async () => boot }))
-
-    await controller.reload()
-
-    expect(slots.get("sidebar.section").map((entry) => entry.id)).toEqual(["shared"])
-    expect(slots.get("status.bar").map((entry) => entry.id)).toEqual(["shared"])
-    expect(controller.errors.get()).toEqual([])
+    // slot 登记函数已删除：旧插件在这一步抛错，同一插件里先登记的 Panel 照常生效。
+    expect(extensions.get("panel").map((panel) => panel.id)).toEqual(["status"])
+    expect(controller.errors.get()).toMatchObject([{ pluginId: "ui.old", kind: "apply" }])
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("ui.old"))
     controller.dispose()
   })
 })
@@ -223,26 +170,27 @@ describe("client plugin panels and surfaces", () => {
   })
 
   it("gives the id to a plugin it was rejected for once the winner is disabled", async () => {
-    const { slots, extensions, controller } = setup()
+    const { extensions, controller } = setup()
     vi.spyOn(console, "error").mockImplementation(() => {})
-    const slot = `ctx.slots.register("sidebar.section", { id: "shared", render: () => null })`
-    const a = entry("ui.a", `${surfaceCall("x", "A")}\n${slot}`)
-    const b = entry("ui.b", `${surfaceCall("x", "B")}\n${slot}`)
+    const panel = `ctx.panels.register({ id: "status", title: "Status", render() {} })`
+    const a = entry("ui.a", `${surfaceCall("x", "A")}\n${panel}`)
+    const b = entry("ui.b", `${surfaceCall("x", "B")}\n${panel}`)
     serve([a, b])
     await controller.reload()
     expect(extensions.get("surface")).toMatchObject([{ id: "x", title: { text: "A" } }])
-    expect(extensions.conflicts().map((conflict) => conflict.rejected.id)).toEqual(["ui.b"])
-    expect(controller.errors.get()).toMatchObject([{ pluginId: "ui.b", kind: "slotConflict" }])
+    expect(extensions.conflicts().map((conflict) => `${conflict.point}:${conflict.id}`)).toEqual([
+      "surface:x",
+      "panel:status",
+    ])
 
-    // 停用 A：B 重新应用，拿到 Surface 与 slot 条目，冲突记录随之清掉。
+    // 停用 A：B 重新应用，拿到 Surface 与 Panel，冲突记录随之清掉。
     serve([b])
     await controller.reload()
     expect(extensions.get("surface")).toMatchObject([
       { id: "x", title: { text: "B" }, owner: { kind: "plugin", id: "ui.b" } },
     ])
-    expect(slots.get("sidebar.section").map((item) => item.id)).toEqual(["shared"])
+    expect(extensions.get("panel").map((item) => item.id)).toEqual(["status"])
     expect(extensions.conflicts()).toEqual([])
-    expect(controller.errors.get()).toEqual([])
     controller.dispose()
   })
 

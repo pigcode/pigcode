@@ -7,18 +7,15 @@ import {
   LocaleController,
   ExtensionRegistryScope,
   createExtensionRegistry,
-  createSlotRegistry,
 } from "@pigcode/client-runtime"
 import "@pigcode/ui-primitives/styles/globals.css"
 import { App } from "./app"
 import { registerBuiltinSettingsPages } from "./builtin-settings-pages"
 import { registerBuiltinSurfaces } from "./builtin-surfaces"
 import { createClientPluginController } from "./client-plugins"
-import { registerCorePlugins } from "./core-plugins"
 
-/** 全局状态、连接、slot、扩展点注册表与插件控制器在模块加载时创建一次。 */
+/** 全局状态、连接、扩展点注册表与插件控制器在模块加载时创建一次。 */
 const store = new AppStore()
-const slots = createSlotRegistry()
 const extensions = createExtensionRegistry()
 registerBuiltinSurfaces(extensions)
 const locale = new LocaleController()
@@ -45,8 +42,7 @@ const connection = new Connection({
   onStatus: (status) => store.update({ status }),
 })
 
-const plugins = createClientPluginController({ slots, extensions, connection })
-registerCorePlugins(slots, { connection, store, plugins })
+const plugins = createClientPluginController({ extensions, connection })
 registerBuiltinSettingsPages(extensions, { connection, store, plugins })
 
 let attached = false
@@ -88,13 +84,7 @@ if (root) {
     <StrictMode>
       {/* Panel、Surface 与设置页从扩展点注册表读取。 */}
       <ExtensionRegistryScope registry={extensions}>
-        <App
-          store={store}
-          slots={slots}
-          connection={connection}
-          plugins={plugins}
-          locale={locale.getLocale()}
-        />
+        <App store={store} connection={connection} plugins={plugins} locale={locale.getLocale()} />
       </ExtensionRegistryScope>
     </StrictMode>,
   )

@@ -324,9 +324,6 @@ importers:
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@pigcode/plugin-sdk':
-        specifier: workspace:*
-        version: link:../plugin-sdk
       '@pigcode/ui-composer':
         specifier: workspace:*
         version: link:../ui-composer
@@ -364,9 +361,6 @@ importers:
       '@pigcode/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@pigcode/plugin-sdk':
-        specifier: workspace:*
-        version: link:../plugin-sdk
       '@pigcode/ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives
@@ -416,9 +410,6 @@ importers:
 
   packages/ui-plugin-manager:
     dependencies:
-      '@pigcode/plugin-sdk':
-        specifier: workspace:*
-        version: link:../plugin-sdk
       '@pigcode/ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives

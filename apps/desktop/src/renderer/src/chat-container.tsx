@@ -35,8 +35,8 @@ export interface CoreDeps {
   plugins: ClientPluginController
 }
 
-/** chat.view slot 传入聊天容器的右栏控制；第三方聊天视图可以忽略。 */
-export interface ChatSlotProps {
+/** 聊天容器的右栏控制：线程头的切换按钮、文件与 Diff 标签的打开入口。 */
+export interface ChatControls {
   rightOpen?: boolean
   onToggleRight?: () => void
   /** 线程头末尾的布局按钮；右栏展开时为 null，按钮在右栏标签栏里。 */
@@ -77,7 +77,7 @@ export function ChatViewContainer({
   layoutControls,
   onOpenFile,
   onOpenDiff,
-}: { deps: CoreDeps } & ChatSlotProps) {
+}: { deps: CoreDeps } & ChatControls) {
   const state = useAppStore(deps.store)
   const { t } = useLocale()
   // 输入框的 `/` 和命令面板用同一份 Command：下面只取登记了 slash 的那几条。
