@@ -60,7 +60,8 @@ async function attach(port: MessagePort): Promise<void> {
   port.start()
   if (attached) store.update({ reconnected: false })
   try {
-    await connection.attach({
+    // 新端口可能连续到达：被后来的一次取代时 attach 返回 false，不能当成连接成功。
+    const connected = await connection.attach({
       send: (message) => port.postMessage(message),
       onMessage: (listener) => {
         const handler = (event: MessageEvent) => listener(event.data)
@@ -69,6 +70,7 @@ async function attach(port: MessagePort): Promise<void> {
       },
       close: () => port.close(),
     })
+    if (!connected) return
   } catch {
     store.update({ status: "offline" })
     return

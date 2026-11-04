@@ -24,20 +24,43 @@ interface SubscribeResult {
 /** 基于 RpcClient 的连接，负责多线程订阅、断线重订阅与事件游标维护。 */
 export class Connection {
   private client: RpcClient | undefined
+  /** 每次 attach 递增；中途被新的 attach 取代时，旧的一次不再改连接状态。 */
+  private attempts = 0
   private readonly subscriptions = new Map<string, number>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
-  /** 绑定新的传输层；已有线程时逐个从各自 cursor 重订阅。 */
-  async attach(transport: HostTransport): Promise<void> {
-    this.handlers.onStatus(this.client ? "reconnecting" : "connecting")
-    this.client = new RpcClient(transport)
-    this.client.onNotification((message) => this.handleNotification(message))
-    for (const [threadId, cursor] of [...this.subscriptions]) {
-      await this.subscribe(threadId, cursor)
+  /**
+   * 绑定新的传输层；已有线程时逐个从各自 cursor 重订阅。
+   * 返回这次 attach 是否成为当前连接：false 表示中途被新的 attach 取代，
+   * 调用方不要把它当成连接成功（例如不要在界面上提示「已重新连接」）。
+   */
+  async attach(transport: HostTransport): Promise<boolean> {
+    const attempt = ++this.attempts
+    const previous = this.client
+    this.handlers.onStatus(previous ? "reconnecting" : "connecting")
+    // 旧连接不会再收到响应：先拒绝在途调用，等它们的界面才能走错误路径而不是一直转圈。
+    previous?.close("host connection lost")
+    const client = new RpcClient(transport)
+    this.client = client
+    client.onNotification((message) => this.handleNotification(message))
+    try {
+      for (const [threadId, cursor] of [...this.subscriptions]) {
+        await this.subscribe(threadId, cursor, client)
+      }
+    } catch (error) {
+      if (this.client === client) {
+        client.close("host connection lost")
+        this.client = undefined
+      }
+      // 已经被新的 attach 取代时，这次失败与界面无关。
+      if (attempt === this.attempts) throw error
+      return false
     }
+    if (attempt !== this.attempts) return false
     this.handlers.onStatus("connected")
+    return true
   }
 
   /** 打开线程并订阅 snapshot + cursor；重复打开会从 0 重新同步。 */
@@ -82,17 +105,21 @@ export class Connection {
   }
 
   /** 订阅线程并回放 cursor 之后的事件，随后更新该线程的 cursor。 */
-  private async subscribe(threadId: string, cursor: number): Promise<void> {
-    if (!this.client) throw new Error("host not connected")
-    const result = (await this.client.call("thread.subscribe", {
+  private async subscribe(threadId: string, cursor: number, client = this.client): Promise<void> {
+    if (!client) throw new Error("host not connected")
+    const result = (await client.call("thread.subscribe", {
       threadId,
       cursor,
     })) as SubscribeResult
+    // 回放途中线程可能已经被关掉：不再分发，界面不该出现一个已经关掉的线程。
+    if (!this.subscriptions.has(threadId)) return
     if (this.handlers.onEvents) this.handlers.onEvents(result.events)
     else for (const event of result.events) this.handlers.onEvent(event)
     const lastSeq = result.events.reduce((max, event) => Math.max(max, event.seq), cursor)
     const nextCursor = Math.max(cursor, result.cursor ?? 0, lastSeq)
-    this.subscriptions.set(threadId, nextCursor)
+    // 回放期间可能已经收到新事件，cursor 不能退回去。
+    const known = this.subscriptions.get(threadId)
+    if (known !== undefined) this.subscriptions.set(threadId, Math.max(known, nextCursor))
   }
 
   /** 分发服务端推送的线程事件与 Agent 的 delta。 */
