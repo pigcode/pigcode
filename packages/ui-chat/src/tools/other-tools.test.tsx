@@ -13,6 +13,7 @@ import { MessageList } from "../message-list"
 import { browserPreview, toolOutputParts, type ToolCall } from "../tool-meta"
 import { resetToolOpen } from "../tool-open"
 import { ToolBlock } from "./index"
+import { WithToolRenderers } from "./tool-renderers.fixtures"
 
 afterEach(() => {
   cleanup()
@@ -20,7 +21,11 @@ afterEach(() => {
 })
 
 function inLocale(node: ReactNode) {
-  return render(<LocaleProvider locale="zh-CN">{node}</LocaleProvider>)
+  return render(
+    <LocaleProvider locale="zh-CN">
+      <WithToolRenderers>{node}</WithToolRenderers>
+    </LocaleProvider>,
+  )
 }
 
 function tool(name: string, input: unknown, extra: Partial<ToolCall> = {}): ToolCall {

@@ -1,7 +1,7 @@
 /**
  * 左侧栏的 Panel，以及插件 DOM 内容的挂载点。Panel 从扩展点注册表读取；插件内容的挂载点由 Panel、
- * Surface 与设置页共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；重画或移除前
- * 调用插件返回的清理函数。渲染出错时显示原因，不影响宿主。
+ * Surface、设置页与工具渲染器共用：容器带 pg-root，插件的内容使用宿主的字体、颜色与 pg-* 组件样式；
+ * 重画或移除前调用插件返回的清理函数。渲染或清理出错时不影响宿主：渲染的错误显示在内容区，清理的错误写进控制台。
  */
 import { useEffect, useRef, useState } from "react"
 import { ChevronRight } from "lucide-react"
@@ -9,7 +9,7 @@ import { contributionText, useContributions, type PanelContribution } from "@pig
 import type { ClientRender } from "@pigcode/plugin-sdk"
 import { useLocale } from "@pigcode/ui-primitives"
 
-/** 挂载一段插件内容；kind 区分侧栏面板、右栏标签与设置页的排版。 */
+/** 挂载一段插件内容；kind 区分侧栏面板、右栏标签、设置页与时间线工具行的排版。render 换了就重画。 */
 export function PluginContentHost({
   id,
   render,
@@ -17,7 +17,7 @@ export function PluginContentHost({
 }: {
   id: string
   render: ClientRender
-  kind: "panel" | "surface" | "settings"
+  kind: "panel" | "surface" | "settings" | "tool"
 }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -36,6 +36,9 @@ export function PluginContentHost({
     return () => {
       try {
         if (typeof cleanup === "function") cleanup()
+      } catch (error) {
+        // 这里抛出去的话 React 会卸载外层的整棵树，时间线和侧栏都会跟着消失。
+        console.error(`[plugin-content:${id}]`, error)
       } finally {
         container.replaceChildren()
       }

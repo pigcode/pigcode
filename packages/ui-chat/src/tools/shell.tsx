@@ -9,6 +9,7 @@ import { useLocale } from "@pigcode/ui-primitives"
 import { commandText, toolPreview, type ToolCall } from "../tool-meta"
 import { ToolRow } from "../tool-row"
 import { headLines, toolStatusWord } from "./common"
+import { ToolBlock } from "./tool-block"
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 
@@ -197,7 +198,7 @@ export const CommandGroup = memo(function CommandGroup({
       {() => (
         <div className="tool-children">
           {tools.map((tool) => (
-            <CommandRow key={tool.id} tool={tool} live={liveOutput?.[tool.id]} showIcon={false} />
+            <ToolBlock key={tool.id} tool={tool} live={liveOutput?.[tool.id]} showIcon={false} />
           ))}
         </div>
       )}

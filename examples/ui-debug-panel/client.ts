@@ -1,7 +1,7 @@
 /**
- * 示例 UI 插件：侧栏里一个 Panel、右侧面板里一种 Surface、设置里一页，再加一条 Command（命令面板与
- * 输入框 `/` 都能执行）；界面都用 ctx.ui 拼出来，和宿主的控件一模一样；文案随 ctx.locale 切换，
- * 主题变化时面板里的状态跟着更新。
+ * 示例 UI 插件，用到全部五个扩展点：侧栏里一个 Panel、右侧面板里一种 Surface、设置里一页、一条 Command
+ * （命令面板与输入框 `/` 都能执行）和 debug_probe 工具的工具渲染器；界面都用 ctx.ui 拼出来，和宿主的控件
+ * 一模一样；文案随 ctx.locale 切换，主题变化时面板里的状态跟着更新。
  */
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 
@@ -24,6 +24,7 @@ const TEXT = {
     commandDesc: "面板与输入框 / 共用同一条命令。",
     commandKeyword: "调试 debug",
     runs: (count: number) => `示例命令已执行 ${count} 次`,
+    probe: "调试探针",
   },
   "en-US": {
     hello: "Hello from pigcode-ui-debug-panel",
@@ -43,6 +44,7 @@ const TEXT = {
     commandDesc: "One command shared by the palette and the composer's / list.",
     commandKeyword: "debug sample",
     runs: (count: number) => `Sample command ran ${count} times`,
+    probe: "Debug probe",
   },
 }
 
@@ -94,6 +96,15 @@ export function apply(ctx: ClientPluginContext): () => void {
     run() {
       runs += 1
       for (const notify of [...listeners]) notify()
+    },
+  })
+
+  // 时间线里 debug_probe 工具的显示；停用插件后回到通用渲染器。
+  const disposeToolRenderer = ctx.toolRenderers.register({
+    id: "debug-probe",
+    tools: ["debug_probe"],
+    render(container, call) {
+      container.append(ui.text(`${text.probe} · ${call.status}`, { tone: "muted", size: "sm" }))
     },
   })
 
@@ -180,6 +191,7 @@ export function apply(ctx: ClientPluginContext): () => void {
   return () => {
     disposePanel()
     disposeCommand()
+    disposeToolRenderer()
     disposeSurface()
     disposeSettings()
   }

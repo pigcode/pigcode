@@ -12,12 +12,14 @@ import "@pigcode/ui-primitives/styles/globals.css"
 import { App } from "./app"
 import { registerBuiltinSettingsPages } from "./builtin-settings-pages"
 import { registerBuiltinSurfaces } from "./builtin-surfaces"
+import { registerBuiltinToolRenderers, ToolRenderersScope } from "./builtin-tool-renderers"
 import { createClientPluginController } from "./client-plugins"
 
 /** 全局状态、连接、扩展点注册表与插件控制器在模块加载时创建一次。 */
 const store = new AppStore()
 const extensions = createExtensionRegistry()
 registerBuiltinSurfaces(extensions)
+registerBuiltinToolRenderers(extensions)
 const locale = new LocaleController()
 
 const savedLocale = window.localStorage.getItem("pigcode.locale")
@@ -82,9 +84,16 @@ const root = document.querySelector("#root")
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      {/* Panel、Surface 与设置页从扩展点注册表读取。 */}
+      {/* Panel、Surface、设置页、Command 与工具渲染器从扩展点注册表读取。 */}
       <ExtensionRegistryScope registry={extensions}>
-        <App store={store} connection={connection} plugins={plugins} locale={locale.getLocale()} />
+        <ToolRenderersScope>
+          <App
+            store={store}
+            connection={connection}
+            plugins={plugins}
+            locale={locale.getLocale()}
+          />
+        </ToolRenderersScope>
       </ExtensionRegistryScope>
     </StrictMode>,
   )

@@ -12,8 +12,10 @@ import type {
 import {
   FAKE_SCRIPT_TEXT,
   FAKE_SUBAGENT_TEXT,
+  FAKE_TOOL_RENDERERS_TEXT,
   fakeScript,
   fakeSubagentScript,
+  fakeToolRenderersScript,
   runFakeScript,
 } from "./fake-script"
 import { FAKE_BROWSER_PREFIX, runFakeBrowser, type FakeToolCaller } from "./fake-browser"
@@ -24,7 +26,7 @@ const CHUNKS = ["Hello", " from", " fake", " agent"]
 
 /** 长跑输入的标记；用于验证 run 中断与进程清理。 */
 export const FAKE_LONG_RUN_TEXT = "long"
-export { FAKE_SCRIPT_TEXT, FAKE_SHOWCASE_TEXT, FAKE_SUBAGENT_TEXT }
+export { FAKE_SCRIPT_TEXT, FAKE_SHOWCASE_TEXT, FAKE_SUBAGENT_TEXT, FAKE_TOOL_RENDERERS_TEXT }
 
 /**
  * fake agent 的模型目录：一个可调思考深度，一个不可调，用来覆盖两种界面状态。
@@ -140,7 +142,9 @@ export class FakeAgentDriver implements AgentDriver {
           ? fakeSubagentScript
           : input.text === FAKE_SHOWCASE_TEXT
             ? fakeShowcaseScript
-            : null
+            : input.text === FAKE_TOOL_RENDERERS_TEXT
+              ? fakeToolRenderersScript
+              : null
     if (script) {
       await runFakeScript(runtime, this.stepMs, script)
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })

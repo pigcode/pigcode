@@ -1,6 +1,6 @@
 /**
- * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel、Surface 与设置页登记到
- * 扩展点注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
+ * 第三方 UI 插件：读取 boot graph、动态加载 client bundle，把插件的 Panel、Surface、设置页、Command 与工具渲染器
+ * 登记到扩展点注册表（归属自动填成这个插件），并给插件一套和宿主一致的 DOM 组件、宿主的主题与语言。
  *
  * reload 先把新出现和换了版本的 bundle 都 import 完，再在同一个同步步骤里卸载、应用：
  * - 从 boot graph 消失（停用、卸载）的插件按 owner 移除全部 Contribution，打开着的 Surface 随之关闭，
@@ -27,6 +27,7 @@ import {
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
 import { SettingPage } from "@pigcode/ui-primitives"
 import { PluginContentHost } from "@pigcode/ui-shell"
+import { checkToolRenderer, pluginToolRenderer } from "./plugin-tool-renderers"
 
 /**
  * 插件在窗口里出的错；id 用作快照内的稳定 key。
@@ -47,7 +48,7 @@ export interface PluginErrorRegistry {
   subscribe(listener: () => void): () => void
 }
 
-/** Renderer 持有的第三方插件控制器。Panel、Surface 与设置页在扩展点注册表里，不在这里。 */
+/** Renderer 持有的第三方插件控制器。插件登记的内容在扩展点注册表里，不在这里。 */
 export interface ClientPluginController {
   /** 加载与注册时出的错，插件页按插件显示。 */
   errors: PluginErrorRegistry
@@ -292,6 +293,12 @@ export function createClientPluginController(deps: {
               }
             },
           })
+        },
+      },
+      toolRenderers: {
+        register(renderer) {
+          checkToolRenderer(renderer)
+          return deps.extensions.register("toolRenderer", pluginToolRenderer(renderer, owner))
         },
       },
       ui,

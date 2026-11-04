@@ -10,6 +10,7 @@ import { MessageList } from "./message-list"
 import { AgentRow, type SubagentCall } from "./subagent-card"
 import { SubagentView } from "./subagent-view"
 import { resetToolOpen } from "./tool-open"
+import { WithToolRenderers } from "./tools/tool-renderers.fixtures"
 import { ConversationActionsContext } from "./tools"
 
 afterEach(() => {
@@ -61,7 +62,11 @@ const RUNNING: SubagentCall = {
 const SUBAGENT: SubagentCall = { ...RUNNING, status: "completed", output: "It is src/index.ts." }
 
 function inLocale(node: ReactNode) {
-  return render(<LocaleProvider locale="zh-CN">{node}</LocaleProvider>)
+  return render(
+    <LocaleProvider locale="zh-CN">
+      <WithToolRenderers>{node}</WithToolRenderers>
+    </LocaleProvider>,
+  )
 }
 
 describe("AgentRow", () => {

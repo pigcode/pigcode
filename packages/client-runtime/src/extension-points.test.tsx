@@ -3,6 +3,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  BUILTIN_TOOL_RENDERER_ORDER,
   EXTENSION_POINTS,
   ExtensionRegistryScope,
   createExtensionRegistry,
@@ -10,6 +11,7 @@ import {
   useContributions,
   type ContributionOwner,
   type PanelContribution,
+  type ToolRendererContribution,
 } from "./extension-points"
 
 afterEach(() => {
@@ -175,6 +177,59 @@ describe("extension registry", () => {
       { point: "panel", id: "a1", existing: PLUGIN_A, rejected: PLUGIN_B },
     ])
     expect(onConflicts).toHaveBeenCalledOnce()
+  })
+})
+
+describe("tool renderers", () => {
+  function renderer(
+    id: string,
+    owner: ContributionOwner,
+    order: number,
+    match: (name: string) => boolean,
+  ): ToolRendererContribution {
+    return { id, owner, order, matches: match, render: () => id }
+  }
+
+  /** 时间线的选择规则：按注册表的顺序，第一个匹配的生效。 */
+  const pick = (registry: ReturnType<typeof createExtensionRegistry>, name: string) =>
+    registry.get("toolRenderer").find((item) => item.matches(name))?.id
+
+  it("lets a plugin at the default order beat the built-in that matches every MCP name", () => {
+    const registry = createExtensionRegistry()
+    const isMcp = (name: string) => name.startsWith("mcp__")
+    registry.register(
+      "toolRenderer",
+      renderer("builtin.mcp", WORKBENCH, BUILTIN_TOOL_RENDERER_ORDER, isMcp),
+    )
+    const dispose = registry.register(
+      "toolRenderer",
+      renderer("clock", PLUGIN_A, 0, (name) => name.endsWith("clock_now")),
+    )
+    expect(pick(registry, "mcp__pigcode__clock_now")).toBe("clock")
+    expect(pick(registry, "mcp__github__list_issues")).toBe("builtin.mcp")
+    // 没有匹配时列表里什么也选不到，时间线用通用渲染器。
+    expect(pick(registry, "frob_widget")).toBeUndefined()
+
+    dispose()
+    expect(pick(registry, "mcp__pigcode__clock_now")).toBe("builtin.mcp")
+  })
+
+  it("puts a plugin after the built-ins when its order is larger, and removes it with its owner", () => {
+    const registry = createExtensionRegistry()
+    const any = () => true
+    registry.register(
+      "toolRenderer",
+      renderer("builtin.mcp", WORKBENCH, BUILTIN_TOOL_RENDERER_ORDER, any),
+    )
+    registry.register("toolRenderer", renderer("late", PLUGIN_A, 2000, any))
+    registry.register("toolRenderer", renderer("early", PLUGIN_B, -1, any))
+    expect(registry.get("toolRenderer").map((item) => item.id)).toEqual([
+      "early",
+      "builtin.mcp",
+      "late",
+    ])
+    registry.removeOwner(PLUGIN_B)
+    expect(pick(registry, "anything")).toBe("builtin.mcp")
   })
 })
 

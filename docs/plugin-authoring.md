@@ -404,6 +404,7 @@ export function apply(ctx: PluginHostContext): void {
   `stdioServer()` 写进 `mcp_servers.pigcode`，由 stdio bridge 经 Unix domain socket / 命名管道
   连回 Host，并在 hello 时用一次性 token 绑定线程。Host 不监听 TCP 端口。
 - 没有任何已注册工具时，Host 不会注入空 MCP 配置。
+- 工具调用在时间线里的显示由[工具渲染器](#工具渲染器)决定；没有登记时用内置的 MCP 行。
 
 ## UI 插件
 
@@ -412,7 +413,7 @@ export function apply(ctx: PluginHostContext): void {
 
 ### 五个扩展点
 
-窗口里只有五个扩展点。下表前四个的登记入口已经开放，插件和内置功能遵守同样的规则：
+窗口里只有五个扩展点。插件和内置功能遵守同样的规则：
 
 | 扩展点     | 加什么                               | 登记方式                     |
 | ---------- | ------------------------------------ | ---------------------------- |
@@ -420,7 +421,7 @@ export function apply(ctx: PluginHostContext): void {
 | Surface    | 右侧面板（Workbench）里的一种标签    | `ctx.surfaces.register`      |
 | 设置页     | 设置里的一页                         | `ctx.settingsPages.register` |
 | Command    | 命令面板与输入框 `/` 共用的一个操作  | `ctx.commands.register`      |
-| 工具渲染器 | 一类工具调用在对话时间线里的显示方式 | 即将开放                     |
+| 工具渲染器 | 一类工具调用在对话时间线里的显示方式 | `ctx.toolRenderers.register` |
 
 除此之外没有别的登记途径。manifest 里写 `contributes.settings`、`contributes.commands`、
 `contributes.slots` 或 `contributes.rpc` 会让整个插件不可用：安装时被拒绝；已经安装的插件升级后在插件页显示错误，
@@ -432,12 +433,13 @@ Host 入口和界面代码都不加载。把这些字段删掉，改用上表的
 
 ### Panel、Surface、设置页与 Command
 
-UI 插件在四个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
-设置页是设置里的一页，Command 是命令面板与输入框 `/` 共用的一个操作。内置功能也通过同一个扩展点注册表登记
-（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface；通用、外观、Agent、定时任务、插件都是内置的设置页；
-新会话、侧栏、右侧面板、设置、插件、添加项目都是内置的命令），遵守同样的规则：
+UI 插件在五个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
+设置页是设置里的一页，Command 是命令面板与输入框 `/` 共用的一个操作，工具渲染器见[下文](#工具渲染器)。
+内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface；通用、外观、Agent、
+定时任务、插件都是内置的设置页；新会话、侧栏、右侧面板、设置、插件、添加项目都是内置的命令；命令、读文件、改文件、
+搜索、抓取、提问、技能、后台任务、计划、MCP、浏览器的显示都是内置的工具渲染器），遵守同样的规则：
 
-- `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)`、`ctx.settingsPages.register(page)` 返回注销函数。
+- `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)`、`ctx.settingsPages.register(page)`、`ctx.toolRenderers.register(renderer)` 返回注销函数。
   登记的归属由宿主按插件自动填写，插件不需要也不能自己指定。
 - `id` 在同一个扩展点上唯一，内置的 Surface 和设置页（`general`、`appearance`、`agents`、`schedules`、`plugins`）
   也算在内。和已有的 id 重名时，这次登记不生效、返回一个什么也不做的
@@ -445,7 +447,7 @@ UI 插件在四个扩展点上登记内容：Panel 是左侧栏里的一个区�
 - 可选的 `order` 决定排列顺序（小的在前，缺省 0），相同时按 `id` 排。插件的 Surface 列在启动器和「+」菜单的
   「插件」组里；插件的设置页列在设置侧栏内置页后面的「插件设置」组里，设置里的搜索也会搜到它的名称。
 - `file` 是文件标签的种类，Surface 不能用这个 id；用了按和工作台冲突处理。
-- 插件停用或卸载时，它登记的全部 Panel、Surface 与设置页一起移除（没有自己注销的也一样）；各个会话里已经打开的
+- 插件停用或卸载时，它登记的全部 Contribution 一起移除（没有自己注销的也一样）；各个会话里已经打开的
   这种 Surface 标签随之关闭，当前标签改选相邻的标签；正在看它的设置页时回到通用页，前进后退也会跳过这一页。被它挤掉过同名登记的插件会重新应用一次，拿到空出来的 id。
 - 插件更新到新版本时，新版本加载完才替换旧版本，已经打开的 Surface 标签保留，正在看的设置页也不变。
   这要求在 `apply` 里同步登记：`await` 之后才登记的话，新版本登记之前那一刻这一页不存在，正在看它的用户会
@@ -510,8 +512,8 @@ export function apply(ctx: ClientPluginContext): () => void {
 - `render(container)` 可以返回清理函数；宿主在移除或重画前调用它，然后清空容器。
   `render` 抛出的错误显示在内容区里，不影响宿主。
 - 容器带 `pg-root` 类：字体、字号、颜色和行高已经是宿主的；侧栏面板（`pg-panel`）是紧凑排版，
-  右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样。
-- 工具渲染器的登记入口还没开放。
+  右栏标签（`pg-surface`）带内边距、最宽 720px，设置页（`pg-settings`）和内置设置页同宽，分组之间的间距也一样，
+  时间线里的工具行（`pg-tool`）没有内边距，多个元素纵向排开。
 
 ### Command：命令面板与输入框 `/`
 
@@ -549,6 +551,63 @@ const disposeCommand = ctx.commands.register({
 })
 return () => disposeCommand()
 ```
+
+### 工具渲染器
+
+`ctx.toolRenderers.register(renderer)` 决定一类工具调用在对话时间线里怎么显示，主时间线和子 agent 的标签页都生效。
+完整示例见 [`examples/capability-clock/client.ts`](../examples/capability-clock/client.ts)：它是带界面代码的
+Capability 插件，`package.json` 里同时声明 `host` 和 `client`。
+
+```ts
+const dispose = ctx.toolRenderers.register({
+  id: "clock-now",
+  tools: ["clock_now"],
+  render(container, call) {
+    container.append(ctx.ui.text(`${call.status}: ${call.output ?? ""}`, { size: "sm" }))
+  },
+})
+```
+
+**匹配是声明式的。** `tools` 和 `families` 至少给一个非空的，两者是「或」的关系。宿主只比较名字，时间线渲染时不运行
+插件的代码，所以没有 `matches` 这样的回调：
+
+- `tools` 里的名字匹配完整的工具名，或者 `mcp__<服务>__<工具>` 里的工具部分，区分大小写，不做前缀或模糊匹配。写工具
+  注册时的名字（`clock_now`）就够了：`ctx.mcp.registerTool` 注册的工具，Claude Code 和 Codex 在时间线里都报告成
+  `mcp__pigcode__clock_now`，这个前缀由宿主和 Agent 决定，插件不需要知道。Agent 可能改写工具名里的特殊字符（例如
+  `foo.bar`），工具名只用字母、数字、`_` 和 `-` 最稳妥。名字不分服务：`tools: ["search"]` 也会匹配
+  `mcp__github__search`，只想要某一个服务时写完整的 `mcp__github__search`。
+- `families` 是工具族（类型 `ClientToolFamily`）：宿主把各 Agent 的工具名统一到一个族，例如 Bash 和 `exec_command`
+  都是 `shell`。可选的值是 `file-read`、`file-write`、`shell`、`search`、`web-fetch`、`todo`、`ask-user-question`、`agent`、
+  `skill`、`task-output`、`task-stop`、`message`、`plan-guidance`、`switch-mode`、`mcp`、`browser`、`unknown`。`mcp` 匹配
+  所有 MCP 工具，除了 `browser_*` 这些算 `browser` 族；`unknown` 匹配宿主不认识的全部工具，也就是替换通用渲染器，
+  一般用不上。
+
+**优先级就是 `order`。** 扩展点上的渲染器按 `order` 从小到大排（相同时按 `id`），第一个匹配的生效；没有匹配时用通用
+渲染器（工具名加可展开的参数与结果）。内置渲染器的 `order` 都是 1000，插件缺省是 0，所以插件的渲染器优先于内置的：
+内置的 MCP 渲染器匹配所有 `mcp__` 工具，`order` 大于 1000 的插件渲染器永远排不到它前面。
+
+按族匹配的渲染器要自己给一个 `order`，不要留在缺省的 0：和别的插件同为 0 时只能按 `id` 决出先后，结果和名字相关。
+一般用 1 到 999，这样按工具名登记的渲染器（缺省 0）仍然优先，又排在所有内置渲染器前面；想接管 `unknown` 的用
+大于 1000 的。正好等于 1000 时按 `id` 和内置渲染器决胜负，不要用。
+
+**内容是 DOM。** `render(container, call)` 和 Panel 的 `render` 一样可以返回清理函数：
+
+- `call` 有 `id`、`name`、`status`（`running`、`completed`、`failed`、`stopped`）、`input`、`output`（文字形式，还没有时是
+  `undefined`）、`inputValue`、`outputValue`（事件里原样的值，形状由 Agent 决定，比如同一个 MCP 工具的结果可能是 JSON
+  文字，也可能是内容块数组）、`startedAt`、`endedAt`、`exitCode`。
+- 调用的状态、输入或输出变化时，宿主先调用清理函数、清空容器，再用新的 `call` 调用 `render`；其余时候不重画。
+- `render` 抛错时，错误显示在这一行里；清理函数抛错时写进控制台。两者都不影响时间线的其余部分。
+- 运行中的命令，流出来的输出不传给插件渲染器，`call.output` 要等调用结束才有内容；内置的命令行会实时显示。
+- 插件停用或卸载时渲染器一起移除，已经显示的调用立即回到内置渲染器（`mcp__` 工具是内置的 MCP 行）或通用渲染器。
+
+**合并分组。** 连续的读文件、搜索、网页抓取和只读命令合成「查阅」，连续的终端命令合成「终端」，连续的浏览器操作合成
+「浏览器」。
+这一步按工具族进行，先于渲染器：分组的标题行总是宿主画的，插件的渲染器只用在展开后的子项上。下面这些工具不经过工具渲染器：
+`todo`（显示在状态面板）、`plan-guidance`（不显示）、有子 agent 卡片的 `agent` 调用，以及已经显示成提问卡片的
+`ask-user-question` 调用。
+
+`id` 冲突、抛错和清理的规则与其它扩展点相同；内置渲染器的 `id` 是 `builtin.<族名>`。`id`、`render`、`order`、`tools`、
+`families` 不合规，或者 `tools` 和 `families` 都是空的，`register` 直接抛错，插件页把它显示成界面代码错误。
 
 ### 和宿主一致的组件：`ctx.ui`
 
@@ -601,10 +660,10 @@ UI 插件运行在渲染进程，不应访问 Node 或 Electron API。
 1. 启用时先计算“当前已启用插件 + 目标插件”的 `provides`。只要有一个服务标识被多个插件声明
    （包括同一插件重复声明），就抛出 `PROVIDES_CONFLICT`，附带冲突的标识和插件 id，并拒绝启用。
 2. 检查通过后，Host 入口被动态挂载，agent 与 Capability 插件的服务立即可用。
-3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页与 Command 出现。
+3. boot graph 立即重写；渲染进程加载新出现的 UI client bundle，它的 Panel、Surface、设置页、Command 与工具渲染器出现。
 4. 停用时会卸载 Host 入口并等待 `ctx.effect` 清理，agent 与 Capability 插件的服务立即消失；
-   boot graph 重写后，它的 Panel、Surface、设置页与 Command 也会移除，已经打开的 Surface 标签关闭，
-   正在看的设置页回到通用页。停用 agent 还会取消它排队中的 run、
+   boot graph 重写后，它的 Panel、Surface、设置页、Command 与工具渲染器也会移除，已经打开的 Surface 标签关闭，
+   正在看的设置页回到通用页，时间线回到内置或通用的显示。停用 agent 还会取消它排队中的 run、
    中断运行中的 run 并释放会话。
 
 因此插件必须正确清理自己注册的东西：agent 用

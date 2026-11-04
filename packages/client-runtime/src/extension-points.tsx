@@ -112,17 +112,46 @@ export interface CommandContribution extends ContributionBase {
   run(): void | Promise<void>
 }
 
-/** 工具渲染器收到的一次工具调用。 */
-export interface ToolRendererProps {
-  toolName: string
-  input: unknown
-  output: unknown
+/** 工具渲染器看到的一次工具调用；和时间线（ui-chat 的 ToolCall）的结构相同。 */
+export interface ToolRendererCall {
+  id: string
+  name: string
   status: "running" | "completed" | "failed" | "stopped"
+  /** 输入与输出的文字形式。 */
+  input: string | undefined
+  output: string | undefined
+  /** 事件里原样的输入与输出。 */
+  inputValue?: unknown
+  outputValue?: unknown
+  startedAt?: string | undefined
+  endedAt?: string | undefined
+  /** 命令的退出码；Agent 不报告时缺省。 */
+  exitCode?: number | undefined
 }
 
-/** 工具渲染器：决定一类工具调用在对话时间线里怎么显示（#39 接入）。 */
+/** 工具渲染器的 render 收到的参数。 */
+export interface ToolRendererProps {
+  tool: ToolRendererCall
+  /** 运行中的命令已经流出的输出；只传给命令的渲染器。 */
+  live?: string | undefined
+  /** 分组里的子项不显示图标。 */
+  showIcon: boolean
+}
+
+/**
+ * 内置工具渲染器的 order。优先级就是 order：小的在前，第一个匹配的生效。内置的 MCP 渲染器匹配所有
+ * `mcp__` 工具，内置的排在 1000，缺省 order 为 0 的插件渲染器才能排在它前面。
+ * 按族匹配的插件渲染器应该自己给 1 到 999（或大于 1000），不要留在 0：同为 0 时只能按 id 决胜负。
+ * 正好等于 1000 也会按 id 和内置渲染器比，没有意义。
+ */
+export const BUILTIN_TOOL_RENDERER_ORDER = 1000
+
+/**
+ * 工具渲染器：决定一类工具调用在对话时间线里怎么显示。时间线取第一个匹配的；都不匹配时用
+ * ui-chat 的通用渲染器。
+ */
 export interface ToolRendererContribution extends ContributionBase {
-  /** 这个渲染器负责的工具调用。 */
+  /** 这个渲染器负责的工具调用。渲染时调用，要快，不能抛错。 */
   matches(toolName: string): boolean
   render(props: ToolRendererProps): ReactNode
 }

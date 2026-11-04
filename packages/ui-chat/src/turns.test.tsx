@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { MessageList } from "./message-list"
 import { resetToolOpen } from "./tool-open"
+import { WithToolRenderers } from "./tools/tool-renderers.fixtures"
 import { buildTimeline, latestPlan, type Turn } from "./turns"
 
 afterEach(() => {
@@ -184,13 +185,15 @@ describe("turn rendering", () => {
   function renderList(events: ThreadEvent[], streamingText = "", liveReasoning = "") {
     return render(
       <LocaleProvider locale="zh-CN">
-        <MessageList
-          events={events}
-          streamingText={streamingText}
-          liveReasoning={liveReasoning}
-          root="/repo"
-          onApproval={() => {}}
-        />
+        <WithToolRenderers>
+          <MessageList
+            events={events}
+            streamingText={streamingText}
+            liveReasoning={liveReasoning}
+            root="/repo"
+            onApproval={() => {}}
+          />
+        </WithToolRenderers>
       </LocaleProvider>,
     )
   }

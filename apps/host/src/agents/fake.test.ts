@@ -5,6 +5,7 @@ import {
   FAKE_MODELS,
   FAKE_SCRIPT_TEXT,
   FAKE_SHOWCASE_TEXT,
+  FAKE_TOOL_RENDERERS_TEXT,
   FAKE_SUBAGENT_TEXT,
   FakeAgentDriver,
 } from "./fake"
@@ -110,6 +111,25 @@ describe("fake agent", () => {
     expect(events.filter((event) => event.type === "reasoning.completed")).toHaveLength(2)
     expect(events.some((event) => event.type === "reasoning.delta")).toBe(true)
     expect(events.some((event) => event.type === "subagent.started")).toBe(true)
+    expect(events.at(-1)).toEqual({ type: "run.completed" })
+  })
+
+  it("calls the sample plugins' tools under the names their renderers declare", async () => {
+    const driver = new FakeAgentDriver({ stepMs: 0 })
+    const session = await driver.createSession({ threadId: "th_1", cwd: "/tmp" })
+    const events: AgentEvent[] = []
+    await driver.send(
+      session,
+      { text: FAKE_TOOL_RENDERERS_TEXT },
+      {
+        signal: new AbortController().signal,
+        emit: (event) => events.push(event),
+        requestApproval: async () => "deny",
+      },
+    )
+    expect(
+      events.flatMap((event) => (event.type === "tool.completed" ? [event.name] : [])),
+    ).toEqual(["mcp__pigcode__clock_now", "clock_now", "debug_probe"])
     expect(events.at(-1)).toEqual({ type: "run.completed" })
   })
 

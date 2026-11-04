@@ -8,6 +8,9 @@ import type { AgentRuntime } from "./driver"
 /** 触发脚本化回复的输入。 */
 export const FAKE_SCRIPT_TEXT = "tools"
 
+/** 触发工具渲染器脚本的输入。 */
+export const FAKE_TOOL_RENDERERS_TEXT = "renderers"
+
 /** 脚本里的一步：事件，或者等待。 */
 export type Step = AgentEvent | { wait: number }
 
@@ -72,6 +75,20 @@ const TEST_OUTPUT = [
   " ✓ src/index.test.ts > answer is exported\n",
   "\n Test Files  1 passed (1)\n      Tests  3 passed (3)\n   Duration  412ms\n",
 ]
+
+/**
+ * 样例插件登记了工具渲染器的工具：clock_now 一次用真实 Agent 报告的名字（mcp__pigcode__clock_now，见
+ * agent-claude 与 agent-codex），一次用不带前缀的名字；debug_probe 属于 ui-debug-panel。
+ */
+export function fakeToolRenderersScript(stepMs: number): Step[] {
+  const now = '{"now":"2026-01-02T03:04:05.000Z"}'
+  return [
+    ...tool("fake-clock-mcp", "mcp__pigcode__clock_now", {}, [{ type: "text", text: now }], stepMs),
+    ...tool("fake-clock-bare", "clock_now", {}, now, stepMs),
+    ...tool("fake-debug-probe", "debug_probe", { target: "timeline" }, "probe ok", stepMs),
+    ...message("工具都调用完了。"),
+  ]
+}
 
 /** 完整脚本；stepMs 控制每个工具的耗时，测试传 0。 */
 export function fakeScript(stepMs: number): Step[] {

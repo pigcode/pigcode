@@ -6,7 +6,8 @@
   "pigcode": {
     "apiVersion": 1,
     "kind": "capability",
-    "host": "./index.ts"
+    "host": "./index.ts",
+    "client": "./client.ts"
   },
   "devDependencies": {
     "@pigcode/plugin-sdk": "workspace:*"

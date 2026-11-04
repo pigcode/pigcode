@@ -12,6 +12,7 @@ import { resetToolOpen } from "../tool-open"
 import { ConversationActionsContext, type ConversationActions } from "./common"
 import { ToolBlock } from "./index"
 import { plainOutput } from "./shell"
+import { WithToolRenderers } from "./tool-renderers.fixtures"
 
 afterEach(() => {
   cleanup()
@@ -22,7 +23,7 @@ function inLocale(node: ReactNode, actions: ConversationActions = {}) {
   return render(
     <LocaleProvider locale="zh-CN">
       <ConversationActionsContext.Provider value={actions}>
-        {node}
+        <WithToolRenderers>{node}</WithToolRenderers>
       </ConversationActionsContext.Provider>
     </LocaleProvider>,
   )

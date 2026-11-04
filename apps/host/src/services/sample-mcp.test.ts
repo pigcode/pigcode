@@ -12,7 +12,7 @@ import type { CreateSessionInput, AgentDriver } from "../agents/driver"
 import { FakeAgentDriver } from "../agents/fake"
 import { apply as agentsPlugin } from "../agents/registry"
 import { apply as mcpBridge } from "./mcp-bridge"
-import { installLocalPlugin } from "./plugin-manager"
+import { buildBootGraph, installLocalPlugin } from "./plugin-manager"
 import { apply as pluginsPlugin } from "./plugins"
 import { apply as projects } from "./projects"
 import { apply as sessions } from "./sessions"
@@ -78,6 +78,22 @@ describe("Capability clock sample", () => {
       expect(ctx.mcpBridge.listTools("thread-clock").map((tool) => tool.name)).not.toContain(
         "clock_now",
       )
+    } finally {
+      await settleSocket(ctx)
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
+describe("Capability clock sample's client code", () => {
+  it("loads through the boot graph like a UI plugin's client code", async () => {
+    const { ctx, profileDir } = await setupHost()
+    try {
+      const plugin = await installLocalPlugin(profileDir, CLOCK_SOURCE)
+      expect(plugin.id).toBe("capability.pigcode-capability-clock")
+      const graph = await buildBootGraph(profileDir)
+      expect(graph.entries.map((entry) => entry.id)).toEqual([plugin.id])
+      expect(graph.entries[0]?.url).toContain("/pigcode-capability-clock/client.mjs?rev=")
     } finally {
       await settleSocket(ctx)
       await ctx.fiber.dispose()

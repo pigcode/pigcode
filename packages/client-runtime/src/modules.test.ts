@@ -12,6 +12,7 @@ function stubContext(): ClientPluginContext {
     surfaces: { register: () => () => {} },
     settingsPages: { register: () => () => {} },
     commands: { register: () => () => {} },
+    toolRenderers: { register: () => () => {} },
     ui: {} as ClientUiKit,
     theme: fixed<ClientTheme>("light"),
     locale: fixed("zh-CN"),

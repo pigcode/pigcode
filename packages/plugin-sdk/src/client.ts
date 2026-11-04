@@ -1,5 +1,5 @@
 /**
- * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页与 Command（内容是 DOM）、
+ * 浏览器侧插件可见的能力：在扩展点上登记的 Panel、Surface、设置页、Command 与工具渲染器（内容是 DOM）、
  * 和宿主一致的界面组件（pg-* 样式）、宿主的主题与语言。插件不依赖 React，也不接触宿主内部对象。
  */
 
@@ -71,6 +71,66 @@ export interface ClientCommand {
   /** `/` 触发名，例如 `debug` 对应 `/debug`；缺省时只出现在命令面板。 */
   slash?: string
   run(): void | Promise<void>
+}
+
+/** 工具的展示族：宿主把各 Agent 的工具名统一成这一套名字，例如 Bash 和 exec_command 都是 `shell`。 */
+export type ClientToolFamily =
+  | "file-read"
+  | "file-write"
+  | "shell"
+  | "search"
+  | "web-fetch"
+  | "todo"
+  | "ask-user-question"
+  | "agent"
+  | "skill"
+  | "task-output"
+  | "task-stop"
+  | "message"
+  | "plan-guidance"
+  | "switch-mode"
+  | "mcp"
+  | "browser"
+  | "unknown"
+
+/** 时间线里的一次工具调用。 */
+export interface ClientToolCall {
+  id: string
+  /** Agent 报告的工具名；MCP 工具是 `mcp__<服务>__<工具>`。 */
+  name: string
+  status: "running" | "completed" | "failed" | "stopped"
+  /** 输入与输出的文字形式；还没有时是 undefined。 */
+  input: string | undefined
+  output: string | undefined
+  /** 事件里原样的输入与输出；形状由 Agent 决定，读取时自己校验。 */
+  inputValue?: unknown
+  outputValue?: unknown
+  startedAt?: string | undefined
+  endedAt?: string | undefined
+  /** 命令的退出码；Agent 不报告时缺省。 */
+  exitCode?: number | undefined
+}
+
+/** 把一次工具调用画进容器；可以返回清理函数，重画或移除前调用。调用变化（状态、输出）时重画。 */
+export type ClientToolRender = (container: HTMLElement, call: ClientToolCall) => void | (() => void)
+
+/**
+ * 工具渲染器：决定一类工具调用在对话时间线里怎么显示。匹配是声明式的：`tools` 和 `families` 至少给一个
+ * 非空的，渲染时宿主只比较名字，不运行插件代码。
+ */
+export interface ClientToolRenderer {
+  /** 在全部工具渲染器里唯一（内置的是 `builtin.<族名>`）。 */
+  id: string
+  /** 小的优先，第一个匹配的生效；相同时按 id 排。缺省 0；内置渲染器是 1000，大于它就排在内置的后面。 */
+  order?: number
+  /**
+   * 工具名。写完整的工具名，或 `mcp__<服务>__<工具>` 里的工具部分：`clock_now` 同时匹配
+   * `clock_now` 和 `mcp__pigcode__clock_now`，插件不需要知道各 Agent 加的服务前缀。区分大小写。
+   */
+  tools?: readonly string[]
+  /** 工具族。 */
+  families?: readonly ClientToolFamily[]
+  render: ClientToolRender
 }
 
 /** 宿主的当前值与变化通知。 */
@@ -146,6 +206,8 @@ export interface ClientPluginContext {
   settingsPages: ClientContributionApi<ClientSettingsPage>
   /** Command 扩展点：在命令面板和输入框 `/` 里添加一个命令。 */
   commands: ClientContributionApi<ClientCommand>
+  /** 工具渲染器扩展点：决定一类工具调用在对话时间线里怎么显示。 */
+  toolRenderers: ClientContributionApi<ClientToolRenderer>
   ui: ClientUiKit
   theme: ClientObservable<ClientTheme>
   /** 界面语言，例如 `zh-CN`、`en-US`。 */

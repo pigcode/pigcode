@@ -88,6 +88,7 @@ const builtinOwnerKeys: Readonly<Record<string, MessageKey>> = {
   agents: "plugins.owner.agents",
   schedules: "plugins.owner.schedules",
   plugins: "plugins.owner.plugins",
+  toolRenderers: "plugins.owner.toolRenderers",
 }
 
 /** 界面代码错误的文案。 */

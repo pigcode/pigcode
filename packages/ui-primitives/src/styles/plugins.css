@@ -54,6 +54,12 @@
   flex-direction: column;
   gap: 28px;
 }
+/* 时间线里的一行工具调用：插件画多个元素时纵向排开，宽度不超过时间线。 */
+.pg-root.pg-tool {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
 
 .pg-root > .btn,
 .pg-section-body > .btn {

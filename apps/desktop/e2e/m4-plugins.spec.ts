@@ -1,7 +1,7 @@
 /** M4 验收：安装/启用/停用第三方 Agent、UI、Capability 插件。 */
 import { mkdirSync, rmSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject, installPlugin } from "./projects"
+import { addProject, installPlugin, launchEnv } from "./projects"
 
 test("installs, enables, and disables plugins without restart", async () => {
   // 每次从干净的项目目录开始，避免上一次失败残留影响结果。
@@ -183,6 +183,133 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(capabilityItem).toContainText("已停用")
   await capabilityItem.locator(".ext-row-main").click()
   await expect(capabilityItem.locator(".ext-facts")).toContainText("能力")
+
+  await app.close()
+})
+
+test("a plugin's contributions on all five extension points come and go with it", async () => {
+  const projectRoot = "/tmp/pigcode-m4-e2e-renderers"
+  rmSync(projectRoot, { recursive: true, force: true })
+  mkdirSync(projectRoot, { recursive: true })
+  const app = await electron.launch({
+    args: ["."],
+    env: launchEnv({ PIGCODE_FAKE_STEP_MS: "40" }),
+  })
+  const page = await app.firstWindow()
+  await addProject(app, page, projectRoot)
+
+  const openPlugins = async () => {
+    await page.getByRole("button", { name: "设置", exact: true }).click()
+    await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  }
+  const backToApp = () => page.getByRole("button", { name: "返回应用" }).first().click()
+  await openPlugins()
+  // ui-debug-panel 在五个扩展点上都登记了内容；capability-clock 是带界面代码的 Capability 插件。
+  await installPlugin(page, new URL("../../../examples/ui-debug-panel", import.meta.url).pathname)
+  await installPlugin(page, new URL("../../../examples/capability-clock", import.meta.url).pathname)
+  const debug = page.locator(".ext-item").filter({ hasText: "pigcode-ui-debug-panel" })
+  const clock = page.locator(".ext-item").filter({ hasText: "pigcode-capability-clock" })
+  await expect(debug.getByRole("switch")).toBeChecked()
+  await expect(clock.getByRole("switch")).toBeChecked()
+  await backToApp()
+
+  // fake agent 调用样例插件的工具：clock_now 带 MCP 前缀和不带各一次，还有 debug_probe。
+  await page.getByRole("button", { name: "新会话" }).first().click()
+  await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+  await page.locator(".tiptap").click()
+  await page.keyboard.type("renderers")
+  await page.keyboard.press("Enter")
+  const turn = page.locator(".turn").last()
+  await expect(turn).toHaveAttribute("data-status", "completed")
+
+  const debugPanel = page.locator(".plugin-panel-head").filter({ hasText: "Debug Panel" })
+  const debugSettings = page
+    .locator(".sidebar")
+    .getByRole("button", { name: "Debug Settings", exact: true })
+  const addSurface = page.getByRole("button", { name: "添加面板" })
+  const inspectorItem = page.getByRole("menuitem", { name: "Debug Inspector" })
+  const commandOption = page.getByRole("option", { name: /运行示例命令/ })
+  const probeRow = turn.locator("[data-plugin-content='debug-probe']")
+  const clockRows = turn.locator("[data-plugin-content='clock-now']")
+  const genericProbe = turn.getByRole("button", { name: /^Debug probe/ })
+  const genericClock = turn.getByRole("button", { name: /^Clock now/ })
+  const mcpClock = turn.getByRole("button", { name: /^MCP.*Clock now/ })
+  /** 这一轮结束后工作区是折叠的；回到会话时重新展开。 */
+  const showWork = async () => {
+    const toggle = turn.locator(".work-toggle")
+    if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click()
+    await expect(toggle).toHaveAttribute("aria-expanded", "true")
+  }
+  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+
+  // 启用：Panel、Surface、Command、工具渲染器和设置页都出现。
+  await showWork()
+  await expect(debugPanel).toBeVisible()
+  await addSurface.click()
+  await expect(inspectorItem).toBeVisible()
+  await page.keyboard.press("Escape")
+  await page.locator(".tiptap").click()
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("示例命令")
+  await expect(commandOption).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(probeRow).toHaveText("调试探针 · completed")
+  await expect(genericProbe).toHaveCount(0)
+  // 两种名字的 clock_now 都用插件的渲染器，内置的 MCP 行和通用行都不出现。
+  await expect(clockRows).toHaveCount(2)
+  await expect(clockRows.first()).toContainText("当前时间")
+  await expect(clockRows.last()).toContainText("当前时间")
+  await expect(mcpClock).toHaveCount(0)
+  await expect(genericClock).toHaveCount(0)
+  await openPlugins()
+  await expect(debugSettings).toBeVisible()
+
+  // 停用：五处都消失，时间线回到内置的 MCP 行和通用行。
+  await debug.getByRole("switch").click()
+  await expect(debug.getByRole("switch")).not.toBeChecked()
+  await clock.getByRole("switch").click()
+  await expect(clock.getByRole("switch")).not.toBeChecked()
+  await expect(debugSettings).toHaveCount(0)
+  await expect(debugPanel).toBeHidden()
+  await backToApp()
+  await showWork()
+  await expect(probeRow).toHaveCount(0)
+  await expect(clockRows).toHaveCount(0)
+  await expect(genericProbe).toBeVisible()
+  await expect(genericClock).toBeVisible()
+  await expect(mcpClock).toBeVisible()
+  await addSurface.click()
+  await expect(page.getByRole("menuitem", { name: /终端/ })).toBeVisible()
+  await expect(inspectorItem).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await page.locator(".tiptap").click()
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("示例命令")
+  await expect(page.locator(".palette")).toContainText("没有匹配结果")
+  await page.keyboard.press("Escape")
+
+  // 重新启用：渲染器回来，已经在时间线里的调用换回插件的显示。
+  await openPlugins()
+  await debug.getByRole("switch").click()
+  await expect(debug.getByRole("switch")).toBeChecked()
+  await clock.getByRole("switch").click()
+  await expect(clock.getByRole("switch")).toBeChecked()
+  await expect(debugSettings).toBeVisible()
+  await backToApp()
+  await showWork()
+  await expect(probeRow).toBeVisible()
+  await expect(clockRows).toHaveCount(2)
+  await expect(genericClock).toHaveCount(0)
+  await page.locator(".tiptap").click()
+  await page.keyboard.press("ControlOrMeta+k")
+  await page.locator(".palette input").fill("示例命令")
+  await expect(commandOption).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // 后面的用例不需要 clock 样例，只留一个停用的记录，和其余样例一样。
+  await openPlugins()
+  await clock.getByRole("switch").click()
+  await expect(clock.getByRole("switch")).not.toBeChecked()
 
   await app.close()
 })
