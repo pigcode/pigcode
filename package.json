@@ -17,7 +17,8 @@
     "real:claude": "node scripts/real-smoke.ts claude",
     "real:codex": "node scripts/real-smoke.ts codex",
     "real:codex:multi": "node scripts/real-smoke.ts codex-multi",
-    "create-plugin": "node scripts/create-plugin.ts"
+    "create-plugin": "node scripts/create-plugin.ts",
+    "postinstall": "node scripts/fix-node-pty-helper.ts"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.1",

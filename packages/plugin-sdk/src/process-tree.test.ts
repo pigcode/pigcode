@@ -164,18 +164,22 @@ describe("ownProcessTree", () => {
     await tree.terminate()
   })
 
-  it("leaves what the process started alone when it exits normally, and forgets its pid", async () => {
-    const { child, grandchildPid } = await start(
-      parentScript({ after: "setTimeout(() => process.exit(0), 100)" }),
-    )
-    const tree = ownProcessTree(child)
-    await new Promise((resolve) => child.once("exit", resolve))
-    const kill = vi.spyOn(process, "kill")
-    await tree.terminate()
-    expect(kill).not.toHaveBeenCalled()
-    kill.mockRestore()
-    expect(isAlive(grandchildPid)).toBe(true)
-  })
+  // 只在 POSIX 上有意义：Windows 上 libuv 的 Job 对象会在父进程退出时结束它的子进程，不是我们做的。
+  posixIt(
+    "leaves what the process started alone when it exits normally, and forgets its pid",
+    async () => {
+      const { child, grandchildPid } = await start(
+        parentScript({ after: "setTimeout(() => process.exit(0), 100)" }),
+      )
+      const tree = ownProcessTree(child)
+      await new Promise((resolve) => child.once("exit", resolve))
+      const kill = vi.spyOn(process, "kill")
+      await tree.terminate()
+      expect(kill).not.toHaveBeenCalled()
+      kill.mockRestore()
+      expect(isAlive(grandchildPid)).toBe(true)
+    },
+  )
 
   posixIt(
     "does not signal again after the tree is gone, because the pid may belong to someone else by then",
