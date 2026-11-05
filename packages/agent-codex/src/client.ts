@@ -77,10 +77,10 @@ export class CodexRpcClient {
   }
 
   /** 停止监听并关闭底层传输。 */
-  close(): void {
+  close(): Promise<void> {
     this.disposeLine()
     this.disposeClose()
-    this.transport.close()
+    return Promise.resolve(this.transport.close())
   }
 
   /** 进程不在了：等待中的请求立即失败，而不是等到超时。 */

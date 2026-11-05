@@ -66,6 +66,10 @@ export class CodexDriver implements AgentDriver {
   }
 
   private readonly sessions = new Map<string, CodexSessionState>()
+  /** 所有还开着的 app-server，包括 session 建到一半和临时拉模型目录的。 */
+  private readonly clients = new Set<CodexRpcClient>()
+  /** 正在结束的 app-server。注册表注销 driver 时不等 dispose，所以 close 要等这里的全部结束，否则 Host 一退出就没人强制结束它们了。 */
+  private readonly ending = new Set<Promise<void>>()
   private readonly transportFactory: (launch: CodexLaunch) => CodexTransport
   private readonly probe: (launch: CodexLaunch) => Promise<CodexDetection>
 
@@ -119,7 +123,7 @@ export class CodexDriver implements AgentDriver {
       }
     }
 
-    const client = new CodexRpcClient(this.transportFactory(launch))
+    const client = this.openClient(launch)
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
@@ -144,7 +148,7 @@ export class CodexDriver implements AgentDriver {
       // 同一 key 的旧 state 必须先关闭，否则会遗留一个 app-server 子进程。
       const previous = this.sessions.get(stateKey)
       if (previous) {
-        previous.client.close()
+        void this.closeClient(previous.client)
         this.sessions.delete(stateKey)
       }
       this.sessions.set(stateKey, {
@@ -166,7 +170,7 @@ export class CodexDriver implements AgentDriver {
       }
     } catch (error) {
       // 初始化失败时结束子进程，避免泄漏 app-server。
-      client.close()
+      void this.closeClient(client)
       throw error
     }
   }
@@ -232,7 +236,7 @@ export class CodexDriver implements AgentDriver {
 
   /** 临时启动 app-server 拉取模型目录；失败时返回空目录，不影响设置页。 */
   async listModels(settings: AgentSettingsValues = {}): Promise<AgentModelInfo[]> {
-    const client = new CodexRpcClient(this.transportFactory(codexLaunch(settings)))
+    const client = this.openClient(codexLaunch(settings))
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
@@ -241,7 +245,7 @@ export class CodexDriver implements AgentDriver {
     } catch {
       return []
     } finally {
-      client.close()
+      void this.closeClient(client)
     }
   }
 
@@ -260,15 +264,33 @@ export class CodexDriver implements AgentDriver {
     for (const key of keys) {
       const state = this.sessions.get(key)
       if (!state) continue
-      state.client.close()
       this.sessions.delete(key)
+      await this.closeClient(state.client)
     }
   }
 
   /** 插件停用时关闭所有 app-server，包括空闲等待复用的。 */
-  close(): void {
-    for (const state of this.sessions.values()) state.client.close()
+  async close(): Promise<void> {
     this.sessions.clear()
+    for (const client of [...this.clients]) void this.closeClient(client)
+    await Promise.all(this.ending)
+  }
+
+  /** 启动一个 app-server 并记下来，插件停用时都要结束。 */
+  private openClient(launch: CodexLaunch): CodexRpcClient {
+    const client = new CodexRpcClient(this.transportFactory(launch))
+    this.clients.add(client)
+    return client
+  }
+
+  /** 结束 app-server；不管调用方等不等，close 都会等它结束。 */
+  private closeClient(client: CodexRpcClient): Promise<void> {
+    this.clients.delete(client)
+    const done = client.close().finally(() => {
+      this.ending.delete(done)
+    })
+    this.ending.add(done)
+    return done
   }
 
   /** 按原生 thread id 或本地 thread id 查找 session 状态。 */

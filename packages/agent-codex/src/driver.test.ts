@@ -1,6 +1,6 @@
 /** 用 scripted replay transport 驱动 CodexDriver，验证协议交互与事件归一化。 */
 import type { AgentEvent } from "@pigcode/contracts"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -375,5 +375,52 @@ describe("CodexDriver", () => {
 
     expect(models).toEqual([{ id: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", isDefault: true }])
     expect(transport.closed).toBe(true)
+  })
+})
+
+describe("CodexDriver process lifetime", () => {
+  /** close 要等外部放行才完成的传输，模拟进程还没结束；initialize 可以设置成永远没有回应。 */
+  class SlowClosingTransport extends ScriptedTransport {
+    readonly closed = vi.fn()
+    finishClosing = (): void => undefined
+    override close(): Promise<void> {
+      this.closed()
+      return new Promise((resolve) => {
+        this.finishClosing = resolve
+      })
+    }
+  }
+
+  /** 让 Promise 回调都跑完。 */
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 10))
+
+  // 注销 driver 时注册表先 dispose 活跃会话，不等结果，接着插件才 await close；Host 紧接着就退出。
+  it("close also waits for a dispose nobody awaited", async () => {
+    const transport = new SlowClosingTransport({ nativeThreadId: "th_native" })
+    const driver = new CodexDriver({ transportFactory: () => transport })
+    const session = await driver.createSession({ threadId: "t1", cwd: "/tmp" })
+    void driver.dispose(session)
+    let finished = false
+    const closed = driver.close().then(() => {
+      finished = true
+    })
+    await settle()
+    expect(transport.closed).toHaveBeenCalledOnce()
+    expect(finished).toBe(false)
+    transport.finishClosing()
+    await closed
+    expect(finished).toBe(true)
+  })
+
+  it("close ends an app-server whose session is still being created", async () => {
+    const transport = new SlowClosingTransport({ nativeThreadId: "th_native" })
+    vi.spyOn(transport, "send").mockImplementation(() => undefined)
+    const driver = new CodexDriver({ transportFactory: () => transport })
+    void driver.createSession({ threadId: "t1", cwd: "/tmp" }).catch(() => undefined)
+    const closed = driver.close()
+    await settle()
+    expect(transport.closed).toHaveBeenCalledOnce()
+    transport.finishClosing()
+    await closed
   })
 })

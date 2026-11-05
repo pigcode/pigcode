@@ -9,7 +9,8 @@ export interface HostProcess {
   child: UtilityProcess
   appPort: MessagePortMain
   controlPort: MessagePortMain
-  stop(): void
+  /** 通知 Host 清理后退出；Host 退出或超时被强制结束后完成。 */
+  stop(): Promise<void>
 }
 
 /**
@@ -52,6 +53,9 @@ function pipeOutput(child: UtilityProcess, append: (text: string) => void): void
   })
 }
 
+/** 等 Host 清理并退出的最长时间。 */
+const HOST_STOP_TIMEOUT_MS = 5000
+
 /** 以 utilityProcess 方式启动 Host，并把端口转交给子进程。 */
 export function startHostProcess(entry: string, profileDir: string): HostProcess {
   const control = new MessageChannelMain()
@@ -59,6 +63,10 @@ export function startHostProcess(entry: string, profileDir: string): HostProcess
   const child = utilityProcess.fork(entry, [], {
     stdio: "pipe",
     env: { ...process.env, PIGCODE_PROFILE_DIR: profileDir },
+  })
+  let exited = false
+  child.once("exit", () => {
+    exited = true
   })
   const append = createAppender(process.env.PIGCODE_HOST_LOG)
   // 重启的 Host 追加到同一个文件；分隔线把几次启动的输出分开。
@@ -70,7 +78,22 @@ export function startHostProcess(entry: string, profileDir: string): HostProcess
     controlPort: control.port2,
     appPort: app.port2,
     stop() {
-      child.kill()
+      return new Promise((resolve) => {
+        if (exited) {
+          resolve()
+          return
+        }
+        // Host 要等 Agent 和终端的进程结束，它们同时结束，宽限都是 3 秒；超过这个时间就是卡住了。
+        const timer = setTimeout(() => {
+          child.kill()
+          resolve()
+        }, HOST_STOP_TIMEOUT_MS)
+        child.once("exit", () => {
+          clearTimeout(timer)
+          resolve()
+        })
+        child.postMessage({ type: "shutdown" })
+      })
     },
   }
 }

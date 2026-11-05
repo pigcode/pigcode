@@ -8,8 +8,8 @@ export const inject = ["agents"]
 export function apply(ctx: PluginHostContext): void {
   const driver = new ClaudeDriver()
   ctx.agents.register(driver)
-  ctx.effect(() => () => {
+  ctx.effect(() => async () => {
     ctx.agents.unregister(driver.id)
-    driver.close()
+    await driver.close()
   })
 }

@@ -96,6 +96,10 @@ export class RpcServer {
             this.ctx.agents.cancelRun(run.runId)
           }
         }
+        // 终端也一样：之后没有界面能关它，里面的进程会一直跑下去。
+        for (const thread of this.ctx.threads.list(value.projectId)) {
+          this.ctx.get("terminal")?.closeThread(thread.id)
+        }
         return project
       }
       case "thread.list":
@@ -125,6 +129,8 @@ export class RpcServer {
         for (const run of this.ctx.agents.listRuns()) {
           if (archived.has(run.threadId)) this.ctx.agents.cancelRun(run.runId)
         }
+        // 终端也一样：归档后没有界面能关它，里面的进程会一直跑下去。
+        for (const threadId of archived) this.ctx.get("terminal")?.closeThread(threadId)
         const thread = this.ctx.threads.archive(value.threadId)
         if (!thread) throw new Error(`thread not found: ${value.threadId}`)
         return thread

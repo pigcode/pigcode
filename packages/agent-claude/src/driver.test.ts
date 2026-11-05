@@ -1,7 +1,11 @@
 /** 用 replay query 驱动 driver，验证事件顺序与审批。 */
 import type { Options } from "@anthropic-ai/claude-agent-sdk"
 import type { SessionMcp } from "@pigcode/plugin-sdk"
-import { describe, expect, it } from "vitest"
+import { mkdtemp, readFile, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { describe, expect, it, vi } from "vitest"
+import { withCliStderr } from "./cli-process"
 import { ClaudeDriver } from "./driver"
 import { replayQuery } from "./replay"
 
@@ -266,5 +270,119 @@ describe("ClaudeDriver", () => {
     // 其他工具仍然走审批。
     await captured?.canUseTool?.("Bash", { command: "ls" }, options)
     expect(approvals).toEqual(["Bash"])
+  })
+})
+
+/** 用真实 SDK 启动一个假的 CLI：它启动一个孙进程，把 pid 写到文件里，然后一直等着。 */
+describe("ClaudeDriver process lifetime", () => {
+  /** 写一个假 CLI 并开始一次 send；返回 driver、session 和这次 send 的结果。 */
+  async function startFakeCli(script: string) {
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-tree-"))
+    const cli = join(dir, "fake-claude.js")
+    const pidFile = join(dir, "tool.pid")
+    await writeFile(cli, script.replace("PID_FILE", JSON.stringify(pidFile)))
+    const driver = new ClaudeDriver({ executable: cli })
+    const session = await driver.createSession({ threadId: "t1", cwd: dir })
+    const failures: string[] = []
+    const sent = driver.send(
+      session,
+      { text: "hello" },
+      {
+        signal: new AbortController().signal,
+        emit: (event) => {
+          if (event.type === "run.failed") failures.push(event.message)
+        },
+        requestApproval: async () => "allow-once",
+      },
+    )
+    return { driver, session, sent, failures, pidFile }
+  }
+
+  // 和真实的 Claude Code 一样，Bash 工具放在自己的 session 里，不在 CLI 的进程组内；还要忽略 SIGTERM，
+  // 这样只有强制结束那一步才能结束它。
+  const HANGING_CLI = `
+    const { spawn } = require("node:child_process")
+    const { writeFileSync } = require("node:fs")
+    const script = "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)"
+    const tool = spawn(process.execPath, ["-e", script], { stdio: "ignore", detached: true })
+    setTimeout(() => writeFileSync(PID_FILE, String(tool.pid)), 200)
+    process.stdin.resume()
+    process.stdin.on("end", () => {})
+    setInterval(() => {}, 1000)
+  `
+
+  /** 等假 CLI 写好孙进程的 pid。 */
+  async function toolPid(pidFile: string): Promise<number> {
+    return vi.waitFor(async () => Number(await readFile(pidFile, "utf8")), {
+      timeout: 10000,
+      interval: 25,
+    })
+  }
+
+  function isAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  it("has ended the CLI and its tools by the time close resolves", { timeout: 15000 }, async () => {
+    const { driver, sent, pidFile } = await startFakeCli(HANGING_CLI)
+    const pid = await toolPid(pidFile)
+    expect(isAlive(pid)).toBe(true)
+    await driver.close()
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await sent
+  })
+
+  it("ends the CLI and its tools when the session is disposed", { timeout: 15000 }, async () => {
+    const { driver, session, sent, pidFile } = await startFakeCli(HANGING_CLI)
+    const pid = await toolPid(pidFile)
+    await driver.dispose(session)
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await sent
+  })
+
+  // 注销 driver 时注册表先 dispose 活跃会话，不等结果，接着插件才 await close；Host 紧接着就退出。
+  it("close also waits for a dispose nobody awaited", { timeout: 15000 }, async () => {
+    const { driver, session, sent, pidFile } = await startFakeCli(HANGING_CLI)
+    const pid = await toolPid(pidFile)
+    void driver.dispose(session)
+    await driver.close()
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await sent
+  })
+
+  it("still tells the user what the CLI wrote to stderr when it fails", async () => {
+    const { sent, failures } = await startFakeCli(`
+      process.stderr.write("Not logged in: run claude login\\n")
+      process.exit(3)
+    `)
+    await sent
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toContain("Not logged in: run claude login")
+  })
+
+  it("adds stderr only to errors about the process exiting", () => {
+    expect(withCliStderr("Claude Code process exited with code 1", "boom")).toBe(
+      "Claude Code process exited with code 1: boom",
+    )
+    expect(withCliStderr("Claude Code returned an error result: nope", "a warning")).toBe(
+      "Claude Code returned an error result: nope",
+    )
+    expect(withCliStderr("Claude Code process exited with code 1", "")).toBe(
+      "Claude Code process exited with code 1",
+    )
+  })
+
+  it("does not lose stderr that is still being written when the CLI exits", async () => {
+    const { sent, failures } = await startFakeCli(`
+      process.stderr.write("x".repeat(200000) + "the real reason\\n", () => process.exit(3))
+    `)
+    await sent
+    expect(failures).toHaveLength(1)
+    expect(failures[0]).toContain("the real reason")
   })
 })

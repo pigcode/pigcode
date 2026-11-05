@@ -23,6 +23,7 @@ import type {
   SessionMcp,
   UserInput,
 } from "@pigcode/plugin-sdk"
+import { spawnClaudeCli, withCliStderr, type ClaudeCliProcess } from "./cli-process"
 import { detectClaude, type ClaudeDetection } from "./detect"
 import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { claudeMcpServer } from "./mcp"
@@ -55,6 +56,8 @@ interface DriverSessionState {
   mcp?: SessionMcp
   /** 创建会话时的设置；每个 run 开始前 Host 都会重新创建会话，所以总是最新的一份。 */
   settings?: AgentSettingsValues
+  /** 当前 Query 启动的 CLI；结束会话时要连它启动的工具进程一起结束。 */
+  cli?: ClaudeCliProcess
 }
 
 /** 基于 @anthropic-ai/claude-agent-sdk 的 Claude Code driver。 */
@@ -82,6 +85,8 @@ export class ClaudeDriver implements AgentDriver {
   private readonly fixedExecutable: string | undefined
   private readonly probe: (launch: ClaudeLaunch) => Promise<ClaudeDetection>
   private readonly sessionStates = new Map<string, DriverSessionState>()
+  /** 正在结束的进程树。注册表注销 driver 时不等 dispose，所以 close 要等这里的全部结束，否则 Host 一退出就没人强制结束它们了。 */
+  private readonly ending = new Set<Promise<void>>()
 
   constructor(options: ClaudeDriverOptions = {}) {
     this.queryFn = options.queryFn ?? query
@@ -153,6 +158,8 @@ export class ClaudeDriver implements AgentDriver {
     if (state.query) this.abortState(state)
     state.controller = new AbortController()
     state.interruptRequested = false
+    // 不留上一轮的进程：这一轮启动失败时，错误信息不能带上一轮的 stderr。
+    state.cli = undefined
 
     const normalizeState = createNormalizeState()
     // 切换 Agent 后，handoff 放在用户文本之前，保持上下文连续。
@@ -183,6 +190,10 @@ export class ClaudeDriver implements AgentDriver {
         // 插件工具以进程内 SDK MCP server 暴露，生命周期跟随本次 Query。
         ...(mcpServer ? { mcpServers: { pigcode: mcpServer as McpServerConfig } } : {}),
         permissionMode: mapPermissionMode(session.permissionMode),
+        spawnClaudeCodeProcess: (spawnOptions) => {
+          state.cli = spawnClaudeCli(spawnOptions)
+          return state.cli.process
+        },
         ...(session.permissionMode === "danger-full-access"
           ? { allowDangerouslySkipPermissions: true }
           : {}),
@@ -235,7 +246,10 @@ export class ClaudeDriver implements AgentDriver {
       if (!state.controller.signal.aborted) {
         runtime.emit({
           type: "run.failed",
-          message: error instanceof Error ? error.message : String(error),
+          message: withCliStderr(
+            error instanceof Error ? error.message : String(error),
+            state.cli?.stderrTail() ?? "",
+          ),
         })
       }
     } finally {
@@ -254,18 +268,30 @@ export class ClaudeDriver implements AgentDriver {
     if (state) this.abortState(state)
   }
 
-  /** 中断并释放会话状态；SDK 子进程由 interrupt 结束。 */
+  /** 中断并释放会话状态，连同 CLI 和它启动的工具进程一起结束。 */
   async dispose(session: AgentSessionHandle): Promise<void> {
     const state = this.sessionStates.get(session.id)
     if (!state) return
-    this.abortState(state)
     this.sessionStates.delete(session.id)
+    await this.endState(state)
   }
 
-  /** 插件停用时结束所有会话的 Query，不留下 Claude Code 子进程。 */
-  close(): void {
-    for (const state of this.sessionStates.values()) this.abortState(state)
+  /** 插件停用或 Host 退出时结束所有会话，不留下 Claude Code 子进程。 */
+  async close(): Promise<void> {
+    const states = [...this.sessionStates.values()]
     this.sessionStates.clear()
+    for (const state of states) void this.endState(state)
+    await Promise.all(this.ending)
+  }
+
+  /** 中断 Query，再结束它的进程树。 */
+  private endState(state: DriverSessionState): Promise<void> {
+    this.abortState(state)
+    const done = Promise.resolve(state.cli?.tree.terminate()).finally(() => {
+      this.ending.delete(done)
+    })
+    this.ending.add(done)
+    return done
   }
 
   /** 读取或创建会话状态。 */

@@ -38,7 +38,7 @@ export interface PluginHostContext {
   /** 注册一个供其他插件或 Host 使用的能力。 */
   provide(name: string, value: unknown): void
   /** 注册随插件卸载执行的清理逻辑。 */
-  effect(setup: () => (() => void) | void): void
+  effect(setup: () => (() => void | Promise<void>) | void): void
   /** 注册 Agent driver；manifest.inject 或插件导出的 inject 里写 `agents`。 */
   agents: AgentRegistry
   /** MCP 工具注册；Host 以 Cordis 服务 `mcp` 提供。 */

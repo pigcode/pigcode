@@ -56,6 +56,9 @@ let quitting = false
 let unsavedLabels: UnsavedGuardLabels = DEFAULT_UNSAVED_LABELS
 /** 连续快速失败的次数与最近一次 Host 报告的失败原因，见 host-restart.ts。 */
 let hostQuickFailures = 0
+/** 退出流程里停 Host：只停一次，停完才放行 will-quit。 */
+let hostStop: Promise<void> | undefined
+let hostStopped = false
 let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
@@ -283,20 +286,27 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
 
     if (process.env.PIGCODE_E2E === "1") {
       app.on("pigcode:test-kill-host" as never, () => {
-        host?.stop()
+        host?.child.kill()
       })
     }
   })
 }
 
 // 窗口都关掉以后才停 Host：退出时窗口可能因为未保存的修改被用户留下，退出随之取消。
-app.on("will-quit", () => {
+// 这里先拦下退出，等 Host 清理完再真正退出，否则 Agent 和终端的进程来不及结束。
+app.on("will-quit", (event) => {
   quitting = true
-  host?.stop()
+  if (!host || hostStopped) return
+  event.preventDefault()
+  hostStop ??= host.stop().finally(() => {
+    hostStopped = true
+    // Host 已经不在时 stop 立刻完成，这里还在 will-quit 的处理过程中；此时调用 app.quit 会被 Electron
+    // 忽略（它还在退出流程里），之后又因为 preventDefault 取消了退出，应用就再也退不出去。
+    setImmediate(() => app.quit())
+  })
 })
 
 app.on("window-all-closed", () => {
   quitting = true
-  host?.stop()
   app.quit()
 })

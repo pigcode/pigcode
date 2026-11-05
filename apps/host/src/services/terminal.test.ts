@@ -199,6 +199,21 @@ describe("terminal service", () => {
     expect(pty.spawns[0]?.cwd).toBe(await realpath(worktree))
   })
 
+  it("closes a thread's terminal and leaves other threads' alone", async () => {
+    const pty = fakePty()
+    const { ctx, thread, project } = await setupTerminal(pty)
+    const other = ctx.threads.create(project.id, "Other", "fake")
+    await ctx.terminal.open(thread.id, 80, 24)
+    const kept = await ctx.terminal.open(other.id, 80, 24)
+
+    ctx.terminal.closeThread(thread.id)
+    expect(pty.killCount).toBe(1)
+    expect(() => ctx.terminal.write(kept.id, "x")).not.toThrow()
+    // 线程没有终端时什么也不做：归档会对每个线程都调用它。
+    ctx.terminal.closeThread(thread.id)
+    expect(pty.killCount).toBe(1)
+  })
+
   it("rejects unknown threads and terminals", async () => {
     const pty = fakePty()
     const { ctx } = await setupTerminal(pty)

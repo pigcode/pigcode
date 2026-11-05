@@ -1,8 +1,8 @@
-/** 验证 Windows 上 npm 装的 .cmd 形式的 codex 能启动并收到它的输出。 */
+/** 验证 Windows 上 npm 装的 .cmd 形式的 codex 能启动，以及关闭时不留下子进程。 */
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { StdioCodexTransport } from "./transport"
 
 describe("StdioCodexTransport", () => {
@@ -23,5 +23,30 @@ describe("StdioCodexTransport", () => {
     })
     expect(line).toContain('"ok":true')
     transport.close()
+  })
+
+  it("ends the app-server and whatever it started when it closes", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-tree-"))
+    const bin = join(dir, "fake-codex.js")
+    await writeFile(
+      bin,
+      `const { spawn } = require("node:child_process")
+       const tool = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" })
+       setTimeout(() => console.log(JSON.stringify({ tool: tool.pid })), 200)
+       setInterval(() => {}, 1000)`,
+    )
+    const transport = new StdioCodexTransport(process.execPath, [bin])
+    const line = await new Promise<string>((resolve) => transport.onLine(resolve))
+    const toolPid = (JSON.parse(line) as { tool: number }).tool
+    await transport.close()
+    const gone = () => {
+      try {
+        process.kill(toolPid, 0)
+        return false
+      } catch {
+        return true
+      }
+    }
+    await vi.waitFor(() => expect(gone()).toBe(true), { timeout: 5000, interval: 25 })
   })
 })

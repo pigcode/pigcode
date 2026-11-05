@@ -3,6 +3,7 @@ import type { Context } from "cordis"
 import { randomUUID } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { createRequire } from "node:module"
+import { terminateProcessGroup } from "@pigcode/plugin-sdk/node"
 import { threadCwd } from "./worktrees"
 
 /** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
@@ -11,7 +12,8 @@ export interface PtyLike {
   onExit(listener: (event: { exitCode: number }) => void): void
   write(data: string): void
   resize(cols: number, rows: number): void
-  kill(): void
+  /** 结束 shell 和它的作业；返回的 Promise 在 shell 所在的组结束后完成。 */
+  kill(): void | Promise<void>
 }
 
 /** spawn 所需的参数；cwd 由服务解析和校验，不接受调用方传入。 */
@@ -41,6 +43,8 @@ export interface TerminalService {
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   close(id: string): void
+  /** 关闭这个线程的终端；没有打开的终端时什么也不做。 */
+  closeThread(threadId: string): void
   subscribe(id: string, listener: (data: string) => void): () => void
 }
 
@@ -76,6 +80,14 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
   const terminals = new Map<string, TerminalEntry>()
   const byThread = new Map<string, string>()
+  /** 正在结束的 PTY；Host 退出前要等它们。 */
+  const ending = new Set<Promise<void>>()
+
+  /** 结束 PTY 但不等它：RPC 不必等 shell 退出。 */
+  function endPty(pty: PtyLike): void {
+    const done = Promise.resolve(pty.kill()).finally(() => ending.delete(done))
+    ending.add(done)
+  }
 
   /** 按 id 取记录；未知 id 一律报错，避免静默丢弃输入。 */
   function entry(id: string): TerminalEntry {
@@ -99,7 +111,7 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   function close(id: string): void {
     const found = detach(id)
     if (!found) throw new Error(`terminal not found: ${id}`)
-    found.pty.kill()
+    endPty(found.pty)
   }
 
   const service: TerminalService = {
@@ -132,6 +144,10 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
       entry(id).pty.resize(cols, rows)
     },
     close,
+    closeThread(threadId) {
+      const id = byThread.get(threadId)
+      if (id) close(id)
+    },
     subscribe(id, listener) {
       const found = entry(id)
       found.subscribers.add(listener)
@@ -142,10 +158,11 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   }
 
   ctx.provide("terminal", service)
-  ctx.effect(() => () => {
-    for (const found of terminals.values()) found.pty.kill()
+  ctx.effect(() => async () => {
+    for (const found of terminals.values()) endPty(found.pty)
     terminals.clear()
     byThread.clear()
+    await Promise.all(ending)
   })
 }
 
@@ -185,12 +202,30 @@ export function realPtyFactory(): PtyFactory {
     spawn(input) {
       const require = createRequire(import.meta.url)
       const pty = require("node-pty") as typeof import("node-pty")
-      return pty.spawn(input.shell, [], {
+      const child = pty.spawn(input.shell, [], {
         cwd: input.cwd,
         cols: input.cols,
         rows: input.rows,
         env: process.env as Record<string, string>,
       })
+      return {
+        onData: (listener) => void child.onData(listener),
+        onExit: (listener) => void child.onExit(listener),
+        write: (data) => child.write(data),
+        resize: (cols, rows) => child.resize(cols, rows),
+        // 和关掉终端窗口一样：交互式 shell 忽略 SIGTERM，收到 SIGHUP 才退出，并把它转发给自己的作业。
+        // 用户 nohup 或 disown 的进程不受影响，这是他们有意留下的。
+        // Windows 上 node-pty 的 kill 要异步查询控制台里的进程，Host 退出太快就来不及了，所以先结束整棵树。
+        kill: async () => {
+          await terminateProcessGroup(child.pid, { signal: "SIGHUP" })
+          if (process.platform !== "win32") return
+          try {
+            child.kill()
+          } catch {
+            // 控制台已经随进程一起关闭。
+          }
+        },
+      }
     },
   }
 }

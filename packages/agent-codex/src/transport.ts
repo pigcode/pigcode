@@ -1,7 +1,12 @@
 /** Codex 子进程的 NDJSON 传输；测试用 replay 实现。 */
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { createInterface } from "node:readline"
-import { launchTarget } from "@pigcode/plugin-sdk/node"
+import {
+  launchTarget,
+  ownProcessTree,
+  PROCESS_TREE_SPAWN_OPTIONS,
+  type OwnedProcessTree,
+} from "@pigcode/plugin-sdk/node"
 
 /** 按行收发 NDJSON 的最小传输接口；协议层不感知进程与回放的区别。 */
 export interface CodexTransport {
@@ -9,7 +14,8 @@ export interface CodexTransport {
   onLine(listener: (line: string) => void): () => void
   /** 子进程启动失败或退出时回调一次；回放传输可以不实现。 */
   onClose?(listener: (reason: Error) => void): () => void
-  close(): void
+  /** 返回的 Promise 在子进程和它启动的进程都结束后完成。 */
+  close(): void | Promise<void>
 }
 
 /**
@@ -19,6 +25,7 @@ export interface CodexTransport {
  */
 export class StdioCodexTransport implements CodexTransport {
   private readonly child: ChildProcessWithoutNullStreams
+  private readonly tree: OwnedProcessTree
   private readonly listeners = new Set<(line: string) => void>()
   private readonly closeListeners = new Set<(reason: Error) => void>()
   private closed: Error | null = null
@@ -34,8 +41,10 @@ export class StdioCodexTransport implements CodexTransport {
     this.child = spawn(target.command, target.args, {
       stdio: ["pipe", "pipe", "pipe"],
       ...(target.shell ? { shell: true } : {}),
+      ...PROCESS_TREE_SPAWN_OPTIONS,
       ...(env ? { env } : {}),
     })
+    this.tree = ownProcessTree(this.child)
     this.child.on("error", (error) =>
       this.finish(new Error(`codex app-server unavailable: ${error.message}`)),
     )
@@ -68,8 +77,8 @@ export class StdioCodexTransport implements CodexTransport {
     return () => this.closeListeners.delete(listener)
   }
 
-  close(): void {
-    if (!this.closed && this.child.exitCode === null) this.child.kill("SIGTERM")
+  close(): Promise<void> {
+    return this.tree.terminate()
   }
 
   private finish(reason: Error): void {

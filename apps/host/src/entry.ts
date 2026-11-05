@@ -26,7 +26,14 @@ if (!parentPort) {
   throw new Error("host entry must run inside an Electron utilityProcess")
 }
 
+/** 已经创建的应用；退出时要运行它所有服务的清理。 */
+let hostApp: { fiber: { dispose(): Promise<unknown> } } | undefined
+
 parentPort.on("message", (event) => {
+  if (event.data?.type === "shutdown") {
+    void shutdown()
+    return
+  }
   void bootstrap(event).catch((error: unknown) => {
     // 启动失败要留下原因再退出；静默的未处理拒绝无从排查。原因同时交给 main：连续失败时 main 停止重启，
     // 把它显示在错误对话框里。稍等一下再退出，让这条消息送到 main。
@@ -36,6 +43,16 @@ parentPort.on("message", (event) => {
     setTimeout(() => process.exit(1), 200)
   })
 })
+
+/** main 要退出了：运行清理，结束 Agent 和终端的进程树，然后退出。卡住时 main 会强制结束本进程。 */
+async function shutdown(): Promise<void> {
+  try {
+    await hostApp?.fiber.dispose()
+  } catch (error) {
+    console.error("[host] shutdown failed:", error)
+  }
+  process.exit(0)
+}
 
 /**
  * 两个目录：核心 profile 随应用发布、只读，列出核心服务与内置插件（与本文件同在 out/host 下）；
@@ -59,6 +76,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
     "core.settings": { path: join(profileDir, "settings.json") },
   })
+  hostApp = ctx
   // 数据库打不开（备份或迁移失败、数据库比应用新）时 storage 不会起来，其后的服务也都缺席；
   // 在这里带着真正的原因失败，而不是等到下面 ctx.agents 报 TypeError。
   await requireCoreService(ctx, "core.storage", "storage")
