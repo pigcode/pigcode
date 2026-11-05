@@ -18,6 +18,7 @@ import {
   readPathKind,
 } from "./folder-picker"
 import { startHostProcess, type HostProcess } from "./host-process"
+import { applyLoginShellEnv } from "./shell-env"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
@@ -280,9 +281,13 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
   })
+  // 提前开始读，Electron 准备好的这段时间也算在内，窗口少等一会儿。
+  const shellEnv = applyLoginShellEnv()
   app.whenReady().then(async () => {
     registerAppProtocol(resolveAppPath("out/renderer"))
     registerPluginProtocol(profileDir())
+    // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
+    await shellEnv
     host = startHost()
     mainWindow = await createWindow()
 
