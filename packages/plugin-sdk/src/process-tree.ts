@@ -3,7 +3,12 @@
  * POSIX 上让子进程自成一个进程组，向组发信号；Windows 没有进程组，用 taskkill /T 按父子关系结束。
  */
 import { execFile, type ChildProcess } from "node:child_process"
-import { forgetProcessTree, processRecordIntervalMs, recordProcessTree } from "./process-records"
+import {
+  forgetProcessTree,
+  processRecordIntervalMs,
+  recordProcessTree,
+  startProcessTree,
+} from "./process-records"
 
 /**
  * 优雅终止后等多久再强制结束。要给 CLI 留出退出前的工作（Claude Code 的 SessionEnd hook 等），
@@ -154,7 +159,10 @@ export function ownProcessTree(child: ChildProcess): OwnedProcessTree {
       ? setInterval(() => void recordProcessTree(pid), intervalMs)
       : undefined
   timer?.unref()
-  if (pid !== undefined && processRecordIntervalMs() > 0) void recordProcessTree(pid)
+  if (pid !== undefined && processRecordIntervalMs() > 0) {
+    startProcessTree(pid)
+    void recordProcessTree(pid)
+  }
   const terminate = (options?: TerminateOptions): Promise<void> => {
     termination ??= pid === undefined ? Promise.resolve() : terminateProcessTree(pid, options)
     return termination

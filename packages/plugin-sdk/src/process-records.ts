@@ -18,6 +18,12 @@ interface ProcessRecord {
 /** 树里每个进程的启动时间；每隔一段时间刷新一次，CLI 崩溃前启动的工具才留得下记录。 */
 const recorded = new Map<number, Map<number, string>>()
 
+/**
+ * 已经结束、不再记录的树。定时快照可能在「删除记录」之后才从 ps 回来，没有它会把刚删掉的记录写回去。
+ * 同一个 pid 被新进程复用时由 startProcessTree 清掉。
+ */
+const forgotten = new Set<number>()
+
 /** 默认多久刷新一次；测试用 PIGCODE_PROCESS_RECORD_MS 缩短。 */
 const DEFAULT_INTERVAL_MS = 5000
 
@@ -89,6 +95,8 @@ export async function processStartTime(pid: number): Promise<string | undefined>
 export async function recordProcessTree(root: number): Promise<void> {
   if (process.platform === "win32" || !recordFile() || root <= 1) return
   const table = await readTable()
+  // 读进程表期间这棵树可能已经结束并删过记录，这时不能再写回去。
+  if (forgotten.has(root)) return
   const pids = new Map<number, string>()
   const start = table.find((row) => row.pid === root)?.startedAt
   if (start === undefined) return
@@ -106,8 +114,14 @@ export async function recordProcessTree(root: number): Promise<void> {
   flush()
 }
 
+/** 一棵树开始记录：如果这个 pid 上次已经结束过，清掉标记。 */
+export function startProcessTree(root: number): void {
+  forgotten.delete(root)
+}
+
 /** 这棵树已经结束：不再记它。 */
 export function forgetProcessTree(root: number): void {
+  forgotten.add(root)
   if (recorded.delete(root)) flush()
 }
 

@@ -27,6 +27,12 @@ const SCRIPT = `
   setInterval(() => {}, 1000)
 `
 
+/** 把环境变量恢复成用例开始前的样子；原本没设时要删掉，而不是写成 "undefined"。 */
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name]
+  else process.env[name] = value
+}
+
 const dirs: string[] = []
 const trees: OwnedProcessTree[] = []
 const pids: number[] = []
@@ -88,8 +94,9 @@ afterEach(async () => {
       process.kill(pid, "SIGKILL")
     }
   }
-  process.env.PIGCODE_PROFILE_DIR = profileDir
-  process.env.PIGCODE_PROCESS_RECORD_MS = recordMs
+  // 给 process.env 赋 undefined 会变成字符串 "undefined"，要用 delete 才是「没设」。
+  restoreEnv("PIGCODE_PROFILE_DIR", profileDir)
+  restoreEnv("PIGCODE_PROCESS_RECORD_MS", recordMs)
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
