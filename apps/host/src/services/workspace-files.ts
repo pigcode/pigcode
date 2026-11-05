@@ -143,7 +143,10 @@ async function walkFiles(root: string, prefix: string): Promise<string[]> {
  * 问 git 哪些路径被忽略；目录带尾斜杠，这样 `build/` 这类规则也能命中。
  * 不是 git 仓库时返回 null，由调用方退回到固定的忽略目录名。
  */
-async function gitIgnored(root: string, paths: readonly string[]): Promise<Set<string> | null> {
+export async function gitIgnored(
+  root: string,
+  paths: readonly string[],
+): Promise<Set<string> | null> {
   if (paths.length === 0) return new Set()
   return new Promise((resolvePromise) => {
     const child = execFile(
@@ -160,6 +163,9 @@ async function gitIgnored(root: string, paths: readonly string[]): Promise<Set<s
         resolvePromise(new Set(String(stdout).split("\0").filter(Boolean)))
       },
     )
+    // git 可能没读输入就退出了（不是仓库、目录已经不在）。这时管道没人读，写入以 EPIPE 结束；
+    // 没有监听的话这个错误事件会让整个 Host 退出。结果由上面的回调给出，忽略即可。
+    child.stdin?.on("error", () => undefined)
     child.stdin?.end(`${paths.join("\0")}\0`)
   })
 }
