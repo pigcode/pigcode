@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "license": "MIT",
   "description": "Pigcode desktop",
-  "author": "Pigcode",
+  "author": {
+    "name": "Pigcode contributors",
+    "email": "pigcode@users.noreply.github.com"
+  },
   "homepage": "https://github.com/pigcode/pigcode",
   "private": true,
   "type": "module",
