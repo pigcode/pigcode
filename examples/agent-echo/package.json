@@ -1,6 +1,7 @@
 {
   "name": "pigcode-agent-echo",
   "version": "0.1.0",
+  "license": "MIT",
   "description": "Example agent that echoes your message back",
   "type": "module",
   "main": "./index.ts",

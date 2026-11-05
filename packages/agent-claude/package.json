@@ -1,6 +1,7 @@
 {
   "name": "@pigcode/agent-claude",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Claude Code agent for Pigcode",
   "type": "module",

@@ -1,6 +1,7 @@
 {
   "name": "@pigcode/agent-codex",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "description": "Codex agent for Pigcode",
   "type": "module",
