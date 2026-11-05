@@ -6,6 +6,12 @@ directories:
 files:
   - out/**/*
   - package.json
+# 分发时要保留的许可证：Pigcode 自己的，以及随包分发的第三方声明（scripts/notices.ts 生成）。
+extraResources:
+  - from: build/LICENSE.txt
+    to: LICENSE.txt
+  - from: build/THIRD_PARTY_NOTICES.txt
+    to: THIRD_PARTY_NOTICES.txt
 # node-pty 和 better-sqlite3 带原生二进制，esbuild 的平台二进制由可执行文件启动，都不能留在 asar 里；
 # Host 产物整个解包，验证 ESM 能否从 asar 加载。pnpm 把 esbuild 的平台包放在 .pnpm 下，两条都解包。
 asarUnpack:
