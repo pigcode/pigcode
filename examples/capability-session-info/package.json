@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "type": "module",
-  "main": "./index.ts",
+  "main": "./dist/index.js",
   "pigcode": {
     "apiVersion": 1,
     "kind": "capability",

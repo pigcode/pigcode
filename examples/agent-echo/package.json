@@ -4,7 +4,7 @@
   "license": "MIT",
   "description": "Example agent that echoes your message back",
   "type": "module",
-  "main": "./index.ts",
+  "main": "./dist/index.js",
   "pigcode": {
     "apiVersion": 1,
     "kind": "agent",
