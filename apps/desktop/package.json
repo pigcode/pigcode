@@ -18,6 +18,7 @@
     "notices": "node ../../scripts/notices.ts",
     "package:mac": "pnpm notices && pnpm build:host && pnpm build && electron-builder --mac --arm64 --publish never",
     "package:mac:x64": "pnpm notices && pnpm build:host && pnpm build && electron-builder --mac --x64 --publish never",
+    "package:mac:all": "pnpm notices && pnpm build:host && pnpm build && electron-builder --mac --arm64 --x64 --publish never",
     "package:win": "pnpm notices && pnpm build:host && pnpm build && electron-builder --win --publish never",
     "package:linux": "pnpm notices && pnpm build:host && pnpm build && electron-builder --linux --publish never",
     "test:packaged": "playwright test e2e/packaged.spec.ts"

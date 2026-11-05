@@ -3,6 +3,12 @@ appId: com.pigcode.desktop
 productName: Pigcode
 directories:
   output: dist
+# 更新源就是 GitHub Release（ADR 0010）。写在这里，打包时才会生成 latest*.yml；
+# 实际发布由 .github/workflows/release.yml 建草稿再人工发布，所以脚本里仍然用 --publish never。
+publish:
+  provider: github
+  owner: pigcode
+  repo: frontend
 files:
   - out/**/*
   - package.json
