@@ -28,6 +28,7 @@ import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
 import { quitDetail, quitLabels } from "./locale/quit"
 import { askQuitState, hasPendingWork } from "./quit-check"
+import { createUpdates } from "./updates"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
@@ -74,7 +75,11 @@ let tray: Tray | undefined
 /** 第一次隐藏到托盘时的提示只弹一次。 */
 let hiddenHintShown = false
 /** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
-let preferences: Preferences = { launchAtLogin: false, showInDock: true }
+let preferences: Preferences = {
+  launchAtLogin: false,
+  showInDock: true,
+  autoCheckUpdates: true,
+}
 /** Host 的控制端口：退出前经它查询还有多少工作。Host 退出后置空。 */
 let hostControlPort: MessagePortMain | undefined
 /** 用户在退出确认框里选了退出；之后的 app.quit() 不再重复询问。 */
@@ -108,6 +113,12 @@ function applyPreferences(next: Preferences): void {
     if (!next.showInDock) ensureTray()
   }
 }
+
+/** 检查更新：启动后一次，之后每 6 小时；同一个版本只提示一次。 */
+const updates = createUpdates({
+  getWindow: () => mainWindow,
+  autoCheck: () => preferences.autoCheckUpdates,
+})
 
 function profileDir(): string {
   return process.env.PIGCODE_PROFILE_DIR ?? join(app.getPath("userData"), "profiles", "desktop")
@@ -174,12 +185,15 @@ function registerNativeBridge(): void {
       readFolderPickerLabels(labels),
     )
   })
+  ipcMain.handle("pigcode:check-for-updates", () => updates.checkNow())
   ipcMain.handle("pigcode:preferences-get", () => preferences)
   ipcMain.handle("pigcode:preferences-set", (_event, key: unknown, value: unknown) => {
     const next = withPreference(preferences, key, value)
     if (next === preferences) return preferences
     writePreferences(preferencesPath(), next)
     applyPreferences(next)
+    // 自动检查的开关改了，定时器跟着起停。
+    if (key === "autoCheckUpdates") updates.start()
     return next
   })
   ipcMain.handle("pigcode:unsaved-labels", (_event, value: unknown) => {
@@ -395,6 +409,7 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
     await shellEnv
     applyPreferences(readPreferences(preferencesPath()))
+    updates.start()
     host = startHost()
     mainWindow = await openMainWindow()
     ensureTray()

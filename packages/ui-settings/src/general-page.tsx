@@ -1,6 +1,7 @@
 // 通用设置页：启动、更新和侧栏会话分组。
 import { useEffect, useRef, useState } from "react"
 import {
+  Button,
   SegmentedControl,
   SettingPage,
   SettingRow,
@@ -11,10 +12,18 @@ import {
   type SidebarGrouping,
 } from "@pigcode/ui-primitives"
 
-/** 主进程要应用的偏好：开机自启与 Dock 图标。 */
+/** 主进程要应用的偏好：开机自启、Dock 图标和自动检查更新。 */
 interface Preferences {
   launchAtLogin: boolean
   showInDock: boolean
+  autoCheckUpdates: boolean
+}
+
+/** 手动检查更新的结果，和主进程的 UpdateResult 一致。 */
+interface UpdateResult {
+  status: "up-to-date" | "update-available" | "error"
+  version?: string
+  url?: string
 }
 
 /** 本机桥只暴露需要的一小块，设置页不依赖主应用的全局类型。 */
@@ -23,6 +32,8 @@ interface VersionBridge {
   platform?: string
   getPreferences?: () => Promise<Preferences>
   setPreference?: (key: keyof Preferences, value: boolean) => Promise<Preferences>
+  checkForUpdates?: () => Promise<UpdateResult>
+  openExternal?: (url: string) => Promise<void>
 }
 
 function nativeBridge(): VersionBridge | undefined {
@@ -42,7 +53,11 @@ function useAppVersion(): string | null {
 
 /** 读主进程的偏好；读到之前用默认值，开关不会在加载时闪一下。 */
 function usePreferences(): [Preferences, (key: keyof Preferences, value: boolean) => void] {
-  const [prefs, setPrefs] = useState<Preferences>({ launchAtLogin: false, showInDock: true })
+  const [prefs, setPrefs] = useState<Preferences>({
+    launchAtLogin: false,
+    showInDock: true,
+    autoCheckUpdates: true,
+  })
   // 用户已经动过开关时，晚到的读取结果不能把刚改的值盖回去。
   const changed = useRef(false)
   useEffect(() => {
@@ -72,6 +87,32 @@ export function GeneralPage() {
   const version = useAppVersion()
   const [prefs, setPreference] = usePreferences()
   const platform = nativeBridge()?.platform
+  const [checking, setChecking] = useState(false)
+  const [update, setUpdate] = useState<UpdateResult | null>(null)
+
+  /** 手动检查一次；结果显示在这一行里。 */
+  const checkNow = (): void => {
+    setChecking(true)
+    void (
+      nativeBridge()
+        ?.checkForUpdates?.()
+        .then(setUpdate, () => setUpdate({ status: "error" }))
+        .finally(() => setChecking(false)) ?? setChecking(false)
+    )
+  }
+
+  /** 检查结果的一句话说明；还没检查时为 undefined。 */
+  const updateStatus = ((): string | undefined => {
+    if (checking) return t("settings.general.checking")
+    if (!update) return undefined
+    if (update.status === "up-to-date") {
+      return t("settings.general.upToDate").replace("{version}", version ?? "")
+    }
+    if (update.status === "update-available") {
+      return t("settings.general.updateAvailable").replace("{version}", update.version ?? "")
+    }
+    return t("settings.general.checkFailed")
+  })()
 
   return (
     <SettingPage title={t("settings.general.pageTitle")}>
@@ -105,13 +146,34 @@ export function GeneralPage() {
       <SettingSection title={t("settings.general.updates")}>
         <SettingRow
           title={t("settings.general.autoUpdate")}
+          description={t("settings.general.autoUpdate.description")}
+        >
+          <Switch
+            checked={prefs.autoCheckUpdates}
+            onCheckedChange={(value) => setPreference("autoCheckUpdates", value)}
+            aria-label={t("settings.general.autoUpdate")}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t("settings.general.checkUpdates")}
           description={
-            version
-              ? t("settings.general.autoUpdate.description").replace("{version}", version)
-              : undefined
+            updateStatus ??
+            (version
+              ? t("settings.general.checkUpdates.description").replace("{version}", version)
+              : undefined)
           }
         >
-          <Switch defaultChecked aria-label={t("settings.general.autoUpdate")} />
+          {update?.status === "update-available" && update.url ? (
+            <Button
+              variant="secondary"
+              onClick={() => void nativeBridge()?.openExternal?.(update.url ?? "")}
+            >
+              {t("settings.general.openDownload")}
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={checkNow} disabled={checking}>
+            {t("settings.general.checkNow")}
+          </Button>
         </SettingRow>
       </SettingSection>
       <SettingSection title={t("settings.general.sidebar")}>

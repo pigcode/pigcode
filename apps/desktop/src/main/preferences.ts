@@ -10,12 +10,18 @@ export interface Preferences {
   launchAtLogin: boolean
   /** 在 Dock 中显示；关掉以后只能从菜单栏图标打开窗口。只在 macOS 上有意义。 */
   showInDock: boolean
+  /** 自动检查更新。默认开；关掉以后还能在设置页手动检查。 */
+  autoCheckUpdates: boolean
 }
 
-export const DEFAULT_PREFERENCES: Preferences = { launchAtLogin: false, showInDock: true }
+export const DEFAULT_PREFERENCES: Preferences = {
+  launchAtLogin: false,
+  showInDock: true,
+  autoCheckUpdates: true,
+}
 
 /** 可以改的键；页面传其他键时忽略。 */
-const KEYS = ["launchAtLogin", "showInDock"] as const
+const KEYS = ["launchAtLogin", "showInDock", "autoCheckUpdates"] as const
 export type PreferenceKey = (typeof KEYS)[number]
 
 export function isPreferenceKey(value: unknown): value is PreferenceKey {

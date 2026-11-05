@@ -4,13 +4,21 @@ import { contextBridge, ipcRenderer } from "electron"
 contextBridge.exposeInMainWorld("pigcodeNative", {
   platform: process.platform,
   appVersion: (): Promise<string> => ipcRenderer.invoke("pigcode:app-version"),
-  getPreferences: (): Promise<{ launchAtLogin: boolean; showInDock: boolean }> =>
-    ipcRenderer.invoke("pigcode:preferences-get"),
+  getPreferences: (): Promise<{
+    launchAtLogin: boolean
+    showInDock: boolean
+    autoCheckUpdates: boolean
+  }> => ipcRenderer.invoke("pigcode:preferences-get"),
   setPreference: (
-    key: "launchAtLogin" | "showInDock",
+    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates",
     value: boolean,
-  ): Promise<{ launchAtLogin: boolean; showInDock: boolean }> =>
+  ): Promise<{ launchAtLogin: boolean; showInDock: boolean; autoCheckUpdates: boolean }> =>
     ipcRenderer.invoke("pigcode:preferences-set", key, value),
+  checkForUpdates: (): Promise<{
+    status: "up-to-date" | "update-available" | "error"
+    version?: string
+    url?: string
+  }> => ipcRenderer.invoke("pigcode:check-for-updates"),
   setThemeSource: (source: "light" | "dark" | "system") =>
     ipcRenderer.invoke("pigcode:set-theme", source),
   windowControl: (action: "minimize" | "maximize" | "close") =>
