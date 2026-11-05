@@ -1,8 +1,27 @@
-# node-pty 携带原生二进制，留在 asar 内无法加载，打包时必须解包。
-# esbuild 的平台二进制由可执行文件启动，同样不能留在 asar 里（插件安装时的 TSX 编译用它）。
+# 未签名打包（见 adr/0005）。appId 与 productName 公开分发前再确认。
+appId: com.pigcode.desktop
+productName: Pigcode
+directories:
+  output: dist
+files:
+  - out/**/*
+  - package.json
+# node-pty 和 better-sqlite3 带原生二进制，esbuild 的平台二进制由可执行文件启动，都不能留在 asar 里；
+# Host 产物整个解包，验证 ESM 能否从 asar 加载。pnpm 把 esbuild 的平台包放在 .pnpm 下，两条都解包。
 asarUnpack:
   - node_modules/node-pty/**
+  - node_modules/better-sqlite3/**
   - node_modules/esbuild/**
-  # pnpm 把 esbuild 的平台包放在 .pnpm 下的软链接后面，两条都解包。
   - "**/@esbuild/**"
   - "**/esbuild/**"
+  - out/host/**
+mac:
+  identity: null
+  target: [dmg]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+linux:
+  target: [AppImage, deb]
+  category: Development

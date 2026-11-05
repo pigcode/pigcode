@@ -1,6 +1,9 @@
 {
   "name": "@pigcode/desktop",
   "version": "0.0.0",
+  "description": "Pigcode desktop",
+  "author": "Pigcode",
+  "homepage": "https://github.com/pigcode/pigcode",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -9,7 +12,12 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "rebuild:native": "electron-rebuild -f -w node-pty"
+    "rebuild:native": "electron-rebuild -f -w node-pty",
+    "build:host": "node ../../scripts/build-host.ts",
+    "package:mac": "pnpm build:host && pnpm build && electron-builder --mac --arm64 --publish never",
+    "package:mac:x64": "pnpm build:host && pnpm build && electron-builder --mac --x64 --publish never",
+    "package:win": "pnpm build:host && pnpm build && electron-builder --win --publish never",
+    "package:linux": "pnpm build:host && pnpm build && electron-builder --linux --publish never"
   },
   "dependencies": {
     "@base-ui/react": "1.9.0",
@@ -28,7 +36,6 @@
     "@tiptap/react": "3.32.0",
     "@tiptap/starter-kit": "3.32.0",
     "better-sqlite3": "13.0.3",
-    "esbuild": "^0.28.2",
     "lucide-react": "1.0.1",
     "node-pty": "1.1.0",
     "react": "19.2.3",
@@ -40,6 +47,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "electron": "43.4.1",
+    "electron-builder": "26.0.12",
     "electron-vite": "5.0.0",
     "typescript": "5.9.3",
     "vite": "7.1.12",
