@@ -226,6 +226,40 @@ describe("mcp bridge", () => {
     }
   })
 
+  it("keeps each thread's calls to its own identity", async () => {
+    const ctx = await setup()
+    ctx.mcp.registerTool("plugin.who", { ...ECHO_TOOL, name: "who" }, async (_input, call) => ({
+      threadId: call.threadId,
+    }))
+    const handle = await ctx.mcpBridge.createSocketServer()
+    const mine = stdioServer(ctx, "thread-a")
+    const other = stdioServer(ctx, "thread-b")
+    expect(mine.env.PIGCODE_MCP_TOKEN).not.toBe(other.env.PIGCODE_MCP_TOKEN)
+    const socket = connectSocket(mine.env.PIGCODE_MCP_SOCKET!)
+    try {
+      socket.send({ type: "hello", token: mine.env.PIGCODE_MCP_TOKEN })
+      expect(await socket.next()).toMatchObject({ type: "hello", ok: true })
+      // 参数里写别的线程也没用：身份来自 hello 用的 token。
+      socket.send({
+        type: "tools/call",
+        name: "who",
+        arguments: { threadId: "thread-b" },
+      })
+      expect(await socket.next()).toMatchObject({
+        type: "tools/call",
+        result: { threadId: "thread-a" },
+      })
+    } finally {
+      socket.close()
+    }
+
+    // 桥关了之后旧 token 不再有效，也不能再连上。
+    await handle.close()
+    const after = connectSocket(mine.env.PIGCODE_MCP_SOCKET!)
+    after.send({ type: "hello", token: mine.env.PIGCODE_MCP_TOKEN })
+    after.close()
+  })
+
   it("bridges MCP JSON-RPC to the socket from stdio", async () => {
     const ctx = await setup()
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async (input, call) => ({

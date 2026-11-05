@@ -25,6 +25,8 @@ interface CodexSessionState {
   nativeThreadId: string | null
   turnId: string | null
   interruptRequested: boolean
+  /** 本轮是否已经报过终态，用来忽略重复的 turn/completed。 */
+  finished: boolean
   permissionMode: string
   model: string | null
   /** 启动这个 app-server 的命令指纹；设置改了就不再复用。 */
@@ -152,6 +154,7 @@ export class CodexDriver implements AgentDriver {
         this.sessions.delete(stateKey)
       }
       this.sessions.set(stateKey, {
+        finished: false,
         client,
         nativeThreadId,
         turnId: null,
@@ -181,6 +184,7 @@ export class CodexDriver implements AgentDriver {
     if (!state?.nativeThreadId) throw new Error("codex thread not started")
     const client = state.client
     state.interruptRequested = false
+    state.finished = false
 
     const disposers = [
       client.onNotification("item/agentMessage/delta", (params) =>
@@ -197,7 +201,14 @@ export class CodexDriver implements AgentDriver {
       client.onNotification("thread/tokenUsage/updated", (params) =>
         emit(runtime, "thread/tokenUsage/updated", params),
       ),
-      client.onNotification("turn/completed", (params) => emit(runtime, "turn/completed", params)),
+      client.onNotification("turn/completed", (params) => {
+        const events = normalizeCodexNotification("turn/completed", params)
+        const ends = events.some((event) => event.type.startsWith("run."))
+        // app-server 可能重复通知同一个 turn 的终态；run 的终态只报一次。
+        if (ends && state.finished) return
+        if (ends) state.finished = true
+        for (const event of events) runtime.emit(event)
+      }),
     ]
     client.onServerRequest("item/commandExecution/requestApproval", async (params) => {
       const decision = await runtime.requestApproval({ toolName: "Bash", input: params })

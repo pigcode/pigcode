@@ -93,6 +93,15 @@ describe("AgentRow", () => {
     expect(screen.getByText("Look for the main export.")).toBeTruthy()
     expect(screen.getByText("child reply")).toBeTruthy()
   })
+
+  it("collapses again when the open row is clicked", async () => {
+    inLocale(<AgentRow subagent={RUNNING} />)
+    const row = screen.getByRole("button", { name: /子智能体/ })
+    await userEvent.click(row)
+    expect(screen.getByText("Look for the main export.")).toBeTruthy()
+    await userEvent.click(row)
+    expect(screen.queryByText("Look for the main export.")).toBeNull()
+  })
 })
 
 describe("sub-agents in the timeline", () => {

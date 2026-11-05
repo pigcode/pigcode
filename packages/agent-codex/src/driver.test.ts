@@ -272,6 +272,28 @@ describe("CodexDriver", () => {
     expect(events).toContainEqual({ type: "run.completed" })
   })
 
+  // app-server 重复通知同一个 turn 的终态时，run 的终态只能报一次。
+  it("reports the end of a turn once when the app-server says it twice", async () => {
+    const { driver } = setup({
+      onTurnStart: (message, replay) => {
+        replay.push({ id: message.id, result: { turn: { id: "turn_1" } } })
+        const completed = {
+          method: "turn/completed",
+          params: { threadId: "th_native", turn: { id: "turn_1", status: "completed" } },
+        }
+        // 通知要在 driver 记下 turnId 之后才到，和其他用例一样放到下一轮事件循环。
+        setTimeout(() => {
+          replay.push(completed)
+          replay.push(completed)
+        }, 0)
+      },
+    })
+    const session = await driver.createSession({ threadId: "t1", cwd: "/tmp" })
+    const { runtime, events } = runtimeFor()
+    await driver.send(session, { text: "hello" }, runtime)
+    expect(events.filter((event) => event.type === "run.completed")).toHaveLength(1)
+  })
+
   it("interrupts the active turn and emits run.interrupted", async () => {
     const { driver, transport } = setup({
       onTurnStart: (message, replay) => {

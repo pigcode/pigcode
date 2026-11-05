@@ -74,6 +74,15 @@ describe("PluginManagerView", () => {
     expect(screen.getByText(/冲突: provides conflict/)).toBeTruthy()
   })
 
+  it("shows why the Host can't support a plugin's apiVersion", async () => {
+    const error = "unsupported plugin apiVersion: 2; this Host supports 1"
+    renderView([{ ...DEMO, error }])
+    const row = screen.getByRole("button", { name: "Demo 的详情" })
+    expect(row.textContent).toContain("加载失败")
+    await userEvent.click(row)
+    expect(screen.getByText(error)).toBeTruthy()
+  })
+
   it("shows extension point conflicts with the point, the id and the owner that kept it", async () => {
     const other: PluginSummary = {
       ...DEMO,
