@@ -16,3 +16,5 @@ playwright-report/
 .env.*
 apps/desktop/build/THIRD_PARTY_NOTICES.txt
 apps/desktop/build/LICENSE.txt
+apps/desktop/build/Electron-LICENSE.txt
+apps/desktop/build/LICENSES.chromium.html

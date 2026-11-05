@@ -59,7 +59,15 @@ function resourcesDirOf(executable: string): string {
 
 test("the packaged app still chats, installs a plugin and runs a terminal", async () => {
   const executable = packagedExecutable()
-  test.skip(!executable, "build the app first (pnpm package:mac) or set PIGCODE_PACKAGED_APP")
+  // 显式跑 test:packaged 时没有安装包就是失败，不能静默跳过；普通 E2E 里跳过它。
+  const expected =
+    process.env.npm_lifecycle_event === "test:packaged" ||
+    process.env.PIGCODE_PACKAGED_EXPECTED === "1"
+  if (expected) {
+    expect(executable, "build the app first (pnpm package:mac)").toBeTruthy()
+  } else {
+    test.skip(!executable, "build the app first (pnpm package:mac) or set PIGCODE_PACKAGED_APP")
+  }
   test.setTimeout(300_000)
 
   const dir = mkdtempSync(join(tmpdir(), "pigcode-packaged-"))

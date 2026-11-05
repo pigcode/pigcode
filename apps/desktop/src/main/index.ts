@@ -291,17 +291,30 @@ function showHiddenHint(): void {
   new Notification({ title: labels.hiddenTitle, body: labels.hiddenBody }).show()
 }
 
+/** 正在创建的主窗口。启动过程中 activate 或 second-instance 再来一次时复用，不会开出两个窗口。 */
+let openingWindow: Promise<BrowserWindow> | undefined
+
+/** 创建主窗口；同时只创建一个。 */
+function openMainWindow(): Promise<BrowserWindow> {
+  openingWindow ??= createWindow().finally(() => {
+    openingWindow = undefined
+  })
+  return openingWindow
+}
+
 /** 把窗口带到前台；窗口已经被关掉（Linux 或异常）时重新创建一个。 */
 function showWindow(): void {
-  if (!mainWindow || mainWindow.isDestroyed()) {
-    void createWindow().then((window) => {
-      mainWindow = window
-    })
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
     return
   }
-  if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.show()
-  mainWindow.focus()
+  void openMainWindow().then((window) => {
+    mainWindow = window
+    window.show()
+    window.focus()
+  })
 }
 
 /** 创建调试窗口，并在页面加载后把 Host 的 MessagePort 交给渲染进程。 */
@@ -328,6 +341,8 @@ export async function createWindow(): Promise<BrowserWindow> {
   window.webContents.on("will-redirect", guardFrame)
   // 页面有未保存的文件修改时会阻止卸载；preventDefault 表示用户确认放弃，继续关闭或刷新。
   window.webContents.on("will-prevent-unload", (event) => {
+    // 窗口隐藏到托盘时退出也要看得见确认框；macOS 上挂在隐藏窗口上的 sheet 不会显示。
+    if (!window.isVisible()) window.show()
     const show = (options: MessageBoxSyncOptions) => dialog.showMessageBoxSync(window, options)
     if (confirmDiscard(show, unsavedLabels)) {
       event.preventDefault()
@@ -369,7 +384,7 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     await shellEnv
     applyPreferences(readPreferences(preferencesPath()))
     host = startHost()
-    mainWindow = await createWindow()
+    mainWindow = await openMainWindow()
     ensureTray()
 
     if (process.env.PIGCODE_E2E === "1") {

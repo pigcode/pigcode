@@ -8,7 +8,8 @@ import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { launchEnv } from "./projects"
 
-test.skip(process.platform === "linux", "Linux hides the launch-at-login and Dock switches")
+// 「在 Dock 中显示」只在 macOS 上有；Linux 会隐藏这两个开关。
+test.skip(process.platform !== "darwin", "the Dock switch only exists on macOS")
 
 const preferencesFile = () => join(process.env.PIGCODE_PROFILE_DIR ?? "", "preferences.json")
 const stored = () => JSON.parse(readFileSync(preferencesFile(), "utf8"))

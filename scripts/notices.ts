@@ -15,8 +15,9 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs"
+import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
 /** pnpm licenses list --prod --json 的输出。 */
 export type LicenseInventory = Record<string, InventoryPackage[]>
@@ -162,18 +163,42 @@ export function readInventory(cwd: string): LicenseInventory {
     cwd,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
+    // Windows 上 pnpm 是 .cmd，不经过 shell 启动不了。
+    shell: process.platform === "win32",
   })
   return JSON.parse(output) as LicenseInventory
 }
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
+
+/**
+ * Electron 发行版自带的声明：应用里还有 Chromium，打包时 electron-builder 在 macOS 上不会带上它们。
+ * electron 是 apps/desktop 的依赖，从那个包解析。
+ */
+export function electronLicenseFiles(): Array<{ from: string; to: string }> {
+  const fromApp = createRequire(join(root, "apps/desktop/package.json"))
+  const binary = fromApp("electron") as string
+  // macOS 上解析到 Electron.app 里的可执行文件，声明文件在它的 dist 目录下。
+  const bundle = join("Electron.app", "Contents", "MacOS")
+  const index = binary.lastIndexOf(bundle)
+  const dist = index > 0 ? binary.slice(0, index - 1) : dirname(binary)
+  return [
+    { from: join(dist, "LICENSE"), to: "Electron-LICENSE.txt" },
+    { from: join(dist, "LICENSES.chromium.html"), to: "LICENSES.chromium.html" },
+  ]
+}
+
 const target = join(root, "apps/desktop/build")
 
-if (process.argv[1] && import.meta.url === `file://${process.argv[1]}`) {
+// 直接运行时（而不是被别处 import）才写文件；Windows 的路径要用 file URL 比较。
+const entry = process.argv[1] ? pathToFileURL(process.argv[1]).href : undefined
+
+if (entry === import.meta.url) {
   const ownLicense = readFileSync(join(root, "LICENSE"), "utf8")
   const notices = renderNotices({ ownLicense, entries: noticeEntries(readInventory(root)) })
   mkdirSync(target, { recursive: true })
   writeFileSync(join(target, "THIRD_PARTY_NOTICES.txt"), notices)
   copyFileSync(join(root, "LICENSE"), join(target, "LICENSE.txt"))
+  for (const file of electronLicenseFiles()) copyFileSync(file.from, join(target, file.to))
   console.log(`notices: ${String(notices.split("\n").length)} lines in apps/desktop/build`)
 }

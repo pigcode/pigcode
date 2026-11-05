@@ -34,7 +34,7 @@ describe("content security policy", () => {
     expect(csp).toMatch(/script-src 'self' pigcode-plugin: 'sha256-/)
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/)
     expect(csp).toContain("style-src 'self' 'unsafe-inline' pigcode-plugin:")
-    expect(csp).toContain("img-src 'self' data:")
+    expect(csp).toContain("img-src 'self' data: http: https:")
     expect(csp).toContain("connect-src 'self' pigcode-plugin:")
     expect(csp).toContain("object-src 'none'")
   })

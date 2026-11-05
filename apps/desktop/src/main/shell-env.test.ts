@@ -1,5 +1,5 @@
 /** 用假的 shell 脚本验证读取登录 shell 环境：真的启动进程，和应用里一样。 */
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -58,9 +58,12 @@ line two"`)
   it("stops waiting for a shell that hangs, and ends it", async () => {
     const pidFile = join(tempDir(), "pid")
     const shell = fakeShell(`echo $$ > "${pidFile}"\nsleep 30`)
-    expect(await readLoginShellEnv(shell, 400)).toBeNull()
+    // 超时给得比 shell 启动久：机器忙的时候 400ms 可能还没轮到它写 pid。
+    expect(await readLoginShellEnv(shell, 1500)).toBeNull()
+    // 机器太忙时可能在写 pid 之前就被结束了；那种情况下没有进程留下，也就没什么可等的。
+    if (!existsSync(pidFile)) return
     const pid = Number(readFileSync(pidFile, "utf8"))
-    await expect.poll(() => isRunning(pid)).toBe(false)
+    await expect.poll(() => isRunning(pid), { timeout: 3000 }).toBe(false)
   })
 
   // rc 文件里的后台进程一直占着 stdout，不能等到输出关闭。

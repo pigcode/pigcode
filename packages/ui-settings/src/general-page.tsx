@@ -1,5 +1,5 @@
 // 通用设置页：启动、更新和侧栏会话分组。
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   SegmentedControl,
   SettingPage,
@@ -43,12 +43,20 @@ function useAppVersion(): string | null {
 /** 读主进程的偏好；读到之前用默认值，开关不会在加载时闪一下。 */
 function usePreferences(): [Preferences, (key: keyof Preferences, value: boolean) => void] {
   const [prefs, setPrefs] = useState<Preferences>({ launchAtLogin: false, showInDock: true })
+  // 用户已经动过开关时，晚到的读取结果不能把刚改的值盖回去。
+  const changed = useRef(false)
   useEffect(() => {
     void nativeBridge()
       ?.getPreferences?.()
-      .then(setPrefs, () => undefined)
+      .then(
+        (loaded) => {
+          if (!changed.current) setPrefs(loaded)
+        },
+        () => undefined,
+      )
   }, [])
   const update = (key: keyof Preferences, value: boolean): void => {
+    changed.current = true
     setPrefs((current) => ({ ...current, [key]: value }))
     void nativeBridge()
       ?.setPreference?.(key, value)

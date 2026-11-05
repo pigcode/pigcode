@@ -33,7 +33,8 @@ export function contentSecurityPolicy(html: string): string {
     "default-src 'self'",
     `script-src 'self' pigcode-plugin: ${inlineScriptHashes(html).join(" ")}`.trim(),
     "style-src 'self' 'unsafe-inline' pigcode-plugin:",
-    "img-src 'self' data:",
+    // 聊天的 Markdown 允许 http(s) 图片（markdown.tsx 的 safeImage），CSP 要跟它一致。
+    "img-src 'self' data: http: https:",
     "connect-src 'self' pigcode-plugin:",
     "frame-src 'self' blob: http: https:",
     "object-src 'none'",
