@@ -7,6 +7,7 @@ import { homedir } from "node:os"
 import { delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path"
 import type { EnvironmentEntry } from "@pigcode/contracts"
 
+export * from "./process-records"
 export * from "./process-tree"
 
 /** 把开头的 `~` 展开成用户主目录；其他路径原样返回。 */

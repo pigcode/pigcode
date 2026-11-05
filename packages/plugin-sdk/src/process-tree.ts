@@ -3,6 +3,7 @@
  * POSIX 上让子进程自成一个进程组，向组发信号；Windows 没有进程组，用 taskkill /T 按父子关系结束。
  */
 import { execFile, type ChildProcess } from "node:child_process"
+import { forgetProcessTree, processRecordIntervalMs, recordProcessTree } from "./process-records"
 
 /**
  * 优雅终止后等多久再强制结束。要给 CLI 留出退出前的工作（Claude Code 的 SessionEnd hook 等），
@@ -146,6 +147,14 @@ export interface OwnedProcessTree {
 export function ownProcessTree(child: ChildProcess): OwnedProcessTree {
   const pid = child.pid
   let termination: Promise<void> | undefined
+  // 记下这棵树的进程和启动时间：Host 如果崩溃，下次启动时靠它收拾（pigcode/pigcode#47）。
+  const intervalMs = processRecordIntervalMs()
+  const timer =
+    pid !== undefined && intervalMs > 0
+      ? setInterval(() => void recordProcessTree(pid), intervalMs)
+      : undefined
+  timer?.unref()
+  if (pid !== undefined && processRecordIntervalMs() > 0) void recordProcessTree(pid)
   const terminate = (options?: TerminateOptions): Promise<void> => {
     termination ??= pid === undefined ? Promise.resolve() : terminateProcessTree(pid, options)
     return termination
@@ -153,6 +162,8 @@ export function ownProcessTree(child: ChildProcess): OwnedProcessTree {
   child.once("exit", (code, signal) => {
     if (!IS_WINDOWS && (code !== 0 || signal !== null)) void terminate()
     else termination ??= Promise.resolve()
+    if (timer) clearInterval(timer)
+    if (pid !== undefined) forgetProcessTree(pid)
   })
   return {
     signal(signal) {

@@ -2,6 +2,7 @@
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHostAppFromProfile, requireCoreService } from "./kernel/app"
+import { sweepOrphanedProcesses } from "@pigcode/plugin-sdk/node"
 import { writeBootGraph } from "./kernel/boot"
 import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
@@ -72,6 +73,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
   const profile = await loadProfile(coreProfileDir(), "desktop")
+  // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
+  await sweepOrphanedProcesses()
   const ctx = await createHostAppFromProfile(profile, {
     "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
     "core.settings": { path: join(profileDir, "settings.json") },
