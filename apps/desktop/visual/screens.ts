@@ -87,6 +87,7 @@ export async function launch(
         ...env,
         PIGCODE_PROFILE_DIR: join(work, "profile"),
         PIGCODE_AGENT: "fake",
+        PIGCODE_QUIT_CONFIRM: "0",
         PIGCODE_FAKE_STEP_MS: "40",
         PIGCODE_CLAUDE_PATH: join(MISSING_CLI, "claude"),
         PIGCODE_CODEX_PATH: join(MISSING_CLI, "codex"),

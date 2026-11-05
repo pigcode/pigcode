@@ -10,7 +10,7 @@ test("chat, plugin panel, and reconnect", async () => {
   )
   const app = await electron.launch({
     args: ["."],
-    env: { ...env, PIGCODE_AGENT: "fake" },
+    env: { ...env, PIGCODE_AGENT: "fake", PIGCODE_QUIT_CONFIRM: "0" },
   })
   const page = await app.firstWindow()
   await addProject(app, page, "/tmp/pigcode-m0b")

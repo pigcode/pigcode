@@ -8,7 +8,11 @@ import {
   type Page,
 } from "@playwright/test"
 
-/** 过滤 undefined，满足 Playwright env 的 string 值约束；默认用 fake agent。 */
+/**
+ * 过滤 undefined，满足 Playwright env 的 string 值约束；默认用 fake agent。
+ * 退出确认默认关掉：等待审批的用例会在应用退出时撞上原生确认框，把测试卡住；
+ * 退出确认自己的用例传 PIGCODE_QUIT_CONFIRM=1 打开。
+ */
 export function launchEnv(extra: Record<string, string>): Record<string, string> {
   return {
     ...Object.fromEntries(
@@ -17,6 +21,7 @@ export function launchEnv(extra: Record<string, string>): Record<string, string>
       ),
     ),
     PIGCODE_AGENT: "fake",
+    PIGCODE_QUIT_CONFIRM: "0",
     ...extra,
   }
 }

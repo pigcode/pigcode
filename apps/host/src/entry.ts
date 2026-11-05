@@ -7,6 +7,7 @@ import { writeBootGraph } from "./kernel/boot"
 import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { RpcServer } from "./rpc/server"
+import { attachQuitState } from "./rpc/quit-state"
 import { apply as pluginsPlugin } from "./services/plugins"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
@@ -94,6 +95,10 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
   new RpcServer(ctx, new MessagePortTransport(appPort)).start()
-  // 控制端口目前只承载内置浏览器的动作：agent 的 browser_* 工具经它交给 main 执行。
-  if (control) ctx.get("browser")?.attach(control)
+  // 控制端口承载两件事：内置浏览器的动作（agent 的 browser_* 工具经它交给 main 执行），
+  // 以及退出前查询还有多少在跑的工作。
+  if (control) {
+    ctx.get("browser")?.attach(control)
+    attachQuitState(control, ctx)
+  }
 }

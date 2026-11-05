@@ -9,6 +9,7 @@ import {
   Notification,
   shell,
   type MessageBoxSyncOptions,
+  type MessagePortMain,
   type Tray,
 } from "electron"
 import { join } from "node:path"
@@ -25,6 +26,8 @@ import { readPreferences, withPreference, writePreferences, type Preferences } f
 import { applyLoginShellEnv } from "./shell-env"
 import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
+import { quitDetail, quitLabels } from "./locale/quit"
+import { askQuitState, hasPendingWork } from "./quit-check"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
@@ -72,6 +75,12 @@ let tray: Tray | undefined
 let hiddenHintShown = false
 /** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
 let preferences: Preferences = { launchAtLogin: false, showInDock: true }
+/** Host 的控制端口：退出前经它查询还有多少工作。Host 退出后置空。 */
+let hostControlPort: MessagePortMain | undefined
+/** 用户在退出确认框里选了退出；之后的 app.quit() 不再重复询问。 */
+let quitConfirmed = false
+/** 正在进行的退出检查；连点退出时复用。 */
+let quitCheck: Promise<void> | undefined
 let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
@@ -249,11 +258,13 @@ function showHostFailure(count: number): void {
 function startHost(): HostProcess {
   const next = startHostProcess(resolveAppPath("out/host/index.mjs"), profileDir())
   const startedAt = Date.now()
+  hostControlPort = next.controlPort
   browser.attachControlPort(next.controlPort)
   next.child.on("message", (message: unknown) => {
     lastHostFatal = readHostFatal(message) ?? lastHostFatal
   })
   next.child.on("exit", () => {
+    hostControlPort = undefined
     if (quitting) return
     const decision = decideRestart(hostQuickFailures, Date.now() - startedAt)
     hostQuickFailures = decision.quickFailures
@@ -348,8 +359,9 @@ export async function createWindow(): Promise<BrowserWindow> {
       event.preventDefault()
       return
     }
-    // 用户选了「继续编辑」，退出被取消：之后的关窗口又是隐藏，而不是退出。
+    // 用户选了「继续编辑」，退出被取消：之后的关窗口又是隐藏而不是退出，下次退出要重新确认。
     quitting = false
+    quitConfirmed = false
   })
   window.webContents.on("did-finish-load", () => {
     if (host) window.webContents.postMessage("pigcode:port", null, [host.appPort])
@@ -412,9 +424,54 @@ app.on("will-quit", (event) => {
 // macOS 上点 Dock 图标（Windows 上从托盘选「打开窗口」）把隐藏的窗口叫回来。
 app.on("activate", () => showWindow())
 
-// 退出流程开始后，关窗口不再隐藏，否则应用退不出去。
-app.on("before-quit", () => {
-  quitting = true
+/** 退出前问一次 Host：有任务在跑时让用户确认，避免一个 Cmd+Q 就把 agent 和终端都停掉。 */
+async function checkBeforeQuit(): Promise<void> {
+  const port = hostControlPort
+  const state = port ? await askQuitState(port) : null
+  // Host 不在或没应答时直接退出：没有工作可保，也不能把应用卡住。
+  if (!state || !hasPendingWork(state)) {
+    quitNow()
+    return
+  }
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show()
+  const labels = quitLabels(app.getLocale())
+  const options = {
+    type: "warning" as const,
+    buttons: [labels.quit, labels.stay],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+    message: labels.title,
+    detail: quitDetail(labels, state).join("\n"),
+  }
+  const { response } =
+    mainWindow && !mainWindow.isDestroyed()
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options)
+  if (response === 0) quitNow()
+}
+
+/** 记住用户已经确认，再走一次正常的退出流程。 */
+function quitNow(): void {
+  quitConfirmed = true
+  // 在 before-quit 里 preventDefault 之后，这个处理跑完前直接 app.quit() 会被忽略；
+  // 等一轮事件循环再退。
+  setImmediate(() => app.quit())
+}
+
+// 退出流程开始后，关窗口不再隐藏，否则应用退不出去。有任务在跑时先问一次。
+app.on("before-quit", (event) => {
+  // E2E 默认关掉（见 e2e/projects.ts）：等待审批的用例退出时会撞上原生确认框。
+  if (quitConfirmed || process.env.PIGCODE_QUIT_CONFIRM === "0") {
+    quitting = true
+    return
+  }
+  event.preventDefault()
+  quitCheck ??= checkBeforeQuit()
+    .catch(() => quitNow())
+    .finally(() => {
+      quitCheck = undefined
+    })
 })
 
 app.on("window-all-closed", () => {

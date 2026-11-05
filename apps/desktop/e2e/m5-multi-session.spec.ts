@@ -22,6 +22,7 @@ test("keeps background runs alive across threads", async () => {
     env: {
       ...launchEnv(),
       PIGCODE_AGENT: "fake",
+      PIGCODE_QUIT_CONFIRM: "0",
       PIGCODE_FAKE_DELAY_MS: "800",
     },
   })
