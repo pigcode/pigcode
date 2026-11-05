@@ -44,7 +44,7 @@ git push origin v0.2.0
 - [ ] 关窗口：macOS 和 Windows 上应用还在托盘里，点 Dock 或菜单栏图标能回窗口；Linux 上直接退出。
 - [ ] 有任务在跑时退出，确认框出现，选「继续运行」任务继续。
 - [ ] 设置页「检查更新」能连上 GitHub（仓库公开后）；发现新版本时提示能打开下载页。
-- [ ] 第二个版本起：Windows 和 AppImage 能从上一个版本更新，用户数据还在（#71 完成后）。
+- [ ] 第二个版本起：Windows 和 AppImage 能从上一个版本更新，用户数据还在（更新会在下载完成后、下次退出时安装，或点提示里的「重启并更新」）。这一条必须在两个真实版本之间验证，第一次发版时做（#71）。
 - [ ] macOS 第一次打开要右键 →「打开」；Windows 会弹 SmartScreen —— 这是未签名的预期行为（ADR 0005）。
 
 ## 4. 发布、撤回、更新指针
@@ -61,7 +61,11 @@ git -C frontend fetch && git add frontend
 git commit -m "chore: bump frontend to 0.2.0"
 ```
 
-## 5. 现在还不能做的事
+## 5. 更新怎么工作
+
+Windows 和 AppImage 的安装包会自己更新：发现新版本后后台下载，下载完提示「重启并更新」，不点的话下次退出时安装。macOS（未签名）和 deb 只提示，点开下载页。判断逻辑在 `apps/desktop/src/main/update-mode.ts`。
+
+## 6. 现在还不能做的事
 
 - 仓库还是私有的（#60），所以 Release 匿名拿不到，自动更新和下载页要等转公开。
 - Actions 额度用完后 CI 不会启动；release workflow 也一样。

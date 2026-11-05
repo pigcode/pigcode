@@ -54,6 +54,11 @@ const EXEMPT_FILES: ReadonlyArray<{ file: RegExp; reason: string }> = [
     file: /^scripts\/naming-scan\.test\.ts$/,
     reason: "本检查自己：规则与测试样例里写着旧名字",
   },
+  {
+    file: /^apps\/desktop\/electron-builder\.yml$/,
+    reason:
+      "electron-builder 的 publish 配置键就叫 provider（GitHub 更新源），是外部配置格式，不是产品术语",
+  },
 ]
 
 /** 文件里的一段不扫：从含 start 的行到含 end 的行之前。旧写法要被拒绝，报错和测试只能写出旧名字。 */
