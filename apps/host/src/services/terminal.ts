@@ -193,7 +193,9 @@ function validateSize(cols: number, rows: number): void {
 /** 当前平台的默认 shell；Windows 使用 ConPTY 对应的 COMSPEC。 */
 export function defaultShell(): string {
   if (process.platform === "win32") return process.env.COMSPEC ?? "cmd.exe"
-  return process.env.SHELL ?? "/bin/zsh"
+  // 从 Dock 或桌面菜单启动时可能没有 SHELL；Linux 上不能退回只存在于 macOS 的 zsh。
+  const fallback = process.platform === "darwin" ? "/bin/zsh" : "/bin/sh"
+  return process.env.SHELL ?? fallback
 }
 
 /** 真实 PTY 工厂；node-pty 是 CJS，用 createRequire 避免 ESM 默认导入问题。 */

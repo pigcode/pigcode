@@ -6,7 +6,7 @@ import { Context } from "cordis"
 import { afterEach, describe, expect, it } from "vitest"
 import { apply as projects } from "./projects"
 import { apply as storage } from "./storage"
-import { apply as terminal, type PtyFactory, type PtySpawnInput } from "./terminal"
+import { defaultShell, apply as terminal, type PtyFactory, type PtySpawnInput } from "./terminal"
 import { apply as threads } from "./threads"
 
 /** 单个 fake PTY 的内部状态。 */
@@ -120,6 +120,23 @@ afterEach(async () => {
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true, maxRetries: 5 })),
   )
+})
+
+describe("default shell", () => {
+  it("falls back to a shell that exists on the platform", () => {
+    const platform = process.platform
+    const shell = process.env.SHELL
+    try {
+      delete process.env.SHELL
+      Object.defineProperty(process, "platform", { value: "linux" })
+      expect(defaultShell()).toBe("/bin/sh")
+      Object.defineProperty(process, "platform", { value: "darwin" })
+      expect(defaultShell()).toBe("/bin/zsh")
+    } finally {
+      Object.defineProperty(process, "platform", { value: platform })
+      if (shell !== undefined) process.env.SHELL = shell
+    }
+  })
 })
 
 describe("terminal service", () => {

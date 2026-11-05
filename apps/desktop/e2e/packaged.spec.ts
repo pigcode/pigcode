@@ -96,7 +96,12 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
       args: [],
       cwd: workspace,
       env: {
-        ...launchEnv({ PIGCODE_AGENT: "fake", PIGCODE_PROFILE_DIR: profile }),
+        // 终端用系统的 shell；Linux 的 CI/容器里不一定设了 SHELL。
+        ...launchEnv({
+          PIGCODE_AGENT: "fake",
+          PIGCODE_PROFILE_DIR: profile,
+          SHELL: process.platform === "win32" ? "" : "/bin/sh",
+        }),
         PIGCODE_HOST_LOG: join(dir, "host.log"),
       },
     })
