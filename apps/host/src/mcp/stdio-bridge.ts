@@ -123,7 +123,8 @@ async function dispatch(
         protocolVersion:
           typeof params?.protocolVersion === "string" ? params.protocolVersion : "2024-11-05",
         capabilities: { tools: {} },
-        serverInfo: { name: "pigcode", version: "0.1.0" },
+        // 版本由 Host 在启动命令里传进来：这个脚本会被单独起成子进程，不引插件 SDK 的包。
+        serverInfo: { name: "pigcode", version: process.env.PIGCODE_VERSION ?? "0.0.0-dev" },
       }
     case "notifications/initialized":
     case "notifications/cancelled":

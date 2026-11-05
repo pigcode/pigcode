@@ -1,6 +1,13 @@
+import { readFileSync } from "node:fs"
 import { defineConfig } from "vitest/config"
 
+// 和构建时一样注入产品版本：测试里的 HOST_VERSION 才能和 package.json 一致（adr/0007）。
+const appVersion = JSON.parse(
+  readFileSync(new URL("./apps/desktop/package.json", import.meta.url), "utf8"),
+).version as string
+
 export default defineConfig({
+  define: { __PIGCODE_VERSION__: JSON.stringify(appVersion) },
   test: {
     include: [
       "packages/**/*.test.ts",

@@ -1,7 +1,13 @@
 /** Electron 构建配置：renderer 使用 React，样式是 ui-primitives 里的普通 CSS。 */
+import { readFileSync } from "node:fs"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "electron-vite"
 import type { Plugin } from "vite"
+
+/** 产品版本：唯一来源是 package.json，编译时替换掉代码里的 __PIGCODE_VERSION__（adr/0007）。 */
+const appVersion = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"))
+  .version as string
+const define = { __PIGCODE_VERSION__: JSON.stringify(appVersion) }
 
 /**
  * 插件共享模块（ADR-0002）的入口。产物名固定为 `shared/<名字>.js`，和 index.html 的 import map 对应。
@@ -42,16 +48,19 @@ function sharedModuleEntries(): Plugin {
 export default defineConfig({
   // 标题栏默认色取自 ui-primitives 的 tokens.css 与纯函数模块；它的入口是 TS 源码，打进 main 而不外置。
   main: {
+    define,
     build: { outDir: "out/main", externalizeDeps: { exclude: ["@pigcode/ui-primitives"] } },
   },
   // sandbox 渲染器只能加载 CJS preload，因此显式输出 .cjs。
   preload: {
+    define,
     build: {
       outDir: "out/preload",
       rollupOptions: { output: { format: "cjs", entryFileNames: "index.cjs" } },
     },
   },
   renderer: {
+    define,
     root: "src/renderer",
     plugins: [react(), sharedModuleEntries()],
     // electron-vite 默认不压缩；渲染进程的脚本压缩后体积约减半，冷启动解析更快。

@@ -73,6 +73,8 @@ function profileDir(): string {
 
 /** 注册主题与窗口控制 IPC；只接受已知的动作和外观值。 */
 function registerNativeBridge(): void {
+  // 设置页显示的版本就是 package.json 的版本，electron 在启动时读一次。
+  ipcMain.handle("pigcode:app-version", () => app.getVersion())
   ipcMain.handle("pigcode:set-theme", (_event, value: unknown) => {
     const source = readThemeSource(value)
     if (source) nativeTheme.themeSource = source

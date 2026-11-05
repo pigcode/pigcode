@@ -2,6 +2,7 @@
  * 线程级 MCP 桥：插件工具注册、按线程调用、Unix socket（Windows 命名管道）与 stdio 桥的启动命令。
  * 桥本身不关心是哪个 agent：会话拿到工具列表与调用入口，由 driver 接到自己 CLI 的 MCP 机制上。
  */
+import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import type {
   McpBridgeApi,
   McpStdioServer,
@@ -128,7 +129,8 @@ export function apply(ctx: Context): void {
     return {
       command: "node",
       args: [stdioBridgePath()],
-      env: { PIGCODE_MCP_SOCKET: address, PIGCODE_MCP_TOKEN: token },
+      // 版本随启动命令传下去，stdio 桥用它填 serverInfo，不用自己依赖插件 SDK。
+      env: { PIGCODE_MCP_SOCKET: address, PIGCODE_MCP_TOKEN: token, PIGCODE_VERSION: HOST_VERSION },
     }
   }
 

@@ -107,7 +107,7 @@ export const enUS = {
   "settings.general.showInDock.description": "When off, only show in the menu bar",
   "settings.general.updates": "Updates",
   "settings.general.autoUpdate": "Check for updates automatically",
-  "settings.general.autoUpdate.description": "Current version 0.1.0",
+  "settings.general.autoUpdate.description": "Current version {version}",
   "settings.general.sidebar": "Sidebar",
   "settings.general.sidebarGrouping": "Sidebar threads",
   "settings.general.byProject": "By project",

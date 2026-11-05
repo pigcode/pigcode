@@ -1,5 +1,6 @@
 /** 用 scripted replay transport 驱动 CodexDriver，验证协议交互与事件归一化。 */
 import type { AgentEvent } from "@pigcode/contracts"
+import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { describe, expect, it, vi } from "vitest"
 import type {
   ApprovalDecision,
@@ -62,7 +63,7 @@ describe("CodexDriver", () => {
     })
 
     expect(messageOf(transport, "initialize")?.params).toEqual({
-      clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
+      clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
     })
     expect(messageOf(transport, "thread/start")?.params).toMatchObject({
       cwd: "/tmp/project",

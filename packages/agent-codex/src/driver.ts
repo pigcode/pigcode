@@ -16,6 +16,7 @@ import { CodexRpcClient } from "./client"
 import { detectCodex, type CodexDetection } from "./detect"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
 import { parseCodexModels } from "./models"
+import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { normalizeCodexNotification } from "./normalize"
 import { StdioCodexTransport, type CodexTransport } from "./transport"
 
@@ -128,7 +129,7 @@ export class CodexDriver implements AgentDriver {
     const client = this.openClient(launch)
     try {
       await client.request("initialize", {
-        clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
+        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
       })
       const params = createThreadParams(input)
       // 同一 Agent 切换优先原生 fork；fork 返回的新 thread id 用于后续 turn。
@@ -250,7 +251,7 @@ export class CodexDriver implements AgentDriver {
     const client = this.openClient(codexLaunch(settings))
     try {
       await client.request("initialize", {
-        clientInfo: { name: "pigcode", title: "Pigcode", version: "0.1.0" },
+        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
       })
       return parseCodexModels(await client.request("model/list", {}))
     } catch {

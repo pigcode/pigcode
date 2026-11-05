@@ -1,4 +1,5 @@
 // 通用设置页：启动、更新和侧栏会话分组。
+import { useEffect, useState } from "react"
 import {
   SegmentedControl,
   SettingPage,
@@ -10,10 +11,26 @@ import {
   type SidebarGrouping,
 } from "@pigcode/ui-primitives"
 
+/** 本机桥只暴露需要的一小块，设置页不依赖主应用的全局类型。 */
+interface VersionBridge {
+  appVersion?: () => Promise<string>
+}
+
+/** 从主进程读应用版本；读不到时保持空，不显示占位。 */
+function useAppVersion(): string | null {
+  const [version, setVersion] = useState<string | null>(null)
+  useEffect(() => {
+    const bridge = (globalThis as { pigcodeNative?: VersionBridge }).pigcodeNative
+    void bridge?.appVersion?.().then(setVersion, () => undefined)
+  }, [])
+  return version
+}
+
 /** 渲染通用设置；启动与更新开关只在本页保留状态，侧栏排法保存在本机并同步到侧栏。 */
 export function GeneralPage() {
   const { t } = useLocale()
   const [grouping, setGrouping] = useSidebarGrouping()
+  const version = useAppVersion()
 
   return (
     <SettingPage title={t("settings.general.pageTitle")}>
@@ -34,7 +51,11 @@ export function GeneralPage() {
       <SettingSection title={t("settings.general.updates")}>
         <SettingRow
           title={t("settings.general.autoUpdate")}
-          description={t("settings.general.autoUpdate.description")}
+          description={
+            version
+              ? t("settings.general.autoUpdate.description").replace("{version}", version)
+              : undefined
+          }
         >
           <Switch defaultChecked aria-label={t("settings.general.autoUpdate")} />
         </SettingRow>

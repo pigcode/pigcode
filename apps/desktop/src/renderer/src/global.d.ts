@@ -2,6 +2,7 @@
 interface Window {
   pigcodeNative?: {
     platform: string
+    appVersion?(): Promise<string>
     setThemeSource(source: "light" | "dark" | "system"): Promise<void>
     windowControl(action: "minimize" | "maximize" | "close"): Promise<void>
     isMaximized(): Promise<boolean>

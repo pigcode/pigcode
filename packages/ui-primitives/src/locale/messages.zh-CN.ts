@@ -106,7 +106,7 @@ export const zhCN = {
   "settings.general.showInDock.description": "关闭后只出现在菜单栏",
   "settings.general.updates": "更新",
   "settings.general.autoUpdate": "自动检查更新",
-  "settings.general.autoUpdate.description": "当前版本 0.1.0",
+  "settings.general.autoUpdate.description": "当前版本 {version}",
   "settings.general.sidebar": "侧栏",
   "settings.general.sidebarGrouping": "侧栏会话",
   "settings.general.byProject": "按项目",

@@ -12,6 +12,10 @@ const root = fileURLToPath(new URL("..", import.meta.url))
 /** Host 构建产物目录。 */
 const outDir = join(root, "apps/desktop/out/host")
 
+/** 应用版本：唯一的版本号来源是 apps/desktop/package.json，构建时注入 Host（adr/0007）。 */
+const appVersion = JSON.parse(await readFile(join(root, "apps/desktop/package.json"), "utf8"))
+  .version as string
+
 /** 共用 esbuild 选项；CJS 依赖需要 require 才能加载 Node 内置模块。 */
 const shared: BuildOptions = {
   bundle: true,
@@ -23,6 +27,8 @@ const shared: BuildOptions = {
   // 它在 apps/desktop 的 dependencies 里，随应用一起发布。
   external: ["better-sqlite3", "node-pty", "esbuild"],
   sourcemap: true,
+  // 产品版本在代码里只写一次：构建时替换成 package.json 里的值。
+  define: { __PIGCODE_VERSION__: JSON.stringify(appVersion) },
   outExtension: { ".js": ".mjs" },
   banner: {
     js: 'import { createRequire as __pigcodeCreateRequire } from "node:module"; const require = __pigcodeCreateRequire(import.meta.url);',

@@ -4,6 +4,7 @@ import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 import net from "node:net"
 import { fileURLToPath } from "node:url"
+import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { apply as mcpBridge } from "./mcp-bridge"
@@ -268,17 +269,15 @@ describe("mcp bridge", () => {
     }))
     await ctx.mcpBridge.createSocketServer()
     const config = stdioServer(ctx, "thread-stdio")
-    const bridge = startBridge({
-      PIGCODE_MCP_SOCKET: config.env.PIGCODE_MCP_SOCKET!,
-      PIGCODE_MCP_TOKEN: config.env.PIGCODE_MCP_TOKEN!,
-    })
+    // 整个环境都传下去：桥的版本也来自这里。
+    const bridge = startBridge(config.env)
 
     expect(await bridge.request(1, "initialize", { protocolVersion: "2025-06-18" })).toMatchObject({
       jsonrpc: "2.0",
       id: 1,
       result: {
         protocolVersion: "2025-06-18",
-        serverInfo: { name: "pigcode", version: "0.1.0" },
+        serverInfo: { name: "pigcode", version: HOST_VERSION },
       },
     })
     bridge.notify("notifications/initialized")
@@ -305,10 +304,8 @@ describe("mcp bridge", () => {
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
     await ctx.mcpBridge.createSocketServer()
     const config = stdioServer(ctx, "thread-stdio-close")
-    const bridge = startBridge({
-      PIGCODE_MCP_SOCKET: config.env.PIGCODE_MCP_SOCKET!,
-      PIGCODE_MCP_TOKEN: config.env.PIGCODE_MCP_TOKEN!,
-    })
+    // 整个环境都传下去：桥的版本也来自这里。
+    const bridge = startBridge(config.env)
 
     bridge.child.stdin.end()
     const code = await new Promise<number | null>((resolve) => {

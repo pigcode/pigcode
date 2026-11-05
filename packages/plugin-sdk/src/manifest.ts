@@ -104,7 +104,15 @@ export type PluginKind = z.infer<typeof pluginKindSchema>
 export const CURRENT_PLUGIN_API_VERSION = 1
 
 /** Host 版本；随 Host 发布递增，插件 engines 用它判断兼容。 */
-export const HOST_VERSION = "0.1.0"
+/** 构建 Host 时由 scripts/build-host.ts 注入（apps/desktop/package.json 的 version）。 */
+declare const __PIGCODE_VERSION__: string | undefined
+
+/**
+ * 产品版本：插件 `engines.pigcode` 的版本范围和设置页显示的都是它。
+ * 没注入时（单元测试、渲染进程）回退到开发版本，不要在这里改数字。
+ */
+export const HOST_VERSION =
+  typeof __PIGCODE_VERSION__ === "string" ? __PIGCODE_VERSION__ : "0.0.0-dev"
 
 /** 返回 null 表示兼容；否则返回可直接展示给用户的原因。 */
 export function checkPluginCompatibility(manifest: PluginManifest): string | null {
