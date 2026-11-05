@@ -199,6 +199,18 @@ export async function walkShell(walk: Walk): Promise<void> {
   await page.keyboard.press("Escape")
   await expect(page.locator(".palette")).toBeHidden()
 
+  // 审批卡片：fake agent 收到 approve 时请求一次命令审批。
+  await page.locator(".tiptap").click()
+  await page.keyboard.type("approve")
+  await page.keyboard.press("Enter")
+  const approval = page.getByRole("group", { name: t("chat.approval.title") })
+  await expect(approval).toBeVisible()
+  await step("timeline-approval")
+  // 决议之后这一轮才结束，后面的步骤不会被等待中的审批挡住。
+  await approval.getByRole("button").first().click()
+  // 决议后卡片留着显示结果，按钮消失。
+  await expect(approval.getByRole("button")).toHaveCount(0)
+
   await page.locator(".proj-block .proj").first().click({ button: "right" })
   await expect(page.getByRole("menuitem", { name: t("sidebar.removeProject") })).toBeVisible()
   await step("menu-project")
@@ -207,6 +219,17 @@ export async function walkShell(walk: Walk): Promise<void> {
   await expect(page.getByRole("menuitem", { name: t("sidebar.archive") })).toBeVisible()
   await step("menu-thread")
   await page.keyboard.press("Escape")
+
+  // 窄窗口（宽度小于 960px）：侧栏收进抽屉。放在最后，前面的截图不受窗口尺寸影响。
+  await page.setViewportSize({ width: 720, height: 800 })
+  await expect(page.locator(".sidebar")).toBeHidden()
+  await step("shell-narrow")
+  await page
+    .getByRole("button", { name: t("sidebar.expand") })
+    .first()
+    .click()
+  await expect(page.locator(".app")).toHaveClass(/is-drawer-open/)
+  await step("shell-narrow-drawer")
 }
 
 /** 一轮完整的工作（fake agent 的 showcase）和右栏的每一种 Surface。 */

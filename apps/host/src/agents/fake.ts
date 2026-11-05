@@ -70,7 +70,7 @@ export class FakeAgentDriver implements AgentDriver {
   readonly displayName = "Fake Agent"
   readonly features: AgentFeatures = {
     streaming: true,
-    approvals: false,
+    approvals: true,
     questions: true,
     plan: false,
     resume: false,
@@ -136,6 +136,11 @@ export class FakeAgentDriver implements AgentDriver {
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
       return
     }
+    if (input.text === FAKE_APPROVAL_TEXT) {
+      await runFakeApproval(runtime)
+      if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
+      return
+    }
     if (input.text.startsWith(FAKE_BROWSER_PREFIX)) {
       await runFakeBrowser(runtime, {
         threadId: session.threadId,
@@ -183,6 +188,32 @@ function envMs(name: string, fallback = 0): number {
 
 /** 触发提问脚本的输入。 */
 export const FAKE_ASK_TEXT = "ask"
+
+/** 触发审批脚本的输入。 */
+export const FAKE_APPROVAL_TEXT = "approve"
+
+/** 审批脚本里模型说的话；界面上显示为用户内容，英文界面检查靠它区分。 */
+export const FAKE_APPROVAL_TEXTS = {
+  before: "这一步要先确认一下。",
+  title: "运行这条命令？",
+  denied: "好，不执行。",
+  allowed: "命令已经执行完了。",
+}
+
+/** 请求一次命令审批，按用户的决议收尾。 */
+async function runFakeApproval(runtime: AgentRuntime): Promise<void> {
+  runtime.emit({ type: "message.completed", text: FAKE_APPROVAL_TEXTS.before })
+  const decision = await runtime.requestApproval({
+    toolName: "Bash",
+    title: FAKE_APPROVAL_TEXTS.title,
+    description: "pnpm install",
+    input: { command: "pnpm install" },
+  })
+  runtime.emit({
+    type: "message.completed",
+    text: decision === "deny" ? FAKE_APPROVAL_TEXTS.denied : FAKE_APPROVAL_TEXTS.allowed,
+  })
+}
 
 /** 先问两个问题（一个多选、一个单选），再按回答给出结论。 */
 async function runFakeQuestions(runtime: AgentRuntime): Promise<void> {

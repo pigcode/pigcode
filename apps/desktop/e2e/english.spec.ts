@@ -7,6 +7,7 @@
  * 片段（比如「文件」「新建」）只在整行都是脚本里的一行时才算用户内容，所以界面文案漏翻时不会被放过。
  */
 import { expect, test, type Page } from "@playwright/test"
+import { FAKE_APPROVAL_TEXTS } from "../../host/src/agents/fake"
 import { fakeShowcaseScript } from "../../host/src/agents/fake-showcase"
 import { zhCN } from "../../../packages/ui-primitives/src/locale/messages.zh-CN"
 import {
@@ -38,11 +39,13 @@ function stringsIn(value: unknown): string[] {
 const UI_RUNS = new Set(Object.values(zhCN).flatMap(hanRuns))
 
 /** 用户内容里出现的汉字片段：showcase 脚本产生的回答、思考、工具输入与输出，去掉和界面文案相同的片段。 */
-const USER_CONTENT = new Set(
-  stringsIn(fakeShowcaseScript(0))
+const USER_CONTENT = new Set([
+  ...stringsIn(fakeShowcaseScript(0))
     .flatMap(hanRuns)
     .filter((run) => !UI_RUNS.has(run)),
-)
+  // 审批脚本是另一段模型输出，同样算用户内容。
+  ...Object.values(FAKE_APPROVAL_TEXTS).flatMap(hanRuns),
+])
 
 /** 比较整行时忽略有序列表的序号、空白、表格竖线和 markdown 标记：渲染后的表格行和列表项与脚本里的原文相同。 */
 function normalizeLine(line: string): string {
