@@ -28,7 +28,7 @@ function packagedExecutable(): string | undefined {
         ]
       : process.platform === "win32"
         ? [join(distDir, "win-unpacked/Pigcode.exe")]
-        : [join(distDir, "linux-unpacked/Pigcode"), join(distDir, "linux-unpacked/pigcode")]
+        : [join(distDir, "linux-unpacked/pigcode")]
   return candidates.find((path) => existsSync(path))
 }
 

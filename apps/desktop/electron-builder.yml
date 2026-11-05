@@ -42,6 +42,8 @@ win:
 linux:
   target: [AppImage, deb]
   category: Development
+  # 默认的可执行名取自带 scope 的包名，会变成 @pigcodedesktop；用户在应用菜单里看到它。
+  executableName: pigcode
 # 包名是 @pigcode/desktop，默认的 deb 文件名会带上 scope 变成 dist/@pigcode/desktop_…，
 # 那个目录不存在，打包会失败。显式给个不带斜杠的名字。
 deb:
