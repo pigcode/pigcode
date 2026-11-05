@@ -6,9 +6,12 @@
   "pigcode": {
     "apiVersion": 1,
     "kind": "capability",
-    "host": "./index.ts"
+    "host": "./dist/index.js"
   },
   "devDependencies": {
     "@pigcode/plugin-sdk": "workspace:*"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-plugin.ts"
   }
 }

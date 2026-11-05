@@ -59,8 +59,16 @@ function transformReason(error: unknown): string {
 /** 转换一个 TypeScript 文件；TSX 用自动 JSX runtime，enum、namespace 等语法也一并处理。 */
 export async function transpileTypeScript(source: string, fileName: string): Promise<string> {
   // 按需加载 esbuild：它带着平台原生二进制，找不到时只该让这一次本地安装失败，
-  // 不能让整个 Host 在启动时 import 失败。
-  const { transform } = await import("esbuild")
+  // 不能让整个 Host 在启动时 import 失败。打包后的应用不带编译器，这时只装构建好的插件（ADR-0006）。
+  let transform: typeof import("esbuild").transform
+  try {
+    ;({ transform } = await import("esbuild"))
+  } catch {
+    throw new Error(
+      `PLUGIN_TYPESCRIPT_NO_COMPILER: ${fileName}: 这是一个 TypeScript 源码插件，但当前安装的 Pigcode 不带编译器。` +
+        "请安装构建好的插件（把 pigcode.host / pigcode.client 指向 dist 里的 .js）。",
+    )
+  }
   try {
     const result = await transform(source, {
       loader: loaderFor(fileName),

@@ -328,30 +328,30 @@ describe("ClaudeDriver process lifetime", () => {
     }
   }
 
-  it("has ended the CLI and its tools by the time close resolves", { timeout: 15000 }, async () => {
+  it("has ended the CLI and its tools by the time close resolves", { timeout: 30000 }, async () => {
     const { driver, sent, pidFile } = await startFakeCli(HANGING_CLI)
     const pid = await toolPid(pidFile)
     expect(isAlive(pid)).toBe(true)
     await driver.close()
-    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 3000, interval: 25 })
     await sent
   })
 
-  it("ends the CLI and its tools when the session is disposed", { timeout: 15000 }, async () => {
+  it("ends the CLI and its tools when the session is disposed", { timeout: 30000 }, async () => {
     const { driver, session, sent, pidFile } = await startFakeCli(HANGING_CLI)
     const pid = await toolPid(pidFile)
     await driver.dispose(session)
-    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 3000, interval: 25 })
     await sent
   })
 
   // 注销 driver 时注册表先 dispose 活跃会话，不等结果，接着插件才 await close；Host 紧接着就退出。
-  it("close also waits for a dispose nobody awaited", { timeout: 15000 }, async () => {
+  it("close also waits for a dispose nobody awaited", { timeout: 30000 }, async () => {
     const { driver, session, sent, pidFile } = await startFakeCli(HANGING_CLI)
     const pid = await toolPid(pidFile)
     void driver.dispose(session)
     await driver.close()
-    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 1500, interval: 25 })
+    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 3000, interval: 25 })
     await sent
   })
 

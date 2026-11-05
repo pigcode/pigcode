@@ -8,7 +8,7 @@
     "apiVersion": 1,
     "kind": "agent",
     "displayName": "Echo",
-    "host": "./index.ts",
+    "host": "./dist/index.js",
     "provides": [
       "agent:echo"
     ],
@@ -48,5 +48,8 @@
   },
   "devDependencies": {
     "@pigcode/plugin-sdk": "workspace:*"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-plugin.ts"
   }
 }

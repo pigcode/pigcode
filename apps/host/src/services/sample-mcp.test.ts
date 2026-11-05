@@ -93,7 +93,8 @@ describe("Capability clock sample's client code", () => {
       expect(plugin.id).toBe("capability.pigcode-capability-clock")
       const graph = await buildBootGraph(profileDir)
       expect(graph.entries.map((entry) => entry.id)).toEqual([plugin.id])
-      expect(graph.entries[0]?.url).toContain("/pigcode-capability-clock/client.mjs?rev=")
+      // 样例是构建后安装的，加载的就是 dist 里的构建产物。
+      expect(graph.entries[0]?.url).toContain("/pigcode-capability-clock/dist/client.js?rev=")
     } finally {
       await settleSocket(ctx)
       await ctx.fiber.dispose()

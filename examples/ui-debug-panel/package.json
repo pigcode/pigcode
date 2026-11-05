@@ -5,12 +5,15 @@
   "pigcode": {
     "apiVersion": 1,
     "kind": "ui",
-    "client": "./client.tsx"
+    "client": "./dist/client.js"
   },
   "devDependencies": {
     "@pigcode/plugin-sdk": "workspace:*",
     "@pigcode/ui-primitives": "workspace:*",
     "@types/react": "19.2.2",
     "react": "19.2.3"
+  },
+  "scripts": {
+    "build": "node ../../scripts/build-plugin.ts"
   }
 }

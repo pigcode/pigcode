@@ -130,7 +130,7 @@ function manifestFor(
       },
     }
   }
-  // UI 插件：入口是 React 组件（.tsx），安装时由 Host 编译；宿主的 React 与 ui-primitives 在运行时提供，
+  // UI 插件：入口是 React 组件（.tsx）。直接装源码时由开发版在安装时编译；打包后的应用只装构建产物（adr/0006）。
   // 插件自己不依赖它们的运行时版本，只在开发时用它们做类型检查与打包。
   return {
     ...base,
@@ -359,9 +359,9 @@ declare module "*?raw" {
 }
 
 /**
- * UI 插件自带构建配置：作者要发布到 npm 时用它打包成 `dist/client.js`，并把宿主的共享模块
- * （React、JSX runtime、ui-primitives、插件 SDK）标为 external（ADR-0002）。不打包也能直接安装：
- * 安装时 Host 会转换 `client.tsx`，这期间用不到 esbuild。
+ * UI 插件自带构建配置：用它打包成 `dist/client.js`，宿主的共享模块（React、JSX runtime、
+ * ui-primitives、插件 SDK）标为 external（ADR-0002）。打包后的 Pigcode 只装构建好的插件（adr/0006）；
+ * 开发版仍可直接装源码目录，安装时 Host 会转换 `client.tsx`。
  */
 function uiBuildScript(): string {
   return `/**
@@ -472,7 +472,7 @@ function printResult(target: string, kind: Kind, pkgName: string, files: string[
       "UI 插件用宿主的 React 和 @pigcode/ui-primitives 写界面，安装时由 Host 编译 client.tsx。",
     )
     console.log(
-      "发布前要自己打包时: pnpm install && pnpm build，再把 pigcode.client 指向 ./dist/client.js。",
+      "装进打包后的 Pigcode 前要先构建（pnpm install && pnpm build），入口改指 ./dist/client.js；源码目录只在开发版可装（adr/0006）。",
     )
   }
 }

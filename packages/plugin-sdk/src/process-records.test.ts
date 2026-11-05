@@ -93,7 +93,8 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 
-describe("process records", () => {
+// 这些用例要起真实进程、读进程表；整套测试并行跑时 5 秒不够。
+describe("process records", { timeout: 30_000 }, () => {
   posixIt("records the CLI and the processes it started", async () => {
     const dir = await profile()
     const { child, grandchildPid } = await startTree()
