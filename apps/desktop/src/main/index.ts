@@ -6,8 +6,10 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
+  Notification,
   shell,
   type MessageBoxSyncOptions,
+  type Tray,
 } from "electron"
 import { join } from "node:path"
 import {
@@ -18,7 +20,10 @@ import {
   readPathKind,
 } from "./folder-picker"
 import { startHostProcess, type HostProcess } from "./host-process"
+import { hidesOnClose } from "./lifecycle"
 import { applyLoginShellEnv } from "./shell-env"
+import { createTray } from "./tray"
+import { trayLabels } from "./locale/tray"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
@@ -60,6 +65,10 @@ let hostQuickFailures = 0
 /** 退出流程里停 Host：只停一次，停完才放行 will-quit。 */
 let hostStop: Promise<void> | undefined
 let hostStopped = false
+/** 托盘只在 macOS 和 Windows 上有；创建一次，之后复用。 */
+let tray: Tray | undefined
+/** 第一次隐藏到托盘时的提示只弹一次。 */
+let hiddenHintShown = false
 let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
@@ -234,6 +243,36 @@ function startHost(): HostProcess {
   return next
 }
 
+/** 托盘：隐藏窗口以后从这里找回窗口或退出。Linux 没有托盘（关窗口直接退出）。 */
+function ensureTray(): void {
+  if (tray || !hidesOnClose()) return
+  tray = createTray(app.getLocale(), {
+    show: () => showWindow(),
+    quit: () => app.quit(),
+  })
+}
+
+/** 第一次隐藏到托盘时提示一下；Windows 上关窗口后应用还在运行，不说明会让人以为已经退出。 */
+function showHiddenHint(): void {
+  if (process.platform !== "win32" || hiddenHintShown || !Notification.isSupported()) return
+  hiddenHintShown = true
+  const labels = trayLabels(app.getLocale())
+  new Notification({ title: labels.hiddenTitle, body: labels.hiddenBody }).show()
+}
+
+/** 把窗口带到前台；窗口已经被关掉（Linux 或异常）时重新创建一个。 */
+function showWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow().then((window) => {
+      mainWindow = window
+    })
+    return
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
 /** 创建调试窗口，并在页面加载后把 Host 的 MessagePort 交给渲染进程。 */
 export async function createWindow(): Promise<BrowserWindow> {
   const window = new BrowserWindow(
@@ -259,10 +298,23 @@ export async function createWindow(): Promise<BrowserWindow> {
   // 页面有未保存的文件修改时会阻止卸载；preventDefault 表示用户确认放弃，继续关闭或刷新。
   window.webContents.on("will-prevent-unload", (event) => {
     const show = (options: MessageBoxSyncOptions) => dialog.showMessageBoxSync(window, options)
-    if (confirmDiscard(show, unsavedLabels)) event.preventDefault()
+    if (confirmDiscard(show, unsavedLabels)) {
+      event.preventDefault()
+      return
+    }
+    // 用户选了「继续编辑」，退出被取消：之后的关窗口又是隐藏，而不是退出。
+    quitting = false
   })
   window.webContents.on("did-finish-load", () => {
     if (host) window.webContents.postMessage("pigcode:port", null, [host.appPort])
+  })
+  window.on("close", (event) => {
+    if (quitting || !hidesOnClose()) return
+    // 关窗口只是隐藏：Host、agent run 和终端都继续运行，从托盘或 Dock 能找回窗口。
+    event.preventDefault()
+    window.hide()
+    ensureTray()
+    showHiddenHint()
   })
   await window.loadURL("pigcode://app/index.html")
   return window
@@ -276,11 +328,7 @@ const singleInstance = process.env.PIGCODE_PROFILE_DIR === undefined
 if (singleInstance && !app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  })
+  app.on("second-instance", () => showWindow())
   // 提前开始读，Electron 准备好的这段时间也算在内，窗口少等一会儿。
   const shellEnv = applyLoginShellEnv()
   app.whenReady().then(async () => {
@@ -290,6 +338,7 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     await shellEnv
     host = startHost()
     mainWindow = await createWindow()
+    ensureTray()
 
     if (process.env.PIGCODE_E2E === "1") {
       app.on("pigcode:test-kill-host" as never, () => {
@@ -313,7 +362,17 @@ app.on("will-quit", (event) => {
   })
 })
 
+// macOS 上点 Dock 图标（Windows 上从托盘选「打开窗口」）把隐藏的窗口叫回来。
+app.on("activate", () => showWindow())
+
+// 退出流程开始后，关窗口不再隐藏，否则应用退不出去。
+app.on("before-quit", () => {
+  quitting = true
+})
+
 app.on("window-all-closed", () => {
+  // 关窗口只是隐藏时这条不会触发；Linux 上关掉最后一个窗口就退出。
+  if (hidesOnClose()) return
   quitting = true
   app.quit()
 })

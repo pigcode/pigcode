@@ -220,9 +220,9 @@ test("closing the window with unsaved file changes asks first", async () => {
     await page.keyboard.press("Enter")
     await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
 
-    // 关窗口时选「放弃修改」：应用退出，磁盘上的文件没被改动。
+    // 再退出时选「放弃修改」：应用退出，磁盘上的文件没被改动。
     const exit = new Promise((resolve) => app.process().once("exit", resolve))
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.close())
+    await app.evaluate(({ app: electronApp }) => electronApp.quit())
     await exit
     exited = true
     expect(readFileSync(join(root, "README.md"), "utf8")).toBe("# Files demo\n")
