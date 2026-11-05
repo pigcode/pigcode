@@ -21,6 +21,7 @@ import {
 } from "./folder-picker"
 import { startHostProcess, type HostProcess } from "./host-process"
 import { hidesOnClose } from "./lifecycle"
+import { readPreferences, withPreference, writePreferences, type Preferences } from "./preferences"
 import { applyLoginShellEnv } from "./shell-env"
 import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
@@ -69,12 +70,34 @@ let hostStopped = false
 let tray: Tray | undefined
 /** 第一次隐藏到托盘时的提示只弹一次。 */
 let hiddenHintShown = false
+/** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
+let preferences: Preferences = { launchAtLogin: false, showInDock: true }
 let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
 /** 把应用内相对路径解析到 app.getAppPath() 之下。 */
 export function resolveAppPath(...segments: string[]): string {
   return join(app.getAppPath(), ...segments)
+}
+
+/** 偏好跟着 profile 走：并排的多个 profile 各有各的开关，E2E 也不会写到本机的 userData 里。 */
+function preferencesPath(): string {
+  return join(profileDir(), "preferences.json")
+}
+
+/**
+ * 把偏好落实到系统上。开机自启只对装好的应用设置：开发时把 Electron 自己写进登录项没有意义，
+ * 也会弄脏开发机的设置。
+ */
+function applyPreferences(next: Preferences): void {
+  preferences = next
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: next.launchAtLogin })
+  if (process.platform === "darwin") {
+    if (next.showInDock) void app.dock?.show()
+    else app.dock?.hide()
+    // 藏起 Dock 图标以后，菜单栏图标是唯一的入口。
+    if (!next.showInDock) ensureTray()
+  }
 }
 
 function profileDir(): string {
@@ -141,6 +164,14 @@ function registerNativeBridge(): void {
       pathKind,
       readFolderPickerLabels(labels),
     )
+  })
+  ipcMain.handle("pigcode:preferences-get", () => preferences)
+  ipcMain.handle("pigcode:preferences-set", (_event, key: unknown, value: unknown) => {
+    const next = withPreference(preferences, key, value)
+    if (next === preferences) return preferences
+    writePreferences(preferencesPath(), next)
+    applyPreferences(next)
+    return next
   })
   ipcMain.handle("pigcode:unsaved-labels", (_event, value: unknown) => {
     unsavedLabels = readUnsavedGuardLabels(value) ?? unsavedLabels
@@ -336,6 +367,7 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     registerPluginProtocol(profileDir())
     // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
     await shellEnv
+    applyPreferences(readPreferences(preferencesPath()))
     host = startHost()
     mainWindow = await createWindow()
     ensureTray()

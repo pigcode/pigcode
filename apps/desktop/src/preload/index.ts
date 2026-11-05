@@ -4,6 +4,13 @@ import { contextBridge, ipcRenderer } from "electron"
 contextBridge.exposeInMainWorld("pigcodeNative", {
   platform: process.platform,
   appVersion: (): Promise<string> => ipcRenderer.invoke("pigcode:app-version"),
+  getPreferences: (): Promise<{ launchAtLogin: boolean; showInDock: boolean }> =>
+    ipcRenderer.invoke("pigcode:preferences-get"),
+  setPreference: (
+    key: "launchAtLogin" | "showInDock",
+    value: boolean,
+  ): Promise<{ launchAtLogin: boolean; showInDock: boolean }> =>
+    ipcRenderer.invoke("pigcode:preferences-set", key, value),
   setThemeSource: (source: "light" | "dark" | "system") =>
     ipcRenderer.invoke("pigcode:set-theme", source),
   windowControl: (action: "minimize" | "maximize" | "close") =>
