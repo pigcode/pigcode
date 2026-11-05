@@ -48,11 +48,14 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await page.getByRole("button", { name: "添加面板" }).click()
   await page.getByRole("menuitem", { name: /检查点/ }).click()
   await page.getByRole("button", { name: "创建检查点" }).click()
+  // 等快照真正建好再改文件；否则机器忙的时候，快照可能拍到下面写进去的内容。
+  await expect(page.getByRole("button", { name: "恢复" }).first()).toBeVisible()
   await page.getByRole("tab", { name: "终端 1" }).click()
   await expect(page.locator(".xterm")).toContainText("READY")
   await page.locator(".xterm").click()
-  // WROTE 用于确认 shell 已经真正改写了 a.txt，避免 restore 变成空操作。
-  await page.keyboard.type("echo two > a.txt && echo WROTE")
+  // WROTE 用于确认 shell 已经真正改写了 a.txt，避免 restore 变成空操作。命令里拆开写：
+  // 终端会回显输入的命令，写成一个词的话，命令还没执行断言就通过了，文件会在恢复之后才被改写。
+  await page.keyboard.type("echo two > a.txt && echo WR''OTE")
   await page.keyboard.press("Enter")
   await expect(page.locator(".xterm")).toContainText("WROTE")
   await page.getByRole("tab", { name: "检查点" }).click()
