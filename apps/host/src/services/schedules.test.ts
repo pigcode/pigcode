@@ -1,4 +1,7 @@
 /** 验证定时任务服务：间隔触发、忙时跳过、重启恢复与删除。 */
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { apply as projects } from "./projects"
@@ -6,10 +9,10 @@ import { SchedulesService, type ScheduleRunner } from "./schedules"
 import { apply as storage } from "./storage"
 import { apply as threads } from "./threads"
 
-/** 建立内存 Host，线程用于满足 schedules.thread_id 外键。 */
-async function setup() {
+/** 建立 Host（默认内存库），线程用于满足 schedules.thread_id 外键。 */
+async function setup(dbPath = ":memory:") {
   const ctx = new Context()
-  await ctx.plugin(storage, { path: ":memory:" })
+  await ctx.plugin(storage, { path: dbPath })
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   const project = ctx.projects.add("/tmp/pigcode-schedules")
@@ -22,8 +25,13 @@ async function setup() {
   return { ctx, thread, service, runner, startRun, listRuns }
 }
 
-afterEach(() => {
+const dirs: string[] = []
+
+afterEach(async () => {
   vi.useRealTimers()
+  await Promise.all(
+    dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true, maxRetries: 5 })),
+  )
 })
 
 describe("SchedulesService", () => {
@@ -116,6 +124,41 @@ describe("SchedulesService", () => {
 
     restored.stop()
     await ctx.fiber.dispose()
+  })
+
+  // 上面几条只是换了一个服务实例，数据库和进程都还在。这里让旧 Host 真正关掉，
+  // 新 Host 从同一个文件重新打开，模拟重启。
+  it("fires once per interval across a real Host restart on the same file", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-10-20T00:00:00.000Z"))
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-schedules-"))
+    dirs.push(dir)
+    const dbPath = join(dir, "pigcode.db")
+
+    const before = await setup(dbPath)
+    before.service.start()
+    before.service.create({
+      threadId: before.thread.id,
+      prompt: "summarize",
+      intervalSeconds: 60,
+      enabled: true,
+    })
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(before.startRun).toHaveBeenCalledTimes(1)
+    before.service.stop()
+    await before.ctx.fiber.dispose()
+
+    const after = await setup(dbPath)
+    after.service.start()
+    // 重启时这个任务还没到期，不能补跑；再过一分钟才触发一次。
+    await vi.advanceTimersByTimeAsync(59_000)
+    expect(after.startRun).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(after.startRun).toHaveBeenCalledTimes(1)
+    expect(after.service.list()[0]?.lastRunAt).toBe("2026-10-20T00:02:00.000Z")
+
+    after.service.stop()
+    await after.ctx.fiber.dispose()
   })
 
   it("catches up an overdue schedule exactly once after start", async () => {

@@ -54,7 +54,15 @@ test("chat, plugin panel, and reconnect", async () => {
   await row.getByRole("switch").click()
   await expect(page.getByText("Debug Panel")).toBeHidden()
 
+  // 重启 Host 不能重载窗口：在渲染进程里留一个标记，重连后它还要在。
+  await page.evaluate(() => {
+    ;(window as unknown as { restoredMarker?: string }).restoredMarker = "still here"
+  })
   await app.evaluate(({ app }) => app.emit("pigcode:test-kill-host"))
   await expect(page.getByText("已重新连接")).toBeVisible()
+  const marker = await page.evaluate(
+    () => (window as unknown as { restoredMarker?: string }).restoredMarker,
+  )
+  expect(marker).toBe("still here")
   await app.close()
 })

@@ -6,6 +6,7 @@ import type {
   AgentDriver,
   AgentModelInfo,
   AgentRuntime,
+  AgentStatus,
   AgentSessionHandle,
   UserInput,
 } from "./driver"
@@ -57,6 +58,8 @@ export interface FakeAgentOptions {
   delayMs?: number
   /** 脚本化回复里每个工具的耗时；缺省时读取 PIGCODE_FAKE_STEP_MS。 */
   stepMs?: number
+  /** detect 的耗时；缺省时读取 PIGCODE_FAKE_DETECT_MS。 */
+  detectMs?: number
   /** 以线程身份调用 MCP 工具；浏览器脚本用它操作内置浏览器。 */
   callTool?: FakeToolCaller
 }
@@ -84,11 +87,13 @@ export class FakeAgentDriver implements AgentDriver {
 
   private readonly delayMs: number
   private readonly stepMs: number
+  private readonly detectMs: number
   private readonly callTool: FakeToolCaller | undefined
 
   constructor(options: FakeAgentOptions = {}) {
     this.delayMs = options.delayMs ?? envMs("PIGCODE_FAKE_DELAY_MS")
     this.stepMs = options.stepMs ?? envMs("PIGCODE_FAKE_STEP_MS", 600)
+    this.detectMs = options.detectMs ?? envMs("PIGCODE_FAKE_DETECT_MS")
     this.callTool = options.callTool
   }
 
@@ -102,6 +107,12 @@ export class FakeAgentDriver implements AgentDriver {
       permissionMode: input.permissionMode ?? "workspace-write",
       model: input.model ?? null,
     }
+  }
+
+  /** 只读检测；E2E 用 PIGCODE_FAKE_DETECT_MS 把检测卡住，验证界面不等它。 */
+  async detect(): Promise<AgentStatus> {
+    if (this.detectMs > 0) await new Promise((resolve) => setTimeout(resolve, this.detectMs))
+    return { installed: true, version: null, authenticated: true }
   }
 
   /** 固定的模型目录。 */
