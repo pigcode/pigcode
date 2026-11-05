@@ -2,6 +2,7 @@
 import { protocol } from "electron"
 import { readFile } from "node:fs/promises"
 import { extname, join, normalize, resolve, sep } from "node:path"
+import { contentSecurityPolicy } from "./csp"
 
 /** 常见静态资源扩展名对应的 MIME 类型。 */
 const contentTypes: Record<string, string> = {
@@ -47,10 +48,16 @@ export function registerAppProtocol(appRoot: string): void {
     const url = new URL(request.url)
     const requestPath = decodeURIComponent(url.pathname).replace(/^\/+/, "")
     const file = resolveInside(appRoot, requestPath === "" ? "index.html" : requestPath)
-    return new Response(await readFile(file), {
+    const content = await readFile(file)
+    const type = contentTypes[extname(file)] ?? "application/octet-stream"
+    return new Response(content, {
       headers: {
-        "content-type": contentTypes[extname(file)] ?? "application/octet-stream",
+        "content-type": type,
         "access-control-allow-origin": "*",
+        // 只有文档会带 CSP；加载子资源时浏览器不理会这个响应头。
+        ...(type === "text/html"
+          ? { "content-security-policy": contentSecurityPolicy(content.toString("utf8")) }
+          : {}),
       },
     })
   })
