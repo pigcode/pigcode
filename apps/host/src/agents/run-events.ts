@@ -124,6 +124,13 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
         explanation: event.explanation,
       })
       return
+    case "notice":
+      hooks.append(run.threadId, run.runId, "notice", {
+        level: event.level,
+        key: event.key,
+        ...(event.params === undefined ? {} : { params: event.params }),
+      })
+      return
     case "run.interrupted":
       hooks.finish(run, "interrupted", "run.interrupted", {})
       return

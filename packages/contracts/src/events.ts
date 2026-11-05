@@ -20,6 +20,7 @@ export const threadEventTypeSchema = z.enum([
   "question.requested",
   "question.answered",
   "plan.updated",
+  "notice",
   "file.changed",
   "usage.updated",
   "subagent.started",
@@ -111,6 +112,16 @@ export const agentEventSchema = z.discriminatedUnion("type", [
     type: z.literal("plan.updated"),
     plan: z.unknown(),
     explanation: z.string().nullable(),
+  }),
+  /**
+   * 会话里需要用户知道的一件事：还能继续，但有东西没接上（例如插件工具的 MCP 桥起不来）。
+   * 文案由界面按 key 选择，driver 只给稳定的键和参数，避免中文界面里出现英文句子。
+   */
+  z.object({
+    type: z.literal("notice"),
+    level: z.enum(["info", "warning", "error"]),
+    key: z.string().min(1),
+    params: z.record(z.string(), z.string()).optional(),
   }),
   z.object({ type: z.literal("run.completed") }),
   z.object({ type: z.literal("run.failed"), message: z.string() }),

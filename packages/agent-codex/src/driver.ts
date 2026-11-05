@@ -19,6 +19,13 @@ import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
 import { parseCodexModels } from "./models"
 import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { normalizeCodexNotification } from "./normalize"
+import {
+  emitNotice,
+  flushNotices,
+  mcpStartupNotice,
+  rememberNotice,
+  type NoticeState,
+} from "./notice"
 import { StdioCodexTransport, type CodexTransport } from "./transport"
 
 /** 单个 session 的 app-server 状态；权限与模型在 thread/start 或 thread/resume 时生效。 */
@@ -33,6 +40,8 @@ interface CodexSessionState {
   model: string | null
   /** 启动这个 app-server 的命令指纹；设置改了就不再复用。 */
   launchKey: string
+  /** 会话提示：MCP 桥起不来时攒下来，下一次 send 时补发。 */
+  notice: NoticeState
 }
 
 /** driver 的可选依赖；测试替换传输与检测。 */
@@ -128,6 +137,13 @@ export class CodexDriver implements AgentDriver {
     }
 
     const client = this.openClient(launch)
+    // MCP 桥起不来时 app-server 只发一条通知，界面上否则没有任何线索（#57）。
+    // 通知在 thread/start 之后就到，那时 run 还没开始，先攒在 session 里，等 send 时补发。
+    const notice: NoticeState = { pending: [], told: new Set() }
+    client.onNotification("mcpServer/startupStatus/updated", (params) => {
+      const found = mcpStartupNotice(params)
+      if (found) rememberNotice(notice, found)
+    })
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
@@ -164,6 +180,7 @@ export class CodexDriver implements AgentDriver {
         permissionMode,
         model,
         launchKey: key,
+        notice,
       })
       return {
         id: input.sessionId ?? `codex_${randomUUID()}`,
@@ -187,6 +204,14 @@ export class CodexDriver implements AgentDriver {
     const client = state.client
     state.interruptRequested = false
     state.finished = false
+    // 启动期攒下的提示在这里补发：此刻 run 已经建立，事件有对应的 runId。
+    flushNotices(state.notice, runtime)
+    // 之后才到的启动结果直接推送，同样落在本轮；同一问题只报一次。
+    const watchStartup = (params: unknown): void => {
+      const found = mcpStartupNotice(params)
+      if (found) emitNotice(state.notice, runtime, found)
+    }
+    const disposeStartup = client.onNotification("mcpServer/startupStatus/updated", watchStartup)
 
     const disposers = [
       client.onNotification("item/agentMessage/delta", (params) =>
@@ -248,6 +273,7 @@ export class CodexDriver implements AgentDriver {
       await waitForTurn(client, state.turnId, runtime.signal)
     } finally {
       runtime.signal.removeEventListener("abort", onAbort)
+      disposeStartup()
       for (const dispose of disposers) dispose()
       state.turnId = null
     }

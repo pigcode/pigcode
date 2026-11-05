@@ -14,8 +14,10 @@ import {
   collectSubagents,
   collectTools,
   isParentScoped,
+  noticeFromEvent,
   questionFromEvent,
   toolFromEvent,
+  type SessionNotice,
 } from "./event-parsers"
 import { fileChanges, mergeFileChanges, toolInputValue, type FileChange } from "./file-changes"
 import type { QuestionRequestView } from "./question-card"
@@ -58,6 +60,11 @@ export interface Turn {
   files: FileChange[]
   /** 这一轮最新的待办；状态面板用。 */
   plan: TodoItem[] | null
+  /**
+   * 这一轮里的会话提示。不放进 work：工作区会折叠，而「插件工具没接上」这类事用户要在
+   * 收起状态下也能看到，否则回答里少了工具调用就没有任何解释。
+   */
+  notices: SessionNotice[]
   error: string | null
   signature: string
 }
@@ -84,6 +91,7 @@ function emptyTurn(key: string, runId: string | null): Turn {
     replyAt: null,
     files: [],
     plan: null,
+    notices: [],
     error: null,
     signature: "",
   }
@@ -217,6 +225,11 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
       case "plan.updated": {
         const items = todoItems(payload?.plan ?? payload?.steps ?? payload)
         if (items.length > 0) turn.plan = items
+        break
+      }
+      case "notice": {
+        const notice = noticeFromEvent(event)
+        if (notice) turn.notices.push(notice)
         break
       }
       case "approval.requested": {

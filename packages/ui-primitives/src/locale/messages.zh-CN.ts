@@ -367,6 +367,9 @@ export const zhCN = {
   "chat.approval.allowedSession": "本会话内已允许",
   "chat.approval.denied": "已拒绝",
   "chat.error": "运行失败",
+  /* 会话提示：Agent 只给稳定的键（如 mcp.bridge.failed），界面在 chat.notice.<键> 里找文案。 */
+  "chat.notice.mcp.bridge.failed":
+    "插件工具没有接上：{name} 服务启动失败。这一轮里模型看不到插件工具。",
   "plugins.title": "插件管理",
   "plugins.install": "安装插件",
   "plugins.installSpec": "插件目录或 npm 包",

@@ -57,6 +57,21 @@ test("a background thread waiting for approval shows it in the sidebar", async (
   await app.close()
 })
 
+test("a notice from the agent stays visible outside the folded work", async () => {
+  const { app, page } = await openThread("thread-notice", { PIGCODE_FAKE_DELAY_MS: "300" })
+  const row = rows(page, "pigcode-e2e-thread-notice")
+
+  await send(page, "notice")
+  // 这一轮照常结束，提示只是附带的一条信息。
+  await expect(row("notice")).toHaveAttribute("data-status", "completed", { timeout: 15_000 })
+  // toast 容器也是 role="status"，用类名收窄。
+  const notice = page.locator(".turn-notice")
+  await expect(notice).toContainText("插件工具没有接上")
+  // 收起的轮里仍然看得到：提示不在工作区里。
+  await expect(page.getByText("插件工具这次用不了，其余照常。")).toBeVisible()
+  await app.close()
+})
+
 test("a failed run shows as failed in the sidebar and in the timeline", async () => {
   const { app, page } = await openThread("thread-failed", { PIGCODE_FAKE_DELAY_MS: "300" })
   const row = rows(page, "pigcode-e2e-thread-failed")

@@ -140,6 +140,18 @@ export class FakeAgentDriver implements AgentDriver {
       runtime.emit({ type: "run.failed", message: FAKE_FAIL_MESSAGE })
       return
     }
+    if (input.text === FAKE_NOTICE_TEXT) {
+      // 和 Codex 的插件桥失败一样：这一轮照常回答，只是先告诉用户工具没接上（#57）。
+      runtime.emit({
+        type: "notice",
+        level: "warning",
+        key: "mcp.bridge.failed",
+        params: { name: "pigcode" },
+      })
+      runtime.emit({ type: "message.completed", text: FAKE_NOTICE_TEXT_REPLY })
+      runtime.emit({ type: "run.completed" })
+      return
+    }
     if (input.text === FAKE_APPROVAL_TEXT) {
       await runFakeApproval(runtime)
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
@@ -201,6 +213,12 @@ export const FAKE_FAIL_MESSAGE = "这一步没有做成：找不到要修改的�
 
 /** 触发审批脚本的输入。 */
 export const FAKE_APPROVAL_TEXT = "approve"
+
+/** 触发会话提示的输入。 */
+export const FAKE_NOTICE_TEXT = "notice"
+
+/** 提示那一轮的回答；证明提示不影响对话继续。 */
+export const FAKE_NOTICE_TEXT_REPLY = "插件工具这次用不了，其余照常。"
 
 /** 审批脚本里模型说的话；界面上显示为用户内容，英文界面检查靠它区分。 */
 export const FAKE_APPROVAL_TEXTS = {

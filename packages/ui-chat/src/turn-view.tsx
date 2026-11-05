@@ -5,10 +5,11 @@
  * 工作区一直展开、没有箭头；正常结束后折叠，只留最终回答。
  */
 import { memo, useState } from "react"
-import { AlertTriangle, ChevronRight, LoaderCircle } from "lucide-react"
-import { formatDuration, useLocale } from "@pigcode/ui-primitives"
+import { AlertTriangle, ChevronRight, Info, LoaderCircle } from "lucide-react"
+import { formatDuration, isMessageKey, useLocale } from "@pigcode/ui-primitives"
 import { ApprovalCard, type ApprovalDecision } from "./approval-card"
 import { elapsed, useNow } from "./duration"
+import type { SessionNotice } from "./event-parsers"
 import { FileSummary } from "./file-summary"
 import { MessageText } from "./message-item"
 import { QuestionCard } from "./question-card"
@@ -61,6 +62,25 @@ function WorkHeader({
         <span className="work-label">{label}</span>
         {canToggle ? <ChevronRight className="ic work-chev" aria-hidden="true" /> : null}
       </button>
+    </div>
+  )
+}
+
+/** 一条会话提示：还能继续，但有东西没接上。放在工作区外面，收起时也看得见。 */
+function NoticeLine({ notice }: { notice: SessionNotice }) {
+  const { t } = useLocale()
+  // Agent 只给稳定的键（mcp.bridge.failed），界面从 chat.notice.<键> 取文案；
+  // 版本不一致时语言包里可能没有这条，此时原样显示键名，总比什么都不说好。
+  const message = `chat.notice.${notice.key}`
+  const template = isMessageKey(message) ? t(message) : notice.key
+  const text = Object.entries(notice.params).reduce(
+    (line, [name, value]) => line.replaceAll(`{${name}}`, value),
+    template,
+  )
+  return (
+    <div className="turn-notice" data-level={notice.level} role="status">
+      <Info className="ic ic-sm" aria-hidden="true" />
+      <span>{text}</span>
     </div>
   )
 }
@@ -130,6 +150,9 @@ function TurnViewImpl({
           resolved={undefined}
           onApproval={onApproval}
         />
+      ))}
+      {turn.notices.map((notice) => (
+        <NoticeLine key={notice.id} notice={notice} />
       ))}
       {pending.map((item) => (
         <QuestionCard

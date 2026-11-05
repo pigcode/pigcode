@@ -375,6 +375,8 @@ export const enUS = {
   "chat.approval.allowedSession": "Allowed for this session",
   "chat.approval.denied": "Denied",
   "chat.error": "Run failed",
+  "chat.notice.mcp.bridge.failed":
+    "Plugin tools are not connected: the {name} server failed to start. The model cannot see plugin tools in this turn.",
   "plugins.title": "Plugin manager",
   "plugins.install": "Install plugin",
   "plugins.installSpec": "Plugin directory or npm package",

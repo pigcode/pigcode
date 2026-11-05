@@ -251,6 +251,32 @@
 .turn-error .ic {
   margin-top: 3px;
 }
+/* 还能继续，但有东西没接上（例如插件工具的 MCP 桥）：比错误轻，一行就说完。 */
+.turn-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--r-block);
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.turn-notice .ic {
+  margin-top: 2px;
+  flex: none;
+}
+.turn-notice[data-level="info"] {
+  background: var(--cv-inline-code);
+  color: var(--cv-subtle);
+}
+.turn-notice[data-level="error"] {
+  background: var(--bad-soft);
+  color: var(--bad-text);
+}
 /* ─── 回答下方的操作栏：悬停这一轮时出现 ─────────────────── */
 .turn-actions {
   display: flex;

@@ -26,6 +26,25 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe("mapAgentEvent notices", () => {
+  it("persists a notice with its level, key and params", () => {
+    const { run, hooks, live, appended } = harness()
+    mapAgentEvent(
+      run,
+      { type: "notice", level: "warning", key: "mcp.bridge.failed", params: { name: "pigcode" } },
+      hooks,
+    )
+    expect(appended).toEqual([
+      {
+        type: "notice",
+        payload: { level: "warning", key: "mcp.bridge.failed", params: { name: "pigcode" } },
+      },
+    ])
+    // 提示不是流式事件，不进实时通道。
+    expect(live).toEqual([])
+  })
+})
+
 describe("mapAgentEvent reasoning", () => {
   it("streams thinking live and records how long it took", () => {
     vi.useFakeTimers()

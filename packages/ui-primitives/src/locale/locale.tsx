@@ -16,6 +16,14 @@ export function translate(locale: Locale, key: MessageKey): string {
   return dictionaries[locale][key]
 }
 
+/**
+ * 这个键有没有文案。文案的键可能来自 Host 或 Agent（例如会话提示），版本不一致时会出现
+ * 当前语言包里没有的键；调用方据此决定退回显示键名，而不是显示 undefined。
+ */
+export function isMessageKey(key: string): key is MessageKey {
+  return key in zhCN
+}
+
 interface LocaleValue {
   locale: Locale
   t: (key: MessageKey) => string

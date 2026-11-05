@@ -222,6 +222,36 @@ function subagentOutput(value: unknown): string | undefined {
   return subagentOutput(record.content) ?? asText(record.text) ?? asText(record.result)
 }
 
+/** 会话提示：还能继续，但有东西没接上（例如插件工具的 MCP 桥起不来）。 */
+export interface SessionNotice {
+  /** 渲染用的 key，来自事件序号。 */
+  id: string
+  level: "info" | "warning" | "error"
+  /** 语言包里的键；driver 只给稳定的键，不传成品文字。 */
+  key: string
+  /** 文案里的占位参数。 */
+  params: Record<string, string>
+}
+
+/** 解析 notice 事件；缺 key 的提示没有可显示的文案，直接丢掉。 */
+export function noticeFromEvent(event: ThreadEvent): SessionNotice | undefined {
+  const payload = asRecord(event.payload)
+  const key = asText(payload?.key)
+  if (!key) return undefined
+  const level = payload?.level
+  const params = asRecord(payload?.params) ?? {}
+  return {
+    id: `notice-${event.seq}`,
+    level: level === "info" || level === "error" ? level : "warning",
+    key,
+    params: Object.fromEntries(
+      Object.entries(params).flatMap(([name, value]) =>
+        typeof value === "string" ? [[name, value]] : [],
+      ),
+    ),
+  }
+}
+
 /** 判断事件是否属于某个子 agent；这类事件只在卡片内部展示。 */
 export function isParentScoped(type: ThreadEvent["type"]): boolean {
   return (

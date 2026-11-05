@@ -278,6 +278,26 @@ describe("turn rendering", () => {
     expect(screen.getByText("Linux")).toBeTruthy()
   })
 
+  it("keeps a notice on the turn outside the folded work", () => {
+    const events = [
+      ...scriptedRun(),
+      event(19, "notice", {
+        level: "warning",
+        key: "mcp.bridge.failed",
+        params: { name: "pigcode" },
+      }),
+    ]
+    const [turn] = onlyTurns(events)
+    expect(turn?.notices).toEqual([
+      { id: "notice-19", level: "warning", key: "mcp.bridge.failed", params: { name: "pigcode" } },
+    ])
+    // 提示不进工作区：工作区结束时会折叠起来。
+    expect(turn?.work.some((item) => item.kind === "message")).toBe(true)
+    renderList(events)
+    expect(screen.getByRole("status").textContent).toContain("插件工具没有接上")
+    expect(screen.getByRole("status").getAttribute("data-level")).toBe("warning")
+  })
+
   it("draws a marker divider when the agent changes", () => {
     renderList([...scriptedRun(), event(30, "thread.updated", { agentId: "codex" }, null)])
     expect(screen.getByRole("separator").textContent).toBe("已切换到 codex")
