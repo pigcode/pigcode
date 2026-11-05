@@ -72,10 +72,14 @@ function usePreferences(): [Preferences, (key: keyof Preferences, value: boolean
   }, [])
   const update = (key: keyof Preferences, value: boolean): void => {
     changed.current = true
+    const before = prefs
     setPrefs((current) => ({ ...current, [key]: value }))
     void nativeBridge()
       ?.setPreference?.(key, value)
-      .then(setPrefs, () => undefined)
+      .then(setPrefs, () => {
+        // 写不进去（磁盘满、桥不可用）时回到原来的样子，别让开关和实际设置对不上。
+        if (nativeBridge()?.setPreference) setPrefs(before)
+      })
   }
   return [prefs, update]
 }
@@ -171,7 +175,11 @@ export function GeneralPage() {
               {t("settings.general.openDownload")}
             </Button>
           ) : null}
-          <Button variant="secondary" onClick={checkNow} disabled={checking}>
+          <Button
+            variant="secondary"
+            onClick={checkNow}
+            disabled={checking || !nativeBridge()?.checkForUpdates}
+          >
             {t("settings.general.checkNow")}
           </Button>
         </SettingRow>

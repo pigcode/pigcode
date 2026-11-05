@@ -30,6 +30,8 @@ export interface QuitStateReply extends QuitState {
 export interface QuitStatePort {
   on(event: "message", listener: (value: unknown) => void): void
   postMessage(message: unknown): void
+  /** MessagePortMain 收到 start() 之前不派发消息；测试的假端口没有这个方法。 */
+  start?(): void
 }
 
 /** 取出消息本身；直接传消息对象的端口（测试里）原样返回。 */
@@ -39,10 +41,12 @@ function messageData(value: unknown): unknown {
     : value
 }
 
-function countOf(ctx: Context, table: string): number {
+function countPendingRequests(ctx: Context): number {
   try {
-    const row = ctx.storage.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as
-      { n?: unknown } | undefined
+    // 只数还挂着的：历史记录会一直留在这张表里（status 变成 resolved 或 orphaned）。
+    const row = ctx.storage.db
+      .prepare("SELECT COUNT(*) AS n FROM pending_requests WHERE status = 'pending'")
+      .get() as { n?: unknown } | undefined
     return typeof row?.n === "number" ? row.n : 0
   } catch {
     // 表还没迁移出来时按 0 算：退出检查不能挡住退出。
@@ -62,13 +66,15 @@ export function readQuitState(ctx: Context): QuitState {
       .filter((schedule) => schedule.enabled) ?? []
   return {
     runs: runs.length,
-    approvals: countOf(ctx, "pending_requests"),
+    approvals: countPendingRequests(ctx),
     schedules: schedules.length,
   }
 }
 
 /** 在控制端口上应答退出检查；其他消息留给内置浏览器。 */
 export function attachQuitState(port: QuitStatePort, ctx: Context): void {
+  // 不能指望其他监听者先 start()：浏览器插件加载失败时也要能回答。
+  port.start?.()
   port.on("message", (value) => {
     const data = messageData(value) as Partial<QuitStateRequest> | undefined
     if (data?.type !== "app.quit-state" || typeof data.id !== "number") return

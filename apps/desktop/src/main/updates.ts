@@ -35,6 +35,8 @@ export function createUpdates(options: {
       detail: labels.detail,
     }
     const window = options.getWindow()
+    // 窗口隐藏到托盘时，macOS 上的 sheet 不会显示：提示先把它叫出来。
+    if (window && !window.isDestroyed() && !window.isVisible()) window.show()
     const { response } =
       window && !window.isDestroyed()
         ? await dialog.showMessageBox(window, message)

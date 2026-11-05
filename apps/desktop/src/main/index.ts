@@ -26,7 +26,7 @@ import { readPreferences, withPreference, writePreferences, type Preferences } f
 import { applyLoginShellEnv } from "./shell-env"
 import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
-import { quitDetail, quitLabels } from "./locale/quit"
+import { confirmQuit } from "./quit-prompt"
 import { askQuitState, hasPendingWork } from "./quit-check"
 import { createUpdates } from "./updates"
 import { decideRestart, readHostFatal } from "./host-restart"
@@ -444,26 +444,15 @@ async function checkBeforeQuit(): Promise<void> {
   const port = hostControlPort
   const state = port ? await askQuitState(port) : null
   // Host 不在或没应答时直接退出：没有工作可保，也不能把应用卡住。
-  if (!state || !hasPendingWork(state)) {
+  if (!state || !hasPendingWork(state) || (await confirmQuit(() => mainWindow, state))) {
     quitNow()
     return
   }
-  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) mainWindow.show()
-  const labels = quitLabels(app.getLocale())
-  const options = {
-    type: "warning" as const,
-    buttons: [labels.quit, labels.stay],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
-    message: labels.title,
-    detail: quitDetail(labels, state).join("\n"),
+  // Linux 上关掉窗口就退出了：用户选「继续运行」时窗口已经不在了，把它重新开出来。
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    quitting = false
+    showWindow()
   }
-  const { response } =
-    mainWindow && !mainWindow.isDestroyed()
-      ? await dialog.showMessageBox(mainWindow, options)
-      : await dialog.showMessageBox(options)
-  if (response === 0) quitNow()
 }
 
 /** 记住用户已经确认，再走一次正常的退出流程。 */

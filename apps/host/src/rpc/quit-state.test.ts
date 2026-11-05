@@ -8,8 +8,16 @@ import { attachQuitState, readQuitState, type QuitStatePort } from "./quit-state
 function context(options: { runs?: string[]; schedules?: number } = {}): Context {
   const ctx = new Context()
   const db = new Database(":memory:")
-  db.exec("CREATE TABLE pending_requests (id TEXT PRIMARY KEY)")
-  for (const id of ["a", "b"]) db.prepare("INSERT INTO pending_requests (id) VALUES (?)").run(id)
+  db.exec("CREATE TABLE pending_requests (id TEXT PRIMARY KEY, status TEXT NOT NULL)")
+  // 两条还挂着，一条已经处理过：只数前两条。
+  for (const [id, status] of [
+    ["a", "pending"],
+    ["b", "pending"],
+    ["c", "resolved"],
+    ["d", "orphaned"],
+  ]) {
+    db.prepare("INSERT INTO pending_requests (id, status) VALUES (?, ?)").run(id, status)
+  }
   const runs = options.runs ?? ["running", "queued", "completed"]
   ctx.provide("storage", { db } as never)
   ctx.provide("agents", {
