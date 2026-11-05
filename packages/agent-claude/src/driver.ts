@@ -159,7 +159,7 @@ export class ClaudeDriver implements AgentDriver {
     state.controller = new AbortController()
     state.interruptRequested = false
     // 不留上一轮的进程：这一轮启动失败时，错误信息不能带上一轮的 stderr。
-    state.cli = undefined
+    delete state.cli
 
     const normalizeState = createNormalizeState()
     // 切换 Agent 后，handoff 放在用户文本之前，保持上下文连续。
@@ -248,7 +248,7 @@ export class ClaudeDriver implements AgentDriver {
           type: "run.failed",
           message: withCliStderr(
             error instanceof Error ? error.message : String(error),
-            state.cli?.stderrTail() ?? "",
+            cliStderr(state),
           ),
         })
       }
@@ -316,6 +316,11 @@ export class ClaudeDriver implements AgentDriver {
     const activeQuery = state.query
     if (activeQuery) void activeQuery.interrupt().catch(() => undefined)
   }
+}
+
+/** 这个会话当前 CLI 的 stderr；CLI 在 SDK 的回调里才启动，单独取才不会被类型收窄成没有进程。 */
+function cliStderr(state: DriverSessionState): string {
+  return state.cli?.stderrTail() ?? ""
 }
 
 /** 把 AbortSignal 转成可参与 Promise.race 的哨兵值。 */

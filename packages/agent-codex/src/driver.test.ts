@@ -381,10 +381,10 @@ describe("CodexDriver", () => {
 describe("CodexDriver process lifetime", () => {
   /** close 要等外部放行才完成的传输，模拟进程还没结束；initialize 可以设置成永远没有回应。 */
   class SlowClosingTransport extends ScriptedTransport {
-    readonly closed = vi.fn()
+    readonly closeCalled = vi.fn()
     finishClosing = (): void => undefined
     override close(): Promise<void> {
-      this.closed()
+      this.closeCalled()
       return new Promise((resolve) => {
         this.finishClosing = resolve
       })
@@ -405,7 +405,7 @@ describe("CodexDriver process lifetime", () => {
       finished = true
     })
     await settle()
-    expect(transport.closed).toHaveBeenCalledOnce()
+    expect(transport.closeCalled).toHaveBeenCalledOnce()
     expect(finished).toBe(false)
     transport.finishClosing()
     await closed
@@ -419,7 +419,7 @@ describe("CodexDriver process lifetime", () => {
     void driver.createSession({ threadId: "t1", cwd: "/tmp" }).catch(() => undefined)
     const closed = driver.close()
     await settle()
-    expect(transport.closed).toHaveBeenCalledOnce()
+    expect(transport.closeCalled).toHaveBeenCalledOnce()
     transport.finishClosing()
     await closed
   })
