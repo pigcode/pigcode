@@ -3,6 +3,7 @@ import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type {
   ApprovalDecision,
+  ApprovalRequest,
   CreateSessionInput,
   AgentDriver,
   AgentModelInfo,
@@ -219,6 +220,12 @@ export class CodexDriver implements AgentDriver {
       const decision = await runtime.requestApproval({ toolName: "ApplyPatch", input: params })
       return toApprovalResponse(decision, "acceptForSession")
     })
+    client.onServerRequest("mcpServer/elicitation/request", async (params) => {
+      const request = mcpToolApproval(params)
+      // 审批卡片填不了表单，也打不开链接，这类请求只能拒绝。
+      if (!request) return { action: "decline" }
+      return toElicitationResponse(await runtime.requestApproval(request))
+    })
 
     const text = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
     const onAbort = (): void => {
@@ -398,6 +405,39 @@ function completedTurnId(params: unknown): string | undefined {
     if (typeof id === "string") return id
   }
   return typeof record.turnId === "string" ? record.turnId : undefined
+}
+
+/**
+ * Codex 用 MCP elicitation 请求批准工具调用，靠 `_meta.codex_approval_kind` 和普通的 elicitation 区分。
+ * 请求里没有单独的工具名字段，只能从 message 里取；取不到时退回到 server 名。
+ */
+function mcpToolApproval(params: unknown): ApprovalRequest | null {
+  const record = params as {
+    serverName?: unknown
+    message?: unknown
+    _meta?: { codex_approval_kind?: unknown; tool_description?: unknown; tool_params?: unknown }
+  }
+  const server = record.serverName
+  if (record._meta?.codex_approval_kind !== "mcp_tool_call" || typeof server !== "string") {
+    return null
+  }
+  const tool =
+    typeof record.message === "string" ? /tool "([^"]+)"/.exec(record.message)?.[1] : null
+  const description = record._meta.tool_description
+  return {
+    toolName: tool ? `mcp__${server}__${tool}` : `mcp__${server}`,
+    input: record._meta.tool_params ?? {},
+    ...(typeof description === "string" ? { description } : {}),
+  }
+}
+
+/** 把 Pigcode 审批决议映射为 MCP elicitation 的答复；本会话内放行靠 `_meta.persist`。 */
+function toElicitationResponse(decision: ApprovalDecision): Record<string, unknown> {
+  if (decision === "deny") return { action: "decline" }
+  if (decision === "allow-for-session") {
+    return { action: "accept", content: {}, _meta: { persist: "session" } }
+  }
+  return { action: "accept", content: {} }
 }
 
 /** 把 Pigcode 审批决议映射为 Codex 的 accept/acceptForSession/decline。 */

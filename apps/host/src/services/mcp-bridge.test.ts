@@ -1,13 +1,14 @@
 /** 验证 thread-scoped MCP bridge：插件工具注册、Claude server、socket 与 stdio 桥。 */
 import type { ChildProcessWithoutNullStreams } from "node:child_process"
 import { spawn } from "node:child_process"
+import { readFile } from "node:fs/promises"
 import { createInterface } from "node:readline"
 import net from "node:net"
 import { fileURLToPath } from "node:url"
-import { HOST_VERSION } from "@pigcode/plugin-sdk"
+import { HOST_VERSION, type McpStdioServer } from "@pigcode/plugin-sdk"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { apply as mcpBridge } from "./mcp-bridge"
+import { apply as mcpBridge, stdioBridgeUrl } from "./mcp-bridge"
 
 /** 仓库内的 stdio 桥入口；构建时由 build-host.ts 编译到 out/host/mcp/stdio-bridge.mjs。 */
 const BRIDGE_PATH = fileURLToPath(new URL("../mcp/stdio-bridge.ts", import.meta.url))
@@ -81,15 +82,18 @@ function connectSocket(path: string): {
   }
 }
 
-/** 启动 stdio 桥子进程，按行读取 JSON-RPC 响应。 */
-function startBridge(env: Record<string, string>): {
+/** 按 Host 交出的启动命令启动 stdio 桥，就像 Codex 那样；按行读取 JSON-RPC 响应。 */
+function startBridge(
+  config: McpStdioServer,
+  overrides: Record<string, string> = {},
+): {
   child: ChildProcessWithoutNullStreams
   request(id: number, method: string, params?: unknown): Promise<Record<string, unknown>>
   notify(method: string, params?: unknown): void
   next(): Promise<Record<string, unknown>>
 } {
-  const child = spawn(process.execPath, [BRIDGE_PATH], {
-    env: { ...process.env, ...env },
+  const child = spawn(config.command, config.args, {
+    env: { ...process.env, ...config.env, ...overrides },
     stdio: ["pipe", "pipe", "pipe"],
   })
   children.push(child)
@@ -125,10 +129,7 @@ function startBridge(env: Record<string, string>): {
 }
 
 /** stdio 桥的启动命令；Codex 这类以子进程连接 MCP 的 agent 用它。 */
-function stdioServer(
-  ctx: Context,
-  threadId: string,
-): { command: string; args: string[]; env: Record<string, string> } {
+function stdioServer(ctx: Context, threadId: string): McpStdioServer {
   return ctx.mcpBridge.stdioServer(threadId)
 }
 
@@ -194,10 +195,39 @@ describe("mcp bridge", () => {
     const ctx = await setup()
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({ ok: true }))
     const config = stdioServer(ctx, "thread-1")
-    expect(config.command).toBe("node")
-    expect(config.args[0]).toMatch(/stdio-bridge\.mjs$/)
+    expect(config.command).toBe(process.execPath)
+    // 打包后 execPath 是 Electron：少了这个变量，它不会把桥当脚本跑。
+    expect(config.env.ELECTRON_RUN_AS_NODE).toBe("1")
     expect(config.env.PIGCODE_MCP_SOCKET).toBeTruthy()
     expect(config.env.PIGCODE_MCP_TOKEN).toBeTruthy()
+  })
+
+  it("finds the bridge next to the built core bundle and in the sources", async () => {
+    expect(stdioBridgeUrl("file:///app/out/host/core/mcp-bridge.mjs").href).toBe(
+      "file:///app/out/host/mcp/stdio-bridge.mjs",
+    )
+    expect(stdioBridgeUrl("file:///repo/apps/host/src/services/mcp-bridge.ts").href).toBe(
+      "file:///repo/apps/host/src/mcp/stdio-bridge.ts",
+    )
+    // 构建脚本写出的文件名要和上面算出来的一致。
+    const buildScript = await readFile(
+      new URL("../../../../scripts/build-host.ts", import.meta.url),
+      "utf8",
+    )
+    expect(buildScript).toContain(`"mcp/stdio-bridge.mjs"`)
+  })
+
+  it("hands out a command that starts without node on PATH", async () => {
+    const ctx = await setup()
+    ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({ ok: true }))
+    await ctx.mcpBridge.createSocketServer()
+    // 从 Dock 或开始菜单启动的应用拿不到 shell 的 PATH，装了 node 也可能找不到。
+    const bridge = startBridge(stdioServer(ctx, "thread-no-path"), { PATH: "" })
+
+    await bridge.request(1, "initialize", { protocolVersion: "2025-06-18" })
+    expect(await bridge.request(2, "tools/list")).toMatchObject({
+      result: { tools: [{ name: "echo" }] },
+    })
   })
 
   it("serves tools/list and tools/call over the unix socket", async () => {
@@ -269,8 +299,7 @@ describe("mcp bridge", () => {
     }))
     await ctx.mcpBridge.createSocketServer()
     const config = stdioServer(ctx, "thread-stdio")
-    // 整个环境都传下去：桥的版本也来自这里。
-    const bridge = startBridge(config.env)
+    const bridge = startBridge(config)
 
     expect(await bridge.request(1, "initialize", { protocolVersion: "2025-06-18" })).toMatchObject({
       jsonrpc: "2.0",
@@ -304,8 +333,7 @@ describe("mcp bridge", () => {
     ctx.mcp.registerTool("plugin.echo", ECHO_TOOL, async () => ({}))
     await ctx.mcpBridge.createSocketServer()
     const config = stdioServer(ctx, "thread-stdio-close")
-    // 整个环境都传下去：桥的版本也来自这里。
-    const bridge = startBridge(config.env)
+    const bridge = startBridge(config)
 
     bridge.child.stdin.end()
     const code = await new Promise<number | null>((resolve) => {

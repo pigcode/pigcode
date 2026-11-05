@@ -127,10 +127,17 @@ export function apply(ctx: Context): void {
     // 命令是同步返回的；socket 监听在后台启动，子进程连接时已就绪。
     void ensureSocketServer().catch(() => undefined)
     return {
-      command: "node",
-      args: [stdioBridgePath()],
+      // 用 Host 自己的可执行文件跑桥：从 Dock 启动的应用拿不到 shell 的 PATH，用户也可能没装 node。
+      // Host 跑在 Electron 里时要靠 ELECTRON_RUN_AS_NODE 把它当 Node 用，直接用 Node 跑时这个变量没有作用。
+      command: process.execPath,
+      args: [fileURLToPath(stdioBridgeUrl(import.meta.url))],
       // 版本随启动命令传下去，stdio 桥用它填 serverInfo，不用自己依赖插件 SDK。
-      env: { PIGCODE_MCP_SOCKET: address, PIGCODE_MCP_TOKEN: token, PIGCODE_VERSION: HOST_VERSION },
+      env: {
+        ELECTRON_RUN_AS_NODE: "1",
+        PIGCODE_MCP_SOCKET: address,
+        PIGCODE_MCP_TOKEN: token,
+        PIGCODE_VERSION: HOST_VERSION,
+      },
     }
   }
 
@@ -301,8 +308,10 @@ function socketAddress(instanceId: string): string {
 }
 
 /** stdio 桥与 mcp-bridge bundle 位于同一 out/host 目录下的兄弟目录。 */
-function stdioBridgePath(): string {
-  return fileURLToPath(new URL("../mcp/stdio-bridge.mjs", import.meta.url))
+export function stdioBridgeUrl(moduleUrl: string): URL {
+  // .mjs 只在构建产物里有；从源码运行时（单元测试、真实 CLI 测试）桥也要能启动。
+  const file = moduleUrl.endsWith(".ts") ? "stdio-bridge.ts" : "stdio-bridge.mjs"
+  return new URL(`../mcp/${file}`, moduleUrl)
 }
 
 /** 写入一行 JSON；连接已关闭时静默忽略。 */

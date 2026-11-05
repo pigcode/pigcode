@@ -3,9 +3,7 @@
  * 默认跳过；跑法：PIGCODE_REAL_CLAUDE=1 pnpm exec vitest run apps/host/src/agents/mcp-tools.real.test.ts
  * （Codex 用 PIGCODE_REAL_CODEX=1，也可以两个一起设）。
  *
- * 已知问题（2026-11-05）：Codex 这一半现在会失败。真实 app-server 没有启动我们在 thread/start 里给的
- * config.mcp_servers：插件工具的 stdio 桥一次 hello 都没有。模型是凭环境自己给出时间的，不是调用工具。
- * 需要查这一版 app-server 的配置覆盖方式。Claude 这一半在本机也还没跑通，CLI 指向的代理不认这些模型 id。
+ * Claude 这一半在本机还没跑通，CLI 指向的代理不认这些模型 id。
  */
 import { randomUUID } from "node:crypto"
 import type { AgentEvent } from "@pigcode/contracts"
@@ -92,7 +90,6 @@ async function callClock(
 
 /**
  * 两种 Agent 的断言相同：工具被调用，回答里带上了只有工具才有的口令。
- * 这一版 Codex app-server 不为 MCP 工具调用发 item 通知，所以不按 tool.started 断言。
  */
 function expectToolWasCalled(
   events: AgentEvent[],

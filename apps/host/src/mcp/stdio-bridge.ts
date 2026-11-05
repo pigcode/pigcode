@@ -4,7 +4,7 @@
  * 从 PIGCODE_MCP_SOCKET 连接 Host 的本地 socket，把 stdin 上的 MCP JSON-RPC
  * 转发给 Host，并把结果写回 stdout。Host 通过 token 识别调用线程。
  *
- * 这个文件由 Codex/Claude 以独立 node 子进程启动，只能依赖 Node 内置模块；
+ * 这个文件由 Codex 以独立子进程启动，只能依赖 Node 内置模块；
  * 构建时 build-host 把它转成 out/host/mcp/stdio-bridge.mjs。
  */
 import net from "node:net"

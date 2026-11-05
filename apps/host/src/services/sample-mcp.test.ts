@@ -145,7 +145,7 @@ describe("agent MCP injection", () => {
       expect(captured?.mcp?.tools.map((tool) => tool.name)).toContain("clock_now")
       const result = (await captured?.mcp?.callTool("clock_now", {})) as { now?: string }
       expect(typeof result.now).toBe("string")
-      expect(captured?.mcp?.stdioServer()).toMatchObject({ command: "node" })
+      expect(captured?.mcp?.stdioServer()).toMatchObject({ command: process.execPath })
       // 样例插件 id 已随启用的 Capability 插件注册到 bridge。
       expect(pluginId).toBe("capability.pigcode-capability-clock")
     } finally {

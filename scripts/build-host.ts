@@ -100,7 +100,7 @@ for (const name of builtinPlugins) {
   await writeFile(join(targetDir, "package.json"), `${JSON.stringify(shipped, null, 2)}\n`, "utf8")
 }
 
-// stdio 桥由 Codex/Claude 以系统 node 子进程启动，不能依赖 Node 的类型剥离；单独编成 .mjs。
+// stdio 桥由 Codex 以子进程启动，安装包里不带源码；单独编成 .mjs。
 await build({
   entryPoints: [join(root, "apps/host/src/mcp/stdio-bridge.ts")],
   outfile: join(outDir, "mcp/stdio-bridge.mjs"),

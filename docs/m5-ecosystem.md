@@ -104,7 +104,8 @@ JSON 序列化；Host 会把它转成 MCP 的文本内容交给模型。工具�
 - **Claude**：Host 用 `createSdkMcpServer` 为每次会话创建进程内 MCP server，名称为
   `pigcode`，通过 `query()` 的 `mcpServers` 注入。server 的 handler 闭包绑定当前
   `threadId`。
-- **Codex**：Host 生成 `config.mcp_servers.pigcode`，command 为 `node`，参数指向
+- **Codex**：Host 生成 `config.mcp_servers.pigcode`，command 为 Host 自己的可执行文件（靠
+  `ELECTRON_RUN_AS_NODE` 当 Node 用，不依赖系统的 node），参数指向
   `mcp/stdio-bridge.mjs`，并通过环境变量传入 Unix socket 路径（Windows 为命名管道）
   和一次性 token。`thread/start` 与 `thread/resume` 都会带上该配置。stdio bridge 在
   `hello` 时用 token 映射回线程，之后 `tools/list`、`tools/call` 都只在该线程作用域内
