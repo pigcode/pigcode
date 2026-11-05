@@ -17,7 +17,7 @@ export const workbenchZhCN = {
   "checkpoint.phase.final": "结束",
   "checkpoint.phase.manual": "手动",
   "checkpoint.restore": "恢复",
-  "checkpoint.restorePrompt": "确认恢复到此 checkpoint？",
+  "checkpoint.restorePrompt": "文件会恢复到这个检查点。对话不会回滚，Agent 也不会知道文件变了。",
   "checkpoint.confirmRestore": "确认恢复",
   "checkpoint.restoring": "恢复中…",
   "workbench.diff.unknownFile": "未知文件",
@@ -52,7 +52,8 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
   "checkpoint.phase.final": "Final",
   "checkpoint.phase.manual": "Manual",
   "checkpoint.restore": "Restore",
-  "checkpoint.restorePrompt": "Restore to this checkpoint?",
+  "checkpoint.restorePrompt":
+    "Files go back to this checkpoint. The conversation is not rolled back, and the agent isn't told the files changed.",
   "checkpoint.confirmRestore": "Restore",
   "checkpoint.restoring": "Restoring…",
   "workbench.diff.unknownFile": "Unknown file",
