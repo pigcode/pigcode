@@ -60,7 +60,8 @@ jobs:
         with: { version: 10.28.2 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm, cache-dependency-path: pnpm-lock.yaml }
-      - run: pnpm install --frozen-lockfile
+      # 启动 Electron 的任务不能用依赖缓存里的原生模块（node-pty），ci.yml 里也是这么装的。
+      - run: pnpm install --frozen-lockfile --config.side-effects-cache=false
       # 打包前先确认代码是好的：lint、类型和单元测试和 ci.yml 用同一套命令。
       - run: pnpm lint
       - run: pnpm typecheck
@@ -70,6 +71,8 @@ jobs:
       - run: ${{ matrix.smoke }}
         env:
           PIGCODE_E2E: "1"
+          # 打包好的应用在测试期间别去查更新：查到新版本会弹窗、甚至在退出时装上。
+          PIGCODE_UPDATE_CHECK: "0"
       - uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.os }}
@@ -99,7 +102,11 @@ jobs:
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
         shell: bash
         run: |
-          flags=(--draft --title "$TAG" --generate-notes)
-          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
-          gh release create "$TAG" "${flags[@]}"
-          gh release upload "$TAG" release/* --clobber
+          # 这个 job 没有 checkout，gh 从哪里读仓库要显式给。
+          repo=(-R "$GITHUB_REPOSITORY")
+          # 重跑时草稿可能已经在了：只建一次。
+          gh release view "$TAG" "${repo[@]}" >/dev/null 2>&1 ||
+            { flags=(--draft --title "$TAG" --generate-notes)
+              if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+              gh release create "$TAG" "${flags[@]}" "${repo[@]}"; }
+          gh release upload "$TAG" release/* --clobber "${repo[@]}"

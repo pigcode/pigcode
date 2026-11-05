@@ -20,6 +20,8 @@ export interface Updates {
   start(): void
   /** 设置页的手动检查。 */
   checkNow(): Promise<UpdateResult>
+  /** 已经下载好时退出并安装，返回是否接过了这次退出。 */
+  installIfReady(): boolean
 }
 
 export interface UpdateOptions {
@@ -33,6 +35,8 @@ export interface UpdateOptions {
   requestRestart?: () => void
   /** 测试用：替换下载实现。 */
   download?: () => Promise<boolean>
+  /** 测试用：替换「装好并重启」。 */
+  install?: () => void
   /** 测试用：替换查询最新版本。 */
   fetchRelease?: typeof fetchLatestRelease
 }
@@ -54,8 +58,11 @@ async function ask(options: {
 
 export function createUpdates(options: UpdateOptions): Updates {
   const mode = options.mode ?? updateMode(process.platform, process.env)
-  const install = canInstallUpdates(mode, options.isPackaged ?? app.isPackaged)
+  const canInstall = canInstallUpdates(mode, options.isPackaged ?? app.isPackaged)
   const download = options.download ?? downloadWithUpdater
+  const install = options.install ?? installWithUpdater
+  /** 更新已经下载好，下次退出时安装（electron-updater 的 autoInstallOnAppQuit）。 */
+  let ready = false
 
   /** 只提示：打开下载页。 */
   const showDownloadPage = async (release: LatestRelease): Promise<void> => {
@@ -94,9 +101,10 @@ export function createUpdates(options: UpdateOptions): Updates {
   }
 
   const prompt = async (release: LatestRelease): Promise<void> => {
-    if (install) {
+    if (canInstall) {
       // 后台下载好，下次退出时安装；下载失败就退回下载页，别让用户没有出路。
       if (await download()) {
+        ready = true
         await showReady(release.version)
         return
       }
@@ -115,7 +123,28 @@ export function createUpdates(options: UpdateOptions): Updates {
     log: (message) => console.warn(message),
     ...(options.fetchRelease ? { fetchRelease: options.fetchRelease } : {}),
   })
-  return { start: () => scheduler.start(), checkNow: () => scheduler.checkNow() }
+  return {
+    start: () => scheduler.start(),
+    checkNow: () => scheduler.checkNow(),
+    installIfReady() {
+      if (!ready) return false
+      // 交给 electron-updater：它会走一遍退出，并在装好后重新打开应用。
+      install()
+      return true
+    },
+  }
+}
+
+/** 退出并安装已经下载好的更新，装完重新打开应用。 */
+function installWithUpdater(): void {
+  void import("electron-updater")
+    .then(({ autoUpdater }) => {
+      // isSilent=false：显示安装进度；isForceRunAfter=true：装完自动打开。
+      autoUpdater.quitAndInstall(false, true)
+    })
+    .catch((error: unknown) => {
+      console.warn("update install failed", error instanceof Error ? error.message : error)
+    })
 }
 
 /** 下载更新。electron-updater 按 electron-builder 写进安装包的 app-update.yml 找源。 */

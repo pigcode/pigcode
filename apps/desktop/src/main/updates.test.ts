@@ -29,7 +29,7 @@ afterEach(() => {
 })
 
 /** 启动后台检查并跑到第一次检查结束。 */
-async function findUpdate(options: Options): Promise<void> {
+async function findUpdate(options: Options): Promise<ReturnType<typeof createUpdates>> {
   const updates = createUpdates({
     getWindow: () => undefined,
     autoCheck: () => true,
@@ -38,6 +38,7 @@ async function findUpdate(options: Options): Promise<void> {
   })
   updates.start()
   await vi.advanceTimersByTimeAsync(5000)
+  return updates
 }
 
 describe("update prompt", () => {
@@ -79,6 +80,29 @@ describe("update prompt", () => {
     const [first] = showMessageBox.mock.calls[0] as [{ message: string }]
     expect(first.message).toBe("有新版本 0.2.0")
     expect(openExternal).toHaveBeenCalledWith(release.url)
+  })
+
+  it("installs and restarts the downloaded update when asked at quit", async () => {
+    const install = vi.fn()
+    showMessageBox.mockResolvedValue({ response: 1 })
+    const updates = await findUpdate({
+      mode: "install",
+      isPackaged: true,
+      download: async () => true,
+      install,
+    })
+    // 什么都没下载时不能接管退出。
+    const cold = createUpdates({
+      getWindow: () => undefined,
+      autoCheck: () => false,
+      mode: "install",
+      isPackaged: true,
+      install,
+    })
+    expect(cold.installIfReady()).toBe(false)
+    // 下载过以后，退出交给 electron-updater（它会装好并重新打开应用）。
+    expect(updates.installIfReady()).toBe(true)
+    expect(install).toHaveBeenCalledTimes(1)
   })
 
   it("only opens the download page on macOS and deb packages", async () => {

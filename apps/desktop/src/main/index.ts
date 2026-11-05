@@ -459,8 +459,10 @@ async function checkBeforeQuit(): Promise<void> {
 function quitNow(): void {
   quitConfirmed = true
   // 在 before-quit 里 preventDefault 之后，这个处理跑完前直接 app.quit() 会被忽略；
-  // 等一轮事件循环再退。
-  setImmediate(() => app.quit())
+  // 等一轮事件循环再退。更新已经下载好时交给 electron-updater，装完会重新打开应用。
+  setImmediate(() => {
+    if (!updates.installIfReady()) app.quit()
+  })
 }
 
 // 退出流程开始后，关窗口不再隐藏，否则应用退不出去。有任务在跑时先问一次。

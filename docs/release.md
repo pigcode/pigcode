@@ -22,7 +22,7 @@ git push origin v0.2.0
 `.github/workflows/release.yml`，推 `v*` tag 时触发：
 
 1. 检查 tag 和 `apps/desktop/package.json` 一致。
-2. 三个平台各自：lint、类型检查、单元测试 → 打包 → 跑打包后的应用的冒烟测试（`pnpm test:packaged`，见 #69）。
+2. 三个平台各自：lint、类型检查、单元测试 → 打包 → 跑打包后的应用的冒烟测试（`pnpm --dir apps/desktop run test:packaged`，见 #69）。
    - macOS：arm64 和 x64 各一个 DMG，不签名、不公证。
    - Windows：x64 的 NSIS 安装包。
    - Linux：AppImage 和 deb。
@@ -44,7 +44,7 @@ git push origin v0.2.0
 - [ ] 关窗口：macOS 和 Windows 上应用还在托盘里，点 Dock 或菜单栏图标能回窗口；Linux 上直接退出。
 - [ ] 有任务在跑时退出，确认框出现，选「继续运行」任务继续。
 - [ ] 设置页「检查更新」能连上 GitHub（仓库公开后）；发现新版本时提示能打开下载页。
-- [ ] 第二个版本起：Windows 和 AppImage 能从上一个版本更新，用户数据还在（更新会在下载完成后、下次退出时安装，或点提示里的「重启并更新」）。这一条必须在两个真实版本之间验证，第一次发版时做（#71）。
+- [ ] 第二个版本起：Windows 和 AppImage 能从上一个版本更新，用户数据还在（更新会在下载完成后、下次退出时安装，或点提示里的「重启并更新」）。这一条要在两个真实版本之间验证，所以最早在第二个版本发布时做（#71）。
 - [ ] macOS 第一次打开要右键 →「打开」；Windows 会弹 SmartScreen —— 这是未签名的预期行为（ADR 0005）。
 
 ## 4. 发布、撤回、更新指针
