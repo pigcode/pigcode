@@ -58,7 +58,22 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await page.keyboard.type("echo two > a.txt && echo WR''OTE")
   await page.keyboard.press("Enter")
   await expect(page.locator(".xterm")).toContainText("WROTE")
+
+  // 改完再建一个快照：Diff 默认拿最新的快照和基准（HEAD）比，这样才看得到改动。
   await page.getByRole("tab", { name: "检查点" }).click()
+  await page.getByRole("button", { name: "创建检查点" }).click()
+  await expect(page.getByRole("button", { name: "恢复" })).toHaveCount(2)
+
+  // 从界面看 diff：右栏的 Diff 显示快照相对基准的改动。
+  await page.getByRole("button", { name: "添加面板" }).click()
+  await page.getByRole("menuitem", { name: /Diff/ }).click()
+  const diff = page.locator(".diff-view")
+  await expect(diff.locator(".diff-file").filter({ hasText: "a.txt" })).toBeVisible()
+  await expect(diff.locator(".diff-line-remove").first()).toContainText("one")
+  await expect(diff.locator(".diff-line-add").first()).toContainText("two")
+
+  await page.getByRole("tab", { name: "检查点" }).click()
+  // 列表按时间从早到晚，第一个是改动前的快照。
   await page.getByRole("button", { name: "恢复" }).first().click()
   await page.getByRole("button", { name: "确认恢复" }).click()
   // 确认按钮消失代表 restore RPC 已完成，再读文件避免竞态。
@@ -70,12 +85,14 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await expect(page.locator(".right-panel").getByRole("tab")).toHaveText([
     "终端 1",
     "检查点",
+    "Diff",
     "文件",
   ])
   await page.getByRole("treeitem", { name: "a.txt" }).click()
   await expect(page.locator(".right-panel").getByRole("tab")).toHaveText([
     "终端 1",
     "检查点",
+    "Diff",
     "a.txt",
   ])
   await expect(page.getByRole("textbox", { name: "文件内容 a.txt" })).toHaveValue("one\n")

@@ -41,7 +41,8 @@ export { RunAlreadyActiveError, TooManyActiveRunsError, RunQueueFullError }
 
 /** 注册 Agent driver，并把一次 run 的规范化事件映射为线程事件。 */
 export function apply(ctx: Context, config: AgentRunConfig = {}): void {
-  const maxConcurrentRuns = config.maxConcurrentRuns ?? 4
+  // E2E 用 PIGCODE_MAX_CONCURRENT_RUNS 把并发压到 1，好观察排队中的会话。
+  const maxConcurrentRuns = envCount("PIGCODE_MAX_CONCURRENT_RUNS") ?? config.maxConcurrentRuns ?? 4
   const maxQueuedRuns = config.maxQueuedRuns ?? 32
   // Claude Code、Codex 与第三方 agent 都由各自的插件注册；Host 只自带开发与测试用的 fake。
   const drivers = new Map<string, AgentDriver>()
@@ -451,3 +452,9 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   })
 }
 apply.inject = inject
+
+/** 环境变量里的正整数；没设或不是正数时返回 undefined。 */
+function envCount(name: string): number | undefined {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : undefined
+}

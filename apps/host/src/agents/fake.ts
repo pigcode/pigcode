@@ -136,6 +136,10 @@ export class FakeAgentDriver implements AgentDriver {
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
       return
     }
+    if (input.text === FAKE_FAIL_TEXT) {
+      runtime.emit({ type: "run.failed", message: FAKE_FAIL_MESSAGE })
+      return
+    }
     if (input.text === FAKE_APPROVAL_TEXT) {
       await runFakeApproval(runtime)
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
@@ -188,6 +192,12 @@ function envMs(name: string, fallback = 0): number {
 
 /** 触发提问脚本的输入。 */
 export const FAKE_ASK_TEXT = "ask"
+
+/** 触发失败脚本的输入。 */
+export const FAKE_FAIL_TEXT = "fail"
+
+/** 这一轮的失败消息；界面上显示为用户内容。 */
+export const FAKE_FAIL_MESSAGE = "这一步没有做成：找不到要修改的文件。"
 
 /** 触发审批脚本的输入。 */
 export const FAKE_APPROVAL_TEXT = "approve"
