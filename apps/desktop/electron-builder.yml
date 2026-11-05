@@ -42,3 +42,7 @@ win:
 linux:
   target: [AppImage, deb]
   category: Development
+# 包名是 @pigcode/desktop，默认的 deb 文件名会带上 scope 变成 dist/@pigcode/desktop_…，
+# 那个目录不存在，打包会失败。显式给个不带斜杠的名字。
+deb:
+  artifactName: Pigcode-${version}-${arch}.deb
