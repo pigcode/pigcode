@@ -6,7 +6,15 @@
  * macOS 会把 .app 复制到临时目录再启动：在仓库里运行打包后的应用时，Node 会顺着目录往上找到
  * 工作区的依赖，测试就变成假通过。
  */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -109,6 +117,15 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
   const resources = resourcesDirOf(executable!)
   expect(existsSync(join(resources, "LICENSE.txt"))).toBe(true)
   expect(existsSync(join(resources, "THIRD_PARTY_NOTICES.txt"))).toBe(true)
+  // electron-updater 按这个文件找更新源。Windows 和 AppImage 的真实更新还没在机器上跑过，
+  // 至少保证安装包里带的是对的：指向 pigcode/pigcode 的 GitHub Release。
+  // 三个平台的打包都会跑这条，所以 Windows 和 Linux 的包也会被检查到。
+  const updateYml = join(resources, "app-update.yml")
+  expect(existsSync(updateYml), "app-update.yml missing from the package").toBe(true)
+  const updateConfig = readFileSync(updateYml, "utf8")
+  expect(updateConfig).toContain("provider: github")
+  expect(updateConfig).toContain("owner: pigcode")
+  expect(updateConfig).toContain("repo: pigcode")
 
   let app: ElectronApplication | undefined
   try {
