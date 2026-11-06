@@ -88,7 +88,13 @@ test("the background check asks once and opens the download page", async () => {
           app.evaluate(() => (globalThis as unknown as { updatePrompts: string[] }).updatePrompts),
         { timeout: 20_000 },
       )
-      .toEqual(["有新版本 9.9.9"])
+      // 只断言「提示了一次、里面带新版本号」：主进程按 app.getLocale() 选语言，
+      // 而 runner 的系统语言不受这个仓库控制。文案本身由 locale 的单元测试覆盖。
+      .toHaveLength(1)
+    const [prompt] = await app.evaluate(
+      () => (globalThis as unknown as { updatePrompts: string[] }).updatePrompts,
+    )
+    expect(prompt).toContain("9.9.9")
   } finally {
     await app.close()
     server.close()
