@@ -122,6 +122,10 @@ export function createUpdates(options: UpdateOptions): Updates {
     prompt,
     log: (message) => console.warn(message),
     ...(options.fetchRelease ? { fetchRelease: options.fetchRelease } : {}),
+    // E2E 把首次检查提前：默认的 5 秒既拖慢全量测试，又让断言和真实计时器赛跑。
+    ...(process.env.PIGCODE_UPDATE_DELAY_MS
+      ? { startupDelayMs: Number(process.env.PIGCODE_UPDATE_DELAY_MS) }
+      : {}),
   })
   return {
     start: () => scheduler.start(),

@@ -66,7 +66,9 @@ test("the background check asks once and opens the download page", async () => {
   const { url, server } = await releaseServer("v9.9.9")
   const app = await electron.launch({
     args: launchArgs(),
-    env: launchEnv({ PIGCODE_UPDATE_API: url }),
+    // 首次检查提前到 200ms：默认 5 秒既拖慢全量测试，又让断言和真实计时器赛跑
+    // （满载的 runner 上 Host 起得慢，5 秒内可能还没开始检查）。
+    env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_DELAY_MS: "200" }),
   })
   try {
     // 启动后 5 秒才查；把确认框换成桩，记下文案并选「打开下载页」。
