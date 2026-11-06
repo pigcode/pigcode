@@ -1,53 +1,26 @@
 /** 验证 MCP Capability 样例：安装启用后暴露 clock_now，停用后工具消失。 */
-import Loader from "@cordisjs/plugin-loader"
-import { Context } from "cordis"
-import { mkdtemp, writeFile } from "node:fs/promises"
+import { mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { Context } from "cordis"
+import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import { ClaudeDriver } from "@pigcode/agent-claude/driver"
 import { CodexDriver } from "@pigcode/agent-codex/driver"
 import type { CreateSessionInput, AgentDriver } from "../agents/driver"
 import { FakeAgentDriver } from "../agents/fake"
-import { apply as agentsPlugin } from "../agents/registry"
 import { apply as mcpBridge } from "./mcp-bridge"
 import { buildBootGraph, installLocalPlugin } from "./plugin-manager"
-import { apply as pluginsPlugin } from "./plugins"
-import { apply as projects } from "./projects"
-import { apply as sessions } from "./sessions"
-import { apply as storage } from "./storage"
-import { apply as threads } from "./threads"
+import { setupHost } from "./plugin-harness"
 
 /** 仓库内的 MCP Capability 样例目录；测试走真实的本地安装流程。 */
 const CLOCK_SOURCE = fileURLToPath(
   new URL("../../../../examples/capability-clock", import.meta.url),
 )
 
-/** 创建带 loader、mcpBridge 与 plugins 服务的 Host 测试上下文。 */
-async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
-  const profileDir = await mkdtemp(join(tmpdir(), "pigcode-mcp-sample-"))
-  // loader 以 profileDir 为解析作用域；package.json 让裸包名解析到 node_modules。
-  await writeFile(
-    join(profileDir, "package.json"),
-    JSON.stringify({ name: "pigcode-profile", version: "0.0.0", private: true }),
-  )
-  const ctx = new Context()
-  const base = pathToFileURL(profileDir).href
-  await ctx.plugin(Loader, { baseUrl: base.endsWith("/") ? base : `${base}/` })
-  await ctx.plugin(storage, { path: ":memory:" })
-  await ctx.plugin(projects)
-  await ctx.plugin(threads)
-  await ctx.plugin(sessions)
-  await ctx.plugin(mcpBridge)
-  await ctx.plugin(agentsPlugin)
-  await ctx.plugin(pluginsPlugin, { profileDir })
-  return { ctx, profileDir }
-}
-
 /** 安装并启用 clock 样例，返回可查询 MCP 工具的 context。 */
 async function installClockSample(): Promise<{ ctx: Context; pluginId: string }> {
-  const { ctx, profileDir } = await setupHost()
+  const { ctx, profileDir } = await setupHost({ prefix: "pigcode-mcp-sample-", extra: [mcpBridge] })
   const plugin = await installLocalPlugin(profileDir, CLOCK_SOURCE)
   await ctx.plugins.enable(plugin.id)
   await ctx.loader.await()
@@ -87,7 +60,10 @@ describe("Capability clock sample", () => {
 
 describe("Capability clock sample's client code", () => {
   it("loads through the boot graph like a UI plugin's client code", async () => {
-    const { ctx, profileDir } = await setupHost()
+    const { ctx, profileDir } = await setupHost({
+      prefix: "pigcode-mcp-sample-",
+      extra: [mcpBridge],
+    })
     try {
       const plugin = await installLocalPlugin(profileDir, CLOCK_SOURCE)
       expect(plugin.id).toBe("capability.pigcode-capability-clock")

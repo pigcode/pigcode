@@ -1,38 +1,10 @@
 /** 验证 Host 插件启用/停用无需重启即可生效。 */
-import Loader from "@cordisjs/plugin-loader"
-import { Context } from "cordis"
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
-import { apply as agentsPlugin } from "../agents/registry"
 import { installLocalPlugin } from "./plugin-manager"
-import { apply as pluginsPlugin } from "./plugins"
-import { apply as projects } from "./projects"
-import { apply as sessions } from "./sessions"
-import { apply as storage } from "./storage"
-import { apply as threads } from "./threads"
-
-/** 创建带 loader、agents 与 plugins 服务的 Host 测试上下文。 */
-async function setupHost(): Promise<{ ctx: Context; profileDir: string }> {
-  const profileDir = await mkdtemp(join(tmpdir(), "pigcode-dynamic-"))
-  // loader 以 profileDir 为解析作用域；package.json 让裸包名解析到 node_modules。
-  await writeFile(
-    join(profileDir, "package.json"),
-    JSON.stringify({ name: "pigcode-profile", version: "0.0.0", private: true }),
-  )
-  const ctx = new Context()
-  const base = pathToFileURL(profileDir).href
-  await ctx.plugin(Loader, { baseUrl: base.endsWith("/") ? base : `${base}/` })
-  await ctx.plugin(storage, { path: ":memory:" })
-  await ctx.plugin(projects)
-  await ctx.plugin(threads)
-  await ctx.plugin(sessions)
-  await ctx.plugin(agentsPlugin)
-  await ctx.plugin(pluginsPlugin, { profileDir })
-  return { ctx, profileDir }
-}
+import { setupHost } from "./plugin-harness"
 
 /** 写入一个注册 echo agent 的最小 Host 插件源目录。 */
 async function fixtureAgentPlugin(): Promise<string> {
@@ -79,7 +51,7 @@ async function fixtureAgentPlugin(): Promise<string> {
 
 describe("dynamic host plugin", () => {
   it("loads and unloads a host plugin without restart", async () => {
-    const { ctx, profileDir } = await setupHost()
+    const { ctx, profileDir } = await setupHost({ prefix: "pigcode-dynamic-" })
     const plugin = await installLocalPlugin(profileDir, await fixtureAgentPlugin())
 
     await ctx.plugins.enable(plugin.id)
