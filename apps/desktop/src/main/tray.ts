@@ -1,14 +1,33 @@
 /** 托盘图标与菜单（pigcode/monorepo#64）：关闭窗口后从这里找回窗口或退出。 */
 import { Menu, Tray, nativeImage, type NativeImage } from "electron"
+import { existsSync } from "node:fs"
+import { join } from "node:path"
 import { trayLabels } from "./locale/tray"
 
 /** 图标边长。托盘图标由系统缩放，16 在 macOS 菜单栏上是标准尺寸。 */
 const ICON_SIZE = 16
 
 /**
- * 占位图标：一个空心圆角方块。正式图标由产品标识的 ticket 提供。
- * macOS 的菜单栏图标是模板图，只用透明度，颜色由系统按明暗主题决定。
+ * 菜单栏图标。打包后是 Resources/tray 里的模板图（源文件 build/tray/tray.svg，
+ * 由 scripts/build-icons.ts 生成）；开发时读不在那个位置，退回下面手绘的占位图。
+ * macOS 的菜单栏图标只按透明度渲染，颜色由系统按明暗主题决定。
  */
+export function trayIcon(resourcesDir?: string): NativeImage {
+  if (resourcesDir) {
+    const base = join(resourcesDir, "tray", "trayTemplate.png")
+    if (existsSync(base)) {
+      const image = nativeImage.createFromPath(base)
+      // 带 @2x 的同名文件会被自动配上，Retina 上就不用再放大。
+      if (!image.isEmpty()) {
+        if (process.platform === "darwin") image.setTemplateImage(true)
+        return image
+      }
+    }
+  }
+  return placeholderIcon()
+}
+
+/** 开发时的占位图标：一个空心圆角方块。 */
 export function placeholderIcon(): NativeImage {
   const pixels = Buffer.alloc(ICON_SIZE * ICON_SIZE * 4)
   const inset = 2
@@ -50,9 +69,9 @@ export interface TrayActions {
 }
 
 /** 创建托盘。macOS 的菜单栏图标点一下就是菜单；Windows 上左键直接打开窗口，右键是菜单。 */
-export function createTray(locale: string, actions: TrayActions): Tray {
+export function createTray(locale: string, actions: TrayActions, resourcesDir?: string): Tray {
   const labels = trayLabels(locale)
-  const tray = new Tray(placeholderIcon())
+  const tray = new Tray(trayIcon(resourcesDir))
   tray.setToolTip("Pigcode")
   tray.setContextMenu(
     Menu.buildFromTemplate([

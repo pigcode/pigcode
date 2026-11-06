@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- 菜单栏模板图：16px 下也要认得出来，所以只留轮廓特征。 -->
+  <path d="M 10 10 L 7 4 Q 6.5 2.8 8 3.2 L 13 5.2 Z" fill="#000"/>
+  <path d="M 22 10 L 25 4 Q 25.5 2.8 24 3.2 L 19 5.2 Z" fill="#000"/>
+  <rect x="6" y="7" width="20" height="19" rx="8.5" fill="#000"/>
+  <!-- 鼻子：一条圆头窄缝，比镂空椭圆在 16px 下清楚 -->
+  <rect x="12" y="18" width="8" height="3.2" rx="1.6" fill="#fff"/>
+</svg>

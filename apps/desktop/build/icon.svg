@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect x="0" y="0" width="1024" height="1024" rx="228" ry="228" fill="#1c1c22"/>
+  <!-- 耳朵：圆角三角形，底部压在头下面，避免内角露出来 -->
+  <path d="M 340 372 L 292 186 Q 286 164 308 169 L 452 232 Q 466 238 456 252 Z" fill="#e88fa6"/>
+  <path d="M 684 372 L 732 186 Q 738 164 716 169 L 572 232 Q 558 238 568 252 Z" fill="#e88fa6"/>
+  <!-- 头 -->
+  <rect x="252" y="244" width="520" height="480" rx="204" ry="204" fill="#f7c6d1"/>
+  <!-- 鼻子 -->
+  <rect x="388" y="516" width="248" height="156" rx="78" ry="78" fill="#e88fa6"/>
+  <ellipse cx="450" cy="594" rx="23" ry="31" fill="#8e4359"/>
+  <ellipse cx="574" cy="594" rx="23" ry="31" fill="#8e4359"/>
+  <!-- 眼睛 -->
+  <ellipse cx="400" cy="420" rx="27" ry="31" fill="#2a2226"/>
+  <ellipse cx="624" cy="420" rx="27" ry="31" fill="#2a2226"/>
+</svg>

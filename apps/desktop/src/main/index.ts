@@ -302,10 +302,12 @@ function startHost(): HostProcess {
 /** 托盘：隐藏窗口以后从这里找回窗口或退出。Linux 没有托盘（关窗口直接退出）。 */
 function ensureTray(): void {
   if (tray || !hidesOnClose()) return
-  tray = createTray(app.getLocale(), {
-    show: () => showWindow(),
-    quit: () => app.quit(),
-  })
+  tray = createTray(
+    app.getLocale(),
+    { show: () => showWindow(), quit: () => app.quit() },
+    // 打包后图标在 Resources/tray；开发时读不到，createTray 会退回占位图。
+    app.isPackaged ? process.resourcesPath : undefined,
+  )
 }
 
 /** 第一次隐藏到托盘时提示一下；Windows 上关窗口后应用还在运行，不说明会让人以为已经退出。 */
