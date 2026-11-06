@@ -1,4 +1,5 @@
-# 未签名打包（见 adr/0005）。appId 与 productName 公开分发前再确认。
+# 未签名打包（见 adr/0005）。appId、productName 与发布者已在 2026-11-06 确认，不要再改：
+# 这两个值进了 bundle id、AppUserModelID 和 userData 目录，改了等于换一个应用。
 appId: com.pigcode.desktop
 productName: Pigcode
 directories:
