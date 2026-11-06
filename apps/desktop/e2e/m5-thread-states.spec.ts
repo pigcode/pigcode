@@ -8,10 +8,15 @@ function rows(page: Page, project: string) {
   return (title: string) => block.locator(".sess").filter({ hasText: title })
 }
 
-/** 在当前线程里发一条消息。 */
+/** 在当前线程里发一条消息，并等到它出现在会话里，确认真的发出去了。 */
 async function send(page: Page, text: string): Promise<void> {
-  await page.getByRole("textbox").fill(text)
+  const box = page.getByRole("textbox")
+  // 用键盘输入而不是 fill：Tiptap 的变更来自输入事件，fill 直接改 DOM 时
+  // 运行中的编辑器不一定会认，Enter 就成了空发送。
+  await box.click()
+  await page.keyboard.type(text)
   await page.keyboard.press("Enter")
+  await expect(page.locator(".msg-user").filter({ hasText: text })).toBeVisible()
 }
 
 /** 在这个项目里再开一个会话，等 composer 可以输入。 */
