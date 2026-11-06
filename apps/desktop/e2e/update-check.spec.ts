@@ -70,7 +70,10 @@ test("the background check asks once and opens the download page", async () => {
     // 在 xvfb 下把主进程卡死。装好桩之后再显式触发一次，不去赌启动有多快。
     env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_DELAY_MS: "600000" }),
   })
+  // 超时无输出时看不出卡在哪一步；把进度打到 CI 日志里。
+  const step = (name: string): void => console.log(`[update-check] ${name}`)
   try {
+    step("launched")
     // 把确认框换成桩，记下文案并选「打开下载页」。
     await app.evaluate(({ dialog }) => {
       const prompts: string[] = []
@@ -84,8 +87,10 @@ test("the background check asks once and opens the download page", async () => {
         return { response: 0, checkboxChecked: false }
       }) as typeof dialog.showMessageBox
     })
+    step("stub installed")
     // 桩装好了，这时候才让后台检查跑：不去赌它在启动的哪一刻触发。
     const page = await app.firstWindow()
+    step("window ready")
     await page
       .evaluate(async () => {
         const bridge = (
@@ -108,6 +113,7 @@ test("the background check asks once and opens the download page", async () => {
           enabled: true,
         })
       })
+    step("check triggered")
     await expect
       .poll(
         () =>
