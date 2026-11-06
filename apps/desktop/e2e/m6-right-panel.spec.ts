@@ -3,7 +3,7 @@ import { mkdirSync, rmSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 /** 在 guest 页面里执行脚本；webview 的内容只在 main 里拿得到。 */
 function inGuest(app: ElectronApplication, script: string): Promise<string> {
@@ -45,7 +45,7 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
   const site = await startSite()
   const base = `http://127.0.0.1:${(site.address() as AddressInfo).port}`
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   try {

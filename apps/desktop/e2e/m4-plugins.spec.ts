@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject, installPlugin, launchEnv } from "./projects"
+import { addProject, installPlugin, launchEnv, launchArgs } from "./projects"
 
 /** 仓库里的脚手架脚本：生成一个 UI 插件用到真实的模板，而不是复制的样例。 */
 const CREATE_PLUGIN = fileURLToPath(new URL("../../../scripts/create-plugin.ts", import.meta.url))
@@ -20,7 +20,7 @@ test("installs, enables, and disables plugins without restart", async () => {
       (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   )
-  const app = await electron.launch({ args: ["."], env: { ...env, PIGCODE_AGENT: "echo" } })
+  const app = await electron.launch({ args: launchArgs(), env: { ...env, PIGCODE_AGENT: "echo" } })
   const page = await app.firstWindow()
   // 安装 Agent 插件
   await addProject(app, page, projectRoot)
@@ -224,7 +224,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   rmSync(projectRoot, { recursive: true, force: true })
   mkdirSync(projectRoot, { recursive: true })
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: launchEnv({ PIGCODE_FAKE_STEP_MS: "40" }),
   })
   const page = await app.firstWindow()
@@ -354,7 +354,7 @@ test("a generated UI plugin is a React plugin and runs right after generating", 
   const generated = join(mkdtempSync(join(tmpdir(), "pigcode-generated-ui-")), "demo")
   execFileSync(process.execPath, [CREATE_PLUGIN, generated, "ui", "demo"], { stdio: "pipe" })
 
-  const app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv({}) })
   const page = await app.firstWindow()
   await addProject(app, page, projectRoot)
 
@@ -396,7 +396,7 @@ test("a plugin written with React renders the host's ui-primitives and reads the
   const projectRoot = "/tmp/pigcode-m4-e2e-react"
   rmSync(projectRoot, { recursive: true, force: true })
   mkdirSync(projectRoot, { recursive: true })
-  const app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv({}) })
   const page = await app.firstWindow()
   await addProject(app, page, projectRoot)
 

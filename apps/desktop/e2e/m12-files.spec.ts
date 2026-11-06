@@ -9,7 +9,7 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test"
-import { addProject, launchEnv } from "./projects"
+import { addProject, launchEnv, launchArgs } from "./projects"
 
 /** 一个带 git 历史、忽略目录、嵌套目录与图片的项目。 */
 function createProject(): string {
@@ -59,7 +59,10 @@ async function openFilesPanel(app: ElectronApplication, root: string): Promise<P
 
 test("file explorer: browse, open, edit, save, search and refresh", async () => {
   const root = createProject()
-  const app = await electron.launch({ args: ["."], env: launchEnv({ PIGCODE_FAKE_STEP_MS: "50" }) })
+  const app = await electron.launch({
+    args: launchArgs(),
+    env: launchEnv({ PIGCODE_FAKE_STEP_MS: "50" }),
+  })
   try {
     // 打开文件树：目录在前，被 .gitignore 忽略的 node_modules 淡化显示。
     const page = await openFilesPanel(app, root)
@@ -188,7 +191,7 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
 
 test("closing the window with unsaved file changes asks first", async () => {
   const root = createProject()
-  const app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv({}) })
   let exited = false
   try {
     const page = await openFilesPanel(app, root)

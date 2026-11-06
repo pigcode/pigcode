@@ -2,7 +2,7 @@
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { launchEnv } from "./projects"
+import { launchEnv, launchArgs } from "./projects"
 
 /** 一个只回答 GitHub release 形状的本地服务。 */
 async function releaseServer(tag: string | null): Promise<{ url: string; server: Server }> {
@@ -26,7 +26,7 @@ async function releaseServer(tag: string | null): Promise<{ url: string; server:
 test("a manual check shows the new version and can open the download page", async () => {
   const { url, server } = await releaseServer("v9.9.9")
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     // 关掉后台检查：这个用例只测手动检查，本地服务也回答不了和当前版本相同的情况。
     env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_CHECK: "0" }),
   })
@@ -64,7 +64,10 @@ test("a manual check shows the new version and can open the download page", asyn
 
 test("the background check asks once and opens the download page", async () => {
   const { url, server } = await releaseServer("v9.9.9")
-  const app = await electron.launch({ args: ["."], env: launchEnv({ PIGCODE_UPDATE_API: url }) })
+  const app = await electron.launch({
+    args: launchArgs(),
+    env: launchEnv({ PIGCODE_UPDATE_API: url }),
+  })
   try {
     // 启动后 5 秒才查；把确认框换成桩，记下文案并选「打开下载页」。
     await app.evaluate(({ dialog }) => {
@@ -95,7 +98,7 @@ test("the background check asks once and opens the download page", async () => {
 test("a failed check says so and leaves the app alone", async () => {
   const { url, server } = await releaseServer(null)
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_CHECK: "0" }),
   })
   try {

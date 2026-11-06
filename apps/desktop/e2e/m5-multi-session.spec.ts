@@ -1,7 +1,7 @@
 /** M5 验收：侧栏切换多会话，后台运行状态保持。 */
 import { mkdirSync, rmSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 /** 过滤 undefined，满足 Playwright env 的 string 值约束。 */
 function launchEnv(): Record<string, string> {
@@ -18,7 +18,7 @@ test("keeps background runs alive across threads", async () => {
   rmSync(projectRoot, { recursive: true, force: true })
   mkdirSync(projectRoot, { recursive: true })
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: {
       ...launchEnv(),
       PIGCODE_AGENT: "fake",

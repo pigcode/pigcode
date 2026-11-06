@@ -26,6 +26,14 @@ export function launchEnv(extra: Record<string, string>): Record<string, string>
   }
 }
 
+/**
+ * 启动参数。`--lang=zh-CN` 固定主进程的语言：对话框文案走 app.getLocale()，
+ * 而 CI 的 runner 是英文环境、本地 macOS 是中文，不固定的话断言会随环境变。
+ */
+export function launchArgs(extra: string[] = []): string[] {
+  return [".", "--lang=zh-CN", ...extra]
+}
+
 /** 建一个带两个源文件的项目，启动应用并在里面开一个新会话。 */
 export async function openThread(
   name: string,
@@ -36,7 +44,9 @@ export async function openThread(
   mkdirSync(join(root, "src"), { recursive: true })
   writeFileSync(join(root, "README.md"), "# Demo\n")
   writeFileSync(join(root, "src/index.ts"), "export const answer = 42\n")
-  const app = await electron.launch({ args: ["."], env: launchEnv(extra) })
+  // 固定语言：主进程的对话框按 app.getLocale() 选文案，而 CI 的 runner 是英文环境、
+  // 本地 macOS 是中文，不固定的话断言会随运行环境变。
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv(extra) })
   const page = await app.firstWindow()
   await addProject(app, page, root)
   await page

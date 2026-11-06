@@ -2,7 +2,7 @@
 import { execFileSync } from "node:child_process"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 /** 过滤 undefined，满足 Playwright env 的 string 值约束。 */
 function launchEnv(): Record<string, string> {
@@ -26,7 +26,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   execFileSync("git", ["commit", "-qm", "init"], { cwd: root })
 
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   const page = await app.firstWindow()

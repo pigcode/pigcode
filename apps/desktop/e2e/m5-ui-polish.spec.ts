@@ -1,7 +1,7 @@
 /** M5 UI 交互验收：自动标题、命令面板、快捷键与右侧面板。 */
 import { mkdirSync, rmSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 /** 过滤 undefined，满足 Playwright env 的 string 值约束。 */
 function launchEnv(): Record<string, string> {
@@ -17,7 +17,7 @@ test("polished shell: auto title, command palette and shortcuts", async () => {
   rmSync(projectRoot, { recursive: true, force: true })
   mkdirSync(projectRoot, { recursive: true })
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: { ...launchEnv(), PIGCODE_AGENT: "fake" },
   })
   try {

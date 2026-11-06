@@ -1,7 +1,7 @@
 /** 真实 Codex 端到端：新建线程、发 OK、看到用户气泡与最终回答。 */
 import { mkdirSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 test.skip(process.env.PIGCODE_REAL_CODEX !== "1", "set PIGCODE_REAL_CODEX=1")
 
@@ -16,7 +16,7 @@ function launchEnv(): Record<string, string> {
 test("real codex answers OK", async () => {
   // Codex app-server 以项目根目录作为 cwd，目录必须存在才能启动。
   mkdirSync("/tmp/pigcode-m2-e2e", { recursive: true })
-  const app = await electron.launch({ args: ["."], env: launchEnv() })
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv() })
   try {
     const page = await app.firstWindow()
     await addProject(app, page, "/tmp/pigcode-m2-e2e")

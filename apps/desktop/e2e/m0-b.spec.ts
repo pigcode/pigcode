@@ -1,6 +1,6 @@
 /** M0-B 验收：项目/会话、fake 流、插件的侧栏面板与右栏标签、重连。 */
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject, installPlugin } from "./projects"
+import { addProject, installPlugin, launchArgs } from "./projects"
 
 test("chat, plugin panel, and reconnect", async () => {
   const env = Object.fromEntries(
@@ -9,7 +9,7 @@ test("chat, plugin panel, and reconnect", async () => {
     ),
   )
   const app = await electron.launch({
-    args: ["."],
+    args: launchArgs(),
     env: { ...env, PIGCODE_AGENT: "fake", PIGCODE_QUIT_CONFIRM: "0" },
   })
   const page = await app.firstWindow()

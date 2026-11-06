@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { launchEnv } from "./projects"
+import { launchEnv, launchArgs } from "./projects"
 
 // 「在 Dock 中显示」只在 macOS 上有；Linux 会隐藏这两个开关。
 test.skip(process.platform !== "darwin", "the Dock switch only exists on macOS")
@@ -15,7 +15,7 @@ const preferencesFile = () => join(process.env.PIGCODE_PROFILE_DIR ?? "", "prefe
 const stored = () => JSON.parse(readFileSync(preferencesFile(), "utf8"))
 
 test("the Dock switch is saved and survives a restart", async () => {
-  let app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  let app = await electron.launch({ args: launchArgs(), env: launchEnv({}) })
   let page = await app.firstWindow()
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()
@@ -39,7 +39,7 @@ test("the Dock switch is saved and survives a restart", async () => {
   }
 
   // 重启后还是上次的选择。
-  app = await electron.launch({ args: ["."], env: launchEnv({}) })
+  app = await electron.launch({ args: launchArgs(), env: launchEnv({}) })
   page = await app.firstWindow()
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()

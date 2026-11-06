@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { _electron as electron, expect, test, type Page } from "@playwright/test"
-import { addProject, launchEnv, openThread } from "./projects"
+import { addProject, launchEnv, openThread, launchArgs } from "./projects"
 
 /** 打开「设置 → Agent」。 */
 async function openAgents(page: Page): Promise<void> {
@@ -104,7 +104,7 @@ test("projects, threads and agent settings survive a restart", async () => {
     PIGCODE_DB_PATH: join(profileDir, "pigcode.db"),
   })
   try {
-    const first = await electron.launch({ args: ["."], env })
+    const first = await electron.launch({ args: launchArgs(), env })
     const page = await first.firstWindow()
     await addProject(first, page, root)
     const projectName = root.split("/").at(-1) ?? ""
@@ -121,7 +121,7 @@ test("projects, threads and agent settings survive a restart", async () => {
     await expect(page.getByText("已保存，对之后新建的会话生效")).toBeVisible()
     await first.close()
 
-    const second = await electron.launch({ args: ["."], env })
+    const second = await electron.launch({ args: launchArgs(), env })
     const again = await second.firstWindow()
     const block = again.locator(".proj-block").filter({ hasText: projectName })
     await expect(block).toBeVisible()

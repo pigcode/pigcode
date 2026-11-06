@@ -1,7 +1,7 @@
 /** M5 真实 Codex 端到端：两个线程并行运行，分别得到 OK-1 与 OK-2。 */
 import { mkdirSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject } from "./projects"
+import { addProject, launchArgs } from "./projects"
 
 test.skip(process.env.PIGCODE_REAL_CODEX !== "1", "set PIGCODE_REAL_CODEX=1")
 
@@ -22,7 +22,7 @@ test("runs two real codex threads from the sidebar", async () => {
   // Codex app-server 以项目根目录作为 cwd，目录必须存在才能启动。
   const projectRoot = "/tmp/pigcode-m5-real-e2e"
   mkdirSync(projectRoot, { recursive: true })
-  const app = await electron.launch({ args: ["."], env: launchEnv() })
+  const app = await electron.launch({ args: launchArgs(), env: launchEnv() })
   try {
     const page = await app.firstWindow()
     await addProject(app, page, projectRoot)
