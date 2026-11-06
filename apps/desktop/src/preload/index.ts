@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     autoCheck: boolean
     enabled: boolean
     api: string
+    reachable: boolean
+    foundVersion: string | null
+    currentVersion: string
   }> => ipcRenderer.invoke("pigcode:test-start-update-check"),
   setThemeSource: (source: "light" | "dark" | "system") =>
     ipcRenderer.invoke("pigcode:set-theme", source),

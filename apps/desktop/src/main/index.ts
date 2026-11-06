@@ -28,6 +28,7 @@ import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
 import { confirmQuit } from "./quit-prompt"
 import { askQuitState, hasPendingWork } from "./quit-check"
+import { fetchLatestRelease, LATEST_RELEASE_API } from "./update-check"
 import { createUpdates } from "./updates"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
@@ -188,13 +189,18 @@ function registerNativeBridge(): void {
   ipcMain.handle("pigcode:check-for-updates", () => updates.checkNow())
   // E2E 专用：等对话框的桩装好之后再让后台检查跑一次，不依赖启动计时器。
   if (process.env.PIGCODE_E2E === "1") {
-    // 返回偏好与开关状态，测试失败时能直接看出「为什么没查」。
-    ipcMain.handle("pigcode:test-start-update-check", () => {
+    // 返回偏好、开关与「现在能不能真的查到」：测试失败时能直接看出卡在哪一步。
+    ipcMain.handle("pigcode:test-start-update-check", async () => {
       updates.start(0)
+      const api = process.env.PIGCODE_UPDATE_API ?? LATEST_RELEASE_API
+      const found = await fetchLatestRelease(api)
       return {
         autoCheck: preferences.autoCheckUpdates,
         enabled: process.env.PIGCODE_UPDATE_CHECK !== "0",
-        api: process.env.PIGCODE_UPDATE_API ?? "(default)",
+        api,
+        reachable: found !== null,
+        foundVersion: found?.version ?? null,
+        currentVersion: app.getVersion(),
       }
     })
   }
