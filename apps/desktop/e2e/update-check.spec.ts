@@ -93,6 +93,11 @@ test("the background check asks once and opens the download page", async () => {
     // 桩装好了，这时候才让后台检查跑：不去赌它在启动的哪一刻触发。
     const page = await app.firstWindow()
     step("window ready")
+    // 提示弹框前 ask() 会把隐藏的窗口叫出来；xvfb 下没有窗口管理器，
+    // 这一步会卡住主进程。先确认窗口是可见的，让它走直接弹框的分支。
+    step(
+      `window visible: ${String(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.isVisible()))}`,
+    )
     await page
       .evaluate(async () => {
         const bridge = (
