@@ -20,8 +20,11 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     url?: string
   }> => ipcRenderer.invoke("pigcode:check-for-updates"),
   /** 只在 PIGCODE_E2E=1 时存在：装好对话框的桩之后触发一次后台检查。 */
-  startBackgroundUpdateCheck: (): Promise<void> =>
-    ipcRenderer.invoke("pigcode:test-start-update-check"),
+  startBackgroundUpdateCheck: (): Promise<{
+    autoCheck: boolean
+    enabled: boolean
+    api: string
+  }> => ipcRenderer.invoke("pigcode:test-start-update-check"),
   setThemeSource: (source: "light" | "dark" | "system") =>
     ipcRenderer.invoke("pigcode:set-theme", source),
   windowControl: (action: "minimize" | "maximize" | "close") =>

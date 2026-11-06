@@ -86,14 +86,28 @@ test("the background check asks once and opens the download page", async () => {
     })
     // 桩装好了，这时候才让后台检查跑：不去赌它在启动的哪一刻触发。
     const page = await app.firstWindow()
-    await page.evaluate(async () => {
-      const bridge = (
-        window as unknown as {
-          pigcodeNative: { startBackgroundUpdateCheck(): Promise<void> }
-        }
-      ).pigcodeNative
-      await bridge.startBackgroundUpdateCheck()
-    })
+    await page
+      .evaluate(async () => {
+        const bridge = (
+          window as unknown as {
+            pigcodeNative: {
+              startBackgroundUpdateCheck(): Promise<{
+                autoCheck: boolean
+                enabled: boolean
+                api: string
+              }>
+            }
+          }
+        ).pigcodeNative
+        return bridge.startBackgroundUpdateCheck()
+      })
+      .then((state) => {
+        // 定时器不会因为偏好关掉而启动；把原因留在失败信息里。
+        expect(state, "the background check must be allowed to run").toMatchObject({
+          autoCheck: true,
+          enabled: true,
+        })
+      })
     await expect
       .poll(
         () =>
