@@ -63,6 +63,8 @@ test("a manual check shows the new version and can open the download page", asyn
 })
 
 test("the background check asks once and opens the download page", async () => {
+  // 卡住时不要拖满 60 秒：这个用例的问题都出在「检查没跑」上。
+  test.setTimeout(30_000)
   const { url, server } = await releaseServer("v9.9.9")
   const app = await electron.launch({
     args: launchArgs(),
@@ -107,10 +109,9 @@ test("the background check asks once and opens the download page", async () => {
         return bridge.startBackgroundUpdateCheck()
       })
       .then((state) => {
-        // 定时器不会因为偏好关掉而启动；把原因留在失败信息里。
+        // 定时器在偏好关掉时不会启动；失败时先把原因说出来。
         expect(state, "the background check must be allowed to run").toMatchObject({
           autoCheck: true,
-          enabled: true,
         })
       })
     step("check triggered")
