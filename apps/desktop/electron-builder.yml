@@ -3,6 +3,11 @@ appId: com.pigcode.desktop
 productName: Pigcode
 directories:
   output: dist
+# 两个原生模块都走 node-addon-api（N-API），ABI 跨 Node/Electron 版本稳定，
+# 打包时直接用各自的 prebuilds，不需要 node-gyp 重编译。
+# Windows runner 上的 VS 18 还不被 node-gyp 认识（报 unknown version "undefined"），
+# 开着 rebuild 会让 Windows 打包必失败，而重编译本身毫无必要。
+npmRebuild: false
 # 更新源就是 GitHub Release（ADR 0010）。写在这里，打包时才会生成 latest*.yml；
 # 实际发布由 .github/workflows/release.yml 建草稿再人工发布，所以脚本里仍然用 --publish never。
 publish:
