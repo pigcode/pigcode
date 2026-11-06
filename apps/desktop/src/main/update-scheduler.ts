@@ -31,7 +31,7 @@ export interface UpdateSchedulerDeps {
 
 export interface UpdateScheduler {
   /** 按当前偏好起停定时器；偏好变了就再调一次。 */
-  start(): void
+  start(delayMs?: number): void
   stop(): void
   /** 手动检查：调用方负责显示结果。 */
   checkNow(): Promise<UpdateResult>
@@ -77,10 +77,10 @@ export function createUpdateScheduler(deps: UpdateSchedulerDeps): UpdateSchedule
   }
 
   return {
-    start() {
+    start(delayMs?: number) {
       stop()
       if (!deps.enabled() || !deps.autoCheck()) return
-      startup = setTimeout(() => void run(), deps.startupDelayMs ?? STARTUP_DELAY_MS)
+      startup = setTimeout(() => void run(), delayMs ?? deps.startupDelayMs ?? STARTUP_DELAY_MS)
       timer = setInterval(() => void run(), INTERVAL_MS)
     },
     stop,

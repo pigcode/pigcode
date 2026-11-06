@@ -66,12 +66,12 @@ test("the background check asks once and opens the download page", async () => {
   const { url, server } = await releaseServer("v9.9.9")
   const app = await electron.launch({
     args: launchArgs(),
-    // 首次检查提前到 200ms：默认 5 秒既拖慢全量测试，又让断言和真实计时器赛跑
-    // （满载的 runner 上 Host 起得慢，5 秒内可能还没开始检查）。
-    env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_DELAY_MS: "200" }),
+    // 先把启动计时器推远：桩要在检查触发之前装好，否则弹出的是真正的原生对话框，
+    // 在 xvfb 下把主进程卡死。装好桩之后再显式触发一次，不去赌启动有多快。
+    env: launchEnv({ PIGCODE_UPDATE_API: url, PIGCODE_UPDATE_DELAY_MS: "600000" }),
   })
   try {
-    // 启动后 5 秒才查；把确认框换成桩，记下文案并选「打开下载页」。
+    // 把确认框换成桩，记下文案并选「打开下载页」。
     await app.evaluate(({ dialog }) => {
       const prompts: string[] = []
       Object.assign(globalThis, { updatePrompts: prompts })
@@ -83,6 +83,16 @@ test("the background check asks once and opens the download page", async () => {
         prompts.push(options.message)
         return { response: 0, checkboxChecked: false }
       }) as typeof dialog.showMessageBox
+    })
+    // 桩装好了，这时候才让后台检查跑：不去赌它在启动的哪一刻触发。
+    const page = await app.firstWindow()
+    await page.evaluate(async () => {
+      const bridge = (
+        window as unknown as {
+          pigcodeNative: { startBackgroundUpdateCheck(): Promise<void> }
+        }
+      ).pigcodeNative
+      await bridge.startBackgroundUpdateCheck()
     })
     await expect
       .poll(

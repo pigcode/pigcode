@@ -16,8 +16,8 @@ export interface UpdateResult {
 }
 
 export interface Updates {
-  /** 按当前偏好起停自动检查；偏好改了再调一次。 */
-  start(): void
+  /** 按当前偏好起停自动检查；偏好改了再调一次。delayMs 只有 E2E 用。 */
+  start(delayMs?: number): void
   /** 设置页的手动检查。 */
   checkNow(): Promise<UpdateResult>
   /** 已经下载好时退出并安装，返回是否接过了这次退出。 */
@@ -128,7 +128,8 @@ export function createUpdates(options: UpdateOptions): Updates {
       : {}),
   })
   return {
-    start: () => scheduler.start(),
+    // delayMs 只有 E2E 用：桩装好之后再触发，不去赌启动计时器。
+    start: (delayMs?: number) => scheduler.start(delayMs),
     checkNow: () => scheduler.checkNow(),
     installIfReady() {
       if (!ready) return false
