@@ -18,6 +18,8 @@ async function send(page: Page, text: string): Promise<void> {
 async function newThread(page: Page, project: string): Promise<void> {
   await page.locator(".proj-block").filter({ hasText: project }).locator(".proj-add").click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+  // 新会话的标题是默认文案；等它成为当前会话，接下来的输入才会进这一条。
+  await expect(page.locator(".sess.is-active")).toHaveCount(1)
 }
 
 test("a thread beyond the run limit is queued in the sidebar", async () => {
@@ -27,20 +29,24 @@ test("a thread beyond the run limit is queued in the sidebar", async () => {
   const { app, page } = await openThread("thread-queued", {
     PIGCODE_MAX_CONCURRENT_RUNS: "1",
   })
-  const row = rows(page, "pigcode-e2e-thread-queued")
+  // 断言失败时也要关掉应用：留一个还在跑 `long` 的实例会拖垮后面同 worker 的用例。
+  try {
+    const row = rows(page, "pigcode-e2e-thread-queued")
 
-  await send(page, "long")
-  await expect(row("long")).toHaveAttribute("data-status", "running")
-  await newThread(page, "pigcode-e2e-thread-queued")
-  await send(page, "second run")
-  await expect(row("second run")).toHaveAttribute("data-status", "queued")
+    await send(page, "long")
+    await expect(row("long")).toHaveAttribute("data-status", "running")
+    await newThread(page, "pigcode-e2e-thread-queued")
+    await send(page, "second run")
+    await expect(row("second run")).toHaveAttribute("data-status", "queued")
 
-  // 中断第一个，排队的那个接着跑完。
-  await row("long").click()
-  await expect(page.getByRole("button", { name: "中断" })).toBeVisible()
-  await page.getByRole("button", { name: "中断" }).click()
-  await expect(row("second run")).toHaveAttribute("data-status", "completed", { timeout: 20_000 })
-  await app.close()
+    // 中断第一个，排队的那个接着跑完。
+    await row("long").click()
+    await expect(page.getByRole("button", { name: "中断" })).toBeVisible()
+    await page.getByRole("button", { name: "中断" }).click()
+    await expect(row("second run")).toHaveAttribute("data-status", "completed", { timeout: 20_000 })
+  } finally {
+    await app.close()
+  }
 })
 
 test("a background thread waiting for approval shows it in the sidebar", async () => {
