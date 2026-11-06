@@ -1,5 +1,5 @@
 /**
- * 自动检查更新的节拍（pigcode/pigcode#67）：启动后查一次，之后每隔一段时间查一次，
+ * 自动检查更新的节拍（pigcode/monorepo#67）：启动后查一次，之后每隔一段时间查一次，
  * 同一个版本在一次运行里只提示一次。怎么提示、怎么打开下载页由调用方注入，方便单独测试。
  */
 import { fetchLatestRelease, isNewer, type LatestRelease } from "./update-check"

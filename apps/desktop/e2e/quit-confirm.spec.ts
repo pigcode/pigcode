@@ -1,4 +1,4 @@
-/** 退出前确认（pigcode/pigcode#65）：有任务在跑时先问，选「继续运行」不退出；没任务时直接退出。 */
+/** 退出前确认（pigcode/monorepo#65）：有任务在跑时先问，选「继续运行」不退出；没任务时直接退出。 */
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 

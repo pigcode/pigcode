@@ -1,6 +1,6 @@
 /**
- * 检查 GitHub Release 有没有新版本（pigcode/pigcode#67）。
- * v1.0 的下载页和更新源都是 pigcode/frontend 的 Release（ADR 0010），所以只需要比版本号、给出链接。
+ * 检查 GitHub Release 有没有新版本（pigcode/monorepo#67）。
+ * v1.0 的下载页和更新源都是 pigcode/pigcode 的 Release（ADR 0010），所以只需要比版本号、给出链接。
  */
 export interface LatestRelease {
   /** 发布标签去掉前缀 v 后的版本号，例如 1.0.0。 */
@@ -10,7 +10,7 @@ export interface LatestRelease {
 }
 
 /** 默认的 GitHub API；E2E 用 PIGCODE_UPDATE_API 指向本地服务。 */
-export const LATEST_RELEASE_API = "https://api.github.com/repos/pigcode/frontend/releases/latest"
+export const LATEST_RELEASE_API = "https://api.github.com/repos/pigcode/pigcode/releases/latest"
 
 /** 解析 x.y.z；带预发布后缀或格式不对时返回 null。 */
 export function parseVersion(value: unknown): [number, number, number] | null {

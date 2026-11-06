@@ -1,5 +1,5 @@
 /**
- * 哪些安装包能自己装更新（pigcode/pigcode#71）。
+ * 哪些安装包能自己装更新（pigcode/monorepo#71）。
  * macOS 的包没签名，electron-updater 装不了（ADR 0005）；deb 每次全量下载还要输系统密码，也不做。
  * 其余情况只提示去下载页。
  */

@@ -1,4 +1,4 @@
-/** 检查更新（pigcode/pigcode#67）：手动检查显示结果，打开下载页走系统浏览器；自动检查的开关存得住。 */
+/** 检查更新（pigcode/monorepo#67）：手动检查显示结果，打开下载页走系统浏览器；自动检查的开关存得住。 */
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { _electron as electron, expect, test } from "@playwright/test"
@@ -14,7 +14,7 @@ async function releaseServer(tag: string | null): Promise<{ url: string; server:
     response.writeHead(200, { "content-type": "application/json" }).end(
       JSON.stringify({
         tag_name: tag,
-        html_url: `https://github.com/pigcode/frontend/releases/tag/${tag}`,
+        html_url: `https://github.com/pigcode/pigcode/releases/tag/${tag}`,
       }),
     )
   })
@@ -55,7 +55,7 @@ test("a manual check shows the new version and can open the download page", asyn
       .poll(() =>
         app.evaluate(() => (globalThis as unknown as { openedUrls: string[] }).openedUrls),
       )
-      .toEqual(["https://github.com/pigcode/frontend/releases/tag/v9.9.9"])
+      .toEqual(["https://github.com/pigcode/pigcode/releases/tag/v9.9.9"])
   } finally {
     await app.close()
     server.close()

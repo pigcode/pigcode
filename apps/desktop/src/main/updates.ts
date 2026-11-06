@@ -1,5 +1,5 @@
 /**
- * 检查更新在 main 里的入口（pigcode/pigcode#67、#71）：把节拍交给 update-scheduler，
+ * 检查更新在 main 里的入口（pigcode/monorepo#67、#71）：把节拍交给 update-scheduler，
  * 这里负责「发现新版本之后做什么」。下载页和更新源都是 GitHub Release（ADR 0010）。
  */
 import { app, dialog, shell, type BrowserWindow } from "electron"

@@ -1,4 +1,4 @@
-/** 关窗口只是隐藏（pigcode/pigcode#18）：macOS 和 Windows 上 Host 继续跑，从 Dock 或托盘能叫回来。 */
+/** 关窗口只是隐藏（pigcode/monorepo#18）：macOS 和 Windows 上 Host 继续跑，从 Dock 或托盘能叫回来。 */
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 

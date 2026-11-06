@@ -8,7 +8,7 @@ directories:
 publish:
   provider: github
   owner: pigcode
-  repo: frontend
+  repo: pigcode
 files:
   - out/**/*
   - package.json

@@ -1,5 +1,5 @@
 /**
- * 通用设置里的开机自启和 Dock 图标（pigcode/pigcode#66）：开关的状态存进 profile，重启后还在。
+ * 通用设置里的开机自启和 Dock 图标（pigcode/monorepo#66）：开关的状态存进 profile，重启后还在。
  * Dock 图标是否真的从 Dock 里消失，Playwright 启动的 Electron 里 app.dock.isVisible() 一直返回 true，
  * 自动化测不出来，发布前手动确认一次。
  */

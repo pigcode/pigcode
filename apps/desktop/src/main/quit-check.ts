@@ -1,5 +1,5 @@
 /**
- * 退出前经 Host 的控制端口问一次还有多少工作（pigcode/pigcode#65）。
+ * 退出前经 Host 的控制端口问一次还有多少工作（pigcode/monorepo#65）。
  * 单独放一个文件，是为了不依赖 Electron 也能测：端口只用到 on/off/postMessage。
  */
 export interface QuitState {

@@ -1,5 +1,5 @@
 /**
- * 退出前查询还有没有在跑的工作：main 在关掉应用之前问一次，有任务时弹确认框（pigcode/pigcode#65）。
+ * 退出前查询还有没有在跑的工作：main 在关掉应用之前问一次，有任务时弹确认框（pigcode/monorepo#65）。
  * 走控制端口，不经过渲染进程——窗口可能已经关掉或连不上。
  */
 import type { Context } from "cordis"

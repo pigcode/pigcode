@@ -15,7 +15,7 @@ type Options = Omit<Partial<import("./updates").UpdateOptions>, "getWindow" | "a
 
 const release = {
   version: "0.2.0",
-  url: "https://github.com/pigcode/frontend/releases/tag/v0.2.0",
+  url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
 }
 
 beforeEach(() => {

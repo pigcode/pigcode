@@ -1,4 +1,4 @@
-/** 退出确认框的文案：有任务在跑、等待审批或启用了定时任务时，退出前问一次（pigcode/pigcode#65）。 */
+/** 退出确认框的文案：有任务在跑、等待审批或启用了定时任务时，退出前问一次（pigcode/monorepo#65）。 */
 export interface QuitLabels {
   title: string
   /** 有这一类工作时追加一行；{count} 换成数量。 */

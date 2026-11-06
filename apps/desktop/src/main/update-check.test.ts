@@ -21,13 +21,13 @@ describe("version comparison", () => {
 describe("latest release", () => {
   const release = {
     tag_name: "v0.2.0",
-    html_url: "https://github.com/pigcode/frontend/releases/tag/v0.2.0",
+    html_url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
   }
 
   it("reads the tag and page", () => {
     expect(readLatestRelease(release)).toEqual({
       version: "0.2.0",
-      url: "https://github.com/pigcode/frontend/releases/tag/v0.2.0",
+      url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
     })
   })
 

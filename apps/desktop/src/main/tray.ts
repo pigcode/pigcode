@@ -1,4 +1,4 @@
-/** 托盘图标与菜单（pigcode/pigcode#64）：关闭窗口后从这里找回窗口或退出。 */
+/** 托盘图标与菜单（pigcode/monorepo#64）：关闭窗口后从这里找回窗口或退出。 */
 import { Menu, Tray, nativeImage, type NativeImage } from "electron"
 import { trayLabels } from "./locale/tray"
 

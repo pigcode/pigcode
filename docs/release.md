@@ -7,7 +7,7 @@
 版本号只有一个来源：`apps/desktop/package.json` 的 `version`。
 
 ```sh
-# 在 pigcode/frontend 的 main 上
+# 在 pigcode/pigcode 的 main 上
 pnpm --dir apps/desktop version patch --no-git-tag-version   # 或 minor / major
 git commit -am "chore: release 0.2.0"
 git push

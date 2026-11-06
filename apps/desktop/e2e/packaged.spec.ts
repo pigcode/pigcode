@@ -1,5 +1,5 @@
 /**
- * 打包后的应用冒烟（pigcode/pigcode#69）：启动安装后的应用，而不是构建产物。
+ * 打包后的应用冒烟（pigcode/monorepo#69）：启动安装后的应用，而不是构建产物。
  * 打包后才会坏的东西只能在这里发现：原生模块、asar、插件安装、License 文件。
  *
  * 跑法：先在 apps/desktop 里 `pnpm package:mac`（其他平台用对应的脚本），再 `pnpm test:packaged`。

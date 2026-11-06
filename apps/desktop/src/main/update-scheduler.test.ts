@@ -15,7 +15,7 @@ function setup(overrides: Partial<UpdateSchedulerDeps> = {}) {
   const logged: string[] = []
   const fetchRelease = vi.fn(async () => ({
     version: "0.2.0",
-    url: "https://github.com/pigcode/frontend/releases/tag/v0.2.0",
+    url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
   }))
   const deps: UpdateSchedulerDeps = {
     apiUrl: () => "http://localhost/latest",
@@ -77,7 +77,7 @@ describe("update scheduler", () => {
     await expect(scheduler.checkNow()).resolves.toEqual({
       status: "update-available",
       version: "0.2.0",
-      url: "https://github.com/pigcode/frontend/releases/tag/v0.2.0",
+      url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
     })
     const current = setup({ currentVersion: () => "0.2.0" })
     await expect(current.scheduler.checkNow()).resolves.toEqual({ status: "up-to-date" })

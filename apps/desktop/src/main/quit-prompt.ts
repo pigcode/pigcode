@@ -1,5 +1,5 @@
 /**
- * 有任务在跑时的退出确认（pigcode/pigcode#65）。窗口隐藏到托盘时先把它叫出来：
+ * 有任务在跑时的退出确认（pigcode/monorepo#65）。窗口隐藏到托盘时先把它叫出来：
  * macOS 上挂在隐藏窗口上的 sheet 不会显示，主进程会一直等一个看不见的答案。
  */
 import { app, dialog, type BrowserWindow } from "electron"

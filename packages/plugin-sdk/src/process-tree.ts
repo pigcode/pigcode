@@ -145,14 +145,14 @@ export interface OwnedProcessTree {
 
 /**
  * 接管用 PROCESS_TREE_SPAWN_OPTIONS 启动的子进程。它崩溃时清理组里剩下的进程；搬到别的 session 里的
- * 工具进程这时已经找不到了，由下次启动时的清理负责（pigcode/pigcode#47）。
+ * 工具进程这时已经找不到了，由下次启动时的清理负责（pigcode/monorepo#47）。
  * 正常退出时不动：Claude Code 每轮结束都会退出，agent 这一轮可能有意留下 dev server。
  * Windows 上它一退出，父子关系就查不到了，没有可清理的。
  */
 export function ownProcessTree(child: ChildProcess): OwnedProcessTree {
   const pid = child.pid
   let termination: Promise<void> | undefined
-  // 记下这棵树的进程和启动时间：Host 如果崩溃，下次启动时靠它收拾（pigcode/pigcode#47）。
+  // 记下这棵树的进程和启动时间：Host 如果崩溃，下次启动时靠它收拾（pigcode/monorepo#47）。
   const intervalMs = processRecordIntervalMs()
   const timer =
     pid !== undefined && intervalMs > 0
