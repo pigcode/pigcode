@@ -57,6 +57,27 @@ function resourcesDirOf(executable: string): string {
   return join(dirname(executable), "resources")
 }
 
+/**
+ * 一个指向源码的插件：manifest 的 `main` 是 .ts。
+ * 安装包里不带编译器，装它必须失败——用它验证「复制到仓库外面」确实把工作区的依赖隔开了。
+ */
+function sourcePlugin(workspace: string): string {
+  const dir = join(workspace, "source-plugin")
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "pigcode-source-plugin",
+      version: "1.0.0",
+      type: "module",
+      main: "./index.ts",
+      pigcode: { apiVersion: 1, kind: "capability", host: "./index.ts" },
+    }),
+  )
+  writeFileSync(join(dir, "index.ts"), "export function apply(): void {}\n")
+  return dir
+}
+
 test("the packaged app still chats, installs a plugin and runs a terminal", async () => {
   const executable = packagedExecutable()
   // 显式跑 test:packaged 时没有安装包就是失败，不能静默跳过；普通 E2E 里跳过它。
@@ -122,6 +143,17 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     await expect(
       page.locator(".ext-item").filter({ hasText: "pigcode-capability-clock" }),
     ).toBeVisible()
+
+    // 安装包里没有 esbuild（ADR 0006），源码插件要被明确拒绝，而不是崩掉或静默失败。
+    // 这一条同时证明「复制到仓库外面」是有效的：在仓库里跑时 Node 会找到工作区的 esbuild，
+    // 源码插件会装成功，这条断言就会失败。安装失败时对话框不会关，所以不能走 installPlugin。
+    const dialog = page.getByRole("dialog", { name: "安装插件" })
+    await page.locator(".page-head").getByRole("button", { name: "安装插件" }).click()
+    await dialog.getByLabel("插件目录或 npm 包").fill(sourcePlugin(workspace))
+    await dialog.getByRole("button", { name: "安装", exact: true }).click()
+    await expect(dialog.getByRole("alert")).toContainText("不带编译器")
+    await page.keyboard.press("Escape")
+    await expect(dialog).toBeHidden()
 
     // 终端：node-pty 在安装包里能加载。
     await page.getByRole("button", { name: "返回应用" }).first().click()
