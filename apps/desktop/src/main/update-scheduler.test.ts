@@ -83,4 +83,32 @@ describe("update scheduler", () => {
     const current = setup({ currentVersion: () => "0.2.0" })
     await expect(current.scheduler.checkNow()).resolves.toEqual({ status: "up-to-date" })
   })
+
+  // macOS 换包要靠 Release 的附件挑 DMG；prompt 只收到 version/url 时会一路退到下载页。
+  it("hands the whole release to the prompt, assets included", async () => {
+    const seen: unknown[] = []
+    const assets = [
+      { name: "Pigcode-0.2.0-arm64.dmg", url: "https://example.invalid/Pigcode-0.2.0-arm64.dmg" },
+    ]
+    const { scheduler } = setup({
+      fetchRelease: async () => ({
+        version: "0.2.0",
+        url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
+        assets,
+      }),
+      prompt: async (release) => {
+        seen.push(release)
+      },
+    })
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(seen).toEqual([
+      {
+        version: "0.2.0",
+        url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
+        assets,
+      },
+    ])
+    scheduler.stop()
+  })
 })

@@ -63,11 +63,21 @@ git commit -m "chore: bump frontend to 0.2.0"
 
 ## 5. 更新怎么工作
 
-Windows 和 AppImage 的安装包会自己更新：发现新版本后后台下载，下载完提示「重启并更新」，不点的话下次退出时安装。macOS（未签名）和 deb 只提示，点开下载页。判断逻辑在 `apps/desktop/src/main/update-mode.ts`。
+三种处理方式，判断逻辑在 `apps/desktop/src/main/update-mode.ts`：
+
+| 平台 | 做法 |
+|---|---|
+| Windows、AppImage | electron-updater 后台下载，提示「重启并更新」，不点的话下次退出时安装 |
+| macOS | 下载对应架构的 DMG，提示「打开安装包」；用户在挂载出来的窗口里把 Pigcode 拖进「应用程序」 |
+| deb 等其余 | 只提示，点开下载页 |
+
+macOS 走不了 electron-updater（包没签名，ADR 0005），但整条升级链路仍然在应用里走完：应用自己按 `process.arch` 从 Release 附件里挑 DMG、下载到 `userData/update-downloads/`，再交给系统打开。用户数据在 `~/Library/Application Support/Pigcode`，换掉 `.app` 不影响会话、设置和插件。下载过的包在下次启动时清掉。
+
+下载或打开失败都会退回下载页，不会让用户卡在一条走不通的路上。这条链路由 `apps/desktop/e2e/packaged-update.spec.ts` 在打包产物上验证。
 
 ## 6. 现在还不能做的事
 
 - 仓库还是私有的（#60），所以 Release 匿名拿不到，自动更新和下载页要等转公开。
 - Actions 额度用完后 CI 不会启动；release workflow 也一样。
-- macOS 的安装包没签名，electron-updater 不能更新它，只提示去下载页（ADR 0005）。
+- macOS 的安装包没签名，electron-updater 不能更新它；改用「下载 DMG 让用户拖进应用程序」（ADR 0005）。
 - Linux 的 deb 不做自动更新（要输入系统密码、每次全量下载），只提示。

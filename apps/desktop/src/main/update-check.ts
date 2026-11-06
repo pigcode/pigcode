@@ -7,6 +7,15 @@ export interface LatestRelease {
   version: string
   /** Release 页面地址，点提示里的按钮打开它。 */
   url: string
+  /** Release 里的安装包；macOS 靠它直接下载 DMG。缺省表示这个来源没有附件。 */
+  assets?: LatestAsset[]
+}
+
+/** Release 里附的一个文件。 */
+export interface LatestAsset {
+  name: string
+  /** 直接下载地址（browser_download_url）。 */
+  url: string
 }
 
 /** 默认的 GitHub API；E2E 用 PIGCODE_UPDATE_API 指向本地服务。 */
@@ -88,7 +97,42 @@ export function readLatestRelease(
   if (!version || typeof url !== "string" || !/^https:\/\//.test(url)) return null
   // 原样用 tag 里的版本号（去掉 v），保留 -beta.n 后缀，界面才能显示完整版本。
   const text = String(record.tag_name).trim().replace(/^v/, "")
-  return { version: text, url }
+  return { version: text, url, assets: readAssets(record.assets) }
+}
+
+/**
+ * 安装包的下载地址。GitHub 给的永远是 https；明文只放行本机回环，
+ * 这样 E2E 能在 localhost 上假造一次下载，而不会让远程的 http 地址进到下载器里。
+ */
+function isAssetUrl(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  if (parsed.protocol === "https:") return true
+  return parsed.protocol === "http:" && isLoopback(parsed.hostname)
+}
+
+function isLoopback(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+}
+
+/** Release 附带的文件；残缺的条目直接跳过，坏数据不影响升级检查本身。 */
+function readAssets(value: unknown): LatestAsset[] {
+  if (!Array.isArray(value)) return []
+  const assets: LatestAsset[] = []
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null) continue
+    const item = entry as Record<string, unknown>
+    const name = item.name
+    const url = item.browser_download_url
+    if (typeof name !== "string" || typeof url !== "string") continue
+    if (!isAssetUrl(url)) continue
+    assets.push({ name, url })
+  }
+  return assets
 }
 
 /**

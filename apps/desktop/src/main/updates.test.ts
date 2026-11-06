@@ -117,4 +117,86 @@ describe("update prompt", () => {
     )
     expect(openExternal).toHaveBeenCalledWith(release.url)
   })
+
+  // macOS 没签名装不了（ADR 0005），但可以下载完整包再交给系统打开。
+  it("downloads the full package on macOS and opens it when the user agrees", async () => {
+    const openPath = vi.fn(async () => "")
+    const downloadPackage = vi.fn(async () => ({ path: "/tmp/Pigcode-0.2.0-arm64.dmg" }))
+    showMessageBox.mockResolvedValue({ response: 0 })
+    await findUpdate({ mode: "replace", isPackaged: true, openPath, downloadPackage })
+
+    expect(downloadPackage).toHaveBeenCalledTimes(1)
+    expect(showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "新版本 0.2.0 已下载",
+        buttons: ["打开安装包", "稍后"],
+      }),
+    )
+    expect(openPath).toHaveBeenCalledWith("/tmp/Pigcode-0.2.0-arm64.dmg")
+    // 走的是换包，不该同时打开下载页。
+    expect(openExternal).not.toHaveBeenCalled()
+  })
+
+  it("does not open the package when the user picks later", async () => {
+    const openPath = vi.fn(async () => "")
+    showMessageBox.mockResolvedValue({ response: 1 })
+    await findUpdate({
+      mode: "replace",
+      isPackaged: true,
+      openPath,
+      downloadPackage: async () => ({ path: "/tmp/Pigcode.dmg" }),
+    })
+    expect(openPath).not.toHaveBeenCalled()
+  })
+
+  it("falls back to the download page when the package cannot be downloaded", async () => {
+    showMessageBox.mockResolvedValue({ response: 0 })
+    await findUpdate({
+      mode: "replace",
+      isPackaged: true,
+      downloadPackage: async () => {
+        throw new Error("HTTP 500")
+      },
+    })
+    expect(showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "有新版本 0.2.0",
+        detail: "下载新版本失败，改为打开下载页。",
+      }),
+    )
+    expect(openExternal).toHaveBeenCalledWith(release.url)
+  })
+
+  it("only replaces when running from a real package", async () => {
+    showMessageBox.mockResolvedValue({ response: 0 })
+    const downloadPackage = vi.fn()
+    await findUpdate({
+      mode: "replace",
+      isPackaged: false,
+      downloadPackage,
+      openPath: async () => "",
+    })
+    expect(downloadPackage).not.toHaveBeenCalled()
+    // 开发运行时退回下载页，什么都不假装能做。
+    expect(openExternal).toHaveBeenCalledWith(release.url)
+  })
+
+  // 下载好了却打不开（DMG 被删除、系统拒绝），用户至少还能自己去 Release 页面拿。
+  it("falls back to the download page when the package cannot be opened", async () => {
+    showMessageBox.mockResolvedValue({ response: 0 })
+    await findUpdate({
+      mode: "replace",
+      isPackaged: true,
+      downloadPackage: async () => ({ path: "/tmp/Pigcode.dmg" }),
+      // shell.openPath 用错误字符串表示失败，而不是抛异常。
+      openPath: async () => "no application can open it",
+    })
+    expect(showMessageBox).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        message: "有新版本 0.2.0",
+        detail: "安装包打不开，改为打开下载页。",
+      }),
+    )
+    expect(openExternal).toHaveBeenCalledWith(release.url)
+  })
 })

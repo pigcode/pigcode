@@ -46,6 +46,8 @@ describe("latest release", () => {
     expect(readLatestRelease(release)).toEqual({
       version: "0.2.0",
       url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
+      // 没有 assets 字段时是空数组：调用方据此退回下载页。
+      assets: [],
     })
   })
 
@@ -53,6 +55,21 @@ describe("latest release", () => {
     expect(readLatestRelease({ ...release, tag_name: "v0.2.0-beta.1" })?.version).toBe(
       "0.2.0-beta.1",
     )
+  })
+
+  // macOS 换包要下载这个地址，所以只收 https 和本机回环。
+  it("keeps only downloadable asset urls", () => {
+    const assets = [
+      { name: "Pigcode-0.2.0-arm64.dmg", browser_download_url: "https://example.test/a.dmg" },
+      { name: "local.dmg", browser_download_url: "http://localhost:1234/a.dmg" },
+      { name: "plain.dmg", browser_download_url: "http://example.test/a.dmg" },
+      { name: "file.dmg", browser_download_url: "file:///etc/passwd" },
+      { name: "junk" },
+    ]
+    expect(readLatestRelease({ ...release, assets })?.assets).toEqual([
+      { name: "Pigcode-0.2.0-arm64.dmg", url: "https://example.test/a.dmg" },
+      { name: "local.dmg", url: "http://localhost:1234/a.dmg" },
+    ])
   })
 
   it("always ignores drafts and broken responses", () => {
@@ -119,6 +136,7 @@ describe("fetching", () => {
     expect(await fetchLatestRelease("http://localhost/releases", ok)).toEqual({
       version: "0.2.0",
       url: release.html_url,
+      assets: [],
     })
   })
 })

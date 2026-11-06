@@ -4,8 +4,10 @@
  */
 import { app, dialog, shell, type BrowserWindow } from "electron"
 import { RELEASES_API, fetchLatestRelease, type LatestRelease } from "./update-check"
-import { canInstallUpdates, updateMode, type UpdateMode } from "./update-mode"
+import { downloadPackage, pickDmg, type DownloadedPackage } from "./update-download"
+import { canInstallUpdates, canReplaceApp, updateMode, type UpdateMode } from "./update-mode"
 import { createUpdateScheduler } from "./update-scheduler"
+import { settleOpenPath } from "./open-in"
 import { updateLabels } from "./locale/update"
 
 /** 设置页手动检查的结果。 */
@@ -41,6 +43,12 @@ export interface UpdateOptions {
   install?: () => void
   /** 测试用：替换查询最新版本。 */
   fetchRelease?: typeof fetchLatestRelease
+  /** 测试用：替换「下载完整包」。 */
+  downloadPackage?: (release: LatestRelease) => Promise<DownloadedPackage>
+  /** 测试用：替换架构与打开安装包，避免真的弹出 Finder。 */
+  arch?: string
+  /** 打开安装包；返回错误描述，空串表示成功（和 shell.openPath 一致）。 */
+  openPath?: (path: string) => Promise<string>
 }
 
 /** 等一句确认：buttons 是 [确定, 取消]，返回是否选了第一个。 */
@@ -60,14 +68,18 @@ async function ask(options: {
 
 export function createUpdates(options: UpdateOptions): Updates {
   const mode = options.mode ?? updateMode(process.platform, process.env)
-  const canInstall = canInstallUpdates(mode, options.isPackaged ?? app.isPackaged)
+  const packaged = options.isPackaged ?? app.isPackaged
+  const canInstall = canInstallUpdates(mode, packaged)
+  const canReplace = canReplaceApp(mode, packaged)
   const download = options.download ?? downloadWithUpdater
   const install = options.install ?? installWithUpdater
+  /** macOS 上下载好的安装包；用户点了「打开安装包」才真的打开。 */
+  let downloaded: DownloadedPackage | undefined
   /** 更新已经下载好，下次退出时安装（electron-updater 的 autoInstallOnAppQuit）。 */
   let ready = false
 
-  /** 只提示：打开下载页。 */
-  const showDownloadPage = async (release: LatestRelease): Promise<void> => {
+  /** 只提示：打开下载页。detail 用来解释为什么没走自动流程。 */
+  const showDownloadPage = async (release: LatestRelease, detail?: string): Promise<void> => {
     const labels = updateLabels(app.getLocale())
     const open = await ask({
       getWindow: options.getWindow,
@@ -78,7 +90,7 @@ export function createUpdates(options: UpdateOptions): Updates {
         cancelId: 1,
         noLink: true,
         message: labels.title.replace("{version}", release.version),
-        detail: labels.detail,
+        detail: detail ?? labels.detail,
       },
     })
     if (open) await shell.openExternal(release.url)
@@ -102,6 +114,50 @@ export function createUpdates(options: UpdateOptions): Updates {
     if (restart) (options.requestRestart ?? (() => app.quit()))()
   }
 
+  /**
+   * macOS：下载完整包，然后打开它让用户把应用拖进「应用程序」。
+   * 没签名所以装不了（ADR 0005），但这样整条升级链路仍然在应用里走完，
+   * 用户不需要自己去 Release 页面找对应架构的包。
+   */
+  const replaceInPlace = async (release: LatestRelease): Promise<void> => {
+    const labels = updateLabels(app.getLocale())
+    const fetchPackage =
+      options.downloadPackage ??
+      ((found: LatestRelease): Promise<DownloadedPackage> => {
+        const asset = pickDmg(found.assets, options.arch ?? process.arch)
+        if (!asset) throw new Error("no dmg asset for this architecture")
+        return downloadPackage(asset)
+      })
+    try {
+      downloaded = await fetchPackage(release)
+    } catch (error) {
+      console.warn("update download failed", error instanceof Error ? error.message : error)
+      await showDownloadPage(release, labels.downloadFailed)
+      return
+    }
+    const open = await ask({
+      getWindow: options.getWindow,
+      message: {
+        type: "info",
+        buttons: [labels.replace, labels.later],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+        message: labels.replaceTitle.replace("{version}", release.version),
+        detail: labels.replaceDetail,
+      },
+    })
+    if (!open) return
+    const packagePath = downloaded.path
+    // shell.openPath 返回错误字符串而不是抛异常；它还可能一直不返回（Linux 会话总线不可用）。
+    // 换包这条路径只需要把文件交给系统，等不到就当作已经交出去了。
+    const result = options.openPath
+      ? await options.openPath(packagePath)
+      : await settleOpenPath(shell.openPath(packagePath))
+    // 打不开就退回下载页：用户至少还能自己去 Release 页面拿。
+    if (result) await showDownloadPage(release, labels.openFailed)
+  }
+
   const prompt = async (release: LatestRelease): Promise<void> => {
     if (canInstall) {
       // 后台下载好，下次退出时安装；下载失败就退回下载页，别让用户没有出路。
@@ -111,6 +167,10 @@ export function createUpdates(options: UpdateOptions): Updates {
         return
       }
       console.warn("update download failed")
+    }
+    if (canReplace) {
+      await replaceInPlace(release)
+      return
     }
     await showDownloadPage(release)
   }

@@ -8,6 +8,14 @@ export interface UpdateLabels {
   readyTitle: string
   readyDetail: string
   restart: string
+  /** macOS：完整包下载好了，打开它让用户把应用拖进「应用程序」。 */
+  replaceTitle: string
+  replaceDetail: string
+  replace: string
+  /** 下载完整包失败时补在下载页提示里的一句解释。 */
+  downloadFailed: string
+  /** 安装包下载好了但打不开。 */
+  openFailed: string
 }
 
 const ZH_CN: UpdateLabels = {
@@ -18,6 +26,12 @@ const ZH_CN: UpdateLabels = {
   readyTitle: "新版本 {version} 已下载",
   readyDetail: "重启 Pigcode 完成安装。正在运行的任务会先按退出流程确认。",
   restart: "重启并更新",
+  replaceTitle: "新版本 {version} 已下载",
+  replaceDetail:
+    "打开安装包，把 Pigcode 拖进「应用程序」替换旧版本。你的会话、设置和插件都在，不会丢。",
+  replace: "打开安装包",
+  downloadFailed: "下载新版本失败，改为打开下载页。",
+  openFailed: "安装包打不开，改为打开下载页。",
 }
 
 const EN_US: UpdateLabels = {
@@ -28,6 +42,12 @@ const EN_US: UpdateLabels = {
   readyTitle: "Version {version} is ready to install",
   readyDetail: "Restart Pigcode to finish. Running tasks are confirmed before it quits.",
   restart: "Restart and update",
+  replaceTitle: "Version {version} is downloaded",
+  replaceDetail:
+    "Open the package and drag Pigcode into Applications to replace the old one. Your sessions, settings and plugins stay.",
+  replace: "Open the package",
+  downloadFailed: "The download failed, opening the download page instead.",
+  openFailed: "The package could not be opened, opening the download page instead.",
 }
 
 export function updateLabels(locale: string): UpdateLabels {

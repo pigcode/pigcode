@@ -28,6 +28,7 @@ import { createTray } from "./tray"
 import { trayLabels } from "./locale/tray"
 import { confirmQuit } from "./quit-prompt"
 import { askQuitState, hasPendingWork } from "./quit-check"
+import { clearDownloads } from "./update-download"
 import { createUpdates } from "./updates"
 import { decideRestart, readHostFatal } from "./host-restart"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
@@ -397,6 +398,10 @@ export async function createWindow(): Promise<BrowserWindow> {
   return window
 }
 
+// 默认应用名是 package.json 的 name（@pigcode/desktop），userData 因此带 scope；productName 不管这个。
+// 统一成 Pigcode，必须在 ready 之前调用——路径在第一次取用时就算好了。
+app.setName("Pigcode")
+
 /**
  * 默认 profile 只允许一个实例：两个 Host 同时读写一份数据库与 settings.json 会互相覆盖。
  * 再次启动时把已有窗口带到前台后退出。显式指定 PIGCODE_PROFILE_DIR（E2E、并排的多个 profile）不加锁。
@@ -414,6 +419,8 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
     await shellEnv
     applyPreferences(readPreferences(preferencesPath()))
+    // 上一次下载的安装包没用了（版本已经换了，或者用户没点「打开安装包」）。
+    void clearDownloads().catch(() => undefined)
     updates.start()
     host = startHost()
     mainWindow = await openMainWindow()

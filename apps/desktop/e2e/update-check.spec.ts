@@ -6,7 +6,6 @@ import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { launchEnv, launchArgs } from "./projects"
 
-/** 一个只回答 GitHub release 形状的本地服务。 */
 /**
  * 假的 Release 列表接口。返回数组：`/releases/latest` 按 GitHub 的定义永远不返回
  * 预发布，所以客户端读的是列表，挑哪一条由「接收预发布版本」的偏好决定。
@@ -24,6 +23,13 @@ async function releaseServer(tag: string | null): Promise<{ url: string; server:
           html_url: `https://github.com/pigcode/pigcode/releases/tag/${tag}`,
           draft: false,
           prerelease: false,
+          // macOS 走「下载完整包」时要用它挑这个架构的 DMG。
+          assets: [
+            {
+              name: `Pigcode-${tag.replace(/^v/, "")}-arm64.dmg`,
+              browser_download_url: `https://example.invalid/Pigcode-${tag.replace(/^v/, "")}-arm64.dmg`,
+            },
+          ],
         },
       ]),
     )

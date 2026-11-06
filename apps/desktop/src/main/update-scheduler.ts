@@ -49,26 +49,34 @@ export function createUpdateScheduler(deps: UpdateSchedulerDeps): UpdateSchedule
   /** 这次运行已经提示过的版本。 */
   let prompted: string | undefined
 
-  const checkNow = async (): Promise<UpdateResult> => {
+  /** 查一次并判断有没有新版本。返回完整的 Release，附件要留给调用方挑安装包。 */
+  const findUpdate = async (): Promise<LatestRelease | null | "error"> => {
     const release = await fetchRelease(deps.apiUrl(), undefined, undefined, {
       allowPrerelease: deps.allowPrerelease?.() ?? false,
     })
     // 取不到（断网、仓库还私有）算失败；不影响别的功能。
-    if (!release) return { status: "error" }
-    if (!isNewer(release.version, deps.currentVersion())) return { status: "up-to-date" }
-    return { status: "update-available", version: release.version, url: release.url }
+    if (!release) return "error"
+    return isNewer(release.version, deps.currentVersion()) ? release : null
+  }
+
+  const checkNow = async (): Promise<UpdateResult> => {
+    const found = await findUpdate()
+    if (found === "error") return { status: "error" }
+    if (found === null) return { status: "up-to-date" }
+    return { status: "update-available", version: found.version, url: found.url }
   }
 
   const run = async (): Promise<void> => {
-    const result = await checkNow()
-    if (result.status === "error") {
+    const found = await findUpdate()
+    if (found === "error") {
       deps.log("update check failed")
       return
     }
-    if (result.status !== "update-available" || !result.url || !result.version) return
-    if (result.version === prompted) return
-    prompted = result.version
-    await deps.prompt({ version: result.version, url: result.url })
+    if (found === null) return
+    if (found.version === prompted) return
+    prompted = found.version
+    // 整个 Release 传下去：macOS 换包要靠 assets 挑 DMG，不能只剩 version 和 url。
+    await deps.prompt(found)
   }
 
   const stop = (): void => {
