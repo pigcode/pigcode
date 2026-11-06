@@ -18,6 +18,8 @@ export interface UpdateSchedulerDeps {
   enabled: () => boolean
   /** 用户偏好：自动检查是开还是关。 */
   autoCheck: () => boolean
+  /** 用户偏好：接不接预发布版本。缺省按不接处理。 */
+  allowPrerelease?: () => boolean
   /** 当前版本，用来比较。 */
   currentVersion: () => string
   /** 发现新版本时怎么提示；调用方只负责展示。 */
@@ -48,7 +50,9 @@ export function createUpdateScheduler(deps: UpdateSchedulerDeps): UpdateSchedule
   let prompted: string | undefined
 
   const checkNow = async (): Promise<UpdateResult> => {
-    const release = await fetchRelease(deps.apiUrl())
+    const release = await fetchRelease(deps.apiUrl(), undefined, undefined, {
+      allowPrerelease: deps.allowPrerelease?.() ?? false,
+    })
     // 取不到（断网、仓库还私有）算失败；不影响别的功能。
     if (!release) return { status: "error" }
     if (!isNewer(release.version, deps.currentVersion())) return { status: "up-to-date" }

@@ -21,6 +21,7 @@ function setup(overrides: Partial<UpdateSchedulerDeps> = {}) {
     apiUrl: () => "http://localhost/latest",
     enabled: () => true,
     autoCheck: () => true,
+    allowPrerelease: () => false,
     currentVersion: () => "0.1.0",
     prompt: async (release) => {
       prompted.push(release.version)

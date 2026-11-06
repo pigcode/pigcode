@@ -1,26 +1,36 @@
 /** 检查更新（pigcode/monorepo#67）：手动检查显示结果，打开下载页走系统浏览器；自动检查的开关存得住。 */
+import { readFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
+import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { launchEnv, launchArgs } from "./projects"
 
 /** 一个只回答 GitHub release 形状的本地服务。 */
+/**
+ * 假的 Release 列表接口。返回数组：`/releases/latest` 按 GitHub 的定义永远不返回
+ * 预发布，所以客户端读的是列表，挑哪一条由「接收预发布版本」的偏好决定。
+ */
 async function releaseServer(tag: string | null): Promise<{ url: string; server: Server }> {
   const server = createServer((request, response) => {
-    if (request.url !== "/latest" || tag === null) {
+    if (request.url !== "/releases" || tag === null) {
       response.writeHead(404).end("not found")
       return
     }
     response.writeHead(200, { "content-type": "application/json" }).end(
-      JSON.stringify({
-        tag_name: tag,
-        html_url: `https://github.com/pigcode/pigcode/releases/tag/${tag}`,
-      }),
+      JSON.stringify([
+        {
+          tag_name: tag,
+          html_url: `https://github.com/pigcode/pigcode/releases/tag/${tag}`,
+          draft: false,
+          prerelease: false,
+        },
+      ]),
     )
   })
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
   const { port } = server.address() as AddressInfo
-  return { url: `http://127.0.0.1:${String(port)}/latest`, server }
+  return { url: `http://127.0.0.1:${String(port)}/releases`, server }
 }
 
 test("a manual check shows the new version and can open the download page", async () => {
@@ -47,6 +57,18 @@ test("a manual check shows the new version and can open the download page", asyn
       "aria-checked",
       "true",
     )
+    // 接收预发布默认关：正式版用户不该被推到 beta 上。
+    const prerelease = page.getByRole("switch", { name: "接收预发布版本" })
+    await expect(prerelease).toHaveAttribute("aria-checked", "false")
+    // 开关存进 profile，不是本机的 userData。
+    await prerelease.click()
+    await expect(prerelease).toHaveAttribute("aria-checked", "true")
+    // 从测试进程读 profile 里的 preferences.json（主进程 evaluate 里没有 require）。
+    const stored = (): Record<string, unknown> =>
+      JSON.parse(
+        readFileSync(join(process.env.PIGCODE_PROFILE_DIR ?? "", "preferences.json"), "utf8"),
+      )
+    await expect.poll(stored).toMatchObject({ prereleaseUpdates: true })
 
     await page.getByRole("button", { name: "立即检查" }).click()
     await expect(page.getByText("有新版本 9.9.9")).toBeVisible({ timeout: 10_000 })

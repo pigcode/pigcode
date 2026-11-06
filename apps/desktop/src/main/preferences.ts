@@ -12,16 +12,22 @@ export interface Preferences {
   showInDock: boolean
   /** 自动检查更新。默认开；关掉以后还能在设置页手动检查。 */
   autoCheckUpdates: boolean
+  /**
+   * 接收预发布版本（x.y.z-beta.n）。默认关：beta 是给试用新功能的人准备的，
+   * 正式版用户不该被推过去。开着时既能收到 beta 也能收到新的正式版。
+   */
+  prereleaseUpdates: boolean
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
   launchAtLogin: false,
   showInDock: true,
   autoCheckUpdates: true,
+  prereleaseUpdates: false,
 }
 
 /** 可以改的键；页面传其他键时忽略。 */
-const KEYS = ["launchAtLogin", "showInDock", "autoCheckUpdates"] as const
+const KEYS = ["launchAtLogin", "showInDock", "autoCheckUpdates", "prereleaseUpdates"] as const
 export type PreferenceKey = (typeof KEYS)[number]
 
 export function isPreferenceKey(value: unknown): value is PreferenceKey {

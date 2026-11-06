@@ -107,6 +107,9 @@ export const zhCN = {
   "settings.general.updates": "更新",
   "settings.general.autoUpdate": "自动检查更新",
   "settings.general.autoUpdate.description": "启动后查一次，之后每 6 小时查一次",
+  "settings.general.prereleaseUpdates": "接收预发布版本",
+  "settings.general.prereleaseUpdates.description":
+    "开启后能收到 x.y.z-beta.n 这样的测试版本。正式版发布时会自动回到正式线。",
   "settings.general.checkUpdates": "检查更新",
   "settings.general.checkUpdates.description": "当前版本 {version}",
   "settings.general.checkNow": "立即检查",

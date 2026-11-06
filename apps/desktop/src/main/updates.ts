@@ -3,7 +3,7 @@
  * 这里负责「发现新版本之后做什么」。下载页和更新源都是 GitHub Release（ADR 0010）。
  */
 import { app, dialog, shell, type BrowserWindow } from "electron"
-import { LATEST_RELEASE_API, fetchLatestRelease, type LatestRelease } from "./update-check"
+import { RELEASES_API, fetchLatestRelease, type LatestRelease } from "./update-check"
 import { canInstallUpdates, updateMode, type UpdateMode } from "./update-mode"
 import { createUpdateScheduler } from "./update-scheduler"
 import { updateLabels } from "./locale/update"
@@ -27,6 +27,8 @@ export interface Updates {
 export interface UpdateOptions {
   getWindow: () => BrowserWindow | undefined
   autoCheck: () => boolean
+  /** 用户偏好：接不接预发布版本。缺省按不接处理，测试里不用每次都写。 */
+  allowPrerelease?: () => boolean
   /** Windows 和 AppImage 自动下载并安装；macOS 和 deb 只提示。 */
   mode?: UpdateMode
   /** 开发运行时 electron-updater 读不到 app-update.yml，只提示。 */
@@ -114,10 +116,11 @@ export function createUpdates(options: UpdateOptions): Updates {
   }
 
   const scheduler = createUpdateScheduler({
-    apiUrl: () => process.env.PIGCODE_UPDATE_API ?? LATEST_RELEASE_API,
+    apiUrl: () => process.env.PIGCODE_UPDATE_API ?? RELEASES_API,
     // E2E 用 PIGCODE_UPDATE_CHECK=0 整个关掉。
     enabled: () => process.env.PIGCODE_UPDATE_CHECK !== "0",
     autoCheck: options.autoCheck,
+    allowPrerelease: options.allowPrerelease ?? (() => false),
     currentVersion: () => app.getVersion(),
     prompt,
     log: (message) => console.warn(message),

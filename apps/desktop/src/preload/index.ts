@@ -8,12 +8,17 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     launchAtLogin: boolean
     showInDock: boolean
     autoCheckUpdates: boolean
+    prereleaseUpdates: boolean
   }> => ipcRenderer.invoke("pigcode:preferences-get"),
   setPreference: (
-    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates",
+    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates" | "prereleaseUpdates",
     value: boolean,
-  ): Promise<{ launchAtLogin: boolean; showInDock: boolean; autoCheckUpdates: boolean }> =>
-    ipcRenderer.invoke("pigcode:preferences-set", key, value),
+  ): Promise<{
+    launchAtLogin: boolean
+    showInDock: boolean
+    autoCheckUpdates: boolean
+    prereleaseUpdates: boolean
+  }> => ipcRenderer.invoke("pigcode:preferences-set", key, value),
   checkForUpdates: (): Promise<{
     status: "up-to-date" | "update-available" | "error"
     version?: string

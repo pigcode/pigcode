@@ -79,6 +79,7 @@ let preferences: Preferences = {
   launchAtLogin: false,
   showInDock: true,
   autoCheckUpdates: true,
+  prereleaseUpdates: false,
 }
 /** Host 的控制端口：退出前经它查询还有多少工作。Host 退出后置空。 */
 let hostControlPort: MessagePortMain | undefined
@@ -118,6 +119,7 @@ function applyPreferences(next: Preferences): void {
 const updates = createUpdates({
   getWindow: () => mainWindow,
   autoCheck: () => preferences.autoCheckUpdates,
+  allowPrerelease: () => preferences.prereleaseUpdates,
 })
 
 function profileDir(): string {
@@ -193,7 +195,8 @@ function registerNativeBridge(): void {
     writePreferences(preferencesPath(), next)
     applyPreferences(next)
     // 自动检查的开关改了，定时器跟着起停。
-    if (key === "autoCheckUpdates") updates.start()
+    // 这两个都影响「该不该把一个版本当成新版本」，改了要重新排一次检查。
+    if (key === "autoCheckUpdates" || key === "prereleaseUpdates") updates.start()
     return next
   })
   ipcMain.handle("pigcode:unsaved-labels", (_event, value: unknown) => {

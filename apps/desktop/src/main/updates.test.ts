@@ -33,6 +33,7 @@ async function findUpdate(options: Options): Promise<ReturnType<typeof createUpd
   const updates = createUpdates({
     getWindow: () => undefined,
     autoCheck: () => true,
+    allowPrerelease: () => false,
     fetchRelease: async () => release,
     ...options,
   })

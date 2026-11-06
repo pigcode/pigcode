@@ -108,6 +108,9 @@ export const enUS = {
   "settings.general.updates": "Updates",
   "settings.general.autoUpdate": "Check for updates automatically",
   "settings.general.autoUpdate.description": "Checks once at launch, then every 6 hours",
+  "settings.general.prereleaseUpdates": "Receive prerelease versions",
+  "settings.general.prereleaseUpdates.description":
+    "Get x.y.z-beta.n builds. You go back to the stable line as soon as a release ships.",
   "settings.general.checkUpdates": "Check for updates",
   "settings.general.checkUpdates.description": "Current version {version}",
   "settings.general.checkNow": "Check now",

@@ -17,6 +17,7 @@ interface Preferences {
   launchAtLogin: boolean
   showInDock: boolean
   autoCheckUpdates: boolean
+  prereleaseUpdates: boolean
 }
 
 /** 手动检查更新的结果，和主进程的 UpdateResult 一致。 */
@@ -57,6 +58,7 @@ function usePreferences(): [Preferences, (key: keyof Preferences, value: boolean
     launchAtLogin: false,
     showInDock: true,
     autoCheckUpdates: true,
+    prereleaseUpdates: false,
   })
   // 用户已经动过开关时，晚到的读取结果不能把刚改的值盖回去。
   const changed = useRef(false)
@@ -156,6 +158,16 @@ export function GeneralPage() {
             checked={prefs.autoCheckUpdates}
             onCheckedChange={(value) => setPreference("autoCheckUpdates", value)}
             aria-label={t("settings.general.autoUpdate")}
+          />
+        </SettingRow>
+        <SettingRow
+          title={t("settings.general.prereleaseUpdates")}
+          description={t("settings.general.prereleaseUpdates.description")}
+        >
+          <Switch
+            checked={prefs.prereleaseUpdates}
+            onCheckedChange={(value) => setPreference("prereleaseUpdates", value)}
+            aria-label={t("settings.general.prereleaseUpdates")}
           />
         </SettingRow>
         <SettingRow
