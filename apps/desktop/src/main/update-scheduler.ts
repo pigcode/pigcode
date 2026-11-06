@@ -25,13 +25,11 @@ export interface UpdateSchedulerDeps {
   /** 自动检查失败只写日志，不打扰用户。 */
   log: (message: string) => void
   fetchRelease?: typeof fetchLatestRelease
-  /** 启动后第一次检查的延迟；E2E 调小，免得测试等 5 秒还可能等不到。 */
-  startupDelayMs?: number
 }
 
 export interface UpdateScheduler {
   /** 按当前偏好起停定时器；偏好变了就再调一次。 */
-  start(delayMs?: number): void
+  start(): void
   stop(): void
   /** 手动检查：调用方负责显示结果。 */
   checkNow(): Promise<UpdateResult>
@@ -77,10 +75,10 @@ export function createUpdateScheduler(deps: UpdateSchedulerDeps): UpdateSchedule
   }
 
   return {
-    start(delayMs?: number) {
+    start() {
       stop()
       if (!deps.enabled() || !deps.autoCheck()) return
-      startup = setTimeout(() => void run(), delayMs ?? deps.startupDelayMs ?? STARTUP_DELAY_MS)
+      startup = setTimeout(() => void run(), STARTUP_DELAY_MS)
       timer = setInterval(() => void run(), INTERVAL_MS)
     },
     stop,

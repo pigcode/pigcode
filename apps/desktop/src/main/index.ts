@@ -186,13 +186,6 @@ function registerNativeBridge(): void {
     )
   })
   ipcMain.handle("pigcode:check-for-updates", () => updates.checkNow())
-  // E2E 专用：等对话框的桩装好之后再触发一次后台检查，不依赖启动计时器。
-  if (process.env.PIGCODE_E2E === "1") {
-    ipcMain.handle("pigcode:test-start-update-check", () => {
-      updates.start(0)
-      return { autoCheck: preferences.autoCheckUpdates }
-    })
-  }
   ipcMain.handle("pigcode:preferences-get", () => preferences)
   ipcMain.handle("pigcode:preferences-set", (_event, key: unknown, value: unknown) => {
     const next = withPreference(preferences, key, value)
