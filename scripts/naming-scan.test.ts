@@ -135,6 +135,12 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
     pattern: /\b(?:capabilityEntry|capabilityItem|capabilityPlugin|installCapabilitySample)\b/g,
     reason: "指 Capability 插件的标识符：脚手架的入口模板、E2E 与样例测试里的变量",
   },
+  {
+    pattern: /toContain\("provider: github"\)/g,
+    file: "apps/desktop/e2e/packaged.spec.ts",
+    reason:
+      "检查安装包里的 app-update.yml；键名和 electron-builder.yml 的 publish 配置是同一个外部格式，不是产品术语",
+  },
 ]
 
 interface Finding {
