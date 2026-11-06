@@ -280,6 +280,7 @@ export const enUS = {
   "workbench.createCheckpoint": "Create checkpoint",
   "workbench.terminalOpening": "Opening terminal…",
   "workbench.diffBase": "Diff base",
+  "workbench.diffBaseDefault": "Default (latest baseline)",
   "workbench.diff.loading": "Loading diff…",
   "workbench.diff.empty": "No changes",
   "workbench.diff.emptyHint": "Edit files and the diff against the base version shows up here.",

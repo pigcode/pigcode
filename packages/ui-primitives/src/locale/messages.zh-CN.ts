@@ -274,6 +274,7 @@ export const zhCN = {
   "workbench.createCheckpoint": "创建检查点",
   "workbench.terminalOpening": "正在打开终端…",
   "workbench.diffBase": "Diff 基准",
+  "workbench.diffBaseDefault": "默认（最近的基线）",
   "workbench.diff.loading": "正在读取 diff…",
   "workbench.diff.empty": "没有改动",
   "workbench.diff.emptyHint": "修改文件后，这里会显示和基准版本的差异。",

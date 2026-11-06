@@ -72,6 +72,28 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await expect(diff.locator(".diff-line-remove").first()).toContainText("one")
   await expect(diff.locator(".diff-line-add").first()).toContainText("two")
 
+  // 按 run 选基准：这个会话只有手动快照、没有跑过 agent，所以默认基准是 HEAD
+  // （和工作区比）。选一个快照作基准，看的就是「那个快照之后改了什么」。
+  const basePicker = page.locator(".workbench-diff-base-select")
+  await expect(basePicker).toContainText("HEAD")
+  await basePicker.click()
+  // 列表按时间倒序，最新的手动快照在最上面；跳过第一项「默认」。
+  const snapshotOptions = page.getByRole("option").filter({ hasText: "手动" })
+  await expect(snapshotOptions).toHaveCount(2)
+  await snapshotOptions.first().click()
+  await expect(basePicker).toContainText("手动")
+  // 拿最新的快照作基准，它之后没有改动：diff 是空的。
+  await expect(diff.locator(".diff-file")).toHaveCount(0)
+  // 拿第一个（改动前的）快照作基准，才看得到 a.txt 的改动。
+  await basePicker.click()
+  await snapshotOptions.last().click()
+  await expect(diff.locator(".diff-line-remove").first()).toContainText("one")
+  await expect(diff.locator(".diff-line-add").first()).toContainText("two")
+  // 切回默认基准。没有这个选项的话，选过一次快照就再也回不到「和工作区比」。
+  await basePicker.click()
+  await page.getByRole("option", { name: /默认/ }).click()
+  await expect(basePicker).toContainText("HEAD")
+
   await page.getByRole("tab", { name: "检查点" }).click()
   // 列表按时间从早到晚，第一个是改动前的快照。
   await page.getByRole("button", { name: "恢复" }).first().click()

@@ -126,6 +126,11 @@ export function DiffPane() {
               <Select.Portal>
                 <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
                   <Select.Popup>
+                    {/* 默认基准是最近一次 run 的 baseline，不是固定值；给它一个选项，
+                        否则选过一次快照之后就再也回不去了。 */}
+                    <Select.Item value="">
+                      <Select.ItemText>{t("workbench.diffBaseDefault")}</Select.ItemText>
+                    </Select.Item>
                     {[...diff.committed].reverse().map((checkpoint) => (
                       <Select.Item key={checkpoint.id} value={checkpoint.commitSha ?? ""}>
                         <Select.ItemText>{checkpointLabel(checkpoint, locale)}</Select.ItemText>
