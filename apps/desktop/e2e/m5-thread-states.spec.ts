@@ -21,18 +21,24 @@ async function newThread(page: Page, project: string): Promise<void> {
 }
 
 test("a thread beyond the run limit is queued in the sidebar", async () => {
-  // 并发压到 1：第二个线程的 run 只能排队，直到第一个结束。
+  // 并发压到 1。第一个 run 用 fake agent 的 `long`：它一直跑到被中断，不会因为
+  // 「新建线程 + 输入 + 发送」花的时间比固定延时还长而在第二个 run 之前结束。
+  // 用固定延时（原来的 1500ms）时，慢一点的 CI 上窗口会过期，第二个 run 就不再排队。
   const { app, page } = await openThread("thread-queued", {
-    PIGCODE_FAKE_DELAY_MS: "1500",
     PIGCODE_MAX_CONCURRENT_RUNS: "1",
   })
   const row = rows(page, "pigcode-e2e-thread-queued")
 
-  await send(page, "first run")
-  await expect(row("first run")).toHaveAttribute("data-status", "running")
+  await send(page, "long")
+  await expect(row("long")).toHaveAttribute("data-status", "running")
   await newThread(page, "pigcode-e2e-thread-queued")
   await send(page, "second run")
   await expect(row("second run")).toHaveAttribute("data-status", "queued")
+
+  // 中断第一个，排队的那个接着跑完。
+  await row("long").click()
+  await expect(page.getByRole("button", { name: "中断" })).toBeVisible()
+  await page.getByRole("button", { name: "中断" }).click()
   await expect(row("second run")).toHaveAttribute("data-status", "completed", { timeout: 20_000 })
   await app.close()
 })
