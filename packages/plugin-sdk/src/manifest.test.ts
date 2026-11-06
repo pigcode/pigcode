@@ -1,4 +1,5 @@
 /** 验证 manifest 结构与 apiVersion/engines 兼容性。 */
+import semver from "semver"
 import { describe, expect, it } from "vitest"
 import {
   checkPluginCompatibility,
@@ -180,12 +181,24 @@ describe("plugin compatibility", () => {
   const compatibleBase = {
     name: "demo",
     version: "1.0.0",
-    engines: { pigcode: ">=0.1.0" },
+    // `-0` 是 semver 的惯用写法：让同号的预发布版本也算满足。
+    engines: { pigcode: ">=0.1.0-0" },
     pigcode: { apiVersion: 1 as const, kind: "ui" as const, client: "./client.js" },
   }
 
   it("accepts the current API and engine range", () => {
     expect(checkPluginCompatibility(pluginManifestSchema.parse(compatibleBase))).toBeNull()
+  })
+
+  it("accepts a prerelease Host when the range allows prereleases", () => {
+    const manifest = pluginManifestSchema.parse(compatibleBase)
+    // 内置插件就是用 `>=0.1.0-0` 声明的；预发布版本来能加载它们（monorepo#72）。
+    expect(semver.satisfies("0.1.0-beta.1", manifest.engines!.pigcode!)).toBe(true)
+  })
+
+  it("rejects a prerelease Host when the range does not allow prereleases", () => {
+    // `>=0.1.0` 不含同号的预发布：0.1.0-beta.1 < 0.1.0。这是 semver 的规定，不是 bug。
+    expect(semver.satisfies("0.1.0-beta.1", ">=0.1.0")).toBe(false)
   })
 
   it("rejects an unsupported engine range", () => {

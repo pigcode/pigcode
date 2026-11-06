@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "pigcode": ">=0.1.0"
+    "pigcode": ">=0.1.0-0"
   },
   "pigcode": {
     "apiVersion": 1,
