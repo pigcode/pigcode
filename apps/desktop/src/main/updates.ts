@@ -71,7 +71,10 @@ export function createUpdates(options: UpdateOptions): Updates {
   const packaged = options.isPackaged ?? app.isPackaged
   const canInstall = canInstallUpdates(mode, packaged)
   const canReplace = canReplaceApp(mode, packaged)
-  const download = options.download ?? downloadWithUpdater
+  // electron-updater 自己查一次最新版本，得知道用户接不接预发布，否则它挑出来的
+  // 可能和调度器报的不是同一个版本（甚至没有）。
+  const download =
+    options.download ?? (() => downloadWithUpdater(options.allowPrerelease?.() ?? false))
   const install = options.install ?? installWithUpdater
   /** macOS 上下载好的安装包；用户点了「打开安装包」才真的打开。 */
   let downloaded: DownloadedPackage | undefined
@@ -212,10 +215,12 @@ function installWithUpdater(): void {
 }
 
 /** 下载更新。electron-updater 按 electron-builder 写进安装包的 app-update.yml 找源。 */
-async function downloadWithUpdater(): Promise<boolean> {
+async function downloadWithUpdater(allowPrerelease: boolean): Promise<boolean> {
   try {
     const { autoUpdater } = await import("electron-updater")
     autoUpdater.autoDownload = false
+    // 和调度器用同一个偏好：勾了「接收预发布版本」就要能装到预发布版。
+    autoUpdater.allowPrerelease = allowPrerelease
     // 下载完成后用户没点「重启并更新」也在退出时装上。
     autoUpdater.autoInstallOnAppQuit = true
     const result = await autoUpdater.checkForUpdates()

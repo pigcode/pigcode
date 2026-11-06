@@ -4,11 +4,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const showMessageBox = vi.fn()
 const openExternal = vi.fn()
 
+// downloadWithUpdater 在运行时才 import electron-updater；这里换成可观察的替身，
+// 用来确认「接收预发布版本」真的传进去了。
+const { autoUpdater } = vi.hoisted(() => ({
+  autoUpdater: {
+    autoDownload: true,
+    autoInstallOnAppQuit: false,
+    allowPrerelease: false,
+    checkForUpdates: vi.fn(async () => ({})),
+    downloadUpdate: vi.fn(async () => undefined),
+    quitAndInstall: vi.fn(),
+  },
+}))
+
 vi.mock("electron", () => ({
   app: { getLocale: () => "zh-CN", getVersion: () => "0.1.0", isPackaged: true },
   dialog: { showMessageBox },
   shell: { openExternal },
 }))
+
+vi.mock("electron-updater", () => ({ autoUpdater }))
 
 const { createUpdates } = await import("./updates")
 type Options = Omit<Partial<import("./updates").UpdateOptions>, "getWindow" | "autoCheck">
@@ -22,6 +37,11 @@ beforeEach(() => {
   vi.useFakeTimers()
   showMessageBox.mockReset()
   openExternal.mockReset()
+  autoUpdater.allowPrerelease = false
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.checkForUpdates.mockClear()
+  autoUpdater.downloadUpdate.mockClear()
 })
 
 afterEach(() => {
@@ -58,6 +78,31 @@ describe("update prompt", () => {
     )
     // 重启走正常退出流程（before-quit 里的任务确认）。
     expect(requestRestart).toHaveBeenCalledTimes(1)
+  })
+
+  // 勾了「接收预发布版本」时，调度器会报出 0.2.0-beta.1；electron-updater 自己再查一次
+  // 版本，不知道这个偏好就会去挑稳定版，结果什么都挑不到，用户被退到下载页。
+  it("tells electron-updater whether prereleases are wanted", async () => {
+    showMessageBox.mockResolvedValue({ response: 1 })
+    await findUpdate({ mode: "install", isPackaged: true, allowPrerelease: () => true })
+    // downloadWithUpdater 里的 import("electron-updater") 走模块加载队列，
+    // advanceTimersByTimeAsync 不会等它；换回真实计时器等下载真的开始。
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
+
+    expect(autoUpdater.allowPrerelease).toBe(true)
+    expect(autoUpdater.autoDownload).toBe(false)
+    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
+    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps prereleases off when the preference is off", async () => {
+    showMessageBox.mockResolvedValue({ response: 1 })
+    await findUpdate({ mode: "install", isPackaged: true, allowPrerelease: () => false })
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
+
+    expect(autoUpdater.allowPrerelease).toBe(false)
   })
 
   it("leaves the install for later when the user picks it", async () => {
