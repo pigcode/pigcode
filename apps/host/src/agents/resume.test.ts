@@ -110,6 +110,11 @@ describe("session resume", () => {
         .read(thread.id, 0)
         .some((event) => event.type === "run.interrupted" && event.runId === "run-stale"),
     ).toBe(true)
+    // 时间线只显示「已停止」，不说为什么；提示必须落在被打断的那一轮里（monorepo#6 的缺口 B）。
+    const notice = ctx.sessions
+      .read(thread.id, 0)
+      .find((event) => event.type === "notice" && event.runId === "run-stale")
+    expect(notice?.payload).toEqual({ level: "warning", key: "host.restarted" })
 
     const request = ctx.storage.db
       .prepare(`SELECT status FROM pending_requests WHERE id = ?`)

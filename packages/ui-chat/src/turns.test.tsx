@@ -298,6 +298,18 @@ describe("turn rendering", () => {
     expect(screen.getByRole("status").getAttribute("data-level")).toBe("warning")
   })
 
+  it("explains an interrupted turn when the notice has no params", () => {
+    // Host 重启后补的那条（monorepo#6 的缺口 B）：没有占位参数，文案原样显示。
+    const events = [
+      ...scriptedRun(),
+      event(19, "notice", { level: "warning", key: "host.restarted" }),
+    ]
+    const [turn] = onlyTurns(events)
+    expect(turn?.notices[0]).toMatchObject({ key: "host.restarted", params: {} })
+    renderList(events)
+    expect(screen.getByRole("status").textContent).toContain("应用重启过")
+  })
+
   it("draws a marker divider when the agent changes", () => {
     renderList([...scriptedRun(), event(30, "thread.updated", { agentId: "codex" }, null)])
     expect(screen.getByRole("separator").textContent).toBe("已切换到 codex")

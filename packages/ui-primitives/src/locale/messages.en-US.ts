@@ -377,6 +377,8 @@ export const enUS = {
   "chat.error": "Run failed",
   "chat.notice.mcp.bridge.failed":
     "Plugin tools are not connected: the {name} server failed to start. The model cannot see plugin tools in this turn.",
+  "chat.notice.host.restarted":
+    "Pigcode restarted, so this turn was interrupted. Any pending approvals went with the agent process — send the message again to continue.",
   "plugins.title": "Plugin manager",
   "plugins.install": "Install plugin",
   "plugins.installSpec": "Plugin directory or npm package",

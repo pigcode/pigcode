@@ -370,6 +370,8 @@ export const zhCN = {
   /* 会话提示：Agent 只给稳定的键（如 mcp.bridge.failed），界面在 chat.notice.<键> 里找文案。 */
   "chat.notice.mcp.bridge.failed":
     "插件工具没有接上：{name} 服务启动失败。这一轮里模型看不到插件工具。",
+  "chat.notice.host.restarted":
+    "应用重启过，这一轮被中断了。等审批的请求也跟着 agent 进程一起没了，需要重新发一条消息。",
   "plugins.title": "插件管理",
   "plugins.install": "安装插件",
   "plugins.installSpec": "插件目录或 npm 包",
