@@ -22,14 +22,14 @@ const claudeFeatures: AgentFeatures = {
   nativeSessionId: true,
 }
 
-/** Codex 的完整 Agent 功能快照；未实现的特性必须保持 false。 */
+/** Codex 的完整 Agent 功能快照；未实现的特性必须保持 false，实现了的必须是 true。 */
 const codexFeatures: AgentFeatures = {
   streaming: true,
   approvals: true,
   questions: false,
   plan: true,
   resume: true,
-  fork: false,
+  fork: true,
   rollback: false,
   checkpoint: false,
   subagents: false,
@@ -53,7 +53,9 @@ describe("agent features", () => {
     const codex = new CodexDriver().features
     expect(codex.approvals).toBe(true)
     expect(codex.questions).toBe(false)
-    expect(codex.fork).toBe(false)
+    // app-server 的 thread/fork 已经实现（driver.test.ts 有回放用例），
+    // Host 切模型时也在用，所以这里必须是 true。
+    expect(codex.fork).toBe(true)
     expect(codex.rollback).toBe(false)
     expect(codex.checkpoint).toBe(false)
     // M5 起 Codex 通过 config.mcp_servers 注入插件工具；subagents 仍未实现。

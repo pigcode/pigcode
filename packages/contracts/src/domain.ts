@@ -1,7 +1,14 @@
 /** 定义 Pigcode 的持久领域实体与 Agent 功能描述。 */
 import { z } from "zod"
 
-/** Agent 功能：一个 Agent 支持哪些功能，界面据此隐藏不支持的控件。 */
+/**
+ * Agent 功能：一个 Agent 支持哪些功能。
+ *
+ * **只是界面提示**：界面据它隐藏做不到的控件，Host 不拿它拒绝任何 RPC。
+ * 真正的能力由 driver 自己决定——可选的 `askQuestions`、原生会话 id 的有无，
+ * 都比一个布尔值可靠；再加一层校验就是第二个真相来源，不一致时更难查。
+ * 所以这里的值必须和 driver 的实际实现对得上（Codex 的 fork 就曾经写着 false 而实现是真的）。
+ */
 export const agentFeaturesSchema = z.object({
   streaming: z.boolean(),
   approvals: z.boolean(),

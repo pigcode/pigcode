@@ -60,14 +60,15 @@ export class CodexDriver implements AgentDriver {
   readonly id = "codex"
   readonly displayName = "Codex"
   // M2 桥接审批、计划、用量与 resume；M5 起通过 `config.mcp_servers` 注入插件工具。
-  // questions/fork/rollback/checkpoint/subagents 尚未实现，对应的 Agent 功能保持 false。
+  // fork 走 app-server 的 thread/fork（见 createSession），Host 切模型时已经在用，所以是 true。
+  // questions/rollback/checkpoint/subagents 尚未实现，对应的 Agent 功能保持 false。
   readonly features: AgentFeatures = {
     streaming: true,
     approvals: true,
     questions: false,
     plan: true,
     resume: true,
-    fork: false,
+    fork: true,
     rollback: false,
     checkpoint: false,
     subagents: false,
