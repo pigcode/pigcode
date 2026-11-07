@@ -28,28 +28,8 @@ function inScope(file: string): boolean {
   return SOURCE_DIRS.some((dir) => file.startsWith(dir)) && SOURCE_FILE.test(file)
 }
 
-/** 整个文件不扫：已有用户的数据要能从任何旧版本升级上来，迁移代码和它的测试必须写旧名字。 */
+/** 整个文件不扫：本检查自己的规则与样例，以及外部配置格式里同名的键。 */
 const EXEMPT_FILES: ReadonlyArray<{ file: RegExp; reason: string }> = [
-  {
-    file: /^apps\/host\/src\/storage\/migrations\.ts$/,
-    reason: "数据库 v1–v8 的迁移 SQL 读写旧的表名、列名与事件键名",
-  },
-  {
-    file: /^apps\/host\/src\/services\/legacy-names[\w.-]*\.ts$/,
-    reason: "settings.json 与 plugins.yml 的旧名字迁移（legacy-names.ts）及其测试",
-  },
-  {
-    file: /^apps\/host\/src\/storage\/migration-v\d+\.test\.ts$/,
-    reason: "数据库迁移测试用旧版本的数据做输入",
-  },
-  {
-    file: /^apps\/host\/src\/storage\/database-safety\.test\.ts$/,
-    reason: "迁移前备份与失败回滚的测试用旧版本的数据做输入",
-  },
-  {
-    file: /^apps\/host\/src\/kernel\/upgrade\.test\.ts$/,
-    reason: "从旧版本 profile 整体升级的测试用旧数据做输入",
-  },
   {
     file: /^scripts\/naming-scan\.test\.ts$/,
     reason: "本检查自己：规则与测试样例里写着旧名字",
@@ -121,7 +101,7 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
   { pattern: /\bplugins\.kind\.capability\b/g, reason: "语言包里 Capability 种类标签的键" },
   {
     pattern: /\bcapability: "plugins\.kind\.capability"/g,
-    file: "packages/ui-plugin-manager/src/plugin-list.tsx",
+    file: "packages/ui-plugin-manager/src/plugin-summary.ts",
     reason: "插件种类到标签键的映射，键是 kind 的取值",
   },
   { pattern: /\bcapability\.(?=[\w@])/g, reason: "Capability 插件的 id：capability.<包名>" },

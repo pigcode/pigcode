@@ -1,7 +1,6 @@
 /**
  * agent 设置在 Host 里的存取：每个 Agent 的值存在 settings 服务的 `agents.<id>` 下，
  * 默认 Agent 存在 `defaultAgent`。只读检测的结果按 Agent 短时缓存。
- * 改名前的旧键由 settings 服务启动时迁移，见 legacy-names.ts。
  */
 import {
   CUSTOM_MODELS_KEY,

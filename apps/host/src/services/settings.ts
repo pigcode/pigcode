@@ -5,7 +5,6 @@
 import type { Context } from "cordis"
 import { readFileSync, renameSync } from "node:fs"
 import { writeFileAtomicSync } from "./atomic-write"
-import { backupBeforeRenameSync, migrateLegacySettings } from "./legacy-names"
 
 /** 设置读写入口；值必须可 JSON 序列化。 */
 export interface SettingsService {
@@ -54,30 +53,10 @@ function writeSettingsFile(path: string, values: Record<string, unknown>): void 
   writeFileAtomicSync(path, `${JSON.stringify(values, null, 2)}\n`)
 }
 
-/**
- * 把旧名字迁移后的设置写回文件，先备份原文件（见 legacy-names.ts）。备份或写入失败（只读 profile、
- * 磁盘满）时只记日志：迁移后的值留在内存里照常使用，下一次 set 会把整份设置写回去。
- * settings 服务必须起来，否则 Host 没有设置服务，agent 设置与默认 agent 全部失效。
- */
-function persistMigratedSettings(path: string, values: Record<string, unknown>): void {
-  try {
-    if (!backupBeforeRenameSync(path)) {
-      console.error(`[host] could not back up ${path}; keeping the migrated settings in memory`)
-      return
-    }
-    writeSettingsFile(path, values)
-  } catch (error) {
-    console.error(`[host] could not write the migrated settings to ${path}:`, error)
-  }
-}
-
 /** 注册 settings 服务。 */
 export function apply(ctx: Context, config: SettingsConfig = {}): void {
   const path = config.path
-  // 旧版本用旧名字保存的 agent 设置先迁移；已经迁移过时不写文件。
-  const migrated = migrateLegacySettings(path ? loadSettingsFile(path) : {})
-  if (path && migrated.changed) persistMigratedSettings(path, migrated.values)
-  let values: Record<string, unknown> = migrated.values
+  let values: Record<string, unknown> = path ? loadSettingsFile(path) : {}
   const listeners = new Set<(key: string, value: unknown) => void>()
 
   const service: SettingsService = {

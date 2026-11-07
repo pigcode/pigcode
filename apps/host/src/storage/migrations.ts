@@ -5,114 +5,26 @@ import type Database from "better-sqlite3"
 type Migration = string | ((db: Database.Database) => void)
 
 /**
- * v7 的改名：Agent 以前叫 provider（#33），表和列改成新名字。外键、索引、触发器都不引用这些列，
- * provider_sessions 也没有被别的表的外键引用；RENAME 时 SQLite 会同步改写引用它们的 schema。
+ * 迁移列表。Pigcode 还没有分发给用户，现有的表都在第一个迁移里一次建好；以后改 schema 时在后面追加，
+ * 已经发出去的迁移不再改动。
  */
-const AGENT_RENAMES = {
-  tables: [["provider_sessions", "agent_sessions"]],
-  columns: [
-    ["threads", "default_provider_id", "default_agent_id"],
-    ["threads", "last_provider_id", "last_agent_id"],
-    ["agent_sessions", "provider_id", "agent_id"],
-    ["runs", "provider_session_id", "agent_session_id"],
-    ["pending_requests", "provider_request_id", "agent_request_id"],
-  ],
-} as const
-
-/**
- * v7：按 AGENT_RENAMES 改名。只改还叫旧名字的表和列，重复执行不报错也不改动。
- * 新旧名字同时存在说明有人手工改过库：旧的那份没有数据时跳过，有数据时报错停下，
- * 不悄悄丢掉它（迁移在事务里，报错时库原样不动）。
- */
-function renameAgentColumns(db: Database.Database): void {
-  const tables = new Set(
-    db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).pluck().all() as string[],
-  )
-  const count = (sql: string) => db.prepare(sql).pluck().get() as number
-  for (const [from, to] of AGENT_RENAMES.tables) {
-    if (!tables.has(from)) continue
-    if (!tables.has(to)) {
-      db.exec(`ALTER TABLE ${from} RENAME TO ${to}`)
-      continue
-    }
-    if (count(`SELECT COUNT(*) FROM ${from}`) > 0) {
-      throw new Error(`cannot rename table ${from} to ${to}: both exist and ${from} has rows`)
-    }
-  }
-  for (const [table, from, to] of AGENT_RENAMES.columns) {
-    const columns = new Set(
-      (db.pragma(`table_info(${table})`) as Array<{ name: string }>).map((column) => column.name),
-    )
-    if (!columns.has(from)) continue
-    if (!columns.has(to)) {
-      db.exec(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`)
-      continue
-    }
-    if (count(`SELECT COUNT(*) FROM ${table} WHERE ${from} IS NOT NULL`) > 0) {
-      throw new Error(
-        `cannot rename ${table}.${from} to ${to}: both columns exist and ${from} has values`,
-      )
-    }
-  }
-  // 失败 run 的错误码也跟着改名；没有代码按它判断，只是让库里不再出现旧名字。
-  if (tables.has("runs")) {
-    db.prepare(
-      `UPDATE runs SET error_code = 'AGENT_ERROR' WHERE error_code = 'PROVIDER_ERROR'`,
-    ).run()
-  }
-}
-
-/**
- * v8 的改名：持久事件 payload 里的旧字段名（#34）。界面直接读这些事件，旧事件和新事件要用同一套字段名。
- */
-const EVENT_PAYLOAD_RENAMES = [
-  ["run.started", "providerId", "agentId"],
-  ["run.started", "providerSessionId", "agentSessionId"],
-  ["thread.updated", "providerId", "agentId"],
-] as const
-
-/**
- * v8：按 EVENT_PAYLOAD_RENAMES 改写 thread_events 的 payload_json。只改还带旧字段的事件，重复执行不改动；
- * 新旧字段同时存在时保留新字段的值，删掉旧字段。payload 不是合法 JSON 的事件原样保留。
- * 没有 thread_events 表（只造了部分 schema 的测试库）时什么都不做。
- */
-function renameEventPayloadKeys(db: Database.Database): void {
-  const exists = db
-    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thread_events'`)
-    .get()
-  if (!exists) return
-  const rename = db.prepare(`
-    UPDATE thread_events
-    SET payload_json = json_remove(
-      CASE
-        WHEN json_type(payload_json, '$.' || :to) IS NULL
-          THEN json_set(payload_json, '$.' || :to, json(payload_json -> ('$.' || :from)))
-        ELSE payload_json
-      END,
-      '$.' || :from
-    )
-    WHERE type = :type
-      AND (CASE WHEN json_valid(payload_json) THEN json_type(payload_json, '$.' || :from) END)
-        IS NOT NULL
-  `)
-  for (const [type, from, to] of EVENT_PAYLOAD_RENAMES) rename.run({ type, from, to })
-}
-
 const MIGRATIONS: Migration[] = [
   `
-  CREATE TABLE IF NOT EXISTS projects (
+  CREATE TABLE projects (
     id TEXT PRIMARY KEY,
     root_path TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    archived_at TEXT
   );
 
-  CREATE TABLE IF NOT EXISTS threads (
+  CREATE TABLE threads (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id),
+    parent_thread_id TEXT REFERENCES threads(id),
     title TEXT NOT NULL,
-    default_provider_id TEXT NOT NULL,
-    last_provider_id TEXT,
+    default_agent_id TEXT NOT NULL,
+    last_agent_id TEXT,
     last_model_id TEXT,
     permission_mode TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -121,10 +33,12 @@ const MIGRATIONS: Migration[] = [
     last_run_id TEXT
   );
 
-  CREATE TABLE IF NOT EXISTS runs (
+  CREATE INDEX idx_threads_parent ON threads(parent_thread_id);
+
+  CREATE TABLE runs (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id),
-    provider_session_id TEXT NOT NULL,
+    agent_session_id TEXT NOT NULL,
     status TEXT NOT NULL,
     started_at TEXT NOT NULL,
     completed_at TEXT,
@@ -133,7 +47,7 @@ const MIGRATIONS: Migration[] = [
     checkpoint_id TEXT
   );
 
-  CREATE TABLE IF NOT EXISTS thread_events (
+  CREATE TABLE thread_events (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     thread_id TEXT NOT NULL,
     run_id TEXT,
@@ -143,20 +57,18 @@ const MIGRATIONS: Migration[] = [
     created_at TEXT NOT NULL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_thread_events_thread_seq
-    ON thread_events(thread_id, seq);
+  CREATE INDEX idx_thread_events_thread_seq ON thread_events(thread_id, seq);
 
-  CREATE TABLE IF NOT EXISTS command_receipts (
+  CREATE TABLE command_receipts (
     command_id TEXT PRIMARY KEY,
     result_json TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS provider_sessions (
+
+  CREATE TABLE agent_sessions (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id),
-    provider_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
     native_session_id TEXT,
     cwd TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -164,23 +76,21 @@ const MIGRATIONS: Migration[] = [
     stopped_at TEXT
   );
 
-  CREATE TABLE IF NOT EXISTS pending_requests (
+  CREATE TABLE pending_requests (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id),
     run_id TEXT NOT NULL REFERENCES runs(id),
     kind TEXT NOT NULL,
-    provider_request_id TEXT,
+    agent_request_id TEXT,
     payload_json TEXT NOT NULL,
     status TEXT NOT NULL,
     created_at TEXT NOT NULL,
     resolved_at TEXT
   );
 
-  CREATE INDEX IF NOT EXISTS idx_pending_requests_thread_status
-    ON pending_requests(thread_id, status);
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS checkpoints (
+  CREATE INDEX idx_pending_requests_thread_status ON pending_requests(thread_id, status);
+
+  CREATE TABLE checkpoints (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id),
     run_id TEXT,
@@ -191,10 +101,9 @@ const MIGRATIONS: Migration[] = [
     created_at TEXT NOT NULL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_checkpoints_thread_created
-    ON checkpoints(thread_id, created_at);
+  CREATE INDEX idx_checkpoints_thread_created ON checkpoints(thread_id, created_at);
 
-  CREATE TABLE IF NOT EXISTS worktrees (
+  CREATE TABLE worktrees (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL REFERENCES projects(id),
     thread_id TEXT NOT NULL REFERENCES threads(id),
@@ -204,33 +113,40 @@ const MIGRATIONS: Migration[] = [
     created_at TEXT NOT NULL,
     removed_at TEXT
   );
-  `,
-  `
-  CREATE TABLE IF NOT EXISTS schedules (
+
+  -- 定时任务：rule_json 是运行规则（contracts 的 ScheduleRule）；next_run_at 为空表示过了结束日期，任务已完成。
+  CREATE TABLE schedules (
     id TEXT PRIMARY KEY,
     thread_id TEXT NOT NULL REFERENCES threads(id),
+    title TEXT NOT NULL,
     prompt TEXT NOT NULL,
-    interval_seconds INTEGER NOT NULL,
+    rule_json TEXT NOT NULL,
+    ends_at TEXT,
     enabled INTEGER NOT NULL,
-    next_run_at TEXT NOT NULL,
+    next_run_at TEXT,
     last_run_at TEXT,
     last_run_id TEXT,
-    created_at TEXT NOT NULL
+    run_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_schedules_next_run
-    ON schedules(enabled, next_run_at);
-  `,
-  `
-  ALTER TABLE projects ADD COLUMN archived_at TEXT;
-  `,
-  `
-  ALTER TABLE threads ADD COLUMN parent_thread_id TEXT REFERENCES threads(id);
+  CREATE INDEX idx_schedules_next_run ON schedules(enabled, next_run_at);
 
-  CREATE INDEX IF NOT EXISTS idx_threads_parent ON threads(parent_thread_id);
+  -- 定时任务的每一次触发：source 是 schedule（到点）或 manual（立即运行）；status 是 started（启动了 run，
+  -- 结果看 runs 表）、skipped（会话正忙或 Agent 不可用）或 failed（启动出错）。
+  CREATE TABLE schedule_runs (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    run_id TEXT,
+    error TEXT,
+    triggered_at TEXT NOT NULL
+  );
+
+  CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, triggered_at);
   `,
-  renameAgentColumns,
-  renameEventPayloadKeys,
 ]
 
 /** 最新的 schema 版本，也就是迁移的个数。 */
@@ -242,8 +158,8 @@ export function schemaVersion(db: Database.Database): number {
 }
 
 /**
- * 按 user_version 执行缺失迁移，默认迁到最新；测试可以只迁到某个旧版本，造出旧数据库。
- * 每个迁移和它的版本号在同一个事务里提交：中途退出不会留下改了一半、版本号却没变的库。
+ * 按 user_version 执行缺失迁移，默认迁到最新。每个迁移和它的版本号在同一个事务里提交：
+ * 中途退出不会留下改了一半、版本号却没变的库。
  */
 export function migrate(db: Database.Database, target: number = SCHEMA_VERSION): void {
   const step = db.transaction((version: number) => {
