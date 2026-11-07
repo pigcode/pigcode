@@ -63,7 +63,7 @@ export function readQuitState(ctx: Context): QuitState {
     ctx
       .get("schedules")
       ?.list()
-      .filter((schedule) => schedule.enabled) ?? []
+      .filter((schedule) => schedule.status === "active") ?? []
   return {
     runs: runs.length,
     approvals: countPendingRequests(ctx),

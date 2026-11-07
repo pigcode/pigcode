@@ -1,0 +1,652 @@
+/*
+  定时任务页（ui-settings 的 SchedulesPage 与 ScheduleEditor）。
+  列表：状态筛选、保持唤醒的提示条、两列任务卡片，隔一条线是模板。
+  编辑页：面包屑、标题、页签与操作栏，下面是表单（计划框里是几个小胶囊）或运行历史。
+*/
+
+/* ─── 列表 ─────────────────────────────────────────────── */
+.schedules-error {
+  margin-top: var(--space-4);
+}
+.schedules-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.schedules-filter-pill,
+.schedule-tab {
+  height: var(--control-sm);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-full);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.schedules-filter-pill:hover,
+.schedule-tab:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.schedules-filter-pill[aria-pressed="true"],
+.schedule-tab[aria-selected="true"] {
+  background: var(--active);
+  color: var(--fg);
+}
+.schedules-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  margin-top: var(--space-8);
+}
+.schedules-filter + .schedules-stack {
+  margin-top: var(--space-7);
+}
+
+/* 保持唤醒：浅底的一条，右边是开关 */
+.schedules-awake {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunken);
+}
+.schedules-awake > .ic {
+  flex: none;
+  color: var(--muted);
+}
+.schedules-awake p {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.schedules-awake-title {
+  margin-right: var(--space-3);
+  color: var(--fg);
+  font-weight: 500;
+}
+.schedules-awake-hint {
+  color: var(--muted);
+}
+
+.schedules-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--schedule-empty-h);
+  color: var(--muted);
+}
+/* 空状态：细边的大圆角卡片，文案和按钮在中间 */
+.schedules-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: var(--schedule-empty-h);
+  padding: var(--space-9);
+  border-radius: var(--r-2xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  text-align: center;
+}
+.schedules-empty-title {
+  color: var(--fg);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.schedules-empty-hint {
+  max-width: 420px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+.schedules-empty .btn {
+  margin-top: var(--space-5);
+}
+
+.schedules-section-title {
+  margin-bottom: var(--space-6);
+  color: var(--fg-2);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.schedules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+@container (max-width: 560px) {
+  .schedules-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.schedules-filter-empty {
+  padding: var(--space-9) 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/*
+  任务卡片：标题、两行指令，底部是计划与下一次运行、运行次数。标题是主按钮，::after 盖住整张卡片，
+  点空白处等于编辑；右上角的菜单叠在它上面。完成的任务整体变淡，悬停也不变。
+*/
+.schedule-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: var(--schedule-card-h);
+  padding: var(--space-6);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+}
+.schedule-card:hover,
+.schedule-card[data-menu-open] {
+  background: color-mix(in oklab, var(--surface) 96%, var(--fg));
+}
+.schedule-card:has(> .schedule-card-main:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.schedule-card[data-status="completed"] {
+  opacity: 0.6;
+}
+.schedule-card[data-status="completed"]:hover {
+  background: var(--surface);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .schedule-card {
+    transition: background var(--t-fast) var(--ease);
+  }
+}
+.schedule-card-main {
+  display: block;
+  min-width: 0;
+  padding-right: calc(var(--control-sm) + var(--space-4));
+  color: inherit;
+  text-align: left;
+}
+.schedule-card-main:focus-visible {
+  outline: none;
+}
+.schedule-card-main::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.schedule-card-title {
+  display: block;
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.5;
+}
+.schedule-card-prompt {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 3em;
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.schedule-card-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  margin-top: auto;
+  font-size: var(--fs-sm);
+}
+.schedule-card-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg-2);
+}
+.schedule-card[data-status="paused"] .schedule-card-state {
+  color: var(--warn-text);
+}
+/* 运行中的计划是浅绿的标签；暂停与完成后变成灰的 */
+.schedule-card-when {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: var(--badge-h);
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--ok-soft);
+  color: var(--ok-text);
+}
+.schedule-card-when[data-dim] {
+  background: var(--surface-sunken);
+  color: var(--muted);
+}
+.schedule-card-when .ic {
+  flex: none;
+}
+.schedule-card-count {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-sunken);
+  color: var(--muted);
+  line-height: var(--badge-h);
+}
+.icon-btn.schedule-card-menu {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: 1;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
+  opacity: 0;
+}
+.schedule-card:hover .schedule-card-menu,
+.schedule-card:has(:focus-visible) .schedule-card-menu,
+.schedule-card[data-menu-open] .schedule-card-menu {
+  opacity: 1;
+}
+@media (hover: none) {
+  .icon-btn.schedule-card-menu {
+    opacity: 1;
+  }
+}
+.schedule-menu.menu-popup {
+  min-width: 160px;
+}
+.schedule-notice {
+  align-self: center;
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.schedule-notice[data-tone="warn"] {
+  color: var(--warn-text);
+}
+
+/* 模板：分隔线以下，两列；整张卡片是一个按钮 */
+.schedules-divider {
+  height: var(--hair);
+  margin: calc(var(--space-9) + var(--space-7)) 0;
+  border: 0;
+  background: var(--divider);
+}
+.schedule-template {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: var(--schedule-template-h);
+  padding: var(--space-6);
+  border-radius: var(--r-panel);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  color: inherit;
+  text-align: left;
+}
+.schedule-template:hover {
+  background: var(--hover);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .schedule-template {
+    transition: background var(--t-fast) var(--ease);
+  }
+}
+.schedule-template-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.schedule-template-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.schedule-template-icon[data-template="risk"] {
+  background: var(--warn-soft);
+  color: var(--warn-text);
+}
+.schedule-template-icon[data-template="release"] {
+  background: var(--ok-soft);
+  color: var(--ok-text);
+}
+.schedule-template-icon[data-template="docs"] {
+  background: var(--surface-sunken);
+  color: var(--fg-2);
+}
+.schedule-template-desc {
+  display: -webkit-box;
+  flex: 1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.schedule-template-when {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+
+/* ─── 编辑页 ───────────────────────────────────────────── */
+.schedule-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-top: var(--space-8);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.schedule-crumbs + .page-head {
+  margin-top: var(--space-5);
+}
+.schedule-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-sm);
+  margin-left: calc(var(--space-2) * -1);
+  padding: 0 var(--space-3) 0 var(--space-1);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.schedule-back:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.schedule-crumb-sep {
+  opacity: 0.6;
+}
+.schedule-crumb-current {
+  color: var(--fg-2);
+}
+.schedules .page-head .actions,
+.schedule-editor .page-head .actions {
+  align-items: center;
+}
+/* 编辑时标题下面是「设置 / 历史」两个页签，下边一条细线 */
+.schedule-tabs {
+  display: flex;
+  gap: var(--space-2);
+  padding-bottom: var(--space-6);
+  border-bottom: var(--hair) solid var(--divider);
+}
+.schedule-tab {
+  height: var(--control-md);
+  padding: 0 var(--space-6);
+  font-size: var(--fs-md);
+}
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+.schedule-tabs + .schedule-form {
+  margin-top: var(--space-8);
+}
+.schedule-form .field {
+  gap: var(--space-3);
+}
+.schedule-status-chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--space-2) var(--space-5);
+  min-height: var(--control-lg);
+  padding: var(--space-2) var(--space-6) var(--space-2) var(--space-5);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunken);
+  color: var(--fg);
+  font-size: var(--fs-md);
+}
+.schedule-status-chip > span:first-of-type {
+  margin-left: calc(var(--space-3) * -1);
+}
+.schedule-form-notice {
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/*
+  计划框：输入框样子的一行，里面是频率、星期或几号、几点几分的小胶囊（.pill-select，在 controls.css），
+  最右边是时区。
+*/
+.schedule-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.schedule-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-height: calc(var(--control-lg) + var(--space-2));
+  padding: var(--space-2) var(--space-5) var(--space-2) var(--space-3);
+  border-radius: var(--r-lg);
+  background: var(--input-bg);
+  box-shadow: var(--shadow-field);
+}
+.schedule-box:hover:not([data-disabled]) {
+  box-shadow: var(--shadow-field-hover);
+}
+.schedule-box:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+.schedule-box[data-disabled] {
+  opacity: 0.55;
+}
+.pill-select.schedule-custom-summary {
+  min-width: 0;
+  padding-right: var(--space-4);
+}
+.pill-select.schedule-custom-summary .ic {
+  margin-left: var(--space-2);
+}
+.schedule-time-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.schedule-colon {
+  color: var(--muted);
+}
+.schedule-word {
+  color: var(--fg-2);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+}
+.schedule-tz {
+  margin-left: auto;
+  padding-left: var(--space-4);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+/* 自定义重复对话框 */
+.dialog.schedule-custom-dialog {
+  width: min(480px, calc(100vw - 48px));
+}
+.schedule-custom-dialog .field {
+  gap: var(--space-3);
+}
+.schedule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+.input.schedule-number {
+  width: 76px;
+}
+.select-trigger.schedule-unit {
+  width: 112px;
+  min-width: 0;
+}
+.input.schedule-date {
+  width: 168px;
+}
+.seg.schedule-seg {
+  align-self: flex-start;
+}
+/* 可以多选的小方块：星期几、每月的几号；选中的填上强调色的浅底 */
+.toggle-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.toggle-pill {
+  min-width: var(--control-md);
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--input-bg);
+  box-shadow: var(--shadow-field);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.toggle-pill:hover:not(:disabled) {
+  box-shadow: var(--shadow-field-hover);
+}
+.toggle-pill[aria-pressed="true"] {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-soft-strong);
+  color: var(--accent-text);
+  font-weight: 500;
+}
+.toggle-pills.schedule-month-dates {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.schedule-month-dates .toggle-pill {
+  min-width: 0;
+  padding: 0;
+}
+.dialog.schedule-confirm {
+  width: min(400px, calc(100vw - 48px));
+}
+
+/* ─── 运行历史 ─────────────────────────────────────────── */
+.schedule-runs {
+  margin-top: var(--space-8);
+}
+.schedule-runs table {
+  width: 100%;
+  overflow: hidden;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  font-size: var(--fs-md);
+}
+.schedule-runs th {
+  height: var(--control-md);
+  padding: 0 var(--space-6);
+  background: var(--surface-sunken);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  text-align: left;
+}
+.schedule-runs td {
+  height: calc(var(--control-lg) + var(--space-6));
+  padding: 0 var(--space-6);
+  border-top: var(--hair) solid var(--divider);
+  color: var(--fg);
+  white-space: nowrap;
+}
+.schedule-runs tbody tr:hover {
+  background: var(--hover);
+}
+.schedule-runs-time {
+  font-variant-numeric: tabular-nums;
+}
+.schedule-runs-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+}
+.schedule-runs-status[data-status="succeeded"] .schedule-runs-label {
+  color: var(--ok-text);
+}
+.schedule-runs-status[data-status="failed"] .schedule-runs-label {
+  color: var(--bad-text);
+}
+.schedule-runs-status[data-status="skipped"] .schedule-runs-label {
+  color: var(--warn-text);
+}
+.schedule-runs-reason {
+  max-width: 220px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.schedule-runs .schedule-runs-actions {
+  width: 1%;
+  text-align: right;
+}
+.btn.schedule-run-action {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  color: var(--muted);
+}
+.btn.schedule-run-action:hover {
+  color: var(--fg);
+}
+.btn.schedule-run-action[data-danger]:hover {
+  color: var(--bad-text);
+}
+.schedule-runs-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  font-size: var(--fs-sm);
+}
+.schedule-runs-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: var(--schedule-empty-h);
+  margin-top: var(--space-8);
+  border-radius: var(--r-lg);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  text-align: center;
+}
