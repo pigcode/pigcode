@@ -1,6 +1,8 @@
 /*
-  侧栏：直接露出窗口底色。顶行留给交通灯与顶行按钮（titlebar.css），中间是导航、项目与会话列表，
-  底部固定一行账户与设置。侧栏的行都是 ListRow（list-rows.css），这里只管行间距、悬停才出现的部分和重命名。
+  侧栏：直接露出窗口底色。顶行留给交通灯与顶行按钮（titlebar.css），下面固定一块导航（工作区侧栏的
+  新会话等入口，设置侧栏的返回与搜索），只有再往下的项目与会话列表（设置侧栏是设置页导航）滚动，
+  底部固定一行账户与设置。宽度可拖动，分隔条在 workspace.css。
+  侧栏的行都是 ListRow（list-rows.css），这里只管行间距、悬停才出现的部分和重命名。
   窄窗口下侧栏变成从左边滑出的抽屉，盖在内容上，下面一层蒙层。
 */
 
@@ -21,17 +23,60 @@
   height: var(--topbar-h);
   flex: none;
 }
-.side-scroll {
+/* 顶行下面固定的一块；右边留出和下面列表的滚动条一样宽的空，两块的行左右对齐 */
+.side-head {
   display: flex;
   flex-direction: column;
+  flex: none;
+  width: var(--sidebar-w);
+  padding: 2px var(--scrollbar-size) 0 10px;
+}
+/*
+  只有这一块滚动。滚动条的位置一直留着，占的是右边原来的留白，内容超出时行不会被挤窄。
+  列表在 .side-scroll-body 里跟着内容长高，超出时整列滚动，行不会被压扁。
+*/
+.side-scroll {
   flex: 1;
   min-height: 0;
   width: var(--sidebar-w);
-  padding: 2px 10px 12px;
+  padding: 0 0 12px 10px;
   overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
 }
-.side-actions {
+.side-scroll-body {
+  display: flex;
+  flex-direction: column;
+}
+/*
+  滚动后上沿渐隐到固定的导航下面，下面还有内容时下沿渐隐，和 Cursor 的侧栏一样；
+  第二层遮罩是右边滚动条那一列，滚动条不跟着淡出。
+*/
+.side-scroll[data-fade-top],
+.side-scroll[data-fade-bottom] {
+  mask-image:
+    linear-gradient(
+      var(--side-fade-top, var(--mask-fill)),
+      var(--mask-fill) 18px,
+      var(--mask-fill) calc(100% - 36px),
+      var(--side-fade-bottom, var(--mask-fill))
+    ),
+    linear-gradient(var(--mask-fill), var(--mask-fill));
+  mask-position: left, right;
+  mask-repeat: no-repeat;
+  mask-size:
+    calc(100% - var(--scrollbar-size)) 100%,
+    var(--scrollbar-size) 100%;
+}
+.side-scroll[data-fade-top] {
+  --side-fade-top: transparent;
+}
+.side-scroll[data-fade-bottom] {
+  --side-fade-bottom: transparent;
+}
+/* 主导航与设置导航：行与行之间留同样的 2px，选中行和悬停行不会贴在一起 */
+.side-actions,
+.side-nav {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -95,13 +140,23 @@
   background: var(--hover);
   color: var(--fg);
 }
-/* 设置侧栏的搜索框是 SearchField，这里只管它和下面分区之间的间距 */
+/*
+  设置侧栏的搜索框是 SearchField，和侧栏的行一样高。侧栏是灰底，白底框会浮在上面，
+  所以这里用和侧栏融在一起的浅灰底，只靠细描边勾出外框；聚焦时底色不变，描边加深。
+*/
 .side-search {
   margin-bottom: var(--space-2);
 }
+.search-field.side-search,
+.search-field.side-search:focus-within {
+  background: var(--field);
+}
 
 /* ─── 项目行与会话行 ───────────────────────────────────── */
-/* 项目行：打开的项目显示展开的文件夹；悬停或键盘聚焦时右侧出现新会话按钮 */
+/*
+  项目行：打开的项目显示展开的文件夹；悬停或键盘聚焦时右侧出现新会话按钮。
+  按钮不画底色，悬停在按钮上时只把加号的颜色加深一档，和行里其余部分是同一种样子。
+*/
 .proj-block + .proj-block {
   margin-top: 10px;
 }
@@ -119,8 +174,10 @@
 .proj-row:has(:focus-visible) .proj-add {
   opacity: 1;
 }
-.icon-btn.proj-add:hover {
-  background: var(--active);
+.icon-btn.proj-add:hover,
+.icon-btn.proj-add:focus-visible {
+  background: none;
+  color: var(--fg);
 }
 /* 会话行：状态点（运行中是点阵）占和文件夹图标一样宽的一格，标题与项目名对齐，右侧常驻 agent 缩写与时间 */
 .sess .status-dot {
@@ -175,7 +232,7 @@
 .sess.is-active .sess-kbd {
   background: var(--surface-raised);
 }
-/* 重命名时标题换成输入框，状态点或文件夹图标留在原位；输入框的光圈画在标题格外面 */
+/* 重命名时标题换成输入框，状态点或文件夹图标留在原位；聚焦的描边画成内阴影，和别的输入框一样 */
 .is-editing > .list-row-title {
   display: flex;
   overflow: visible;
@@ -188,10 +245,8 @@
   padding: 0 5px;
   border: 0;
   border-radius: var(--r-sm);
-  background: var(--surface-raised);
-  box-shadow:
-    0 0 0 1px var(--border-focus),
-    0 0 0 3px var(--accent-ring);
+  background: var(--input-bg-focus);
+  box-shadow: var(--shadow-field-focus);
   color: var(--fg);
   font: inherit;
   font-size: var(--fs-md);

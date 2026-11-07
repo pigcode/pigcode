@@ -187,7 +187,7 @@ describe("Shell", () => {
     const workspace = container.querySelector(".workspace")
     expect(workspace?.querySelector("main.panel")?.textContent).toContain("chat")
     expect(workspace?.querySelector(".right-panel-slot")?.textContent).toContain("right")
-    expect(screen.getByRole("separator")).toBeTruthy()
+    expect(screen.getByRole("separator", { name: "右侧面板" })).toBeTruthy()
     expect(container.querySelector(".app")?.classList.contains("has-right")).toBe(true)
   })
 
@@ -195,7 +195,7 @@ describe("Shell", () => {
     window.localStorage.removeItem("pigcode.rightWidth")
     const { container } = renderShell()
     const app = container.querySelector(".app") as HTMLElement
-    const separator = screen.getByRole("separator")
+    const separator = screen.getByRole("separator", { name: "右侧面板" })
 
     expect(app.style.getPropertyValue("--right-w")).toBe("460px")
     fireEvent.keyDown(separator, { key: "ArrowLeft" })
@@ -211,7 +211,7 @@ describe("Shell", () => {
     const slot = container.querySelector(".right-panel-slot")
     expect(slot?.hasAttribute("hidden")).toBe(true)
     expect(slot?.textContent).toContain("right")
-    expect(screen.queryByRole("separator")).toBeNull()
+    expect(screen.queryByRole("separator", { name: "右侧面板" })).toBeNull()
     expect(container.querySelector(".app")?.classList.contains("has-right")).toBe(false)
   })
 
@@ -219,7 +219,7 @@ describe("Shell", () => {
     const { container } = renderShell({ rightMaximized: true })
 
     expect(container.querySelector(".app")?.classList.contains("is-right-max")).toBe(true)
-    expect(screen.queryByRole("separator")).toBeNull()
+    expect(screen.queryByRole("separator", { name: "右侧面板" })).toBeNull()
   })
 
   it("renders the bottom panel under the chat and toggles it with Ctrl+`", () => {
@@ -358,6 +358,7 @@ describe("Shell", () => {
       </ExtensionRegistryScope>,
     )
     const group = screen.getByLabelText("插件管理")
+    expect(group.closest(".side-scroll")).not.toBeNull()
     const heads = Array.from(group.querySelectorAll(".plugin-panel-head"))
     expect(heads.map((head) => head.textContent)).toEqual(["First", "Second"])
     expect(screen.getByText("first body")).toBeTruthy()
@@ -367,6 +368,38 @@ describe("Shell", () => {
 
     act(() => registry.removeOwner(owner))
     expect(screen.queryByLabelText("插件管理")).toBeNull()
+  })
+
+  it("keeps the workspace sidebar on the plugins and schedules pages, marking the open one", () => {
+    const onView = vi.fn()
+    const { rerender } = renderShell({ view: "plugins", onView })
+    const plugins = () => screen.getByRole("button", { name: "插件" })
+    const schedules = () => screen.getByRole("button", { name: "定时任务" })
+    expect(plugins().getAttribute("aria-current")).toBe("page")
+    expect(schedules().getAttribute("aria-current")).toBeNull()
+    expect(screen.queryByRole("button", { name: "返回应用" })).toBeNull()
+    expect(screen.getByRole("button", { name: "设置" })).toBeTruthy()
+    fireEvent.click(schedules())
+    expect(onView).toHaveBeenLastCalledWith("schedules")
+
+    rerender(
+      <LocaleProvider locale="zh-CN">
+        <Shell
+          view="schedules"
+          projects={[]}
+          threads={[]}
+          activeThreadId={null}
+          onView={onView}
+          onAddProject={() => {}}
+          onNewThread={() => {}}
+          onOpenThread={() => {}}
+        />
+      </LocaleProvider>,
+    )
+    expect(schedules().getAttribute("aria-current")).toBe("page")
+    expect(plugins().getAttribute("aria-current")).toBeNull()
+    fireEvent.click(plugins())
+    expect(onView).toHaveBeenLastCalledWith("plugins")
   })
 
   it("puts the built-in commands in the palette from the registry, before a plugin's", async () => {

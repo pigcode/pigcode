@@ -1,4 +1,6 @@
-/** 工作区侧栏：主导航、项目与会话列表；会话可按项目分组或按时间排成一列。 */
+/**
+ * 工作区侧栏：固定在上面的主导航，下面滚动的项目与会话列表；会话可按项目分组或按时间排成一列。
+ */
 import { useEffect, useState, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import {
@@ -14,6 +16,7 @@ import {
 } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 import { openFolder, revealLabelKey, useOpenFailure } from "./open-in"
+import { SideScroll } from "./side-scroll"
 import { ProjectRow, ThreadRow, type RenameHandlers, type RowAction } from "./sidebar-rows"
 import type { ThreadStatus } from "./thread-status"
 import { useToast } from "./toast"
@@ -36,6 +39,8 @@ export interface WorkspaceSidebarProps {
   onOpenSchedules?: () => void
   /** 插件入口；不传时不显示。 */
   onOpenPlugins?: () => void
+  /** 正在看的顶层页面：定时任务页或插件页，对应的入口高亮。 */
+  activeNav?: "schedules" | "plugins" | undefined
   /** 会话行右键菜单里的重命名与归档；两个都传时才有菜单。 */
   onRenameThread?: ((threadId: string, title: string) => void) | undefined
   onArchiveThread?: ((threadId: string) => void) | undefined
@@ -44,6 +49,8 @@ export interface WorkspaceSidebarProps {
   onRemoveProject?: ((projectId: string) => void) | undefined
   /** 按住 ⌘/Ctrl 时在前九个会话上显示数字快捷键。 */
   shortcutHints?: boolean
+  /** 排在列表最后、跟着列表滚动的内容，例如插件的 Panel。 */
+  children?: ReactNode
 }
 
 /** 侧栏里从上到下可见的会话；⌘/Ctrl+数字按这个顺序跳转。 */
@@ -128,11 +135,13 @@ export function WorkspaceSidebar({
   onNewThread,
   onOpenSchedules,
   onOpenPlugins,
+  activeNav,
   onRenameThread,
   onArchiveThread,
   onRenameProject,
   onRemoveProject,
   shortcutHints = false,
+  children,
 }: WorkspaceSidebarProps) {
   const { t } = useLocale()
   const toast = useToast()
@@ -209,114 +218,123 @@ export function WorkspaceSidebar({
 
   return (
     <>
-      <nav className="side-actions" aria-label={t("nav.projects")}>
-        <ListRow
-          render={<button type="button" />}
-          className="nav-item new-thread-btn"
-          aria-label={t("nav.newThread")}
-          onClick={() => onNewThread()}
-          leading={<Icon name="compose" />}
-          title={t("nav.newThread")}
-          meta={<kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>}
-        />
-        {onOpenSchedules ? (
+      <div className="side-head">
+        <nav className="side-actions" aria-label={t("nav.projects")}>
           <ListRow
             render={<button type="button" />}
-            className="nav-item"
-            onClick={onOpenSchedules}
-            leading={<Icon name="clock" />}
-            title={t("settings.schedules")}
+            className="nav-item new-thread-btn"
+            aria-label={t("nav.newThread")}
+            onClick={() => onNewThread()}
+            leading={<Icon name="compose" />}
+            title={t("nav.newThread")}
+            meta={<kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>}
           />
-        ) : null}
-        {onOpenPlugins ? (
-          <ListRow
-            render={<button type="button" />}
-            className="nav-item"
-            onClick={onOpenPlugins}
-            leading={<Icon name="cube" />}
-            title={t("settings.plugins")}
-          />
-        ) : null}
-      </nav>
-      <div className="side-label">
-        <span>{grouping === "time" ? t("sidebar.recent") : t("nav.projects")}</span>
-        <GroupingMenu value={grouping} onChange={setGrouping} />
-        <Button
-          variant="plain"
-          className="icon-btn"
-          type="button"
-          aria-label={t("nav.addProject")}
-          title={t("nav.addProject")}
-          onClick={onAddProject}
-        >
-          <Icon name="folder-plus" small />
-        </Button>
-      </div>
-      {projects.length === 0 ? (
-        <ListRow
-          render={<button type="button" />}
-          className="nav-item side-add-project"
-          onClick={onAddProject}
-          leading={<Icon name="plus" />}
-          title={t("nav.addProject")}
-        />
-      ) : null}
-      {grouping === "time" ? (
-        <div className="recent-sessions">
-          {projects.length > 0 && liveThreads.length === 0 ? (
-            <EmptyState size="compact" title={t("sidebar.noThreads")} />
+          {onOpenSchedules ? (
+            <ListRow
+              render={<button type="button" />}
+              className="nav-item"
+              selected={activeNav === "schedules"}
+              aria-current={activeNav === "schedules" ? "page" : undefined}
+              onClick={onOpenSchedules}
+              leading={<Icon name="clock" />}
+              title={t("settings.schedules")}
+            />
           ) : null}
-          {order.map((thread) =>
-            row(
-              thread,
-              <span className="sess-project truncate">
-                {projectNames.get(thread.projectId) ?? ""}
-              </span>,
-            ),
-          )}
+          {onOpenPlugins ? (
+            <ListRow
+              render={<button type="button" />}
+              className="nav-item"
+              selected={activeNav === "plugins"}
+              aria-current={activeNav === "plugins" ? "page" : undefined}
+              onClick={onOpenPlugins}
+              leading={<Icon name="cube" />}
+              title={t("settings.plugins")}
+            />
+          ) : null}
+        </nav>
+      </div>
+      <SideScroll>
+        <div className="side-label">
+          <span>{grouping === "time" ? t("sidebar.recent") : t("nav.projects")}</span>
+          <GroupingMenu value={grouping} onChange={setGrouping} />
+          <Button
+            variant="plain"
+            className="icon-btn"
+            type="button"
+            aria-label={t("nav.addProject")}
+            title={t("nav.addProject")}
+            onClick={onAddProject}
+          >
+            <Icon name="folder-plus" small />
+          </Button>
         </div>
-      ) : (
-        projects.map((project) => {
-          const open = expandedProjects[project.id] ?? true
-          const projectThreads = liveThreads.filter((thread) => thread.projectId === project.id)
-          return (
-            <div key={project.id} className="proj-block">
-              <ProjectRow
-                project={project}
-                open={open}
-                rename={renameFor(project.id, (name) => onRenameProject?.(project.id, name))}
-                actions={projectActions(project)}
-                onToggle={() => onToggleProject(project.id, !open)}
-                onNewThread={() => onNewThread(project.id)}
-              />
-              {open ? (
-                <div className="proj-sessions">
-                  {projectThreads.length === 0 ? (
-                    <EmptyState size="compact" title={t("sidebar.noThreads")} />
-                  ) : null}
-                  {projectThreads.map((thread) => {
-                    const agentId = thread.lastAgentId ?? thread.defaultAgentId
-                    const agentName = agentNames[agentId] ?? agentId
-                    // 缩写只是装饰；读屏器读 agent 的全名。
-                    return row(
-                      thread,
-                      <>
-                        <EntityAvatar
-                          id={agentId}
-                          name={agentName}
-                          size="inline"
-                          className="sess-agent"
-                        />
-                        <span className="sr-only">{agentName}</span>
-                      </>,
-                    )
-                  })}
-                </div>
-              ) : null}
-            </div>
-          )
-        })
-      )}
+        {projects.length === 0 ? (
+          <ListRow
+            render={<button type="button" />}
+            className="nav-item side-add-project"
+            onClick={onAddProject}
+            leading={<Icon name="plus" />}
+            title={t("nav.addProject")}
+          />
+        ) : null}
+        {grouping === "time" ? (
+          <div className="recent-sessions">
+            {projects.length > 0 && liveThreads.length === 0 ? (
+              <EmptyState size="compact" title={t("sidebar.noThreads")} />
+            ) : null}
+            {order.map((thread) =>
+              row(
+                thread,
+                <span className="sess-project truncate">
+                  {projectNames.get(thread.projectId) ?? ""}
+                </span>,
+              ),
+            )}
+          </div>
+        ) : (
+          projects.map((project) => {
+            const open = expandedProjects[project.id] ?? true
+            const projectThreads = liveThreads.filter((thread) => thread.projectId === project.id)
+            return (
+              <div key={project.id} className="proj-block">
+                <ProjectRow
+                  project={project}
+                  open={open}
+                  rename={renameFor(project.id, (name) => onRenameProject?.(project.id, name))}
+                  actions={projectActions(project)}
+                  onToggle={() => onToggleProject(project.id, !open)}
+                  onNewThread={() => onNewThread(project.id)}
+                />
+                {open ? (
+                  <div className="proj-sessions">
+                    {projectThreads.length === 0 ? (
+                      <EmptyState size="compact" title={t("sidebar.noThreads")} />
+                    ) : null}
+                    {projectThreads.map((thread) => {
+                      const agentId = thread.lastAgentId ?? thread.defaultAgentId
+                      const agentName = agentNames[agentId] ?? agentId
+                      // 缩写只是装饰；读屏器读 agent 的全名。
+                      return row(
+                        thread,
+                        <>
+                          <EntityAvatar
+                            id={agentId}
+                            name={agentName}
+                            size="inline"
+                            className="sess-agent"
+                          />
+                          <span className="sr-only">{agentName}</span>
+                        </>,
+                      )
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })
+        )}
+        {children}
+      </SideScroll>
     </>
   )
 }

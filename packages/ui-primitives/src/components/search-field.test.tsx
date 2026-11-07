@@ -45,6 +45,18 @@ describe("SearchField", () => {
     expect((container.firstElementChild as HTMLElement).getAttribute("data-size")).toBe("compact")
   })
 
+  it("marks the plain variant used at the top of popups", () => {
+    const { container } = render(<Controlled />)
+    expect((container.firstElementChild as HTMLElement).getAttribute("data-variant")).toBe(
+      "default",
+    )
+    cleanup()
+    const plain = render(<Controlled variant="plain" />)
+    expect((plain.container.firstElementChild as HTMLElement).getAttribute("data-variant")).toBe(
+      "plain",
+    )
+  })
+
   it("names the input after the placeholder unless aria-label is given", () => {
     render(<Controlled />)
     expect(screen.getByRole("searchbox", { name: "搜索设置" })).toBeTruthy()

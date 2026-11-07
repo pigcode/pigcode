@@ -64,7 +64,10 @@
 }
 
 /* ─── 模型选择器：左栏 agent，右栏模型与思考深度 ───────────── */
-/* 外框是 Popover 自带的 .popup */
+/*
+  外框是 Popover 自带的 .popup。高度固定，切换 agent 时不跳；按钮和窗口边缘之间放不下时缩到放得下。
+  右栏顶上的搜索和底部的思考深度不动，只有中间的模型列表滚动。
+*/
 .model-picker {
   width: min(480px, calc(100vw - 32px));
   overflow: hidden;
@@ -72,7 +75,9 @@
 .model-picker-body {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
-  height: var(--model-picker-h);
+  /* 行高不能被内容撑开：模型再多也只在列表里滚，否则搜索和思考深度会被挤出外框 */
+  grid-template-rows: minmax(0, 1fr);
+  height: min(var(--model-picker-h), var(--available-height, var(--model-picker-h)));
 }
 .model-rail {
   display: flex;
@@ -135,10 +140,11 @@
   min-width: 0;
   flex-direction: column;
 }
-/* 搜索区只给 SearchField 留出内边距，左右和下面列表的行对齐 */
+/* 搜索区和命令面板的一样：不带底色的一行，下面一条细线隔开列表；左右和列表的行对齐 */
 .model-search {
   flex: none;
-  padding: var(--space-4) var(--space-3) var(--space-1);
+  padding: var(--space-5) var(--space-3);
+  border-bottom: var(--hair) solid var(--border-strong);
 }
 .model-list {
   flex: 1;
@@ -189,21 +195,28 @@
   color: var(--warn-text);
   font-size: var(--fs-xs);
 }
+/*
+  档位多、文字又长（英文）时，分段控件换到下一行。标签不折行，至少留出「思考深度」几个字，
+  再挤就只截断后面的模型名。
+*/
 .model-effort {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3) var(--space-5);
   padding: 8px 12px 10px;
   border-top: var(--hair) solid var(--border-strong);
 }
 .model-effort-label {
   display: flex;
-  min-width: 0;
+  flex: 1 1 0;
+  min-width: 5em;
   align-items: baseline;
   gap: 6px;
   color: var(--fg-2);
   font-size: var(--fs-sm);
+  white-space: nowrap;
 }
 .model-effort-model {
   color: var(--muted);

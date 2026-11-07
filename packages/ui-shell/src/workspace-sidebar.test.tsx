@@ -1,6 +1,6 @@
 /** 验证侧栏渲染导航、项目与会话，以及会话的右键菜单与数字快捷键。 */
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -110,10 +110,27 @@ describe("WorkspaceSidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "插件" }))
     expect(onOpenSchedules).toHaveBeenCalledTimes(1)
     expect(onOpenPlugins).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole("button", { name: "插件" }).getAttribute("aria-current")).toBeNull()
+    expect(screen.getByRole("button", { name: "定时任务" }).getAttribute("aria-current")).toBeNull()
     const addButtons = screen.getAllByRole("button", { name: "添加项目" })
     expect(addButtons).toHaveLength(2)
     fireEvent.click(addButtons[1] as HTMLElement)
     expect(onAddProject).toHaveBeenCalledTimes(1)
+  })
+
+  it("pins the main navigation above the scrolling list, which ends with the extra content", () => {
+    renderSidebar({ onOpenSchedules: vi.fn(), onOpenPlugins: vi.fn(), children: <p>panel body</p> })
+    const head = document.querySelector(".side-head") as HTMLElement
+    const list = document.querySelector(".side-scroll") as HTMLElement
+    for (const name of ["新会话", "定时任务", "插件"]) {
+      expect(within(head).getByRole("button", { name })).toBeTruthy()
+    }
+    expect(within(list).queryByRole("button", { name: "定时任务" })).toBeNull()
+    expect(within(list).getByText("项目")).toBeTruthy()
+    expect(within(list).getByRole("button", { name: /First thread/ })).toBeTruthy()
+    expect(list.querySelector(".side-scroll-body")?.lastElementChild?.textContent).toBe(
+      "panel body",
+    )
   })
 
   it("switches to a single list sorted by time from the filter menu and remembers it", async () => {

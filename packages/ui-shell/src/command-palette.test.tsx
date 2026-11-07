@@ -132,6 +132,25 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("option", { name: /Open the dev server/ })).toBeTruthy()
   })
 
+  it("starts the new thread draft in the project picked from the projects group", async () => {
+    const user = userEvent.setup()
+    const onNewThread = vi.fn()
+    renderPalette(
+      {
+        onNewThread,
+        projects: [
+          { id: "p1", name: "one", rootPath: "/one", createdAt: "2026-10-20T00:00:00.000Z" },
+          { id: "p2", name: "two", rootPath: "/two", createdAt: "2026-10-20T00:00:00.000Z" },
+        ],
+      },
+      [],
+    )
+
+    await user.click(screen.getByRole("option", { name: /two/ }))
+
+    expect(onNewThread).toHaveBeenCalledWith("p2")
+  })
+
   it("closes on Escape", async () => {
     const user = userEvent.setup()
     const { onClose } = renderPalette()

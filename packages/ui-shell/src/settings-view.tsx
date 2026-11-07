@@ -20,10 +20,10 @@ export function settingsPageOrFallback(
 }
 
 /**
- * 一页设置出错（代码分块没加载下来、页面组件抛错）时只在内容区显示错误，侧栏和窗口其余部分照常可用。
+ * 一页（设置页、插件页）出错（代码分块没加载下来、页面组件抛错）时只在内容区显示错误，侧栏和窗口其余部分照常可用。
  * 按页 id 挂载，换一页就重新开始。
  */
-class PageErrorBoundary extends Component<
+export class PageErrorBoundary extends Component<
   { fallback: (reason: string) => ReactNode; children: ReactNode },
   { reason: string | null }
 > {

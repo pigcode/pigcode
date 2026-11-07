@@ -3,7 +3,7 @@
  * 搜索按名称过滤两组；内容区画当前页，当前页被移除时退回通用页。
  */
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   ExtensionRegistryScope,
@@ -67,6 +67,17 @@ describe("SettingsSidebar", () => {
     )
     expect(screen.getByRole("button", { name: "外观" }).getAttribute("aria-current")).toBe("page")
     expect(screen.getAllByTestId("glyph")).toHaveLength(3)
+  })
+
+  it("pins the back row and the search box above the scrolling page list", () => {
+    renderSidebar(registryWithPages())
+    const head = document.querySelector(".side-head") as HTMLElement
+    const list = document.querySelector(".side-scroll") as HTMLElement
+    expect(within(head).getByRole("button", { name: "返回应用" })).toBeTruthy()
+    expect(within(head).getByPlaceholderText("搜索设置")).toBeTruthy()
+    expect(within(list).queryByRole("button", { name: "返回应用" })).toBeNull()
+    expect(within(list).getByText("设置")).toBeTruthy()
+    expect(within(list).getByRole("button", { name: "Debug Settings" })).toBeTruthy()
   })
 
   it("selects a page by its id", () => {

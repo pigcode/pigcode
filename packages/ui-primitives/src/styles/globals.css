@@ -25,7 +25,7 @@
 @import "./file-summary.css";
 @import "./turn-nav.css";
 @import "./status-panel.css";
-@import "./chat-empty.css";
+@import "./new-thread.css";
 @import "./composer.css";
 @import "./composer-input.css";
 @import "./drawer.css";
@@ -43,5 +43,6 @@
 @import "./settings-page.css";
 @import "./agents.css";
 @import "./plugins.css";
+@import "./schedules.css";
 @import "./toast.css";
 @import "./motion.css";

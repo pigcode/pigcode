@@ -1,5 +1,6 @@
 /*
-  命令面板：⌘K 打开的面板，顶部搜索框，下面分组的命令列表与底部按键提示。外框是 menus.css 的 .popup。
+  命令面板：⌘K 打开的面板。顶上一行是不带底色和描边的搜索输入（SearchField 的 plain），一条细线隔开
+  下面分组的命令列表，最下面是按键提示。外框是 menus.css 的 .popup。
 */
 /* 蒙层的颜色和层级来自 .scrim，这里只让面板靠上居中 */
 .palette-scrim {
@@ -21,8 +22,15 @@
 /* 顶部一行只负责给 SearchField 留出内边距，和下面列表的行左右对齐 */
 .palette-search {
   flex: none;
-  padding: var(--space-4) var(--space-3);
+  padding: var(--space-5) var(--space-3);
   border-bottom: var(--hair) solid var(--divider);
+}
+/* 放大镜居中在和下面各行图标一样宽的位置里，输入的文字和各行的标题左对齐 */
+.palette-search .search-field {
+  gap: var(--space-4);
+}
+.palette-search .search-field > .ic {
+  margin: 0 calc((var(--palette-icon-size) - var(--icon-sm)) / 2);
 }
 .palette-search kbd,
 .palette-foot kbd {

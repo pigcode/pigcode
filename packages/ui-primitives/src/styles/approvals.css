@@ -124,14 +124,18 @@
   height: var(--control-lg);
   margin-top: 4px;
   padding: 0 10px;
-  border: 1px solid var(--cv-border);
+  border: 1px solid var(--input-border);
   border-radius: var(--r-block);
-  background: var(--cv-card);
+  background: var(--input-bg);
   color: var(--fg);
   font: inherit;
 }
+.question-other:hover {
+  border-color: var(--input-border-hover);
+}
 .question-other:focus {
-  border-color: var(--border-strong);
+  border-color: var(--input-border-focus);
+  background: var(--input-bg-focus);
   outline: none;
 }
 @media (prefers-reduced-motion: no-preference) {

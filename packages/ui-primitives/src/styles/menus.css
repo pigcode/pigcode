@@ -51,6 +51,13 @@
 .menu-item[data-disabled] {
   opacity: 0.4;
 }
+/* 删除、卸载这类不能撤回的操作 */
+.menu-item[data-danger] {
+  color: var(--bad-text);
+}
+.menu-item[data-danger] .ic {
+  color: inherit;
+}
 .menu-item .ic {
   flex: none;
   color: var(--fg-2);

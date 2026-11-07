@@ -23,7 +23,8 @@ export interface CommandPaletteProps {
   threads: Thread[]
   projects: Project[]
   activeThreadId: string | null
-  onNewThread: () => void
+  /** 进入新会话草稿；从「项目」组选的项目作为草稿的项目。 */
+  onNewThread: (projectId?: string) => void
   onOpenThread: (threadId: string) => void
 }
 
@@ -75,7 +76,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       hint: project.rootPath,
       icon: "folder",
       keywords: `${project.name} ${project.rootPath}`,
-      run: props.onNewThread,
+      run: () => props.onNewThread(project.id),
     }))
     return [...actions, ...threads, ...projects]
   }, [actions, props, t])
@@ -149,6 +150,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       >
         <div className="palette-search">
           <SearchField
+            variant="plain"
             inputRef={inputRef}
             value={query}
             onValueChange={(value) => {

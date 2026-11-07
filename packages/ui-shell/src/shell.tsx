@@ -17,7 +17,7 @@ import { AddProjectDialog } from "./add-project-dialog"
 import { registerBuiltinCommands } from "./builtin-commands"
 import { CommandPalette } from "./command-palette"
 import { Icon } from "./icon"
-import { PanelResizer, useRightWidth } from "./panel-resizer"
+import { PanelResizer, SidebarResizer, useRightWidth, useSidebarWidth } from "./panel-resizer"
 import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar } from "./settings-sidebar"
 import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
@@ -35,8 +35,8 @@ import {
 } from "./window-state"
 import { WorkspaceSidebar, visibleThreads } from "./workspace-sidebar"
 
-/** 顶层视图：聊天、设置与插件。 */
-export type ShellView = "chat" | "settings" | "plugins"
+/** 顶层视图：聊天、设置、插件与定时任务。 */
+export type ShellView = "chat" | "settings" | "plugins" | "schedules"
 
 /** 外壳所需的数据与事件；项目/线程数据由 store 传入。 */
 export interface ShellProps {
@@ -147,9 +147,11 @@ export function Shell({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [rightWidth, setRightWidth] = useRightWidth()
+  const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [localExpanded, setLocalExpanded] = useState<Record<string, boolean>>({})
   const [localSidebarOpen, setLocalSidebarOpen] = useState(true)
-  const inSettings = view !== "chat"
+  // 插件页、定时任务页和聊天一样用工作区侧栏，侧栏里对应的入口高亮；只有设置换成设置侧栏。
+  const inSettings = view === "settings"
   const platform = nativePlatform()
   const narrow = useNarrowWindow()
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -157,7 +159,7 @@ export function Shell({
   const shortcutHints = useModifierHints() && !inSettings
   const expanded = expandedProjects ?? localExpanded
   const open = sidebarOpen ?? localSidebarOpen
-  const activePage = settingsPage ?? (view === "plugins" ? "plugins" : DEFAULT_SETTINGS_PAGE)
+  const activePage = settingsPage ?? DEFAULT_SETTINGS_PAGE
 
   // 抽屉只在窄窗口里有意义；变宽后复位，下次变窄时从收起开始。
   useEffect(() => {
@@ -292,10 +294,10 @@ export function Shell({
     onToggleProject?.(projectId, next)
   }
 
-  /** 打开一个设置页；插件页有自己的顶层视图，命令面板与侧栏底部也直接打开它。 */
+  /** 打开一个设置页。 */
   function selectPage(page: string): void {
     onSettingsPage?.(page)
-    onView(page === "plugins" ? "plugins" : "settings")
+    onView("settings")
   }
 
   // 内置命令走 Command 扩展点：命令面板和输入框 `/` 都从注册表读取。调用方每次渲染都可能传来新的
@@ -332,7 +334,10 @@ export function Shell({
   ]
     .filter(Boolean)
     .join(" ")
-  const appStyle = { "--right-w": `${rightWidth}px` } as CSSProperties
+  const appStyle = {
+    "--sidebar-w": `${sidebarWidth}px`,
+    "--right-w": `${rightWidth}px`,
+  } as CSSProperties
 
   const menus = hasCustomTitleBar(platform)
     ? titleBarMenus({
@@ -365,42 +370,44 @@ export function Shell({
         aria-label={inSettings ? t("settings.title") : t("nav.projects")}
       >
         <div className="side-top" />
-        <div className="side-scroll">
-          {inSettings ? (
-            <SettingsSidebar
-              activePage={activePage}
-              onSelect={selectPage}
-              onExit={() => onView("chat")}
-            />
-          ) : (
-            <WorkspaceSidebar
-              projects={projects}
-              threads={threads}
-              activeThreadId={activeThreadId}
-              threadStatus={threadStatus}
-              agentNames={agentNames}
-              expandedProjects={expanded}
-              onAddProject={() => setDialogOpen(true)}
-              onToggleProject={toggleProject}
-              onOpenThread={(threadId) => {
-                setDrawerOpen(false)
-                onOpenThread(threadId)
-              }}
-              onNewThread={(projectId) => {
-                setDrawerOpen(false)
-                onNewThread(projectId)
-              }}
-              onOpenSchedules={() => selectPage("schedules")}
-              onOpenPlugins={() => selectPage("plugins")}
-              onRenameThread={onRenameThread}
-              onArchiveThread={onArchiveThread}
-              onRenameProject={onRenameProject}
-              onRemoveProject={onRemoveProject}
-              shortcutHints={shortcutHints}
-            />
-          )}
-          <SidebarPanels />
-        </div>
+        {inSettings ? (
+          <SettingsSidebar
+            activePage={activePage}
+            onSelect={selectPage}
+            onExit={() => onView("chat")}
+          >
+            <SidebarPanels />
+          </SettingsSidebar>
+        ) : (
+          <WorkspaceSidebar
+            projects={projects}
+            threads={threads}
+            activeThreadId={view === "chat" ? activeThreadId : null}
+            threadStatus={threadStatus}
+            agentNames={agentNames}
+            expandedProjects={expanded}
+            onAddProject={() => setDialogOpen(true)}
+            onToggleProject={toggleProject}
+            onOpenThread={(threadId) => {
+              setDrawerOpen(false)
+              onOpenThread(threadId)
+            }}
+            onNewThread={(projectId) => {
+              setDrawerOpen(false)
+              onNewThread(projectId)
+            }}
+            onOpenSchedules={() => onView("schedules")}
+            onOpenPlugins={() => onView("plugins")}
+            activeNav={view === "schedules" || view === "plugins" ? view : undefined}
+            onRenameThread={onRenameThread}
+            onArchiveThread={onArchiveThread}
+            onRenameProject={onRenameProject}
+            onRemoveProject={onRemoveProject}
+            shortcutHints={shortcutHints}
+          >
+            <SidebarPanels />
+          </WorkspaceSidebar>
+        )}
         {!inSettings ? (
           <div className="side-foot">
             <span className="side-account">
@@ -422,6 +429,7 @@ export function Shell({
           </div>
         ) : null}
       </aside>
+      {open && !narrow ? <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} /> : null}
       <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
       <div className="workspace">
         <main className="panel">
@@ -448,7 +456,7 @@ export function Shell({
         projects={projects}
         threads={threads}
         activeThreadId={activeThreadId}
-        onNewThread={() => onNewThread()}
+        onNewThread={(projectId) => onNewThread(projectId)}
         onOpenThread={onOpenThread}
       />
     </div>

@@ -10,6 +10,11 @@
 .page.narrow {
   max-width: var(--col-narrow);
 }
+/* 两列卡片的页面（插件、定时任务）比设置页的单列宽一些；卡片栏按页面自己的宽度换成一列 */
+.page.wide {
+  max-width: var(--col-wide);
+  container-type: inline-size;
+}
 .page-head {
   display: flex;
   align-items: center;

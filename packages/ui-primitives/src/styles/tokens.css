@@ -32,10 +32,19 @@
   --border: oklch(21% 0.006 286 / 0.1);
   --border-strong: oklch(21% 0.006 286 / 0.16);
   --divider: oklch(21% 0.006 286 / 0.075);
+  /* 拖动分隔条悬停与拖动时的竖线：同 Cursor 的 sash.hoverBorder，墨色 12% */
+  --resizer-hover: oklch(21% 0.006 286 / 0.12);
   --border-focus: oklch(52% 0.2 264 / 0.6);
   --field: oklch(21% 0.006 286 / 0.04);
   --popover-glass: oklch(100% 0 0 / 0.9);
   --scroll-thumb: oklch(21% 0.006 286 / 0.18);
+
+  /* 输入框：浅底、细描边；悬停时描边深一点，聚焦再深一档，始终是中性色，不加外发光 */
+  --input-bg: oklch(100% 0 0);
+  --input-bg-focus: oklch(100% 0 0);
+  --input-border: oklch(21% 0.006 286 / 0.13);
+  --input-border-hover: oklch(21% 0.006 286 / 0.22);
+  --input-border-focus: oklch(21% 0.006 286 / 0.4);
 
   /* 操作：主按钮、开关、链接与焦点用靛蓝，其余界面保持中性 */
   --primary: oklch(48.8% 0.217 264);
@@ -114,11 +123,10 @@
   */
   --cv-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
   --cv-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04);
-  --composer-ring: oklch(21% 0.006 286 / 0.11);
-  --composer-ring-focus: oklch(21% 0.006 286 / 0.22);
+  /* 输入区卡片的细线画在卡片外、叠在更暗的底色上，所以比普通细线更淡；聚焦只比平时深一档 */
+  --composer-ring: oklch(21% 0.006 286 / 0.06);
+  --composer-ring-focus: oklch(21% 0.006 286 / 0.1);
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
-  --shadow-composer-focus:
-    0 1px 2px oklch(21% 0.006 286 / 0.05), 0 8px 24px oklch(21% 0.006 286 / 0.07);
 
   /*
     对话区（timeline.css 及各块）：前景的 60% / 40% 透明度作为次要与最次要文字，细线、卡片从主题表面推出，
@@ -167,10 +175,17 @@
   --border: oklch(100% 0 0 / 0.08);
   --border-strong: oklch(100% 0 0 / 0.13);
   --divider: oklch(100% 0 0 / 0.065);
+  --resizer-hover: oklch(100% 0 0 / 0.12);
   --border-focus: oklch(66% 0.17 264 / 0.75);
   --field: oklch(100% 0 0 / 0.05);
   --popover-glass: oklch(23% 0 0 / 0.9);
   --scroll-thumb: oklch(100% 0 0 / 0.18);
+
+  --input-bg: oklch(100% 0 0 / 0.035);
+  --input-bg-focus: oklch(100% 0 0 / 0.055);
+  --input-border: oklch(100% 0 0 / 0.1);
+  --input-border-hover: oklch(100% 0 0 / 0.17);
+  --input-border-focus: oklch(100% 0 0 / 0.32);
 
   --primary: oklch(57.1% 0.21 264);
   --primary-hover: oklch(62% 0.19 264);
@@ -236,10 +251,9 @@
   --cv-shadow-md: 0 4px 6px -1px oklch(0% 0 0 / 0.3), 0 2px 4px -2px oklch(0% 0 0 / 0.3);
   --cv-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
   --cv-shadow-card: 0 1px 2px rgb(0 0 0 / 0.04);
-  --composer-ring: oklch(100% 0 0 / 0.1);
-  --composer-ring-focus: oklch(100% 0 0 / 0.2);
+  --composer-ring: oklch(100% 0 0 / 0.07);
+  --composer-ring-focus: oklch(100% 0 0 / 0.11);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
-  --shadow-composer-focus: 0 8px 24px oklch(0% 0 0 / 0.34);
 
   --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
   --cv-added: #46bf72;
@@ -279,7 +293,7 @@
   /*
     字号：键帽与头像字母 10 / 小键帽与分组名 10.5 / 快捷键与附注 11 / 说明 11.5 / 次要 12 /
     右栏紧凑文字 12.5 / 界面 13 / 抽屉标题 13.5 / 面板标题 14 / 对话框标题 15 / 页面标题 20 /
-    空白页标题 22，随「界面字号」整体缩放；对话 14
+    空白页标题 22 / 新会话的问候 28，随「界面字号」整体缩放；对话 14
   */
   --ui-scale: 1;
   --fs-4xs: calc(var(--ui-scale) * 10px);
@@ -294,6 +308,7 @@
   --fs-heading: calc(var(--ui-scale) * 15px);
   --fs-title: calc(var(--ui-scale) * 20px);
   --fs-display: calc(var(--ui-scale) * 22px);
+  --fs-hero: calc(var(--ui-scale) * 28px);
   /* 固定大小的图标里的字母（应用图标的首字母）、文件树的 git 状态字母：不随界面字号缩放 */
   --fs-icon-letter: 10px;
   --fs-tree-badge: 10.5px;
@@ -401,22 +416,27 @@
   --dot-matrix-size: 10px;
   --dot-matrix-dot: 2px;
 
-  /* 按钮和输入框的阴影：主按钮的立体感、输入框的细边与聚焦光圈 */
+  /*
+    按钮和输入框的阴影：主按钮的立体感；输入框的细描边画成内阴影，不占布局，悬停与聚焦只换描边的深浅
+  */
   --shadow-primary:
     inset 0 1px 0 oklch(100% 0 0 / 0.16),
     0 0 0 0.5px color-mix(in oklab, var(--primary) 70%, black), 0 1px 2px oklch(0% 0 0 / 0.12);
-  --shadow-field:
-    inset 0 0 0 var(--hair) var(--border-strong), 0 1px 1px oklch(26% 0.02 280 / 0.03);
-  --shadow-field-focus: inset 0 0 0 1px var(--border-focus), 0 0 0 3.5px var(--accent-ring);
+  --shadow-field: inset 0 0 0 1px var(--input-border);
+  --shadow-field-hover: inset 0 0 0 1px var(--input-border-hover);
+  --shadow-field-focus: inset 0 0 0 1px var(--input-border-focus);
   /* 浮层的磨砂 */
   --popup-blur: blur(24px) saturate(1.8);
   /* 遮罩渐变里不透明的一端：遮罩只看 alpha，与主题无关 */
   --mask-fill: #000;
 
   --hair: 0.5px;
+  /* 侧栏的默认宽度；拖动分隔条后由 shell.tsx 写到 .app 上 */
   --sidebar-w: 260px;
   --col: 720px;
   --col-narrow: 640px;
+  /* 两列卡片的页面：插件与定时任务 */
+  --col-wide: 860px;
   --chat-col: 848px;
   /* 对话列的最大宽度 */
   --cv-col: 56rem;
@@ -437,16 +457,13 @@
   /*
     组件尺寸：只属于一个组件的固定尺寸，也集中放在这里。
     空白页的图标块与其中的图标、提示胶囊的高度；设置页的页头与分组标题行；
-    输入框的最小高度（普通与加高）；模型菜单的高度、左栏按钮；侧栏底部账户行；
+    新会话草稿里输入框正文区的最小高度；模型菜单的高度、左栏按钮；侧栏底部账户行；
     线程头里子 agent 的图标块；命令面板每行的图标块；内置浏览器里 agent 点击位置的圆圈；
-    添加项目对话框的文件夹选择区；终端抽屉的最小高度；问题导航里每一项的可点高度与其中的短横
+    添加项目对话框的文件夹选择区；终端抽屉的最小高度；会话导航里每一项的可点高度与其中的短横；
+    插件页卡片与插件详情里的应用图标；定时任务页的空状态卡与模板卡的最小高度
   */
-  --empty-mark-size: 48px;
-  --empty-mark-icon: 24px;
-  --empty-hint-h: 30px;
   --page-head-h: 30px;
   --section-head-h: 22px;
-  --composer-input-h: 52px;
   --composer-input-h-tall: 70px;
   --model-picker-h: min(400px, 62vh);
   --model-rail-btn: 38px;
@@ -454,8 +471,15 @@
   --subagent-icon-size: 22px;
   --palette-icon-size: 24px;
   --browser-pointer-size: 24px;
+  --browser-progress-h: 2px;
+  --browser-state-icon: 56px;
   --folder-picker-h: 132px;
   --terminal-drawer-min-h: 140px;
+  --plugin-icon: 36px;
+  --plugin-icon-lg: 40px;
+  --schedule-empty-h: 220px;
+  --schedule-card-h: 128px;
+  --schedule-template-h: 114px;
   --turn-nav-item-h: 10px;
   --turn-nav-bar-h: 2px;
 
@@ -501,6 +525,8 @@
   --avatar: oklch(20% 0.01 270 / 0.08);
   --field: oklch(20% 0.01 270 / 0.05);
   --field-hl: transparent;
+  --input-bg: oklch(100% 0 0 / 0.55);
+  --input-bg-focus: oklch(100% 0 0 / 0.72);
 
   /* 半透明底上细线要略深一点才看得见 */
   --divider: oklch(20% 0.01 270 / 0.09);
@@ -519,6 +545,8 @@
   --popover-glass: oklch(24% 0.003 270 / 0.72);
   --avatar: oklch(100% 0 0 / 0.1);
   --field: oklch(100% 0 0 / 0.06);
+  --input-bg: oklch(100% 0 0 / 0.06);
+  --input-bg-focus: oklch(100% 0 0 / 0.08);
 
   --divider: oklch(100% 0 0 / 0.08);
   --border: oklch(100% 0 0 / 0.09);
