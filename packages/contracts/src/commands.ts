@@ -1,7 +1,12 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
 import { agentSettingsValuesSchema } from "./agents"
-import { permissionModeSchema, reasoningEffortSchema } from "./domain"
+import { permissionModeSchema, reasoningEffortSchema, scheduleRuleSchema } from "./domain"
+
+/** 定时任务的标题：可以留空。 */
+const scheduleTitle = z.string().trim().max(120)
+/** 结束日期；null 表示永不结束。 */
+const scheduleEndsAt = z.string().datetime().nullable()
 
 /** 只读检测；refresh 跳过缓存重新运行，agentId 只检测这一个 agent。 */
 const agentDetectParams = z.object({
@@ -35,12 +40,18 @@ export const commandSchemas = {
   }),
   /** 只从侧栏移除；文件夹与会话都保留，再次添加同一路径时恢复。 */
   "project.remove": z.object({ projectId: z.string().min(1) }),
+  /** 项目根目录里的文件（相对路径）；新会话草稿还没有会话时，输入框的 @ 引用用它。 */
+  "project.files": z.object({ projectId: z.string().min(1) }),
   "thread.create": z.object({
     projectId: z.string().min(1),
     title: z.string().min(1).default("New thread"),
     agentId: z.string().min(1).default("fake"),
     /** 在这个主会话下添加子代理；子代理继承主会话的项目、工作目录与最近的对话摘要。 */
     parentThreadId: z.string().min(1).optional(),
+    /** 新会话草稿里选好的模型；缺省用 agent 的默认模型。 */
+    modelId: z.string().min(1).optional(),
+    /** 新会话草稿里选好的权限模式；缺省是 workspace-write。 */
+    permissionMode: permissionModeSchema.optional(),
   }),
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
   "thread.rename": z.object({
@@ -99,8 +110,25 @@ export const commandSchemas = {
   "plugin.disable": z.object({ id: z.string().min(1) }),
   /** 卸载用户安装的插件；内置插件只能停用。 */
   "plugin.uninstall": z.object({ id: z.string().min(1) }),
+  /** 安装插件市场里的一项；返回安装的条目。 */
+  "plugin.installFromMarketplace": z.object({
+    marketplace: z.string().min(1),
+    name: z.string().min(1),
+  }),
+  /** 按记下的来源重新安装用户安装的插件（从远程市场装的先刷新市场），保留配置与启停状态。 */
+  "plugin.update": z.object({ id: z.string().min(1) }),
   /** 重新读取插件列表，按当前状态补齐或卸下 Host 入口（插件页的「刷新」）。 */
   "plugin.reload": z.object({}),
+  /** 已添加的插件市场与其中的插件；返回 `MarketplaceSummary[]`。 */
+  "marketplace.list": z.object({}),
+  /** 添加插件市场：GitHub 仓库、git 地址、https 上的 marketplace.json、本地目录或文件。 */
+  "marketplace.add": z.object({ source: z.string().trim().min(1) }),
+  /** 刷新一个市场；不给 id 时刷新全部。返回刷新后的 `MarketplaceSummary[]`。 */
+  "marketplace.refresh": z.object({ id: z.string().min(1).optional() }),
+  /** 启用或停用市场：停用的不在插件市场里列出、不随「全部刷新」刷新，从它装的插件保留。 */
+  "marketplace.setEnabled": z.object({ id: z.string().min(1), enabled: z.boolean() }),
+  /** 删除市场；从它装的插件保留。 */
+  "marketplace.remove": z.object({ id: z.string().min(1) }),
   "plugin.bootGraph": z.object({}),
   "workspace.tree": z.object({ threadId: z.string().min(1) }),
   /** 线程工作目录的绝对路径；复制完整路径、在文件管理器中显示时用。 */
@@ -151,18 +179,30 @@ export const commandSchemas = {
   "schedule.list": z.object({}),
   "schedule.create": z.object({
     threadId: z.string().min(1),
-    prompt: z.string().min(1),
-    intervalSeconds: z.number().int().positive().max(2_147_483),
+    title: scheduleTitle.default(""),
+    prompt: z.string().trim().min(1),
+    rule: scheduleRuleSchema,
+    endsAt: scheduleEndsAt.default(null),
     enabled: z.boolean().default(true),
   }),
   "schedule.update": z.object({
     id: z.string().min(1),
-    prompt: z.string().min(1).optional(),
-    intervalSeconds: z.number().int().positive().max(2_147_483).optional(),
+    title: scheduleTitle.optional(),
+    prompt: z.string().trim().min(1).optional(),
+    rule: scheduleRuleSchema.optional(),
+    endsAt: scheduleEndsAt.optional(),
     enabled: z.boolean().optional(),
   }),
   "schedule.delete": z.object({ id: z.string().min(1) }),
+  /** 立即运行一次，不改动原来排好的下一次；返回 `{ status: started | busy | unavailable | failed, runId }`。 */
   "schedule.runNow": z.object({ id: z.string().min(1) }),
+  /** 一个任务的运行历史，新的在前；返回 `{ runs, total }`。 */
+  "schedule.runs": z.object({
+    id: z.string().min(1),
+    limit: z.number().int().min(1).max(100).default(20),
+    offset: z.number().int().min(0).default(0),
+  }),
+  "schedule.deleteRun": z.object({ id: z.string().min(1) }),
   "checkpoint.list": z.object({ threadId: z.string().min(1) }),
   "checkpoint.create": z.object({ threadId: z.string().min(1), label: z.string().optional() }),
   "checkpoint.restore": z.object({ threadId: z.string().min(1), checkpointId: z.string().min(1) }),
