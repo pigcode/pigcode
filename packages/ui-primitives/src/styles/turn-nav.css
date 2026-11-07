@@ -1,109 +1,123 @@
 /*
-  问题导航：对话区左侧一列短横线，一条代表一次提问；悬停时弹出这一问的提问与回答摘要。
+  会话导航（参照 Cursor 的 conversation minimap）：会话区左边留白里一列短横线，一条代表用户的一条消息，
+  当前读到的那条最深。指针靠近时附近几条变长变深：turn-navigator.tsx 按指针位置在附近的项上写
+  --turn-nav-distance（相隔几条，可以是小数）。悬停或聚焦时右边浮出这条消息和回答的开头。
+  会话区窄于 640px 时左边没有留白（timeline.css 的 .msgs），导航不显示，不会压到消息上。
 */
 .turn-nav {
+  --turn-nav-idle: color-mix(in oklab, var(--fg) 28%, transparent);
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
   z-index: 10;
-  width: 48px;
+  width: 2rem;
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-8px);
+  transform: translateX(-4px);
   transition:
-    opacity 150ms ease-out,
-    transform 150ms ease-out,
-    visibility 150ms;
+    opacity var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease),
+    visibility var(--t-fast);
 }
-@container conversation (min-width: 864px) {
+@container conversation (min-width: 640px) {
   .turn-nav {
     visibility: visible;
     opacity: 1;
     transform: none;
+    transition-duration: var(--t-med);
   }
 }
+@container conversation (min-width: 864px) {
+  .turn-nav {
+    width: 3rem;
+  }
+}
+/* 整列竖直居中，最多 320px 高；放不下时自己滚动（不显示滚动条） */
 .turn-nav-rail {
   position: absolute;
   top: 50%;
-  left: 12px;
+  right: 0;
+  left: 0;
   display: flex;
-  width: 36px;
-  max-height: calc(100% - 6rem);
+  max-height: min(50%, 320px);
   flex-direction: column;
-  padding: 4px 0;
+  padding: var(--space-2) 0;
   overflow: hidden auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   scrollbar-width: none;
   transform: translateY(-50%);
+  -webkit-user-select: none;
+  user-select: none;
 }
 .turn-nav-rail::-webkit-scrollbar {
   display: none;
 }
+/* 一项是整行宽、10px 高的按钮，短横线离左边 12px */
 .turn-nav-item {
+  --turn-nav-near: clamp(0, 1 - var(--turn-nav-distance, 4) / 3.5, 1);
   display: flex;
-  width: 36px;
+  width: 100%;
   height: var(--turn-nav-item-h);
   flex: none;
   align-items: center;
-  border-radius: var(--r-xs);
+  padding-left: var(--space-6);
 }
+.turn-nav-rail .turn-nav-item:focus-visible {
+  outline: none;
+}
+/* 平时 6px；指针对着的那条 16px，往外依次 12、9、7px */
 .turn-nav-bar {
   display: block;
-  width: 12px;
+  width: calc(
+    6px + 4px * clamp(0, 1 - var(--turn-nav-distance, 4), 1) + 3px *
+      clamp(0, 2 - var(--turn-nav-distance, 4), 1) + 2px *
+      clamp(0, 3 - var(--turn-nav-distance, 4), 1) + 1px *
+      clamp(0, 4 - var(--turn-nav-distance, 4), 1)
+  );
   height: var(--turn-nav-bar-h);
+  flex: none;
   border-radius: var(--r-full);
-  background: var(--cv-subtlest);
-  opacity: 0.55;
-  transform-origin: left;
+  background: color-mix(in oklab, var(--fg) calc(var(--turn-nav-near) * 60%), var(--turn-nav-idle));
+  pointer-events: none;
   transition:
-    opacity 150ms ease-out,
-    transform 150ms ease-out,
-    background-color 150ms ease-out;
+    width var(--t-fast) var(--ease),
+    background-color var(--t-fast) var(--ease);
 }
-.turn-nav-item[data-running] .turn-nav-bar {
-  opacity: 0.72;
-}
-.turn-nav-item[aria-current] .turn-nav-bar {
-  background: var(--fg);
-  opacity: 0.9;
-}
-.turn-nav-item:hover .turn-nav-bar,
+.turn-nav-item[aria-current] .turn-nav-bar,
 .turn-nav-item:focus-visible .turn-nav-bar {
   background: var(--fg);
-  opacity: 1;
-  transform: scaleX(1.5);
 }
-/* 问题导航的悬停卡片：外观是 .tip-popup，内容是这一问的提问与回答摘要 */
+
+/* 悬停卡片：外观是 .tip-popup，内容是这条消息与回答的开头，各最多三行 */
 .turn-nav-card {
   display: flex;
-  width: 20rem;
-  max-width: calc(100vw - 2rem);
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 2rem));
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-4);
-  padding: var(--space-6);
-  font-size: var(--cv-fs);
-  line-height: 20px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  line-height: 1.35;
 }
-.turn-nav-user {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  font-weight: 500;
-  white-space: pre-line;
-}
+.turn-nav-user,
 .turn-nav-assistant {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
-  color: color-mix(in oklab, var(--fg) 80%, transparent);
+  overflow-wrap: anywhere;
+}
+.turn-nav-user {
+  font-weight: 500;
+}
+.turn-nav-assistant {
+  color: var(--muted);
 }
 .turn-nav-assistant[data-empty] {
-  color: var(--cv-subtle);
+  color: var(--faint);
 }
 @media (prefers-reduced-motion: reduce) {
   .turn-nav,

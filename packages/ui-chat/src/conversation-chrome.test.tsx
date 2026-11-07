@@ -1,4 +1,4 @@
-/** 验证时间线的外围部件：用户气泡、思考、改动汇总、状态面板与问题导航。 */
+/** 验证时间线的外围部件：用户气泡、思考、改动汇总与状态面板；会话导航见 turn-navigator.test.tsx。 */
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -11,7 +11,6 @@ import { ReasoningBlock } from "./reasoning"
 import { StatusPanel } from "./status-panel"
 import { resetToolOpen } from "./tool-open"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
-import { TurnNavigator, plainPreview } from "./turn-navigator"
 import { buildTimeline } from "./turns"
 import { UserBubble } from "./user-bubble"
 
@@ -155,37 +154,5 @@ describe("StatusPanel", () => {
       <StatusPanel timeline={buildTimeline([event(1, "run.started", { text: "hi" })])} />,
     )
     expect(container.querySelector(".status-panel")).toBeNull()
-  })
-})
-
-describe("TurnNavigator", () => {
-  it("lists one bar per question and jumps to the turn", async () => {
-    const timeline = buildTimeline([
-      event(1, "run.started", { text: "first question" }, "run_1"),
-      event(2, "message.completed", { role: "assistant", text: "**First** answer" }, "run_1"),
-      event(3, "run.completed", {}, "run_1"),
-      event(4, "run.started", { text: "second question" }, "run_2"),
-    ])
-    const scroller = document.createElement("div")
-    const section = document.createElement("section")
-    section.className = "turn"
-    section.dataset.turn = "run_1"
-    section.scrollIntoView = vi.fn()
-    scroller.append(section)
-    document.body.append(scroller)
-    inLocale(<TurnNavigator timeline={timeline} scroller={{ current: scroller }} />)
-    const nav = screen.getByRole("navigation", { name: "对话问题导航" })
-    expect(nav.querySelectorAll(".turn-nav-item")).toHaveLength(2)
-    await userEvent.click(screen.getByRole("button", { name: "跳转到第 1 条问题" }))
-    expect(section.scrollIntoView).toHaveBeenCalled()
-    scroller.remove()
-  })
-
-  it("previews answers without Markdown syntax", () => {
-    expect(
-      plainPreview(
-        "## 改动\n\n| 文件 | 改动 |\n| --- | :---: |\n| `src/a.ts` | **新建** |\n\n```ts\nconst a = 1\n```\n- 跑过 [测试](https://x.dev)",
-      ),
-    ).toBe("改动 文件 改动 src/a.ts 新建 跑过 测试")
   })
 })
