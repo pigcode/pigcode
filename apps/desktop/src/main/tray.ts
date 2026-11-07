@@ -1,5 +1,5 @@
 /** 托盘图标与菜单（pigcode/monorepo#64）：关闭窗口后从这里找回窗口或退出。 */
-import { Menu, Tray, nativeImage, type NativeImage } from "electron"
+import { Menu, Notification, Tray, nativeImage, type NativeImage } from "electron"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { trayLabels } from "./locale/tray"
@@ -82,4 +82,15 @@ export function createTray(locale: string, actions: TrayActions, resourcesDir?: 
   )
   if (process.platform !== "darwin") tray.on("click", actions.show)
   return tray
+}
+
+/** 第一次隐藏到托盘时的提示只弹一次。 */
+let hiddenHintShown = false
+
+/** 第一次隐藏到托盘时提示一下；Windows 上关窗口后应用还在运行，不说明会让人以为已经退出。 */
+export function showHiddenHint(locale: string): void {
+  if (process.platform !== "win32" || hiddenHintShown || !Notification.isSupported()) return
+  hiddenHintShown = true
+  const labels = trayLabels(locale)
+  new Notification({ title: labels.hiddenTitle, body: labels.hiddenBody }).show()
 }

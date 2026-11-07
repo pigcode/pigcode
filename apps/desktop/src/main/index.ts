@@ -6,7 +6,6 @@ import {
   ipcMain,
   Menu,
   nativeTheme,
-  Notification,
   shell,
   type MessageBoxSyncOptions,
   type MessagePortMain,
@@ -22,10 +21,16 @@ import {
 } from "./folder-picker"
 import { startHostProcess, type HostProcess } from "./host-process"
 import { hidesOnClose } from "./lifecycle"
-import { readPreferences, withPreference, writePreferences, type Preferences } from "./preferences"
+import {
+  DEFAULT_PREFERENCES,
+  readPreferences,
+  withPreference,
+  writePreferences,
+  type Preferences,
+} from "./preferences"
+import { setKeepAwake } from "./keep-awake"
 import { applyLoginShellEnv } from "./shell-env"
-import { createTray } from "./tray"
-import { trayLabels } from "./locale/tray"
+import { createTray, showHiddenHint } from "./tray"
 import { confirmQuit } from "./quit-prompt"
 import { askQuitState, hasPendingWork } from "./quit-check"
 import { clearDownloads } from "./update-download"
@@ -73,15 +78,8 @@ let hostStop: Promise<void> | undefined
 let hostStopped = false
 /** 托盘只在 macOS 和 Windows 上有；创建一次，之后复用。 */
 let tray: Tray | undefined
-/** 第一次隐藏到托盘时的提示只弹一次。 */
-let hiddenHintShown = false
 /** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
-let preferences: Preferences = {
-  launchAtLogin: false,
-  showInDock: true,
-  autoCheckUpdates: true,
-  prereleaseUpdates: false,
-}
+let preferences: Preferences = { ...DEFAULT_PREFERENCES }
 /** Host 的控制端口：退出前经它查询还有多少工作。Host 退出后置空。 */
 let hostControlPort: MessagePortMain | undefined
 /** 用户在退出确认框里选了退出；之后的 app.quit() 不再重复询问。 */
@@ -114,6 +112,7 @@ function applyPreferences(next: Preferences): void {
     // 藏起 Dock 图标以后，菜单栏图标是唯一的入口。
     if (!next.showInDock) ensureTray()
   }
+  setKeepAwake(next.keepAwake)
 }
 
 /** 检查更新：启动后一次，之后每 6 小时；同一个版本只提示一次。 */
@@ -314,14 +313,6 @@ function ensureTray(): void {
   )
 }
 
-/** 第一次隐藏到托盘时提示一下；Windows 上关窗口后应用还在运行，不说明会让人以为已经退出。 */
-function showHiddenHint(): void {
-  if (process.platform !== "win32" || hiddenHintShown || !Notification.isSupported()) return
-  hiddenHintShown = true
-  const labels = trayLabels(app.getLocale())
-  new Notification({ title: labels.hiddenTitle, body: labels.hiddenBody }).show()
-}
-
 /** 正在创建的主窗口。启动过程中 activate 或 second-instance 再来一次时复用，不会开出两个窗口。 */
 let openingWindow: Promise<BrowserWindow> | undefined
 
@@ -392,7 +383,7 @@ export async function createWindow(): Promise<BrowserWindow> {
     event.preventDefault()
     window.hide()
     ensureTray()
-    showHiddenHint()
+    showHiddenHint(app.getLocale())
   })
   await window.loadURL("pigcode://app/index.html")
   return window

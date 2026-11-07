@@ -25,12 +25,13 @@ afterEach(() => {
 describe("preferences", () => {
   it("starts from the defaults when there is no file", () => {
     expect(readPreferences(tempPath())).toEqual(DEFAULT_PREFERENCES)
-    // 开机自启默认关，Dock 图标默认显示，自动检查开，但默认不接预发布。
+    // 开机自启默认关，Dock 图标默认显示，自动检查开，但默认不接预发布，也不阻止电脑睡眠。
     expect(DEFAULT_PREFERENCES).toEqual({
       launchAtLogin: false,
       showInDock: true,
       autoCheckUpdates: true,
       prereleaseUpdates: false,
+      keepAwake: false,
     })
   })
 
@@ -42,6 +43,7 @@ describe("preferences", () => {
       showInDock: true,
       autoCheckUpdates: true,
       prereleaseUpdates: false,
+      keepAwake: false,
     })
     writeFileSync(path, "not json")
     expect(readPreferences(path)).toEqual(DEFAULT_PREFERENCES)
@@ -54,12 +56,14 @@ describe("preferences", () => {
       showInDock: false,
       autoCheckUpdates: false,
       prereleaseUpdates: true,
+      keepAwake: true,
     })
     expect(readPreferences(path)).toEqual({
       launchAtLogin: true,
       showInDock: false,
       autoCheckUpdates: false,
       prereleaseUpdates: true,
+      keepAwake: true,
     })
   })
 

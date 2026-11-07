@@ -17,6 +17,11 @@ export interface Preferences {
    * 正式版用户不该被推过去。开着时既能收到 beta 也能收到新的正式版。
    */
   prereleaseUpdates: boolean
+  /**
+   * Pigcode 打开时不让电脑睡眠，定时任务能按时运行。默认关：阻止睡眠费电，要用户自己打开。
+   * 只阻止系统挂起，屏幕照常熄灭。
+   */
+  keepAwake: boolean
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
@@ -24,10 +29,17 @@ export const DEFAULT_PREFERENCES: Preferences = {
   showInDock: true,
   autoCheckUpdates: true,
   prereleaseUpdates: false,
+  keepAwake: false,
 }
 
 /** 可以改的键；页面传其他键时忽略。 */
-const KEYS = ["launchAtLogin", "showInDock", "autoCheckUpdates", "prereleaseUpdates"] as const
+const KEYS = [
+  "launchAtLogin",
+  "showInDock",
+  "autoCheckUpdates",
+  "prereleaseUpdates",
+  "keepAwake",
+] as const
 export type PreferenceKey = (typeof KEYS)[number]
 
 export function isPreferenceKey(value: unknown): value is PreferenceKey {
