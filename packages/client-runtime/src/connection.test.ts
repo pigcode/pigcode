@@ -149,6 +149,31 @@ describe("Connection", () => {
     expect(deltas).toEqual([{ threadId: "th_2", type: "message.delta" }])
   })
 
+  it("hands over each replay with its thread, even when the replay is empty", async () => {
+    const transport = new MemoryTransport()
+    const replays: Array<{ threadId: string; seqs: number[] }> = []
+    const connection = new Connection({
+      onEvent: () => {},
+      onEvents: (events, threadId) =>
+        replays.push({ threadId, seqs: events.map((event) => event.seq) }),
+      onDelta: () => {},
+      onStatus: () => {},
+    })
+    await connection.attach(transport.client)
+    await open(connection, transport, "th_empty")
+    const pending = connection.openThread("th_1")
+    respond(transport, await nextRequest(transport), {
+      snapshot: {},
+      cursor: 1,
+      events: [threadEvent("th_1", 1, "thread.created")],
+    })
+    await pending
+    expect(replays).toEqual([
+      { threadId: "th_empty", seqs: [] },
+      { threadId: "th_1", seqs: [1] },
+    ])
+  })
+
   it("ignores events and deltas after a thread is closed", async () => {
     const transport = new MemoryTransport()
     const events: ThreadEvent[] = []

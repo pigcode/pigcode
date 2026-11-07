@@ -18,6 +18,7 @@ import type { ComposerCommand } from "@pigcode/ui-composer"
 import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
+import { NewThreadPage } from "./new-thread-page"
 import {
   buildThreadTabs,
   childThreads,
@@ -45,6 +46,8 @@ export interface ChatControls {
   onOpenFile?: (path: string) => void
   /** 在右栏打开 Diff。 */
   onOpenDiff?: () => void
+  /** 每次进入新会话草稿都会变；变了就把光标放回草稿的输入框。 */
+  draftFocus?: number
 }
 
 /** 把 unknown 错误转成可展示文本。 */
@@ -77,6 +80,7 @@ export function ChatViewContainer({
   layoutControls,
   onOpenFile,
   onOpenDiff,
+  draftFocus,
 }: { deps: CoreDeps } & ChatControls) {
   const state = useAppStore(deps.store)
   const { t } = useLocale()
@@ -236,7 +240,7 @@ export function ChatViewContainer({
         parentThreadId: main.id,
       })) as Thread
       deps.store.update({ threads: [...deps.store.getSnapshot().threads, child] })
-      deps.store.openThread(child.id)
+      deps.store.openThread(child.id, { loaded: true })
       selectThreadTab(main.id, `agent:${child.id}`)
       await deps.connection.openThread(child.id)
     })().catch(fail)
@@ -293,6 +297,22 @@ export function ChatViewContainer({
     [registeredCommands, t],
   )
 
+  // 没有当前会话就是新会话草稿：发第一条消息时才建会话。
+  if (!main) {
+    return (
+      <NewThreadPage
+        deps={deps}
+        agents={agents}
+        catalog={catalog}
+        onLoadModels={load}
+        featuresByAgent={featuresByAgent}
+        commands={commands}
+        focusKey={draftFocus}
+        layoutControls={layoutControls}
+      />
+    )
+  }
+
   return (
     <>
       {notice ? (
@@ -310,7 +330,8 @@ export function ChatViewContainer({
         agents={agents}
         catalog={catalog}
         onLoadModels={load}
-        {...(project ? { cwd: project.rootPath } : {})}
+        {...(project ? { cwd: project.rootPath, projectName: project.name } : {})}
+        loading={threadId !== null && !state.threadStates[threadId]?.loaded}
         onStart={(text, options) => {
           if (!threadId) return
           void deps.connection

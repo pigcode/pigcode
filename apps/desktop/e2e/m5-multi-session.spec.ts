@@ -43,14 +43,16 @@ test("keeps background runs alive across threads", async () => {
     await expect(page.locator(".msg-user").filter({ hasText: "hello one" })).toBeVisible()
     await expect(row("hello one")).toHaveAttribute("data-status", "running")
 
-    // 第二个线程：第一个线程转到后台继续运行，侧栏仍显示 running。
+    // 第二个线程：先是新会话草稿，侧栏里还没有它；第一个线程转到后台继续运行，侧栏仍显示 running。
     await project.locator(".proj-add").click()
-    await expect(project.locator(".sess")).toHaveCount(2)
+    await expect(page.locator(".new-thread-view")).toBeVisible()
+    await expect(project.locator(".sess")).toHaveCount(1)
     await expect(row("hello one")).toHaveAttribute("data-status", "running")
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
     await page.getByRole("textbox").fill("hello two")
     await page.keyboard.press("Enter")
     await expect(page.locator(".msg-user").filter({ hasText: "hello two" })).toBeVisible()
+    await expect(project.locator(".sess")).toHaveCount(2)
     await expect(row("hello two")).toHaveAttribute("data-status", "running")
     await expect(row("hello two")).toHaveAttribute("aria-current", "page")
 

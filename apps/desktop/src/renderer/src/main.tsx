@@ -35,8 +35,8 @@ document.documentElement.lang = locale.getLocale()
 
 const connection = new Connection({
   onEvent: (event) => store.addEvent(event),
-  // 打开长会话时整段历史一次写入，只触发一次渲染。
-  onEvents: (events) => store.addEvents(events),
+  // 打开长会话时整段历史一次写入，只触发一次渲染；写完也就知道这个会话还有没有消息。
+  onEvents: (events, threadId) => store.addEvents(events, threadId),
   // 流式增量按帧合并写入；新事件到达前 store 会先写完已排队的文本。
   onDelta: (delta) => {
     if (delta.event.type === "message.delta") {

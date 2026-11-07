@@ -5,20 +5,14 @@
  */
 import { useCallback, useMemo, useRef } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
-import { ArrowLeftRight, Sparkles, Waypoints, type LucideIcon } from "lucide-react"
-import { formatShortcut, useLocale } from "@pigcode/ui-primitives"
+import { ArrowLeftRight, Waypoints, type LucideIcon } from "lucide-react"
+import { useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
 import { TurnView } from "./turn-view"
 import { buildTimeline, isEnded, type TimelineEntry } from "./turns"
 
 export { hasPendingApproval } from "./turns"
-
-/** 空会话的标题与说明；子代理会话用它替换默认文案。 */
-export interface EmptyStateText {
-  title: string
-  hint: string
-}
 
 /** 消息列表需要的线程事件与交互回调。 */
 export interface MessageListProps {
@@ -36,7 +30,6 @@ export interface MessageListProps {
   onOpenFile?: ((path: string) => void) | undefined
   onViewDiff?: ((path?: string) => void) | undefined
   onOpenSubagent?: ((id: string) => void) | undefined
-  empty?: EmptyStateText | undefined
   /** 运行中命令已经流出的输出，按工具调用 id。 */
   liveOutput?: Readonly<Record<string, string>> | undefined
   onAnswer?: ((requestId: string, answers: string[]) => void) | undefined
@@ -74,31 +67,6 @@ function MarkerDivider({
   )
 }
 
-function EmptyState({ empty }: { empty: EmptyStateText | undefined }) {
-  const { t } = useLocale()
-  return (
-    <div className="chat-empty">
-      <span className="empty-mark" aria-hidden="true">
-        <Sparkles className="ic" />
-      </span>
-      <h2>{empty?.title ?? t("chat.empty.title")}</h2>
-      <p>{empty?.hint ?? t("chat.empty.hint")}</p>
-      {empty ? null : (
-        <div className="empty-hints">
-          <span>
-            <kbd>{formatShortcut("Mod+k")}</kbd>
-            {t("chat.empty.command")}
-          </span>
-          <span>
-            <kbd>{formatShortcut("Mod+n")}</kbd>
-            {t("chat.empty.newThread")}
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** 渲染整条时间线，流式文本、思考与命令输出放在正在运行的那一轮里。 */
 export function MessageList({
   events,
@@ -111,7 +79,6 @@ export function MessageList({
   onOpenFile,
   onViewDiff,
   onOpenSubagent,
-  empty,
   liveOutput,
   onAnswer,
 }: MessageListProps) {
@@ -139,16 +106,6 @@ export function MessageList({
     return null
   }, [timeline])
 
-  if (!timeline.some((entry) => entry.kind !== "brief")) {
-    return (
-      <div className="msgs">
-        <EmptyState empty={empty} />
-        {timeline.length > 0 ? (
-          <MarkerDivider icon={Waypoints} label={t("chat.subagent.brief")} role="note" />
-        ) : null}
-      </div>
-    )
-  }
   return (
     <ConversationActionsContext.Provider value={actions}>
       <div className="msgs">

@@ -19,12 +19,13 @@ async function send(page: Page, text: string): Promise<void> {
   await expect(page.locator(".msg-user").filter({ hasText: text })).toBeVisible()
 }
 
-/** 在这个项目里再开一个会话，等 composer 可以输入。 */
+/** 在这个项目里进入新会话草稿，等 composer 可以输入；第一条消息发出去时才建会话。 */
 async function newThread(page: Page, project: string): Promise<void> {
   await page.locator(".proj-block").filter({ hasText: project }).locator(".proj-add").click()
+  await expect(page.locator(".new-thread-view")).toBeVisible()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
-  // 新会话的标题是默认文案；等它成为当前会话，接下来的输入才会进这一条。
-  await expect(page.locator(".sess.is-active")).toHaveCount(1)
+  // 草稿还不是会话：侧栏里没有选中的行。
+  await expect(page.locator(".sess.is-active")).toHaveCount(0)
 }
 
 test("a thread beyond the run limit is queued in the sidebar", async () => {

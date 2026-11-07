@@ -20,7 +20,9 @@ test("real claude answers OK", async () => {
   try {
     const page = await app.firstWindow()
     await addProject(app, page, "/tmp/pigcode-m1-e2e")
-    await expect(page.getByText("pigcode-m1-e2e", { exact: true })).toBeVisible()
+    await expect(
+      page.locator(".sidebar").getByText("pigcode-m1-e2e", { exact: true }),
+    ).toBeVisible()
     await page.getByRole("button", { name: "新会话" }).first().click()
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
     await page.getByRole("textbox").fill("Reply with exactly OK")

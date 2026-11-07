@@ -207,7 +207,7 @@ describe("spawned sub-agents", () => {
 })
 
 describe("sub-agent threads", () => {
-  it("mark the main thread's brief in the timeline and keep the sub-agent empty state", () => {
+  it("greet with their own text and note the main thread's brief before the first message", () => {
     const events = [
       event(0, "thread.created", { title: "子代理", parentThreadId: "main" }, null),
       event(1, "thread.updated", { handoff: "You are a sub-agent…" }, null),
@@ -215,14 +215,28 @@ describe("sub-agent threads", () => {
     expect(buildTimeline(events)).toEqual([{ kind: "brief", key: "brief-1" }])
     render(
       <LocaleProvider locale="zh-CN">
-        <MessageList
+        <ChatView
+          thread={{
+            id: "c1",
+            projectId: "p1",
+            title: "Codex 子代理",
+            defaultAgentId: "codex",
+            lastAgentId: null,
+            lastModelId: null,
+            permissionMode: "workspace-write",
+            createdAt: "2026-10-21T00:00:00.000Z",
+            updatedAt: "2026-10-21T00:00:00.000Z",
+            archivedAt: null,
+            lastRunId: null,
+            parentThreadId: "main",
+          }}
           events={events}
-          onApproval={() => {}}
           empty={{ title: "和主会话并行工作", hint: "共用工作目录" }}
         />
       </LocaleProvider>,
     )
-    expect(screen.getByText("和主会话并行工作")).toBeTruthy()
-    expect(screen.getByText("已附上主会话的近况")).toBeTruthy()
+    expect(screen.getByRole("heading", { level: 1, name: "和主会话并行工作" })).toBeTruthy()
+    expect(screen.getByText("共用工作目录")).toBeTruthy()
+    expect(screen.getByRole("note").textContent).toBe("已附上主会话的近况")
   })
 })

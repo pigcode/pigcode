@@ -52,6 +52,8 @@ export interface WorkspaceService {
   /** 线程工作目录的绝对路径。 */
   root(threadId: string): string
   tree(threadId: string): Promise<WorkspaceEntry[]>
+  /** 项目根目录里的文件；还没有会话（新会话草稿）时用。 */
+  projectTree(projectId: string): Promise<WorkspaceEntry[]>
   /** 列出一个目录；空字符串表示工作目录本身。 */
   list(threadId: string, path?: string): Promise<DirectoryListing>
   /** 按路径模糊搜索文件与目录。 */
@@ -88,6 +90,12 @@ export const apply: WorkspacePlugin = (ctx) => {
     root: (threadId) => threadCwd(ctx, threadId),
     async tree(threadId) {
       const files = await index.files(threadCwd(ctx, threadId))
+      return files.map((path) => ({ path, type: "file" as const }))
+    },
+    async projectTree(projectId) {
+      const project = ctx.projects.get(projectId)
+      if (!project) throw new Error(`project not found: ${projectId}`)
+      const files = await index.files(project.rootPath)
       return files.map((path) => ({ path, type: "file" as const }))
     },
     list: (threadId, path = "") => listDirectory(threadCwd(ctx, threadId), path),

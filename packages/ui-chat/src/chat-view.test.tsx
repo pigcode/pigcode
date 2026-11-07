@@ -1,13 +1,17 @@
-/** 验证聊天页渲染用户消息、流式文本、审批按钮与按 Agent 功能显示的控件。 */
+/** 验证聊天页渲染用户消息、流式文本、审批按钮、按 Agent 功能显示的控件，以及还没有消息的会话。 */
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AgentFeatures } from "@pigcode/contracts"
+import { resetComposerMemory } from "@pigcode/ui-composer"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { ChatView } from "./chat-view"
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetComposerMemory()
+})
 
 /** 全部 Agent 功能开启的基准，测试只覆盖需要关闭的单项。 */
 const enabledFeatures: AgentFeatures = {
@@ -241,12 +245,8 @@ describe("ChatView", () => {
             { id: "claude", label: "Claude Code" },
           ]}
           catalog={{
-            codex: [
-              { id: "gpt-5", label: "GPT-5", isDefault: true, efforts: [], defaultEffort: null },
-            ],
-            claude: [
-              { id: "opus", label: "Opus", isDefault: true, efforts: [], defaultEffort: null },
-            ],
+            codex: [{ id: "gpt-5", label: "GPT-5", isDefault: true, efforts: [] }],
+            claude: [{ id: "opus", label: "Opus", isDefault: true, efforts: [] }],
           }}
           onSelectModel={onSelectModel}
         />
@@ -323,5 +323,128 @@ describe("ChatView", () => {
       </LocaleProvider>,
     )
     expect(screen.queryByRole("button", { name: "IDE" })).toBeNull()
+  })
+})
+
+describe("ChatView before the first message", () => {
+  /** 输入框正文的占位文字。 */
+  const placeholder = () =>
+    document.querySelector(".tiptap p[data-placeholder]")?.getAttribute("data-placeholder")
+
+  function renderBlank(events = [event(0, "thread.created", { title: "新会话" })]) {
+    const onStart = vi.fn()
+    const view = render(
+      <LocaleProvider locale="zh-CN">
+        <ChatView
+          thread={thread}
+          events={events.map((item) => ({ ...item, runId: null }))}
+          cwd="/work/pigcode"
+          projectName="Pigcode App"
+          onStart={onStart}
+        />
+      </LocaleProvider>,
+    )
+    return { ...view, onStart }
+  }
+
+  it("greets like a new thread, with the thread's project shown but not switchable", async () => {
+    const { container } = renderBlank()
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/接下来做什么？$/)
+    expect(container.querySelector(".msgs")).toBeNull()
+    const project = container.querySelector(".composer-head .draft-project")
+    expect(project?.tagName).toBe("SPAN")
+    expect(project?.textContent).toBe("会话所在的项目: Pigcode App")
+    expect(project?.getAttribute("title")).toBe("/work/pigcode")
+    expect(placeholder()).toBe("描述要做的事，@ 引用文件，/ 使用命令")
+    await waitFor(() =>
+      expect(document.activeElement?.closest(".new-thread .tiptap")).not.toBeNull(),
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "补充测试" }))
+    expect(screen.getByRole("textbox").textContent).toBe(
+      "给最近改动的代码补充单元测试，并运行确认全部通过。",
+    )
+  })
+
+  it("still greets when the thread only switched agents", () => {
+    renderBlank([
+      event(0, "thread.created", { title: "新会话" }),
+      event(1, "thread.updated", { agentId: "codex" }),
+    ])
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/接下来做什么？$/)
+    expect(screen.queryByRole("separator")).toBeNull()
+  })
+
+  it("sends from the greeting through the thread, then shows the conversation", async () => {
+    const { onStart, rerender } = renderBlank()
+    await userEvent.type(screen.getByRole("textbox"), "修一下登录页")
+    await userEvent.keyboard("{Enter}")
+    expect(onStart).toHaveBeenCalledWith("修一下登录页", { effort: null })
+
+    rerender(
+      <LocaleProvider locale="zh-CN">
+        <ChatView
+          thread={thread}
+          events={[
+            { ...event(0, "thread.created", { title: "新会话" }), runId: null },
+            event(1, "run.started", { text: "修一下登录页" }),
+          ]}
+          cwd="/work/pigcode"
+          onStart={onStart}
+        />
+      </LocaleProvider>,
+    )
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull()
+    expect(document.querySelector(".msg-user")?.textContent).toBe("修一下登录页")
+    expect(placeholder()).toBe("继续对话")
+    await waitFor(() =>
+      expect(document.activeElement?.closest(".composer-wrap .tiptap")).not.toBeNull(),
+    )
+  })
+})
+
+describe("ChatView while the thread's history loads", () => {
+  const created = { ...event(0, "thread.created", { title: "新会话" }), runId: null }
+  const answered = [
+    created,
+    event(1, "run.started", { text: "修一下登录页" }),
+    event(2, "message.completed", { role: "assistant", text: "改好了" }),
+    event(3, "run.completed"),
+  ]
+  const view = (props: Partial<Parameters<typeof ChatView>[0]>) => (
+    <LocaleProvider locale="zh-CN">
+      <button type="button">sidebar</button>
+      <ChatView thread={thread} events={[]} {...props} />
+    </LocaleProvider>
+  )
+  const composerInput = () => document.querySelector(".composer-wrap .tiptap")
+
+  it("stays quiet with the input at the bottom, and greets once the thread is known to be empty", () => {
+    const { rerender } = render(view({ loading: true }))
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull()
+    expect(document.querySelector(".new-thread")).toBeNull()
+    expect(composerInput()).not.toBeNull()
+
+    rerender(view({ loading: false, events: [created] }))
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toMatch(/接下来做什么？$/)
+    expect(composerInput()).toBeNull()
+  })
+
+  it("shows the messages of a loaded thread under the same input, with no greeting in between", () => {
+    const { rerender } = render(view({ loading: true }))
+    const input = composerInput()
+    rerender(view({ loading: false, events: answered }))
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull()
+    expect(document.querySelector(".msg-ai")?.textContent).toContain("改好了")
+    expect(composerInput()).toBe(input)
+  })
+
+  it("leaves focus where the user moved it when the greeting turns into a conversation", async () => {
+    const { rerender } = render(view({ events: [created] }))
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy()
+    screen.getByRole("button", { name: "sidebar" }).focus()
+    rerender(view({ events: answered }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(document.activeElement?.textContent).toBe("sidebar")
   })
 })

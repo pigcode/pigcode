@@ -46,6 +46,29 @@ describe("Claude model catalog", () => {
     ])
   })
 
+  it("keeps the xhigh level Claude Code 2.1 reports and leaves models without effort fields fixed", () => {
+    const models: ModelInfo[] = [
+      {
+        value: "opus",
+        resolvedModel: "claude-opus-5-5",
+        displayName: "Opus 5.5",
+        description: "For complex work and everyday tasks",
+        supportsEffort: true,
+        supportedEffortLevels: ["low", "medium", "high", "xhigh", "max"],
+        supportsAdaptiveThinking: true,
+      },
+      {
+        value: "claude-haiku-4-5-20251001",
+        displayName: "Haiku 4.5",
+        description: "Fastest for quick answers",
+      },
+    ]
+    expect(parseClaudeModels(models).map(({ id, efforts }) => ({ id, efforts }))).toEqual([
+      { id: "opus", efforts: ["low", "medium", "high", "xhigh", "max"] },
+      { id: "claude-haiku-4-5-20251001", efforts: [] },
+    ])
+  })
+
   it("reads the catalog from an SDK session that never sends a prompt, then closes it", async () => {
     const fake = catalogQuery(Promise.resolve(SDK_MODELS))
     const queryFn = vi.fn(() => fake.query)

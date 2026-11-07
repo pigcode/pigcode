@@ -47,6 +47,18 @@ describe("workspace", () => {
     await ctx.fiber.dispose()
   })
 
+  it("lists a project's files before it has a thread, for @ in the new thread draft", async () => {
+    const { ctx, root, thread } = await createFixture()
+    await mkdir(join(root, "src"))
+    await writeFile(join(root, "src", "index.ts"), "export const x = 1\n")
+
+    const project = ctx.threads.get(thread.id)!.projectId
+    const tree = await ctx.workspace.projectTree(project)
+    expect(tree).toContainEqual({ path: "src/index.ts", type: "file" })
+    await expect(ctx.workspace.projectTree("missing")).rejects.toThrow("project not found")
+    await ctx.fiber.dispose()
+  })
+
   it("reads text files inside the project and rejects absolute paths", async () => {
     const { ctx, root, thread } = await createFixture()
     await writeFile(join(root, "README.md"), "# pigcode\n")

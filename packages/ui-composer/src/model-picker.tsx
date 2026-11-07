@@ -1,6 +1,6 @@
 /**
  * 模型选择器：左边一列 agent（以及收藏），右边是选中 agent 的模型列表与搜索，
- * 底部是当前模型支持的思考深度。只有选中某个 agent 才会列出它自己的模型。
+ * 底部是当前模型的思考深度：「默认」加上它支持的档位。只有选中某个 agent 才会列出它自己的模型。
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronDown, Loader2, Star } from "lucide-react"
@@ -28,6 +28,10 @@ import { modelKey, useModelPreferences } from "./model-preferences"
 
 /** 收藏页在左栏里的 id；不会与 agent id 冲突。 */
 const FAVORITES = "__favorites__"
+
+/** 「默认」在分段控件里的值：不发档位，由 agent 自己决定；不会与协议里的档位重名。 */
+const DEFAULT_EFFORT = "default"
+type EffortChoice = ReasoningEffort | typeof DEFAULT_EFFORT
 
 /** 模型选择器的属性；目录由调用方按 agent 懒加载。 */
 export interface ModelPickerProps {
@@ -74,6 +78,8 @@ export function ModelPicker({
   const [index, setIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  /** 鼠标悬停换的高亮不滚动列表：滚动会把别的行挪到指针下面。 */
+  const hovered = useRef(false)
 
   // 打开时回到当前 agent、清空搜索；当前 agent 的目录顺便读一次，胶囊才能显示模型名。
   useEffect(() => {
@@ -122,11 +128,18 @@ export function ModelPicker({
     }
   }, [open, tab, preferences.favorites, catalog, onLoadModels])
 
-  useEffect(() => setIndex(0), [tab, query])
   useEffect(() => {
-    listRef.current
-      ?.querySelector<HTMLElement>("[data-highlighted]")
-      ?.scrollIntoView?.({ block: "nearest" })
+    setIndex(0)
+    if (listRef.current) listRef.current.scrollTop = 0
+  }, [tab, query])
+  useEffect(() => {
+    if (hovered.current) {
+      hovered.current = false
+      return
+    }
+    const list = listRef.current
+    const row = list?.querySelector<HTMLElement>("[data-highlighted]")
+    if (list && row) revealInList(list, row)
   }, [index])
 
   function choose(row: Row | undefined): void {
@@ -227,6 +240,7 @@ export function ModelPicker({
               <div className="model-pane">
                 <div className="model-search">
                   <SearchField
+                    variant="plain"
                     inputRef={searchRef}
                     value={query}
                     onValueChange={setQuery}
@@ -281,7 +295,11 @@ export function ModelPicker({
                         aria-disabled={locked || undefined}
                         data-highlighted={rowIndex === index ? "" : undefined}
                         className={current ? "model-row is-current" : "model-row"}
-                        onMouseEnter={() => setIndex(rowIndex)}
+                        onMouseEnter={() => {
+                          if (rowIndex === index) return
+                          hovered.current = true
+                          setIndex(rowIndex)
+                        }}
                         onClick={() => choose(row)}
                         title={row.model.label}
                         titleProps={{ className: "model-row-name" }}
@@ -345,7 +363,18 @@ export function ModelPicker({
   )
 }
 
-/** 思考深度的分段选择；只列出当前模型支持的档位。 */
+/**
+ * 把行滚进列表的可见范围。只滚列表自己：scrollIntoView 还会滚动外框和页面这些 overflow: hidden 的祖先，
+ * 滚走的内容用户拉不回来。
+ */
+function revealInList(list: HTMLElement, row: HTMLElement): void {
+  const view = list.getBoundingClientRect()
+  const box = row.getBoundingClientRect()
+  if (box.top < view.top) list.scrollTop -= view.top - box.top
+  else if (box.bottom > view.bottom) list.scrollTop += box.bottom - view.bottom
+}
+
+/** 思考深度的分段选择：第一段是「默认」（没选过档位时就是它），后面只列出当前模型支持的档位。 */
 function EffortControl({
   efforts,
   value,
@@ -355,7 +384,7 @@ function EffortControl({
   efforts: readonly ReasoningEffort[]
   value: ReasoningEffort | null
   modelLabel: string
-  onChange: (effort: ReasoningEffort) => void
+  onChange: (effort: ReasoningEffort | null) => void
 }) {
   const { t } = useLocale()
   return (
@@ -364,11 +393,14 @@ function EffortControl({
         {t("composer.effort.label")}
         <span className="model-effort-model truncate">{modelLabel}</span>
       </span>
-      <SegmentedControl<ReasoningEffort>
+      <SegmentedControl<EffortChoice>
         aria-label={t("composer.effort.label")}
-        value={value}
-        onValueChange={onChange}
-        options={efforts.map((effort) => ({ value: effort, label: t(effortKeys[effort]) }))}
+        value={value ?? DEFAULT_EFFORT}
+        onValueChange={(next) => onChange(next === DEFAULT_EFFORT ? null : next)}
+        options={[
+          { value: DEFAULT_EFFORT, label: t("composer.effort.default") },
+          ...efforts.map((effort) => ({ value: effort, label: t(effortKeys[effort]) })),
+        ]}
       />
     </div>
   )

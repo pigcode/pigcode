@@ -1,4 +1,7 @@
-/** 模型选择的本机偏好：收藏的模型、每个模型上次选的思考深度。所有输入框共用一份。 */
+/**
+ * 模型选择的本机偏好：收藏的模型、每个模型选的思考深度。所有输入框共用一份。
+ * 选「默认」就删掉这个模型的档位，没有档位的模型发送时不带思考深度。
+ */
 import { useSyncExternalStore } from "react"
 import type { ReasoningEffort } from "@pigcode/contracts"
 
@@ -74,7 +77,7 @@ const EMPTY: Preferences = { favorites: [], efforts: {} }
 /** 读取模型偏好；任何一个输入框修改后其他输入框同步更新。 */
 export function useModelPreferences(): Preferences & {
   toggleFavorite: (key: string) => void
-  setEffort: (key: string, effort: ReasoningEffort) => void
+  setEffort: (key: string, effort: ReasoningEffort | null) => void
 } {
   const preferences = useSyncExternalStore(subscribe, read, () => EMPTY)
   return {
@@ -90,7 +93,10 @@ export function useModelPreferences(): Preferences & {
     },
     setEffort: (key, effort) => {
       const current = read()
-      write({ ...current, efforts: { ...current.efforts, [key]: effort } })
+      const others = Object.fromEntries(
+        Object.entries(current.efforts).filter(([model]) => model !== key),
+      )
+      write({ ...current, efforts: effort ? { ...others, [key]: effort } : others })
     },
   }
 }

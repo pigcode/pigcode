@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import type { AgentFeatures, AgentList, AgentModel } from "@pigcode/contracts"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ComposerAgent, ComposerModel, ComposerModelCatalog } from "@pigcode/ui-composer"
-import { listRegisteredAgents } from "./agent-context"
+import { listRegisteredAgents, pickAgentId } from "./agent-context"
 
 /** agent.detect 的返回；只关心是否安装。 */
 type Detection = Record<string, { installed?: unknown } | undefined>
@@ -16,7 +16,6 @@ export function toComposerModel(model: AgentModel): ComposerModel {
     ...(model.description ? { description: model.description } : {}),
     isDefault: model.isDefault,
     efforts: model.efforts,
-    defaultEffort: model.defaultEffort,
     ...(model.custom ? { custom: true } : {}),
   }
 }
@@ -102,6 +101,28 @@ export function useAgentFeatures(
     }
   }, [connection, revision, connected])
   return features
+}
+
+/** 新会话默认使用的 agent；新会话草稿没选过 agent 时显示它。连上 Host 与插件启停后重新读取。 */
+export function useDefaultAgentId(
+  connection: Connection,
+  revision: number,
+  connected: boolean,
+): string | null {
+  const [agentId, setAgentId] = useState<string | null>(null)
+  useEffect(() => {
+    if (!connected) return undefined
+    let cancelled = false
+    void pickAgentId(connection)
+      .then((id) => {
+        if (!cancelled) setAgentId(id)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [connection, revision, connected])
+  return agentId
 }
 
 /**

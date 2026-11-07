@@ -1,22 +1,34 @@
 /**
- * 聊天主视图：标签栏（主会话与子代理）、消息时间线、输入框与环境抽屉。时间线左侧是问题导航，
- * 右上角浮着状态面板，离开底部时出现圆形的「滚动到底部」按钮。
+ * 聊天主视图：标签栏（主会话与子代理）、消息时间线、输入框与环境抽屉。时间线左侧是会话导航，
+ * 右上角浮着状态面板，离开底部时出现圆形的「滚动到底部」按钮。还没有消息时和新会话草稿页一样：
+ * 问候、卡片上方带项目的高输入框与建议；会话已经属于这个项目，项目只显示，不能换。历史还没读到时
+ * 不知道有没有消息，先按对话的样子摆（输入框在底部），读到了再决定要不要换成问候。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import type { AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
-import { ArrowDown, ArrowLeft, Ellipsis, PanelRight } from "lucide-react"
+import { ArrowDown, ArrowLeft, Ellipsis, PanelRight, Waypoints } from "lucide-react"
 import {
   Composer,
   type ComposerAgent,
   type ComposerCommand,
   type ComposerModelCatalog,
+  type ComposerProps,
   type ComposerSubmitOptions,
   type PermissionMode,
 } from "@pigcode/ui-composer"
 import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
 import { EnvironmentDrawer, type EnvironmentInfo } from "./environment-drawer"
-import { MessageList, type EmptyStateText } from "./message-list"
+import { MessageList } from "./message-list"
+import { NewThreadHero, NewThreadStage, NewThreadSuggestions, ProjectChip } from "./new-thread-view"
 import { StatusPanel } from "./status-panel"
 import type { SubagentCall } from "./subagent-card"
 import { SubagentView } from "./subagent-view"
@@ -30,6 +42,12 @@ export interface AgentOption {
   displayName: string
 }
 
+/** 还没有消息时代替问候的标题与说明；子代理会话用它说明共用工作目录。 */
+export interface EmptyStateText {
+  title: string
+  hint: string
+}
+
 /** ChatView 的公开 props；数据全部由调用方传入，不读取 fixture。 */
 export interface ChatViewProps {
   thread?: Thread | null
@@ -39,6 +57,10 @@ export interface ChatViewProps {
   liveReasoning?: string
   /** 当前工作目录（项目根目录）；时间线里的路径按它显示成相对路径。 */
   cwd?: string
+  /** 会话所在项目的名字，还没有消息时显示在输入框上方；不提供时取 cwd 的最后一段。 */
+  projectName?: string | undefined
+  /** 会话的历史还没读到：这时不知道有没有消息，不显示问候，输入框留在底部。 */
+  loading?: boolean | undefined
   /** 发送消息；交给 composer 提交，附带本次的思考深度。 */
   onStart?: (text: string, options: ComposerSubmitOptions) => void
   /** 兼容计划接口里的 onSubmit 命名。 */
@@ -80,7 +102,7 @@ export interface ChatViewProps {
   onOpenSubagent?: ((id: string) => void) | undefined
   /** 从派生子代理的只读视图回到主会话。 */
   onBackToMain?: (() => void) | undefined
-  /** 空会话的文案；子代理会话用它说明共用工作目录。 */
+  /** 还没有消息时代替问候的文案；子代理会话用它说明共用工作目录。 */
   empty?: EmptyStateText | undefined
   /** 运行中命令已经流出的输出，按工具调用 id。 */
   liveOutput?: Readonly<Record<string, string>> | undefined
@@ -111,6 +133,8 @@ export function ChatView({
   streamingText = "",
   liveReasoning = "",
   cwd,
+  projectName,
+  loading = false,
   onStart,
   onSubmit,
   onInterrupt,
@@ -175,12 +199,25 @@ export function ChatView({
     modelId,
     permissionMode: thread?.permissionMode ?? "workspace-write",
   }
-  const projectName = cwd?.split(/[\\/]/).filter(Boolean).at(-1)
+  const folderName = cwd?.split(/[\\/]/).filter(Boolean).at(-1)
   const viewKey = subagent ? `subagent:${subagent.id}` : (thread?.id ?? null)
+  // 确定还没有任何一轮：显示问候与居中的高输入框；时间线里只有切换或近况标记时也算。
+  const blank = !subagent && !loading && !timeline.some((entry) => entry.kind === "turn")
+  // 问候换成对话时，焦点随着问候里的输入框一起没了，放回底部的输入框。
+  const [composerFocus, setComposerFocus] = useState(0)
+  const wasBlank = useRef(blank)
 
   useEffect(() => {
     setPinned(true)
   }, [viewKey])
+
+  useLayoutEffect(() => {
+    const focused = document.activeElement
+    if (wasBlank.current && !blank && (!focused || focused === document.body)) {
+      setComposerFocus((value) => value + 1)
+    }
+    wasBlank.current = blank
+  }, [blank])
 
   useEffect(() => {
     if (!pinned) return
@@ -201,10 +238,31 @@ export function ChatView({
   }
 
   const mainTitle = thread
-    ? projectName
-      ? `${projectName} / ${thread.title}`
+    ? folderName
+      ? `${folderName} / ${thread.title}`
       : thread.title
     : undefined
+
+  const composerProps = {
+    onSubmit: (text: string, options: ComposerSubmitOptions) => submit?.(text, options),
+    onStop: onInterrupt ?? (() => undefined),
+    running,
+    disabled: !thread,
+    draftKey: thread?.id ?? null,
+    agents,
+    agentId,
+    modelId,
+    catalog,
+    ...(onLoadModels ? { onLoadModels } : {}),
+    ...(thread && onSelectModel ? { onSelectModel } : {}),
+    permissionMode: thread?.permissionMode ?? "workspace-write",
+    ...(thread && onPermissionMode ? { onPermissionMode } : {}),
+    ...(files ? { files } : {}),
+    ...(commands ? { commands } : {}),
+    canPlan,
+    canInterrupt,
+  } satisfies ComposerProps
+  const shownProject = projectName ?? folderName
 
   return (
     <section className="view">
@@ -247,81 +305,89 @@ export function ChatView({
           </Button>
         ) : null}
       </div>
-      <div className="thread-wrap">
-        <div className="thread" ref={threadRef} onScroll={handleScroll}>
-          {subagent ? (
-            <SubagentView
-              subagent={subagent}
-              root={cwd}
-              onOpenFile={onOpenFile}
-              onViewDiff={onViewDiff}
-            />
-          ) : (
-            <MessageList
-              events={visibleEvents}
-              timeline={timeline}
-              streamingText={streamingText}
-              liveReasoning={liveReasoning}
-              agentName={agentName}
-              onApproval={onApproval ?? (() => undefined)}
-              root={cwd}
-              onOpenFile={onOpenFile}
-              onViewDiff={onViewDiff}
-              onOpenSubagent={onOpenSubagent}
-              empty={empty}
-              liveOutput={liveOutput}
-              onAnswer={onAnswer}
-            />
-          )}
-        </div>
-        {subagent ? null : <TurnNavigator timeline={timeline} scroller={threadRef} />}
-        {subagent ? null : <StatusPanel timeline={timeline} />}
-        {!pinned ? (
-          <button
-            type="button"
-            className="scroll-bottom"
-            aria-label={t("chat.scrollToBottom")}
-            title={t("chat.scrollToBottom")}
-            onClick={jumpToLatest}
-          >
-            <ArrowDown className="ic ic-sm" aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
-      <div className="composer-wrap">
-        {subagent ? (
-          <div className="subagent-readonly" role="note">
-            <span>{t("chat.subagent.readonly")}</span>
-            {onBackToMain ? (
-              <button type="button" className="subagent-back" onClick={onBackToMain}>
-                <ArrowLeft className="ic ic-sm" aria-hidden="true" />
-                {t("chat.subagent.back")}
+      {blank ? (
+        <NewThreadStage>
+          <NewThreadHero title={empty?.title} hint={empty?.hint}>
+            {timeline.some((entry) => entry.kind === "brief") ? (
+              <p className="new-thread-note" role="note">
+                <Waypoints className="ic ic-xs" aria-hidden="true" />
+                {t("chat.subagent.brief")}
+              </p>
+            ) : null}
+          </NewThreadHero>
+          <Composer
+            {...composerProps}
+            tall
+            {...(shownProject
+              ? { header: <ProjectChip name={shownProject} rootPath={cwd} /> }
+              : {})}
+            autoFocus={Boolean(thread)}
+          />
+          {thread ? <NewThreadSuggestions draftKey={thread.id} /> : null}
+        </NewThreadStage>
+      ) : (
+        <>
+          <div className="thread-wrap">
+            <div className="thread" ref={threadRef} onScroll={handleScroll}>
+              {subagent ? (
+                <SubagentView
+                  subagent={subagent}
+                  root={cwd}
+                  onOpenFile={onOpenFile}
+                  onViewDiff={onViewDiff}
+                />
+              ) : (
+                <MessageList
+                  events={visibleEvents}
+                  timeline={timeline}
+                  streamingText={streamingText}
+                  liveReasoning={liveReasoning}
+                  agentName={agentName}
+                  onApproval={onApproval ?? (() => undefined)}
+                  root={cwd}
+                  onOpenFile={onOpenFile}
+                  onViewDiff={onViewDiff}
+                  onOpenSubagent={onOpenSubagent}
+                  liveOutput={liveOutput}
+                  onAnswer={onAnswer}
+                />
+              )}
+            </div>
+            {subagent ? null : <TurnNavigator timeline={timeline} scroller={threadRef} />}
+            {subagent ? null : <StatusPanel timeline={timeline} />}
+            {!pinned ? (
+              <button
+                type="button"
+                className="scroll-bottom"
+                aria-label={t("chat.scrollToBottom")}
+                title={t("chat.scrollToBottom")}
+                onClick={jumpToLatest}
+              >
+                <ArrowDown className="ic ic-sm" aria-hidden="true" />
               </button>
             ) : null}
           </div>
-        ) : (
-          <Composer
-            onSubmit={(text, options) => submit?.(text, options)}
-            onStop={onInterrupt ?? (() => undefined)}
-            running={running}
-            disabled={!thread}
-            autoFocus={Boolean(thread) && visibleEvents.length === 0 && !running}
-            draftKey={thread?.id ?? null}
-            agents={agents}
-            agentId={agentId}
-            modelId={modelId}
-            catalog={catalog}
-            {...(onLoadModels ? { onLoadModels } : {})}
-            {...(thread && onSelectModel ? { onSelectModel } : {})}
-            permissionMode={thread?.permissionMode ?? "workspace-write"}
-            {...(thread && onPermissionMode ? { onPermissionMode } : {})}
-            {...(files ? { files } : {})}
-            {...(commands ? { commands } : {})}
-            canPlan={canPlan}
-            canInterrupt={canInterrupt}
-          />
-        )}
-      </div>
+          <div className="composer-wrap">
+            {subagent ? (
+              <div className="subagent-readonly" role="note">
+                <span>{t("chat.subagent.readonly")}</span>
+                {onBackToMain ? (
+                  <button type="button" className="subagent-back" onClick={onBackToMain}>
+                    <ArrowLeft className="ic ic-sm" aria-hidden="true" />
+                    {t("chat.subagent.back")}
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <Composer
+                {...composerProps}
+                focusKey={composerFocus}
+                placeholder={t("composer.placeholder.followUp")}
+              />
+            )}
+          </div>
+        </>
+      )}
       <EnvironmentDrawer
         open={drawerOpen}
         info={environment}

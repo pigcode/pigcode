@@ -9,7 +9,11 @@ M5 把 Pigcode 从“单线程工作台”扩展成可以同时处理多个会�
 
 ### 线程 tab
 
-- 从侧栏点击线程或以“新会话”创建线程时，该线程会以 tab 打开并立即订阅 Host 事件。
+- 从侧栏点击线程时，该线程会以 tab 打开并立即订阅 Host 事件。
+- “新会话”（侧栏、项目行的加号、⌘N、命令面板）只进入新会话草稿，不在 Host 上建线程，侧栏里也没有它：草稿页
+  上方选项目，输入框里选 agent、模型和权限。第一次发送时才调用 `thread.create`（带上选好的 `modelId` 与
+  `permissionMode`）、打开 tab 并开始 run；在草稿里打开右侧面板或底部终端也会先建线程，因为它们挂在线程上。
+  `@` 引用在还没有线程时用 `project.files` 列出项目根目录的文件。
 - 每个打开线程在 Renderer 中维护独立的 `ThreadViewState`：事件、流式文本、运行状态、
   待审批计数和最近错误。
 - 切换 tab 只改变当前展示的线程；后台线程的 run 继续执行，事件仍通过同一个
@@ -163,38 +167,83 @@ RPC：
 合法的 URL 通过 preload 的 `previewOpen(url)` 打开一个独立的 Electron 窗口：
 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。
 `previewClose(id?)` 关闭指定窗口，省略 `id` 时关闭全部。Renderer 不内嵌 iframe，
-预览窗口与主界面进程隔离。右栏的 preview tab 提供 URL 输入（默认
-`http://localhost:3000`）、打开按钮和错误提示。
+预览窗口与主界面进程隔离。右栏内置浏览器的「更多」菜单里有「在新窗口打开」，只对本机地址可用。
+
+## 内置浏览器
+
+右栏的浏览器标签是一个常驻的 `<webview>`：挂在 `body` 下，盖到标签里的占位槽上，切换线程或收起右栏时移到屏幕外继续运行，
+agent 可以在后台操作它。页面运行在独立分区 `persist:pigcode-browser` 的沙箱里，没有 preload，只能打开 http/https 与
+`about:blank`；新窗口在同一个标签里打开，权限请求一律拒绝。
+
+- 工具栏：后退、前进、重新加载（加载中换成停止，底边有进度线）、胶囊形地址栏（没聚焦时网址居中，左边是网站图标或连接类型），
+  以及响应式视图、选择网页元素和「更多」（在默认浏览器中打开、在新窗口打开、复制网址、开发者工具）。
+- 标签显示页面标题和网站图标，没有标题时显示主机名。
+- 响应式视图：页面按设备视口渲染（预设 iPhone、Pixel、iPad、笔记本、桌面，也可以手动输入宽高、横竖切换），放在页面区正中；
+  页面区放不下时整体缩小显示，页面自己看到的视口尺寸不变。
+- 选择网页元素：往页面里临时注入一段脚本，悬停的元素描边并显示标签和尺寸，点击后采集这个元素，按 Esc 取消。
+  采集网址、标题、选择器、文字、尺寸、样式摘要和截断后的 HTML，作为附件出现在当前会话的输入框上方，发送时以 Markdown
+  接在文字后面。不读 cookie 和存储，不采集输入框的值。
+- 「在默认浏览器中打开」走 `pigcode:browser-external`，只接受不带用户名密码的 http/https 地址。
+- 主框架加载失败时页面区说明原因（证书错误单独说明怎么办），页面进程崩溃时提示重新加载；agent 正在操作、正在选择元素、
+  已加入聊天这些提示浮在页面上方，不挤动页面。
 
 ## 定时任务
 
-定时任务以固定间隔（秒）重复运行，不支持 cron 表达式。
+每个任务有一条运行规则（`ScheduleRule`），不支持 cron 表达式。常用频率：
 
-- 间隔必须是正整数且不超过 `2_147_483` 秒（约 24.8 天）；更大的值会超过
-  Node `setTimeout` 的 32 位上限并被截断成 1ms。
-- 任务持久化在 SQLite 的 `schedules` 表（migration 4），包含线程、prompt、
-  间隔、启用状态、`next_run_at`、`last_run_at` 和 `last_run_id`。
-- 创建时 `next_run_at = now + intervalSeconds`；每次触发后从当前时间重新计算下一次。
-- Host 启动时读取所有启用任务并重新装载 timer。Host 退出期间不会触发；如果
-  `next_run_at` 已过期，启动后只补跑一次，然后按间隔继续。
-- 线程已有运行中或排队中的 run 时视为忙：本次跳过，只推进 `next_run_at`，
-  `last_run_at` / `last_run_id` 保持不变。因此同一线程不会因为定时任务产生并发 run。
-- 触发使用 `setTimeout` 链，并避免同一任务重入；`stop()` 清理全部 timer，
-  随 Host 服务 dispose 自动执行。
+| `kind`     | 字段                            | 含义                                 |
+| ---------- | ------------------------------- | ------------------------------------ |
+| `hourly`   | `minute`（0–59）                | 每小时的第几分                       |
+| `daily`    | `time`（`HH:MM`）               | 每天几点                             |
+| `weekdays` | `time`                          | 周一到周五的几点                     |
+| `weekly`   | `days`（0–6，周日为 0）、`time` | 每周的这几天的几点                   |
+| `monthly`  | `day`（1–31）、`time`           | 每月几号；没有这一天的月份取最后一天 |
+
+自定义重复都带 `every`（1–200）和 `anchor`（起算时刻，ISO 时间）：
+
+| `kind`               | 字段                            | 含义                                |
+| -------------------- | ------------------------------- | ----------------------------------- |
+| `everyMinutes`       | `every`                         | 每 N 分钟，从 `anchor` 起按整段推进 |
+| `everyHours`         | `every`、`minute`               | 每 N 小时的第几分                   |
+| `everyDays`          | `every`、`time`                 | 每 N 天几点                         |
+| `everyWeeks`         | `every`、`days`、`time`         | 每 N 周的这几天（周一起算一周）     |
+| `everyMonths`        | `every`、`days`（1–31）、`time` | 每 N 个月的这几号                   |
+| `everyMonthsWeekday` | `every`、`weekday`、`time`      | 每 N 个月的第一个星期几             |
+| `everyYears`         | `every`、`month`、`day`、`time` | 每 N 年的几月几号                   |
+
+- 规则按 Host 所在机器的本地时间计算，日期运算按日历走，夏令时切换不会让时间漂移。下一次运行时间由
+  contracts 的 `nextScheduleRun` 算出，`nextScheduleRunBefore` 再加上结束时间；Host 排期和界面预览用的是同一个函数。
+- 任务可以设结束时间 `endsAt`：过了结束时间没有下一次，任务的状态变成 `completed`。状态由 Host 推出来：
+  启用且有下一次是 `active`，停用是 `paused`，没有下一次是 `completed`。
+- 很远的下一次（超过 `setTimeout` 的 32 位上限，约 24.8 天）分段等待，到点前醒来重新装一次 timer。
+- 任务存在 SQLite 的 `schedules` 表：线程、标题、prompt、`rule_json`、`ends_at`、启用状态、`next_run_at`、
+  `last_run_at`、`last_run_id` 和 `run_count`。每次触发在 `schedule_runs` 表记一行：来源（定时或手动）、
+  发出去的 run 或跳过、失败的原因；删除任务时一起删掉。整个数据库只有一个初始 schema（`SCHEMA_VERSION = 1`），
+  应用还没有分发，不保留旧版本的迁移。
+- 创建时按规则算出第一次运行时间；每次定时触发后从当前时间重新算下一次。改规则、改结束时间或重新启用时重新排期，
+  只停用或改标题、内容时保留原来的时间。
+- Host 启动时读取所有启用任务并重新装载 timer。Host 退出期间不会触发；如果 `next_run_at` 已过期，启动后只补跑一次，
+  然后按规则继续，错过的多次不会连着补跑。桌面端可以打开「保持电脑唤醒」（`powerSaveBlocker`），应用开着时不让系统睡眠。
+- 线程已有运行中或排队中的 run 时视为忙：本次跳过并记为 `skipped`（原因 `THREAD_BUSY`），只推进 `next_run_at`；
+  Agent 不可用时记为 `AGENT_UNAVAILABLE`。因此同一线程不会因为定时任务产生并发 run。
+- 立即运行（手动）也记进运行历史、计入运行次数，但不改动原来排好的下一次。
 - 删除或停用任务会清除对应 timer，之后不会再触发。
 
 RPC：
 
-| 命令              | 参数                                              | 返回                        |
-| ----------------- | ------------------------------------------------- | --------------------------- |
-| `schedule.list`   | `{}`                                              | `Schedule[]`                |
-| `schedule.create` | `{ threadId, prompt, intervalSeconds, enabled? }` | `Schedule`                  |
-| `schedule.update` | `{ id, prompt?, intervalSeconds?, enabled? }`     | `Schedule`                  |
-| `schedule.delete` | `{ id }`                                          | `{ deleted }`               |
-| `schedule.runNow` | `{ id }`                                          | `{ runId: string \| null }` |
+| 命令                 | 参数                                                    | 返回                                                          |
+| -------------------- | ------------------------------------------------------- | ------------------------------------------------------------- |
+| `schedule.list`      | `{}`                                                    | `Schedule[]`                                                  |
+| `schedule.create`    | `{ threadId, title?, prompt, rule, endsAt?, enabled? }` | `Schedule`                                                    |
+| `schedule.update`    | `{ id, title?, prompt?, rule?, endsAt?, enabled? }`     | `Schedule`                                                    |
+| `schedule.delete`    | `{ id }`                                                | `{ deleted }`                                                 |
+| `schedule.runNow`    | `{ id }`                                                | `{ status: started \| busy \| unavailable \| failed, runId }` |
+| `schedule.runs`      | `{ id, limit?, offset? }`（默认 20 条，新的在前）       | `{ runs: ScheduleRun[], total }`                              |
+| `schedule.deleteRun` | `{ id }`                                                | `{ deleted }`                                                 |
 
-`runNow` 在线程忙或 Agent 不可用时返回 `runId: null`。桌面端在
-**设置 → 定时任务** 中管理任务、启停和立即运行。
+`ScheduleRun` 的状态由运行历史和对应的 run 一起推出：`running`、`succeeded`、`failed`、`stopped` 或 `skipped`，
+带触发时间、结束时间与原因。桌面端在侧栏的 **定时任务** 页管理任务：列表按状态筛选，卡片上是计划、下一次运行和运行次数；
+编辑页有「设置 / 历史」两个页签，运行历史可以跳到当时的会话或删除记录。
 
 ## Agent 切换：原生 fork 优先
 

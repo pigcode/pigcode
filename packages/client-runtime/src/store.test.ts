@@ -196,4 +196,44 @@ describe("AppStore", () => {
     expect(store.getSnapshot().activeThreadId).toBe("th_1")
     expect(store.getSnapshot().events).toEqual([])
   })
+
+  it("knows a thread's history has arrived only once its replay is in, even an empty one", () => {
+    const store = new AppStore()
+    store.openThread("th_1")
+    store.openThread("th_2")
+    const loaded = (threadId: string) => store.getSnapshot().threadStates[threadId]?.loaded
+    expect(loaded("th_1")).toBe(false)
+    // 实时推来的事件不算回放：这时还不知道之前有没有消息。
+    store.addEvent(threadEvent("th_1", 5, "run.started"))
+    expect(loaded("th_1")).toBe(false)
+
+    let notifications = 0
+    store.subscribe(() => {
+      notifications += 1
+    })
+    store.addEvents([threadEvent("th_1", 1, "thread.created")], "th_1")
+    expect(notifications).toBe(1)
+    expect(loaded("th_1")).toBe(true)
+    expect(store.getSnapshot().threadStates["th_1"]?.events.map((event) => event.seq)).toEqual([
+      5, 1,
+    ])
+
+    store.addEvents([], "th_2")
+    expect(loaded("th_2")).toBe(true)
+    expect(notifications).toBe(2)
+    // 已经读到过：重连后的空回放什么也不改。
+    store.addEvents([], "th_2")
+    expect(notifications).toBe(2)
+  })
+
+  it("treats a thread it just created as loaded, and forgets it once closed", () => {
+    const store = new AppStore()
+    store.openThread("th_new", { loaded: true })
+    expect(store.getSnapshot().threadStates["th_new"]?.loaded).toBe(true)
+    store.openThread("th_new")
+    expect(store.getSnapshot().threadStates["th_new"]?.loaded).toBe(true)
+    store.closeThread("th_new")
+    store.openThread("th_new")
+    expect(store.getSnapshot().threadStates["th_new"]?.loaded).toBe(false)
+  })
 })

@@ -3,10 +3,22 @@ import type { Context } from "cordis"
 import type { Thread } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 
+/** 新会话草稿里先选好的模型与权限模式；写进新线程，第一次 run 就用它们。 */
+export interface InitialSelection {
+  modelId?: string | undefined
+  permissionMode?: Thread["permissionMode"] | undefined
+}
+
 /** 线程记录的读写入口。 */
 export interface ThreadsService {
   /** parentThreadId 指向主会话时创建的是子代理会话，项目必须与主会话相同。 */
-  create(projectId: string, title: string, agentId: string, parentThreadId?: string): Thread
+  create(
+    projectId: string,
+    title: string,
+    agentId: string,
+    parentThreadId?: string,
+    initial?: InitialSelection,
+  ): Thread
   list(projectId?: string): Thread[]
   get(threadId: string): Thread | undefined
   /** 主会话下未归档的子代理，按创建时间排列。 */
@@ -39,7 +51,7 @@ export interface ThreadsPlugin {
 /** 注册 threads 服务；新线程默认使用 workspace-write 权限模式。 */
 export const apply: ThreadsPlugin = (ctx) => {
   const service: ThreadsService = {
-    create(projectId, title, agentId, parentThreadId) {
+    create(projectId, title, agentId, parentThreadId, initial = {}) {
       if (parentThreadId !== undefined) {
         const parent = service.get(parentThreadId)
         if (!parent) throw new Error(`thread not found: ${parentThreadId}`)
@@ -53,9 +65,10 @@ export const apply: ThreadsPlugin = (ctx) => {
         projectId,
         title,
         defaultAgentId: agentId,
-        lastAgentId: null,
-        lastModelId: null,
-        permissionMode: "workspace-write",
+        // 选了模型就和切换后一样记成最近的选择，界面和 run 都按 lastAgentId/lastModelId 读。
+        lastAgentId: initial.modelId ? agentId : null,
+        lastModelId: initial.modelId ?? null,
+        permissionMode: initial.permissionMode ?? "workspace-write",
         createdAt: now,
         updatedAt: now,
         archivedAt: null,

@@ -18,6 +18,8 @@ export interface ThreadViewState {
   status: ThreadViewStatus
   pendingApprovals: number
   lastError: string | null
+  /** 订阅回放已经到达；在这之前 events 为空不代表会话里还没有消息。 */
+  loaded: boolean
 }
 
 /** Renderer 全局状态快照。 */
@@ -54,6 +56,7 @@ function emptyThreadState(): ThreadViewState {
     status: "idle",
     pendingApprovals: 0,
     lastError: null,
+    loaded: false,
   }
 }
 
@@ -238,10 +241,10 @@ export class AppStore {
     this.emit()
   }
 
-  /** 打开线程：初始化独立状态并加入打开列表。 */
-  openThread(threadId: string): void {
+  /** 打开线程：初始化独立状态并加入打开列表；loaded 给刚建好、没有历史要回放的会话。 */
+  openThread(threadId: string, options: { loaded?: boolean } = {}): void {
     const threadStates = { ...this.state.threadStates }
-    if (!threadStates[threadId]) threadStates[threadId] = emptyThreadState()
+    if (!threadStates[threadId]) threadStates[threadId] = { ...emptyThreadState(), ...options }
     const openThreadIds = this.state.openThreadIds.includes(threadId)
       ? this.state.openThreadIds
       : [...this.state.openThreadIds, threadId]
@@ -273,8 +276,8 @@ export class AppStore {
     this.emit()
   }
 
-  /** 切换活动线程，并同步活动镜像。 */
-  setActiveThread(threadId: string): void {
+  /** 切换活动线程，并同步活动镜像；null 表示没有活动线程（新会话草稿）。 */
+  setActiveThread(threadId: string | null): void {
     this.flushDeltas()
     this.state = {
       ...this.state,
@@ -305,9 +308,11 @@ export class AppStore {
   /**
    * 批量写入事件：订阅回放一次给出整段历史，逐条写入会把事件数组复制 n 次、通知 n 次。
    * 这里每个线程只复制一次数组，所有线程处理完再通知一次。已有的 seq 跳过。
+   * replayOf 是这批事件回放的线程（回放可能为空），写完记下它的历史已经读到。
    */
-  addEvents(events: readonly ThreadEvent[]): void {
-    if (events.length === 0) return
+  addEvents(events: readonly ThreadEvent[], replayOf?: string): void {
+    const firstReplay = replayOf !== undefined && !this.state.threadStates[replayOf]?.loaded
+    if (events.length === 0 && !firstReplay) return
     this.flushDeltas()
     const byThread = new Map<string, ThreadEvent[]>()
     for (const event of events) {
@@ -356,6 +361,9 @@ export class AppStore {
         mirroredEvents = list
         if (endsStream) mirroredStream = ""
       }
+    }
+    if (replayOf !== undefined && firstReplay) {
+      threadStates[replayOf] = { ...(threadStates[replayOf] ?? emptyThreadState()), loaded: true }
     }
     this.state = {
       ...this.state,

@@ -1,4 +1,5 @@
 /** 输入框、按轮时间线、运行指示与「用…打开」的端到端验收（fake agent）。 */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
@@ -10,13 +11,17 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     PIGCODE_CODEX_PATH: join(tmpdir(), "pigcode-e2e-no-codex"),
   })
   try {
-    // 新会话用 agent 的默认模型；思考深度是本机偏好，先显式选一次。
+    // 新会话用 agent 的默认模型。思考深度是本机偏好，上一次运行可能留下档位，先显式选一次「默认」：
+    // 不指定档位，胶囊上只有模型名；目录里 Fake Sage 的默认档位是「中」，也不显示。
     const chip = page.getByRole("button", { name: /Agent 与模型/ })
     await expect(chip).toContainText("Fake Sage")
 
     await chip.click()
     const efforts = page.getByRole("radiogroup", { name: "思考深度" })
-    await expect(efforts.getByRole("radio")).toHaveText(["低", "中", "高", "最高"])
+    await expect(efforts.getByRole("radio")).toHaveText(["默认", "低", "中", "高", "最高"])
+    await efforts.getByRole("radio", { name: "默认" }).click()
+    await expect(efforts.getByRole("radio", { name: "默认" })).toBeChecked()
+    await expect(chip).toHaveText(/Fake Sage$/)
     await efforts.getByRole("radio", { name: "中", exact: true }).click()
     await expect(chip).toContainText("中")
     await expect(page.getByRole("tab", { name: "Fake Agent" })).toHaveAttribute(
@@ -32,6 +37,11 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await page.getByRole("tab", { name: "Codex" }).click()
     await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没有匹配的模型")
     await page.getByRole("tab", { name: "Fake Agent" }).click()
+    await efforts.getByRole("radio", { name: "最高" }).click()
+    await expect(chip).toContainText("最高")
+    // 选回「默认」：不再指定档位，胶囊上的档位也去掉。
+    await efforts.getByRole("radio", { name: "默认" }).click()
+    await expect(chip).toHaveText(/Fake Sage$/)
     await efforts.getByRole("radio", { name: "最高" }).click()
     await expect(chip).toContainText("最高")
     await page.getByRole("listbox", { name: "Fake Agent" }).getByText("Fake Swift").click()
@@ -70,6 +80,38 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await expect(page.locator(".tiptap")).toHaveText("")
   } finally {
     await app.close()
+  }
+})
+
+test("a long model list scrolls by itself under a fixed search and thinking depth", async () => {
+  // 自定义模型把 fake agent 的目录撑长（Claude Code 有十几个模型）：只有列表滚动，
+  // 搜索框和思考深度都留在弹层里，不会被挤出去。
+  const profile = mkdtempSync(join(tmpdir(), "pigcode-e2e-picker-"))
+  const customModels = Array.from({ length: 16 }, (_, index) => `fake-custom-${index + 1}`)
+  writeFileSync(join(profile, "settings.json"), JSON.stringify({ "agents.fake": { customModels } }))
+  const { app, page } = await openThread("picker", { PIGCODE_PROFILE_DIR: profile })
+  try {
+    await page.getByRole("button", { name: /Agent 与模型/ }).click()
+    const list = page.getByRole("listbox", { name: "Fake Agent" })
+    await expect(list.getByRole("option")).toHaveCount(18)
+    const popup = await page.locator(".model-picker").boundingBox()
+    const search = page.getByRole("searchbox", { name: "搜索模型…" })
+    const efforts = page.getByRole("radiogroup", { name: "思考深度" })
+    const searchBefore = await search.boundingBox()
+    await list.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    expect(await search.boundingBox()).toEqual(searchBefore)
+    for (const part of [search, efforts]) {
+      const box = await part.boundingBox()
+      if (!box || !popup) throw new Error("the model picker is not laid out")
+      expect(box.y).toBeGreaterThanOrEqual(popup.y)
+      expect(box.y + box.height).toBeLessThanOrEqual(popup.y + popup.height + 1)
+    }
+  } finally {
+    await app.close()
+    rmSync(profile, { recursive: true, force: true })
   }
 })
 

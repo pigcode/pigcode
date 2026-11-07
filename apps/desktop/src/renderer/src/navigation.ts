@@ -1,8 +1,11 @@
-/** 前进后退的历史：会话、设置页与插件页都是可以回去的位置。 */
+/** 前进后退的历史：会话、设置页、插件页与定时任务页都是可以回去的位置。 */
 
 /** 一个可以回去的位置。 */
 export type NavLocation =
-  { kind: "thread"; threadId: string } | { kind: "settings"; page: string } | { kind: "plugins" }
+  | { kind: "thread"; threadId: string }
+  | { kind: "settings"; page: string }
+  | { kind: "plugins" }
+  | { kind: "schedules" }
 
 /** 历史记录与当前所在的下标；没有记录时 index 为 -1。 */
 export interface NavHistory {

@@ -83,7 +83,6 @@ export interface ComposerModel {
   description?: string | undefined
   isDefault: boolean
   efforts: readonly ReasoningEffort[]
-  defaultEffort: ReasoningEffort | null
   /** 用户在 agent 设置里添加的模型。 */
   custom?: boolean | undefined
 }
@@ -105,12 +104,14 @@ export function resolveModel(
   )
 }
 
-/** 实际生效的思考深度：用户为该模型选过的档位，否则模型默认；模型不可调时为 null。 */
+/**
+ * 发送时显式指定的思考深度：用户为该模型选过、且模型支持的档位。没选过就是「默认」，返回 null：
+ * 不发档位，由 agent 自己决定。目录里的默认档位也不替它发，否则会盖掉用户在 CLI 里配的档位。
+ */
 export function resolveEffort(
   model: ComposerModel | null,
   preferred: ReasoningEffort | null | undefined,
 ): ReasoningEffort | null {
-  if (!model || model.efforts.length === 0) return null
-  if (preferred && model.efforts.includes(preferred)) return preferred
-  return model.defaultEffort
+  if (!model || !preferred) return null
+  return model.efforts.includes(preferred) ? preferred : null
 }

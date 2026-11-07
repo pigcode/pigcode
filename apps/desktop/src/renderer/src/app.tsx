@@ -27,6 +27,7 @@ import { AppearanceContext } from "./builtin-settings-pages"
 import { ChatViewContainer, type CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
 import { UnsavedGuard } from "./unsaved-guard"
+import { PluginsView, SchedulesView } from "./workspace-pages"
 import {
   EMPTY_HISTORY,
   canGoBack,
@@ -39,7 +40,8 @@ import {
   type NavHistory,
   type NavLocation,
 } from "./navigation"
-import { loadAgentFeatures, pickAgentId } from "./agent-context"
+import { loadAgentFeatures } from "./agent-context"
+import { NEW_THREAD_DRAFT_KEY, draftProjectId, materializeDraft } from "./new-thread-draft"
 import { workspaceRevision } from "./workspace-revision"
 
 // 工作台（xterm、diff）与底部终端在第一次打开时才加载，冷启动只加载聊天需要的代码。
@@ -110,6 +112,8 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const [terminalStarted, setTerminalStarted] = useState(false)
   const [panels, setPanels] = useState<Record<string, PanelSurfaceState>>({})
   const [history, setHistory] = useState<NavHistory>(EMPTY_HISTORY)
+  // 每次进入新会话草稿递增，草稿页据此把光标放回输入框。
+  const [draftFocus, setDraftFocus] = useState(0)
   const initialLoadDone = useRef(false)
   const registeredSurfaces = useRef<ReadonlySet<string>>(new Set())
 
@@ -143,8 +147,8 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   // 每次落到新的位置都记一笔；从历史里跳转时当前位置已经对上，不会重复记录。
   useEffect(() => {
     const location: NavLocation | null =
-      view === "plugins"
-        ? { kind: "plugins" }
+      view === "plugins" || view === "schedules"
+        ? { kind: view }
         : view === "settings"
           ? { kind: "settings", page: settingsPage }
           : state.activeThreadId
@@ -178,49 +182,49 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     )
   }, [state.status, state.activeThreadId, activeAgentId, connection, store])
 
-  /** 新建会话；没指定项目时放进当前会话所在的项目，再退回第一个项目。 */
-  async function createThread(projectId?: string): Promise<void> {
+  /**
+   * 进入新会话草稿（参照 ZCode）：不在 Host 上建会话，第一次发送时才建。草稿落在指定的项目里；
+   * 没指定时沿用当前会话的项目，再退回最近用过的项目。已经在草稿里时只把光标放回输入框。
+   */
+  function startDraft(projectId?: string): void {
     const snapshot = store.getSnapshot()
-    const activeProjectId = snapshot.threads.find(
-      (thread) => thread.id === snapshot.activeThreadId,
-    )?.projectId
-    const project = projectId
-      ? snapshot.projects.find((item) => item.id === projectId)
-      : (snapshot.projects.find((item) => item.id === activeProjectId) ?? snapshot.projects[0])
-    if (!project) return
-    try {
-      const agentId = await pickAgentId(connection)
-      if (!agentId) {
-        store.update({ error: translate(locale, "app.noAgent") })
-        return
-      }
-      const thread = (await connection.call("thread.create", {
-        projectId: project.id,
-        title: translate(locale, "thread.defaultTitle"),
-        agentId,
-      })) as Thread
-      store.update({
-        threads: [thread, ...store.getSnapshot().threads],
-        activeProjectId: project.id,
-        error: null,
-      })
-      // 新线程立即成为 tab 与活动会话，再向 Host 订阅事件。
-      store.openThread(thread.id)
-      store.setActiveThread(thread.id)
-      setView("chat")
-      await connection.openThread(thread.id)
-    } catch (error) {
-      store.update({ error: messageOf(error) })
-    }
+    const current = snapshot.threads.find((thread) => thread.id === snapshot.activeThreadId)
+    const target = projectId ?? current?.projectId ?? snapshot.activeProjectId
+    if (target !== snapshot.activeProjectId) store.update({ activeProjectId: target })
+    store.setActiveThread(null)
+    setView("chat")
+    setDraftFocus((value) => value + 1)
   }
 
   function openThread(threadId: string): void {
+    const projectId = store.getSnapshot().threads.find((item) => item.id === threadId)?.projectId
+    if (projectId) store.update({ activeProjectId: projectId })
     store.openThread(threadId)
     store.setActiveThread(threadId)
     setView("chat")
     void connection
       .openThread(threadId)
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
+  }
+
+  /**
+   * 右栏和终端挂在会话上：在草稿里打开它们时先按草稿建会话（ZCode：必须挂在会话上的操作才建会话），
+   * 建好再打开。返回这次是不是按草稿处理的。
+   */
+  function openFromDraft(target: "right" | "terminal"): boolean {
+    if (view !== "chat" || store.getSnapshot().activeThreadId) return false
+    void materializeDraft(connection, store, locale)
+      .then(() => {
+        if (target === "terminal") {
+          setTerminalStarted(true)
+          setTerminalOpen(true)
+          return
+        }
+        setRightOpen(true)
+        setRightMaximized(false)
+      })
+      .catch((error: unknown) => store.update({ error: messageOf(error) }))
+    return true
   }
 
   /** 沿历史后退或前进；先去掉已经不存在的会话和已经移除的设置页。 */
@@ -245,10 +249,9 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     else if (target.kind === "settings") {
       setSelectedPage(target.page)
       setView("settings")
-    } else setView("plugins")
+    } else setView(target.kind)
   }
 
-  const activeSettingsPage = view === "plugins" ? "plugins" : settingsPage
   // 子代理只在主会话的标签栏里出现；侧栏和命令面板只列主会话。
   const mainThreads = useMemo(
     () => state.threads.filter((thread) => !thread.parentThreadId),
@@ -264,12 +267,17 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const activeEvents = activeThreadId ? state.threadStates[activeThreadId]?.events : undefined
   const activeRevision = useMemo(() => workspaceRevision(activeEvents ?? []), [activeEvents])
 
+  // 草稿里有项目时布局按钮也能用：点了先建会话再打开。
+  const draftReady = view === "chat" && !state.activeThreadId && draftProjectId(state) !== null
+
   function toggleRight(): void {
+    if (openFromDraft("right")) return
     setRightOpen((value) => !value)
     setRightMaximized(false)
   }
 
   function toggleTerminal(): void {
+    if (openFromDraft("terminal")) return
     if (!activeThreadId) return
     setTerminalStarted(true)
     setTerminalOpen((value) => !value)
@@ -349,9 +357,9 @@ export function App({ store, connection, plugins, locale }: AppProps) {
 
   const layoutControls = (maximizable: boolean) => (
     <PanelLayoutControls
-      rightOpen={rightOpen}
+      rightOpen={rightOpen && activeThreadId !== null}
       onToggleRight={toggleRight}
-      terminalOpen={terminalOpen}
+      terminalOpen={terminalOpen && activeThreadId !== null}
       onToggleTerminal={toggleTerminal}
       {...(maximizable
         ? {
@@ -359,7 +367,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
             onToggleMaximize: () => setRightMaximized((value) => !value),
           }
         : {})}
-      disabled={!activeThreadId}
+      disabled={!activeThreadId && !draftReady}
     />
   )
 
@@ -378,7 +386,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       canGoForward={canGoForward(history)}
       onBack={() => travel("back")}
       onForward={() => travel("forward")}
-      settingsPage={activeSettingsPage}
+      settingsPage={settingsPage}
       onView={setView}
       onSettingsPage={setSelectedPage}
       onAddProject={(path, name) => {
@@ -386,7 +394,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           store.update({ error: messageOf(error) }),
         )
       }}
-      onNewThread={(projectId) => void createThread(projectId)}
+      onNewThread={startDraft}
       onOpenThread={openThread}
       onRenameThread={(threadId, title) => {
         void renameThread(connection, store, threadId, title).catch((error: unknown) =>
@@ -449,10 +457,8 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       <UnsavedGuard />
       <BrowserHost
         browsers={browsers}
-        onNavigate={(browser, url) =>
-          updatePanel(browser.threadId, (panel) =>
-            updateSurface(panel, browser.id, { title: new URL(url).host, url }),
-          )
+        onPage={(browser, patch) =>
+          updatePanel(browser.threadId, (panel) => updateSurface(panel, browser.id, patch))
         }
       />
       {view === "chat" ? (
@@ -463,10 +469,27 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           layoutControls={rightOpen && activeThreadId ? null : layoutControls(false)}
           onOpenFile={(path: string) => openSurface("file", path)}
           onOpenDiff={() => openSurface("diff")}
+          draftFocus={draftFocus}
         />
+      ) : view === "plugins" ? (
+        <PluginsView
+          deps={{ connection, store, plugins }}
+          onStartDraft={(prefill) => {
+            if (store.getSnapshot().projects.length === 0) return false
+            startDraft()
+            prefill(NEW_THREAD_DRAFT_KEY)
+            return true
+          }}
+          onOpenSettings={(page) => {
+            setSelectedPage(page)
+            setView("settings")
+          }}
+        />
+      ) : view === "schedules" ? (
+        <SchedulesView deps={{ connection, store, plugins }} onOpenThread={openThread} />
       ) : (
         <AppearanceContext.Provider value={appearance}>
-          <SettingsView page={activeSettingsPage} />
+          <SettingsView page={settingsPage} />
         </AppearanceContext.Provider>
       )}
     </AppRenderer>

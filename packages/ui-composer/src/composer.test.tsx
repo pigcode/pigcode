@@ -11,6 +11,7 @@ import { resetComposerMemory } from "./composer-memory"
 afterEach(() => {
   cleanup()
   resetComposerMemory()
+  vi.restoreAllMocks()
 })
 
 function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
@@ -165,6 +166,47 @@ describe("Composer", () => {
 
     expect(run).not.toHaveBeenCalled()
     expect(editor.textContent).toContain("/de")
+  })
+
+  it("moves the text above the buttons once it wraps, and back to one line only when cleared", async () => {
+    // jsdom 不排版：正文一行 28px，内容高度由 height 决定。
+    const realStyle = window.getComputedStyle.bind(window)
+    vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) =>
+      element instanceof HTMLElement && element.classList.contains("tiptap")
+        ? ({ lineHeight: "28px", paddingTop: "0px", paddingBottom: "0px" } as CSSStyleDeclaration)
+        : realStyle(element, pseudo),
+    )
+    let height = 28
+    const card = () => document.querySelector(".composer")
+    const view = renderComposer()
+    Object.defineProperty(view.editor, "scrollHeight", { configurable: true, get: () => height })
+    expect(card()?.classList.contains("is-compact")).toBe(true)
+
+    await userEvent.type(view.editor, "一句短话")
+    expect(card()?.classList.contains("is-compact")).toBe(true)
+    height = 56
+    await userEvent.type(view.editor, "，写长了换到第二行")
+    expect(card()?.classList.contains("is-expanded")).toBe(true)
+    height = 28
+    await userEvent.type(view.editor, "{Backspace}{Backspace}")
+    expect(card()?.classList.contains("is-expanded")).toBe(true)
+    await userEvent.clear(view.editor)
+    expect(card()?.classList.contains("is-compact")).toBe(true)
+
+    view.rerenderWith({ tall: true })
+    expect(card()?.classList.contains("is-expanded")).toBe(true)
+  })
+
+  it("puts the header strip above the card and refocuses when focusKey changes", async () => {
+    const view = renderComposer({ header: <button type="button">选择项目</button>, focusKey: 0 })
+    const frame = document.querySelector(".composer-frame")
+    expect(frame?.querySelector(".composer-head")?.textContent).toBe("选择项目")
+    expect(frame?.querySelector(".composer")).toBeTruthy()
+
+    await userEvent.click(screen.getByRole("button", { name: "选择项目" }))
+    expect(document.activeElement).not.toBe(view.editor)
+    view.rerenderWith({ header: <button type="button">选择项目</button>, focusKey: 1 })
+    await waitFor(() => expect(document.activeElement).toBe(view.editor))
   })
 
   it("does not submit empty content", async () => {

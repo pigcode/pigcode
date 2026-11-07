@@ -46,7 +46,7 @@ describe("navigation history", () => {
   it("treats different settings pages as different places", () => {
     const history = pushLocation(pushLocation(EMPTY_HISTORY, settings), {
       kind: "settings",
-      page: "plugins",
+      page: "schedules",
     })
     expect(history.entries).toHaveLength(2)
   })

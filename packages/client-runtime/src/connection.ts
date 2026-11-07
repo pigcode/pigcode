@@ -9,8 +9,8 @@ export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "of
 /** 连接层向上层转发的回调。 */
 export interface ConnectionHandlers {
   onEvent(event: ThreadEvent): void
-  /** 订阅回放的一整段历史；提供时一次交出，不提供时逐条调用 onEvent。 */
-  onEvents?(events: ThreadEvent[]): void
+  /** 订阅回放的一整段历史（可能为空）与它所属的线程；提供时一次交出，不提供时逐条调用 onEvent。 */
+  onEvents?(events: ThreadEvent[], threadId: string): void
   onDelta(event: { threadId: string; event: AgentEvent }): void
   onStatus(status: ConnectionStatus): void
 }
@@ -113,7 +113,7 @@ export class Connection {
     })) as SubscribeResult
     // 回放途中线程可能已经被关掉：不再分发，界面不该出现一个已经关掉的线程。
     if (!this.subscriptions.has(threadId)) return
-    if (this.handlers.onEvents) this.handlers.onEvents(result.events)
+    if (this.handlers.onEvents) this.handlers.onEvents(result.events, threadId)
     else for (const event of result.events) this.handlers.onEvent(event)
     const lastSeq = result.events.reduce((max, event) => Math.max(max, event.seq), cursor)
     const nextCursor = Math.max(cursor, result.cursor ?? 0, lastSeq)

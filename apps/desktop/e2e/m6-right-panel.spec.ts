@@ -105,12 +105,20 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await expect(page.locator(".browser-hosted[data-shown]")).toBeVisible()
     await expect.poll(() => heading(app)).toBe("second page")
 
-    // 标签按线程保存：新线程显示启动器；切回来后浏览器还是离开时的页面，没有重新加载。
+    // 标签按线程保存：新会话草稿里没有右栏，打开右栏时才建线程，新线程显示启动器；
+    // 切回来后浏览器还是离开时的页面，没有重新加载。
     await page
       .locator(".proj-block")
       .filter({ hasText: "pigcode-m6-e2e" })
       .locator(".proj-add")
       .click()
+    await expect(page.locator(".new-thread-view")).toBeVisible()
+    await expect(page.locator(".right-panel")).toBeHidden()
+    await expect(header.getByRole("button", { name: "切换右侧面板" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    )
+    await header.getByRole("button", { name: "切换右侧面板" }).click()
     await expect(page.getByLabel("打开一个面板")).toBeVisible()
     await expect(page.locator(".browser-hosted[data-shown]")).toHaveCount(0)
     await page.locator('.sess:not([aria-current="page"])').click()

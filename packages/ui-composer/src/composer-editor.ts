@@ -179,3 +179,26 @@ export function pastePlainText(editor: Editor, _view: EditorView, event: Clipboa
 export function isBlank(editor: Editor | null): boolean {
   return !editor || editor.isEmpty
 }
+
+/** 把一段纯文本放进编辑器，换行变成软换行。 */
+export function setPlainText(editor: Editor, text: string): void {
+  const content = text
+    .split("\n")
+    .flatMap((line, index) => [
+      ...(index > 0 ? [{ type: "hardBreak" }] : []),
+      ...(line ? [{ type: "text", text: line }] : []),
+    ])
+  editor.commands.setContent({ type: "doc", content: [{ type: "paragraph", content }] })
+  editor.commands.focus("end")
+}
+
+/** 每个 label（`/` 名字，不分大小写）只保留第一条命令。 */
+export function firstPerLabel(commands: readonly ComposerCommand[]): ComposerCommand[] {
+  const seen = new Set<string>()
+  return commands.filter((command) => {
+    const key = command.label.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}

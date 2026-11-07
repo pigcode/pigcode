@@ -1,8 +1,8 @@
 // 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、权限、agent/模型/思考深度选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
 import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Button, Menu, formatShortcut, useLocale } from "@pigcode/ui-primitives"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Button, Menu, useLocale } from "@pigcode/ui-primitives"
 import {
   getComposerKeyAction,
   nextPermissionMode,
@@ -15,11 +15,22 @@ import {
   type PermissionMode,
   type ReasoningEffort,
 } from "./composer-options"
-import { loadDraft, rememberSent, saveDraft, sentAt } from "./composer-memory"
+import {
+  COMPOSER_PREFILL_EVENT,
+  COMPOSER_TAKE_EVENT,
+  loadDraft,
+  prefillKeyOf,
+  rememberSent,
+  saveDraft,
+  sentAt,
+  takeComposerFocus,
+} from "./composer-memory"
 import {
   composerExtensions,
   editorText,
+  firstPerLabel,
   pastePlainText,
+  setPlainText,
   type ComposerCommand,
 } from "./composer-editor"
 import { ModelPicker } from "./model-picker"
@@ -28,6 +39,8 @@ import { PermissionMenu } from "./permission-menu"
 import { SuggestionPanel } from "./suggestion-panel"
 import { SuggestionStore } from "./suggestion-store"
 import { COMPOSER_MENTION_EVENT, mentionPathOf } from "./composer-mention"
+import { ComposerContextChips, useComposerContexts, withContexts } from "./composer-context"
+import { useWrapped } from "./composer-layout"
 
 /** 发送时附带的选项；思考深度来自当前模型与用户偏好。 */
 export interface ComposerSubmitOptions {
@@ -68,35 +81,16 @@ export interface ComposerProps {
   smartPunctuation?: boolean
   /** 空会话首次出现时自动聚焦输入区。 */
   autoFocus?: boolean
+  /** 每次变化（不是初值）都把光标放回输入区末尾，例如在新会话草稿里再按一次新会话。 */
+  focusKey?: number | undefined
+  /** 输入框卡片上方的一条，和卡片连成一体，例如新会话草稿里的项目选择。 */
+  header?: ReactNode
   /** 草稿归属（通常是线程 id）；切换后保存旧草稿、恢复新草稿。 */
   draftKey?: string | null
   /** @ 引用时可选的项目文件（相对路径）。 */
   files?: () => Promise<readonly string[]>
   /** / 命令；内置的切换模型与权限之外的命令由调用方提供。 */
   commands?: readonly ComposerCommand[]
-}
-
-/** 把一段纯文本放进编辑器，换行变成软换行。 */
-function setPlainText(editor: Editor, text: string): void {
-  const content = text
-    .split("\n")
-    .flatMap((line, index) => [
-      ...(index > 0 ? [{ type: "hardBreak" }] : []),
-      ...(line ? [{ type: "text", text: line }] : []),
-    ])
-  editor.commands.setContent({ type: "doc", content: [{ type: "paragraph", content }] })
-  editor.commands.focus("end")
-}
-
-/** 每个 label（`/` 名字，不分大小写）只保留第一条命令。 */
-function firstPerLabel(commands: readonly ComposerCommand[]): ComposerCommand[] {
-  const seen = new Set<string>()
-  return commands.filter((command) => {
-    const key = command.label.toLowerCase()
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
 }
 
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
@@ -120,6 +114,8 @@ export function Composer({
   canInterrupt = true,
   smartPunctuation = true,
   autoFocus = false,
+  focusKey,
+  header,
   draftKey = null,
   files,
   commands = [],
@@ -193,6 +189,13 @@ export function Composer({
   }
   const editorRef = useRef<Editor | null>(null)
   const draftKeyRef = useRef<string | null>(draftKey)
+  const attached = useComposerContexts(
+    Boolean(disabled),
+    () => editorRef.current?.commands.focus(),
+    draftKey,
+  )
+  const contextsRef = useRef(attached)
+  contextsRef.current = attached
   /** 正在翻历史时记录位置；内容被改动后退出翻找。 */
   const historyRef = useRef<{ offset: number; text: string } | null>(null)
 
@@ -202,11 +205,13 @@ export function Composer({
     const current = latest.current
     if (!editor || current.disabled || current.running) return
     const text = editorText(editor)
-    if (!text) return
-    current.onSubmit(text, { effort: current.effort })
-    rememberSent(text)
+    const { contexts, clear } = contextsRef.current
+    if (!text && contexts.length === 0) return
+    current.onSubmit(withContexts(text, contexts), { effort: current.effort })
+    if (text) rememberSent(text)
     historyRef.current = null
     editor.commands.clearContent(true)
+    clear()
     if (draftKeyRef.current) saveDraft(draftKeyRef.current, null)
   }
   const sendRef = useRef(send)
@@ -289,6 +294,35 @@ export function Composer({
     if (autoFocus && !disabled) editor?.commands.focus()
   }, [autoFocus, disabled, editor])
 
+  const focusedKey = useRef(focusKey)
+  useEffect(() => {
+    if (focusKey === focusedKey.current) return
+    focusedKey.current = focusKey
+    if (!disabled) editor?.commands.focus("end")
+  }, [focusKey, disabled, editor])
+
+  // 预填的正是这个输入框（新会话的建议、「创建插件」）：立刻换上预填的内容。
+  // 要把草稿搬走（新会话草稿建成了会话）：先存下正在写的内容，再清空自己。
+  useEffect(() => {
+    if (!editor) return undefined
+    const onMemory = (event: Event): void => {
+      const key = prefillKeyOf(event)
+      if (!key || key !== draftKeyRef.current || editor.isDestroyed) return
+      if (event.type === COMPOSER_TAKE_EVENT) {
+        saveDraft(key, editor.isEmpty ? null : editor.getJSON())
+        editor.commands.clearContent(false)
+        return
+      }
+      historyRef.current = null
+      editor.commands.setContent(loadDraft(key) ?? "", { emitUpdate: false })
+      takeComposerFocus(key)
+      editor.commands.focus("end")
+    }
+    const types = [COMPOSER_PREFILL_EVENT, COMPOSER_TAKE_EVENT]
+    for (const type of types) window.addEventListener(type, onMemory)
+    return () => types.forEach((type) => window.removeEventListener(type, onMemory))
+  }, [editor])
+
   // 切换会话时保存旧草稿、恢复新草稿；卸载时也保存一次。
   useEffect(() => {
     if (!editor) return
@@ -296,6 +330,7 @@ export function Composer({
     if (previous === draftKey) {
       const initial = draftKey ? loadDraft(draftKey) : null
       if (initial && editor.isEmpty) editor.commands.setContent(initial, { emitUpdate: false })
+      if (draftKey && takeComposerFocus(draftKey)) editor.commands.focus("end")
       return
     }
     if (previous) saveDraft(previous, editor.isEmpty ? null : editor.getJSON())
@@ -303,6 +338,8 @@ export function Composer({
     historyRef.current = null
     const next = draftKey ? loadDraft(draftKey) : null
     editor.commands.setContent(next ?? "", { emitUpdate: false })
+    // 从外面预填的会话（「创建插件」）：光标停在预填文字的末尾，接着写。
+    if (draftKey && takeComposerFocus(draftKey)) editor.commands.focus("end")
   }, [draftKey, editor])
   useEffect(
     () => () => {
@@ -333,11 +370,14 @@ export function Composer({
     return () => window.removeEventListener(COMPOSER_MENTION_EVENT, onMention)
   }, [editor, disabled])
 
-  const empty =
+  const typed =
     useEditorState({
       editor,
-      selector: ({ editor: current }) => !current || current.isEmpty,
-    }) ?? true
+      selector: ({ editor: current }) => Boolean(current && !current.isEmpty),
+    }) ?? false
+  const empty = !typed && attached.contexts.length === 0
+  const wrapped = useWrapped(editor, !tall)
+  const expanded = tall || wrapped || attached.contexts.length > 0
 
   /** 在光标处插入触发字符，打开对应的建议列表。 */
   function insertTrigger(char: "@" | "/"): void {
@@ -350,99 +390,102 @@ export function Composer({
     editor.chain().focus().insertContent(`${prefix}${char}`).run()
   }
 
+  const card = (
+    <div
+      className={["composer", tall ? "is-tall" : "", expanded ? "is-expanded" : "is-compact"]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <SuggestionPanel store={store} />
+      <ComposerContextChips contexts={attached.contexts} onRemove={attached.remove} />
+      <EditorContent editor={editor} className="composer-editor" />
+      <Menu.Root>
+        <Menu.Trigger
+          className="icon-btn composer-attach"
+          type="button"
+          aria-label={t("composer.attach")}
+          title={t("composer.attach")}
+          disabled={disabled}
+        >
+          <Plus className="ic" aria-hidden="true" />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner side={menuSide} align="start" sideOffset={8}>
+            <Menu.Popup>
+              <Menu.Item onClick={() => insertTrigger("@")}>
+                <AtSign className="ic" aria-hidden="true" />
+                <span className="grow">{t("composer.attach.file")}</span>
+                <span className="menu-meta">@</span>
+              </Menu.Item>
+              <Menu.Item disabled={!empty} onClick={() => insertTrigger("/")}>
+                <Slash className="ic" aria-hidden="true" />
+                <span className="grow">{t("composer.attach.command")}</span>
+                <span className="menu-meta">/</span>
+              </Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+      <PermissionMenu
+        value={permissionMode}
+        modes={availableModes}
+        onChange={onPermissionMode}
+        side={menuSide}
+      />
+      {agents.length > 0 ? (
+        <ModelPicker
+          agents={agents}
+          agentId={agentId}
+          modelId={modelId}
+          catalog={catalog}
+          onLoadModels={onLoadModels}
+          onSelectModel={(agent, model) => {
+            onSelectModel?.(agent, model)
+            editor?.commands.focus()
+          }}
+          locked={running || !onSelectModel}
+          side={menuSide}
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+        />
+      ) : null}
+      {running && canInterrupt ? (
+        <Button
+          variant="plain"
+          className="send is-stop"
+          type="button"
+          aria-label={t("chat.interrupt")}
+          title={t("chat.interrupt")}
+          onClick={onStop}
+        >
+          <Square className="ic" aria-hidden="true" />
+        </Button>
+      ) : running ? null : (
+        <Button
+          variant="plain"
+          className="send"
+          type="button"
+          aria-label={t("chat.send")}
+          title={t("chat.send")}
+          aria-disabled={empty || disabled ? true : undefined}
+          onClick={() => sendRef.current()}
+        >
+          <ArrowUp className="ic" aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  )
+
   return (
     <div className="composer-shell">
-      <div className={tall ? "composer is-tall" : "composer"}>
-        <SuggestionPanel store={store} />
-        <EditorContent editor={editor} />
-        <div className="composer-bar">
-          <div className="composer-side">
-            <Menu.Root>
-              <Menu.Trigger
-                className="icon-btn composer-attach"
-                type="button"
-                aria-label={t("composer.attach")}
-                title={t("composer.attach")}
-                disabled={disabled}
-              >
-                <Plus className="ic" aria-hidden="true" />
-              </Menu.Trigger>
-              <Menu.Portal>
-                <Menu.Positioner side={menuSide} align="start" sideOffset={8}>
-                  <Menu.Popup>
-                    <Menu.Item onClick={() => insertTrigger("@")}>
-                      <AtSign className="ic" aria-hidden="true" />
-                      <span className="grow">{t("composer.attach.file")}</span>
-                      <span className="menu-meta">@</span>
-                    </Menu.Item>
-                    <Menu.Item disabled={!empty} onClick={() => insertTrigger("/")}>
-                      <Slash className="ic" aria-hidden="true" />
-                      <span className="grow">{t("composer.attach.command")}</span>
-                      <span className="menu-meta">/</span>
-                    </Menu.Item>
-                  </Menu.Popup>
-                </Menu.Positioner>
-              </Menu.Portal>
-            </Menu.Root>
-            <PermissionMenu
-              value={permissionMode}
-              modes={availableModes}
-              onChange={onPermissionMode}
-              side={menuSide}
-            />
-          </div>
-          <div className="composer-side end">
-            {agents.length > 0 ? (
-              <ModelPicker
-                agents={agents}
-                agentId={agentId}
-                modelId={modelId}
-                catalog={catalog}
-                onLoadModels={onLoadModels}
-                onSelectModel={(agent, model) => {
-                  onSelectModel?.(agent, model)
-                  editor?.commands.focus()
-                }}
-                locked={running || !onSelectModel}
-                side={menuSide}
-                open={pickerOpen}
-                onOpenChange={setPickerOpen}
-              />
-            ) : null}
-            {running && canInterrupt ? (
-              <Button
-                variant="plain"
-                className="send is-stop"
-                type="button"
-                aria-label={t("chat.interrupt")}
-                title={t("chat.interrupt")}
-                onClick={onStop}
-              >
-                <Square className="ic" aria-hidden="true" />
-              </Button>
-            ) : running ? null : (
-              <Button
-                variant="plain"
-                className="send"
-                type="button"
-                aria-label={t("chat.send")}
-                title={t("chat.send")}
-                aria-disabled={empty || disabled ? true : undefined}
-                onClick={() => sendRef.current()}
-              >
-                <ArrowUp className="ic" aria-hidden="true" />
-              </Button>
-            )}
-          </div>
+      {header ? (
+        <div className="composer-frame">
+          <div className="composer-head">{header}</div>
+          {card}
         </div>
-      </div>
-      <div className="composer-under">
-        <span className="composer-hint">
-          {formatShortcut("Shift+Tab")} {t("composer.hint.permission")} · {formatShortcut("Mod+/")}{" "}
-          {t("composer.hint.model")}
-        </span>
-        <span className="composer-hint">{t("chat.sendHint")}</span>
-      </div>
+      ) : (
+        card
+      )}
     </div>
   )
 }

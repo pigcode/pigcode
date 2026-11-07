@@ -1,11 +1,12 @@
 /*
- * 视觉用例截图时隐藏每次运行都会变的文字：时间、耗时、checkpoint 时间。
+ * 视觉用例截图时隐藏每次运行都会变的文字：时间、耗时、checkpoint 时间、按时段变的问候。
  * 用 visibility 而不是遮罩：遮罩框的宽度跟着文字长度变，边缘会产生像素差异。
  */
 time,
 .work-label,
 .reasoning-row .tool-row-primary,
 .status-running-time,
-.checkpoint-time {
+.checkpoint-time,
+.new-thread-title {
   visibility: hidden !important;
 }

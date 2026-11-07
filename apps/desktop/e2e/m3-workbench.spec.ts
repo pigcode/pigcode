@@ -31,7 +31,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   })
   const page = await app.firstWindow()
   await addProject(app, page, root)
-  await expect(page.getByText("pigcode-m3-e2e", { exact: true })).toBeVisible()
+  await expect(page.locator(".sidebar").getByText("pigcode-m3-e2e", { exact: true })).toBeVisible()
   await page.getByRole("button", { name: "新会话" }).first().click()
 
   // 打开右侧面板，从空面板启动器打开终端并跑一个命令。
