@@ -1,5 +1,8 @@
 /** 工作台右栏组件的公开入口。 */
+export * from "./browser-states"
+export * from "./browser-url"
 export * from "./browser-view"
+export * from "./browser-viewport"
 export * from "./checkpoint-panel"
 export * from "./diff-view"
 export * from "./code-editor"

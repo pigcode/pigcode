@@ -14,6 +14,8 @@ export interface PanelSurface {
   title: string
   /** 浏览器最近一次导航的地址；面板随会话重新挂载时用它恢复页面。 */
   url?: string
+  /** 浏览器标签显示的网站图标（页面声明的 favicon 地址）。 */
+  icon?: string | undefined
   /** 文件标签显示的文件（工作目录内的相对路径）。 */
   path?: string
   /** 打开文件时定位到的行（从 1 开始）。 */
@@ -119,11 +121,11 @@ export function closeRemovedSurfaces(
     .reduce((next, surface) => closeSurface(next, surface.id), state)
 }
 
-/** 修改某个标签的标题、地址、文件或未保存状态，例如浏览器加载页面后显示主机名。 */
+/** 修改某个标签的标题、地址、图标、文件或未保存状态，例如浏览器加载页面后显示页面标题与网站图标。 */
 export function updateSurface(
   state: PanelSurfaceState,
   id: string,
-  patch: Partial<Pick<PanelSurface, "title" | "url" | "path" | "dirty">>,
+  patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty">>,
 ): PanelSurfaceState {
   return {
     ...state,

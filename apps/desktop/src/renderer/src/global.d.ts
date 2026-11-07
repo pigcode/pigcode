@@ -53,6 +53,8 @@ interface Window {
     browser?: {
       register(sessionId: string, threadId: string, webContentsId: number): Promise<void>
       unregister(sessionId: string): void
+      /** 在系统默认浏览器里打开内置浏览器的当前页面；只接受 http/https。 */
+      openExternal(url: string): Promise<void>
       onOpen(listener: (request: { threadId: string; url: string | null }) => void): () => void
       onActivity(
         listener: (activity: {

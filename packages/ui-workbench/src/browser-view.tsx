@@ -1,53 +1,26 @@
 /**
- * 浏览器 surface：地址栏、前进后退、刷新、在新窗口打开，下面是页面区。页面本身是宿主盖上来的
- * webview（这里只放占位槽 slot），所以 agent 在后台也能操作它。agent 动手时显示一条指示。
+ * 浏览器 surface：上面是工具栏，打开响应式视图时下面多一条设备栏。页面本身是宿主盖上来的 webview
+ * （这里只放占位槽 slot），agent 在后台也能操作它；agent 动手、正在选择元素这些提示由宿主浮在页面上，
+ * 不挤动页面。没有页面、加载失败或页面崩溃时，页面区画对应的状态。
  */
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
-import { ArrowLeft, ArrowRight, Bot, ExternalLink, Globe, RotateCw } from "lucide-react"
-import { Button, DotMatrix, EmptyState, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { useState, type ReactNode } from "react"
+import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { BrowserDeviceBar } from "./browser-device-bar"
+import {
+  BrowserCrashState,
+  BrowserEmptyState,
+  BrowserLoadErrorState,
+  type BrowserCrash,
+  type BrowserLoadError,
+} from "./browser-states"
+import { BrowserToolbar } from "./browser-toolbar"
+import { DEFAULT_VIEWPORT, type BrowserViewport } from "./browser-viewport"
 
 /** 在独立窗口打开页面的原生桥签名；测试可注入替身。 */
 export type PreviewOpen = (url: string) => Promise<{ id: string }>
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]", "0.0.0.0"])
-
-/** 判断地址能否在内置浏览器里打开：只允许 http/https。 */
-export function isBrowserUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return url.protocol === "http:" || url.protocol === "https:"
-  } catch {
-    return false
-  }
-}
-
-/**
- * 把地址栏输入补全为完整 URL：「3000」→ http://localhost:3000，「localhost:5173/a」与 IP 补 http://，
- * 其他主机名补 https://。不是 http/https 时返回 null。
- */
-export function normalizeBrowserUrl(input: string): string | null {
-  const value = input.trim()
-  if (value.length === 0) return null
-  let candidate = value
-  const hasScheme =
-    /^[a-z][a-z\d+.-]*:\/\//i.test(value) ||
-    /^(about|javascript|data|file|mailto|blob|chrome|devtools|pigcode|pigcode-plugin):/i.test(value)
-  if (/^\d{2,5}(\/.*)?$/.test(value)) candidate = `http://localhost:${value}`
-  else if (!hasScheme) {
-    const host = value.split(/[/?#]/)[0]?.replace(/:\d+$/, "").toLowerCase() ?? ""
-    const local = LOCAL_HOSTS.has(host) || /^\d+\.\d+\.\d+\.\d+$/.test(host)
-    candidate = `${local ? "http" : "https"}://${value}`
-  }
-  try {
-    const url = new URL(candidate)
-    return isBrowserUrl(url.href) ? url.href : null
-  } catch {
-    return null
-  }
-}
-
 /** agent 动作名对应的文案；没有列出的动作原样显示。 */
-const ACTION_LABELS: Record<string, MessageKey> = {
+export const BROWSER_ACTION_LABELS: Record<string, MessageKey> = {
   open: "browser.action.open",
   navigate: "browser.action.navigate",
   back: "browser.action.back",
@@ -70,12 +43,9 @@ export interface BrowserPageView {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
-}
-
-/** agent 最近一次在这个浏览器里的动作。 */
-export interface BrowserAgentView {
-  action: string
-  detail: string
+  favicon?: string | null | undefined
+  error?: BrowserLoadError | null | undefined
+  crashed?: BrowserCrash | null | undefined
 }
 
 /** 默认通过 preload 暴露的 pigcodeNative 打开窗口。 */
@@ -96,11 +66,24 @@ function openError(error: unknown, t: (key: MessageKey) => string): string {
 /** 浏览器属性。 */
 export interface BrowserViewProps {
   page: BrowserPageView
-  agent?: BrowserAgentView | null | undefined
+  /** 响应式视图的尺寸；null 时页面铺满页面区。 */
+  viewport?: BrowserViewport | null | undefined
+  /** 响应式视图的缩放比例：页面区放不下设备尺寸时小于 1。 */
+  viewportScale?: number | undefined
+  /** 正在页面上选择元素。 */
+  picking?: boolean | undefined
   onNavigate: (url: string) => void
   onBack: () => void
   onForward: () => void
   onReload: () => void
+  onStop?: (() => void) | undefined
+  onViewportChange?: ((viewport: BrowserViewport | null) => void) | undefined
+  onTogglePicker?: (() => void) | undefined
+  onOpenDevTools?: (() => void) | undefined
+  /** 在系统默认浏览器里打开。 */
+  onOpenDefault?: ((url: string) => void | Promise<void>) | undefined
+  /** 复制当前地址；宿主负责提示已复制。 */
+  onCopyUrl?: ((url: string) => void) | undefined
   openExternal?: PreviewOpen
   /** 页面区的占位槽；宿主把 webview 盖在它上面。 */
   slot: ReactNode
@@ -109,39 +92,25 @@ export interface BrowserViewProps {
 /** 浏览器 surface。 */
 export function BrowserView({
   page,
-  agent,
+  viewport = null,
+  viewportScale = 1,
+  picking = false,
   onNavigate,
   onBack,
   onForward,
   onReload,
+  onStop,
+  onViewportChange,
+  onTogglePicker,
+  onOpenDevTools,
+  onOpenDefault,
+  onCopyUrl,
   openExternal = openInNativeWindow,
   slot,
 }: BrowserViewProps) {
   const { t } = useLocale()
-  const invalid = t("preview.invalid")
-  const actionKey = agent ? ACTION_LABELS[agent.action] : undefined
   const current = page.url && page.url !== "about:blank" ? page.url : ""
-  const [address, setAddress] = useState(current)
-  const [editing, setEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!editing) setAddress(current)
-  }, [current, editing])
-
-  function submit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault()
-    const url = normalizeBrowserUrl(address)
-    if (!url) {
-      setError(invalid)
-      return
-    }
-    setError(null)
-    setAddress(url)
-    setEditing(false)
-    if (url === current) onReload()
-    else onNavigate(url)
-  }
 
   async function openWindow(): Promise<void> {
     if (!current) return
@@ -154,79 +123,32 @@ export function BrowserView({
   }
 
   return (
-    <div className="browser-view" data-agent={agent ? true : undefined}>
-      <div className="browser-toolbar">
-        <Button
-          variant="plain"
-          size="icon"
-          type="button"
-          aria-label={t("browser.back")}
-          title={t("browser.back")}
-          disabled={!page.canGoBack}
-          onClick={onBack}
-        >
-          <ArrowLeft className="ic ic-sm" aria-hidden="true" />
-        </Button>
-        <Button
-          variant="plain"
-          size="icon"
-          type="button"
-          aria-label={t("browser.forward")}
-          title={t("browser.forward")}
-          disabled={!page.canGoForward}
-          onClick={onForward}
-        >
-          <ArrowRight className="ic ic-sm" aria-hidden="true" />
-        </Button>
-        <Button
-          variant="plain"
-          size="icon"
-          type="button"
-          aria-label={t("browser.reload")}
-          title={t("browser.reload")}
-          disabled={!current}
-          onClick={onReload}
-        >
-          <RotateCw className="ic ic-sm" aria-hidden="true" data-spin={page.loading || undefined} />
-        </Button>
-        <form className="browser-address" onSubmit={submit}>
-          <input
-            type="text"
-            value={address}
-            placeholder={t("browser.address")}
-            aria-label={t("browser.address")}
-            aria-invalid={error === invalid || undefined}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => {
-              setEditing(true)
-              setAddress(event.target.value)
-            }}
-            onFocus={(event) => event.currentTarget.select()}
-            onBlur={() => setEditing(false)}
-          />
-        </form>
-        <Button
-          variant="plain"
-          size="icon"
-          type="button"
-          aria-label={t("browser.external")}
-          title={t("browser.external")}
-          disabled={!current}
-          onClick={() => void openWindow()}
-        >
-          <ExternalLink className="ic ic-sm" aria-hidden="true" />
-        </Button>
-      </div>
-      {agent ? (
-        <div className="browser-agent" role="status" aria-live="polite">
-          <Bot className="ic ic-sm" aria-hidden="true" />
-          <span className="browser-agent-label">{t("browser.agent")}</span>
-          <span className="browser-agent-action truncate">
-            {[actionKey ? t(actionKey) : agent.action, agent.detail].filter(Boolean).join(" · ")}
-          </span>
-          <DotMatrix />
-        </div>
+    <div className="browser-view" data-responsive={viewport ? "" : undefined}>
+      <BrowserToolbar
+        url={current}
+        favicon={page.favicon}
+        loading={page.loading}
+        canGoBack={page.canGoBack}
+        canGoForward={page.canGoForward}
+        responsive={viewport !== null}
+        picking={picking}
+        onNavigate={onNavigate}
+        onBack={onBack}
+        onForward={onForward}
+        onReload={onReload}
+        onStop={onStop}
+        onToggleResponsive={
+          onViewportChange ? () => onViewportChange(viewport ? null : DEFAULT_VIEWPORT) : undefined
+        }
+        onTogglePicker={onTogglePicker}
+        onOpenDefault={onOpenDefault ? () => void onOpenDefault(current) : undefined}
+        onOpenWindow={() => void openWindow()}
+        onCopyUrl={onCopyUrl ? () => onCopyUrl(current) : undefined}
+        onOpenDevTools={onOpenDevTools}
+        onInvalid={setError}
+      />
+      {viewport && onViewportChange ? (
+        <BrowserDeviceBar viewport={viewport} scale={viewportScale} onChange={onViewportChange} />
       ) : null}
       {error ? (
         <p className="browser-error" role="alert">
@@ -234,12 +156,12 @@ export function BrowserView({
         </p>
       ) : null}
       <div className="browser-page">
-        {current ? null : (
-          <EmptyState
-            icon={<Globe className="ic" />}
-            title={t("browser.empty")}
-            description={t("browser.emptyHint")}
-          />
+        {page.crashed ? (
+          <BrowserCrashState crash={page.crashed} onRetry={onReload} />
+        ) : page.error ? (
+          <BrowserLoadErrorState error={page.error} onRetry={onReload} />
+        ) : current ? null : (
+          <BrowserEmptyState />
         )}
         {slot}
       </div>

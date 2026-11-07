@@ -74,6 +74,12 @@
   display: grid;
   place-items: center;
 }
+.surface-tab-favicon {
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: var(--r-2xs);
+  object-fit: contain;
+}
 .surface-tab-x,
 .surface-tab:hover .surface-tab-icon,
 .surface-tab-close:focus-visible .surface-tab-icon {

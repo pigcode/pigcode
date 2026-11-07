@@ -105,7 +105,7 @@ function SurfaceIcon({ surface }: { surface: SurfaceContribution | undefined }) 
   return <Icon className="ic ic-sm" aria-hidden="true" />
 }
 
-/** 标签的图标；文件标签按文件类型。 */
+/** 标签的图标；文件标签按文件类型，浏览器标签用网站图标，读不到时退回 Surface 的图标。 */
 function TabIcon({
   tab,
   surface,
@@ -113,7 +113,19 @@ function TabIcon({
   tab: PanelSurface
   surface: SurfaceContribution | undefined
 }) {
+  const [broken, setBroken] = useState<string | null>(null)
   if (tab.kind === FILE_SURFACE_KIND) return <FileIcon name={tab.title} kind="file" />
+  if (tab.icon && broken !== tab.icon) {
+    return (
+      <img
+        className="surface-tab-favicon"
+        src={tab.icon}
+        alt=""
+        draggable={false}
+        onError={() => setBroken(tab.icon ?? null)}
+      />
+    )
+  }
   return <SurfaceIcon surface={surface} />
 }
 

@@ -2,9 +2,16 @@
  * 把内置浏览器接进 main：渲染进程登记 webview、Host 经控制端口发来 agent 动作、
  * 以及所有 webview 的安全限制（沙箱、无 preload、独立分区、只允许 http/https）。
  */
-import { app, ipcMain, webContents, type BrowserWindow, type MessagePortMain } from "electron"
+import {
+  app,
+  ipcMain,
+  shell,
+  webContents,
+  type BrowserWindow,
+  type MessagePortMain,
+} from "electron"
 import { BrowserAgent, type BrowserRequest, type GuestContents } from "./browser-agent"
-import { BROWSER_PARTITION, isAllowedBrowserUrl } from "./browser-policy"
+import { BROWSER_PARTITION, isAllowedBrowserUrl, readBrowserExternalUrl } from "./browser-policy"
 
 function isBrowserRequest(value: unknown): value is BrowserRequest {
   if (typeof value !== "object" || value === null) return false
@@ -84,6 +91,12 @@ export function setupBrowser(getWindow: () => BrowserWindow | undefined): Browse
   )
   ipcMain.handle("pigcode:browser-unregister", (_event, sessionId: unknown) => {
     if (typeof sessionId === "string") agent.unregister(sessionId)
+  })
+  // 「在默认浏览器中打开」：本机的 http 开发服务器也要能打开，所以和 agent 官网的外链分开；不接受带凭据的地址。
+  ipcMain.handle("pigcode:browser-external", async (_event, value: unknown) => {
+    const url = readBrowserExternalUrl(value)
+    if (!url) throw new Error("URL_NOT_ALLOWED")
+    await shell.openExternal(url)
   })
   return {
     attachControlPort(port) {

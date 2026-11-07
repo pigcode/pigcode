@@ -45,3 +45,11 @@ export function normalizeBrowserUrl(input: string): string | null {
     return null
   }
 }
+
+/** 交给系统浏览器打开的地址：只要 http/https，不带用户名密码；不合法时返回 null。 */
+export function readBrowserExternalUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value === "about:blank" || !isAllowedBrowserUrl(value))
+    return null
+  const url = new URL(value)
+  return url.username || url.password ? null : url.toString()
+}

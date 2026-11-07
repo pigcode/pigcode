@@ -9,15 +9,17 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     showInDock: boolean
     autoCheckUpdates: boolean
     prereleaseUpdates: boolean
+    keepAwake: boolean
   }> => ipcRenderer.invoke("pigcode:preferences-get"),
   setPreference: (
-    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates" | "prereleaseUpdates",
+    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates" | "prereleaseUpdates" | "keepAwake",
     value: boolean,
   ): Promise<{
     launchAtLogin: boolean
     showInDock: boolean
     autoCheckUpdates: boolean
     prereleaseUpdates: boolean
+    keepAwake: boolean
   }> => ipcRenderer.invoke("pigcode:preferences-set", key, value),
   checkForUpdates: (): Promise<{
     status: "up-to-date" | "update-available" | "error"
@@ -77,6 +79,8 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     unregister: (sessionId: string): void => {
       void ipcRenderer.invoke("pigcode:browser-unregister", sessionId).catch(() => undefined)
     },
+    openExternal: (url: string): Promise<void> =>
+      ipcRenderer.invoke("pigcode:browser-external", url),
     onOpen: (listener: (request: { threadId: string; url: string | null }) => void) => {
       const handler = (_event: unknown, value: { threadId: string; url: string | null }) =>
         listener(value)
