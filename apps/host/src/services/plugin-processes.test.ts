@@ -12,7 +12,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { installLocalPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { setupHost } from "./plugin-harness"
 
 /** 插件清理里故意加的一段延时；见 pluginSource。 */

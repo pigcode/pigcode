@@ -5,8 +5,6 @@ import { writeBootGraph } from "../kernel/boot"
 import {
   buildBootGraph,
   hostEntryUrl,
-  installLocalPlugin,
-  installPlugin,
   listPlugins,
   readPluginRecords,
   setPluginEnabled,
@@ -17,6 +15,21 @@ import {
   type PluginRecord,
   type PluginSummary,
 } from "./plugin-manager"
+import {
+  defaultSourceIo,
+  installFromMarketplace,
+  installLocalPlugin,
+  installPlugin,
+  updatePlugin,
+} from "./plugin-installer"
+import {
+  addMarketplace,
+  listMarketplaces,
+  refreshMarketplace,
+  removeMarketplace,
+  setMarketplaceEnabled,
+  type MarketplaceSummary,
+} from "./plugin-marketplace"
 import { providesConflictOf } from "./plugin-conflicts"
 
 /** plugins 插件的配置：用户 profile 目录与内置插件包目录。 */
@@ -26,7 +39,7 @@ export interface PluginsConfig {
   builtin?: string[]
 }
 
-/** Host 侧插件管理服务；支持本地目录、npm 包名/版本与 tarball 安装。 */
+/** Host 侧插件管理服务；支持本地目录、npm、tarball、GitHub、git 与插件市场安装。 */
 export interface PluginsService {
   list(): Promise<PluginSummary[]>
   /** 合并后的插件记录（含 manifest），供 agent 设置页读取 Agent 插件的贡献。 */
@@ -35,6 +48,18 @@ export interface PluginsService {
   record(id: string): Promise<PluginRecord>
   install(spec: string): Promise<InstalledPluginEntry>
   installLocal(sourceDir: string): Promise<InstalledPluginEntry>
+  /** 安装插件市场里的一项。 */
+  installFromMarketplace(marketplace: string, plugin: string): Promise<InstalledPluginEntry>
+  /** 按记下的来源重新安装用户安装的插件，保留配置与启停状态。 */
+  update(id: string): Promise<InstalledPluginEntry>
+  marketplaces(): Promise<MarketplaceSummary[]>
+  addMarketplace(source: string): Promise<MarketplaceSummary>
+  /** 刷新一个市场；不给 id 时刷新全部启用的市场。某个市场失败时原因在它的 error 里，其余照常。 */
+  refreshMarketplaces(id?: string): Promise<MarketplaceSummary[]>
+  /** 启用或停用市场；停用的不列出、不刷新，从它装的插件保留。 */
+  setMarketplaceEnabled(id: string, enabled: boolean): Promise<MarketplaceSummary>
+  /** 删除市场；从它装的插件保留。 */
+  removeMarketplace(id: string): Promise<void>
   /** 卸载用户安装的插件；内置插件只能停用。 */
   uninstall(id: string): Promise<void>
   enable(id: string): Promise<void>
@@ -232,6 +257,24 @@ export const apply: PluginsPlugin = (ctx, config) => {
     record: recordOf,
     install: async (spec) => afterInstall(await installPlugin(env, spec)),
     installLocal: async (sourceDir) => afterInstall(await installLocalPlugin(env, sourceDir)),
+    installFromMarketplace: async (marketplace, plugin) =>
+      afterInstall(await installFromMarketplace(env, marketplace, plugin)),
+    update: async (id) => afterInstall(await updatePlugin(env, id)),
+    marketplaces: () => listMarketplaces(env.profileDir),
+    addMarketplace: (source) => addMarketplace(env.profileDir, source, defaultSourceIo()),
+    refreshMarketplaces: async (id) => {
+      const io = defaultSourceIo()
+      if (id) return [await refreshMarketplace(env.profileDir, id, io)]
+      const results: MarketplaceSummary[] = []
+      for (const summary of await listMarketplaces(env.profileDir)) {
+        results.push(
+          summary.enabled ? await refreshMarketplace(env.profileDir, summary.id, io) : summary,
+        )
+      }
+      return results
+    },
+    setMarketplaceEnabled: (id, enabled) => setMarketplaceEnabled(env.profileDir, id, enabled),
+    removeMarketplace: (id) => removeMarketplace(env.profileDir, id),
     uninstall: async (id) => {
       const record = await recordOf(id)
       if (record.builtin) throw new Error(`PLUGIN_BUILTIN: ${record.name} can only be disabled`)

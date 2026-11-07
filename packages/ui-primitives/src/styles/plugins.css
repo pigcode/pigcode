@@ -43,3 +43,614 @@
 .plugin-panel[data-open] .plugin-panel-chev {
   transform: rotate(90deg);
 }
+
+/*
+  插件页（ui-plugin-manager）：页头下面是搜索框，然后按类型分组，每组一条标题加细线，下面两列卡片。
+  卡片平时没有底色，悬停、键盘聚焦或菜单打开时才铺一层；更多菜单的按钮也只在这时出现。
+*/
+.plugin-market,
+.plugin-dialog {
+  --market-icon-size: var(--plugin-icon);
+  --market-gap: var(--space-5);
+}
+.plugin-market .market-search {
+  margin-bottom: var(--space-2);
+}
+.plugin-market .market-error {
+  margin-top: var(--space-4);
+}
+.market-empty {
+  margin-top: var(--space-8);
+}
+
+/* 分组：标题和卡片里的图标左对齐，标题下一条贯穿的细线 */
+.market-section {
+  margin-top: 26px;
+}
+.market-section-title {
+  padding: 0 var(--market-gap) var(--space-5);
+  border-bottom: var(--hair) solid var(--border-strong);
+  color: var(--fg);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-7);
+  margin-top: var(--space-4);
+}
+@container (max-width: 560px) {
+  .market-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.market-more {
+  margin: var(--space-3) 0 0 var(--market-gap);
+  padding: var(--space-1) 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.market-more:hover {
+  color: var(--fg);
+}
+
+/* 卡片：主按钮的 ::after 盖住整张卡片，点空白处等于看详情；右边的操作叠在它上面 */
+.market-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--market-gap);
+  min-width: 0;
+  min-height: calc(var(--market-icon-size) + var(--market-gap) * 2);
+  padding: var(--market-gap);
+  border-radius: var(--r-lg);
+}
+.market-tile:hover,
+.market-tile:has(:focus-visible),
+.market-tile[data-menu-open] {
+  background: var(--hover);
+}
+.market-tile:has(> .market-tile-main:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.market-tile-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+  color: inherit;
+  text-align: left;
+}
+.market-tile-main:focus-visible {
+  outline: none;
+}
+.market-tile-main::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .market-tile {
+    transition: background var(--t-fast) var(--ease);
+  }
+}
+
+/* 图标：头像放大成应用图标，同一个色相上下两层渐变，上沿一道高光；停用时褪成灰色 */
+.entity-avatar.market-icon {
+  --avatar-size: var(--market-icon-size);
+  border-radius: var(--r-lg);
+  background: linear-gradient(
+    160deg,
+    oklch(95% 0.04 var(--entity-hue)),
+    oklch(86% 0.08 var(--entity-hue))
+  );
+  color: oklch(40% 0.13 var(--entity-hue));
+  box-shadow:
+    inset 0 0 0 var(--hair) oklch(35% 0.08 var(--entity-hue) / 0.18),
+    inset 0 1px 0 var(--field-hl),
+    0 1px 2px oklch(35% 0.08 var(--entity-hue) / 0.14);
+  font-size: calc(var(--avatar-size) * 0.36);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+[data-theme="dark"] .entity-avatar.market-icon {
+  background: linear-gradient(
+    160deg,
+    oklch(42% 0.085 var(--entity-hue)),
+    oklch(31% 0.065 var(--entity-hue))
+  );
+  color: oklch(91% 0.07 var(--entity-hue));
+  box-shadow:
+    inset 0 0 0 var(--hair) var(--border),
+    inset 0 1px 0 var(--hover),
+    var(--shadow-btn);
+}
+.market-tile[data-enabled="false"] .market-icon {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+/* 名称与内置徽标一行，下面一行说明；有问题时说明换成状态 */
+.market-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.market-tile-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 550;
+  line-height: 1.35;
+}
+.market-tile[data-enabled="false"] .market-tile-name {
+  color: var(--fg-2);
+}
+.market-tile-desc {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.market-tile-desc[data-tone] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.market-tile-desc[data-tone="error"] {
+  color: var(--bad-text);
+}
+.market-tile-desc[data-tone="warning"] {
+  color: var(--warn-text);
+}
+
+/* 右边的操作：更多菜单悬停才出现，「打开」是浅灰的小按钮，最后是开关 */
+.market-tile-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+}
+.btn.market-open {
+  height: var(--control-sm);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-sm);
+  background: var(--field);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.btn.market-open:hover {
+  background: var(--active);
+}
+.icon-btn.market-tile-menu {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
+  opacity: 0;
+}
+.market-tile:hover .market-tile-menu,
+.market-tile:has(:focus-visible) .market-tile-menu,
+.market-tile[data-menu-open] .market-tile-menu {
+  opacity: 1;
+}
+.icon-btn.market-tile-menu:hover,
+.icon-btn.market-tile-menu[aria-expanded="true"] {
+  background: var(--active);
+}
+@media (hover: none) {
+  .icon-btn.market-tile-menu {
+    opacity: 1;
+  }
+}
+.market-menu.menu-popup {
+  min-width: 140px;
+}
+
+/* 详情对话框：图标在标题左边，名称与状态一行叠在它右边；包名、权限这些放在一块浅底里 */
+.dialog.plugin-dialog {
+  --market-icon-size: var(--plugin-icon-lg);
+  width: min(480px, calc(100vw - 48px));
+}
+.plugin-dialog .dialog-heading {
+  position: relative;
+  justify-content: center;
+  min-height: var(--market-icon-size);
+  padding-left: calc(var(--market-icon-size) + var(--space-6));
+}
+.plugin-dialog .dialog-title .market-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.plugin-dialog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+.plugin-dialog-meta[data-tone="error"] {
+  color: var(--bad-text);
+}
+.plugin-dialog-meta[data-tone="warning"] {
+  color: var(--warn-text);
+}
+.plugin-dialog-version {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.plugin-dialog-body .ext-facts {
+  padding: var(--space-6) var(--space-7);
+  border-radius: var(--r-lg);
+  background: var(--field);
+}
+/* 内置插件没有底部按钮，正文就是最后一块，自己留出底边 */
+.plugin-dialog .plugin-dialog-body:last-child {
+  padding-bottom: var(--space-8);
+}
+.plugin-dialog-hint {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+/*
+  插件市场（PluginMarket）：分段与搜索一行；每个市场一组，组头是名称、来源与更新时间，失败时多一行原因；
+  卡片右边是「安装」「更新」的胶囊按钮或「已安装」。还没有市场时是一块居中的说明卡。
+*/
+.market-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-2);
+}
+.plugin-market .market-toolbar .market-search {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+.btn.market-add {
+  gap: var(--space-2);
+}
+.market-add-menu.menu-popup {
+  min-width: 280px;
+}
+/* 标题栏的「市场源」：文字按钮，后面一个小计数 */
+.btn.market-sources-btn {
+  gap: var(--space-3);
+}
+.market-sources-count {
+  min-width: var(--badge-h);
+  padding: 0 var(--space-2);
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--badge-h);
+  text-align: center;
+}
+.market-notice {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.market-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0 var(--market-gap) var(--space-5);
+  border-bottom: var(--hair) solid var(--border-strong);
+}
+/* 组标题与它右边的「⋯」：菜单平时淡一点，悬停在组头上时和标题一样清楚 */
+.market-section-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.market-section-head .market-section-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+.icon-btn.source-menu-trigger {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
+}
+.market-section-head .source-menu-trigger {
+  opacity: 0.6;
+}
+.market-section-head:hover .source-menu-trigger,
+.market-section-head .source-menu-trigger:focus-visible,
+.market-section-head .source-menu-trigger[aria-expanded="true"] {
+  opacity: 1;
+}
+.source-menu.menu-popup {
+  min-width: 200px;
+}
+.market-section-meta {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.market-section-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+}
+.market-section-error .ic {
+  flex: none;
+}
+.market-section-empty {
+  padding: var(--space-6) var(--market-gap);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.btn.market-pill {
+  gap: var(--space-2);
+  height: var(--control-sm);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-full);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.market-installed {
+  padding: 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.market-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: var(--badge-h);
+  padding: 0 var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--ok-soft);
+  color: var(--ok-text);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.entity-avatar.market-icon.market-icon-img {
+  padding: 0;
+  background: var(--surface);
+  object-fit: cover;
+}
+.market-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+  padding: var(--space-9) var(--space-9) calc(var(--space-9) + var(--space-4));
+  border-radius: var(--r-2xl);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  text-align: center;
+}
+.market-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--plugin-icon-lg);
+  height: var(--plugin-icon-lg);
+  border-radius: var(--r-lg);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.market-hero h2 {
+  color: var(--fg);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.market-hero p {
+  max-width: 520px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+.market-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* 市场插件详情：有新版本时一条浅绿提示；主页是能点的链接 */
+.market-update-hint {
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--r-md);
+  background: var(--ok-soft);
+  color: var(--ok-text);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.market-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  color: var(--accent-text);
+  text-align: left;
+}
+.market-link:hover {
+  text-decoration: underline;
+}
+
+/* 添加插件市场：风险提示是一块浅黄底，下面一行勾选确认 */
+.dialog.marketplace-dialog {
+  width: min(520px, calc(100vw - 48px));
+}
+.marketplace-risk {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.marketplace-risk .ic {
+  flex: none;
+  margin-top: var(--space-1);
+}
+.marketplace-ack {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.marketplace-ack .checkbox {
+  flex: none;
+  margin-top: var(--space-1);
+}
+
+/*
+  市场源管理：上面一行是数量（复制地址后换成提示）、全部刷新与添加；下面每个市场源一行浅底，
+  左边是来源类型的图标，右边是启用开关、刷新与「⋯」（打开来源、复制地址、删除）。停用的行变淡，删除先在行里确认。
+*/
+.dialog.marketplace-sources {
+  width: min(600px, calc(100vw - 48px));
+}
+.marketplace-sources-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.marketplace-sources-summary {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.marketplace-sources-empty {
+  padding: var(--space-8) 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.marketplace-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: min(420px, 56vh);
+  overflow-y: auto;
+}
+.marketplace-source {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-5) var(--space-6);
+  border-radius: var(--r-lg);
+  background: var(--field);
+}
+.marketplace-source-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--fg-2);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+}
+.marketplace-source[data-enabled="false"] .marketplace-source-icon,
+.marketplace-source[data-enabled="false"] .marketplace-source-text {
+  opacity: 0.55;
+}
+.marketplace-source-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.marketplace-source-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.marketplace-source-type {
+  flex: none;
+  padding: 0 var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: var(--badge-h);
+}
+.marketplace-source-type.is-off {
+  background: var(--active);
+}
+.marketplace-source-label {
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+}
+.marketplace-source-meta {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.marketplace-source-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  color: var(--warn-text);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.marketplace-source-error .ic {
+  flex: none;
+  margin-top: var(--space-1);
+}
+.marketplace-source-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+}
+.marketplace-source-confirm > span {
+  flex: 1 1 100%;
+}
+.marketplace-source-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+}
+.marketplace-source-actions .switch {
+  margin-right: var(--space-2);
+}

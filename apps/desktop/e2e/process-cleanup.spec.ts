@@ -100,12 +100,9 @@ test("quitting the app waits for a plugin's asynchronous cleanup", async () => {
      }\n`,
   )
   const { app, page } = await openThread("cleanup-plugin")
-  await page.getByRole("button", { name: "设置", exact: true }).click()
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
   await installPlugin(page, dir)
-  await expect(
-    page.locator(".ext-item").filter({ hasText: "pigcode-cleanup-marker" }),
-  ).toBeVisible()
+  await expect(page.locator(".market-tile[data-plugin='pigcode-cleanup-marker']")).toBeVisible()
   await app.close()
   expect(existsSync(marker)).toBe(true)
 })

@@ -119,7 +119,7 @@ and UI plugins load and unload without restarting the app.
 Every agent is a plugin. Claude Code and Codex ship with the app as built-in plugins:
 they can be disabled but not uninstalled. Other agents are installed on demand from
 Settings → Agent → Install agent (an npm spec, a tarball, or a local folder), and any
-plugin can be installed from Settings → Plugins.
+plugin can be installed from the Plugins page in the sidebar.
 
 Settings → Agent shows each agent's status (installed, version, signed in), the Agent
 features it supports, and the settings its plugin declares. The built-in agents have the same
@@ -129,8 +129,10 @@ Changes apply to the next run; running sessions are not interrupted. The page al
 the default agent for new sessions; Automatic uses the first agent that is installed and
 signed in.
 
-Settings → Plugins uses the same list as the Agent page: a switch per plugin, and its
-package, kind, permissions and conflicts when expanded. UI plugins draw inside host chrome:
+The Plugins page sits next to New chat in the sidebar and keeps the workspace sidebar. It
+groups plugins by kind into two columns of cards: a switch per plugin, Open for plugins
+with a settings page, and their package, kind, permissions and conflicts in the details
+dialog. UI plugins draw inside host chrome:
 sidebar panels get the sidebar's group header, right-panel surfaces open as regular tabs
 from the launcher, and plugins build their UI with the host's own React and
 `@pigcode/ui-primitives`, so buttons, rows, settings groups and switches look exactly like

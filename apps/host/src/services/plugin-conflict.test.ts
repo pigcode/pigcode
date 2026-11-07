@@ -4,7 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
 import { parse, stringify } from "yaml"
-import { installLocalPlugin, listPlugins, setPluginEnabled } from "./plugin-manager"
+import { listPlugins, setPluginEnabled } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 
 /** 写入一个只声明 host 入口的 Agent 插件源目录。 */
 async function writeAgent(root: string, name: string, provides: string[]): Promise<string> {

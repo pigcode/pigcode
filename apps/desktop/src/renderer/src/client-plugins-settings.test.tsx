@@ -51,8 +51,6 @@ describe("client plugin settings pages", () => {
       "general",
       "appearance",
       "agents",
-      "schedules",
-      "plugins",
     ])
     const page = pages[0]
     expect(page).toMatchObject({
@@ -82,7 +80,7 @@ describe("client plugin settings pages", () => {
 
     controller.dispose()
     expect(extensions.get("settingsPage").map((item) => item.owner.kind)).toEqual(
-      Array(5).fill("builtin"),
+      Array(3).fill("builtin"),
     )
   })
 

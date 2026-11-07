@@ -12,7 +12,7 @@ import {
   rewriteRelativeImports,
   transpileTypeScript,
 } from "./plugin-typescript"
-import { installLocalPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 
 const dirs: string[] = []
 

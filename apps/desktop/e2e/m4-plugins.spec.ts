@@ -4,11 +4,19 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { _electron as electron, expect, test } from "@playwright/test"
+import { _electron as electron, expect, test, type Page } from "@playwright/test"
 import { addProject, installPlugin, launchEnv, launchArgs } from "./projects"
 
 /** 仓库里的脚手架脚本：生成一个 UI 插件用到真实的模板，而不是复制的样例。 */
 const CREATE_PLUGIN = fileURLToPath(new URL("../../../scripts/create-plugin.ts", import.meta.url))
+
+/** 插件页是工作区里的顶层页面：从侧栏的「插件」进去，侧栏仍是工作区导航。 */
+const openPlugins = (page: Page) =>
+  page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+/** 插件页上某个插件的卡片，按包名定位。 */
+const pluginTile = (page: Page, name: string) => page.locator(`.market-tile[data-plugin='${name}']`)
+/** 从插件页回到会话：点侧栏里的会话。 */
+const backToChat = (page: Page) => page.locator(".sidebar .sess").first().click()
 
 test("installs, enables, and disables plugins without restart", async () => {
   // 每次从干净的项目目录开始，避免上一次失败残留影响结果。
@@ -24,17 +32,17 @@ test("installs, enables, and disables plugins without restart", async () => {
   const page = await app.firstWindow()
   // 安装 Agent 插件
   await addProject(app, page, projectRoot)
-  await page.getByRole("button", { name: "设置", exact: true }).click()
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await openPlugins(page)
+  await expect(
+    page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }),
+  ).toHaveAttribute("aria-current", "page")
   const agent = new URL("../../../examples/agent-echo", import.meta.url).pathname
   await installPlugin(page, agent)
-  const echo = page.locator(".ext-item").filter({ hasText: "pigcode-agent-echo" })
+  const echo = pluginTile(page, "pigcode-agent-echo")
   await expect(echo).toBeVisible()
   await expect(echo.getByRole("switch")).toBeChecked()
-  // 设置页的侧栏和内容区各有一个返回入口，取侧栏那个。
-  await page.getByRole("button", { name: "返回应用" }).first().click()
 
-  // 新建会话，默认 agent 由 PIGCODE_AGENT=echo 强制
+  // 新建会话，默认 agent 由 PIGCODE_AGENT=echo 强制；插件页的侧栏里就有「新会话」。
   await page.getByRole("button", { name: "新会话" }).first().click()
   // 线程创建是异步 RPC；等 composer 可编辑后再输入。
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
@@ -45,35 +53,29 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(page.locator(".msg-ai").filter({ hasText: "hello echo" })).toBeVisible()
 
   // 安装 UI 插件：它的 Panel 出现在侧栏，Surface 出现在右侧面板的「+」菜单里，设置页出现在设置侧栏里。
-  const openPlugins = async () => {
-    await page.getByRole("button", { name: "设置", exact: true }).click()
-    await page.getByRole("button", { name: "插件", exact: true }).first().click()
-  }
   const backToApp = () => page.getByRole("button", { name: "返回应用" }).first().click()
-  await openPlugins()
+  await openPlugins(page)
   const ui = new URL("../../../examples/ui-debug-panel", import.meta.url).pathname
   await installPlugin(page, ui)
-  const debug = page.locator(".ext-item").filter({ hasText: "pigcode-ui-debug-panel" })
+  const debug = pluginTile(page, "pigcode-ui-debug-panel")
   await expect(debug.getByRole("switch")).toBeChecked()
   const debugPanel = page.locator(".plugin-panel-head").filter({ hasText: "Debug Panel" })
   await expect(debugPanel).toBeVisible()
 
-  // 设置页列在内置页后面的「插件设置」组里；宿主画页面标题，插件画下面的内容。设置里的搜索也搜得到它。
+  // 卡片上的「打开」去插件自己的设置页。设置页列在内置页后面的「插件设置」组里；宿主画页面标题，
+  // 插件画下面的内容。设置里的搜索也搜得到它。
   const sidebar = page.locator(".sidebar")
   const settingsNav = sidebar.locator(".nav-item:not(.back)")
   const debugSettings = sidebar.getByRole("button", { name: "Debug Settings", exact: true })
   const debugSettingsTitle = page.getByRole("heading", { level: 1, name: "Debug Settings" })
-  await expect(settingsNav).toHaveText([
-    "通用",
-    "外观",
-    "Agent",
-    "定时任务",
-    "插件",
-    "Debug Settings",
-  ])
-  await expect(sidebar.locator(".side-group")).toHaveText(["设置", "插件设置"])
-  await debugSettings.click()
+  const openDebugSettings = debug.getByRole("button", {
+    name: "打开 pigcode-ui-debug-panel 的设置",
+  })
+  await openDebugSettings.click()
   await expect(debugSettingsTitle).toBeVisible()
+  await expect(debugSettings).toHaveAttribute("aria-current", "page")
+  await expect(settingsNav).toHaveText(["通用", "外观", "Agent", "Debug Settings"])
+  await expect(sidebar.locator(".side-group")).toHaveText(["设置", "插件设置"])
   await expect(
     page
       .locator("[data-plugin-content='debug-settings']")
@@ -148,14 +150,14 @@ test("installs, enables, and disables plugins without restart", async () => {
   await page.keyboard.press("ControlOrMeta+k")
   await page.locator(".palette input").fill("插件")
   await page.keyboard.press("Enter")
-  await expect(page.getByRole("heading", { level: 1, name: "插件管理" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "插件" })).toBeVisible()
 
-  // 停用后 Panel 和设置页消失，打开着的 Surface 标签关闭，当前标签改选终端，「+」菜单里也不再有它。
+  // 停用后 Panel 和设置页消失（卡片上的「打开」也跟着没了），打开着的 Surface 标签关闭，
+  // 当前标签改选终端，「+」菜单里也不再有它。
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).not.toBeChecked()
   await expect(debugPanel).toBeHidden()
-  await expect(debugSettings).toHaveCount(0)
-  await expect(sidebar.locator(".side-group")).toHaveText(["设置"])
+  await expect(openDebugSettings).toHaveCount(0)
   // 后退跳过已经移除的 Debug 设置页，直接回到会话，不会停在空白的设置页上。
   await page.getByRole("button", { name: "后退" }).click()
   await expect(page.locator(".tiptap")).toBeVisible()
@@ -189,32 +191,35 @@ test("installs, enables, and disables plugins without restart", async () => {
     "aria-current",
     "page",
   )
+  await expect(sidebar.locator(".side-group")).toHaveText(["设置"])
+  await expect(debugSettings).toHaveCount(0)
 
   // 重新启用：Panel、设置页与 Surface 回来。
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await backToApp()
+  await openPlugins(page)
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).toBeChecked()
   await expect(debugPanel).toBeVisible()
-  await expect(debugSettings).toBeVisible()
-  await backToApp()
+  await expect(openDebugSettings).toBeVisible()
+  await backToChat(page)
   await addSurface.click()
   await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toBeVisible()
   await page.keyboard.press("Escape")
-  await openPlugins()
+  await openPlugins(page)
 
-  // Capability 插件没有可见 UI，用列表状态验证启停热生效；详情里是包名与类型。
+  // Capability 插件没有可见 UI，用卡片状态验证启停热生效；详情里是包名与类型。
   const capabilityPlugin = new URL("../../../examples/capability-session-info", import.meta.url)
     .pathname
   await installPlugin(page, capabilityPlugin)
-  const capabilityItem = page
-    .locator(".ext-item")
-    .filter({ hasText: "pigcode-capability-session-info" })
+  const capabilityItem = pluginTile(page, "pigcode-capability-session-info")
   await expect(capabilityItem.getByRole("switch")).toBeChecked()
   await capabilityItem.getByRole("switch").click()
   await expect(capabilityItem.getByRole("switch")).not.toBeChecked()
-  await expect(capabilityItem).toContainText("已停用")
-  await capabilityItem.locator(".ext-row-main").click()
-  await expect(capabilityItem.locator(".ext-facts")).toContainText("能力")
+  await expect(capabilityItem).toHaveAttribute("data-enabled", "false")
+  await capabilityItem.locator(".market-tile-main").click()
+  const details = page.getByRole("dialog", { name: "pigcode-capability-session-info" })
+  await expect(details.locator(".ext-facts")).toContainText("能力")
+  await expect(details.locator(".ext-facts")).toContainText("pigcode-capability-session-info")
 
   await app.close()
 })
@@ -230,20 +235,14 @@ test("a plugin's contributions on all five extension points come and go with it"
   const page = await app.firstWindow()
   await addProject(app, page, projectRoot)
 
-  const openPlugins = async () => {
-    await page.getByRole("button", { name: "设置", exact: true }).click()
-    await page.getByRole("button", { name: "插件", exact: true }).first().click()
-  }
-  const backToApp = () => page.getByRole("button", { name: "返回应用" }).first().click()
-  await openPlugins()
+  await openPlugins(page)
   // ui-debug-panel 在五个扩展点上都登记了内容；capability-clock 是带界面代码的 Capability 插件。
   await installPlugin(page, new URL("../../../examples/ui-debug-panel", import.meta.url).pathname)
   await installPlugin(page, new URL("../../../examples/capability-clock", import.meta.url).pathname)
-  const debug = page.locator(".ext-item").filter({ hasText: "pigcode-ui-debug-panel" })
-  const clock = page.locator(".ext-item").filter({ hasText: "pigcode-capability-clock" })
+  const debug = pluginTile(page, "pigcode-ui-debug-panel")
+  const clock = pluginTile(page, "pigcode-capability-clock")
   await expect(debug.getByRole("switch")).toBeChecked()
   await expect(clock.getByRole("switch")).toBeChecked()
-  await backToApp()
 
   // fake agent 调用样例插件的工具：clock_now 带 MCP 前缀和不带各一次，还有 debug_probe。
   await page.getByRole("button", { name: "新会话" }).first().click()
@@ -255,9 +254,8 @@ test("a plugin's contributions on all five extension points come and go with it"
   await expect(turn).toHaveAttribute("data-status", "completed")
 
   const debugPanel = page.locator(".plugin-panel-head").filter({ hasText: "Debug Panel" })
-  const debugSettings = page
-    .locator(".sidebar")
-    .getByRole("button", { name: "Debug Settings", exact: true })
+  // 插件的设置页登记着的时候，它的卡片上有「打开」。
+  const debugSettings = debug.getByRole("button", { name: "打开 pigcode-ui-debug-panel 的设置" })
   const addSurface = page.getByRole("button", { name: "添加面板" })
   const inspectorItem = page.getByRole("menuitem", { name: "Debug Inspector" })
   const commandOption = page.getByRole("option", { name: /运行示例命令/ })
@@ -293,7 +291,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await expect(clockRows.last()).toContainText("当前时间")
   await expect(mcpClock).toHaveCount(0)
   await expect(genericClock).toHaveCount(0)
-  await openPlugins()
+  await openPlugins(page)
   await expect(debugSettings).toBeVisible()
 
   // 停用：五处都消失，时间线回到内置的 MCP 行和通用行。
@@ -303,7 +301,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await expect(clock.getByRole("switch")).not.toBeChecked()
   await expect(debugSettings).toHaveCount(0)
   await expect(debugPanel).toBeHidden()
-  await backToApp()
+  await backToChat(page)
   await showWork()
   await expect(probeRow).toHaveCount(0)
   await expect(clockRows).toHaveCount(0)
@@ -321,13 +319,13 @@ test("a plugin's contributions on all five extension points come and go with it"
   await page.keyboard.press("Escape")
 
   // 重新启用：渲染器回来，已经在时间线里的调用换回插件的显示。
-  await openPlugins()
+  await openPlugins(page)
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).toBeChecked()
   await clock.getByRole("switch").click()
   await expect(clock.getByRole("switch")).toBeChecked()
   await expect(debugSettings).toBeVisible()
-  await backToApp()
+  await backToChat(page)
   await showWork()
   await expect(probeRow).toBeVisible()
   await expect(clockRows).toHaveCount(2)
@@ -339,7 +337,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await page.keyboard.press("Escape")
 
   // 后面的用例不需要 clock 样例，只留一个停用的记录，和其余样例一样。
-  await openPlugins()
+  await openPlugins(page)
   await clock.getByRole("switch").click()
   await expect(clock.getByRole("switch")).not.toBeChecked()
 
@@ -358,12 +356,9 @@ test("a generated UI plugin is a React plugin and runs right after generating", 
   const page = await app.firstWindow()
   await addProject(app, page, projectRoot)
 
-  await page.getByRole("button", { name: "设置", exact: true }).click()
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await openPlugins(page)
   await installPlugin(page, generated)
-  const item = page.locator(".ext-item").filter({ hasText: "pigcode-ui-demo" })
-  await expect(item.getByRole("switch")).toBeChecked()
-  await page.getByRole("button", { name: "返回应用" }).first().click()
+  await expect(pluginTile(page, "pigcode-ui-demo").getByRole("switch")).toBeChecked()
 
   // Panel 由生成的 React 组件渲染：ui-primitives 的 ListRow、Badge 与 Button，hook 读到宿主的主题与语言。
   const panel = page.locator("[data-plugin-content='demo-panel']")
@@ -401,13 +396,10 @@ test("a plugin written with React renders the host's ui-primitives and reads the
   await addProject(app, page, projectRoot)
 
   // 安装用 React 写的 UI 插件（TSX 入口在安装时编译）。
-  await page.getByRole("button", { name: "设置", exact: true }).click()
-  await page.getByRole("button", { name: "插件", exact: true }).first().click()
+  await openPlugins(page)
   const ui = new URL("../../../examples/ui-react-panel", import.meta.url).pathname
   await installPlugin(page, ui)
-  const item = page.locator(".ext-item").filter({ hasText: "pigcode-ui-react-panel" })
-  await expect(item.getByRole("switch")).toBeChecked()
-  await page.getByRole("button", { name: "返回应用" }).first().click()
+  await expect(pluginTile(page, "pigcode-ui-react-panel").getByRole("switch")).toBeChecked()
 
   // Panel 由插件的 React 组件渲染：ui-primitives 的 Button 与 ListRow，hook 读到宿主的主题与语言。
   const panel = page.locator("[data-plugin-content='react-panel']")

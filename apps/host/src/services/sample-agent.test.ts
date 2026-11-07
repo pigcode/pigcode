@@ -6,7 +6,7 @@ import { Context } from "cordis"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
 import type { Thread } from "@pigcode/contracts"
-import { installLocalPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { setupHost } from "./plugin-harness"
 import { apply as settings } from "./settings"
 

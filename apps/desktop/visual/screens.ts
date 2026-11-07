@@ -266,7 +266,7 @@ export async function walkWorkbench(walk: Walk): Promise<void> {
 
   const pane = page.locator(".right-panel-body .surface-pane:not([hidden])")
   await launcher.getByRole("button", { name: startsWith(t("workbench.browser")) }).click()
-  await expect(pane.locator(".browser-page > .empty-state")).toBeVisible()
+  await expect(pane.locator('.browser-page > .browser-state[data-state="empty"]')).toBeVisible()
   await step("surface-browser")
 
   /** 从「添加面板」菜单打开一种 Surface；ready 出现、loading 文字消失后截图。 */
@@ -310,7 +310,7 @@ export async function walkWorkbench(walk: Walk): Promise<void> {
   await step("terminal-drawer")
 }
 
-/** 设置的每个分区、插件管理与插件界面。 */
+/** 设置的每个分区，侧栏里的定时任务页与插件页，以及插件界面。 */
 export async function walkSettings(walk: Walk): Promise<void> {
   const { page, step } = walk
   const t = translator(walk.locale)
@@ -345,22 +345,33 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(page.locator(".agent-editor")).toBeVisible()
   await step("settings-agent-editor")
 
-  await section("settings.schedules")
+  // 定时任务和插件不在设置里：回到工作区，从侧栏进去，侧栏保持工作区导航。
+  await page
+    .getByRole("button", { name: t("settings.back") })
+    .first()
+    .click()
+  const nav = (key: MessageKey) =>
+    page
+      .locator(".side-actions")
+      .getByRole("button", { name: t(key), exact: true })
+      .click()
+  await nav("settings.schedules")
   await expect(
     page.getByRole("heading", { level: 1, name: t("settings.schedules.pageTitle") }),
   ).toBeVisible()
   await step("settings-schedules")
 
-  await section("settings.plugins")
-  await expect(page.getByRole("heading", { name: t("plugins.title") })).toBeVisible()
-  await expect(page.locator(".ext-item")).toHaveCount(2)
+  await nav("settings.plugins")
+  await expect(page.getByRole("heading", { name: t("plugins.pageTitle") })).toBeVisible()
+  await expect(page.locator(".market-tile")).toHaveCount(2)
   await step("settings-plugins")
 
   for (const name of ["ui-debug-panel", "agent-echo", "capability-clock"]) {
     await page
       .locator(".page-head")
-      .getByRole("button", { name: t("plugins.install") })
+      .getByRole("button", { name: t("plugins.add"), exact: true })
       .click()
+    await page.getByRole("menuitem", { name: new RegExp(t("plugins.add.install")) }).click()
     const dialog = page.getByRole("dialog", { name: t("plugins.install.title") })
     const input = dialog.getByLabel(t("plugins.installSpec"))
     if (name === "ui-debug-panel") {
@@ -372,12 +383,23 @@ export async function walkSettings(walk: Walk): Promise<void> {
     await dialog.getByRole("button", { name: t("plugins.install.submit"), exact: true }).click()
     await expect(dialog).toBeHidden({ timeout: 30_000 })
   }
-  await expect(page.locator(".ext-item")).toHaveCount(5)
+  await expect(page.locator(".market-tile")).toHaveCount(5)
   await step("settings-plugins-installed")
 
   await page
-    .getByRole("button", { name: t("settings.back") })
-    .first()
+    .getByRole("button", {
+      name: t("plugins.expand").replace("{plugin}", "pigcode-ui-debug-panel"),
+    })
+    .click()
+  await expect(page.getByRole("dialog", { name: "pigcode-ui-debug-panel" })).toBeVisible()
+  await step("dialog-plugin-details")
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog")).toBeHidden()
+
+  // 还没发过消息，侧栏里没有会话：回到新会话草稿，打开右栏时才按草稿建会话。
+  await page
+    .locator(".side-actions")
+    .getByRole("button", { name: t("nav.newThread") })
     .click()
   await expect(page.locator(".plugin-panel")).toBeVisible()
   await step("shell-plugin-panel")

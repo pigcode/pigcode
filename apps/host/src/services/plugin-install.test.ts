@@ -3,7 +3,8 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { installPlugin, listPlugins, type PnpmRunner } from "./plugin-manager"
+import { listPlugins, type PnpmRunner } from "./plugin-manager"
+import { installPlugin } from "./plugin-installer"
 
 /** 构造一个合法的 Agent 插件包 manifest。 */
 function agentManifest(name: string): Record<string, unknown> {
@@ -71,6 +72,7 @@ describe("plugin install", () => {
       name: "pigcode-agent-echo",
       config: {},
       disabled: false,
+      origin: { kind: "npm", spec: "pigcode-agent-echo@0.1.0" },
     })
     expect((await listPlugins(profileDir)).map((plugin) => plugin.name)).toEqual([
       "pigcode-agent-echo",
@@ -110,6 +112,7 @@ describe("plugin install", () => {
       name: "pigcode-local",
       config: {},
       disabled: false,
+      origin: { kind: "local", path: source },
     })
   })
 
@@ -118,12 +121,14 @@ describe("plugin install", () => {
     const runner: PnpmRunner = async () => {
       throw new Error("pnpm must not run for a local directory")
     }
-    // 目录在这台机器上不存在：走本地安装会因找不到 package.json 失败，而不是交给 pnpm。
+    // 目录在这台机器上不存在：走本地安装会因找不到插件失败，而不是交给 pnpm。
     // Windows 上访问 UNC 路径会去找网络主机，只在别的平台上验证它。
     const specs = ["C:\\plugins\\echo"]
     if (process.platform !== "win32") specs.push("\\\\server\\share\\echo")
     for (const spec of specs) {
-      await expect(installPlugin(profileDir, spec, runner)).rejects.toThrow(/ENOENT/)
+      await expect(installPlugin(profileDir, spec, runner)).rejects.toThrow(
+        /PLUGIN_SOURCE_NOT_PLUGIN/,
+      )
     }
   })
 

@@ -1,13 +1,13 @@
 /**
- * 插件的安装（本地目录 / npm / tarball）、卸载、启停与 boot graph。
+ * 插件列表、卸载、启停与 boot graph；安装与更新在 plugin-installer.ts。
  *
  * 插件有两种来源：随应用内置的插件包（Claude Code、Codex 等，只能停用不能卸载），
- * 以及用户安装到 profile 的 `node_modules` 下的插件。用户安装的条目与内置插件的启停状态
- * 都记在 profile 目录的 `plugins.yml` 里；内置插件的包目录由 Host 启动时传入。
+ * 以及用户安装到 profile 的 `node_modules` 下的插件。用户安装的条目（连同它从哪里装的）与内置插件的
+ * 启停状态都记在 profile 目录的 `plugins.yml` 里；内置插件的包目录由 Host 启动时传入。
  */
 import { createHash } from "node:crypto"
-import { cp, mkdir, readFile, rm } from "node:fs/promises"
-import { dirname, join, win32 } from "node:path"
+import { readFile, rm } from "node:fs/promises"
+import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { parse, stringify } from "yaml"
 import {
@@ -18,17 +18,8 @@ import {
 } from "@pigcode/plugin-sdk"
 import { writeFileAtomic } from "./atomic-write"
 import { enableConflictOf, resolveProvidesConflicts } from "./plugin-conflicts"
-import { backupBeforeRename, migrateLegacyPluginEntries } from "./legacy-names"
-import {
-  defaultPnpmRunner,
-  ensureProfilePackage,
-  isTarballPath,
-  packageNameFromSpec,
-  readProfilePackage,
-  resolveInstalledName,
-  type PnpmRunner,
-} from "./plugin-npm"
-import { compileTypeScriptPlugin } from "./plugin-typescript"
+import { defaultPnpmRunner, readProfilePackage, type PnpmRunner } from "./plugin-npm"
+import { describeSource, type PluginSource } from "./plugin-sources"
 
 export type { PnpmRunner }
 
@@ -41,9 +32,13 @@ export interface PluginEnv {
 /** 只给 profile 目录时没有内置插件，方便测试与旧调用方。 */
 export type PluginEnvInput = PluginEnv | string
 
-function toEnv(input: PluginEnvInput): PluginEnv {
+export function toEnv(input: PluginEnvInput): PluginEnv {
   return typeof input === "string" ? { profileDir: input, builtin: [] } : input
 }
+
+/** 插件从哪里装的：某个插件市场里的一项，或者一个直接的来源；更新时按它重新安装。 */
+export type PluginOrigin =
+  { kind: "marketplace"; marketplace: string; plugin: string } | PluginSource
 
 /** plugins.yml 里的一条记录；内置插件只记录启停状态。 */
 export interface InstalledPluginEntry {
@@ -52,6 +47,7 @@ export interface InstalledPluginEntry {
   config?: unknown
   disabled?: boolean
   builtin?: boolean
+  origin?: PluginOrigin
 }
 
 /** 合并内置与用户安装后的一条插件记录。 */
@@ -71,6 +67,8 @@ export interface PluginRecord {
    * 有冲突的插件不加载 Host 入口与界面代码；先加载的那个不受影响。
    */
   conflict: string | null
+  /** 用户安装的插件从哪里装的；内置插件与旧记录为 null。 */
+  origin: PluginOrigin | null
 }
 
 /** 渲染进程启动插件所需的单条 boot graph 记录。 */
@@ -104,6 +102,10 @@ export interface PluginSummary {
   /** provides 冲突原因；无冲突时为 null。 */
   conflict: string | null
   error: string | null
+  /** 从哪里装的；内置插件与旧记录为 null。 */
+  origin: PluginOrigin | null
+  /** 来源的一句话说明，详情里显示。 */
+  originLabel: string | null
 }
 
 /** provides 冲突；code 供 RPC 调用方与界面识别，message 与插件页上的原因相同。 */
@@ -134,50 +136,28 @@ export function pluginIdOf(manifest: PluginManifest): string {
   return `${manifest.pigcode.kind}.${manifest.name}`
 }
 
-/**
- * 读取插件列表；文件不存在时从空列表开始。还用改名前插件 id 的列表就地迁移并写回，
- * 写回前先备份原文件（见 legacy-names.ts）。备份或写回失败时只记日志，这次照样返回迁移后的列表，
- * 下次读取或下一次修改插件列表时再写。
- */
-async function readPluginList(profileDir: string): Promise<InstalledPluginEntry[]> {
-  let plugins: InstalledPluginEntry[]
+/** 读取插件列表；文件不存在或读不懂时从空列表开始。 */
+export async function readPluginList(profileDir: string): Promise<InstalledPluginEntry[]> {
   try {
     const parsed = parse(await readFile(join(profileDir, PLUGINS_FILE), "utf8")) as {
       plugins?: InstalledPluginEntry[]
     } | null
-    plugins = Array.isArray(parsed?.plugins) ? parsed.plugins : []
+    return Array.isArray(parsed?.plugins) ? parsed.plugins : []
   } catch {
     return []
-  }
-  const migrated = migrateLegacyPluginEntries(plugins)
-  if (migrated.changed) await persistMigratedPluginList(profileDir, migrated.entries)
-  return migrated.entries
-}
-
-/** 迁移后的插件列表写回文件；失败只记日志，见 readPluginList。 */
-async function persistMigratedPluginList(
-  profileDir: string,
-  plugins: InstalledPluginEntry[],
-): Promise<void> {
-  const path = join(profileDir, PLUGINS_FILE)
-  try {
-    if (!(await backupBeforeRename(path))) {
-      console.error(`[host] could not back up ${path}; keeping the migrated plugin list in memory`)
-      return
-    }
-    await writePluginList(profileDir, plugins)
-  } catch (error) {
-    console.error(`[host] could not write the migrated plugin list to ${path}:`, error)
   }
 }
 
 /** 原子写回插件列表（临时文件 + fsync + 改名），进程中途退出也不会留下空的或半个文件。 */
-async function writePluginList(profileDir: string, plugins: InstalledPluginEntry[]): Promise<void> {
+export async function writePluginList(
+  profileDir: string,
+  plugins: InstalledPluginEntry[],
+): Promise<void> {
   await writeFileAtomic(join(profileDir, PLUGINS_FILE), stringify({ plugins }))
 }
 
 /** 读取一个包目录里的 manifest，保留失败原因供界面展示。 */
-async function readManifestAt(
+export async function readManifestAt(
   dir: string,
 ): Promise<{ manifest: PluginManifest | null; error: string | null }> {
   try {
@@ -212,6 +192,7 @@ export async function readPluginRecords(input: PluginEnvInput): Promise<PluginRe
       manifest,
       error,
       conflict: null,
+      origin: null,
     })
   }
   const builtinNames = new Set(records.map((record) => record.name))
@@ -229,6 +210,7 @@ export async function readPluginRecords(input: PluginEnvInput): Promise<PluginRe
       manifest,
       error,
       conflict: null,
+      origin: entry.origin ?? null,
     })
   }
   resolveProvidesConflicts(records)
@@ -239,85 +221,6 @@ export async function readPluginRecords(input: PluginEnvInput): Promise<PluginRe
 export function hostEntryUrl(record: PluginRecord): string | null {
   const host = record.manifest?.pigcode.host
   return host ? pathToFileURL(join(record.dir, host)).href : null
-}
-
-/** 内置插件的包名不能再从外部安装一份。 */
-async function assertNotBuiltin(env: PluginEnv, name: string): Promise<void> {
-  for (const dir of env.builtin) {
-    const { manifest } = await readManifestAt(dir)
-    if (manifest?.name === name) throw new Error(`PLUGIN_BUILTIN: ${name} is built into Pigcode`)
-  }
-}
-
-/** 把 manifest 对应的条目写入插件列表；同 id 条目原位替换，避免重复。 */
-async function addPluginEntry(
-  env: PluginEnv,
-  manifest: PluginManifest,
-): Promise<InstalledPluginEntry> {
-  const entry: InstalledPluginEntry = {
-    id: pluginIdOf(manifest),
-    name: manifest.name,
-    config: {},
-    disabled: false,
-  }
-  const list = await readPluginList(env.profileDir)
-  const index = list.findIndex((item) => item.id === entry.id)
-  if (index === -1) list.push(entry)
-  else list[index] = entry
-  await ensureProfilePackage(env.profileDir)
-  await writePluginList(env.profileDir, list)
-  return entry
-}
-
-/** 校验并复制本地插件目录到 profile，随后写入启用的条目。 */
-export async function installLocalPlugin(
-  input: PluginEnvInput,
-  sourceDir: string,
-): Promise<InstalledPluginEntry> {
-  const env = toEnv(input)
-  const manifest = parsePluginManifest(
-    JSON.parse(await readFile(join(sourceDir, "package.json"), "utf8")),
-  )
-  await assertNotBuiltin(env, manifest.name)
-  const target = join(env.profileDir, "node_modules", manifest.name)
-  await rm(target, { recursive: true, force: true })
-  await mkdir(dirname(target), { recursive: true })
-  await cp(sourceDir, target, { recursive: true })
-  await compileTypeScriptPlugin(target)
-  return addPluginEntry(env, manifest)
-}
-
-/**
- * 安装插件：本地目录复制进 profile，其余 spec（npm 包名/版本、tarball）交给
- * `pnpm add`。runner 由调用方注入，测试不联网。
- */
-export async function installPlugin(
-  input: PluginEnvInput,
-  spec: string,
-  runPnpm: PnpmRunner = defaultPnpmRunner,
-): Promise<InstalledPluginEntry> {
-  const env = toEnv(input)
-  const localPath = spec.startsWith("file:") ? spec.slice("file:".length) : spec
-  // win32.isAbsolute 同时认 `/x`、`C:\x` 与 UNC 路径；Windows 的文件夹选择框返回的是盘符路径。
-  const isLocal = spec.startsWith(".") || spec.startsWith("file:") || win32.isAbsolute(spec)
-  if (isLocal && !isTarballPath(localPath)) {
-    return installLocalPlugin(env, localPath)
-  }
-  const fromSpec = packageNameFromSpec(spec)
-  if (fromSpec) await assertNotBuiltin(env, fromSpec)
-  // pnpm add 需要 profile 中已有 package.json 作为安装作用域。
-  await ensureProfilePackage(env.profileDir)
-  const before = await readProfilePackage(env.profileDir)
-  await runPnpm(["add", spec, "--dir", env.profileDir])
-  const after = await readProfilePackage(env.profileDir)
-  const name = resolveInstalledName(spec, before.dependencies ?? {}, after.dependencies ?? {})
-  const packageDir = join(env.profileDir, "node_modules", name)
-  const manifest = parsePluginManifest(
-    JSON.parse(await readFile(join(packageDir, "package.json"), "utf8")),
-  )
-  await assertNotBuiltin(env, manifest.name)
-  await compileTypeScriptPlugin(packageDir)
-  return addPluginEntry(env, manifest)
 }
 
 /**
@@ -382,6 +285,14 @@ export async function setPluginEnabled(
   return { ...record, disabled: !enabled }
 }
 
+/** 来源的一句话说明：市场写成「插件 @ 市场」，其余是地址或路径。 */
+function originLabel(origin: PluginOrigin | null): string | null {
+  if (!origin) return null
+  return origin.kind === "marketplace"
+    ? `${origin.plugin}@${origin.marketplace}`
+    : describeSource(origin)
+}
+
 /** 列出全部插件摘要；manifest 读取失败、不兼容或 provides 冲突时保留错误信息。 */
 export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[]> {
   const records = await readPluginRecords(input)
@@ -403,6 +314,8 @@ export async function listPlugins(input: PluginEnvInput): Promise<PluginSummary[
       conflict: record.conflict,
       // manifest/compat 错误优先展示，其次才是 provides 冲突。
       error: record.error ?? record.conflict,
+      origin: record.origin,
+      originLabel: originLabel(record.origin),
     }
   })
 }

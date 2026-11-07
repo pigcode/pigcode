@@ -12,13 +12,8 @@ import { writeBootGraph } from "../kernel/boot"
 import { uninstallPluginAndClearDefault } from "../rpc/agents"
 import { MemoryTransport } from "../rpc/memory-transport"
 import { RpcServer } from "../rpc/server"
-import {
-  installLocalPlugin,
-  listPlugins,
-  readPluginRecords,
-  setPluginEnabled,
-  uninstallPlugin,
-} from "./plugin-manager"
+import { listPlugins, readPluginRecords, setPluginEnabled, uninstallPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { apply as pluginsPlugin } from "./plugins"
 import { apply as projects } from "./projects"
 import { apply as sessions } from "./sessions"
@@ -253,7 +248,7 @@ describe("plugins service", () => {
 
   it("lists an installed plugin still written with kind provider as failed and uninstalls it", async () => {
     const { ctx, env } = await host()
-    // 改名前装好的插件：plugins.yml 的条目已由 legacy-names.ts 改成 agent. id，包本身没改。
+    // 照着改名前的文档写的插件：plugins.yml 里是 agent. id，包的 manifest 还写着旧的 kind。
     const dir = join(env.profileDir, "node_modules", "pigcode-old")
     await mkdir(dir, { recursive: true })
     await writeFile(
@@ -267,7 +262,7 @@ describe("plugins service", () => {
     await writeFile(join(dir, "index.mjs"), "export function apply() {}\n")
     await writeFile(
       join(env.profileDir, "plugins.yml"),
-      "plugins:\n  - id: provider.pigcode-old\n    name: pigcode-old\n",
+      "plugins:\n  - id: agent.pigcode-old\n    name: pigcode-old\n",
     )
     await ctx.plugins.loadAll()
     expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["alpha"])

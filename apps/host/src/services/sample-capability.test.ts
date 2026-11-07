@@ -2,7 +2,7 @@
 import { Context } from "cordis"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { installLocalPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { setupHost } from "./plugin-harness"
 
 /** 仓库内的 Capability 样例目录；测试按安装路径复制，走真实的本地安装流程。 */

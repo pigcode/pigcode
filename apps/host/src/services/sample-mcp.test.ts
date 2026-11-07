@@ -10,7 +10,8 @@ import { CodexDriver } from "@pigcode/agent-codex/driver"
 import type { CreateSessionInput, AgentDriver } from "../agents/driver"
 import { FakeAgentDriver } from "../agents/fake"
 import { apply as mcpBridge } from "./mcp-bridge"
-import { buildBootGraph, installLocalPlugin } from "./plugin-manager"
+import { buildBootGraph } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { setupHost } from "./plugin-harness"
 
 /** 仓库内的 MCP Capability 样例目录；测试走真实的本地安装流程。 */

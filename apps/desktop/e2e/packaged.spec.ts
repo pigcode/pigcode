@@ -19,7 +19,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
-import { addProject, installPlugin, launchEnv } from "./projects"
+import { addProject, installPlugin, launchEnv, openInstallDialog } from "./projects"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const distDir = resolve(here, "../dist")
@@ -157,9 +157,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     // 插件：构建好的包能装、能启用。
     await page.getByRole("button", { name: "插件" }).first().click()
     await installPlugin(page, plugin)
-    await expect(
-      page.locator(".ext-item").filter({ hasText: "pigcode-capability-clock" }),
-    ).toBeVisible()
+    await expect(page.locator(".market-tile[data-plugin='pigcode-capability-clock']")).toBeVisible()
 
     // 源码插件：安装包里没有编译器，要被明确拒绝而不是崩掉或静默失败。
     // 这条同时证明「复制到仓库外面」是有效的——在仓库里跑时 Node 会找到工作区的
@@ -168,8 +166,8 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     // macOS 上这个前提成立；Linux 的打包路径下 esbuild 能被解析到，安装会成功，
     // 所以只在 macOS 断言被拒绝（#69 的讨论里有记录）。
     const dialog = page.getByRole("dialog", { name: "安装插件" })
-    await page.locator(".page-head").getByRole("button", { name: "安装插件" }).click()
-    await dialog.getByLabel("插件目录或 npm 包").fill(sourcePlugin(workspace))
+    await openInstallDialog(page)
+    await dialog.getByLabel("GitHub 仓库、npm 包或插件目录").fill(sourcePlugin(workspace))
     await dialog.getByRole("button", { name: "安装", exact: true }).click()
     if (process.platform === "darwin") {
       await expect(dialog.getByRole("alert")).toContainText("不带编译器")
@@ -180,8 +178,8 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
       .poll(async () => !(await dialog.isVisible().catch(() => false)), { timeout: 20_000 })
       .toBe(true)
 
-    // 终端：node-pty 在安装包里能加载。
-    await page.getByRole("button", { name: "返回应用" }).first().click()
+    // 终端：node-pty 在安装包里能加载。插件页和聊天并列，沿历史后退回到刚才的会话。
+    await page.getByRole("button", { name: "后退" }).click()
     await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
     await page.getByLabel("打开一个面板").getByRole("button", { name: /终端/ }).click()
     await expect(page.locator(".xterm")).toBeVisible()

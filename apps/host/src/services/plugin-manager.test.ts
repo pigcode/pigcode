@@ -3,7 +3,8 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { buildBootGraph, installLocalPlugin, listPlugins, setPluginEnabled } from "./plugin-manager"
+import { buildBootGraph, listPlugins, setPluginEnabled } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 
 async function fixture(engines?: { pigcode: string }) {
   const root = await mkdtemp(join(tmpdir(), "pigcode-plugin-"))

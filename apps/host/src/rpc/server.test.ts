@@ -146,6 +146,39 @@ describe("rpc server", () => {
     await ctx.fiber.dispose()
   })
 
+  it("creates a thread with the model and permission picked in the new thread draft", async () => {
+    const { ctx, transport } = await createServer()
+    const project = ctx.projects.add("/tmp/pigcode-draft")
+    const send = async (id: string, method: string, params: unknown) => {
+      transport.client.send({ jsonrpc: "2.0", id, method, params })
+      return transport.client.next()
+    }
+
+    expect(
+      await send("1", "thread.create", {
+        projectId: project.id,
+        title: "新会话",
+        agentId: "fake",
+        modelId: "fake-pro",
+        permissionMode: "read-only",
+      }),
+    ).toMatchObject({
+      result: {
+        defaultAgentId: "fake",
+        lastAgentId: "fake",
+        lastModelId: "fake-pro",
+        permissionMode: "read-only",
+      },
+    })
+    // 没选模型和权限时和以前一样：默认模型、每次询问。
+    expect(
+      await send("2", "thread.create", { projectId: project.id, title: "新会话", agentId: "fake" }),
+    ).toMatchObject({
+      result: { lastAgentId: null, lastModelId: null, permissionMode: "workspace-write" },
+    })
+    await ctx.fiber.dispose()
+  })
+
   it("adds a project with the given name, or the folder name when none is given", async () => {
     const { ctx, transport } = await createServer()
     transport.client.send({

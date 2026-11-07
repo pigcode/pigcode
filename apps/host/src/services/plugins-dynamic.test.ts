@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { installLocalPlugin } from "./plugin-manager"
+import { installLocalPlugin } from "./plugin-installer"
 import { setupHost } from "./plugin-harness"
 
 /** 写入一个注册 echo agent 的最小 Host 插件源目录。 */

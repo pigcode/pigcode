@@ -8,7 +8,12 @@ import {
   rpcFailureSchema,
   rpcSuccessSchema,
 } from "@pigcode/contracts"
-import type { CommandMethod, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
+import type {
+  CommandMethod,
+  CommandParams,
+  PermissionMode,
+  ReasoningEffort,
+} from "@pigcode/contracts"
 import { buildSubagentBrief } from "../agents/switching"
 import { listAgents, uninstallPluginAndClearDefault, validateAgentSettings } from "./agents"
 
@@ -141,12 +146,15 @@ export class RpcServer {
           title: string
           agentId: string
           parentThreadId?: string
+          modelId?: string
+          permissionMode?: PermissionMode
         }
         const thread = this.ctx.threads.create(
           value.projectId,
           value.title,
           value.agentId,
           value.parentThreadId,
+          { modelId: value.modelId, permissionMode: value.permissionMode },
         )
         const now = new Date().toISOString()
         this.ctx.sessions.append({
@@ -304,12 +312,32 @@ export class RpcServer {
         return this.ctx.plugins.disable((parsed as { id: string }).id)
       case "plugin.uninstall":
         return uninstallPluginAndClearDefault(this.ctx, (parsed as { id: string }).id)
+      case "plugin.installFromMarketplace": {
+        const { marketplace, name } = parsed as CommandParams<"plugin.installFromMarketplace">
+        return this.ctx.plugins.installFromMarketplace(marketplace, name)
+      }
+      case "plugin.update":
+        return this.ctx.plugins.update((parsed as { id: string }).id)
       case "plugin.reload":
         return this.ctx.plugins.reload()
+      case "marketplace.list":
+        return this.ctx.plugins.marketplaces()
+      case "marketplace.add":
+        return this.ctx.plugins.addMarketplace((parsed as { source: string }).source)
+      case "marketplace.refresh":
+        return this.ctx.plugins.refreshMarketplaces((parsed as { id?: string }).id)
+      case "marketplace.setEnabled": {
+        const value = parsed as { id: string; enabled: boolean }
+        return this.ctx.plugins.setMarketplaceEnabled(value.id, value.enabled)
+      }
+      case "marketplace.remove":
+        return this.ctx.plugins.removeMarketplace((parsed as { id: string }).id)
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
       case "workspace.tree":
         return this.ctx.workspace.tree((parsed as { threadId: string }).threadId)
+      case "project.files":
+        return this.ctx.workspace.projectTree((parsed as { projectId: string }).projectId)
       case "workspace.root":
         return { root: this.ctx.workspace.root((parsed as { threadId: string }).threadId) }
       case "workspace.list": {
@@ -364,24 +392,25 @@ export class RpcServer {
       }
       case "schedule.list":
         return this.ctx.schedules.list()
-      case "schedule.create": {
-        const value = parsed as {
-          threadId: string
-          prompt: string
-          intervalSeconds: number
-          enabled: boolean
-        }
-        return this.ctx.schedules.create(value)
-      }
+      case "schedule.create":
+        return this.ctx.schedules.create(parsed as CommandParams<"schedule.create">)
       case "schedule.update": {
-        const value = parsed as {
-          id: string
-          prompt?: string
-          intervalSeconds?: number
-          enabled?: boolean
-        }
-        return this.ctx.schedules.update(value.id, value)
+        const { id, title, prompt, rule, endsAt, enabled } =
+          parsed as CommandParams<"schedule.update">
+        return this.ctx.schedules.update(id, {
+          ...(title === undefined ? {} : { title }),
+          ...(prompt === undefined ? {} : { prompt }),
+          ...(rule === undefined ? {} : { rule }),
+          ...(endsAt === undefined ? {} : { endsAt }),
+          ...(enabled === undefined ? {} : { enabled }),
+        })
       }
+      case "schedule.runs": {
+        const { id, limit, offset } = parsed as CommandParams<"schedule.runs">
+        return this.ctx.schedules.runs(id, limit, offset)
+      }
+      case "schedule.deleteRun":
+        return { deleted: this.ctx.schedules.deleteRun((parsed as { id: string }).id) }
       case "schedule.delete": {
         const value = parsed as { id: string }
         return { deleted: this.ctx.schedules.delete(value.id) }

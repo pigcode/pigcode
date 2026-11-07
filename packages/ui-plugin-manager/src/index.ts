@@ -1,3 +1,10 @@
-/** 插件管理界面的公开入口。 */
+/** 插件页的公开入口：已安装的插件、插件市场、详情与对话框，以及「创建插件」的草稿。 */
+export * from "./plugin-summary"
 export * from "./plugin-list"
+export * from "./plugin-details"
+export * from "./plugin-market"
+export * from "./market-plugin-dialog"
+export * from "./marketplace-dialogs"
+export * from "./marketplace-sources"
+export * from "./plugin-creator"
 export * from "./plugin-manager-view"

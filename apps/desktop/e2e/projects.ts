@@ -34,7 +34,7 @@ export function launchArgs(extra: string[] = []): string[] {
   return [".", "--lang=zh-CN", ...extra]
 }
 
-/** 建一个带两个源文件的项目，启动应用并在里面开一个新会话。 */
+/** 建一个带两个源文件的项目，启动应用并在里面进入新会话草稿；第一条消息发出去时才建会话。 */
 export async function openThread(
   name: string,
   extra: Record<string, string> = {},
@@ -58,12 +58,17 @@ export async function openThread(
   return { app, page, root }
 }
 
-/** 在插件管理页打开「安装插件」对话框，安装一个插件目录或 npm 包。 */
+/** 在插件页标题栏的「添加」里打开「安装插件」对话框，安装一个插件目录、npm 包或 GitHub 仓库。 */
+export async function openInstallDialog(page: Page): Promise<void> {
+  await page.locator(".page-head").getByRole("button", { name: /^添加/ }).click()
+  await page.getByRole("menuitem", { name: /安装插件/ }).click()
+}
+
+/** 在插件页安装一个插件目录、npm 包或 GitHub 仓库。 */
 export async function installPlugin(page: Page, spec: string): Promise<void> {
-  // 列表为空时空状态里也有一个「安装插件」，用标题栏里那个。
-  await page.locator(".page-head").getByRole("button", { name: "安装插件" }).click()
+  await openInstallDialog(page)
   const dialog = page.getByRole("dialog", { name: "安装插件" })
-  await dialog.getByLabel("插件目录或 npm 包").fill(spec)
+  await dialog.getByLabel("GitHub 仓库、npm 包或插件目录").fill(spec)
   await dialog.getByRole("button", { name: "安装", exact: true }).click()
   await expect(dialog).toBeHidden()
 }

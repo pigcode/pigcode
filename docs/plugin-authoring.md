@@ -598,13 +598,13 @@ Host 入口和界面代码都不加载。把这些字段删掉，改用上表的
 
 UI 插件在五个扩展点上登记内容：Panel 是左侧栏里的一个区块，Surface 是右侧面板（Workbench）里的一种标签，
 设置页是设置里的一页，Command 是命令面板与输入框 `/` 共用的一个操作，工具渲染器见[下文](#工具渲染器)。
-内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface；通用、外观、Agent、
-定时任务、插件都是内置的设置页；新会话、侧栏、右侧面板、设置、插件、添加项目都是内置的命令；命令、读文件、改文件、
+内置功能也通过同一个扩展点注册表登记（浏览器、终端、文件、Diff、PR、检查点都是内置的 Surface；通用、外观、Agent
+是内置的设置页，定时任务和插件是和聊天并列的页面；新会话、侧栏、右侧面板、设置、插件、添加项目都是内置的命令；命令、读文件、改文件、
 搜索、抓取、提问、技能、后台任务、计划、MCP、浏览器的显示都是内置的工具渲染器），遵守同样的规则：
 
 - `ctx.panels.register(panel)`、`ctx.surfaces.register(surface)`、`ctx.settingsPages.register(page)`、`ctx.toolRenderers.register(renderer)` 返回注销函数。
   登记的归属由宿主按插件自动填写，插件不需要也不能自己指定。
-- `id` 在同一个扩展点上唯一，内置的 Surface 和设置页（`general`、`appearance`、`agents`、`schedules`、`plugins`）
+- `id` 在同一个扩展点上唯一，内置的 Surface 和设置页（`general`、`appearance`、`agents`）
   也算在内。和已有的 id 重名时，这次登记不生效、返回一个什么也不做的
   注销函数，先登记的一方保持不变；插件页里这个插件的状态是「有冲突」，详情里写明扩展点、id 和先登记的一方。
 - 可选的 `order` 决定排列顺序（小的在前，缺省 0），相同时按 `id` 排。插件的 Surface 列在启动器和「+」菜单的
@@ -835,29 +835,134 @@ Host 入口 import 或 apply 抛错时 Host 照常启动，错误显示在插件
 桌面端有两个入口，背后是同一套安装流程：
 
 - **设置 → Agent → 安装 agent**：安装 Agent 插件，可以用“选择文件夹…”挑本地目录。
-- **设置 → 插件 → 安装插件**：安装任意种类的插件。两个入口是同一个对话框：填插件目录或 npm 包，
-  或者用“选择文件夹…”。插件管理页和 Agent 页是同一种列表，开关启停，点开一行看包名、权限与卸载。
+- **侧栏的插件**：页面分「插件市场」和「已安装」两段。标题栏的「添加」里有三项：
+  - **创建插件**：让 agent 写一个插件，见[让 agent 创建插件](#让-agent-创建插件)。
+  - **添加插件市场**：添加一个插件市场，见[插件市场](#插件市场)。
+  - **安装插件**：直接安装一个插件，填的内容见下文，也可以用“选择文件夹…”。
 
-可以填的内容：
+  已安装的插件按类型分组，每组两列卡片：开关启停，插件有设置页时卡片上有「打开」，点卡片看包名、权限、来源、更新与卸载。
 
+「安装插件」可以填的内容：
+
+- GitHub 仓库：`owner/repo`、`owner/repo#v1.2.0`（分支、标签或提交）、`owner/repo/packages/clock`（仓库里的子目录）、
+  `github:owner/repo`，或者从网页复制的 `https://github.com/owner/repo/tree/main/packages/clock`、`…/releases/tag/v1.2.0`。
+  Host 直接下载 GitHub 的 tar.gz 归档并在进程里解开，不需要系统里装 git 或 pnpm；环境变量 `GITHUB_TOKEN` / `GH_TOKEN`
+  有值时会带上令牌（私有仓库、避开匿名限流）。仓库里装的是构建好的插件（ADR 0006）：入口要指向 `.js`。
+- 其他 git 仓库：`git@github.com:owner/repo.git`、`git+https://git.example.com/team/tools.git`、`ssh://…`，可以用 `#ref` 指定分支。
+  这些交给系统 git 浅克隆，适合私有仓库和自建服务。
+- https 上的 tar.gz：例如 `https://example.com/pigcode-clock-1.0.0.tgz`（npm pack 的格式也认）。
 - 本地目录：绝对路径（例如 `/tmp/pigcode-plugin-demo` 或 `C:\plugins\demo`）、`./` 开头的相对路径
-  或 `file:` 前缀。Host 把目录复制到用户 profile 的 `node_modules/<包名>`，插件源目录保持不变。
-- npm：包名、版本或 tarball，例如 `my-pigcode-plugin@1.0.0` 或 `/tmp/pkg.tgz`；
-  Host 通过 `pnpm add` 安装到用户 profile。
-- 对应的 Host RPC：`plugin.install`，参数 `{ "spec": "my-pigcode-plugin@1.0.0" }`，本地目录也可以；
-  只装本地目录时也可以用 `plugin.installLocal`，参数 `{ "sourceDir": "/abs/path/to/plugin" }`。
+  或 `file:` 前缀。Host 把目录复制到用户 profile 的 `node_modules/<包名>`，插件源目录保持不变（`.git` 不复制）。
+- npm：包名、版本或本地 tarball，例如 `my-pigcode-plugin@1.0.0` 或 `/tmp/pkg.tgz`；
+  Host 通过 `pnpm add` 安装到用户 profile，需要用户机器上有 pnpm。
 
-装好的插件立即启用。两个页面都可以卸载用户安装的插件（RPC `plugin.uninstall`，参数 `{ "id": … }`）：
+下载的内容在临时目录里解开（归档最大 50 MB，解开最大 200 MB；符号链接跳过，路径跳出目录的归档直接拒绝），
+再和本地目录一样复制进 profile。填的是一个插件市场（有 `marketplace.json`、没有插件的 `package.json`）时，
+安装会提示改用「添加插件市场」。
+
+装好的插件立即启用，`plugins.yml` 里记下它从哪里装的。**更新**按这个来源重新安装，保留插件的配置和启停状态：
+从远程插件市场装的先刷新市场、拿最新的条目；从 GitHub、git、网址或本地目录装的重新下载或复制一遍。
+旧版本装的插件没有来源记录，重新安装一次就能更新。
+
+两个页面都可以卸载用户安装的插件（RPC `plugin.uninstall`，参数 `{ "id": … }`）：
 Host 先卸下插件的 Host 入口并等待 `ctx.effect` 清理，再删除 `node_modules` 里的包和列表里的记录。
 agent 的设置值保留在 `settings.json` 里，重新安装后还在。内置插件不能卸载，
 对它们调用 `plugin.uninstall` 会得到 `PLUGIN_BUILTIN` 错误。
 
-安装的插件和启停状态记在用户 profile 目录的 `plugins.yml` 里；内置插件只记录是否停用。
-用户 profile 默认在 Electron `userData` 下的 `profiles/desktop`，可以用环境变量 `PIGCODE_PROFILE_DIR`
+对应的 Host RPC：
+
+| 方法                            | 参数                           | 说明                                                                |
+| ------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
+| `plugin.install`                | `{ "spec": "owner/repo" }`     | 上面任何一种写法                                                    |
+| `plugin.installLocal`           | `{ "sourceDir": "/abs/path" }` | 只装本地目录                                                        |
+| `plugin.installFromMarketplace` | `{ "marketplace", "name" }`    | 安装插件市场里的一项，装好的包名必须和条目一致                      |
+| `plugin.update`                 | `{ "id": "capability.x" }`     | 按来源重新安装                                                      |
+| `marketplace.list`              | `{}`                           | 已添加的市场与其中的插件                                            |
+| `marketplace.add`               | `{ "source": "owner/repo" }`   | 添加市场，来源的写法见下文                                          |
+| `marketplace.refresh`           | `{ "id"?: "acme-tools" }`      | 刷新一个市场，不给 id 时刷新全部启用的市场；失败的原因在 `error` 里 |
+| `marketplace.setEnabled`        | `{ "id", "enabled": false }`   | 启用或停用市场，停用的不列出、不刷新，从它装的插件保留              |
+| `marketplace.remove`            | `{ "id": "acme-tools" }`       | 删除市场，从它装的插件保留                                          |
+
+安装的插件和启停状态记在用户 profile 目录的 `plugins.yml` 里，已添加的市场记在 `marketplaces.json` 里；
+内置插件只记录是否停用。用户 profile 默认在 Electron `userData` 下的 `profiles/desktop`，可以用环境变量 `PIGCODE_PROFILE_DIR`
 指定。
 
-安装前请确认插件来源可信：安装界面会展示 `permissions` 声明和“插件以 Host 权限运行”的风险提示。
-权限声明目前只用于展示，不会限制插件能做的事。
+安装前请确认插件来源可信：安装界面会展示 `permissions` 声明和“插件以 Host 权限运行”的风险提示，添加插件市场前
+必须勾选风险确认。权限声明目前只用于展示，不会限制插件能做的事。
+
+## 插件市场
+
+插件市场是一个列出插件的目录文件，放在 `.pigcode-plugin/marketplace.json`，或者市场根目录的 `marketplace.json`：
+
+```json
+{
+  "name": "acme-tools",
+  "displayName": "Acme 团队插件",
+  "description": "团队内部用的 Pigcode 插件",
+  "owner": { "name": "Acme", "url": "https://github.com/acme" },
+  "plugins": [
+    {
+      "name": "pigcode-clock",
+      "source": "./plugins/clock",
+      "displayName": "时钟",
+      "description": "给 agent 一个读取当前时间的 MCP 工具",
+      "version": "0.2.0",
+      "category": "productivity",
+      "icon": "./plugins/clock/icon.png",
+      "homepage": "https://example.com/clock",
+      "author": { "name": "Acme" }
+    },
+    {
+      "name": "pigcode-jira",
+      "source": { "source": "github", "repo": "acme/pigcode-jira", "ref": "v1.0.0" }
+    },
+    {
+      "name": "pigcode-notes",
+      "source": { "source": "npm", "package": "pigcode-notes", "version": "^2.0.0" }
+    },
+    {
+      "name": "pigcode-board",
+      "source": {
+        "source": "url",
+        "url": "https://example.com/pigcode-board-1.0.0.tgz",
+        "sha256": "…"
+      }
+    }
+  ]
+}
+```
+
+- `name` 是市场的 id：小写字母、数字、`.`、`_`、`-`，同一个 id 只能来自一个来源。
+- 每个条目的 `name` 是插件的包名，安装后会核对 `package.json` 的 `name`，不一致时拒绝安装。
+- `source`：`./相对路径`（从市场根目录算起，不能跳出去），`{ "source": "github", "repo", "ref"?, "path"? }`，
+  `{ "source": "git", "url", "ref"?, "path"? }`，`{ "source": "npm", "package", "version"? }`，
+  `{ "source": "url", "url", "sha256"? }`（https 上的 tar.gz，给了 sha256 就校验）。格式不对的条目不显示。
+- `displayName`、`description`、`version`、`category`、`author`、`homepage`（https）都是可选的展示信息；`version` 用来判断
+  已安装的插件能不能更新。`icon` 可以是 https 地址，也可以是市场里的图片（png、jpg、svg、webp，256 KB 以内）。
+
+「添加插件市场」可以填：GitHub 仓库（`owner/repo`、网页地址，可以带分支和子目录，例如
+`https://github.com/acme/tools/tree/main/plugins`）、git 地址、https 上的 `marketplace.json`，或者本地文件夹与 `.json` 文件的绝对路径。
+远程来源添加和刷新时下载一次，缓存在 profile 的 `marketplaces/<id>/` 里，安装从缓存里拿；刷新失败时保留上一次的内容，
+原因显示在市场的组头和「市场源」里。本地文件夹每次直接读，改了插件源码刷新一下就能看到。
+https 上的 `marketplace.json` 没有根目录，里面的插件只能用 GitHub、git、npm 或网址来源。
+
+Claude Code 的插件市场（`.claude-plugin/marketplace.json`）里是 Claude Code 插件，格式不同，添加时会说明原因。
+
+插件页标题栏的「市场源」管理已添加的市场：每个市场源一行，写着来源、插件数、装了几个和更新时间，可以启停、刷新、
+在浏览器里打开（GitHub、https 来源）或在文件夹中显示（本地来源）、复制来源地址和删除，上面还有「全部刷新」和「添加市场源」。
+插件市场里每组标题旁的「⋯」也有刷新、停用和打开来源。停用的市场源不在插件市场里列出，不随「全部刷新」刷新，也不提示
+从它装的插件有更新，这些插件照常可用；`marketplaces.json` 里只给停用的市场记 `"enabled": false`，再添加一次同一个来源会重新启用它。
+
+## 让 agent 创建插件
+
+插件页的「添加 → 创建插件」进入新会话草稿（放在最近用的项目里，没有项目时提示先添加项目）：输入框里预填「帮我创建一个 Pigcode 插件：」，
+上方附上 Pigcode 插件创建指南，光标停在末尾，用户写下想要的插件再发送，不会自动发送。指南让 agent：
+
+- 把插件写在项目的 `plugins/<slug>/`，用纯 JavaScript（ES module），不用 TypeScript、JSX、构建步骤和第三方依赖，
+  这样打包后的应用也能直接安装；界面用宿主的 `react` 与 `@pigcode/ui-primitives`；
+- 同时写好 `plugins/.pigcode-plugin/marketplace.json`；
+- 不替用户安装，写完告诉用户：在插件页「添加 → 添加插件市场」填 `plugins/` 的绝对路径，再在插件市场里安装；
+  以后改了插件，把 `version` 加一，在「市场源」里刷新，再点「更新」。
 
 ## 脚手架
 
@@ -905,4 +1010,4 @@ Panel、Surface、设置页都用宿主的 React 和 `@pigcode/ui-primitives`（
 里自己打包时才需要（用仓库根目录的 workspace 版本）。打包后把 `pigcode.client` 指向 `./dist/client.js`。
 
 脚本结束时打印本地安装路径：
-agent 填进 **设置 → Agent → 安装 agent**，其他插件填进 **设置 → 插件** 的“插件目录或 npm 包”。
+agent 填进 **设置 → Agent → 安装 agent**，其他插件填进侧栏 **插件** 页的“插件目录或 npm 包”。
