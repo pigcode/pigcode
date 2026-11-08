@@ -14,7 +14,7 @@ import {
 } from "@pigcode/client-runtime"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ChatView, collectSubagents, type ApprovalDecision } from "@pigcode/ui-chat"
-import type { ComposerCommand } from "@pigcode/ui-composer"
+import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
 import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
@@ -159,7 +159,18 @@ export function ChatViewContainer({
     : mainId
       ? (state.threadStates[mainId]?.liveReasoning ?? "")
       : ""
-  const viewAgentId = thread ? (thread.lastAgentId ?? thread.defaultAgentId) : null
+  // Agent 功能按 driver 记；实例 id 与 driver id 相同时直接命中，否则按实例找到它的 driver。
+  const viewInstanceId =
+    thread?.lastInstanceId ??
+    thread?.lastAgentId ??
+    thread?.defaultInstanceId ??
+    thread?.defaultAgentId ??
+    null
+  const viewAgentId =
+    agents.find((agent) => agent.id === viewInstanceId)?.agentId ??
+    thread?.lastAgentId ??
+    thread?.defaultAgentId ??
+    null
   const features = (viewAgentId ? featuresByAgent[viewAgentId] : undefined) ?? state.agentFeatures
 
   const statuses = useMemo(
@@ -201,16 +212,26 @@ export function ChatViewContainer({
       .catch(fail)
   }
 
-  /** 切换 agent 与模型；换了 agent 时提示上下文以摘要交接。 */
-  function selectModel(agentId: string, modelId: string): void {
+  /** 切换 Agent 实例与模型；换了实例时提示上下文以摘要交接。 */
+  function selectModel(choice: ComposerModelChoice): void {
     if (!thread) return
-    const previousAgent = thread.lastAgentId ?? thread.defaultAgentId
+    const previousInstance = thread.lastInstanceId ?? thread.defaultInstanceId ?? null
     void deps.connection
-      .call("thread.switchAgent", { threadId: thread.id, agentId, modelId })
+      .call("thread.switchAgent", {
+        threadId: thread.id,
+        agentId: choice.agentId,
+        instanceId: choice.instanceId,
+        modelId: choice.modelId,
+      })
       .then(() => {
-        patchThread(deps.store, thread.id, { lastAgentId: agentId, lastModelId: modelId })
-        if (agentId !== previousAgent) {
-          const name = agents.find((agent) => agent.id === agentId)?.label ?? agentId
+        patchThread(deps.store, thread.id, {
+          lastAgentId: choice.agentId,
+          lastInstanceId: choice.instanceId,
+          lastModelId: choice.modelId,
+        })
+        if (choice.instanceId !== previousInstance) {
+          const name =
+            agents.find((agent) => agent.id === choice.instanceId)?.label ?? choice.instanceId
           setNotice(`${t("chat.agent.next")} ${name}`)
         }
       })
@@ -229,14 +250,16 @@ export function ChatViewContainer({
   }
 
   /** 在主会话下添加一个子代理会话，并切到它的标签。 */
-  function addSubagent(agentId: string): void {
+  function addSubagent(instanceId: string): void {
     if (!main) return
-    const label = agents.find((agent) => agent.id === agentId)?.label ?? agentId
+    const chosen = agents.find((agent) => agent.id === instanceId)
+    const label = chosen?.label ?? instanceId
     void (async () => {
       const child = (await deps.connection.call("thread.create", {
         projectId: main.projectId,
         title: t("chat.subagent.defaultTitle").replace("{agent}", label),
-        agentId,
+        agentId: chosen?.agentId ?? instanceId,
+        instanceId,
         parentThreadId: main.id,
       })) as Thread
       deps.store.update({ threads: [...deps.store.getSnapshot().threads, child] })

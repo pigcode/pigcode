@@ -142,7 +142,10 @@ describe("agent catalog", () => {
     second.agents.register(recordingDriver("alpha").driver)
     expect(second.agents.getSettings("alpha")).toEqual({ binaryPath: "/opt/alpha" })
     expect(second.agents.configuredDefaultAgent()).toBe("alpha")
-    await expect(second.agents.defaultAgent()).resolves.toBe("alpha")
+    await expect(second.agents.defaultAgent()).resolves.toEqual({
+      agentId: "alpha",
+      instanceId: "alpha",
+    })
     // 清空设置时删除这个键，而不是存一个空对象。
     second.agents.updateSettings("alpha", { binaryPath: "" })
     expect(second.settings.snapshot()).not.toHaveProperty("agents.alpha")
@@ -160,7 +163,10 @@ describe("agent catalog", () => {
   it("does not register the fake agent when the profile turns it off", async () => {
     const ctx = await setup({ fake: false })
     expect(ctx.agents.list()).toEqual([])
-    await expect(ctx.agents.defaultAgent()).resolves.toBeNull()
+    await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+      agentId: null,
+      instanceId: null,
+    })
     await ctx.fiber.dispose()
   })
 
@@ -239,9 +245,15 @@ describe("default agent", () => {
       const ctx = await setup({ fake: false })
       ctx.agents.register(recordingDriver("codex").driver)
       expect(ctx.agents.list().map((driver) => driver.id)).toEqual(["fake", "codex"])
-      await expect(ctx.agents.defaultAgent()).resolves.toBe("fake")
+      await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+        agentId: "fake",
+        instanceId: "fake",
+      })
       vi.stubEnv("PIGCODE_AGENT", "")
-      await expect(ctx.agents.defaultAgent()).resolves.toBe("codex")
+      await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+        agentId: "codex",
+        instanceId: "codex",
+      })
       await ctx.fiber.dispose()
     } finally {
       vi.unstubAllEnvs()

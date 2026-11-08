@@ -311,14 +311,15 @@ export function WorkspaceSidebar({
                       <EmptyState size="compact" title={t("sidebar.noThreads")} />
                     ) : null}
                     {projectThreads.map((thread) => {
-                      const agentId = thread.lastAgentId ?? thread.defaultAgentId
-                      const agentName = agentNames[agentId] ?? agentId
+                      const instanceId =
+                        thread.lastInstanceId ?? thread.lastAgentId ?? thread.defaultAgentId
+                      const agentName = agentNames[instanceId] ?? instanceId
                       // 缩写只是装饰；读屏器读 agent 的全名。
                       return row(
                         thread,
                         <>
                           <EntityAvatar
-                            id={agentId}
+                            id={instanceId}
                             name={agentName}
                             size="inline"
                             className="sess-agent"

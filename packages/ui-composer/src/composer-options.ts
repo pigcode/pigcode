@@ -68,9 +68,13 @@ export function nextPermissionMode(
   return cycle[(index + 1) % cycle.length] ?? "workspace-write"
 }
 
-/** 输入框里可选的一个 agent。 */
+/** 输入框里可选的一项：一个 Agent 实例（默认实例就是 Agent 自己）。 */
 export interface ComposerAgent {
+  /** 选择用的键：Agent 实例 id；默认实例等于 agent id。 */
   id: string
+  /** 提供实现的 Agent（driver id）。 */
+  agentId: string
+  /** 显示名：实例名；默认实例用 Agent 名。 */
   label: string
   /** 检测到 CLI 未安装时为 false；未知时视为可用。 */
   installed?: boolean | undefined
@@ -87,8 +91,17 @@ export interface ComposerModel {
   custom?: boolean | undefined
 }
 
-/** 各 agent 的模型目录；undefined 表示还没读取。 */
+/** 各 agent 实例的模型目录；undefined 表示还没读取。键是实例 id。 */
 export type ComposerModelCatalog = Readonly<Record<string, readonly ComposerModel[] | undefined>>
+
+/** 在选择器里选中一个模型：实例、它属于哪个 Agent，以及模型。 */
+export interface ComposerModelChoice {
+  /** 实例 id；默认实例等于 agent id。 */
+  instanceId: string
+  /** 提供实现的 Agent。 */
+  agentId: string
+  modelId: string
+}
 
 /** 当前实际使用的模型：线程记录的模型，否则目录里的默认模型，再否则第一个。 */
 export function resolveModel(

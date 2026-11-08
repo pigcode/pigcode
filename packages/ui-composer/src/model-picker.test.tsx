@@ -16,8 +16,8 @@ import type {
 import { resetModelPreferencesCache } from "./model-preferences"
 
 const AGENTS: ComposerAgent[] = [
-  { id: "claude", label: "Claude Code", installed: true },
-  { id: "codex", label: "Codex", installed: false },
+  { id: "claude", agentId: "claude", label: "Claude Code", installed: true },
+  { id: "codex", agentId: "codex", label: "Codex", installed: false },
 ]
 
 const CATALOG: ComposerModelCatalog = {
@@ -157,7 +157,11 @@ describe("ModelPicker", () => {
     expect(within(codex).getByText("GPT-6.1 Sol")).toBeTruthy()
     expect(within(codex).queryByText("Opus")).toBeNull()
     await userEvent.click(within(codex).getByText("GPT-6.1 Sol"))
-    expect(onSelectModel).toHaveBeenCalledWith("codex", "gpt-6.1-sol")
+    expect(onSelectModel).toHaveBeenCalledWith({
+      instanceId: "codex",
+      agentId: "codex",
+      modelId: "gpt-6.1-sol",
+    })
   })
 
   it("loads an agent's catalog only when it is shown", async () => {
@@ -181,7 +185,11 @@ describe("ModelPicker", () => {
     const list = screen.getByRole("listbox", { name: "Claude Code" })
     expect(within(list).getAllByRole("option")).toHaveLength(1)
     await userEvent.keyboard("{Control>}1{/Control}")
-    expect(onSelectModel).toHaveBeenCalledWith("claude", "haiku")
+    expect(onSelectModel).toHaveBeenCalledWith({
+      instanceId: "claude",
+      agentId: "claude",
+      modelId: "haiku",
+    })
   })
 
   it("keeps favorites across agents in the star tab", async () => {
@@ -233,7 +241,11 @@ describe("ModelPicker", () => {
     expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus")
 
     await userEvent.keyboard("{Enter}")
-    expect(onSelectModel).toHaveBeenCalledWith("claude", "opus")
+    expect(onSelectModel).toHaveBeenCalledWith({
+      instanceId: "claude",
+      agentId: "claude",
+      modelId: "opus",
+    })
   })
 
   it("offers Claude Code's thinking levels outside the scrolling list and sends the one picked", async () => {

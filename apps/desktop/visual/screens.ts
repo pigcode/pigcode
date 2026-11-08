@@ -334,13 +334,13 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(
     page.getByRole("heading", { level: 1, name: t("settings.agents"), exact: true }),
   ).toBeVisible()
-  await expect(page.locator(".ext-list").first()).toContainText("Fake Agent")
-  await expect(page.locator(".ext-list").first()).not.toContainText(
+  await expect(page.locator(".agents-master-list").first()).toContainText("Fake Agent")
+  await expect(page.locator(".agents-master-list").first()).not.toContainText(
     withoutEllipsis(t("agents.status.checking")),
   )
   await step("settings-agents")
   await page
-    .getByRole("button", { name: t("agents.expand").replace("{agent}", "Claude Code") })
+    .getByRole("button", { name: t("agents.select").replace("{instance}", "Claude Code") })
     .click()
   await expect(page.locator(".agent-editor")).toBeVisible()
   await step("settings-agent-editor")

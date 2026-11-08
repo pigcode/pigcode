@@ -33,7 +33,9 @@ const created: Thread = {
   projectId: "p2",
   title: "新会话",
   defaultAgentId: "claude",
+  defaultInstanceId: null,
   lastAgentId: null,
+  lastInstanceId: null,
   lastModelId: null,
   permissionMode: "workspace-write",
   createdAt: "2026-11-07T00:00:00.000Z",
@@ -79,6 +81,7 @@ describe("new thread draft", () => {
       projectId: "p2",
       title: "新会话",
       agentId: "claude",
+      instanceId: "claude",
     })
     expect(store.getSnapshot()).toMatchObject({
       activeThreadId: "t-new",
@@ -106,7 +109,12 @@ describe("new thread draft", () => {
   })
 
   it("passes on the agent, model and permission chosen in the draft", async () => {
-    updateDraftOptions({ agentId: "codex", modelId: "gpt-5", permissionMode: "read-only" })
+    updateDraftOptions({
+      instanceId: "inst_abc",
+      agentId: "codex",
+      modelId: "gpt-5",
+      permissionMode: "read-only",
+    })
     const { connection, call } = fakeConnection()
 
     await materializeDraft(connection, storeWith("p1"), "zh-CN")
@@ -116,6 +124,7 @@ describe("new thread draft", () => {
       projectId: "p1",
       title: "新会话",
       agentId: "codex",
+      instanceId: "inst_abc",
       modelId: "gpt-5",
       permissionMode: "read-only",
     })

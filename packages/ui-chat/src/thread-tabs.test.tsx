@@ -58,8 +58,8 @@ const TABS: ThreadTab[] = [
 ]
 
 const AGENTS = [
-  { id: "claude", label: "Claude Code", installed: true },
-  { id: "codex", label: "Codex", installed: false },
+  { id: "claude", agentId: "claude", label: "Claude Code", installed: true },
+  { id: "codex", agentId: "codex", label: "Codex", installed: false },
 ]
 
 function renderTabs(overrides: Partial<Parameters<typeof ThreadTabs>[0]> = {}) {
@@ -221,7 +221,9 @@ describe("sub-agent threads", () => {
             projectId: "p1",
             title: "Codex 子代理",
             defaultAgentId: "codex",
+            defaultInstanceId: null,
             lastAgentId: null,
+            lastInstanceId: null,
             lastModelId: null,
             permissionMode: "workspace-write",
             createdAt: "2026-10-21T00:00:00.000Z",

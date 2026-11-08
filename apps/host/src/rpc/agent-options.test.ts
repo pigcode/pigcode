@@ -181,7 +181,7 @@ describe("agent.* commands", () => {
       rec: { installed: true, version: "1.0.0", authenticated: true },
     })
     await expect(call("agent.models", { agentId: "rec" })).resolves.toEqual([SAGE])
-    await expect(call("agent.default", {})).resolves.toEqual({ id: "rec" })
+    await expect(call("agent.default", {})).resolves.toEqual({ id: "rec", instanceId: "rec" })
 
     await ctx.fiber.dispose()
   })

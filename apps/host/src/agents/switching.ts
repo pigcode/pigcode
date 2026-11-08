@@ -29,10 +29,11 @@ export async function disposeSession(
     model: null,
   })
 }
-
 /** 切换结果，也是 `thread.switchAgent` 的返回；换 Agent 时写 handoff，同一个 Agent 优先写原生 fork 源。 */
 export interface Switch {
   agentId: string
+  /** 切换后使用的实例；没有实例信息时等于 agentId（默认实例）。 */
+  instanceId: string
   modelId: string | null
   /** 换 Agent 时写入的上下文摘要；使用原生 fork 时为 null。 */
   handoff: string | null
@@ -159,7 +160,7 @@ export function pendingForkFromNativeSessionId(ctx: Context, threadId: string): 
   return consumed ? null : forkFrom
 }
 
-/** 更新线程选择、停止旧会话并追加 thread.updated；Agent 是否存在由 registry 校验。 */
+/** 更新线程选择、停止旧会话并追加 thread.updated；Agent 与实例是否存在由 registry 校验。 */
 export async function switchAgent(
   ctx: Context,
   sessions: AgentSessionStore,
@@ -167,11 +168,13 @@ export async function switchAgent(
   agentId: string,
   modelId: string | null,
   disposeActive?: (session: AgentSession) => Promise<void>,
+  instanceId?: string | null,
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
+  const chosenInstance = instanceId ?? agentId
   // 同一个 Agent 且存在 active 原生会话时优先 fork；否则生成换 Agent 的 handoff。
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
-  const activeSession = sessions.findActive(threadId, agentId)
+  const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
   const forkFromNativeSessionId = activeSession?.nativeSessionId ?? null
   const handoff =
     forkFromNativeSessionId === null && hasConversation(ctx, threadId)
@@ -180,7 +183,7 @@ export async function switchAgent(
   const now = new Date().toISOString()
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
   for (const session of active) await disposeActive?.(session)
-  ctx.threads.updateSelection(threadId, agentId, modelId)
+  ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance)
   sessions.stopActive(threadId, now)
   ctx.sessions.append({
     threadId,
@@ -188,11 +191,12 @@ export async function switchAgent(
     type: "thread.updated",
     payload: {
       agentId,
+      instanceId: chosenInstance,
       modelId,
       ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : { handoff }),
     },
     schemaVersion: 1,
     createdAt: now,
   })
-  return { agentId, modelId, handoff, forkFromNativeSessionId }
+  return { agentId, instanceId: chosenInstance, modelId, handoff, forkFromNativeSessionId }
 }

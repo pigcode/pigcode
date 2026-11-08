@@ -230,7 +230,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     activeThreads,
     append,
     execute,
-    settingsFor: agents.settingsFor,
+    settingsFor: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
   }
 
   /** 取消排队中的 run；此时尚未创建 Agent 会话，只需写终态并释放线程。 */
@@ -277,6 +277,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       void driver.dispose(run.session).catch(() => undefined)
     }
     drivers.delete(driverId)
+    // 这个 agent 的所有实例的检测与模型目录都重新读取。
+    for (const instance of agents.instances(driverId)) agents.invalidate(instance.instanceId)
     agents.invalidate(driverId)
   }
 
@@ -294,28 +296,65 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       }))
     },
     detect: (options) => agents.detect(options),
-    models: (agentId) => agents.models(agentId),
+    models: (agentId, instanceId) => agents.models(agentId, instanceId),
     defaultAgent: () => agents.defaultAgent(),
     configuredDefaultAgent: () => agents.configuredDefault(),
-    setDefaultAgent: (agentId) => agents.setDefaultAgent(agentId),
-    getSettings: (agentId) => agents.settingsFor(agentId),
-    updateSettings: (agentId, values) => agents.updateSettings(agentId, values),
-    async switchAgent(threadId, agentId, modelId) {
+    configuredDefaultInstance: () => agents.configuredDefaultInstance(),
+    setDefaultAgent: (agentId, instanceId) => agents.setDefaultAgent(agentId, instanceId ?? null),
+    getSettings: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
+    updateSettings: (agentId, values, instanceId) =>
+      agents.updateSettings(agentId, values, instanceId),
+    listInstances: (agentId) => agents.instances(agentId),
+    findInstance: (instanceId) => agents.findInstance(instanceId),
+    createInstance: (agentId, label, copyFrom) => agents.createInstance(agentId, label, copyFrom),
+    updateInstance: (instanceId, patch) => agents.updateInstance(instanceId, patch),
+    removeInstance(instanceId) {
+      const instance = agents.findInstance(instanceId)
+      if (!instance) throw new Error(`instance not found: ${instanceId}`)
+      if (instance.isDefault) throw new Error(`default instance cannot be removed: ${instanceId}`)
+      // 还有线程记着这个实例时先拒绝：删掉后线程会静默退回默认实例，用户以为自己在用另一套配置。
+      const usage = ctx.storage.db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM threads WHERE default_instance_id = ? OR last_instance_id = ?`,
+        )
+        .get(instanceId, instanceId) as { count: number }
+      if (usage.count > 0) {
+        throw Object.assign(
+          new Error(`instance is in use by ${usage.count} threads: ${instanceId}`),
+          { code: "AGENT_INSTANCE_IN_USE" },
+        )
+      }
+      agents.removeInstance(instanceId)
+    },
+    async switchAgent(threadId, agentId, modelId, instanceId) {
       // 运行中或排队中的线程不能切换：否则旧会话被 dispose，正在跑的 run 会失去驱动。
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
       if (!drivers.has(agentId)) throw new Error(`agent not found: ${agentId}`)
-      return switchAgent(ctx, agentSessions, threadId, agentId, modelId ?? null, (session) =>
-        disposeSession(drivers, session),
+      const instance = agents.instance(agentId, instanceId)
+      if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
+      return switchAgent(
+        ctx,
+        agentSessions,
+        threadId,
+        agentId,
+        modelId ?? null,
+        (session) => disposeSession(drivers, session),
+        instance.instanceId,
       )
     },
     async startRun(threadId, text, emitLive, options = {}) {
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
-      // 切换后使用线程最近选择的 Agent，未切换过时回退到创建时的默认值。
+      // 切换后使用线程最近选择的 Agent 与实例，未切换过时回退到创建时的默认值。
       const agentId = thread.lastAgentId ?? thread.defaultAgentId
       const driver = drivers.get(agentId)
       if (!driver) throw new Error(`agent not found: ${agentId}`)
+      const instance = agents.instance(
+        agentId,
+        options.instanceId ?? thread.lastInstanceId ?? thread.defaultInstanceId,
+      )
+      if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
       const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
       if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
 
@@ -325,7 +364,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       if (reserved) launching += 1
       try {
         const startedAt = new Date().toISOString()
-        const activeSession = agentSessions.findActive(threadId, driver.id)
+        const activeSession = agentSessions.findActive(threadId, driver.id, instance.instanceId)
         const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
         const runId = `run_${randomUUID()}`
         // 会话在 launchRun 中创建；排队阶段不启动 Codex app-server/Claude Query。
@@ -348,6 +387,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           runId,
           threadId,
           driver,
+          instanceId: instance.instanceId,
           input: { text, ...(options.effort ? { effort: options.effort } : {}) },
           emitLive,
           controller: new AbortController(),

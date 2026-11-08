@@ -15,7 +15,7 @@ import {
 } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
 import { OpenInButton } from "@pigcode/ui-shell"
-import { useDefaultAgentId } from "./agents"
+import { useDefaultInstanceId } from "./agents"
 import type { CoreDeps } from "./chat-container"
 import {
   NEW_THREAD_DRAFT_KEY,
@@ -55,23 +55,26 @@ export function NewThreadPage({
   const { locale } = useLocale()
   const registeredCommands = useContributions("command")
   const connected = state.status === "connected"
-  const defaultAgentId = useDefaultAgentId(deps.connection, state.agentRevision, connected)
+  const defaultInstanceId = useDefaultInstanceId(deps.connection, state.agentRevision, connected)
   const options = useDraftOptions()
   const [pending, setPending] = useState(false)
   const projectId = draftProjectId(state)
   const project = state.projects.find((item) => item.id === projectId)
 
-  // 选过的 agent 停用或卸载以后退回默认 agent。
+  // 选过的实例停用、删除或卸载以后退回默认实例。
   const chosenGone =
-    options.agentId !== null &&
+    options.instanceId !== null &&
     agents.length > 0 &&
-    !agents.some((agent) => agent.id === options.agentId)
+    !agents.some((agent) => agent.id === options.instanceId)
   useEffect(() => {
-    if (chosenGone) updateDraftOptions({ agentId: null, modelId: null })
+    if (chosenGone) updateDraftOptions({ instanceId: null, agentId: null, modelId: null })
   }, [chosenGone])
-  const agentId = (chosenGone ? null : options.agentId) ?? defaultAgentId
-  const modelId = options.agentId && !chosenGone ? options.modelId : null
-  const features = agentId ? featuresByAgent[agentId] : undefined
+  const instanceId = (chosenGone ? null : options.instanceId) ?? defaultInstanceId
+  const modelId = options.instanceId && !chosenGone ? options.modelId : null
+  // Agent 功能按 driver 记：实例 id 与 driver 相同时直接命中，否则按实例查它的 driver。
+  const driverId =
+    agents.find((agent) => agent.id === instanceId)?.agentId ?? options.agentId ?? null
+  const features = driverId ? featuresByAgent[driverId] : undefined
 
   const files = useMemo(
     () =>
@@ -118,9 +121,15 @@ export function NewThreadPage({
       agents={agents}
       catalog={catalog}
       onLoadModels={onLoadModels}
-      agentId={agentId}
+      agentId={instanceId}
       modelId={modelId}
-      onSelectModel={(agent, model) => updateDraftOptions({ agentId: agent, modelId: model })}
+      onSelectModel={(choice) =>
+        updateDraftOptions({
+          instanceId: choice.instanceId,
+          agentId: choice.agentId,
+          modelId: choice.modelId,
+        })
+      }
       permissionMode={options.permissionMode}
       onPermissionMode={(mode) => updateDraftOptions({ permissionMode: mode })}
       canPlan={features?.plan ?? true}

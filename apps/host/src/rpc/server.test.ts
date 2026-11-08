@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
+import { apply as settings } from "../services/settings"
 import { apply as storage } from "../services/storage"
 import { GitNoRemoteError, GithubService } from "../services/github"
 import { apply as threads } from "../services/threads"
@@ -12,6 +13,7 @@ import { RpcServer } from "./server"
 async function createServer() {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
+  await ctx.plugin(settings, {})
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
@@ -175,6 +177,66 @@ describe("rpc server", () => {
       await send("2", "thread.create", { projectId: project.id, title: "新会话", agentId: "fake" }),
     ).toMatchObject({
       result: { lastAgentId: null, lastModelId: null, permissionMode: "workspace-write" },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it("creates, edits, defaults and removes agent instances over RPC", async () => {
+    const { ctx, transport } = await createServer()
+    const send = async (id: string, method: string, params: unknown) => {
+      transport.client.send({ jsonrpc: "2.0", id, method, params })
+      return transport.client.next()
+    }
+
+    const created = (await send("1", "agent.createInstance", {
+      agentId: "fake",
+      label: "  公司 API  ",
+    })) as { result: { instanceId: string; label: string; isDefault: boolean } }
+    expect(created.result).toMatchObject({ label: "公司 API", isDefault: false })
+    const instanceId = created.result.instanceId
+
+    // 列表里这个 agent 有两个实例，默认实例在最前。
+    const list = (await send("2", "agent.list", {})) as {
+      result: { agents: Array<{ agentId: string; instances: Array<{ instanceId: string }> }> }
+    }
+    const fake = list.result.agents.find((agent) => agent.agentId === "fake")
+    expect(fake?.instances.map((instance) => instance.instanceId)).toEqual(["fake", instanceId])
+
+    // 设置写进指定实例，默认实例不受影响。
+    await send("3", "agent.updateSettings", {
+      agentId: "fake",
+      instanceId,
+      values: { customModels: ["fake-work"] },
+    })
+    expect(ctx.agents.getSettings("fake", instanceId)).toEqual({ customModels: ["fake-work"] })
+    expect(ctx.agents.getSettings("fake")).toEqual({})
+
+    // 只给实例也能读模型目录：Host 自己找到它属于哪个 Agent。
+    const models = (await send("3b", "agent.models", { instanceId })) as {
+      result: Array<{ id: string; custom?: boolean }>
+    }
+    expect(models.result).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "fake-work", custom: true })]),
+    )
+
+    // 设为默认后，新会话用它。
+    await send("4", "agent.setDefault", { agentId: "fake", instanceId })
+    expect(await send("5", "agent.default", {})).toMatchObject({
+      result: { id: "fake", instanceId },
+    })
+
+    // 默认实例不能改、不能删。
+    expect(
+      await send("6", "agent.updateInstance", { instanceId: "fake", patch: { enabled: false } }),
+    ).toMatchObject({ error: expect.anything() })
+    expect(await send("7", "agent.removeInstance", { instanceId: "fake" })).toMatchObject({
+      error: expect.anything(),
+    })
+
+    // 删掉选中的实例后，默认回到这个 agent 的默认实例。
+    await send("8", "agent.removeInstance", { instanceId })
+    expect(await send("9", "agent.default", {})).toMatchObject({
+      result: { id: "fake", instanceId: "fake" },
     })
     await ctx.fiber.dispose()
   })

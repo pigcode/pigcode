@@ -1,4 +1,4 @@
-/** 已注册的 agent、它们的 Agent 功能与默认 agent 的查询辅助；供聊天与设置容器共用。 */
+/** 已注册的 agent、它们的 Agent 功能与默认实例的查询辅助；供聊天与设置容器共用。 */
 import type { AgentFeatures, Thread } from "@pigcode/contracts"
 import type { AppStore, Connection } from "@pigcode/client-runtime"
 
@@ -14,7 +14,7 @@ export async function listRegisteredAgents(connection: Connection): Promise<Regi
   return (await connection.call("agent.registered", {})) as RegisteredAgent[]
 }
 
-/** 按线程当前的 agent 刷新 Agent 功能；输入框的模型目录由聊天容器按 agent 懒加载。 */
+/** 按线程当前的 agent 刷新 Agent 功能；输入框的模型目录由聊天容器按实例懒加载。 */
 export async function loadAgentFeatures(
   connection: Connection,
   store: AppStore,
@@ -30,7 +30,7 @@ export async function loadAgentFeatures(
 
 /**
  * agent 集合或设置变了（插件启停、安装卸载、改了设置）：刷新当前线程的 Agent 功能，
- * 并递增 agentRevision，让输入框重新读取 agent 列表与模型目录。失败不影响调用方的操作。
+ * 并递增 agentRevision，让输入框重新读取实例列表与模型目录。失败不影响调用方的操作。
  */
 export async function refreshAgentViews(deps: {
   connection: Connection
@@ -54,6 +54,20 @@ export async function refreshAgentViews(deps: {
 
 /** 询问 Host 新会话的默认 agent；没有任何可用的 agent 时为 null。 */
 export async function pickAgentId(connection: Connection): Promise<string | null> {
-  const result = (await connection.call("agent.default", {})) as { id?: unknown }
+  const result = (await connection.call("agent.default", {})) as {
+    id?: unknown
+    instanceId?: unknown
+  }
+  return typeof result.id === "string" && result.id.length > 0 ? result.id : null
+}
+
+/** 新会话默认使用的实例；Host 没有给出实例时退回 Agent id（即默认实例）。 */
+export async function pickInstanceId(connection: Connection): Promise<string | null> {
+  const result = (await connection.call("agent.default", {})) as {
+    id?: unknown
+    instanceId?: unknown
+  }
+  if (typeof result.instanceId === "string" && result.instanceId.length > 0)
+    return result.instanceId
   return typeof result.id === "string" && result.id.length > 0 ? result.id : null
 }

@@ -2,7 +2,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
-import { translate, useAppearance, type Locale } from "@pigcode/ui-primitives"
+import { useAppearance, type Locale } from "@pigcode/ui-primitives"
 export type { ChatControls, CoreDeps } from "./chat-container"
 import {
   AppRenderer,
@@ -21,13 +21,14 @@ import {
   updateSurface,
   type PanelSurfaceState,
 } from "@pigcode/ui-workbench"
-import { useAgentNames } from "./agents"
+import { useInstanceAgents } from "./agents"
 import { BrowserHost } from "./browser-host"
 import { AppearanceContext } from "./builtin-settings-pages"
 import { ChatViewContainer, type CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
 import { UnsavedGuard } from "./unsaved-guard"
 import { PluginsView, SchedulesView } from "./workspace-pages"
+import { useBrowserOpen } from "./use-browser-open"
 import {
   EMPTY_HISTORY,
   canGoBack,
@@ -98,7 +99,12 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const appearance = useAppearance()
   const surfaceContributions = useContributions("surface")
   const settingsPages = useContributions("settingsPage")
-  const agentNames = useAgentNames(connection, state.agentRevision, state.status === "connected")
+  const instanceAgents = useInstanceAgents(
+    connection,
+    state.agentRevision,
+    state.status === "connected",
+  )
+  const agentNames = instanceAgents.names
   const [view, setView] = useState<ShellView>("chat")
   const [selectedPage, setSelectedPage] = useState<string>(DEFAULT_SETTINGS_PAGE)
   // 选中的设置页被移除（插件停用或卸载）时退回通用页，内容区不留空白。
@@ -290,44 +296,18 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     }))
   }
 
-  // agent 调用浏览器工具时，main 让这里给它的线程开（或亮出）浏览器标签；正在看这个线程时展开右栏。
-  const openState = useRef({ panels, activeThreadId: state.activeThreadId, view })
-  openState.current = { panels, activeThreadId: state.activeThreadId, view }
-  useEffect(
-    () =>
-      window.pigcodeNative?.browser?.onOpen(({ threadId, url }) => {
-        const existing = openState.current.panels[threadId]?.surfaces
-          .filter((surface) => surface.kind === "browser")
-          .at(-1)
-        const id = existing?.id ?? `browser-${crypto.randomUUID()}`
-        setPanels((current) => {
-          const panel = current[threadId] ?? EMPTY_SURFACE_STATE
-          return {
-            ...current,
-            [threadId]: panel.surfaces.some((surface) => surface.id === id)
-              ? { ...panel, activeId: id }
-              : {
-                  surfaces: [
-                    ...panel.surfaces,
-                    {
-                      id,
-                      kind: "browser",
-                      title: url ? new URL(url).host : translate(locale, "workbench.browser"),
-                      ...(url ? { url } : {}),
-                    },
-                  ],
-                  activeId: id,
-                },
-          }
-        })
-        const { activeThreadId, view: currentView } = openState.current
-        if (threadId === activeThreadId && currentView === "chat") {
-          setRightOpen(true)
-          setRightMaximized(false)
-        }
-      }),
-    [locale],
-  )
+  // agent 调用浏览器工具时，main 让界面给它的线程开（或亮出）浏览器标签；正在看这个线程时展开右栏。
+  useBrowserOpen({
+    panels,
+    threadId: state.activeThreadId,
+    view,
+    setPanels,
+    onOpenRight: () => {
+      setRightOpen(true)
+      setRightMaximized(false)
+    },
+    locale,
+  })
 
   /** 从聊天里打开文件或 Diff：当前线程的右栏切到对应标签（文件在自己的标签里打开）并展开。 */
   function openSurface(kind: "file" | "diff", path?: string): void {

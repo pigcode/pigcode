@@ -21,8 +21,8 @@ export interface LaunchDeps {
     payload: unknown,
   ) => void
   execute: (run: ActiveRun, input: UserInput) => void
-  /** 启动时读取 agent 的最新设置；排队期间改的设置同样生效。 */
-  settingsFor: (agentId: string) => AgentSettingsValues
+  /** 启动时读取实例的最新设置；排队期间改的设置同样生效。 */
+  settingsFor: (agentId: string, instanceId: string) => AgentSettingsValues
 }
 
 /** 启动排队 run：此时才创建 Agent 会话，避免为未开始的 run 提前启动子进程。 */
@@ -39,11 +39,12 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       model: entry.model,
       ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
       ...(entry.mcp ? { mcp: entry.mcp } : {}),
-      settings: deps.settingsFor(entry.driver.id),
+      settings: deps.settingsFor(entry.driver.id, entry.instanceId),
     })
     const session = deps.agentSessions.reuseOrCreate({
       draft,
       agentId: entry.driver.id,
+      instanceId: entry.instanceId,
       createdAt: entry.queuedAt,
     })
     deps.runs.setAgentSessionId(entry.runId, session.id)
@@ -65,6 +66,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {
       agentId: run.driver.id,
+      instanceId: entry.instanceId,
       agentSessionId: run.session.id,
     })
     deps.activeRuns.set(run.runId, run)

@@ -3,8 +3,12 @@ import type { Context } from "cordis"
 import type { Thread } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 
-/** 新会话草稿里先选好的模型与权限模式；写进新线程，第一次 run 就用它们。 */
+/**
+ * 新会话草稿里先选好的实例、模型与权限模式；写进新线程，第一次 run 就用它们。
+ * instanceId 缺省时用 Agent 的默认实例。
+ */
 export interface InitialSelection {
+  instanceId?: string | undefined
   modelId?: string | undefined
   permissionMode?: Thread["permissionMode"] | undefined
 }
@@ -27,8 +31,13 @@ export interface ThreadsService {
   rename(threadId: string, title: string): Thread | undefined
   /** 归档后线程不再出现在侧栏与命令面板里，事件与记录保留；子代理随主会话一起归档。 */
   archive(threadId: string): Thread | undefined
-  /** 记录线程最近选择的 Agent/model，切换后下一次 run 生效。 */
-  updateSelection(threadId: string, agentId: string, modelId: string | null): void
+  /** 记录线程最近选择的 Agent/实例/model，切换后下一次 run 生效。 */
+  updateSelection(
+    threadId: string,
+    agentId: string,
+    modelId: string | null,
+    instanceId?: string | null,
+  ): void
   /** 修改权限模式；下一次 run 起生效，返回更新后的记录。 */
   setPermissionMode(threadId: string, mode: Thread["permissionMode"]): Thread | undefined
 }
@@ -60,13 +69,17 @@ export const apply: ThreadsPlugin = (ctx) => {
         if (parent.parentThreadId) throw new Error("THREAD_PARENT_IS_SUBAGENT")
       }
       const now = new Date().toISOString()
+      // 旧的调用方不传实例：按 Agent 的默认实例记录。
+      const defaultInstanceId = initial.instanceId ?? agentId
       const thread: Thread = {
         id: `th_${randomUUID()}`,
         projectId,
         title,
         defaultAgentId: agentId,
+        defaultInstanceId,
         // 选了模型就和切换后一样记成最近的选择，界面和 run 都按 lastAgentId/lastModelId 读。
         lastAgentId: initial.modelId ? agentId : null,
+        lastInstanceId: initial.modelId ? defaultInstanceId : null,
         lastModelId: initial.modelId ?? null,
         permissionMode: initial.permissionMode ?? "workspace-write",
         createdAt: now,
@@ -77,17 +90,19 @@ export const apply: ThreadsPlugin = (ctx) => {
       }
       ctx.storage.db
         .prepare(
-          `INSERT INTO threads (id, project_id, title, default_agent_id, last_agent_id,
-            last_model_id, permission_mode, created_at, updated_at, archived_at, last_run_id,
-            parent_thread_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO threads (id, project_id, title, default_agent_id, default_instance_id,
+            last_agent_id, last_instance_id, last_model_id, permission_mode, created_at, updated_at,
+            archived_at, last_run_id, parent_thread_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           thread.id,
           thread.projectId,
           thread.title,
           thread.defaultAgentId,
+          thread.defaultInstanceId,
           thread.lastAgentId,
+          thread.lastInstanceId,
           thread.lastModelId,
           thread.permissionMode,
           thread.createdAt,
@@ -136,13 +151,14 @@ export const apply: ThreadsPlugin = (ctx) => {
         .run(now, threadId, threadId)
       return service.get(threadId)
     },
-    updateSelection(threadId, agentId, modelId) {
+    updateSelection(threadId, agentId, modelId, instanceId) {
       ctx.storage.db
         .prepare(
-          `UPDATE threads SET last_agent_id = ?, last_model_id = ?, updated_at = ?
+          `UPDATE threads SET last_agent_id = ?, last_instance_id = ?, last_model_id = ?,
+             updated_at = ?
            WHERE id = ?`,
         )
-        .run(agentId, modelId, new Date().toISOString(), threadId)
+        .run(agentId, instanceId ?? agentId, modelId, new Date().toISOString(), threadId)
     },
     setPermissionMode(threadId, mode) {
       ctx.storage.db
@@ -164,7 +180,9 @@ function mapThread(row: unknown): Thread {
     projectId: value.project_id!,
     title: value.title!,
     defaultAgentId: value.default_agent_id!,
+    defaultInstanceId: value.default_instance_id ?? value.default_agent_id ?? null,
     lastAgentId: value.last_agent_id ?? null,
+    lastInstanceId: value.last_instance_id ?? value.last_agent_id ?? null,
     lastModelId: value.last_model_id ?? null,
     permissionMode: value.permission_mode as Thread["permissionMode"],
     createdAt: value.created_at!,

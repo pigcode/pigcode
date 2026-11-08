@@ -1,6 +1,7 @@
 /**
- * 模型选择器：左边一列 agent（以及收藏），右边是选中 agent 的模型列表与搜索，
- * 底部是当前模型的思考深度：「默认」加上它支持的档位。只有选中某个 agent 才会列出它自己的模型。
+ * 模型选择器：左边一列 Agent 实例（以及收藏），右边是选中实例的模型列表与搜索，
+ * 底部是当前模型的思考深度：「默认」加上它支持的档位。只有选中某个实例才会列出它自己的模型。
+ * 布局与 T3 Code 的模型选择器一致：左栏是方形图标，右栏搜索固定、列表滚动，底部是思考深度。
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronDown, Loader2, Star } from "lucide-react"
@@ -21,6 +22,7 @@ import {
   type ComposerAgent,
   type ComposerModel,
   type ComposerModelCatalog,
+  type ComposerModelChoice,
   type ReasoningEffort,
 } from "./composer-options"
 import { fuzzyScore } from "./fuzzy"
@@ -33,22 +35,24 @@ const FAVORITES = "__favorites__"
 const DEFAULT_EFFORT = "default"
 type EffortChoice = ReasoningEffort | typeof DEFAULT_EFFORT
 
-/** 模型选择器的属性；目录由调用方按 agent 懒加载。 */
+/** 模型选择器的属性；目录由调用方按实例懒加载。 */
 export interface ModelPickerProps {
+  /** 可选的 Agent 实例；默认实例的 id 就是 agent id。 */
   agents: readonly ComposerAgent[]
+  /** 当前选中的实例 id。 */
   agentId: string | null
   modelId: string | null
   catalog: ComposerModelCatalog
-  onLoadModels?: ((agentId: string) => void) | undefined
-  onSelectModel?: ((agentId: string, modelId: string) => void) | undefined
-  /** 运行中不能切换 agent 或模型；思考深度仍可调整，下一次发送生效。 */
+  onLoadModels?: ((instanceId: string) => void) | undefined
+  onSelectModel?: ((choice: ComposerModelChoice) => void) | undefined
+  /** 运行中不能切换实例或模型；思考深度仍可调整，下一次发送生效。 */
   locked?: boolean
   side?: "top" | "bottom"
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-/** 列表里的一行：模型与它所属的 agent。 */
+/** 列表里的一行：模型与它所属的实例。 */
 interface Row {
   agent: ComposerAgent
   model: ComposerModel
@@ -144,7 +148,11 @@ export function ModelPicker({
 
   function choose(row: Row | undefined): void {
     if (!row || locked) return
-    onSelectModel?.(row.agent.id, row.model.id)
+    onSelectModel?.({
+      instanceId: row.agent.id,
+      agentId: row.agent.agentId,
+      modelId: row.model.id,
+    })
     onOpenChange(false)
   }
 
@@ -277,16 +285,12 @@ export function ModelPicker({
                     const key = modelKey(row.agent.id, row.model.id)
                     const current = row.agent.id === agentId && row.model.id === currentModel?.id
                     const favorite = preferences.favorites.includes(key)
-                    const subtitle = [
-                      row.agent.label,
-                      row.model.isDefault
-                        ? t("composer.model.default")
-                        : row.model.custom
-                          ? t("composer.model.custom")
-                          : row.model.description,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")
+                    // 第二行是模型所属的实例与补充说明，和 T3 一样在每个模型下面标出提供它的实例。
+                    const note = row.model.isDefault
+                      ? t("composer.model.default")
+                      : row.model.custom
+                        ? t("composer.model.custom")
+                        : row.model.description
                     return (
                       <ListRow
                         key={key}
@@ -303,7 +307,15 @@ export function ModelPicker({
                         onClick={() => choose(row)}
                         title={row.model.label}
                         titleProps={{ className: "model-row-name" }}
-                        description={<span className="truncate">{subtitle}</span>}
+                        description={
+                          <span className="model-row-agent">
+                            <EntityAvatar id={row.agent.id} name={row.agent.label} size="sm" />
+                            <span className="truncate">{row.agent.label}</span>
+                            {note ? (
+                              <span className="model-row-note truncate">· {note}</span>
+                            ) : null}
+                          </span>
+                        }
                         meta={
                           current || rowIndex < 9 ? (
                             <>

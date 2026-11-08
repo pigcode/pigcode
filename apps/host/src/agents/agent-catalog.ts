@@ -1,40 +1,83 @@
 /**
- * 已注册 agent 的目录：设置值的读写、只读检测、模型目录（含自定义模型）与默认 agent。
+ * 已注册 agent 的目录：设置值的读写、只读检测、模型目录（含自定义模型）、实例与默认 agent。
  * driver 每次检测、列模型、建会话都拿到最新的设置，改设置不需要重新加载插件。
+ *
+ * 一个 Agent 可以有多份互相独立的配置（实例）。默认实例的值仍存在 `agents.<agentId>`，
+ * 用户新建的实例存在 `agentInstances`；线程、会话与检测结果都按 instanceId 区分。
  */
 import type { Context } from "cordis"
-import type { AgentModel, AgentStatus } from "@pigcode/contracts"
+import type { AgentInstance, AgentModel, AgentStatus } from "@pigcode/contracts"
 import {
   DEFAULT_AGENT_KEY,
+  DEFAULT_INSTANCE_KEY,
   createDetectionCache,
+  createInstance as createStoredInstance,
   customModelIds,
   forcedAgentId,
+  listInstances as listStoredInstances,
   normalizeAgentSettings,
   pickDefaultAgent,
   agentSettingsKey,
-  readAgentSettings,
+  readDefaultInstanceId,
+  readStoredInstances,
+  removeInstance as removeStoredInstance,
+  resolveInstance,
+  updateInstance as updateStoredInstance,
+  type ResolvedInstance,
 } from "./agent-settings"
 import type { AgentDriver, AgentSettingsValues } from "./driver"
 import { createModelCatalogCache, normalizeModels, withCustomModels } from "./model-catalog"
 import { listAgentModels } from "./switching"
 
-/** detect 的选项：只检测一个 agent，或跳过缓存重新检测。 */
+/** detect 的选项：只检测一个 agent 或实例，或跳过缓存重新检测。 */
 export interface DetectOptions {
   agentId?: string | undefined
+  instanceId?: string | undefined
   refresh?: boolean | undefined
+}
+
+/** 新会话默认使用的 agent 与实例；没有可用的 agent 时都是 null。 */
+export interface DefaultAgentChoice {
+  agentId: string | null
+  instanceId: string | null
 }
 
 /** agent 目录对 agents 服务暴露的方法。 */
 export interface AgentCatalog {
+  /** 默认实例的设置；旧的调用方式，等价于 settingsForInstance(agentId, agentId)。 */
   settingsFor(agentId: string): AgentSettingsValues
+  /** 指定实例的设置；实例不存在或不属于这个 agent 时退回默认实例。 */
+  settingsForInstance(agentId: string, instanceId?: string | null): AgentSettingsValues
+  /** 解析实例（含默认实例），供切换、run 启动与设置页使用。 */
+  instance(agentId: string, instanceId?: string | null): ResolvedInstance
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
-  models(agentId: string): Promise<AgentModel[]>
-  defaultAgent(): Promise<string | null>
+  models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
+  defaultAgent(): Promise<DefaultAgentChoice>
   configuredDefault(): string | null
-  setDefaultAgent(agentId: string | null): void
-  updateSettings(agentId: string, values: Record<string, unknown>): AgentSettingsValues
+  configuredDefaultInstance(): string | null
+  setDefaultAgent(agentId: string | null, instanceId?: string | null): void
+  updateSettings(
+    agentId: string,
+    values: Record<string, unknown>,
+    instanceId?: string | null,
+  ): AgentSettingsValues
+  /** 一个 agent 的全部实例，默认实例在前、名字用 agent 的显示名。 */
+  instances(agentId: string): AgentInstance[]
+  /** 某个实例；找不到时返回 null。 */
+  findInstance(instanceId: string): AgentInstance | null
+  createInstance(agentId: string, label: string, copyFrom?: string | null): AgentInstance
+  updateInstance(
+    instanceId: string,
+    patch: {
+      label?: string | undefined
+      enabled?: boolean | undefined
+      values?: Record<string, unknown> | undefined
+    },
+  ): AgentInstance
+  /** 删除实例并返回它；默认实例不能删。 */
+  removeInstance(instanceId: string): AgentInstance | null
   /** driver 注册、注销或设置变化后丢掉缓存的检测与模型目录。 */
-  invalidate(agentId?: string): void
+  invalidate(instanceId?: string): void
 }
 
 /** 没实现 detect 的 driver 视为可用；未注册的 agent 明确报告找不到。 */
@@ -59,13 +102,17 @@ export function createAgentCatalog(
 
   /** settings 服务是可选的：单元测试里没有它时所有 agent 都按默认值运行。 */
   const store = () => ctx.get("settings")
-  const settingsFor = (agentId: string) => readAgentSettings(store(), agentId)
+  const instanceFor = (agentId: string, instanceId?: string | null): ResolvedInstance =>
+    resolveInstance(store(), agentId, instanceId)
+  const settingsFor = (agentId: string) => instanceFor(agentId).values
 
-  function detectOne(agentId: string, refresh = false): Promise<AgentStatus> {
+  /** 检测一个实例：把它的设置交给 driver，结果按实例缓存。 */
+  function detectOne(agentId: string, instanceId: string, refresh = false): Promise<AgentStatus> {
     const driver = drivers.get(agentId)
     if (!driver?.detect) return Promise.resolve(fallbackStatus(driver, agentId))
     const detect = driver.detect.bind(driver)
-    return detections.get(agentId, () => detect(settingsFor(agentId)), refresh)
+    const values = instanceFor(agentId, instanceId).values
+    return detections.get(instanceId, () => detect(values), refresh)
   }
 
   function requireStore() {
@@ -76,49 +123,138 @@ export function createAgentCatalog(
 
   return {
     settingsFor,
+    settingsForInstance(agentId, instanceId) {
+      return instanceFor(agentId, instanceId).values
+    },
+    instance: instanceFor,
     async detect(options = {}) {
-      const ids = options.agentId ? [options.agentId] : [...drivers.keys()]
+      // 只检测一个实例、一个 agent 的全部实例，或全部 agent 的全部实例。
+      const targets: Array<[string, string]> = []
+      if (options.instanceId) {
+        const instance = findInstanceWith(options.instanceId)
+        if (!instance) return {}
+        targets.push([instance.agentId, instance.instanceId])
+      } else {
+        const ids = options.agentId ? [options.agentId] : [...drivers.keys()]
+        for (const id of ids) {
+          for (const instance of listInstancesOf(id)) targets.push([id, instance.instanceId])
+        }
+      }
       const entries = await Promise.all(
-        ids.map(async (id) => [id, await detectOne(id, options.refresh)] as const),
+        targets.map(
+          async ([agentId, instanceId]) =>
+            [instanceId, await detectOne(agentId, instanceId, options.refresh)] as const,
+        ),
       )
       return Object.fromEntries(entries)
     },
-    async models(agentId) {
+    async models(agentId, instanceId) {
       const driver = drivers.get(agentId)
-      const settings = settingsFor(agentId)
+      const instance = instanceFor(agentId, instanceId)
+      const settings = instance.values
       // 只缓存 agent 自己的目录；自定义模型每次现取，改完设置立刻出现在选择器里。
-      const models = await catalogs.get(agentId, async () =>
+      const models = await catalogs.get(instance.instanceId, async () =>
         normalizeModels(await listAgentModels(driver, settings)),
       )
       return withCustomModels(models, customModelIds(settings))
     },
-    defaultAgent() {
+    async defaultAgent() {
       const configured = store()?.get(DEFAULT_AGENT_KEY)
-      return pickDefaultAgent({
+      const agentId = await pickDefaultAgent({
         registered: [...drivers.keys()],
         forced: forcedAgentId(),
         configured: typeof configured === "string" ? configured : undefined,
-        status: (id) => detectOne(id),
+        status: (id) => detectOne(id, id),
       })
+      if (!agentId) return { agentId: null, instanceId: null }
+      const chosen = readDefaultInstanceId(store())
+      // 选好的默认实例必须属于这个 agent 且还在；否则用默认实例。
+      const instance = chosen ? findInstanceWith(chosen) : null
+      return {
+        agentId,
+        instanceId:
+          instance && instance.agentId === agentId && instance.enabled
+            ? instance.instanceId
+            : agentId,
+      }
     },
     configuredDefault() {
       const configured = store()?.get(DEFAULT_AGENT_KEY)
       return typeof configured === "string" ? configured : null
     },
-    setDefaultAgent(agentId) {
-      requireStore().set(DEFAULT_AGENT_KEY, agentId ?? undefined)
+    configuredDefaultInstance() {
+      return readDefaultInstanceId(store())
     },
-    updateSettings(agentId, values) {
+    setDefaultAgent(agentId, instanceId) {
+      const settings = requireStore()
+      settings.set(DEFAULT_AGENT_KEY, agentId ?? undefined)
+      // 默认实例不用单独记：没有 defaultInstance 就是 agent 自己的默认配置。
+      settings.set(
+        DEFAULT_INSTANCE_KEY,
+        agentId && instanceId && instanceId !== agentId ? instanceId : undefined,
+      )
+    },
+    updateSettings(agentId, values, instanceId) {
       const normalized = normalizeAgentSettings(values)
-      const key = agentSettingsKey(agentId)
-      requireStore().set(key, Object.keys(normalized).length > 0 ? normalized : undefined)
-      catalogs.invalidate(agentId)
-      detections.invalidate(agentId)
+      const settings = requireStore()
+      if (instanceId && instanceId !== agentId) {
+        updateStoredInstance(settings, instanceId, { values: normalized })
+      } else {
+        settings.set(
+          agentSettingsKey(agentId),
+          Object.keys(normalized).length > 0 ? normalized : undefined,
+        )
+      }
+      catalogs.invalidate(instanceId ?? agentId)
+      detections.invalidate(instanceId ?? agentId)
       return normalized
     },
-    invalidate(agentId) {
-      catalogs.invalidate(agentId)
-      detections.invalidate(agentId)
+    instances(agentId) {
+      const displayName = drivers.get(agentId)?.displayName ?? agentId
+      return listStoredInstances(store(), agentId, displayName)
     },
+    findInstance(instanceId) {
+      return findInstanceWith(instanceId)
+    },
+    createInstance(agentId, label, copyFrom) {
+      const created = createStoredInstance(requireStore(), agentId, label, copyFrom)
+      detections.invalidate(created.instanceId)
+      catalogs.invalidate(created.instanceId)
+      return created
+    },
+    updateInstance(instanceId, patch) {
+      const updated = updateStoredInstance(requireStore(), instanceId, patch)
+      detections.invalidate(instanceId)
+      catalogs.invalidate(instanceId)
+      return updated
+    },
+    removeInstance(instanceId) {
+      const settings = requireStore()
+      const instance = findInstanceWith(instanceId)
+      removeStoredInstance(settings, instanceId)
+      if (readDefaultInstanceId(settings) === instanceId)
+        settings.set(DEFAULT_INSTANCE_KEY, undefined)
+      detections.invalidate(instanceId)
+      catalogs.invalidate(instanceId)
+      return instance
+    },
+    invalidate(instanceId) {
+      catalogs.invalidate(instanceId)
+      detections.invalidate(instanceId)
+    },
+  }
+
+  /** 一个 agent 的实例；agent 不在已注册列表里时也按默认实例返回一份。 */
+  function listInstancesOf(agentId: string): ResolvedInstance[] {
+    const displayName = drivers.get(agentId)?.displayName ?? agentId
+    return listStoredInstances(store(), agentId, displayName)
+  }
+
+  /** 按 instanceId 找实例：默认实例的 id 就是某个已注册 agent 的 id。 */
+  function findInstanceWith(instanceId: string): ResolvedInstance | null {
+    const stored = readStoredInstances(store())[instanceId]
+    if (stored) return instanceFor(stored.agentId, instanceId)
+    if (drivers.has(instanceId)) return instanceFor(instanceId)
+    return null
   }
 }

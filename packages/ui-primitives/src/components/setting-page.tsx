@@ -1,21 +1,25 @@
 // 设置类页面的通用外框（设置、Agent、插件管理共用）：标题栏、内容列、分组与设置行。
 import type { ReactNode } from "react"
+import { cn } from "./cn"
 import { ListRow } from "./list-row"
 
-/** 设置页容器：标题加居中内容列。 */
+/** 设置页容器：标题加居中内容列；两栏的页面（Agent）用 wide。 */
 export function SettingPage({
   title,
   sub,
   actions,
+  width = "narrow",
   children,
 }: {
   title: string
   sub?: string | undefined
   actions?: ReactNode | undefined
+  /** narrow 是单列设置页的宽度；wide 给两栏的页面，并按页面宽度响应式换行。 */
+  width?: "narrow" | "wide" | undefined
   children: ReactNode
 }) {
   return (
-    <div className="page narrow settings-page">
+    <div className={cn("page", width === "wide" ? "wide" : "narrow", "settings-page")}>
       <header className="page-head">
         <div>
           <h1>{title}</h1>

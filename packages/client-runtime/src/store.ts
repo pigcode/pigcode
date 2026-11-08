@@ -126,6 +126,7 @@ function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
     title?: unknown
     permissionMode?: unknown
     agentId?: unknown
+    instanceId?: unknown
     modelId?: unknown
   }
   const patch: Partial<Thread> = {}
@@ -135,6 +136,11 @@ function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
   }
   if (typeof value.agentId === "string" && value.agentId.length > 0) {
     patch.lastAgentId = value.agentId
+    // 旧事件没有 instanceId：按 Agent 的默认实例处理。
+    patch.lastInstanceId =
+      typeof value.instanceId === "string" && value.instanceId.length > 0
+        ? value.instanceId
+        : value.agentId
     patch.lastModelId = typeof value.modelId === "string" ? value.modelId : null
   }
   return Object.keys(patch).length > 0 ? patch : null

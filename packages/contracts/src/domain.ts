@@ -66,7 +66,11 @@ export const threadSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().min(1),
   defaultAgentId: z.string().min(1),
+  /** 创建时选定的 Agent 实例；旧数据没有这个字段时为 null，按 Agent id 当作默认实例。 */
+  defaultInstanceId: z.string().min(1).nullable().default(null),
   lastAgentId: z.string().nullable(),
+  /** 最近一次切换选定的实例；null 时沿用默认实例。 */
+  lastInstanceId: z.string().min(1).nullable().default(null),
   lastModelId: z.string().nullable(),
   permissionMode: permissionModeSchema,
   createdAt: z.string().datetime(),
@@ -129,6 +133,8 @@ export const agentSessionSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
   agentId: z.string().min(1),
+  /** 启动这个会话的 Agent 实例；旧数据没有时为 null，按 agentId 当作默认实例。 */
+  instanceId: z.string().min(1).nullable().default(null),
   nativeSessionId: z.string().nullable(),
   cwd: z.string().min(1),
   status: z.enum(["active", "stopped", "orphaned"]),

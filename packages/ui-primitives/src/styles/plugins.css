@@ -294,6 +294,37 @@
   border-radius: var(--r-lg);
   background: var(--field);
 }
+/* 插件的包名、权限、提供的服务这类只读信息：左边名称、右边值 */
+.ext-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  font-size: var(--fs-sm);
+}
+.ext-facts dt {
+  color: var(--muted);
+}
+.ext-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+.ext-facts .mono {
+  font-size: var(--fs-sm);
+}
+/* 插件加载失败、扩展点冲突的说明 */
+.ext-error {
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
 /* 内置插件没有底部按钮，正文就是最后一块，自己留出底边 */
 .plugin-dialog .plugin-dialog-body:last-child {
   padding-bottom: var(--space-8);

@@ -42,7 +42,9 @@ const thread = {
   projectId: "p1",
   title: "First thread",
   defaultAgentId: "fake",
+  defaultInstanceId: null,
   lastAgentId: null,
+  lastInstanceId: null,
   lastModelId: null,
   permissionMode: "workspace-write" as const,
   createdAt: "2026-10-20T00:00:00.000Z",
@@ -241,8 +243,8 @@ describe("ChatView", () => {
           features={featuresWith({})}
           events={[]}
           agents={[
-            { id: "codex", label: "Codex" },
-            { id: "claude", label: "Claude Code" },
+            { id: "codex", agentId: "codex", label: "Codex" },
+            { id: "claude", agentId: "claude", label: "Claude Code" },
           ]}
           catalog={{
             codex: [{ id: "gpt-5", label: "GPT-5", isDefault: true, efforts: [] }],
@@ -257,7 +259,11 @@ describe("ChatView", () => {
     await userEvent.click(chip)
     await userEvent.click(await screen.findByRole("tab", { name: "Claude Code" }))
     await userEvent.click(await screen.findByText("Opus"))
-    expect(onSelectModel).toHaveBeenCalledWith("claude", "opus")
+    expect(onSelectModel).toHaveBeenCalledWith({
+      instanceId: "claude",
+      agentId: "claude",
+      modelId: "opus",
+    })
   })
 
   /** plan 为 false 时 composer 的权限菜单里不能出现计划模式。 */

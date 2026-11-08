@@ -12,6 +12,7 @@ import {
   resolveModel,
   type ComposerAgent,
   type ComposerModelCatalog,
+  type ComposerModelChoice,
   type PermissionMode,
   type ReasoningEffort,
 } from "./composer-options"
@@ -63,14 +64,15 @@ export interface ComposerProps {
   menuSide?: "top" | "bottom"
   /** 覆盖默认的 locale 占位文案。 */
   placeholder?: string
-  /** 可选的 agent 与当前选择；agents 为空时不显示模型胶囊。 */
+  /** 可选的 Agent 实例与当前选择；agents 为空时不显示模型胶囊。 */
   agents?: readonly ComposerAgent[]
+  /** 当前选中的实例 id；默认实例等于 agent id。 */
   agentId?: string | null
   modelId?: string | null
-  /** 各 agent 的模型目录；选择器展开到某个 agent 时调用 onLoadModels 懒加载。 */
+  /** 各实例的模型目录；选择器展开到某个实例时调用 onLoadModels 懒加载。 */
   catalog?: ComposerModelCatalog
-  onLoadModels?: (agentId: string) => void
-  onSelectModel?: (agentId: string, modelId: string) => void
+  onLoadModels?: (instanceId: string) => void
+  onSelectModel?: (choice: ComposerModelChoice) => void
   permissionMode?: PermissionMode
   onPermissionMode?: (mode: PermissionMode) => void
   /** agent 不支持计划模式时隐藏该权限选项。 */
@@ -439,8 +441,8 @@ export function Composer({
           modelId={modelId}
           catalog={catalog}
           onLoadModels={onLoadModels}
-          onSelectModel={(agent, model) => {
-            onSelectModel?.(agent, model)
+          onSelectModel={(choice) => {
+            onSelectModel?.(choice)
             editor?.commands.focus()
           }}
           locked={running || !onSelectModel}

@@ -5,7 +5,8 @@ import { Button, SettingRow, useLocale, type MessageKey } from "@pigcode/ui-prim
 
 /** 抽屉需要的会话环境数据。 */
 export interface EnvironmentInfo {
-  agentId: string
+  /** 当前会话用的 Agent 实例的显示名；默认实例就是 Agent 的名字。 */
+  agent: string
   cwd: string | undefined
   modelId: string | null
   permissionMode: PermissionMode
@@ -51,7 +52,7 @@ export function EnvironmentDrawer({
         </Button>
       </div>
       <div className="group">
-        <EnvironmentItem label={t("chat.environment.agent")} value={info.agentId} />
+        <EnvironmentItem label={t("chat.environment.agent")} value={info.agent} />
         <EnvironmentItem
           label={t("chat.environment.cwd")}
           value={info.cwd ?? t("chat.environment.unknown")}

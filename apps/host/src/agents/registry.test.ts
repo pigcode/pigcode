@@ -228,9 +228,15 @@ describe("agents.startRun", () => {
     const { ctx } = await setup()
     try {
       // Claude Code 由插件注册；插件没加载时强制指定不生效，回到 fake。
-      await expect(ctx.agents.defaultAgent()).resolves.toBe("fake")
+      await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+        agentId: "fake",
+        instanceId: "fake",
+      })
       ctx.agents.register({ ...blockingDriver().driver, id: "claude", displayName: "Claude" })
-      await expect(ctx.agents.defaultAgent()).resolves.toBe("claude")
+      await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+        agentId: "claude",
+        instanceId: "claude",
+      })
     } finally {
       delete process.env.PIGCODE_AGENT
       await ctx.fiber.dispose()
@@ -257,7 +263,10 @@ describe("agents.startRun", () => {
     })
     process.env.PIGCODE_AGENT = "echo"
     try {
-      await expect(ctx.agents.defaultAgent()).resolves.toBe("echo")
+      await expect(ctx.agents.defaultAgent()).resolves.toEqual({
+        agentId: "echo",
+        instanceId: "echo",
+      })
     } finally {
       delete process.env.PIGCODE_AGENT
       await ctx.fiber.dispose()

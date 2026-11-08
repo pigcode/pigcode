@@ -30,9 +30,11 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
     if (!contribution || listed.has(contribution.id)) continue
     listed.add(contribution.id)
     const driver = registered.get(contribution.id)
+    const displayName = driver?.displayName ?? manifest.pigcode.displayName ?? manifest.name
+    const values = ctx.agents.getSettings(contribution.id)
     agents.push({
       agentId: contribution.id,
-      displayName: driver?.displayName ?? manifest.pigcode.displayName ?? manifest.name,
+      displayName,
       pluginId: record.id,
       version: manifest.version,
       builtin: record.builtin,
@@ -44,12 +46,14 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       installHint: contribution.installHint ?? null,
       fields: contribution.settings,
       customModels: contribution.customModels,
-      values: ctx.agents.getSettings(contribution.id),
+      values,
       error: errors.get(record.id) ?? null,
+      instances: ctx.agents.listInstances(contribution.id),
     })
   }
   for (const driver of registered.values()) {
     if (listed.has(driver.id)) continue
+    const values = ctx.agents.getSettings(driver.id)
     agents.push({
       agentId: driver.id,
       displayName: driver.displayName,
@@ -64,11 +68,16 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       installHint: null,
       fields: [],
       customModels: true,
-      values: ctx.agents.getSettings(driver.id),
+      values,
       error: null,
+      instances: ctx.agents.listInstances(driver.id),
     })
   }
-  return { agents, defaultAgentId: ctx.agents.configuredDefaultAgent() }
+  return {
+    agents,
+    defaultAgentId: ctx.agents.configuredDefaultAgent(),
+    defaultInstanceId: ctx.agents.configuredDefaultInstance(),
+  }
 }
 
 /**

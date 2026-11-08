@@ -15,7 +15,8 @@ import type {
   ReasoningEffort,
 } from "@pigcode/contracts"
 import { buildSubagentBrief } from "../agents/switching"
-import { listAgents, uninstallPluginAndClearDefault, validateAgentSettings } from "./agents"
+import { uninstallPluginAndClearDefault } from "./agents"
+import { dispatchAgentCommand } from "./agent-commands"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
 function errorCode(error: unknown): string {
@@ -145,6 +146,7 @@ export class RpcServer {
           projectId: string
           title: string
           agentId: string
+          instanceId?: string
           parentThreadId?: string
           modelId?: string
           permissionMode?: PermissionMode
@@ -154,7 +156,11 @@ export class RpcServer {
           value.title,
           value.agentId,
           value.parentThreadId,
-          { modelId: value.modelId, permissionMode: value.permissionMode },
+          {
+            instanceId: value.instanceId,
+            modelId: value.modelId,
+            permissionMode: value.permissionMode,
+          },
         )
         const now = new Date().toISOString()
         this.ctx.sessions.append({
@@ -210,8 +216,18 @@ export class RpcServer {
         return { ok: true }
       }
       case "thread.switchAgent": {
-        const value = parsed as { threadId: string; agentId: string; modelId?: string | null }
-        return this.ctx.agents.switchAgent(value.threadId, value.agentId, value.modelId ?? null)
+        const value = parsed as {
+          threadId: string
+          agentId: string
+          instanceId?: string | null
+          modelId?: string | null
+        }
+        return this.ctx.agents.switchAgent(
+          value.threadId,
+          value.agentId,
+          value.modelId ?? null,
+          value.instanceId ?? null,
+        )
       }
       case "thread.setPermissionMode": {
         const value = parsed as { threadId: string; permissionMode: PermissionMode }
@@ -228,7 +244,12 @@ export class RpcServer {
         return thread
       }
       case "run.start": {
-        const value = parsed as { threadId: string; text: string; effort?: ReasoningEffort }
+        const value = parsed as {
+          threadId: string
+          text: string
+          effort?: ReasoningEffort
+          instanceId?: string
+        }
         const { runId } = await this.ctx.agents.startRun(
           value.threadId,
           value.text,
@@ -239,7 +260,10 @@ export class RpcServer {
               params: { threadId: value.threadId, event },
             })
           },
-          value.effort ? { effort: value.effort } : {},
+          {
+            ...(value.effort ? { effort: value.effort } : {}),
+            ...(value.instanceId ? { instanceId: value.instanceId } : {}),
+          },
         )
         return { runId }
       }
@@ -274,32 +298,17 @@ export class RpcServer {
         this.ctx.agents.answerQuestion(value.threadId, value.runId, value.requestId, value.answers)
         return { ok: true }
       }
-      case "agent.detect": {
-        const value = parsed as { agentId?: string; refresh?: boolean }
-        return this.ctx.agents.detect({ agentId: value.agentId, refresh: value.refresh })
-      }
+      case "agent.detect":
       case "agent.registered":
-        return this.ctx.agents.list()
       case "agent.default":
-        return { id: await this.ctx.agents.defaultAgent() }
       case "agent.models":
-        return this.ctx.agents.models((parsed as { agentId: string }).agentId)
       case "agent.list":
-        return listAgents(this.ctx)
-      case "agent.updateSettings": {
-        const value = parsed as { agentId: string; values: Record<string, unknown> }
-        const agent = (await listAgents(this.ctx)).agents.find(
-          (item) => item.agentId === value.agentId,
-        )
-        if (!agent) throw new Error(`agent not found: ${value.agentId}`)
-        validateAgentSettings(agent, value.values)
-        return { values: this.ctx.agents.updateSettings(value.agentId, value.values) }
-      }
-      case "agent.setDefault": {
-        const value = parsed as { agentId: string | null }
-        this.ctx.agents.setDefaultAgent(value.agentId)
-        return { defaultAgentId: value.agentId }
-      }
+      case "agent.updateSettings":
+      case "agent.createInstance":
+      case "agent.updateInstance":
+      case "agent.removeInstance":
+      case "agent.setDefault":
+        return dispatchAgentCommand(this.ctx, command, parsed)
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.install":

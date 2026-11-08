@@ -147,6 +147,13 @@ const MIGRATIONS: Migration[] = [
 
   CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, triggered_at);
   `,
+  `
+  -- Agent 实例：线程与会话记下自己是哪个实例（agent 的一套独立配置）跑的。
+  -- 旧数据没有值时按 agent_id 当作默认实例。
+  ALTER TABLE threads ADD COLUMN default_instance_id TEXT;
+  ALTER TABLE threads ADD COLUMN last_instance_id TEXT;
+  ALTER TABLE agent_sessions ADD COLUMN instance_id TEXT;
+  `,
 ]
 
 /** 最新的 schema 版本，也就是迁移的个数。 */

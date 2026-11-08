@@ -3,7 +3,7 @@
  * 这个模块在第一次打开设置页时才加载，登记信息在 builtin-settings-pages。
  */
 import { useCallback, useContext, useEffect, useState } from "react"
-import type { AgentList, AgentStatus } from "@pigcode/contracts"
+import type { AgentInstance, AgentList, AgentStatus } from "@pigcode/contracts"
 import { AgentsPage, AppearancePage } from "@pigcode/ui-settings"
 import type { CoreDeps } from "./app"
 import { refreshAgentViews } from "./agent-context"
@@ -16,9 +16,13 @@ export function AppearanceContainer() {
   return <AppearancePage appearance={useContext(AppearanceContext) ?? undefined} />
 }
 
-/** Agent 页容器：列表与设置来自 agent.list，状态来自只读检测；改动后刷新输入框里的 agent。 */
+/** Agent 页容器：列表与设置来自 agent.list，状态来自只读检测；改动后刷新输入框里的实例。 */
 export function AgentsContainer({ deps }: { deps: CoreDeps }) {
-  const [list, setList] = useState<AgentList>({ agents: [], defaultAgentId: null })
+  const [list, setList] = useState<AgentList>({
+    agents: [],
+    defaultAgentId: null,
+    defaultInstanceId: null,
+  })
   const [statuses, setStatuses] = useState<Record<string, AgentStatus>>({})
   const [detecting, setDetecting] = useState(false)
   const { connection } = deps
@@ -28,14 +32,16 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   }, [connection])
 
   const detect = useCallback(
-    async (options: { agentId?: string; refresh?: boolean } = {}): Promise<void> => {
+    async (options: { agentId?: string; instanceId?: string; refresh?: boolean } = {}) => {
       setDetecting(true)
       try {
         const result = (await connection.call("agent.detect", options)) as Record<
           string,
           AgentStatus
         >
-        setStatuses((current) => (options.agentId ? { ...current, ...result } : result))
+        setStatuses((current) =>
+          options.agentId || options.instanceId ? { ...current, ...result } : result,
+        )
       } finally {
         setDetecting(false)
       }
@@ -57,10 +63,20 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     await Promise.all([detect(), refreshAgentViews(deps), deps.plugins.reload()])
   }
 
+  /** 改完一个实例：刷新列表、重新检测它，并让输入框重读模型目录（可执行文件或账号可能换了）。 */
+  async function afterInstanceChange(instanceId: string, agentId?: string): Promise<void> {
+    await refresh()
+    await Promise.all([
+      detect({ ...(agentId ? { agentId } : {}), instanceId, refresh: true }),
+      refreshAgentViews(deps),
+    ])
+  }
+
   return (
     <AgentsPage
       agents={list.agents}
       defaultAgentId={list.defaultAgentId}
+      defaultInstanceId={list.defaultInstanceId}
       statuses={statuses}
       detecting={detecting}
       onDetect={() => detect({ refresh: true })}
@@ -69,18 +85,42 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         await connection.call(enabled ? "plugin.enable" : "plugin.disable", { id: agent.pluginId })
         await afterPluginChange()
       }}
-      onSaveSettings={async (agent, values) => {
-        await connection.call("agent.updateSettings", { agentId: agent.agentId, values })
-        await refresh()
-        // 新设置可能换了可执行文件或配置目录：重新检测这个 agent，并让输入框重读模型目录。
-        await Promise.all([
-          detect({ agentId: agent.agentId, refresh: true }),
-          refreshAgentViews(deps),
-        ])
+      onSaveSettings={async (agent, instance, values) => {
+        await connection.call("agent.updateSettings", {
+          agentId: agent.agentId,
+          instanceId: instance.instanceId,
+          values,
+        })
+        await afterInstanceChange(instance.instanceId, agent.agentId)
       }}
-      onSetDefault={async (agentId) => {
-        await connection.call("agent.setDefault", { agentId })
+      onSetDefault={async (instanceId) => {
+        await connection.call("agent.setDefault", {
+          agentId: instanceId
+            ? (list.agents.find((agent) =>
+                agent.instances.some((item) => item.instanceId === instanceId),
+              )?.agentId ?? instanceId)
+            : null,
+          instanceId,
+        })
         await refresh()
+      }}
+      onCreateInstance={async (agent, label, copyFrom) => {
+        const created = (await connection.call("agent.createInstance", {
+          agentId: agent.agentId,
+          label,
+          ...(copyFrom ? { copyFrom } : {}),
+        })) as AgentInstance
+        await afterInstanceChange(created.instanceId, agent.agentId)
+        return created.instanceId
+      }}
+      onUpdateInstance={async (agent, instanceId, patch) => {
+        await connection.call("agent.updateInstance", { instanceId, patch })
+        await afterInstanceChange(instanceId, agent.agentId)
+      }}
+      onRemoveInstance={async (agent, instanceId) => {
+        await connection.call("agent.removeInstance", { instanceId })
+        await refresh()
+        await refreshAgentViews(deps)
       }}
       onInstall={async (spec) => {
         await connection.call("plugin.install", { spec })

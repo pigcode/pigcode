@@ -20,6 +20,7 @@ import {
   type ComposerAgent,
   type ComposerCommand,
   type ComposerModelCatalog,
+  type ComposerModelChoice,
   type ComposerProps,
   type ComposerSubmitOptions,
   type PermissionMode,
@@ -69,13 +70,13 @@ export interface ChatViewProps {
   onApproval?: (requestId: string, decision: ApprovalDecision) => void
   /** 当前 agent 的 Agent 功能；未提供时按全部可用处理，保持旧行为。 */
   features?: AgentFeatures | null
-  /** 可选的 agent；输入框的模型选择器按 agent 分组列出各自的模型。 */
+  /** 可选的 Agent 实例；输入框的模型选择器按实例分组列出各自的模型。 */
   agents?: readonly ComposerAgent[]
-  /** 各 agent 的模型目录；选择器展开到某个 agent 时通过 onLoadModels 懒加载。 */
+  /** 各实例的模型目录；选择器展开到某个实例时通过 onLoadModels 懒加载。 */
   catalog?: ComposerModelCatalog
-  onLoadModels?: (agentId: string) => void
-  /** 切换 agent 与模型；容器应调用 thread.switchAgent。 */
-  onSelectModel?: (agentId: string, modelId: string) => void
+  onLoadModels?: (instanceId: string) => void
+  /** 切换 Agent 实例与模型；容器应调用 thread.switchAgent。 */
+  onSelectModel?: (choice: ComposerModelChoice) => void
   /** 修改线程权限模式；容器应调用 thread.setPermissionMode。 */
   onPermissionMode?: (mode: PermissionMode) => void
   /** @ 引用时可选的项目文件。 */
@@ -187,14 +188,25 @@ export function ChatView({
     () => buildTimeline(visibleEvents, streaming),
     [visibleEvents, streaming],
   )
-  const agentId = thread?.lastAgentId ?? thread?.defaultAgentId ?? null
+  const instanceId =
+    thread?.lastInstanceId ??
+    thread?.lastAgentId ??
+    thread?.defaultInstanceId ??
+    thread?.defaultAgentId ??
+    null
   const modelId = thread?.lastModelId ?? null
+  /** 按实例 id 找名字；只记得 Agent 时按 Agent 的名字显示。 */
   const agentName = useCallback(
-    (agentId: string) => agents.find((agent) => agent.id === agentId)?.label ?? agentId,
+    (id: string) => {
+      const exact = agents.find((agent) => agent.id === id)
+      if (exact) return exact.label
+      return agents.find((agent) => agent.agentId === id)?.label ?? id
+    },
     [agents],
   )
   const environment: EnvironmentInfo = {
-    agentId: agentId ?? t("chat.environment.unknown"),
+    // 抽屉显示实例名：默认实例用的是 Agent 的名字，用户新建的实例是自己的名字。
+    agent: instanceId ? agentName(instanceId) : t("chat.environment.unknown"),
     cwd,
     modelId,
     permissionMode: thread?.permissionMode ?? "workspace-write",
@@ -250,7 +262,7 @@ export function ChatView({
     disabled: !thread,
     draftKey: thread?.id ?? null,
     agents,
-    agentId,
+    agentId: instanceId,
     modelId,
     catalog,
     ...(onLoadModels ? { onLoadModels } : {}),

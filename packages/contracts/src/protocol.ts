@@ -28,6 +28,8 @@ export const HOST_ERROR_CODES = [
   "GH_NOT_AVAILABLE",
   "GH_NOT_AUTHENTICATED",
   "GIT_NO_REMOTE",
+  /** 删除还有会话在用的 Agent 实例。 */
+  "AGENT_INSTANCE_IN_USE",
 ] as const
 
 /** 有专门说明的 Host 错误码。 */

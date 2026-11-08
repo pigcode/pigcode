@@ -1,6 +1,6 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
-import { agentSettingsValuesSchema } from "./agents"
+import { agentInstancePatchSchema, agentSettingsValuesSchema } from "./agents"
 import { permissionModeSchema, reasoningEffortSchema, scheduleRuleSchema } from "./domain"
 
 /** 定时任务的标题：可以留空。 */
@@ -8,21 +8,26 @@ const scheduleTitle = z.string().trim().max(120)
 /** 结束日期；null 表示永不结束。 */
 const scheduleEndsAt = z.string().datetime().nullable()
 
-/** 只读检测；refresh 跳过缓存重新运行，agentId 只检测这一个 agent。 */
+/** 只读检测；refresh 跳过缓存重新运行，agentId 只检测这个 agent，instanceId 只检测这个实例。 */
 const agentDetectParams = z.object({
   agentId: z.string().min(1).optional(),
+  instanceId: z.string().min(1).optional(),
   refresh: z.boolean().optional(),
 })
 /** `agent.registered` 不带参数，返回已注册 driver 的 agent：id、名字与 Agent 功能。 */
 const agentRegisteredParams = z.object({})
-/** `agent.default` 不带参数，返回新会话默认使用的 agent `{ id }`；没有可用的 agent 时 id 为 null。 */
+/** `agent.default` 不带参数，返回新会话默认使用的 agent `{ id, instanceId }`；没有可用的 agent 时 id 为 null。 */
 const agentDefaultParams = z.object({})
-/** 一个 agent 的模型目录，含用户添加的自定义模型。 */
-const agentModelsParams = z.object({ agentId: z.string().min(1) })
-/** 换 Agent 或模型；返回 `{ agentId, modelId, handoff, forkFromNativeSessionId }`。 */
+/** 一个 agent 实例的模型目录，含用户添加的自定义模型；只给 instanceId 时由 Host 找出它的 agent。 */
+const agentModelsParams = z.object({
+  agentId: z.string().min(1).optional(),
+  instanceId: z.string().min(1).optional(),
+})
+/** 换 Agent 或模型；返回 `{ agentId, instanceId, modelId, handoff, forkFromNativeSessionId }`。 */
 const threadSwitchAgentParams = z.object({
   threadId: z.string().min(1),
   agentId: z.string().min(1),
+  instanceId: z.string().min(1).nullish(),
   modelId: z.string().min(1).nullish(),
 })
 
@@ -46,6 +51,8 @@ export const commandSchemas = {
     projectId: z.string().min(1),
     title: z.string().min(1).default("New thread"),
     agentId: z.string().min(1).default("fake"),
+    /** 用这个 Agent 的哪个实例；缺省时用默认实例。 */
+    instanceId: z.string().min(1).optional(),
     /** 在这个主会话下添加子代理；子代理继承主会话的项目、工作目录与最近的对话摘要。 */
     parentThreadId: z.string().min(1).optional(),
     /** 新会话草稿里选好的模型；缺省用 agent 的默认模型。 */
@@ -89,15 +96,33 @@ export const commandSchemas = {
   "agent.registered": agentRegisteredParams,
   "agent.default": agentDefaultParams,
   "agent.models": agentModelsParams,
-  /** 设置页的 agent 列表：插件、Agent 功能、设置字段与当前值。 */
+  /** 设置页的 agent 列表：插件、Agent 功能、设置字段、实例与当前值。 */
   "agent.list": z.object({}),
-  /** 整体替换一个 agent 的设置值；对之后新建的会话、检测与模型目录生效。 */
+  /** 整体替换一个实例的设置值；对之后新建的会话、检测与模型目录生效。instanceId 缺省时写默认实例。 */
   "agent.updateSettings": z.object({
     agentId: z.string().min(1),
+    instanceId: z.string().min(1).optional(),
     values: agentSettingsValuesSchema,
   }),
+  /** 给一个 Agent 新建实例：从默认实例复制设置作为初值，返回新实例。 */
+  "agent.createInstance": z.object({
+    agentId: z.string().min(1),
+    label: z.string().trim().min(1).max(120),
+    /** 复制哪个实例的设置；缺省时复制默认实例。 */
+    copyFrom: z.string().min(1).optional(),
+  }),
+  /** 改实例的名称、启用状态或设置；没给的项不变。 */
+  "agent.updateInstance": z.object({
+    instanceId: z.string().min(1),
+    patch: agentInstancePatchSchema,
+  }),
+  /** 删除实例；默认实例不能删，用到它的会话退回默认实例。 */
+  "agent.removeInstance": z.object({ instanceId: z.string().min(1) }),
   /** 新会话默认使用的 agent；null 表示自动挑选第一个可用的。返回 `{ defaultAgentId }`。 */
-  "agent.setDefault": z.object({ agentId: z.string().min(1).nullable() }),
+  "agent.setDefault": z.object({
+    agentId: z.string().min(1).nullable(),
+    instanceId: z.string().min(1).nullable().optional(),
+  }),
   "thread.subscribe": z.object({
     threadId: z.string().min(1),
     cursor: z.number().int().nonnegative().default(0),

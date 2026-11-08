@@ -64,8 +64,11 @@ function TabTitle({ text, main }: { text: string; main: boolean }) {
 function TabMark({ tab, agents }: { tab: ThreadTab; agents: readonly ComposerAgent[] }) {
   if (tab.kind === "spawned") return <Bot className="ic ic-sm thread-tab-icon" aria-hidden="true" />
   if (tab.kind !== "agent" || !tab.agentId) return null
-  const name = agents.find((item) => item.id === tab.agentId)?.label ?? tab.agentId
-  return <EntityAvatar id={tab.agentId} name={name} size="sm" />
+  // 子代理记的是实例 id；只记了 Agent 时按 Agent 找它的默认实例。
+  const item =
+    agents.find((entry) => entry.id === tab.agentId) ??
+    agents.find((entry) => entry.agentId === tab.agentId)
+  return <EntityAvatar id={tab.agentId} name={item?.label ?? tab.agentId} size="sm" />
 }
 
 /** 渲染标签栏；左右方向键在标签间移动。 */

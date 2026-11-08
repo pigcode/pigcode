@@ -21,6 +21,7 @@ import {
   type ComposerAgent,
   type ComposerCommand,
   type ComposerModelCatalog,
+  type ComposerModelChoice,
   type ComposerSubmitOptions,
   type PermissionMode,
 } from "@pigcode/ui-composer"
@@ -44,10 +45,12 @@ export interface NewThreadViewProps {
   draftKey: string
   agents?: readonly ComposerAgent[]
   catalog?: ComposerModelCatalog
-  onLoadModels?: (agentId: string) => void
+  onLoadModels?: (instanceId: string) => void
+  /** 当前选中的实例 id；默认实例等于 agent id。 */
   agentId: string | null
   modelId: string | null
-  onSelectModel: (agentId: string, modelId: string) => void
+  /** 选中某个实例的模型；容器据此记下草稿的实例与模型。 */
+  onSelectModel: (choice: ComposerModelChoice) => void
   permissionMode: PermissionMode
   onPermissionMode: (mode: PermissionMode) => void
   canPlan?: boolean

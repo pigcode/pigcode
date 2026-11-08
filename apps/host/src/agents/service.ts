@@ -3,6 +3,7 @@ import type {
   PendingRequest,
   AgentFeatures,
   AgentEvent,
+  AgentInstance,
   AgentModel,
   AgentSession,
   AgentSettingsValues,
@@ -10,7 +11,7 @@ import type {
   ReasoningEffort,
   RunStatus,
 } from "@pigcode/contracts"
-import type { DetectOptions } from "./agent-catalog"
+import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
 import type { ApprovalDecision, ApprovalRequest, AgentDriver } from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
@@ -25,6 +26,8 @@ export interface StartRunResult {
 /** run 的可选参数；effort 只作用于本次 run。 */
 export interface StartRunOptions {
   effort?: ReasoningEffort
+  /** 本次 run 用的实例；缺省时沿用线程最近的实例。 */
+  instanceId?: string
 }
 
 /** 一次审批请求的句柄；decision 在 UI 决议后 resolve。 */
@@ -40,21 +43,47 @@ export interface AgentsService {
   unregister(driverId: string): void
   /** 已注册的 Agent 与它们的 Agent 功能。 */
   list(): Array<{ id: string; displayName: string; features: AgentFeatures }>
-  /** 只读检测已注册 agent：是否安装、版本与登录状态；结果短时缓存，refresh 时重新检测。 */
+  /** 只读检测：是否安装、版本与登录状态；结果短时缓存，refresh 时重新检测。 */
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
-  /** 读取 Agent 的模型目录（含用户添加的自定义模型）；Agent 自己的目录按 Agent 缓存。 */
-  models(agentId: string): Promise<AgentModel[]>
-  /** 新会话的默认 agent：强制指定 > 用户选择 > 第一个可用的；没有任何 agent 时为 null。 */
-  defaultAgent(): Promise<string | null>
+  /** 读取实例的模型目录（含用户添加的自定义模型）；Agent 自己的目录按实例缓存。 */
+  models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
+  /** 新会话的默认 agent 与实例：强制指定 > 用户选择 > 第一个可用的。 */
+  defaultAgent(): Promise<DefaultAgentChoice>
   /** 用户在设置页选择的默认 agent；没选时为 null。 */
   configuredDefaultAgent(): string | null
-  setDefaultAgent(agentId: string | null): void
-  /** agent 当前的设置值。 */
-  getSettings(agentId: string): AgentSettingsValues
-  /** 整体替换 agent 的设置值，返回规范化后保存的值；对之后的检测、模型目录与新会话生效。 */
-  updateSettings(agentId: string, values: Record<string, unknown>): AgentSettingsValues
-  /** 切换线程的 Agent/model；同一个 Agent 写 fork 源，换 Agent 时写 handoff。 */
-  switchAgent(threadId: string, agentId: string, modelId?: string | null): Promise<Switch>
+  /** 用户在设置页选择的默认实例；没选时为 null。 */
+  configuredDefaultInstance(): string | null
+  setDefaultAgent(agentId: string | null, instanceId?: string | null): void
+  /** 实例当前的设置值。 */
+  getSettings(agentId: string, instanceId?: string | null): AgentSettingsValues
+  /** 整体替换实例的设置值，返回规范化后保存的值；对之后的检测、模型目录与新会话生效。 */
+  updateSettings(
+    agentId: string,
+    values: Record<string, unknown>,
+    instanceId?: string | null,
+  ): AgentSettingsValues
+  /** 一个 Agent 的全部实例，默认实例在前。 */
+  listInstances(agentId: string): AgentInstance[]
+  /** 按 instanceId 找实例；找不到时为 null。 */
+  findInstance(instanceId: string): AgentInstance | null
+  createInstance(agentId: string, label: string, copyFrom?: string | null): AgentInstance
+  updateInstance(
+    instanceId: string,
+    patch: {
+      label?: string | undefined
+      enabled?: boolean | undefined
+      values?: Record<string, unknown> | undefined
+    },
+  ): AgentInstance
+  /** 删除实例；默认实例与正被线程使用的实例不能删。 */
+  removeInstance(instanceId: string): void
+  /** 切换线程的 Agent/实例/model；同一个 Agent 写 fork 源，换 Agent 时写 handoff。 */
+  switchAgent(
+    threadId: string,
+    agentId: string,
+    modelId?: string | null,
+    instanceId?: string | null,
+  ): Promise<Switch>
   startRun(
     threadId: string,
     text: string,

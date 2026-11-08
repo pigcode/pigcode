@@ -13,14 +13,18 @@ import { pickAgentId } from "./agent-context"
 /** 草稿输入框的键：草稿的文字和附件按它记在输入框的记忆里。 */
 export const NEW_THREAD_DRAFT_KEY = "new-thread"
 
-/** 草稿里选好的 agent、模型与权限；agentId 为 null 时用默认 agent 和它的默认模型。 */
+/** 草稿里选好的 Agent 实例、模型与权限；instanceId 为 null 时用默认实例和它的默认模型。 */
 export interface DraftOptions {
+  /** Agent 实例 id；默认实例等于 agent id。 */
+  instanceId: string | null
+  /** 实例所属的 Agent（driver id）；随实例一起记下，建会话时一起交给 Host。 */
   agentId: string | null
   modelId: string | null
   permissionMode: PermissionMode
 }
 
 const DEFAULT_OPTIONS: DraftOptions = {
+  instanceId: null,
   agentId: null,
   modelId: null,
   permissionMode: "workspace-write",
@@ -77,11 +81,13 @@ export async function materializeDraft(
   const chosen = draftOptions()
   const agentId = chosen.agentId ?? (await pickAgentId(connection))
   if (!agentId) throw new Error(translate(locale, "app.noAgent"))
+  const instanceId = chosen.instanceId ?? agentId
   const thread = (await connection.call("thread.create", {
     projectId,
     title: translate(locale, "thread.defaultTitle"),
     agentId,
-    ...(chosen.agentId && chosen.modelId ? { modelId: chosen.modelId } : {}),
+    instanceId,
+    ...(chosen.modelId ? { modelId: chosen.modelId } : {}),
     ...(chosen.permissionMode !== DEFAULT_OPTIONS.permissionMode
       ? { permissionMode: chosen.permissionMode }
       : {}),

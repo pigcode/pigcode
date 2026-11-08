@@ -94,6 +94,30 @@ export const agentContributionSchema = z
 /** agent 的设置值：键为字段 key，另加 Host 处理的 customModels。 */
 export const agentSettingsValuesSchema = z.record(z.string(), z.unknown())
 
+/**
+ * Agent 实例：同一个 Agent 的一套独立配置。用户可以为同一个 Agent 建多个实例，
+ * 各自填不同的可执行文件、环境变量与自定义模型（例如个人号与公司 API）。
+ * `instanceId` 是线程与会话引用的路由键；Agent 自带的默认实例用 Agent id 作为 instanceId。
+ */
+export const agentInstanceSchema = z.object({
+  instanceId: z.string().min(1),
+  /** 提供实现的 Agent（driver id）。 */
+  agentId: z.string().min(1),
+  label: z.string().min(1),
+  enabled: z.boolean(),
+  values: agentSettingsValuesSchema,
+  /** 默认实例：随 Agent 存在，不能删除。 */
+  isDefault: z.boolean(),
+  createdAt: z.string().nullable(),
+})
+
+/** 要保存的实例改动；没给的项保持不变。 */
+export const agentInstancePatchSchema = z.object({
+  label: z.string().trim().min(1).max(120).optional(),
+  enabled: z.boolean().optional(),
+  values: agentSettingsValuesSchema.optional(),
+})
+
 /** 一次只读检测的结果；authenticated 为 null 表示无法判断登录状态。 */
 export const agentStatusSchema = z.object({
   installed: z.boolean(),
@@ -125,15 +149,20 @@ export const agentSummarySchema = z.object({
   installHint: localizedTextSchema.nullable(),
   fields: z.array(agentSettingFieldSchema),
   customModels: z.boolean(),
+  /** 设置页编辑的是默认实例的值；其他实例在 instances 里。 */
   values: agentSettingsValuesSchema,
   error: z.string().nullable(),
+  /** 这个 Agent 的全部实例，默认实例在前；没有实例信息时为空。 */
+  instances: z.array(agentInstanceSchema).default([]),
 })
 
-/** `agent.list` 的返回：全部 agent 与新会话默认使用的 agent。 */
+/** `agent.list` 的返回：全部 agent 与新会话默认使用的 agent 和实例。 */
 export const agentListSchema = z.object({
   agents: z.array(agentSummarySchema),
   /** 用户选择的默认 agent；为 null 时 Host 自动挑选第一个可用的。 */
   defaultAgentId: z.string().nullable(),
+  /** 用户选择的默认实例；为 null 时默认 agent 的默认实例。 */
+  defaultInstanceId: z.string().nullable().default(null),
 })
 
 export type LocalizedText = z.infer<typeof localizedTextSchema>
@@ -145,6 +174,8 @@ export type AgentSettingsValues = z.infer<typeof agentSettingsValuesSchema>
 export type AgentStatus = z.infer<typeof agentStatusSchema>
 export type AgentSummary = z.infer<typeof agentSummarySchema>
 export type AgentList = z.infer<typeof agentListSchema>
+export type AgentInstance = z.infer<typeof agentInstanceSchema>
+export type AgentInstancePatch = z.infer<typeof agentInstancePatchSchema>
 
 /**
  * 按 locale 取文案：完整 locale → 语言前缀 → 英文 → 第一条。
