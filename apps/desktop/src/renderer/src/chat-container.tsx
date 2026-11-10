@@ -250,26 +250,6 @@ export function ChatViewContainer({
       })
   }
 
-  /** 在主会话下添加一个子代理会话，并切到它的标签。 */
-  function addSubagent(instanceId: string): void {
-    if (!main) return
-    const chosen = agents.find((agent) => agent.id === instanceId)
-    const label = chosen?.label ?? instanceId
-    void (async () => {
-      const child = (await deps.connection.call("thread.create", {
-        projectId: main.projectId,
-        title: t("chat.subagent.defaultTitle").replace("{agent}", label),
-        agentId: chosen?.agentId ?? instanceId,
-        instanceId,
-        parentThreadId: main.id,
-      })) as Thread
-      deps.store.update({ threads: [...deps.store.getSnapshot().threads, child] })
-      deps.store.openThread(child.id, { loaded: true })
-      selectThreadTab(main.id, `agent:${child.id}`)
-      await deps.connection.openThread(child.id)
-    })().catch(fail)
-  }
-
   /** 关闭子代理标签：用户添加的归档（还在跑的 run 会停下），派生的只是不再显示。 */
   function closeTab(tabId: string): void {
     if (!mainId) return
@@ -390,7 +370,6 @@ export function ChatViewContainer({
                 onSelect: (tabId: string) => selectThreadTab(main.id, tabId),
                 onClose: closeTab,
                 agents,
-                onAdd: addSubagent,
               },
               onOpenSubagent: (subagentId: string) => openSpawnedTab(main.id, subagentId),
               onBackToMain: () => selectThreadTab(main.id, "main"),

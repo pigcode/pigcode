@@ -309,11 +309,6 @@ export const enUS = {
   "chat.switch.handoff": "context handed off as a summary",
   "chat.tabs.label": "Thread tabs",
   "chat.tabs.close": "Close",
-  "chat.tabs.add": "Add sub-agent",
-  "chat.tabs.addTitle": "Add a sub-agent",
-  "chat.tabs.addHint":
-    "Sub-agents share the main thread's working directory and start with a brief of it.",
-  "chat.subagent.defaultTitle": "{agent} sub-agent",
   "chat.subagent.open": "Open in tab",
   "chat.subagent.empty": "Nothing yet",
   "chat.subagent.stepsHint":

@@ -96,21 +96,6 @@
   background: var(--hover);
   color: var(--fg);
 }
-.icon-btn.thread-tab-add {
-  width: var(--control-bar);
-  height: var(--control-bar);
-  flex: none;
-  border-radius: var(--r-md);
-  color: var(--muted);
-}
-.icon-btn.thread-tab-add:hover,
-.icon-btn.thread-tab-add[data-popup-open] {
-  background: var(--hover);
-  color: var(--fg);
-}
-.thread-tab-menu {
-  min-width: 220px;
-}
 
 /* ─── 派生子代理的只读视图：和主时间线同样的工作区与工具行 ─────── */
 .subagent-view {

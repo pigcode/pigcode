@@ -68,7 +68,6 @@ function renderTabs(overrides: Partial<Parameters<typeof ThreadTabs>[0]> = {}) {
     activeId: "main",
     onSelect: vi.fn(),
     onClose: vi.fn(),
-    onAdd: vi.fn(),
     agents: AGENTS,
     ...overrides,
   }
@@ -86,10 +85,13 @@ describe("ThreadTabs", () => {
     const tabs = screen.getAllByRole("tab")
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "修登录",
-      "COCodex 子代理",
-      "CCClaude 子代理",
+      "Codex 子代理",
+      "Claude 子代理",
       "梳理入口",
     ])
+    // 子代理标签带所用 Agent 的品牌标志：Codex 是 OpenAI，Claude Code 是 Anthropic。
+    expect(tabs[1]?.querySelector(".agent-brand")?.getAttribute("data-brand")).toBe("openai")
+    expect(tabs[2]?.querySelector(".agent-brand")?.getAttribute("data-brand")).toBe("claude")
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true")
     // 主会话标签不显示运行状态，运行状态只在侧栏和时间线里。
     expect(tabs[0]?.querySelector(".dot-matrix")).toBeNull()
@@ -113,15 +115,9 @@ describe("ThreadTabs", () => {
     expect(props.onSelect).toHaveBeenLastCalledWith("spawned:s1")
   })
 
-  it("adds a sub-agent from the + menu; agents that are not installed are disabled", async () => {
-    const props = renderTabs()
-    await userEvent.click(screen.getByRole("button", { name: "添加子代理" }))
-    expect(await screen.findByText("子代理和主会话共用工作目录，并带上主会话的近况。")).toBeTruthy()
-    expect(
-      (await screen.findByRole("menuitem", { name: /Codex/ })).getAttribute("aria-disabled"),
-    ).toBe("true")
-    await userEvent.click(screen.getByRole("menuitem", { name: /Claude Code/ }))
-    expect(props.onAdd).toHaveBeenCalledWith("claude")
+  it("has no way to add a tab: sub-agent tabs come from the task itself", () => {
+    renderTabs()
+    expect(screen.queryByRole("button", { name: /添加/ })).toBeNull()
   })
 })
 

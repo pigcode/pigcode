@@ -1,14 +1,15 @@
 /**
- * 线程头的标签栏：第一个标签是主会话，后面是子代理。子代理有两种：用户从「+」添加的
- * （各自是一个可以对话的会话），以及主 agent 运行中派生的（只读，展示它的过程与结果）。
+ * 线程头的标签栏（参照 Cursor）：第一个标签是主会话，后面是这次任务里的子代理，
+ * 用来打开主 agent 运行中派生的子代理（只读，展示它的过程与结果）。标签栏不能新建标签；
+ * 早先版本由用户添加的子代理会话仍然列出，可以关闭。
  * 子代理标签运行中显示点阵，等待许可时显示一个提示点；主会话标签不显示运行状态。
  */
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from "react"
-import { Bot, Plus, X } from "lucide-react"
+import { Bot, X } from "lucide-react"
 import type { ComposerAgent } from "@pigcode/ui-composer"
-import { EntityAvatar, Menu, StatusDot, useLocale } from "@pigcode/ui-primitives"
+import { AgentIcon, StatusDot, useLocale } from "@pigcode/ui-primitives"
 
-/** 标签种类：主会话、用户添加的子代理、主 agent 派生的子代理。 */
+/** 标签种类：主会话、早先用户添加的子代理会话、主 agent 派生的子代理。 */
 export type ThreadTabKind = "main" | "agent" | "spawned"
 
 /** 标签栏里的一个标签。 */
@@ -31,9 +32,8 @@ export interface ThreadTabsProps {
   activeId: string
   onSelect: (id: string) => void
   onClose?: ((id: string) => void) | undefined
-  /** 「+」菜单里可选的 agent；不提供 onAdd 时不显示「+」。 */
+  /** Agent 实例；用户添加的子代理标签按它画品牌图标。 */
   agents?: readonly ComposerAgent[] | undefined
-  onAdd?: ((agentId: string) => void) | undefined
 }
 
 /** 标题放不下时才在右缘渐隐；放得下时完整显示。 */
@@ -68,18 +68,17 @@ function TabMark({ tab, agents }: { tab: ThreadTab; agents: readonly ComposerAge
   const item =
     agents.find((entry) => entry.id === tab.agentId) ??
     agents.find((entry) => entry.agentId === tab.agentId)
-  return <EntityAvatar id={tab.agentId} name={item?.label ?? tab.agentId} size="sm" />
+  return (
+    <AgentIcon
+      agentId={item?.agentId ?? tab.agentId}
+      instanceId={item?.id ?? tab.agentId}
+      name={item?.label ?? tab.agentId}
+    />
+  )
 }
 
 /** 渲染标签栏；左右方向键在标签间移动。 */
-export function ThreadTabs({
-  tabs,
-  activeId,
-  onSelect,
-  onClose,
-  agents = [],
-  onAdd,
-}: ThreadTabsProps) {
+export function ThreadTabs({ tabs, activeId, onSelect, onClose, agents = [] }: ThreadTabsProps) {
   const { t } = useLocale()
   const list = useRef<HTMLDivElement>(null)
 
@@ -156,39 +155,6 @@ export function ThreadTabs({
           )
         })}
       </div>
-      {onAdd && agents.length > 0 ? (
-        <Menu.Root>
-          <Menu.Trigger
-            className="icon-btn thread-tab-add"
-            type="button"
-            aria-label={t("chat.tabs.add")}
-            title={t("chat.tabs.add")}
-          >
-            <Plus className="ic ic-sm" aria-hidden="true" />
-          </Menu.Trigger>
-          <Menu.Portal>
-            <Menu.Positioner side="bottom" align="start" sideOffset={6}>
-              <Menu.Popup className="thread-tab-menu">
-                <div className="menu-label">{t("chat.tabs.addTitle")}</div>
-                {agents.map((agent) => (
-                  <Menu.Item
-                    key={agent.id}
-                    disabled={agent.installed === false}
-                    onClick={() => onAdd(agent.id)}
-                  >
-                    <EntityAvatar id={agent.id} name={agent.label} size="sm" />
-                    <span className="grow">{agent.label}</span>
-                    {agent.installed === false ? (
-                      <span className="menu-meta">{t("composer.model.notInstalled")}</span>
-                    ) : null}
-                  </Menu.Item>
-                ))}
-                <div className="menu-note">{t("chat.tabs.addHint")}</div>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
-      ) : null}
     </div>
   )
 }
