@@ -357,9 +357,7 @@ export function ChatViewContainer({
         loading={threadId !== null && !state.threadStates[threadId]?.loaded}
         onStart={(text, options) => {
           if (!threadId) return
-          void deps.connection
-            .startRun(threadId, text, options.effort ? { effort: options.effort } : {})
-            .catch(fail)
+          void deps.connection.startRun(threadId, text, options).catch(fail)
         }}
         onInterrupt={interrupt}
         onApproval={respondApproval}

@@ -58,27 +58,29 @@
 .permission-menu {
   width: 296px;
 }
-.permission-item.is-danger,
-.permission-item.is-danger .ic {
-  color: var(--warn-text);
-}
 
-/* ─── 模型选择器：左栏实例，右栏模型与思考深度 ───────────── */
+/* ─── 模型选择器：左栏实例，右栏模型，底栏快速模式、思考深度与权限 ─── */
 /*
   外框是 Popover 自带的 .popup。高度固定，切换实例时不跳；按钮和窗口边缘之间放不下时缩到放得下。
-  右栏顶上的搜索和底部的思考深度不动，只有中间的模型列表滚动。左栏是 44 宽的方形图标列，
-  与 T3 Code 的模型选择器一致。
+  右栏顶上的搜索不动，只有模型列表滚动；底栏是作用于下一次发送的快速模式、思考深度与权限。
+  左栏是 44 宽的方形图标列，与 T3 Code 的模型选择器一致。
 */
 .model-picker {
-  width: min(480px, calc(100vw - 32px));
+  width: min(460px, calc(100vw - 32px));
   overflow: hidden;
+}
+.model-picker-frame {
+  display: flex;
+  flex-direction: column;
+  height: min(var(--model-picker-h), var(--available-height, var(--model-picker-h)));
 }
 .model-picker-body {
   display: grid;
+  flex: 1;
+  min-height: 0;
   grid-template-columns: 44px minmax(0, 1fr);
-  /* 行高不能被内容撑开：模型再多也只在列表里滚，否则搜索和思考深度会被挤出外框 */
+  /* 行高不能被内容撑开：模型再多也只在列表里滚，否则搜索会被挤出外框 */
   grid-template-rows: minmax(0, 1fr);
-  height: min(var(--model-picker-h), var(--available-height, var(--model-picker-h)));
 }
 .model-rail {
   display: flex;
@@ -163,8 +165,26 @@
 .model-row[aria-disabled="true"] {
   opacity: 0.6;
 }
+.model-row-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
 .model-row.is-current .model-row-name {
   font-weight: 600;
+}
+/* 支持快速模式的模型在名字后面带一个小闪电 */
+.model-row-fast {
+  display: inline-flex;
+  flex: none;
+  color: var(--favorite);
+}
+.model-row-fast .ic {
+  width: var(--model-fast-icon);
+  height: var(--model-fast-icon);
+  fill: currentColor;
+  stroke-width: 0;
 }
 .model-row-agent {
   display: flex;
@@ -205,39 +225,254 @@
 .model-star[aria-pressed="true"] svg {
   fill: currentColor;
 }
+
 .model-locked {
+  flex: none;
   padding: 6px 14px;
   background: var(--warn-soft);
   color: var(--warn-text);
   font-size: var(--fs-xs);
 }
+
+/* 底栏：左边快速模式与 Ultracode 两个开关，中间思考深度滑块，右边权限；底色比面板深一点，和上面的选择区分开 */
+.model-foot {
+  position: relative;
+  display: grid;
+  flex: none;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: var(--hair) solid var(--border-strong);
+  background: var(--panel);
+}
+.model-foot-center {
+  display: flex;
+  min-width: 0;
+  justify-content: center;
+}
 /*
-  档位多、文字又长（英文）时，分段控件换到下一行。标签不折行，至少留出「思考深度」几个字，
-  再挤就只截断后面的模型名。
+  模式开关：未开是灰色描边图标，开着是实心图标加浅底；模型不支持时置灰。
+  快速模式用琥珀色（和模型行里的小闪电一致），Ultracode 用强调色。
+*/
+.model-switches {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.model-switch {
+  display: grid;
+  width: var(--control-md);
+  height: var(--control-md);
+  place-items: center;
+  border-radius: var(--r-md);
+  color: var(--muted);
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
+}
+.model-switch:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.model-switch[data-switch="fast"][aria-pressed="true"] {
+  background: var(--warn-soft);
+  color: var(--favorite);
+}
+.model-switch[data-switch="fast"][aria-pressed="true"] .ic {
+  fill: currentColor;
+}
+.model-switch[data-switch="ultracode"][aria-pressed="true"] {
+  background: var(--accent-soft-strong);
+  color: var(--accent-text);
+}
+.model-switch[data-switch="ultracode"][aria-pressed="true"] .ic {
+  stroke-width: 2.4;
+}
+.model-switch:disabled {
+  background: none;
+  color: var(--faint);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/*
+  思考深度：胶囊轨道，选中档位以左填满强调色，每档一个小圆点，白色圆钮贴边对齐。
+  最左一档是「默认」，圆点画成空心圈，表示它不是档位之一。
 */
 .model-effort {
   display: flex;
-  flex-wrap: wrap;
+  min-width: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-5);
-  padding: 8px 12px 10px;
-  border-top: var(--hair) solid var(--border-strong);
+  gap: var(--space-4);
 }
 .model-effort-label {
-  display: flex;
-  flex: 1 1 0;
-  min-width: 5em;
-  align-items: baseline;
-  gap: 6px;
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  white-space: nowrap;
-}
-.model-effort-model {
+  flex: none;
   color: var(--muted);
   font-size: var(--fs-xs);
 }
+.model-effort-value {
+  min-width: 2.5em;
+  flex: none;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.model-effort-value[data-default],
+.model-effort.is-empty .model-effort-value {
+  color: var(--muted);
+  font-weight: 400;
+}
+/*
+  胶囊是滑块根节点。Control 铺满胶囊、两端各留半个圆钮宽的内边距：Base UI 换算点击位置时会扣掉这段内边距，
+  圆钮在两端不出界，点胶囊两头的圆角也能选到第一档和最后一档。
+*/
+.model-effort-slider.slider,
+.model-effort-track.is-off {
+  position: relative;
+  display: block;
+  width: calc(var(--model-effort-step) * var(--effort-steps) + var(--model-effort-thumb));
+  height: var(--model-effort-track-h);
+  flex: none;
+  border-radius: var(--r-full);
+  background: var(--track);
+  cursor: pointer;
+}
+.model-effort-control.slider-control {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0 calc(var(--model-effort-thumb) / 2);
+}
+.model-effort-track.slider-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+}
+.model-effort-track.is-off {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.model-effort-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  pointer-events: none;
+  transition: width var(--t-fast);
+}
+.model-effort-dot {
+  position: absolute;
+  top: 50%;
+  width: var(--model-effort-dot);
+  height: var(--model-effort-dot);
+  border-radius: 50%;
+  background: var(--border-strong);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.model-effort-dot[data-on] {
+  background: var(--on-primary);
+  opacity: 0.6;
+}
+.model-effort-dot[data-default] {
+  width: var(--model-effort-ring);
+  height: var(--model-effort-ring);
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+}
+.model-effort-thumb.slider-thumb {
+  z-index: 1;
+  width: var(--model-effort-thumb);
+  height: var(--model-effort-thumb);
+  background: var(--knob);
+  box-shadow: var(--shadow-knob);
+  cursor: grab;
+}
+.model-effort-thumb.slider-thumb:has(:focus-visible) {
+  box-shadow:
+    0 0 0 3px var(--accent-ring),
+    var(--shadow-knob);
+}
+.model-permission {
+  flex: none;
+}
+.model-permission-btn {
+  display: inline-flex;
+  max-width: 180px;
+  height: var(--control-md);
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  border-radius: var(--r-md);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+}
+.model-permission-btn:hover,
+.model-permission-btn[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--fg);
+}
+.model-permission-btn[data-mode="plan"] > .ic:first-child,
+.model-permission-btn[data-mode="read-only"] > .ic:first-child {
+  color: var(--accent-text);
+}
+.model-permission-btn[data-mode="danger-full-access"],
+.model-permission-btn[data-mode="danger-full-access"] > .ic {
+  color: var(--warn-text);
+}
+.model-permission-btn[data-mode="danger-full-access"]:hover {
+  background: var(--warn-soft);
+}
+/* 权限列表从底栏往上展开，画在选择器里面 */
+.model-permission-menu {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(100% + 6px);
+  z-index: 2;
+  width: 280px;
+  padding: var(--space-2);
+  background: var(--popover);
+}
+.model-permission-menu .menu-item:hover,
+.model-permission-menu .menu-item:focus {
+  background: var(--active);
+}
+.permission-item.is-danger,
+.permission-item.is-danger .ic {
+  color: var(--warn-text);
+}
+
+/* 输入框里的胶囊：模型名、档位，开着的模式各一个小图标，非默认权限时一个小徽标 */
 .chip-btn.model-chip .entity-avatar {
   margin-right: 1px;
+}
+.model-chip-switch {
+  flex: none;
+}
+.model-chip-switch[data-switch="fast"] {
+  color: var(--favorite);
+  fill: currentColor;
+  stroke-width: 0;
+}
+.model-chip-switch[data-switch="ultracode"] {
+  color: var(--accent-text);
+}
+.model-chip-mode {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: var(--r-xs);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.model-chip-mode[data-mode="danger-full-access"] {
+  background: var(--warn-soft);
+  color: var(--warn-text);
 }

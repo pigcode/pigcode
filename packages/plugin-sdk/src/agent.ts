@@ -73,6 +73,10 @@ export interface UserInput {
   handoff?: string
   /** 本次 run 的思考深度；不支持的 driver 忽略。 */
   effort?: ReasoningEffort
+  /** 本次 run 用快速模式；不支持的 driver 忽略。 */
+  fast?: boolean
+  /** 本次 run 打开 Ultracode；不支持的 driver 忽略。 */
+  ultracode?: boolean
 }
 
 /** 单次 run 交给 driver 的运行时能力：取消信号、事件出口、审批与提问。 */
@@ -93,6 +97,10 @@ export interface AgentModelInfo {
   /** 该模型可选的思考深度；缺省或为空表示不可调。 */
   efforts?: ReasoningEffort[]
   defaultEffort?: ReasoningEffort | null
+  /** 该模型支持快速模式。 */
+  fast?: boolean | undefined
+  /** 该模型支持 Ultracode。 */
+  ultracode?: boolean | undefined
 }
 
 /**

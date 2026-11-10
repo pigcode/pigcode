@@ -16,7 +16,7 @@ import type {
 import { CodexRpcClient } from "./client"
 import { detectCodex, type CodexDetection } from "./detect"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
-import { parseCodexModels } from "./models"
+import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
 import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { normalizeCodexNotification } from "./normalize"
 import {
@@ -42,6 +42,8 @@ interface CodexSessionState {
   launchKey: string
   /** 会话提示：MCP 桥起不来时攒下来，下一次 send 时补发。 */
   notice: NoticeState
+  /** 上一轮用了快速模式；turn/start 的服务档会沿用到之后的轮次，关掉时要显式清回默认。 */
+  fast?: boolean
 }
 
 /** driver 的可选依赖；测试替换传输与检测。 */
@@ -264,7 +266,14 @@ export class CodexDriver implements AgentDriver {
         input: [{ type: "text", text }],
         // 思考深度只对本轮及之后的轮次生效；没有选择时沿用 Codex 的默认值。
         ...(input.effort ? { effort: input.effort } : {}),
+        // 服务档和思考深度一样会沿用；选了快速发 fast，从快速切回标准时发 null 回到默认档。
+        ...(input.fast
+          ? { serviceTier: FAST_SERVICE_TIER }
+          : state.fast
+            ? { serviceTier: null }
+            : {}),
       })) as { turn?: { id?: string } }
+      state.fast = input.fast === true
       state.turnId = started.turn?.id ?? null
       if (runtime.signal.aborted) {
         // abort 可能早于 turn/start 响应；此时才能拿到 turnId 并发送中断。

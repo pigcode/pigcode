@@ -1,5 +1,5 @@
 // 负责定义会话输入区的权限、思考深度、模型选择和键盘选项。
-import type { PermissionMode, ReasoningEffort } from "@pigcode/contracts"
+import type { KnownReasoningEffort, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
 import type { MessageKey } from "@pigcode/ui-primitives"
 
 export type { PermissionMode, ReasoningEffort }
@@ -42,14 +42,25 @@ export const permissionKeys: Record<
   },
 }
 
-/** 思考深度的文案；各 agent 只展示自己模型支持的档位。 */
-export const effortKeys: Record<ReasoningEffort, MessageKey> = {
+/** 已知思考深度的文案；各 agent 只展示自己模型支持的档位。 */
+export const effortKeys: Record<KnownReasoningEffort, MessageKey> = {
+  none: "composer.effort.none",
   minimal: "composer.effort.minimal",
   low: "composer.effort.low",
   medium: "composer.effort.medium",
   high: "composer.effort.high",
   xhigh: "composer.effort.xhigh",
   max: "composer.effort.max",
+  ultra: "composer.effort.ultra",
+}
+
+/**
+ * 思考深度的显示名：已知档位用界面文案，模型目录里新出现的档位显示原名（下划线、连字符换成空格，首字母大写）。
+ */
+export function effortLabel(effort: ReasoningEffort, t: (key: MessageKey) => string): string {
+  if (Object.hasOwn(effortKeys, effort)) return t(effortKeys[effort as KnownReasoningEffort])
+  const words = effort.replace(/[_-]+/g, " ").trim()
+  return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 /** 将键盘事件转换为提交、换行或忽略动作。 */
@@ -89,6 +100,10 @@ export interface ComposerModel {
   efforts: readonly ReasoningEffort[]
   /** 用户在 agent 设置里添加的模型。 */
   custom?: boolean | undefined
+  /** 支持快速模式。 */
+  fast?: boolean | undefined
+  /** 支持 Ultracode。 */
+  ultracode?: boolean | undefined
 }
 
 /** 各 agent 实例的模型目录；undefined 表示还没读取。键是实例 id。 */
@@ -127,4 +142,16 @@ export function resolveEffort(
 ): ReasoningEffort | null {
   if (!model || !preferred) return null
   return model.efforts.includes(preferred) ? preferred : null
+}
+
+/** 按模型开关的模式：快速模式与 Ultracode。 */
+export type ModelSwitch = "fast" | "ultracode"
+
+/** 发送时是否打开某个开关：模型支持、并且用户为它打开过。 */
+export function resolveSwitch(
+  model: ComposerModel | null,
+  name: ModelSwitch,
+  enabled: boolean,
+): boolean {
+  return Boolean(model?.[name]) && enabled
 }

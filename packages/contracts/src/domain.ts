@@ -35,10 +35,25 @@ export const permissionModeSchema = z.enum([
 ])
 
 /**
- * 推理强度（思考深度）。不同 agent 支持的档位不同：Codex 用 minimal–xhigh，
- * Claude 用 low–max；模型目录里的 efforts 列出该模型实际可选的档位。
+ * 已知的推理强度（思考深度），按从低到高排列；界面给它们起了名字，排序也以它们为准。
+ * Codex 的模型目录里有 none–ultra（none 是完全不思考），Claude 用 low–max。
  */
-export const reasoningEffortSchema = z.enum(["minimal", "low", "medium", "high", "xhigh", "max"])
+export const knownReasoningEfforts = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+  "ultra",
+] as const
+
+/**
+ * 推理强度。不限定取值：agent 的模型目录里出现新档位时（Codex 的档位就是模型给出的任意字符串），
+ * 原样列出、原样转发，界面显示它的原名，不用先改代码。模型目录里的 efforts 列出该模型实际可选的档位。
+ */
+export const reasoningEffortSchema = z.string().trim().min(1).max(64)
 
 /** Agent 模型目录中的一项；efforts 为空表示该模型没有可调的思考深度。 */
 export const agentModelSchema = z.object({
@@ -48,6 +63,10 @@ export const agentModelSchema = z.object({
   isDefault: z.boolean(),
   efforts: z.array(reasoningEffortSchema),
   defaultEffort: reasoningEffortSchema.nullable(),
+  /** 支持快速模式：输出更快、计费更高。Claude 来自 supportsFastMode，Codex 来自 fast 服务档。 */
+  fast: z.boolean().optional(),
+  /** 支持 Ultracode：Claude 会话级的动态工作流编排，和思考深度互不影响。 */
+  ultracode: z.boolean().optional(),
   /** 用户在 agent 设置里添加的模型 id，不在 agent 自己的目录里。 */
   custom: z.boolean().optional(),
 })
@@ -295,6 +314,7 @@ export type AgentFeatures = z.infer<typeof agentFeaturesSchema>
 export type PermissionMode = z.infer<typeof permissionModeSchema>
 /** 推理强度的类型。 */
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>
+export type KnownReasoningEffort = (typeof knownReasoningEfforts)[number]
 /** 模型目录条目的类型。 */
 export type AgentModel = z.infer<typeof agentModelSchema>
 /** 项目的类型。 */

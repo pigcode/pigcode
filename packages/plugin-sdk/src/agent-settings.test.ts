@@ -80,7 +80,11 @@ describe("launch arguments", () => {
 describe("model helpers", () => {
   it("normalizes effort names and orders them", () => {
     expect(asReasoningEffort("Extra High")).toBe("xhigh")
-    expect(asReasoningEffort("bogus")).toBeNull()
+    // 认不得的档位原样保留，发给 agent 时也原样发回去。
+    expect(asReasoningEffort("bogus")).toBe("bogus")
+    // Codex 的模型目录里在 max 之上还有 ultra 档。
+    expect(asReasoningEffort("Ultra")).toBe("ultra")
+    expect(sortEfforts(["ultra", "max", "xhigh"])).toEqual(["xhigh", "max", "ultra"])
     expect(sortEfforts(["high", "low", "high", "minimal"])).toEqual(["minimal", "low", "high"])
   })
 })

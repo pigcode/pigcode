@@ -2,7 +2,12 @@
 import type { ModelInfo, Options, Query } from "@anthropic-ai/claude-agent-sdk"
 import { describe, expect, it, vi } from "vitest"
 import { ClaudeDriver } from "./driver"
-import { CLAUDE_FALLBACK_MODELS, listClaudeModels, parseClaudeModels } from "./models"
+import {
+  CLAUDE_FALLBACK_MODELS,
+  listClaudeModels,
+  parseClaudeModels,
+  toClaudeEffort,
+} from "./models"
 import { replayQuery } from "./replay"
 
 const SDK_MODELS: ModelInfo[] = [
@@ -137,5 +142,45 @@ describe("Claude model catalog", () => {
 
     await driver.send(fallback, { text: "hello" }, runtime)
     expect(captured[2]).not.toHaveProperty("effort")
+    expect(captured[2]).not.toHaveProperty("settings")
+
+    // 快速模式与 Ultracode 都通过会话级的设置覆盖层打开。
+    await driver.send(opus, { text: "hello", fast: true }, runtime)
+    expect(captured[3]?.settings).toEqual({ fastMode: true })
+    await driver.send(opus, { text: "hello", ultracode: true, fast: true }, runtime)
+    expect(captured[4]?.settings).toEqual({ fastMode: true, ultracode: true })
+    // 别的 agent 才有的档位不传给 Claude。
+    await driver.send(opus, { text: "hello", effort: "turbo" }, runtime)
+    expect(captured[5]).not.toHaveProperty("effort")
+  })
+
+  it("sends Claude the nearest level it has for minimal and ultra", () => {
+    expect(toClaudeEffort("minimal")).toBe("low")
+    expect(toClaudeEffort("ultra")).toBe("max")
+    expect(toClaudeEffort("xhigh")).toBe("xhigh")
+  })
+
+  it("marks Ultracode on the model families that have it, matching aliases by their real id", () => {
+    const models = [
+      { value: "opus", resolvedModel: "claude-opus-5-5", displayName: "Opus", description: "" },
+      { value: "claude-opus-4-8", displayName: "Opus 4.8", description: "" },
+      { value: "haiku", resolvedModel: "claude-haiku-5-5", displayName: "Haiku", description: "" },
+    ] as ModelInfo[]
+    expect(parseClaudeModels(models).map(({ id, ultracode }) => ({ id, ultracode }))).toEqual([
+      { id: "opus", ultracode: true },
+      { id: "claude-opus-4-8", ultracode: true },
+      { id: "haiku", ultracode: undefined },
+    ])
+  })
+
+  it("marks the models the SDK says support fast mode", () => {
+    const models = [
+      { value: "opus", displayName: "Opus", description: "", supportsFastMode: true },
+      { value: "sonnet", displayName: "Sonnet", description: "" },
+    ] as ModelInfo[]
+    expect(parseClaudeModels(models).map(({ id, fast }) => ({ id, fast }))).toEqual([
+      { id: "opus", fast: true },
+      { id: "sonnet", fast: undefined },
+    ])
   })
 })

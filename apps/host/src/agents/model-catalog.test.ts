@@ -21,9 +21,20 @@ describe("reasoning efforts", () => {
     expect(asReasoningEffort("High")).toBe("high")
     expect(asReasoningEffort("x-high")).toBe("xhigh")
     expect(asReasoningEffort("extra_high")).toBe("xhigh")
-    expect(asReasoningEffort("none")).toBeNull()
+    // none 是 Codex 的「不思考」档；认不得的档位原样保留，跟在它前一个已知档位后面。
+    expect(asReasoningEffort("none")).toBe("none")
+    expect(asReasoningEffort("Turbo")).toBe("Turbo")
+    expect(asReasoningEffort("  ")).toBeNull()
     expect(asReasoningEffort(3)).toBeNull()
     expect(sortEfforts(["max", "low", "high", "low"])).toEqual(["low", "high", "max"])
+    // Codex 按从低到高给出档位：认不得的 turbo 夹在 high 与 max 之间，排序后仍在那里。
+    expect(sortEfforts(["max", "none", "high", "turbo", "low"])).toEqual([
+      "none",
+      "low",
+      "high",
+      "turbo",
+      "max",
+    ])
   })
 
   it("fills optional fields, drops duplicate ids and an out-of-range default", () => {

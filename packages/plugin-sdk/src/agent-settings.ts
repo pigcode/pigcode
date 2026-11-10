@@ -4,9 +4,11 @@
  */
 import {
   environmentEntriesSchema,
+  knownReasoningEfforts,
   reasoningEffortSchema,
   type EnvironmentEntry,
   type AgentSettingsValues,
+  type KnownReasoningEffort,
   type ReasoningEffort,
 } from "@pigcode/contracts"
 
@@ -116,20 +118,36 @@ export function parseCliArgs(args: string | readonly string[] | undefined): Pars
   return { flags, positionals }
 }
 
-/** 把 CLI 返回的档位名收窄为协议里的思考深度；无法识别时返回 null。 */
+/**
+ * 把 CLI 返回的档位名转成协议里的思考深度：认得的档位（包括 Extra High 这类写法）统一成已知的 id，
+ * 认不得的原样保留，发送时也原样发回去。不是字符串或为空时返回 null。
+ */
 export function asReasoningEffort(value: unknown): ReasoningEffort | null {
   if (typeof value !== "string") return null
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_-]+/g, "")
+  const parsed = reasoningEffortSchema.safeParse(value)
+  if (!parsed.success) return null
+  const normalized = parsed.data.toLowerCase().replace(/[\s_-]+/g, "")
   const alias = normalized === "extrahigh" ? "xhigh" : normalized
-  const parsed = reasoningEffortSchema.safeParse(alias)
-  return parsed.success ? parsed.data : null
+  return isKnownEffort(alias) ? alias : parsed.data
 }
 
-/** 去重并按从低到高排序。 */
+/** 是不是界面认得、能排序的档位。 */
+export function isKnownEffort(effort: string): effort is KnownReasoningEffort {
+  return (knownReasoningEfforts as readonly string[]).includes(effort)
+}
+
+/**
+ * 去重并按从低到高排序。已知档位按固定顺序；认不得的档位跟在它在原列表里前一个已知档位后面，
+ * 前面没有已知档位时排在最前，多个认不得的保持原来的先后。
+ */
 export function sortEfforts(efforts: Iterable<ReasoningEffort>): ReasoningEffort[] {
-  const unique = new Set(efforts)
-  return reasoningEffortSchema.options.filter((effort) => unique.has(effort))
+  let rank = -1
+  const ranked = [...new Set(efforts)].map((effort, index) => {
+    const known = (knownReasoningEfforts as readonly string[]).indexOf(effort)
+    if (known >= 0) rank = known
+    return { effort, rank: known >= 0 ? known : rank + 0.5, index }
+  })
+  return ranked
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map((entry) => entry.effort)
 }

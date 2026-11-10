@@ -1,8 +1,9 @@
 /** 用 fixture 与内存消息验证 SDK 消息到规范化事件的映射。 */
 import { readFileSync } from "node:fs"
+import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { createNormalizeState, normalizeSdkMessage } from "./normalize"
+import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
 
 describe("normalizeSdkMessage", () => {
   it("maps text deltas", () => {
@@ -415,5 +416,28 @@ describe("normalizeSdkMessage", () => {
       "run.completed",
     ])
     expect(state.streamedText).toBe("OK")
+  })
+})
+
+describe("fast mode notice", () => {
+  /** 只带快速模式字段的 init 消息。 */
+  const init = (fields: Record<string, unknown>) =>
+    ({ type: "system", subtype: "init", session_id: "s", ...fields }) as unknown as SDKMessage
+
+  it("says why fast mode did not apply, and stays quiet when it is on", () => {
+    expect(
+      fastModeNotice(
+        init({ fast_mode_state: "off", fast_mode_disabled_reason: "extra_usage_disabled" }),
+      ),
+    ).toEqual({ type: "notice", level: "info", key: "fast.unavailable.extra_usage_disabled" })
+    expect(fastModeNotice(init({ fast_mode_state: "cooldown" }))?.key).toBe(
+      "fast.unavailable.cooldown",
+    )
+    expect(
+      fastModeNotice(init({ fast_mode_state: "off", fast_mode_disabled_reason: "network_error" }))
+        ?.key,
+    ).toBe("fast.unavailable")
+    expect(fastModeNotice(init({ fast_mode_state: "on" }))).toBeNull()
+    expect(fastModeNotice(init({}))).toBeNull()
   })
 })

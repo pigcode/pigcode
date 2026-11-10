@@ -36,6 +36,9 @@ export const CLAUDE_FALLBACK_MODELS: AgentModelInfo[] = [
     isDefault: false,
     efforts: CLAUDE_EFFORTS,
     defaultEffort: null,
+    // 读不到目录时按 Opus 系列都支持快速模式与 Ultracode 处理；CLI 不支持时自己忽略。
+    fast: true,
+    ultracode: true,
   },
   {
     id: "sonnet",
@@ -68,14 +71,37 @@ export function parseClaudeModels(models: readonly ModelInfo[]): AgentModelInfo[
         isDefault: index === 0,
         efforts,
         defaultEffort: null,
+        ...(model.supportsFastMode ? { fast: true } : {}),
+        ...(supportsUltracode(model.resolvedModel ?? model.value) ? { ultracode: true } : {}),
       },
     ]
   })
 }
 
-/** Claude 没有 minimal 档，按 low 处理；其余档位同名。 */
-export function toClaudeEffort(effort: ReasoningEffort): EffortLevel {
-  return effort === "minimal" ? "low" : effort
+/**
+ * 支持 Ultracode 的模型：SDK 的模型信息里没有这一项，按真实模型 id 的前缀判断（和 T3 Code 的列表一致，
+ * 外加同系列的新版本）。别名用 SDK 给的 resolvedModel 对上。判断错了也无妨：不支持的模型或关掉了
+ * Workflows 时，CLI 会静默忽略这个设置（2.1.321 实测）。
+ */
+const ULTRACODE_MODELS = /^claude-(opus-5|fable-5|opus-4-8)/
+
+/** 这个模型 id 是否支持 Ultracode。 */
+export function supportsUltracode(modelId: string): boolean {
+  return ULTRACODE_MODELS.test(modelId)
+}
+
+/** Claude 认得的档位。 */
+const CLAUDE_LEVELS: readonly string[] = ["low", "medium", "high", "xhigh", "max"]
+
+/**
+ * 换成 Claude 的档位：没有 minimal 与 ultra 档，分别按 low 与 max 处理；其余已知档位同名。
+ * none（不思考）Claude 也没有，和别的 agent 才有的档位一样不传。
+ * 别的 agent 才有的档位 Claude 不认识，返回 undefined，不传档位，由 CLI 自己决定。
+ */
+export function toClaudeEffort(effort: ReasoningEffort): EffortLevel | undefined {
+  if (effort === "minimal") return "low"
+  if (effort === "ultra") return "max"
+  return CLAUDE_LEVELS.includes(effort) ? (effort as EffortLevel) : undefined
 }
 
 /** 「default」交给 CLI 自己选，不显式传 model。 */

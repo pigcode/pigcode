@@ -248,6 +248,8 @@ export class RpcServer {
           threadId: string
           text: string
           effort?: ReasoningEffort
+          fast?: boolean
+          ultracode?: boolean
           instanceId?: string
         }
         const { runId } = await this.ctx.agents.startRun(
@@ -262,6 +264,8 @@ export class RpcServer {
           },
           {
             ...(value.effort ? { effort: value.effort } : {}),
+            ...(value.fast ? { fast: true } : {}),
+            ...(value.ultracode ? { ultracode: true } : {}),
             ...(value.instanceId ? { instanceId: value.instanceId } : {}),
           },
         )

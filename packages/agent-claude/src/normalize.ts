@@ -182,3 +182,24 @@ function subagentStarted(
     ...parentFields(parentToolUseId),
   }
 }
+
+/** 有专门说明的快速模式不可用原因；其余原因只说没有生效。 */
+const FAST_REASONS = new Set(["extra_usage_disabled", "free", "model_not_allowed", "cooldown"])
+
+/**
+ * 选了快速模式时，看 init 消息里快速模式到底开没开：没开就给一条会话提示，说明这一轮按标准速度运行。
+ * 原因来自 fast_mode_disabled_reason（账号没开额外用量、免费计划、模型不支持……），限流冷却时是 cooldown 状态。
+ */
+export function fastModeNotice(
+  message: SDKMessage,
+): Extract<AgentEvent, { type: "notice" }> | null {
+  if (message.type !== "system" || message.subtype !== "init") return null
+  const state = message.fast_mode_state
+  if (state === undefined || state === "on") return null
+  const reason = state === "cooldown" ? "cooldown" : message.fast_mode_disabled_reason
+  return {
+    type: "notice",
+    level: "info",
+    key: reason && FAST_REASONS.has(reason) ? `fast.unavailable.${reason}` : "fast.unavailable",
+  }
+}

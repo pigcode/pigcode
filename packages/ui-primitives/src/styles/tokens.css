@@ -467,6 +467,13 @@
   --composer-input-h-tall: 70px;
   --model-picker-h: min(400px, 62vh);
   --model-rail-btn: 38px;
+  /* 思考深度滑块：轨道每档的宽度与高度、圆钮直径、档位圆点与「默认」档的空心圈；模型行里的快速闪电 */
+  --model-effort-step: 18px;
+  --model-effort-track-h: 14px;
+  --model-effort-thumb: 18px;
+  --model-effort-dot: 4px;
+  --model-effort-ring: 6px;
+  --model-fast-icon: 11px;
   --side-foot-h: 52px;
   --subagent-icon-size: 22px;
   --palette-icon-size: 24px;

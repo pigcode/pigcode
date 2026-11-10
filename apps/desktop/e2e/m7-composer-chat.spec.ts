@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 
-test("composer: agent rail, models, thinking depth, permissions, @files and /commands", async () => {
+test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permissions, @files and /commands", async () => {
   // Codex 指向一个不存在的文件，不管本机装没装 Codex，结果都一样。
   const { app, page } = await openThread("composer", {
     PIGCODE_CODEX_PATH: join(tmpdir(), "pigcode-e2e-no-codex"),
@@ -17,13 +17,45 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await expect(chip).toContainText("Fake Sage")
 
     await chip.click()
-    const efforts = page.getByRole("radiogroup", { name: "思考深度" })
-    await expect(efforts.getByRole("radio")).toHaveText(["默认", "低", "中", "高", "最高"])
-    await efforts.getByRole("radio", { name: "默认" }).click()
-    await expect(efforts.getByRole("radio", { name: "默认" })).toBeChecked()
+    // 底栏中间是思考深度的胶囊滑块：最左一档是「默认」，往右是 Fake Sage 的档位，方向键或点轨道都能选。
+    const slider = page.getByRole("slider", { name: "思考深度" })
+    const pill = page.locator(".model-effort-slider")
+    const order = ["默认", "低", "中", "高", "最高"]
+    const effort = async (name: string) => {
+      await slider.focus()
+      await page.keyboard.press("Home")
+      for (let at = 0; at < order.indexOf(name); at += 1) await page.keyboard.press("ArrowRight")
+      await expect(slider).toHaveAttribute("aria-valuetext", name)
+    }
+    await expect(slider).toHaveAttribute("max", "4")
+    await effort("默认")
     await expect(chip).toHaveText(/Fake Sage$/)
-    await efforts.getByRole("radio", { name: "中", exact: true }).click()
+    await effort("中")
     await expect(chip).toContainText("中")
+    // 点胶囊的右端就是最高一档。
+    const box = await pill.boundingBox()
+    if (!box) throw new Error("the effort slider is not laid out")
+    await page.mouse.click(box.x + box.width - 3, box.y + box.height / 2)
+    await expect(slider).toHaveAttribute("aria-valuetext", "最高")
+    await effort("中")
+    // 快速模式：Fake Sage 支持，点闪电打开后胶囊上多一个闪电，再点一次关掉。
+    // 开关是本机偏好，上一次运行可能留着开，先关掉再测。
+    const fast = page.getByRole("button", { name: "快速模式", exact: true })
+    const ultracode = page.getByRole("button", { name: "Ultracode", exact: true })
+    for (const toggle of [fast, ultracode]) {
+      if ((await toggle.getAttribute("aria-pressed")) === "true") await toggle.click()
+    }
+    await fast.click()
+    await expect(fast).toHaveAttribute("aria-pressed", "true")
+    await expect(chip).toHaveAttribute("aria-label", /· 快速/)
+    await fast.click()
+    await expect(chip).not.toHaveAttribute("aria-label", /快速/)
+    // Ultracode 是闪电旁边的另一个开关，按模型记住，胶囊上也有标记。
+    await ultracode.click()
+    await expect(ultracode).toHaveAttribute("aria-pressed", "true")
+    await expect(chip).toHaveAttribute("aria-label", /· Ultracode/)
+    await ultracode.click()
+    await expect(chip).not.toHaveAttribute("aria-label", /Ultracode/)
     await expect(page.getByRole("tab", { name: "Fake Agent" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -37,22 +69,26 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await page.getByRole("tab", { name: "Codex" }).click()
     await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没有匹配的模型")
     await page.getByRole("tab", { name: "Fake Agent" }).click()
-    await efforts.getByRole("radio", { name: "最高" }).click()
+    await effort("最高")
     await expect(chip).toContainText("最高")
     // 选回「默认」：不再指定档位，胶囊上的档位也去掉。
-    await efforts.getByRole("radio", { name: "默认" }).click()
+    await effort("默认")
     await expect(chip).toHaveText(/Fake Sage$/)
-    await efforts.getByRole("radio", { name: "最高" }).click()
+    await effort("最高")
     await expect(chip).toContainText("最高")
     await page.getByRole("listbox", { name: "Fake Agent" }).getByText("Fake Swift").click()
     await expect(chip).toContainText("Fake Swift")
     await expect(chip).not.toContainText("最高")
 
-    // 权限：完全访问要确认；选择保存在线程上。
+    // 选完模型弹层不关，底栏马上换成 Fake Swift 的设置：没有档位，也没有快速模式与 Ultracode。
+    // 权限在选择器底栏里，完全访问要确认，选择保存在线程上。
+    await expect(page.getByTitle("Fake Swift 没有可调的思考深度")).toBeVisible()
+    await expect(fast).toBeDisabled()
+    await expect(ultracode).toBeDisabled()
     await page.getByRole("button", { name: /^权限/ }).click()
-    await page.getByRole("menuitem", { name: /完全访问/ }).click()
+    await page.getByRole("menuitemradio", { name: /完全访问/ }).click()
     await page.getByRole("button", { name: "开启完全访问" }).click()
-    await expect(page.getByRole("button", { name: "权限: 完全访问" })).toBeVisible()
+    await expect(chip).toHaveAttribute("aria-label", /· 完全访问$/)
 
     // @ 引用文件，发送后用户气泡里是带图标的文件名，悬停看到完整路径。
     await page.locator(".tiptap").click()
@@ -76,14 +112,14 @@ test("composer: agent rail, models, thinking depth, permissions, @files and /com
     await page.keyboard.press("Backspace")
     await page.keyboard.type("/readonly")
     await page.keyboard.press("Enter")
-    await expect(page.getByRole("button", { name: "权限: 只读" })).toBeVisible()
+    await expect(chip).toHaveAttribute("aria-label", /· 只读$/)
     await expect(page.locator(".tiptap")).toHaveText("")
   } finally {
     await app.close()
   }
 })
 
-test("a long model list scrolls by itself under a fixed search and thinking depth", async () => {
+test("a long model list scrolls by itself beside a fixed search and thinking depth", async () => {
   // 自定义模型把 fake agent 的目录撑长（Claude Code 有十几个模型）：只有列表滚动，
   // 搜索框和思考深度都留在弹层里，不会被挤出去。
   const profile = mkdtempSync(join(tmpdir(), "pigcode-e2e-picker-"))
@@ -96,7 +132,7 @@ test("a long model list scrolls by itself under a fixed search and thinking dept
     await expect(list.getByRole("option")).toHaveCount(18)
     const popup = await page.locator(".model-picker").boundingBox()
     const search = page.getByRole("searchbox", { name: "搜索模型…" })
-    const efforts = page.getByRole("radiogroup", { name: "思考深度" })
+    const efforts = page.getByRole("slider", { name: "思考深度" })
     const searchBefore = await search.boundingBox()
     await list.evaluate((element) => {
       element.scrollTop = element.scrollHeight

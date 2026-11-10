@@ -19,6 +19,8 @@ export function toComposerModel(model: AgentModel): ComposerModel {
     ...(model.description ? { description: model.description } : {}),
     isDefault: model.isDefault,
     efforts: model.efforts,
+    ...(model.fast ? { fast: true } : {}),
+    ...(model.ultracode ? { ultracode: true } : {}),
     ...(model.custom ? { custom: true } : {}),
   }
 }

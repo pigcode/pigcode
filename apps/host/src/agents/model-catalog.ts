@@ -22,6 +22,8 @@ export function normalizeModels(models: readonly AgentModelInfo[]): AgentModel[]
       isDefault: model.isDefault,
       efforts,
       defaultEffort,
+      ...(model.fast ? { fast: true } : {}),
+      ...(model.ultracode ? { ultracode: true } : {}),
     })
   }
   return result

@@ -41,6 +41,8 @@ export const FAKE_MODELS: AgentModelInfo[] = [
     isDefault: true,
     efforts: ["low", "medium", "high", "max"],
     defaultEffort: "medium",
+    fast: true,
+    ultracode: true,
   },
   {
     id: "fake-swift",

@@ -28,7 +28,7 @@ import { detectClaude, type ClaudeDetection } from "./detect"
 import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
-import { createNormalizeState, normalizeSdkMessage } from "./normalize"
+import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
 import { answerRecord, parseQuestions } from "./questions"
 
 /** 可注入的 query 实现，便于测试替换真实 CLI 进程。 */
@@ -168,6 +168,8 @@ export class ClaudeDriver implements AgentDriver {
     const forkFromNativeSessionId = state.forkFromNativeSessionId
     const resumeId = forkFromNativeSessionId ?? session.nativeSessionId
     const model = claudeModelOption(session.model)
+    // 模型不支持的档位由 CLI 自动降级；Claude 不认识的档位不传。
+    const claudeEffort = input.effort ? toClaudeEffort(input.effort) : undefined
     const launch = claudeLaunch(state.settings, this.fixedExecutable)
     const mcpServer = state.mcp ? claudeMcpServer(state.mcp) : null
     const queryStream = this.queryFn({
@@ -175,8 +177,17 @@ export class ClaudeDriver implements AgentDriver {
       options: {
         cwd: session.cwd,
         ...(model ? { model } : {}),
-        // 模型不支持的档位由 CLI 自动降级。
-        ...(input.effort ? { effort: toClaudeEffort(input.effort) } : {}),
+        ...(claudeEffort ? { effort: claudeEffort } : {}),
+        // 快速模式与 Ultracode 都是会话级的设置覆盖层，每次 run 都是新的 query，所以只在选了时传；
+        // 不传 false，免得盖掉用户在 CLI 里打开的设置。
+        ...(input.fast || input.ultracode
+          ? {
+              settings: {
+                ...(input.fast ? { fastMode: true } : {}),
+                ...(input.ultracode ? { ultracode: true } : {}),
+              },
+            }
+          : {}),
         ...(resumeId ? { resume: resumeId } : {}),
         ...(forkFromNativeSessionId ? { forkSession: true } : {}),
         includePartialMessages: true,
@@ -241,6 +252,8 @@ export class ClaudeDriver implements AgentDriver {
         const next = await Promise.race([nextPromise, aborted])
         if (next === "aborted" || next.done) break
         for (const event of normalizeSdkMessage(next.value, normalizeState)) runtime.emit(event)
+        const notice = input.fast ? fastModeNotice(next.value) : null
+        if (notice) runtime.emit(notice)
       }
     } catch (error) {
       if (!state.controller.signal.aborted) {

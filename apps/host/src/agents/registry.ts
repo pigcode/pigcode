@@ -25,7 +25,7 @@ import { ApprovalBridge } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
-import type { ApprovalHandle, AgentsService } from "./service"
+import { runInput, type ApprovalHandle, type AgentsService } from "./service"
 import { createQuestionFlow } from "./questions"
 
 export type { ApprovalHandle, AgentsService, StartRunOptions, StartRunResult } from "./service"
@@ -388,7 +388,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           threadId,
           driver,
           instanceId: instance.instanceId,
-          input: { text, ...(options.effort ? { effort: options.effort } : {}) },
+          input: runInput(text, options),
           emitLive,
           controller: new AbortController(),
           done,

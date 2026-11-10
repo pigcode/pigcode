@@ -77,6 +77,10 @@ export const commandSchemas = {
     text: z.string().min(1),
     /** 本次 run 的思考深度；缺省时用 agent 自己的默认值。 */
     effort: reasoningEffortSchema.optional(),
+    /** 本次 run 用快速模式；只对目录里标了 fast 的模型生效，其余 driver 忽略。 */
+    fast: z.boolean().optional(),
+    /** 本次 run 打开 Ultracode；只对目录里标了 ultracode 的模型生效，其余 driver 忽略。 */
+    ultracode: z.boolean().optional(),
   }),
   "run.list": z.object({}),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),

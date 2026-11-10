@@ -76,17 +76,19 @@ export class Connection {
     if (this.client) await this.client.call("thread.unsubscribe", { threadId })
   }
 
-  /** 在指定线程发送用户消息；effort 是本次 run 的思考深度。 */
+  /** 在指定线程发送用户消息；effort 是本次 run 的思考深度，fast 与 ultracode 打开对应模式。 */
   async startRun(
     threadId: string,
     text: string,
-    options: { effort?: ReasoningEffort } = {},
+    options: { effort?: ReasoningEffort | null; fast?: boolean; ultracode?: boolean } = {},
   ): Promise<void> {
     if (!this.client) throw new Error("host not connected")
     await this.client.call("run.start", {
       threadId,
       text,
       ...(options.effort ? { effort: options.effort } : {}),
+      ...(options.fast ? { fast: true } : {}),
+      ...(options.ultracode ? { ultracode: true } : {}),
     })
   }
 

@@ -1,39 +1,46 @@
 /**
- * 模型选择器：左边一列 Agent 实例（以及收藏），右边是选中实例的模型列表与搜索，
- * 底部是当前模型的思考深度：「默认」加上它支持的档位。只有选中某个实例才会列出它自己的模型。
- * 布局与 T3 Code 的模型选择器一致：左栏是方形图标，右栏搜索固定、列表滚动，底部是思考深度。
+ * 模型选择器：左栏是 Agent 实例（以及收藏），右栏是选中实例的模型列表与搜索；底栏从左到右是快速模式与
+ * Ultracode 两个开关、当前模型的思考深度滑块与权限。只有选中某个实例才会列出它自己的模型。
+ * 思考深度和两个开关按模型记在本机偏好里；权限记在线程上，开启完全访问的确认框由调用方给出。
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
-import { Check, ChevronDown, Loader2, Star } from "lucide-react"
+import { ChevronDown, Loader2, Star } from "lucide-react"
 import {
   EmptyState,
   EntityAvatar,
-  ListRow,
   Popover,
   SearchField,
-  SegmentedControl,
   formatShortcut,
   useLocale,
 } from "@pigcode/ui-primitives"
 import {
-  effortKeys,
+  effortLabel,
+  permissionKeys,
   resolveEffort,
+  resolveSwitch,
   resolveModel,
   type ComposerAgent,
-  type ComposerModel,
   type ComposerModelCatalog,
   type ComposerModelChoice,
-  type ReasoningEffort,
+  type ModelSwitch,
+  type PermissionMode,
 } from "./composer-options"
 import { fuzzyScore } from "./fuzzy"
+import { EffortControl } from "./model-effort"
 import { modelKey, useModelPreferences } from "./model-preferences"
+import { SwitchButton, SwitchMark, switchLabel } from "./model-switch"
+import { ModelRow, type ModelPickerRow } from "./model-row"
+import { PERMISSION_ICONS } from "./permission-menu"
+import { PermissionSwitch } from "./permission-switch"
+
+/** 底栏里的开关，按这个顺序排；胶囊上的小图标与读屏文字也按它。 */
+const MODEL_SWITCHES: readonly ModelSwitch[] = ["fast", "ultracode"]
 
 /** 收藏页在左栏里的 id；不会与 agent id 冲突。 */
 const FAVORITES = "__favorites__"
 
-/** 「默认」在分段控件里的值：不发档位，由 agent 自己决定；不会与协议里的档位重名。 */
-const DEFAULT_EFFORT = "default"
-type EffortChoice = ReasoningEffort | typeof DEFAULT_EFFORT
+/** 默认的权限：胶囊上不为它画图标。 */
+const DEFAULT_PERMISSION: PermissionMode = "workspace-write"
 
 /** 模型选择器的属性；目录由调用方按实例懒加载。 */
 export interface ModelPickerProps {
@@ -45,20 +52,22 @@ export interface ModelPickerProps {
   catalog: ComposerModelCatalog
   onLoadModels?: ((instanceId: string) => void) | undefined
   onSelectModel?: ((choice: ComposerModelChoice) => void) | undefined
-  /** 运行中不能切换实例或模型；思考深度仍可调整，下一次发送生效。 */
+  /** 当前线程的权限；底栏切换，胶囊上在非默认时显示图标。 */
+  permissionMode?: PermissionMode
+  /** 底栏里可选的权限。 */
+  permissionModes?: readonly PermissionMode[]
+  /** 选了一个权限；完全访问由调用方先确认。没有时底栏不显示权限。 */
+  onPermissionMode?: ((mode: PermissionMode) => void) | undefined
+  /** 运行中不能切换实例或模型；思考深度、速度与权限仍可调整，下一次发送生效。 */
   locked?: boolean
   side?: "top" | "bottom"
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-/** 列表里的一行：模型与它所属的实例。 */
-interface Row {
-  agent: ComposerAgent
-  model: ComposerModel
-}
+type Row = ModelPickerRow
 
-/** 当前 agent、模型与思考深度的胶囊，以及展开后的选择面板。 */
+/** 当前 agent、模型、思考深度、速度与权限的胶囊，以及展开后的选择面板。 */
 export function ModelPicker({
   agents,
   agentId,
@@ -66,6 +75,9 @@ export function ModelPicker({
   catalog,
   onLoadModels,
   onSelectModel,
+  permissionMode = DEFAULT_PERMISSION,
+  permissionModes = [],
+  onPermissionMode,
   locked = false,
   side = "top",
   open,
@@ -77,6 +89,13 @@ export function ModelPicker({
   const currentModel = resolveModel(agentId ? catalog[agentId] : undefined, modelId)
   const currentKey = agent && currentModel ? modelKey(agent.id, currentModel.id) : null
   const effort = resolveEffort(currentModel, currentKey ? preferences.efforts[currentKey] : null)
+  const switchOn = (name: ModelSwitch) =>
+    resolveSwitch(
+      currentModel,
+      name,
+      currentKey ? preferences.switches[name].includes(currentKey) : false,
+    )
+  const switches = MODEL_SWITCHES.filter((name) => switchOn(name))
   const [tab, setTab] = useState<string>(agentId ?? FAVORITES)
   const [query, setQuery] = useState("")
   const [index, setIndex] = useState(0)
@@ -146,6 +165,10 @@ export function ModelPicker({
     if (list && row) revealInList(list, row)
   }, [index])
 
+  /**
+   * 选中一个模型。弹层不跟着关：选完模型往往还要接着调它的思考深度、快速模式或权限，
+   * 底栏会立刻换成新模型的设置；按 Esc 或点外面再关。
+   */
   function choose(row: Row | undefined): void {
     if (!row || locked) return
     onSelectModel?.({
@@ -153,18 +176,20 @@ export function ModelPicker({
       agentId: row.agent.agentId,
       modelId: row.model.id,
     })
-    onOpenChange(false)
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
-    // 回车总是选中高亮的模型；单选按钮会拦下回车，所以在 defaultPrevented 之前处理。
+    const target = event.target as HTMLElement
+    // 回车选中高亮的模型；在思考深度滑块上按回车也一样。滑块自己处理方向键。
+    const inEffort = target.closest(".model-effort") !== null
+    // 底栏的快速开关与权限自己处理按键，回车也是按它们自己的按钮。
+    if (!inEffort && target.closest(".model-foot")) return
     if (event.key === "Enter") {
       event.preventDefault()
       choose(rows[index])
       return
     }
-    // 思考深度的分段控件自己处理方向键，不再移动列表或切换左栏。
-    if (event.defaultPrevented) return
+    if (event.defaultPrevented || inEffort) return
     if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
       event.preventDefault()
       choose(rows[Number(event.key) - 1])
@@ -189,181 +214,172 @@ export function ModelPicker({
   const loading = tab !== FAVORITES && catalog[tab] === undefined
   const tabAgent = agents.find((item) => item.id === tab)
   const chipLabel = currentModel?.label ?? agent?.label ?? t("composer.model.choose")
+  const PermissionIcon = PERMISSION_ICONS[permissionMode]
+  const showPermission = onPermissionMode !== undefined && permissionModes.length > 0
+  const chipParts = [
+    agent?.label,
+    currentModel?.label,
+    effort ? effortLabel(effort, t) : null,
+    ...switches.map((name) => switchLabel(name, t)),
+    permissionMode !== DEFAULT_PERMISSION ? t(permissionKeys[permissionMode].label) : null,
+  ]
   return (
     <Popover.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <Popover.Trigger
         className="chip-btn model-chip"
         type="button"
+        data-mode={permissionMode}
         title={`${t("composer.modelMenu")} ${formatShortcut("Mod+/")}`}
-        aria-label={`${t("composer.modelMenu")}: ${[agent?.label, currentModel?.label, effort ? t(effortKeys[effort]) : null].filter(Boolean).join(" · ")}`}
+        aria-label={`${t("composer.modelMenu")}: ${chipParts.filter(Boolean).join(" · ")}`}
       >
         {agent ? <EntityAvatar id={agent.id} name={agent.label} size="sm" /> : null}
         <span className="model-name truncate">{chipLabel}</span>
-        {effort ? <span className="model-depth">{t(effortKeys[effort])}</span> : null}
+        {effort ? <span className="model-depth">{effortLabel(effort, t)}</span> : null}
+        {switches.map((name) => (
+          <SwitchMark key={name} name={name} />
+        ))}
+        {permissionMode !== DEFAULT_PERMISSION ? (
+          <span className="model-chip-mode" data-mode={permissionMode}>
+            <PermissionIcon className="ic ic-sm" aria-hidden="true" />
+          </span>
+        ) : null}
         <ChevronDown className="ic chip-caret" aria-hidden="true" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner side={side} align="end" sideOffset={8}>
           <Popover.Popup className="model-picker" initialFocus={searchRef}>
-            <div className="model-picker-body" onKeyDown={onKeyDown}>
-              <nav
-                className="model-rail"
-                role="tablist"
-                aria-orientation="vertical"
-                aria-label={t("composer.model.agents")}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === FAVORITES}
-                  className="rail-btn"
-                  title={t("composer.model.favorites")}
-                  aria-label={t("composer.model.favorites")}
-                  onClick={() => setTab(FAVORITES)}
+            <div className="model-picker-frame" onKeyDown={onKeyDown}>
+              <div className="model-picker-body">
+                <nav
+                  className="model-rail"
+                  role="tablist"
+                  aria-orientation="vertical"
+                  aria-label={t("composer.model.agents")}
                 >
-                  <Star className="ic" aria-hidden="true" />
-                </button>
-                <span className="rail-sep" aria-hidden="true" />
-                {agents.map((item) => (
                   <button
-                    key={item.id}
                     type="button"
                     role="tab"
-                    aria-selected={tab === item.id}
+                    aria-selected={tab === FAVORITES}
                     className="rail-btn"
-                    data-current={item.id === agentId ? "true" : undefined}
-                    data-unavailable={item.installed === false ? "true" : undefined}
-                    title={
-                      item.installed === false
-                        ? `${item.label} · ${t("composer.model.notInstalled")}`
-                        : item.label
-                    }
-                    aria-label={item.label}
-                    onClick={() => setTab(item.id)}
+                    title={t("composer.model.favorites")}
+                    aria-label={t("composer.model.favorites")}
+                    onClick={() => setTab(FAVORITES)}
                   >
-                    <EntityAvatar id={item.id} name={item.label} size="md" />
+                    <Star className="ic" aria-hidden="true" />
                   </button>
-                ))}
-              </nav>
-              <div className="model-pane">
-                <div className="model-search">
-                  <SearchField
-                    variant="plain"
-                    inputRef={searchRef}
-                    value={query}
-                    onValueChange={setQuery}
-                    placeholder={t("composer.model.search")}
-                  />
-                </div>
-                <div
-                  className="model-list"
-                  role="listbox"
-                  ref={listRef}
-                  aria-label={
-                    tab === FAVORITES ? t("composer.model.favorites") : (tabAgent?.label ?? "")
-                  }
-                >
-                  {loading ? (
-                    <EmptyState
-                      size="compact"
-                      icon={<Loader2 className="ic spin" />}
-                      title={t("composer.model.loading")}
-                    />
-                  ) : null}
-                  {!loading && rows.length === 0 ? (
-                    <EmptyState
-                      size="compact"
-                      icon={tab === FAVORITES && !query ? <Star className="ic" /> : undefined}
+                  <span className="rail-sep" aria-hidden="true" />
+                  {agents.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={tab === item.id}
+                      className="rail-btn"
+                      data-current={item.id === agentId ? "true" : undefined}
+                      data-unavailable={item.installed === false ? "true" : undefined}
                       title={
-                        tab === FAVORITES && !query
-                          ? t("composer.model.noFavorites")
-                          : t("composer.model.none")
+                        item.installed === false
+                          ? `${item.label} · ${t("composer.model.notInstalled")}`
+                          : item.label
                       }
+                      aria-label={item.label}
+                      onClick={() => setTab(item.id)}
+                    >
+                      <EntityAvatar id={item.id} name={item.label} size="md" />
+                    </button>
+                  ))}
+                </nav>
+                <div className="model-pane">
+                  <div className="model-search">
+                    <SearchField
+                      variant="plain"
+                      inputRef={searchRef}
+                      value={query}
+                      onValueChange={setQuery}
+                      placeholder={t("composer.model.search")}
                     />
-                  ) : null}
-                  {rows.map((row, rowIndex) => {
-                    const key = modelKey(row.agent.id, row.model.id)
-                    const current = row.agent.id === agentId && row.model.id === currentModel?.id
-                    const favorite = preferences.favorites.includes(key)
-                    // 第二行是模型所属的实例与补充说明，和 T3 一样在每个模型下面标出提供它的实例。
-                    const note = row.model.isDefault
-                      ? t("composer.model.default")
-                      : row.model.custom
-                        ? t("composer.model.custom")
-                        : row.model.description
-                    return (
-                      <ListRow
-                        key={key}
-                        role="option"
-                        aria-selected={current}
-                        aria-disabled={locked || undefined}
-                        data-highlighted={rowIndex === index ? "" : undefined}
-                        className={current ? "model-row is-current" : "model-row"}
-                        onMouseEnter={() => {
+                  </div>
+                  <div
+                    className="model-list"
+                    role="listbox"
+                    ref={listRef}
+                    aria-label={
+                      tab === FAVORITES ? t("composer.model.favorites") : (tabAgent?.label ?? "")
+                    }
+                  >
+                    {loading ? (
+                      <EmptyState
+                        size="compact"
+                        icon={<Loader2 className="ic spin" />}
+                        title={t("composer.model.loading")}
+                      />
+                    ) : null}
+                    {!loading && rows.length === 0 ? (
+                      <EmptyState
+                        size="compact"
+                        icon={tab === FAVORITES && !query ? <Star className="ic" /> : undefined}
+                        title={
+                          tab === FAVORITES && !query
+                            ? t("composer.model.noFavorites")
+                            : t("composer.model.none")
+                        }
+                      />
+                    ) : null}
+                    {rows.map((row, rowIndex) => (
+                      <ModelRow
+                        key={modelKey(row.agent.id, row.model.id)}
+                        row={row}
+                        rowIndex={rowIndex}
+                        current={row.agent.id === agentId && row.model.id === currentModel?.id}
+                        highlighted={rowIndex === index}
+                        locked={locked}
+                        favorite={preferences.favorites.includes(
+                          modelKey(row.agent.id, row.model.id),
+                        )}
+                        onToggleFavorite={() =>
+                          preferences.toggleFavorite(modelKey(row.agent.id, row.model.id))
+                        }
+                        onHover={() => {
                           if (rowIndex === index) return
                           hovered.current = true
                           setIndex(rowIndex)
                         }}
-                        onClick={() => choose(row)}
-                        title={row.model.label}
-                        titleProps={{ className: "model-row-name" }}
-                        description={
-                          <span className="model-row-agent">
-                            <EntityAvatar id={row.agent.id} name={row.agent.label} size="sm" />
-                            <span className="truncate">{row.agent.label}</span>
-                            {note ? (
-                              <span className="model-row-note truncate">· {note}</span>
-                            ) : null}
-                          </span>
-                        }
-                        meta={
-                          current || rowIndex < 9 ? (
-                            <>
-                              {current ? (
-                                <Check className="ic ic-sm model-row-check" aria-hidden="true" />
-                              ) : null}
-                              {rowIndex < 9 ? (
-                                <kbd className="model-row-kbd">
-                                  {formatShortcut(`Mod+${rowIndex + 1}`)}
-                                </kbd>
-                              ) : null}
-                            </>
-                          ) : null
-                        }
-                        actions={
-                          <button
-                            type="button"
-                            className="model-star"
-                            aria-pressed={favorite}
-                            aria-label={
-                              favorite
-                                ? t("composer.model.unfavorite")
-                                : t("composer.model.favorite")
-                            }
-                            title={
-                              favorite
-                                ? t("composer.model.unfavorite")
-                                : t("composer.model.favorite")
-                            }
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              preferences.toggleFavorite(key)
-                            }}
-                          >
-                            <Star className="ic ic-sm" aria-hidden="true" />
-                          </button>
-                        }
+                        onChoose={() => choose(row)}
                       />
-                    )
-                  })}
+                    ))}
+                  </div>
                 </div>
-                {locked ? <div className="model-locked">{t("composer.model.locked")}</div> : null}
-                {currentModel && currentKey && currentModel.efforts.length > 0 ? (
-                  <EffortControl
-                    efforts={currentModel.efforts}
-                    value={effort}
-                    modelLabel={currentModel.label}
-                    onChange={(next) => preferences.setEffort(currentKey, next)}
+              </div>
+              {locked ? <div className="model-locked">{t("composer.model.locked")}</div> : null}
+              <div className="model-foot">
+                <div className="model-switches">
+                  {MODEL_SWITCHES.map((name) => (
+                    <SwitchButton
+                      key={name}
+                      name={name}
+                      on={switchOn(name)}
+                      supported={Boolean(currentModel?.[name]) && currentKey !== null}
+                      onToggle={() => {
+                        if (currentKey) preferences.setSwitch(name, currentKey, !switchOn(name))
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="model-foot-center">
+                  {currentModel && currentKey ? (
+                    <EffortControl
+                      efforts={currentModel.efforts}
+                      value={effort}
+                      modelLabel={currentModel.label}
+                      onChange={(next) => preferences.setEffort(currentKey, next)}
+                    />
+                  ) : null}
+                </div>
+                {showPermission ? (
+                  <PermissionSwitch
+                    value={permissionMode}
+                    modes={permissionModes}
+                    onChange={onPermissionMode}
                   />
                 ) : null}
               </div>
@@ -384,36 +400,4 @@ function revealInList(list: HTMLElement, row: HTMLElement): void {
   const box = row.getBoundingClientRect()
   if (box.top < view.top) list.scrollTop -= view.top - box.top
   else if (box.bottom > view.bottom) list.scrollTop += box.bottom - view.bottom
-}
-
-/** 思考深度的分段选择：第一段是「默认」（没选过档位时就是它），后面只列出当前模型支持的档位。 */
-function EffortControl({
-  efforts,
-  value,
-  modelLabel,
-  onChange,
-}: {
-  efforts: readonly ReasoningEffort[]
-  value: ReasoningEffort | null
-  modelLabel: string
-  onChange: (effort: ReasoningEffort | null) => void
-}) {
-  const { t } = useLocale()
-  return (
-    <div className="model-effort">
-      <span className="model-effort-label">
-        {t("composer.effort.label")}
-        <span className="model-effort-model truncate">{modelLabel}</span>
-      </span>
-      <SegmentedControl<EffortChoice>
-        aria-label={t("composer.effort.label")}
-        value={value ?? DEFAULT_EFFORT}
-        onValueChange={(next) => onChange(next === DEFAULT_EFFORT ? null : next)}
-        options={[
-          { value: DEFAULT_EFFORT, label: t("composer.effort.default") },
-          ...efforts.map((effort) => ({ value: effort, label: t(effortKeys[effort]) })),
-        ]}
-      />
-    </div>
-  )
 }

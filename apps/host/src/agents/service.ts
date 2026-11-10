@@ -12,7 +12,7 @@ import type {
   RunStatus,
 } from "@pigcode/contracts"
 import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
-import type { ApprovalDecision, ApprovalRequest, AgentDriver } from "./driver"
+import type { ApprovalDecision, ApprovalRequest, AgentDriver, UserInput } from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
 import type { Switch } from "./switching"
@@ -26,8 +26,22 @@ export interface StartRunResult {
 /** run 的可选参数；effort 只作用于本次 run。 */
 export interface StartRunOptions {
   effort?: ReasoningEffort
+  /** 本次 run 用快速模式。 */
+  fast?: boolean
+  /** 本次 run 打开 Ultracode。 */
+  ultracode?: boolean
   /** 本次 run 用的实例；缺省时沿用线程最近的实例。 */
   instanceId?: string
+}
+
+/** 交给 driver 的输入：文本加上这次 run 选的思考深度、快速模式与 Ultracode。 */
+export function runInput(text: string, options: StartRunOptions): UserInput {
+  return {
+    text,
+    ...(options.effort ? { effort: options.effort } : {}),
+    ...(options.fast ? { fast: true } : {}),
+    ...(options.ultracode ? { ultracode: true } : {}),
+  }
 }
 
 /** 一次审批请求的句柄；decision 在 UI 决议后 resolve。 */

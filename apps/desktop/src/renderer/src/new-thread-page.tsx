@@ -95,11 +95,7 @@ export function NewThreadPage({
     let threadId: string | null = null
     try {
       threadId = (await materializeDraft(deps.connection, deps.store, locale)).id
-      await deps.connection.startRun(
-        threadId,
-        text,
-        submitOptions.effort ? { effort: submitOptions.effort } : {},
-      )
+      await deps.connection.startRun(threadId, text, submitOptions)
     } catch (error) {
       // 还没建成会话时放回草稿；建成了就放进新会话的输入框。
       prefillComposer(threadId ?? NEW_THREAD_DRAFT_KEY, { text })

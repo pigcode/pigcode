@@ -1,4 +1,4 @@
-// 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、权限、agent/模型/思考深度选择，以及发送/停止。
+// 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、agent/模型/思考深度/速度/权限选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
 import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
@@ -8,8 +8,6 @@ import {
   nextPermissionMode,
   permissionKeys,
   permissionModes,
-  resolveEffort,
-  resolveModel,
   type ComposerAgent,
   type ComposerModelCatalog,
   type ComposerModelChoice,
@@ -34,18 +32,19 @@ import {
   setPlainText,
   type ComposerCommand,
 } from "./composer-editor"
-import { ModelPicker } from "./model-picker"
-import { modelKey, useModelPreferences } from "./model-preferences"
-import { PermissionMenu } from "./permission-menu"
+import { ComposerModelControls } from "./composer-model-controls"
+import { useRunPreferences } from "./model-preferences"
 import { SuggestionPanel } from "./suggestion-panel"
 import { SuggestionStore } from "./suggestion-store"
 import { COMPOSER_MENTION_EVENT, mentionPathOf } from "./composer-mention"
 import { ComposerContextChips, useComposerContexts, withContexts } from "./composer-context"
 import { useWrapped } from "./composer-layout"
 
-/** 发送时附带的选项；思考深度来自当前模型与用户偏好。 */
+/** 发送时附带的选项；思考深度、快速模式与 Ultracode 来自当前模型与用户偏好。两个开关只在开着时出现。 */
 export interface ComposerSubmitOptions {
   effort: ReasoningEffort | null
+  fast?: true
+  ultracode?: true
 }
 
 /** 会话输入区 props；agent、模型、权限都由调用方控制，思考深度与收藏保存在本机偏好里。 */
@@ -123,14 +122,9 @@ export function Composer({
   commands = [],
 }: ComposerProps) {
   const { t } = useLocale()
-  const preferences = useModelPreferences()
   const [pickerOpen, setPickerOpen] = useState(false)
   const store = useMemo(() => new SuggestionStore(), [])
-  const currentModel = resolveModel(agentId ? catalog[agentId] : undefined, modelId)
-  const effort = resolveEffort(
-    currentModel,
-    agentId && currentModel ? preferences.efforts[modelKey(agentId, currentModel.id)] : null,
-  )
+  const { effort, fast, ultracode } = useRunPreferences(agentId, catalog, modelId)
   const availableModes = canPlan ? permissionModes : permissionModes.filter((id) => id !== "plan")
 
   const builtinCommands: ComposerCommand[] = [
@@ -166,6 +160,8 @@ export function Composer({
     running,
     disabled,
     effort,
+    fast,
+    ultracode,
     permissionMode,
     availableModes,
     onPermissionMode,
@@ -180,6 +176,8 @@ export function Composer({
     running,
     disabled,
     effort,
+    fast,
+    ultracode,
     permissionMode,
     availableModes,
     onPermissionMode,
@@ -209,7 +207,11 @@ export function Composer({
     const text = editorText(editor)
     const { contexts, clear } = contextsRef.current
     if (!text && contexts.length === 0) return
-    current.onSubmit(withContexts(text, contexts), { effort: current.effort })
+    current.onSubmit(withContexts(text, contexts), {
+      effort: current.effort,
+      ...(current.fast ? { fast: true as const } : {}),
+      ...(current.ultracode ? { ultracode: true as const } : {}),
+    })
     if (text) rememberSent(text)
     historyRef.current = null
     editor.commands.clearContent(true)
@@ -428,29 +430,22 @@ export function Composer({
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
-      <PermissionMenu
-        value={permissionMode}
-        modes={availableModes}
-        onChange={onPermissionMode}
+      <ComposerModelControls
+        agents={agents}
+        agentId={agentId}
+        modelId={modelId}
+        catalog={catalog}
+        onLoadModels={onLoadModels}
+        onSelectModel={(choice) => onSelectModel?.(choice)}
+        selectable={Boolean(onSelectModel)}
+        permissionMode={permissionMode}
+        permissionModes={availableModes}
+        onPermissionMode={onPermissionMode}
+        running={running}
         side={menuSide}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
       />
-      {agents.length > 0 ? (
-        <ModelPicker
-          agents={agents}
-          agentId={agentId}
-          modelId={modelId}
-          catalog={catalog}
-          onLoadModels={onLoadModels}
-          onSelectModel={(choice) => {
-            onSelectModel?.(choice)
-            editor?.commands.focus()
-          }}
-          locked={running || !onSelectModel}
-          side={menuSide}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        />
-      ) : null}
       {running && canInterrupt ? (
         <Button
           variant="plain"

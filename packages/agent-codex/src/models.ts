@@ -21,6 +21,21 @@ function parseEfforts(value: unknown): ReasoningEffort[] {
   return efforts
 }
 
+/** Codex 快速模式对应的服务档 id。 */
+export const FAST_SERVICE_TIER = "fast"
+
+/** 模型是否有 fast 服务档：新协议是 serviceTiers 对象数组，旧协议是 additionalSpeedTiers 字符串数组。 */
+function hasFastTier(model: Record<string, unknown>): boolean {
+  const tiers = Array.isArray(model.serviceTiers)
+    ? model.serviceTiers.map((tier) =>
+        typeof tier === "object" && tier !== null ? (tier as Record<string, unknown>).id : tier,
+      )
+    : Array.isArray(model.additionalSpeedTiers)
+      ? model.additionalSpeedTiers
+      : []
+  return tiers.includes(FAST_SERVICE_TIER)
+}
+
 /** 兼容 data/models 两种列表包裹，并跳过缺少 id 的条目。 */
 export function parseCodexModels(value: unknown): CodexModelInfo[] {
   if (typeof value !== "object" || value === null) return []
@@ -55,6 +70,7 @@ export function parseCodexModels(value: unknown): CodexModelInfo[] {
       entry.efforts = efforts
       entry.defaultEffort = asReasoningEffort(model.defaultReasoningEffort)
     }
+    if (hasFastTier(model)) entry.fast = true
     result.push(entry)
   }
   return result

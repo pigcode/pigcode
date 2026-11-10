@@ -194,15 +194,27 @@ export const enUS = {
   "composer.model.unfavorite": "Remove from favorites",
   "composer.model.notInstalled": "Not installed",
   "composer.model.locked":
-    "The model can't change while running; thinking applies to the next message",
+    "The model can't change while running; thinking, speed and permissions apply to the next message",
   "composer.effort.label": "Thinking",
   "composer.effort.default": "Default",
+  "composer.effort.none": "None",
   "composer.effort.minimal": "Minimal",
   "composer.effort.low": "Low",
   "composer.effort.medium": "Medium",
   "composer.effort.high": "High",
   "composer.effort.xhigh": "Extra high",
   "composer.effort.max": "Max",
+  "composer.effort.ultra": "Ultra",
+  "composer.effort.unavailable": "{model} has no thinking levels",
+  "composer.speed.toggle": "Fast mode",
+  "composer.speed.fast": "Fast",
+  "composer.speed.fastHint": "Faster · costs more",
+  "composer.speed.unsupported": "No fast mode for this model",
+  "composer.speed.supported": "Supports fast mode",
+  "composer.ultracode.toggle": "Ultracode",
+  "composer.ultracode.hint":
+    "Claude splits the work across parallel subagents; takes longer and uses more",
+  "composer.ultracode.unsupported": "No Ultracode for this model",
   "composer.permission.title": "Permissions",
   "composer.permission.ask": "Ask every time",
   "composer.permission.ask.description": "Ask before editing files or running commands",
@@ -336,6 +348,15 @@ export const enUS = {
     "Plugin tools are not connected: the {name} server failed to start. The model cannot see plugin tools in this turn.",
   "chat.notice.host.restarted":
     "Pigcode restarted, so this turn was interrupted. Any pending approvals went with the agent process — send the message again to continue.",
+  "chat.notice.fast.unavailable": "Fast mode did not apply to this turn; it ran at standard speed.",
+  "chat.notice.fast.unavailable.extra_usage_disabled":
+    "Fast mode did not apply: extra usage is not turned on for this account, so this turn ran at standard speed.",
+  "chat.notice.fast.unavailable.free":
+    "Fast mode did not apply: your plan does not include it, so this turn ran at standard speed.",
+  "chat.notice.fast.unavailable.model_not_allowed":
+    "Fast mode did not apply: this model cannot use it, so this turn ran at standard speed.",
+  "chat.notice.fast.unavailable.cooldown":
+    "Fast mode is cooling down after a rate limit, so this turn ran at standard speed.",
   "plugins.title": "Plugin manager",
   "plugins.pageTitle": "Plugins",
   "plugins.install": "Install plugin",
