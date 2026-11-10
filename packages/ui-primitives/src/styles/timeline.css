@@ -56,7 +56,7 @@
   min-width: 0;
   flex-direction: column;
   gap: 20px;
-  padding: 56px 16px 20px;
+  padding: 56px var(--cv-pad) 20px;
   color: var(--fg);
   font-family: var(--font-content);
   font-size: var(--cv-fs);
@@ -64,13 +64,6 @@
 }
 .turn:not([data-user]) {
   padding-top: 0;
-}
-@container conversation (min-width: 448px) {
-  .turn,
-  .msgs > .marker-divider {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
 }
 
 /* 用户气泡：靠右，浅底细边，右上角小圆角；超过 120px 折叠并渐隐 */
@@ -99,7 +92,7 @@
 }
 @container conversation (min-width: 624px) {
   .msg-user {
-    max-width: 36rem;
+    max-width: var(--cv-bubble);
   }
 }
 .msg-user-body {

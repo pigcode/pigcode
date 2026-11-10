@@ -437,9 +437,14 @@
   --col-narrow: 640px;
   /* 两列卡片的页面：插件与定时任务 */
   --col-wide: 860px;
-  --chat-col: 848px;
-  /* 对话列的最大宽度 */
-  --cv-col: 56rem;
+  /*
+    对话列与输入框的最大宽度，照 Cursor 3.29 Agent 窗口的默认值：两者共用 780px，对话内容左右各留 16px，
+    正文最宽约 748px；用户消息的气泡最宽 560px（agent-panel-constants.js 里的 780 / 16 / 560）。
+  */
+  --chat-col: 780px;
+  --cv-col: 780px;
+  --cv-pad: 16px;
+  --cv-bubble: 560px;
   /* 浮层与窗口边缘的间距；顶行高度（侧栏顶行、线程头与右侧面板标签栏，交通灯竖直居中其中） */
   --gap: 8px;
   --topbar-h: 40px;
