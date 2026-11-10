@@ -4,9 +4,11 @@ import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type {
   CreateSessionInput,
+  AgentCommandInfo,
   AgentDriver,
   AgentModelInfo,
   AgentRuntime,
+  AgentSettingsValues,
   AgentStatus,
   AgentSessionHandle,
   UserInput,
@@ -127,6 +129,28 @@ export class FakeAgentDriver implements AgentDriver {
   /** 固定的模型目录。 */
   async listModels(): Promise<AgentModelInfo[]> {
     return FAKE_MODELS
+  }
+
+  /** 固定的 `/` 命令：一条 CLI 内置命令和一个 skill；cwd 只用来让 E2E 看到它传到了。 */
+  async listCommands(
+    _settings: AgentSettingsValues,
+    cwd: string | null,
+  ): Promise<AgentCommandInfo[]> {
+    return [
+      {
+        name: "review",
+        text: "/review",
+        description: "Review the pending changes",
+        kind: "builtin",
+      },
+      {
+        name: "fake-skill",
+        text: "/fake-skill",
+        description: cwd ? `Fake skill for ${cwd}` : "Fake skill",
+        argumentHint: "<topic>",
+        kind: "skill",
+      },
+    ]
   }
 
   /** 依次推送开始、分片、完成事件；`long` 输入持续输出直到被 abort，`tools` 输入走脚本。 */

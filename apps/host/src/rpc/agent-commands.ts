@@ -1,5 +1,5 @@
 /**
- * `agent.*` 命令的分发：检测、模型目录、设置、实例的增删改与默认实例。
+ * `agent.*` 命令的分发：检测、模型目录、`/` 命令、设置、实例的增删改与默认实例。
  * 从 RpcServer 里分出来，让 server.ts 的分发只留一次调用。
  */
 import type { Context } from "cordis"
@@ -13,6 +13,14 @@ interface InstancePatch {
   label?: string
   enabled?: boolean
   values?: Record<string, unknown>
+}
+
+/** `/` 命令的工作目录：线程的，没有线程时项目的，都没有时 null（只列用户级命令）。 */
+function commandCwd(ctx: Context, value: Params): string | null {
+  if (typeof value.threadId === "string") return ctx.workspace.root(value.threadId)
+  if (typeof value.projectId === "string")
+    return ctx.projects.get(value.projectId)?.rootPath ?? null
+  return null
 }
 
 /** 找不到 agent 时抛出可读的错误。 */
@@ -75,6 +83,11 @@ export async function dispatchAgentCommand(
       const instance = instanceId ? ctx.agents.findInstance(instanceId) : null
       const agentId = instance?.agentId ?? (value.agentId as string)
       return ctx.agents.models(agentId, instanceId)
+    }
+    case "agent.commands": {
+      const instance = ctx.agents.findInstance(value.instanceId as string)
+      if (!instance) return []
+      return ctx.agents.commands(instance.agentId, instance.instanceId, commandCwd(ctx, value))
     }
     case "agent.list":
       return listAgents(ctx)

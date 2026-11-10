@@ -186,6 +186,30 @@ describe("agent.* commands", () => {
     await ctx.fiber.dispose()
   })
 
+  it("serves an instance's slash commands for the project's folder, cached per folder", async () => {
+    const { ctx, project, call } = await setup()
+    const listCommands = vi.fn(async () => [
+      { name: "compact", text: "/compact", description: " Summarize ", kind: "builtin" as const },
+      { name: "compact", text: "/compact", kind: "builtin" as const },
+      { name: "lint", text: "/lint", argumentHint: "", kind: "skill" as const },
+    ])
+    ctx.agents.register({ ...recordingDriver(async () => [SAGE]).driver, listCommands })
+
+    const params = { instanceId: "rec", projectId: project.id }
+    await expect(call("agent.commands", params)).resolves.toEqual([
+      { name: "compact", text: "/compact", description: "Summarize", kind: "builtin" },
+      { name: "lint", text: "/lint", kind: "skill" },
+    ])
+    expect(listCommands).toHaveBeenCalledWith({}, project.rootPath)
+    await call("agent.commands", params)
+    expect(listCommands).toHaveBeenCalledTimes(1)
+    // 没有线程也没有项目时只列用户级的命令，单独缓存。
+    await call("agent.commands", { instanceId: "rec" })
+    expect(listCommands).toHaveBeenLastCalledWith({}, null)
+    await expect(call("agent.commands", { instanceId: "missing" })).resolves.toEqual([])
+    await ctx.fiber.dispose()
+  })
+
   it("rejects the old provider.* and thread.switchProvider names as unknown methods", async () => {
     const { ctx, call } = await setup()
     for (const method of [

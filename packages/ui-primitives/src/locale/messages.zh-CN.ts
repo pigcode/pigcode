@@ -230,6 +230,8 @@ export const zhCN = {
   "composer.suggest.commands": "命令",
   "composer.suggest.noFiles": "没有匹配的文件",
   "composer.suggest.noCommands": "没有匹配的命令",
+  "composer.suggest.source.builtin": "内置",
+  "composer.suggest.source.skill": "Skill",
   "chat.send": "发送",
   "chat.interrupt": "中断",
   "chat.approval.allowOnce": "允许一次",

@@ -10,6 +10,9 @@ export interface SuggestionItem {
   label: string
   detail?: string | undefined
   kind: "file" | "command"
+  /** 命令的来源与参数提示；文件没有。 */
+  source?: "pigcode" | "builtin" | "skill" | undefined
+  hint?: string | undefined
 }
 
 /** 面板渲染所需的快照。 */
@@ -47,13 +50,20 @@ export class SuggestionStore {
   /** 插件开始或更新一次建议；查询变化时回到第一项。 */
   show(kind: SuggestionItem["kind"], props: SuggestionProps<SuggestionItem, SuggestionItem>): void {
     this.select = props.command
+    // 列表在重新读取（每敲一个字都会）：先留着上一次的结果，不要闪成空列表。
+    const stale =
+      props.loading &&
+      props.items.length === 0 &&
+      this.snapshot.active &&
+      this.snapshot.kind === kind
+    const items = stale ? this.snapshot.items : props.items
     const sameQuery = this.snapshot.active && this.snapshot.query === props.query
-    const index = sameQuery ? Math.min(this.snapshot.index, Math.max(0, props.items.length - 1)) : 0
+    const index = sameQuery ? Math.min(this.snapshot.index, Math.max(0, items.length - 1)) : 0
     this.set({
       active: true,
       kind,
       query: props.query,
-      items: props.items,
+      items,
       index,
       loading: props.loading,
     })

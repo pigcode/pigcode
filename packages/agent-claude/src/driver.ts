@@ -15,6 +15,7 @@ import type {
   ApprovalRequest,
   CreateSessionInput,
   AgentDriver,
+  AgentCommandInfo,
   AgentModelInfo,
   AgentRuntime,
   AgentSessionHandle,
@@ -26,6 +27,7 @@ import type {
 import { spawnClaudeCli, withCliStderr, type ClaudeCliProcess } from "./cli-process"
 import { detectClaude, type ClaudeDetection } from "./detect"
 import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
+import { listClaudeCommands } from "./commands"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
 import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
@@ -118,6 +120,21 @@ export class ClaudeDriver implements AgentDriver {
       executable: sdkExecutable(launch.executable),
       env: launch.env,
       detect: () => this.probe(launch),
+    })
+  }
+
+  /** 输入框 `/` 菜单里的命令：CLI 内置命令、skill、插件命令与自定义命令。 */
+  async listCommands(
+    settings: AgentSettingsValues,
+    cwd: string | null,
+  ): Promise<AgentCommandInfo[]> {
+    const launch = claudeLaunch(settings, this.fixedExecutable)
+    return listClaudeCommands({
+      queryFn: this.queryFn,
+      executable: sdkExecutable(launch.executable),
+      env: launch.env,
+      detect: () => this.probe(launch),
+      cwd,
     })
   }
 

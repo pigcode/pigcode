@@ -2,6 +2,7 @@
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
 import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import type { AgentCommand } from "@pigcode/contracts"
 import { Button, Menu, useLocale } from "@pigcode/ui-primitives"
 import {
   getComposerKeyAction,
@@ -32,6 +33,7 @@ import {
   setPlainText,
   type ComposerCommand,
 } from "./composer-editor"
+import { useAgentCommandSource } from "./agent-commands"
 import { ComposerModelControls } from "./composer-model-controls"
 import { useRunPreferences } from "./model-preferences"
 import { SuggestionPanel } from "./suggestion-panel"
@@ -92,6 +94,8 @@ export interface ComposerProps {
   files?: () => Promise<readonly string[]>
   /** / 命令；内置的切换模型与权限之外的命令由调用方提供。 */
   commands?: readonly ComposerCommand[]
+  /** 读一个 Agent 实例的 / 命令与 skill；输入框获得焦点时预取当前实例的，调用方负责缓存。 */
+  loadAgentCommands?: ((instanceId: string) => Promise<readonly AgentCommand[]>) | undefined
 }
 
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
@@ -120,6 +124,7 @@ export function Composer({
   draftKey = null,
   files,
   commands = [],
+  loadAgentCommands,
 }: ComposerProps) {
   const { t } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -153,6 +158,7 @@ export function Composer({
 
   // 同一个 `/` 名字只留第一条：输入框自己的命令在前，外面传进来的重名命令不显示。
   const allCommands = firstPerLabel([...builtinCommands, ...commands])
+  const agentSource = useAgentCommandSource(agentId, loadAgentCommands)
 
   // 编辑器只创建一次；回调与配置通过 ref 读取最新值。
   const latest = useRef({
@@ -170,6 +176,7 @@ export function Composer({
     smartPunctuation,
     files,
     commands: allCommands,
+    agentCommands: agentSource,
   })
   latest.current = {
     onSubmit,
@@ -186,6 +193,7 @@ export function Composer({
     smartPunctuation,
     files,
     commands: allCommands,
+    agentCommands: agentSource,
   }
   const editorRef = useRef<Editor | null>(null)
   const draftKeyRef = useRef<string | null>(draftKey)
@@ -240,12 +248,14 @@ export function Composer({
 
   const editor = useEditor({
     immediatelyRender: true,
+    onFocus: () => void latest.current.agentCommands?.(),
     extensions: composerExtensions(
       {
         placeholder: () => latest.current.placeholder,
         smartPunctuation: () => latest.current.smartPunctuation,
         files: () => latest.current.files,
         commands: () => latest.current.commands,
+        agentCommands: () => latest.current.agentCommands,
       },
       store,
     ),

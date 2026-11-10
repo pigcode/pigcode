@@ -14,6 +14,7 @@ import {
 } from "@pigcode/client-runtime"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ChatView, collectSubagents, type ApprovalDecision } from "@pigcode/ui-chat"
+import { useAgentCommandsLoader } from "./agent-commands"
 import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
 import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
@@ -290,6 +291,7 @@ export function ChatViewContainer({
   }
 
   const fileRoot = mainId
+  const loadAgentCommands = useAgentCommandsLoader(deps.connection, threadId ? { threadId } : null)
   const files = useMemo(
     () =>
       fileRoot
@@ -375,6 +377,7 @@ export function ChatViewContainer({
         onPermissionMode={setPermissionMode}
         {...(files ? { files } : {})}
         commands={commands}
+        loadAgentCommands={loadAgentCommands}
         rightOpen={rightOpen}
         {...(onToggleRight ? { onToggleRight } : {})}
         {...(layoutControls !== undefined ? { layoutControls } : {})}

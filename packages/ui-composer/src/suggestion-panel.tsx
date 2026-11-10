@@ -1,8 +1,21 @@
-/** @ 文件与 / 命令的建议面板：贴在输入框上沿，宽度与输入框一致。 */
+/**
+ * @ 文件与 / 命令的建议面板：贴在输入框上沿，宽度与输入框一致。
+ * 命令分三种来源，用图标和右侧的小标签区分：Pigcode 自己的命令、Agent 内置命令、skill 与自定义命令。
+ */
 import { useEffect, useRef, useSyncExternalStore } from "react"
-import { FileText, Loader2, Slash } from "lucide-react"
+import { FileText, Loader2, Slash, Sparkles, SquareTerminal, type LucideIcon } from "lucide-react"
 import { EmptyState, useLocale } from "@pigcode/ui-primitives"
-import type { SuggestionStore } from "./suggestion-store"
+import type { SuggestionItem, SuggestionStore } from "./suggestion-store"
+
+const ICONS: Record<NonNullable<SuggestionItem["source"]>, LucideIcon> = {
+  pigcode: Slash,
+  builtin: SquareTerminal,
+  skill: Sparkles,
+}
+
+function itemIcon(item: SuggestionItem): LucideIcon {
+  return item.kind === "file" ? FileText : ICONS[item.source ?? "pigcode"]
+}
 
 /** 把路径拆成文件名和所在目录，列表里文件名在前、目录淡显。 */
 function splitPath(path: string): { name: string; dir: string } {
@@ -46,12 +59,18 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
       {snapshot.items.map((item, index) => {
         const active = index === snapshot.index
         const path = item.kind === "file" ? splitPath(item.label) : null
+        const Icon = itemIcon(item)
+        const tag =
+          item.source === "builtin" || item.source === "skill"
+            ? t(`composer.suggest.source.${item.source}`)
+            : null
         return (
           <div
             key={`${item.kind}-${item.id}`}
             role="option"
             aria-selected={active}
             data-highlighted={active ? "" : undefined}
+            data-source={item.source}
             className="menu-item"
             onMouseEnter={() => store.highlight(index)}
             onMouseDown={(event) => {
@@ -60,13 +79,11 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
               store.choose(index)
             }}
           >
-            {item.kind === "file" ? (
-              <FileText className="ic ic-sm" aria-hidden="true" />
-            ) : (
-              <Slash className="ic ic-sm" aria-hidden="true" />
-            )}
+            <Icon className="ic ic-sm" aria-hidden="true" />
             <span className="suggest-label">{path ? path.name : item.label}</span>
+            {item.hint ? <span className="suggest-hint">{item.hint}</span> : null}
             <span className="suggest-detail truncate">{path ? path.dir : (item.detail ?? "")}</span>
+            {tag ? <span className="suggest-tag">{tag}</span> : null}
           </div>
         )
       })}

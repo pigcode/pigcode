@@ -83,6 +83,8 @@ export interface ChatViewProps {
   files?: () => Promise<readonly string[]>
   /** 输入框里的 / 命令。 */
   commands?: readonly ComposerCommand[]
+  /** 读 Agent 实例的 / 命令与 skill；容器应调用 agent.commands（带线程）并缓存。 */
+  loadAgentCommands?: ComposerProps["loadAgentCommands"]
   /** 打开时间线里提到的文件（工具行与 @ 引用里的路径，可能是绝对路径）。 */
   onOpenFile?: (path: string) => void
   /** 在右栏查看改动；path 是要看的文件。 */
@@ -148,6 +150,7 @@ export function ChatView({
   onPermissionMode,
   files,
   commands,
+  loadAgentCommands,
   onOpenFile,
   onViewDiff,
   rightOpen = false,
@@ -271,6 +274,7 @@ export function ChatView({
     ...(thread && onPermissionMode ? { onPermissionMode } : {}),
     ...(files ? { files } : {}),
     ...(commands ? { commands } : {}),
+    ...(loadAgentCommands ? { loadAgentCommands } : {}),
     canPlan,
     canInterrupt,
   } satisfies ComposerProps

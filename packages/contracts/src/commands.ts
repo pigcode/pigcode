@@ -100,6 +100,15 @@ export const commandSchemas = {
   "agent.registered": agentRegisteredParams,
   "agent.default": agentDefaultParams,
   "agent.models": agentModelsParams,
+  /**
+   * 实例在某个工作目录下的 `/` 命令（CLI 命令、skill、自定义命令）。工作目录取线程的，
+   * 还没有线程（新会话草稿）时取项目的；都没有时只列用户级的。
+   */
+  "agent.commands": z.object({
+    instanceId: z.string().min(1),
+    threadId: z.string().min(1).optional(),
+    projectId: z.string().min(1).optional(),
+  }),
   /** 设置页的 agent 列表：插件、Agent 功能、设置字段、实例与当前值。 */
   "agent.list": z.object({}),
   /** 整体替换一个实例的设置值；对之后新建的会话、检测与模型目录生效。instanceId 缺省时写默认实例。 */

@@ -4,6 +4,7 @@ export type {
   ApprovalDecision,
   ApprovalRequest,
   CreateSessionInput,
+  AgentCommandInfo,
   AgentDriver,
   AgentModelInfo,
   AgentRuntime,

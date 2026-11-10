@@ -2,9 +2,8 @@
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type {
-  ApprovalDecision,
-  ApprovalRequest,
   CreateSessionInput,
+  AgentCommandInfo,
   AgentDriver,
   AgentModelInfo,
   AgentRuntime,
@@ -17,6 +16,8 @@ import { CodexRpcClient } from "./client"
 import { detectCodex, type CodexDetection } from "./detect"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
 import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
+import { parseCodexSkills } from "./skills"
+import { mcpToolApproval, toApprovalResponse, toElicitationResponse } from "./approvals"
 import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { normalizeCodexNotification } from "./normalize"
 import {
@@ -50,11 +51,6 @@ interface CodexSessionState {
 export interface CodexDriverOptions {
   transportFactory?: (launch: CodexLaunch) => CodexTransport
   detect?: (launch: CodexLaunch) => Promise<CodexDetection>
-}
-
-/** Codex 审批响应；Pigcode 只会产生这三种决议。 */
-interface CodexApprovalResponse {
-  decision: "accept" | "acceptForSession" | "decline"
 }
 
 /** 基于 `codex app-server --stdio` 的 Codex driver。 */
@@ -289,14 +285,35 @@ export class CodexDriver implements AgentDriver {
     }
   }
 
-  /** 临时启动 app-server 拉取模型目录；失败时返回空目录，不影响设置页。 */
+  /** 模型目录；读不到时返回空目录，不影响设置页。 */
   async listModels(settings: AgentSettingsValues = {}): Promise<AgentModelInfo[]> {
+    return this.ask(settings, async (client) =>
+      parseCodexModels(await client.request("model/list", {})),
+    )
+  }
+
+  /** 输入框 `/` 菜单里的 skill（`skills/list`）；读不到时返回空列表。 */
+  async listCommands(
+    settings: AgentSettingsValues,
+    cwd: string | null,
+  ): Promise<AgentCommandInfo[]> {
+    const params = cwd ? { cwds: [cwd] } : {}
+    return this.ask(settings, async (client) =>
+      parseCodexSkills(await client.request("skills/list", params), cwd),
+    )
+  }
+
+  /** 临时启动一个 app-server 做一次只读请求；失败时返回空数组。 */
+  private async ask<T>(
+    settings: AgentSettingsValues,
+    read: (client: CodexRpcClient) => Promise<T[]>,
+  ): Promise<T[]> {
     const client = this.openClient(codexLaunch(settings))
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
       })
-      return parseCodexModels(await client.request("model/list", {}))
+      return await read(client)
     } catch {
       return []
     } finally {
@@ -441,47 +458,4 @@ function completedTurnId(params: unknown): string | undefined {
     if (typeof id === "string") return id
   }
   return typeof record.turnId === "string" ? record.turnId : undefined
-}
-
-/**
- * Codex 用 MCP elicitation 请求批准工具调用，靠 `_meta.codex_approval_kind` 和普通的 elicitation 区分。
- * 请求里没有单独的工具名字段，只能从 message 里取；取不到时退回到 server 名。
- */
-function mcpToolApproval(params: unknown): ApprovalRequest | null {
-  const record = params as {
-    serverName?: unknown
-    message?: unknown
-    _meta?: { codex_approval_kind?: unknown; tool_description?: unknown; tool_params?: unknown }
-  }
-  const server = record.serverName
-  if (record._meta?.codex_approval_kind !== "mcp_tool_call" || typeof server !== "string") {
-    return null
-  }
-  const tool =
-    typeof record.message === "string" ? /tool "([^"]+)"/.exec(record.message)?.[1] : null
-  const description = record._meta.tool_description
-  return {
-    toolName: tool ? `mcp__${server}__${tool}` : `mcp__${server}`,
-    input: record._meta.tool_params ?? {},
-    ...(typeof description === "string" ? { description } : {}),
-  }
-}
-
-/** 把 Pigcode 审批决议映射为 MCP elicitation 的答复；本会话内放行靠 `_meta.persist`。 */
-function toElicitationResponse(decision: ApprovalDecision): Record<string, unknown> {
-  if (decision === "deny") return { action: "decline" }
-  if (decision === "allow-for-session") {
-    return { action: "accept", content: {}, _meta: { persist: "session" } }
-  }
-  return { action: "accept", content: {} }
-}
-
-/** 把 Pigcode 审批决议映射为 Codex 的 accept/acceptForSession/decline。 */
-function toApprovalResponse(
-  decision: ApprovalDecision,
-  sessionDecision: "acceptForSession",
-): CodexApprovalResponse {
-  if (decision === "deny") return { decision: "decline" }
-  if (decision === "allow-for-session") return { decision: sessionDecision }
-  return { decision: "accept" }
 }

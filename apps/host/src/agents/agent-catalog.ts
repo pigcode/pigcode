@@ -6,7 +6,7 @@
  * 用户新建的实例存在 `agentInstances`；线程、会话与检测结果都按 instanceId 区分。
  */
 import type { Context } from "cordis"
-import type { AgentInstance, AgentModel, AgentStatus } from "@pigcode/contracts"
+import type { AgentCommand, AgentInstance, AgentModel, AgentStatus } from "@pigcode/contracts"
 import {
   DEFAULT_AGENT_KEY,
   DEFAULT_INSTANCE_KEY,
@@ -26,7 +26,12 @@ import {
   type ResolvedInstance,
 } from "./agent-settings"
 import type { AgentDriver, AgentSettingsValues } from "./driver"
-import { createModelCatalogCache, normalizeModels, withCustomModels } from "./model-catalog"
+import {
+  createModelCatalogCache,
+  normalizeCommands,
+  normalizeModels,
+  withCustomModels,
+} from "./model-catalog"
 import { listAgentModels } from "./switching"
 
 /** detect 的选项：只检测一个 agent 或实例，或跳过缓存重新检测。 */
@@ -52,6 +57,8 @@ export interface AgentCatalog {
   instance(agentId: string, instanceId?: string | null): ResolvedInstance
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
   models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
+  /** 实例在 cwd 下的 `/` 命令；按实例与工作目录缓存。 */
+  commands(agentId: string, instanceId: string | null, cwd: string | null): Promise<AgentCommand[]>
   defaultAgent(): Promise<DefaultAgentChoice>
   configuredDefault(): string | null
   configuredDefaultInstance(): string | null
@@ -98,6 +105,7 @@ export function createAgentCatalog(
   drivers: ReadonlyMap<string, AgentDriver>,
 ): AgentCatalog {
   const catalogs = createModelCatalogCache()
+  const commandCatalogs = createModelCatalogCache<AgentCommand>()
   const detections = createDetectionCache()
 
   /** settings 服务是可选的：单元测试里没有它时所有 agent 都按默认值运行。 */
@@ -158,6 +166,15 @@ export function createAgentCatalog(
       )
       return withCustomModels(models, customModelIds(settings))
     },
+    async commands(agentId, instanceId, cwd) {
+      const driver = drivers.get(agentId)
+      const instance = instanceFor(agentId, instanceId)
+      if (!driver?.listCommands) return []
+      const list = driver.listCommands.bind(driver)
+      return commandCatalogs.get(`${instance.instanceId}\0${cwd ?? ""}`, async () =>
+        normalizeCommands(await list(instance.values, cwd).catch(() => [])),
+      )
+    },
     async defaultAgent() {
       const configured = store()?.get(DEFAULT_AGENT_KEY)
       const agentId = await pickDefaultAgent({
@@ -206,6 +223,7 @@ export function createAgentCatalog(
         )
       }
       catalogs.invalidate(instanceId ?? agentId)
+      commandCatalogs.invalidate(instanceId ?? agentId)
       detections.invalidate(instanceId ?? agentId)
       return normalized
     },
@@ -220,12 +238,14 @@ export function createAgentCatalog(
       const created = createStoredInstance(requireStore(), agentId, label, copyFrom)
       detections.invalidate(created.instanceId)
       catalogs.invalidate(created.instanceId)
+      commandCatalogs.invalidate(created.instanceId)
       return created
     },
     updateInstance(instanceId, patch) {
       const updated = updateStoredInstance(requireStore(), instanceId, patch)
       detections.invalidate(instanceId)
       catalogs.invalidate(instanceId)
+      commandCatalogs.invalidate(instanceId)
       return updated
     },
     removeInstance(instanceId) {
@@ -236,10 +256,12 @@ export function createAgentCatalog(
         settings.set(DEFAULT_INSTANCE_KEY, undefined)
       detections.invalidate(instanceId)
       catalogs.invalidate(instanceId)
+      commandCatalogs.invalidate(instanceId)
       return instance
     },
     invalidate(instanceId) {
       catalogs.invalidate(instanceId)
+      commandCatalogs.invalidate(instanceId)
       detections.invalidate(instanceId)
     },
   }

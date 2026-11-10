@@ -26,6 +26,28 @@
   color: var(--faint);
   font-size: var(--fs-sm);
 }
+/* 命令的参数提示，例如 <file>。 */
+.suggest-hint {
+  flex: none;
+  max-width: 30%;
+  overflow: hidden;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Agent 命令的来源：内置 / Skill。 */
+.suggest-tag {
+  flex: none;
+  margin-left: auto;
+  padding: 0 var(--space-2);
+  border-radius: var(--r-sm);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted);
+  font-size: var(--fs-3xs);
+  line-height: 1.6;
+}
 .composer .tiptap .mention-chip {
   display: inline-block;
   padding: 0 5px;

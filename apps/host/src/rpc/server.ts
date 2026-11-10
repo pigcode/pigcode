@@ -306,6 +306,7 @@ export class RpcServer {
       case "agent.registered":
       case "agent.default":
       case "agent.models":
+      case "agent.commands":
       case "agent.list":
       case "agent.updateSettings":
       case "agent.createInstance":

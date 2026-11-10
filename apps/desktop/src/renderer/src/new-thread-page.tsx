@@ -15,6 +15,7 @@ import {
 } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
 import { OpenInButton } from "@pigcode/ui-shell"
+import { useAgentCommandsLoader } from "./agent-commands"
 import { useDefaultInstanceId } from "./agents"
 import type { CoreDeps } from "./chat-container"
 import {
@@ -76,6 +77,10 @@ export function NewThreadPage({
     agents.find((agent) => agent.id === instanceId)?.agentId ?? options.agentId ?? null
   const features = driverId ? featuresByAgent[driverId] : undefined
 
+  const loadAgentCommands = useAgentCommandsLoader(
+    deps.connection,
+    projectId ? { projectId } : null,
+  )
   const files = useMemo(
     () =>
       projectId
@@ -131,6 +136,7 @@ export function NewThreadPage({
       canPlan={features?.plan ?? true}
       {...(files ? { files } : {})}
       commands={commands}
+      loadAgentCommands={loadAgentCommands}
       onSubmit={(text, submitOptions) => void submit(text, submitOptions)}
       pending={pending}
       {...(focusKey !== undefined ? { focusKey } : {})}

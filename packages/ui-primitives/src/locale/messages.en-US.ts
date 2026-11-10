@@ -235,6 +235,8 @@ export const enUS = {
   "composer.suggest.commands": "Commands",
   "composer.suggest.noFiles": "No matching files",
   "composer.suggest.noCommands": "No matching commands",
+  "composer.suggest.source.builtin": "Built-in",
+  "composer.suggest.source.skill": "Skill",
   "chat.send": "Send",
   "chat.interrupt": "Stop",
   "chat.approval.allowOnce": "Allow once",

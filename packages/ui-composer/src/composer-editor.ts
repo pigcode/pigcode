@@ -1,6 +1,7 @@
 /**
  * 输入框的 TipTap 扩展：纯文本正文（不做加粗/斜体等格式，发出去的就是用户敲的字），
- * @ 引用项目文件（插入文件标记，发送时写成 @路径），/ 在行首调出命令。
+ * @ 引用项目文件（插入文件标记，发送时写成 @路径），/ 在行首调出命令：Pigcode 自己的命令，
+ * 以及当前 Agent 的内置命令、skill 与自定义命令（插入它们的文字，发给 CLI 展开）。
  */
 import Mention from "@tiptap/extension-mention"
 import { Placeholder } from "@tiptap/extension-placeholder"
@@ -17,7 +18,10 @@ import { matchByLabel, matchFiles } from "./fuzzy"
 import { createSmartPunctuation } from "./smart-punctuation"
 import type { SuggestionItem, SuggestionStore } from "./suggestion-store"
 
-/** 斜杠命令；run 在用户选中后执行，命令文字会从输入框里删掉。 */
+/**
+ * 斜杠命令。Pigcode 自己的命令有 run：选中后执行，命令文字从输入框里删掉。
+ * Agent 的命令有 insert：选中后换成这段文字（例如 `/compact `），随消息发给 CLI。
+ */
 export interface ComposerCommand {
   id: string
   label: string
@@ -25,8 +29,16 @@ export interface ComposerCommand {
   keywords?: readonly string[] | undefined
   /** 现在能不能执行；`/` 建议每次更新时判断，返回 false 时不列出。缺省为能。 */
   available?: (() => boolean) | undefined
-  run: () => void
+  run?: (() => void) | undefined
+  insert?: string | undefined
+  /** 来源：Pigcode 自己的命令（缺省）、Agent 内置命令、skill 与自定义命令。 */
+  source?: CommandSource | undefined
+  /** 参数提示，例如 `<file>`。 */
+  hint?: string | undefined
 }
+
+/** `/` 菜单里命令的来源。 */
+export type CommandSource = "pigcode" | "builtin" | "skill"
 
 /** 扩展读取的最新配置；用 getter 读取，编辑器不必随 props 重建。 */
 export interface ComposerEditorSources {
@@ -34,6 +46,8 @@ export interface ComposerEditorSources {
   smartPunctuation: () => boolean
   files: () => (() => Promise<readonly string[]>) | undefined
   commands: () => readonly ComposerCommand[]
+  /** 当前 Agent 的命令；读一次可能要启动 CLI，由调用方缓存。 */
+  agentCommands: () => (() => Promise<readonly ComposerCommand[]>) | undefined
 }
 
 export const FILE_SUGGESTION_KEY = new PluginKey("composer-file-suggestion")
@@ -62,6 +76,12 @@ export function composerExtensions(
   store: SuggestionStore,
 ): Extensions {
   let filesRequest: Promise<readonly string[]> | null = null
+  /** 这次 `/` 建议里列出的 Agent 命令；选中时按 id 找回。 */
+  let agentListed: readonly ComposerCommand[] = []
+  const loadAgentCommands = async (): Promise<readonly ComposerCommand[]> => {
+    const source = sources.agentCommands()
+    return source ? source().catch(() => []) : []
+  }
   const loadFiles = (): Promise<readonly string[]> => {
     const source = sources.files()
     if (!source) return Promise.resolve([])
@@ -130,22 +150,32 @@ export function composerExtensions(
           char: "/",
           pluginKey: COMMAND_SUGGESTION_KEY,
           startOfLine: true,
-          items: ({ query }) =>
-            matchByLabel(
-              sources.commands().filter((command) => command.available?.() ?? true),
-              query,
-            ).map((command): SuggestionItem => ({
+          items: async ({ query }) => {
+            const own = sources.commands().filter((command) => command.available?.() ?? true)
+            agentListed = await loadAgentCommands()
+            // 同名时 Pigcode 自己的命令优先；没有查询时 skill 排在 Agent 内置命令前面。
+            const all = firstPerLabel([...own, ...ordered(agentListed)])
+            return matchByLabel(all, query).map((command): SuggestionItem => ({
               id: command.id,
               label: command.label,
               detail: command.description,
+              hint: command.hint,
+              source: command.source ?? "pigcode",
               kind: "command",
-            })),
+            }))
+          },
           command: ({ editor, range, props }) => {
             // 列表打开期间命令可能已经消失（例如它的插件被停用）：不删用户敲的字，也不执行。
-            const selected = sources.commands().find((command) => command.id === props.id)
+            const selected = [...sources.commands(), ...agentListed].find(
+              (command) => command.id === props.id,
+            )
             if (!selected) return
+            if (selected.insert) {
+              editor.chain().focus().insertContentAt(range, `${selected.insert} `).run()
+              return
+            }
             editor.chain().focus().deleteRange(range).run()
-            selected.run()
+            selected.run?.()
           },
           render: renderInto(store, "command", COMMAND_SUGGESTION_KEY),
         },
@@ -201,4 +231,12 @@ export function firstPerLabel(commands: readonly ComposerCommand[]): ComposerCom
     seen.add(key)
     return true
   })
+}
+
+/** 没有查询时的顺序：skill 与自定义命令在前，Agent 内置命令在后。 */
+function ordered(commands: readonly ComposerCommand[]): ComposerCommand[] {
+  return [
+    ...commands.filter((command) => command.source !== "builtin"),
+    ...commands.filter((command) => command.source === "builtin"),
+  ]
 }

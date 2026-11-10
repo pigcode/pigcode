@@ -100,4 +100,68 @@ describe("composer suggestions", () => {
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("email me@nowhere", { effort: null })
   })
+
+  it("lists the agent's skills and commands after Pigcode's own and inserts the chosen one", async () => {
+    const onSubmit = vi.fn()
+    const run = vi.fn()
+    const loadAgentCommands = vi.fn(async (_instanceId: string) => AGENT_COMMANDS)
+    const editor = renderComposer({
+      onSubmit,
+      agentId: "claude",
+      loadAgentCommands,
+      commands: [{ id: "new", label: "/new", description: "新会话", run }],
+    })
+    // 获得焦点就预取，敲 / 时已经读好。
+    await userEvent.click(editor)
+    await waitFor(() => expect(loadAgentCommands).toHaveBeenCalledWith("claude"))
+    await userEvent.type(editor, "/")
+    const list = await screen.findByRole("listbox", { name: "命令" })
+    await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(4))
+    const options = within(list).getAllByRole("option")
+    // Pigcode 自己的命令在前，然后是 skill，Agent 内置命令最后；和 Pigcode 重名的 /new 不重复列。
+    expect(options.map((option) => option.dataset.source)).toEqual([
+      "pigcode",
+      "skill",
+      "builtin",
+      "builtin",
+    ])
+    expect(options[1]?.textContent).toContain("/frontend-design")
+    expect(options[1]?.textContent).toContain("<brief>")
+    expect(options[1]?.textContent).toContain("Skill")
+
+    await userEvent.type(editor, "front")
+    await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(1))
+    await userEvent.keyboard("{Enter}")
+    await waitFor(() => expect(screen.queryByRole("listbox", { name: "命令" })).toBeNull())
+    expect(run).not.toHaveBeenCalled()
+    await userEvent.keyboard("a landing page")
+    await userEvent.keyboard("{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("/frontend-design a landing page", { effort: null })
+  })
+
+  it("lists only Pigcode's commands when the agent has none", async () => {
+    const editor = renderComposer({
+      agentId: "codex",
+      loadAgentCommands: async () => {
+        throw new Error("app-server failed")
+      },
+      commands: [{ id: "new", label: "/new", description: "新会话", run: () => {} }],
+    })
+    await userEvent.type(editor, "/")
+    const list = await screen.findByRole("listbox", { name: "命令" })
+    await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(1))
+  })
 })
+
+const AGENT_COMMANDS = [
+  { name: "compact", text: "/compact", description: "Summarize the conversation", kind: "builtin" },
+  {
+    name: "frontend-design",
+    text: "/frontend-design",
+    description: "Distinctive visual design",
+    argumentHint: "<brief>",
+    kind: "skill",
+  },
+  { name: "new", text: "/new", kind: "builtin" },
+  { name: "context", text: "/context", kind: "builtin" },
+] as const

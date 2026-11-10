@@ -12,6 +12,7 @@ export interface ClaudeModelSource {
     prompt: string | AsyncIterable<SDKUserMessage>
     options: {
       pathToClaudeCodeExecutable?: string
+      cwd?: string
       env?: Record<string, string | undefined>
       settings?: Record<string, unknown>
     }
@@ -109,7 +110,7 @@ export function claudeModelOption(model: string | null): string | undefined {
 }
 
 /** 不发送任何消息的输入流；只为让 SDK 完成初始化、回答目录请求。 */
-function idleInput(): { iterable: AsyncIterable<SDKUserMessage>; close: () => void } {
+export function idleInput(): { iterable: AsyncIterable<SDKUserMessage>; close: () => void } {
   let release: () => void = () => undefined
   const closed = new Promise<void>((resolve) => {
     release = resolve
@@ -125,7 +126,7 @@ function idleInput(): { iterable: AsyncIterable<SDKUserMessage>; close: () => vo
 }
 
 /** 超时后放弃等待；SDK 进程在 finally 里关闭。 */
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => reject(new Error("claude model list timed out")), ms)

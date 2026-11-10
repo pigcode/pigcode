@@ -1,7 +1,7 @@
 /** 模型目录：把各 driver 的模型条目统一成协议形状，追加用户的自定义模型，并缓存读取结果。 */
 import { asReasoningEffort, sortEfforts } from "@pigcode/plugin-sdk"
-import type { AgentModel } from "@pigcode/contracts"
-import type { AgentModelInfo } from "./driver"
+import type { AgentCommand, AgentModel } from "@pigcode/contracts"
+import type { AgentCommandInfo, AgentModelInfo } from "./driver"
 
 export { asReasoningEffort, sortEfforts }
 
@@ -24,6 +24,28 @@ export function normalizeModels(models: readonly AgentModelInfo[]): AgentModel[]
       defaultEffort,
       ...(model.fast ? { fast: true } : {}),
       ...(model.ultracode ? { ultracode: true } : {}),
+    })
+  }
+  return result
+}
+
+/** `/` 命令：去掉空名字与重复的插入文字，可选字段为空时省略。 */
+export function normalizeCommands(commands: readonly AgentCommandInfo[]): AgentCommand[] {
+  const seen = new Set<string>()
+  const result: AgentCommand[] = []
+  for (const command of commands) {
+    const name = command.name?.trim()
+    const text = command.text?.trim()
+    if (!name || !text || seen.has(text)) continue
+    seen.add(text)
+    const description = command.description?.trim()
+    const argumentHint = command.argumentHint?.trim()
+    result.push({
+      name,
+      text,
+      ...(description ? { description } : {}),
+      ...(argumentHint ? { argumentHint } : {}),
+      kind: command.kind === "builtin" ? "builtin" : "skill",
     })
   }
   return result
@@ -61,48 +83,55 @@ export interface ModelCatalogCacheOptions {
   now?: () => number
 }
 
-/** 按 Agent 缓存模型目录；同一时刻的重复请求共享一次读取。 */
-export interface ModelCatalogCache {
-  get(agentId: string, load: () => Promise<AgentModel[]>): Promise<AgentModel[]>
-  invalidate(agentId?: string): void
+/**
+ * 按 key 缓存目录（模型目录按实例，`/` 命令按实例与工作目录）；同一时刻的重复请求共享一次读取。
+ * invalidate 传实例 id 时丢掉这个实例的全部条目。
+ */
+export interface ModelCatalogCache<T = AgentModel> {
+  get(key: string, load: () => Promise<T[]>): Promise<T[]>
+  invalidate(prefix?: string): void
 }
 
 /**
  * 读取目录可能要启动 CLI（Codex 起一个 app-server、Claude 起一次 SDK 会话），
  * 切换线程时不能每次都重新读。空目录不缓存，CLI 稍后装好或登录后能立刻看到模型。
  */
-export function createModelCatalogCache(options: ModelCatalogCacheOptions = {}): ModelCatalogCache {
+export function createModelCatalogCache<T = AgentModel>(
+  options: ModelCatalogCacheOptions = {},
+): ModelCatalogCache<T> {
   const ttlMs = options.ttlMs ?? 10 * 60_000
   const now = options.now ?? Date.now
-  const entries = new Map<string, { models: AgentModel[]; expiresAt: number }>()
-  const inflight = new Map<string, Promise<AgentModel[]>>()
+  const entries = new Map<string, { models: T[]; expiresAt: number }>()
+  const inflight = new Map<string, Promise<T[]>>()
+  /** key 是实例 id 本身，或「实例 id + \0 + 其余部分」。 */
+  const owned = (key: string, prefix: string) => key === prefix || key.startsWith(`${prefix}\0`)
   return {
-    get(agentId, load) {
-      const cached = entries.get(agentId)
+    get(key, load) {
+      const cached = entries.get(key)
       if (cached && cached.expiresAt > now()) return Promise.resolve(cached.models)
-      const pending = inflight.get(agentId)
+      const pending = inflight.get(key)
       if (pending) return pending
       const request = load()
         .then((models) => {
-          if (inflight.get(agentId) === request && models.length > 0) {
-            entries.set(agentId, { models, expiresAt: now() + ttlMs })
+          if (inflight.get(key) === request && models.length > 0) {
+            entries.set(key, { models, expiresAt: now() + ttlMs })
           }
           return models
         })
         .finally(() => {
-          if (inflight.get(agentId) === request) inflight.delete(agentId)
+          if (inflight.get(key) === request) inflight.delete(key)
         })
-      inflight.set(agentId, request)
+      inflight.set(key, request)
       return request
     },
-    invalidate(agentId) {
-      if (agentId === undefined) {
+    invalidate(prefix) {
+      if (prefix === undefined) {
         entries.clear()
         inflight.clear()
         return
       }
-      entries.delete(agentId)
-      inflight.delete(agentId)
+      for (const key of [...entries.keys()]) if (owned(key, prefix)) entries.delete(key)
+      for (const key of [...inflight.keys()]) if (owned(key, prefix)) inflight.delete(key)
     },
   }
 }

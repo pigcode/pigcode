@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import { openThread } from "./projects"
 
-test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permissions, @files and /commands", async () => {
+test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permissions, @files, /commands and skills", async () => {
   // Codex 指向一个不存在的文件，不管本机装没装 Codex，结果都一样。
   const { app, page } = await openThread("composer", {
     PIGCODE_CODEX_PATH: join(tmpdir(), "pigcode-e2e-no-codex"),
@@ -114,6 +114,24 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
     await page.keyboard.press("Enter")
     await expect(chip).toHaveAttribute("aria-label", /· 只读$/)
     await expect(page.locator(".tiptap")).toHaveText("")
+
+    // / 菜单里还有 Agent 自己的命令与 skill：skill 带标签，说明来自线程的工作目录。
+    await page.keyboard.type("/")
+    const commands = page.getByRole("listbox", { name: "命令" })
+    const skill = commands.getByRole("option").filter({ hasText: "/fake-skill" })
+    await expect(skill).toContainText("Skill")
+    await expect(skill).toContainText("<topic>")
+    await expect(skill).toContainText("Fake skill for /")
+    await expect(commands.getByRole("option").filter({ hasText: "/review" })).toContainText("内置")
+    // 选中后插入命令文字，随消息原样发给 Agent。
+    await page.keyboard.type("fake-sk")
+    await page.keyboard.press("Enter")
+    await expect(page.locator(".tiptap")).toHaveText("/fake-skill ")
+    await page.keyboard.type("release notes")
+    await page.keyboard.press("Enter")
+    await expect(page.locator(".msg-user").filter({ hasText: "/fake-skill" })).toHaveText(
+      "/fake-skill release notes",
+    )
   } finally {
     await app.close()
   }

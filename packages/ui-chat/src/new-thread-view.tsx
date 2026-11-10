@@ -22,6 +22,7 @@ import {
   type ComposerCommand,
   type ComposerModelCatalog,
   type ComposerModelChoice,
+  type ComposerProps,
   type ComposerSubmitOptions,
   type PermissionMode,
 } from "@pigcode/ui-composer"
@@ -57,6 +58,8 @@ export interface NewThreadViewProps {
   /** @ 引用时可选的项目文件。 */
   files?: () => Promise<readonly string[]>
   commands?: readonly ComposerCommand[]
+  /** 读 Agent 实例的 / 命令与 skill；容器应调用 agent.commands（带项目）并缓存。 */
+  loadAgentCommands?: ComposerProps["loadAgentCommands"]
   onSubmit: (text: string, options: ComposerSubmitOptions) => void
   /** 正在把草稿建成会话；期间不能再发送。 */
   pending?: boolean
@@ -293,6 +296,7 @@ export function NewThreadView({
   canPlan = true,
   files,
   commands,
+  loadAgentCommands,
   onSubmit,
   pending = false,
   focusKey,
@@ -337,6 +341,7 @@ export function NewThreadView({
           canPlan={canPlan}
           {...(files ? { files } : {})}
           {...(commands ? { commands } : {})}
+          {...(loadAgentCommands ? { loadAgentCommands } : {})}
         />
         {ready ? <NewThreadSuggestions draftKey={draftKey} disabled={pending} /> : null}
       </NewThreadStage>
