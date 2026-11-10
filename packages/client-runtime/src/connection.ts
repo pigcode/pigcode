@@ -28,6 +28,9 @@ export class Connection {
   private attempts = 0
   private readonly subscriptions = new Map<string, number>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
+  private readonly terminalExitListeners = new Set<
+    (exit: { terminalId: string; exitCode: number }) => void
+  >()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
@@ -106,6 +109,14 @@ export class Connection {
     }
   }
 
+  /** 订阅终端退出通知：shell 自己结束（例如输入 exit）时，界面据此关掉对应的标签。 */
+  onTerminalExit(listener: (exit: { terminalId: string; exitCode: number }) => void): () => void {
+    this.terminalExitListeners.add(listener)
+    return () => {
+      this.terminalExitListeners.delete(listener)
+    }
+  }
+
   /** 订阅线程并回放 cursor 之后的事件，随后更新该线程的 cursor。 */
   private async subscribe(threadId: string, cursor: number, client = this.client): Promise<void> {
     if (!client) throw new Error("host not connected")
@@ -134,12 +145,23 @@ export class Connection {
         event?: AgentEvent
         terminalId?: unknown
         data?: unknown
+        exitCode?: unknown
       }
     }
     if (value.method === "terminal.output" && value.params) {
       const { terminalId, data } = value.params
       if (typeof terminalId === "string" && typeof data === "string") {
         for (const listener of [...this.terminalListeners]) listener({ terminalId, data })
+      }
+      return
+    }
+    if (value.method === "terminal.exit" && value.params) {
+      const { terminalId, exitCode } = value.params
+      if (typeof terminalId === "string") {
+        const code = typeof exitCode === "number" ? exitCode : 0
+        for (const listener of [...this.terminalExitListeners]) {
+          listener({ terminalId, exitCode: code })
+        }
       }
       return
     }

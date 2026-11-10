@@ -6,7 +6,13 @@ import { Context } from "cordis"
 import { afterEach, describe, expect, it } from "vitest"
 import { apply as projects } from "./projects"
 import { apply as storage } from "./storage"
-import { defaultShell, apply as terminal, type PtyFactory, type PtySpawnInput } from "./terminal"
+import {
+  defaultShell,
+  shellName,
+  apply as terminal,
+  type PtyFactory,
+  type PtySpawnInput,
+} from "./terminal"
 import { apply as threads } from "./threads"
 
 /** 单个 fake PTY 的内部状态。 */
@@ -167,7 +173,7 @@ describe("terminal service", () => {
     expect(() => ctx.terminal.write(opened.id, "closed")).toThrow("terminal not found")
   })
 
-  it("keeps at most one terminal per thread", async () => {
+  it("opens several terminals per thread, each with its shell and cwd", async () => {
     const pty = fakePty()
     const { ctx, thread } = await setupTerminal(pty)
 
@@ -175,14 +181,46 @@ describe("terminal service", () => {
     const second = await ctx.terminal.open(thread.id, 120, 40)
 
     expect(second.id).not.toBe(first.id)
-    expect(pty.killCount).toBe(1)
+    // 新开一个不会关掉前一个：底部终端的每个标签各有自己的 shell。
+    expect(pty.killCount).toBe(0)
     expect(pty.spawns.map((input) => [input.cols, input.rows])).toEqual([
       [80, 24],
       [120, 40],
     ])
-    expect(() => ctx.terminal.write(first.id, "stale")).toThrow("terminal not found")
-    ctx.terminal.write(second.id, "ok\n")
-    expect(pty.writes).toEqual(["ok\n"])
+    expect(first.shell).toBe(shellName(defaultShell()))
+    expect(first.cwd).toBe(pty.spawns[0]?.cwd)
+    ctx.terminal.write(first.id, "one\n")
+    ctx.terminal.write(second.id, "two\n")
+    expect(pty.writes).toEqual(["one\n", "two\n"])
+  })
+
+  it("tells subscribers when the shell exits by itself, not when it is closed", async () => {
+    const pty = fakePty()
+    const { ctx, thread } = await setupTerminal(pty)
+    const closed = await ctx.terminal.open(thread.id, 80, 24)
+    const exits: number[] = []
+    ctx.terminal.subscribe(
+      closed.id,
+      () => undefined,
+      (code) => exits.push(code),
+    )
+    ctx.terminal.close(closed.id)
+    expect(exits).toEqual([])
+
+    const exited = await ctx.terminal.open(thread.id, 80, 24)
+    ctx.terminal.subscribe(
+      exited.id,
+      () => undefined,
+      (code) => exits.push(code),
+    )
+    pty.exit(130)
+    expect(exits).toEqual([130])
+  })
+
+  it("names shells by their executable", () => {
+    expect(shellName("/bin/zsh")).toBe("zsh")
+    expect(shellName("/opt/homebrew/bin/fish")).toBe("fish")
+    expect(shellName("C:\\Windows\\System32\\cmd.exe")).toBe("cmd")
   })
 
   it("cleans up after the pty exits", async () => {
@@ -216,19 +254,20 @@ describe("terminal service", () => {
     expect(pty.spawns[0]?.cwd).toBe(await realpath(worktree))
   })
 
-  it("closes a thread's terminal and leaves other threads' alone", async () => {
+  it("closes all of a thread's terminals and leaves other threads' alone", async () => {
     const pty = fakePty()
     const { ctx, thread, project } = await setupTerminal(pty)
     const other = ctx.threads.create(project.id, "Other", "fake")
     await ctx.terminal.open(thread.id, 80, 24)
+    await ctx.terminal.open(thread.id, 80, 24)
     const kept = await ctx.terminal.open(other.id, 80, 24)
 
     ctx.terminal.closeThread(thread.id)
-    expect(pty.killCount).toBe(1)
+    expect(pty.killCount).toBe(2)
     expect(() => ctx.terminal.write(kept.id, "x")).not.toThrow()
     // 线程没有终端时什么也不做：归档会对每个线程都调用它。
     ctx.terminal.closeThread(thread.id)
-    expect(pty.killCount).toBe(1)
+    expect(pty.killCount).toBe(2)
   })
 
   it("rejects unknown threads and terminals", async () => {

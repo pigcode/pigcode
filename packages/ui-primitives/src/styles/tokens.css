@@ -38,6 +38,7 @@
   --field: oklch(21% 0.006 286 / 0.04);
   --popover-glass: oklch(100% 0 0 / 0.9);
   --scroll-thumb: oklch(21% 0.006 286 / 0.18);
+  --scroll-thumb-hover: oklch(21% 0.006 286 / 0.3);
 
   /* 输入框：浅底、细描边；悬停时描边深一点，聚焦再深一档，始终是中性色，不加外发光 */
   --input-bg: oklch(100% 0 0);
@@ -182,6 +183,7 @@
   --field: oklch(100% 0 0 / 0.05);
   --popover-glass: oklch(23% 0 0 / 0.9);
   --scroll-thumb: oklch(100% 0 0 / 0.18);
+  --scroll-thumb-hover: oklch(100% 0 0 / 0.3);
 
   --input-bg: oklch(100% 0 0 / 0.035);
   --input-bg-focus: oklch(100% 0 0 / 0.055);

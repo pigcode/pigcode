@@ -17,6 +17,7 @@ import type {
 import { buildSubagentBrief } from "../agents/switching"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
+import { forwardTerminal } from "./terminal-notify"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
 function errorCode(error: unknown): string {
@@ -472,13 +473,9 @@ export class RpcServer {
         const terminal = await this.ctx.terminal.open(value.threadId, value.cols, value.rows)
         if (page !== this.page) return terminal
         this.terminalSubscriptions.push(
-          this.ctx.terminal.subscribe(terminal.id, (data) => {
-            this.transport.send({
-              jsonrpc: "2.0",
-              method: "terminal.output",
-              params: { terminalId: terminal.id, data },
-            })
-          }),
+          forwardTerminal(this.ctx.terminal, terminal.id, (message) =>
+            this.transport.send(message),
+          ),
         )
         return terminal
       }

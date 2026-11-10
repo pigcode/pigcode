@@ -4,6 +4,7 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
 import { addProject, launchArgs } from "./projects"
+import { expectTerminalText, terminalText } from "./terminal"
 
 /** 在 guest 页面里执行脚本；webview 的内容只在 main 里拿得到。 */
 function inGuest(app: ElectronApplication, script: string): Promise<string> {
@@ -147,7 +148,23 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await drawer.locator(".xterm").click()
     await page.keyboard.type("echo DRAWER_OK")
     await page.keyboard.press("Enter")
-    await expect(drawer.locator(".xterm")).toContainText("DRAWER_OK")
+    await expectTerminalText(drawer.locator(".xterm"), "DRAWER_OK")
+
+    // 底部终端可以开多个：新标签是另一个 shell，切回第一个时它的输出还在。
+    const termTabs = drawer.getByRole("tab")
+    await expect(termTabs).toHaveCount(1)
+    await drawer.getByRole("button", { name: "新建终端" }).click()
+    await expect(termTabs).toHaveCount(2)
+    await expect(termTabs.nth(1)).toHaveAttribute("aria-selected", "true")
+    const second = drawer.locator(".terminal-pane:not([hidden]) .xterm")
+    await expect(second).toBeVisible()
+    expect(await terminalText(second)).not.toContain("DRAWER_OK")
+    await second.click()
+    await page.keyboard.type("exit")
+    await page.keyboard.press("Enter")
+    // shell 自己退出时关掉它的标签，回到第一个终端。
+    await expect(termTabs).toHaveCount(1)
+    await expectTerminalText(drawer.locator(".terminal-pane:not([hidden]) .xterm"), "DRAWER_OK")
     await expect(header.getByRole("button", { name: "切换底部终端" })).toHaveAttribute(
       "aria-pressed",
       "true",

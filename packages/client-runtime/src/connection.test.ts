@@ -95,6 +95,27 @@ describe("Connection", () => {
     expect(outputs).toHaveLength(1)
   })
 
+  it("dispatches terminal exits so the tab can close", async () => {
+    const transport = new MemoryTransport()
+    const exits: Array<{ terminalId: string; exitCode: number }> = []
+    const connection = new Connection({
+      onEvent: () => {},
+      onDelta: () => {},
+      onStatus: () => {},
+    })
+    await connection.attach(transport.client)
+    const off = connection.onTerminalExit((exit) => exits.push(exit))
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "terminal.exit",
+      params: { terminalId: "term_1", exitCode: 130 },
+    })
+    expect(exits).toEqual([{ terminalId: "term_1", exitCode: 130 }])
+    off()
+    transport.host.send({ jsonrpc: "2.0", method: "terminal.exit", params: { terminalId: "x" } })
+    expect(exits).toHaveLength(1)
+  })
+
   it("opens two threads and routes notifications by threadId", async () => {
     const transport = new MemoryTransport()
     const events: Array<{ threadId: string; seq: number }> = []

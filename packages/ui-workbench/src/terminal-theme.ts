@@ -11,6 +11,10 @@ const TERMINAL_TOKENS: ReadonlyArray<readonly [ColorKey, string]> = [
   ["cursor", "--term-cursor"],
   ["cursorAccent", "--term-cursor-accent"],
   ["selectionBackground", "--term-selection"],
+  // 滚动条和界面里其他滚动条同一种颜色，悬停与拖动时深一档。
+  ["scrollbarSliderBackground", "--scroll-thumb"],
+  ["scrollbarSliderHoverBackground", "--scroll-thumb-hover"],
+  ["scrollbarSliderActiveBackground", "--scroll-thumb-hover"],
   ["black", "--term-black"],
   ["red", "--term-red"],
   ["green", "--term-green"],

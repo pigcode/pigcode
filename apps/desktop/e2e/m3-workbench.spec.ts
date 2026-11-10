@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { addProject, launchArgs } from "./projects"
+import { expectTerminalText } from "./terminal"
 
 /** 过滤 undefined，满足 Playwright env 的 string 值约束。 */
 function launchEnv(): Record<string, string> {
@@ -42,7 +43,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await page.locator(".xterm").click()
   await page.keyboard.type("echo READY")
   await page.keyboard.press("Enter")
-  await expect(page.locator(".xterm")).toContainText("READY")
+  await expectTerminalText(page.locator(".xterm"), "READY")
 
   // 手动 checkpoint，修改文件后 diff/restore；终端标签切走后保持同一个 shell。
   await page.getByRole("button", { name: "添加面板" }).click()
@@ -51,13 +52,13 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   // 等快照真正建好再改文件；否则机器忙的时候，快照可能拍到下面写进去的内容。
   await expect(page.getByRole("button", { name: "恢复" }).first()).toBeVisible()
   await page.getByRole("tab", { name: "终端 1" }).click()
-  await expect(page.locator(".xterm")).toContainText("READY")
+  await expectTerminalText(page.locator(".xterm"), "READY")
   await page.locator(".xterm").click()
   // WROTE 用于确认 shell 已经真正改写了 a.txt，避免 restore 变成空操作。命令里拆开写：
   // 终端会回显输入的命令，写成一个词的话，命令还没执行断言就通过了，文件会在恢复之后才被改写。
   await page.keyboard.type("echo two > a.txt && echo WR''OTE")
   await page.keyboard.press("Enter")
-  await expect(page.locator(".xterm")).toContainText("WROTE")
+  await expectTerminalText(page.locator(".xterm"), "WROTE")
 
   // 改完再建一个快照：Diff 默认拿最新的快照和基准（HEAD）比，这样才看得到改动。
   await page.getByRole("tab", { name: "检查点" }).click()

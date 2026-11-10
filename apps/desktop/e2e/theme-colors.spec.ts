@@ -1,13 +1,11 @@
 /** 主题颜色验收：终端配色由 --term-* token 生成，强调色与明暗变化后不重开终端也跟着变。 */
 import { expect, test, type Page } from "@playwright/test"
 import { openThread } from "./projects"
+import { terminalCursor } from "./terminal"
 
-/** xterm 当前用的光标色：DOM 渲染器把它写进自己的样式表。 */
+/** xterm 当前用的光标色：从终端的配色里读（WebGL 把光标画在画布上，没有样式表可读）。 */
 function cursorColor(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const css = Array.from(document.querySelectorAll("style"), (item) => item.textContent).join("")
-    return /xterm-cursor-block \{ background-color: ([^;]+);/.exec(css)?.[1]?.toUpperCase() ?? ""
-  })
+  return terminalCursor(page.locator(".xterm"))
 }
 
 /** xterm 当前用的终端底色：写在滚动容器的内联样式上。 */

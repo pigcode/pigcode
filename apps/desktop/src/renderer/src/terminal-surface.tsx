@@ -1,4 +1,7 @@
-/** 终端 surface：挂载时打开一个 PTY，卸载时关闭；右侧面板的终端标签与底部终端共用。 */
+/**
+ * 终端 surface：先挂上 xterm 量出尺寸，再按这个尺寸打开一个 PTY，卸载时关闭；
+ * 右侧面板的终端标签与底部终端共用。
+ */
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { Loader2 } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
@@ -6,13 +9,17 @@ import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { TerminalView, type TerminalHandle } from "@pigcode/ui-workbench"
 
 /** terminal.open 返回的会话。 */
-interface TerminalSession {
+export interface TerminalSession {
   id: string
   cols: number
   rows: number
+  /** shell 的名字，例如 zsh；旧版 Host 不给。 */
+  shell?: string | undefined
+  /** shell 的工作目录；旧版 Host 不给。 */
+  cwd?: string | undefined
 }
 
-/** 终端初始尺寸；xterm 挂载后会通过 fit 与 resize 修正。 */
+/** xterm 还没量出尺寸时的行列数；shell 按量出来的尺寸启动。 */
 const TERMINAL_COLS = 80
 const TERMINAL_ROWS = 24
 
@@ -28,22 +35,46 @@ export interface TerminalSurfaceProps {
   active: boolean
   /** 浮在终端右上角的操作按钮。 */
   tools?: ReactNode
+  /** shell 已经起来：底部终端用它的名字与目录给标签起名。 */
+  onOpened?: ((session: TerminalSession) => void) | undefined
+  /** shell 自己退出了（例如输入 exit）。 */
+  onExit?: (() => void) | undefined
 }
 
 /** 一个独立的 shell 会话。 */
-export function TerminalSurface({ connection, threadId, active, tools }: TerminalSurfaceProps) {
+export function TerminalSurface({
+  connection,
+  threadId,
+  active,
+  tools,
+  onOpened,
+  onExit,
+}: TerminalSurfaceProps) {
   const { t } = useLocale()
   const [terminalId, setTerminalId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // 先挂上 xterm 量出面板能放下的行列数，再按这个尺寸启动 shell。
+  // 不能先按 80×24 启动再改：shell 可能在改尺寸之前就画好了第一个提示符（fish 两行提示符的第一行、
+  // 右侧的时间），按 80 列画的那一行之后不会重画。
+  const [measured, setMeasured] = useState(false)
+  const size = useRef({ cols: TERMINAL_COLS, rows: TERMINAL_ROWS })
+  const idRef = useRef<string | null>(null)
+  /** shell 起来之前敲的字，起来后按顺序补发。 */
+  const pending = useRef<string[]>([])
   const handle = useRef<TerminalHandle | null>(null)
   const activeRef = useRef(active)
   activeRef.current = active
+  // 回调可能每次渲染都换；放进 ref，打开终端的 effect 不因此重跑。
+  const callbacks = useRef({ onOpened, onExit })
+  callbacks.current = { onOpened, onExit }
 
   useEffect(() => {
+    if (!measured) return undefined
     let cancelled = false
     let openedId: string | null = null
+    const opening = { ...size.current }
     void connection
-      .call("terminal.open", { threadId, cols: TERMINAL_COLS, rows: TERMINAL_ROWS })
+      .call("terminal.open", { threadId, ...opening })
       .then((result) => {
         const session = result as TerminalSession
         openedId = session.id
@@ -51,24 +82,46 @@ export function TerminalSurface({ connection, threadId, active, tools }: Termina
           void connection.call("terminal.close", { terminalId: session.id }).catch(() => undefined)
           return
         }
+        idRef.current = session.id
         setTerminalId(session.id)
+        callbacks.current.onOpened?.(session)
+        // 等 open 返回的这段时间面板尺寸又变了：补一次 resize。
+        const now = size.current
+        if (now.cols !== opening.cols || now.rows !== opening.rows) {
+          void connection
+            .call("terminal.resize", { terminalId: session.id, ...now })
+            .catch(() => undefined)
+        }
+        for (const data of pending.current.splice(0)) {
+          void connection
+            .call("terminal.write", { terminalId: session.id, data })
+            .catch(() => undefined)
+        }
       })
       .catch((cause: unknown) => {
         if (!cancelled) setError(messageOf(cause))
       })
     return () => {
       cancelled = true
+      idRef.current = null
       if (openedId) {
         void connection.call("terminal.close", { terminalId: openedId }).catch(() => undefined)
       }
     }
-  }, [connection, threadId])
+  }, [connection, threadId, measured])
 
   useEffect(() => {
     if (!terminalId) return undefined
-    return connection.onTerminalOutput((output) => {
+    const offOutput = connection.onTerminalOutput((output) => {
       if (output.terminalId === terminalId) handle.current?.write(output.data)
     })
+    const offExit = connection.onTerminalExit((exit) => {
+      if (exit.terminalId === terminalId) callbacks.current.onExit?.()
+    })
+    return () => {
+      offOutput()
+      offExit()
+    }
   }, [connection, terminalId])
 
   useEffect(() => {
@@ -78,16 +131,25 @@ export function TerminalSurface({ connection, threadId, active, tools }: Termina
   }, [active])
 
   function send(data: string): void {
-    if (!terminalId) return
+    const id = idRef.current
+    if (!id) {
+      pending.current.push(data)
+      return
+    }
     void connection
-      .call("terminal.write", { terminalId, data })
+      .call("terminal.write", { terminalId: id, data })
       .catch((cause: unknown) => setError(messageOf(cause)))
   }
 
   function resize(cols: number, rows: number): void {
-    if (!terminalId) return
+    size.current = { cols, rows }
+    const id = idRef.current
+    if (!id) {
+      setMeasured(true)
+      return
+    }
     void connection
-      .call("terminal.resize", { terminalId, cols, rows })
+      .call("terminal.resize", { terminalId: id, cols, rows })
       .catch((cause: unknown) => setError(messageOf(cause)))
   }
 
@@ -100,11 +162,18 @@ export function TerminalSurface({ connection, threadId, active, tools }: Termina
     <div className="terminal-surface">
       {error ? (
         <p className="workbench-error">{error}</p>
-      ) : terminalId ? (
-        <TerminalView onData={send} onResize={resize} onReady={ready} />
       ) : (
-        // terminal.open 是异步 RPC；会话就绪前不挂载 xterm，避免输入被静默丢弃。
-        <EmptyState icon={<Loader2 className="ic spin" />} title={t("workbench.terminalOpening")} />
+        <>
+          <TerminalView onData={send} onResize={resize} onReady={ready} />
+          {terminalId ? null : (
+            <div className="terminal-surface-loading">
+              <EmptyState
+                icon={<Loader2 className="ic spin" />}
+                title={t("workbench.terminalOpening")}
+              />
+            </div>
+          )}
+        </>
       )}
       {tools ? <div className="terminal-surface-tools">{tools}</div> : null}
     </div>

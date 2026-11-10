@@ -25,6 +25,8 @@ const xtermMock = vi.hoisted(() => {
     readonly dispose = vi.fn()
     readonly dataDisposable = new FakeDisposable()
     readonly resizeDisposable = new FakeDisposable()
+    cols = 80
+    rows = 24
     private readonly dataHandlers = new Set<DataHandler>()
     private readonly resizeHandlers = new Set<ResizeHandler>()
 
@@ -48,20 +50,42 @@ const xtermMock = vi.hoisted(() => {
     }
 
     emitResize(cols: number, rows: number): void {
+      this.cols = cols
+      this.rows = rows
       for (const handler of this.resizeHandlers) handler({ cols, rows })
     }
   }
 
   class FakeFitAddon {
     static instances: FakeFitAddon[] = []
-    readonly fit = vi.fn()
+    /** 测试可以让 fit 改变终端尺寸，模拟真实 fit addon 量出新的行列数。 */
+    static onFit: (() => void) | null = null
+    readonly fit = vi.fn(() => FakeFitAddon.onFit?.())
 
     constructor() {
       FakeFitAddon.instances.push(this)
     }
   }
 
-  return { FakeTerminal, FakeFitAddon }
+  /** WebGL 渲染器的假实现；unavailable 时构造即抛错，模拟拿不到 WebGL 的环境。 */
+  class FakeWebglAddon {
+    static instances: FakeWebglAddon[] = []
+    static unavailable = false
+    readonly dispose = vi.fn()
+    lose: (() => void) | null = null
+
+    constructor() {
+      if (FakeWebglAddon.unavailable) throw new Error("WebGL2 not supported")
+      FakeWebglAddon.instances.push(this)
+    }
+
+    onContextLoss(handler: () => void): FakeDisposable {
+      this.lose = handler
+      return new FakeDisposable()
+    }
+  }
+
+  return { FakeTerminal, FakeFitAddon, FakeWebglAddon }
 })
 
 /** 可控的 ResizeObserver，用于驱动 fit。 */
@@ -81,6 +105,7 @@ class FakeResizeObserver {
 
 vi.mock("@xterm/xterm", () => ({ Terminal: xtermMock.FakeTerminal }))
 vi.mock("@xterm/addon-fit", () => ({ FitAddon: xtermMock.FakeFitAddon }))
+vi.mock("@xterm/addon-webgl", () => ({ WebglAddon: xtermMock.FakeWebglAddon }))
 
 /** jsdom 没有 tokens.css 的计算值，也没有画布：token 直接读 <html> 的内联变量，颜色只认十六进制。 */
 vi.mock("@pigcode/ui-primitives", async (importOriginal) => {
@@ -118,6 +143,8 @@ describe("TerminalView", () => {
   beforeEach(() => {
     xtermMock.FakeTerminal.instances.length = 0
     xtermMock.FakeFitAddon.instances.length = 0
+    xtermMock.FakeWebglAddon.instances.length = 0
+    xtermMock.FakeWebglAddon.unavailable = false
     FakeResizeObserver.instances.length = 0
     vi.stubGlobal("ResizeObserver", FakeResizeObserver)
   })
@@ -157,6 +184,32 @@ describe("TerminalView", () => {
     expect(terminal.write).toHaveBeenCalledWith("pty output")
   })
 
+  it("draws with WebGL and falls back to the DOM renderer when the context is lost", () => {
+    const view = render(<TerminalView />)
+    const webgl = xtermMock.FakeWebglAddon.instances[0]
+    expect(webgl).toBeDefined()
+    expect(terminalAt(0).loadAddon).toHaveBeenCalledWith(webgl)
+    // GPU 上下文丢了：释放 WebGL，xterm 自己退回 DOM 渲染，终端照常可用。
+    act(() => webgl?.lose?.())
+    expect(webgl?.dispose).toHaveBeenCalledTimes(1)
+    view.unmount()
+    expect(webgl?.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the DOM renderer when WebGL is unavailable", () => {
+    xtermMock.FakeWebglAddon.unavailable = true
+    const onReady = vi.fn()
+    render(<TerminalView onReady={onReady} />)
+    expect(xtermMock.FakeWebglAddon.instances).toHaveLength(0)
+    expect(onReady).toHaveBeenCalledWith(expect.objectContaining({ write: expect.any(Function) }))
+  })
+
+  it("releases WebGL with the terminal", () => {
+    const view = render(<TerminalView />)
+    view.unmount()
+    expect(xtermMock.FakeWebglAddon.instances[0]?.dispose).toHaveBeenCalledTimes(1)
+  })
+
   it("forwards typed data and resize events", () => {
     const onData = vi.fn()
     const onResize = vi.fn()
@@ -168,6 +221,47 @@ describe("TerminalView", () => {
 
     act(() => terminal.emitResize(120, 40))
     expect(onResize).toHaveBeenCalledWith(120, 40)
+  })
+
+  it("hands the size from the very first fit to the PTY", () => {
+    // 真实 fit addon 在挂载时就量出面板的行列数；这次变化发生在订阅之前的话，PTY 会一直停在 80×24。
+    xtermMock.FakeFitAddon.onFit = () =>
+      xtermMock.FakeTerminal.instances.at(-1)?.emitResize(140, 13)
+    try {
+      const onResize = vi.fn()
+      render(<TerminalView onResize={onResize} />)
+      expect(onResize).toHaveBeenCalledWith(140, 13)
+      expect(onResize).toHaveBeenLastCalledWith(140, 13)
+    } finally {
+      xtermMock.FakeFitAddon.onFit = null
+    }
+  })
+
+  it("reports the size once the host is laid out, even when fit leaves it unchanged", () => {
+    // jsdom 没有布局，宽高都是 0：当成藏在 display: none 里的面板。
+    let width = 0
+    const box = vi
+      .spyOn(HTMLElement.prototype, "clientWidth", "get")
+      .mockImplementation(() => width)
+    const height = vi
+      .spyOn(HTMLElement.prototype, "clientHeight", "get")
+      .mockImplementation(() => width)
+    try {
+      const onResize = vi.fn()
+      render(<TerminalView onResize={onResize} />)
+      // 还没有布局：量不出尺寸，不报，调用方也就先不启动 shell。
+      expect(onResize).not.toHaveBeenCalled()
+      width = 600
+      act(() => observerAt(0).trigger())
+      expect(onResize).toHaveBeenCalledTimes(1)
+      expect(onResize).toHaveBeenCalledWith(80, 24)
+      // 只主动报一次；之后的尺寸变化走 xterm 的 onResize。
+      act(() => observerAt(0).trigger())
+      expect(onResize).toHaveBeenCalledTimes(1)
+    } finally {
+      box.mockRestore()
+      height.mockRestore()
+    }
   })
 
   it("refits when the host element resizes", () => {

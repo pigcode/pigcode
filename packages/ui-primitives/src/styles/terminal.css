@@ -12,6 +12,17 @@
 .terminal-surface > .empty-state {
   flex: 1;
 }
+/* shell 起来之前盖在 xterm 上面的加载提示；xterm 在下面已经量好了尺寸 */
+.terminal-surface-loading {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: flex;
+  background: var(--term-bg);
+}
+.terminal-surface-loading > .empty-state {
+  flex: 1;
+}
 .terminal-surface > .workbench-error {
   margin: 12px;
 }
@@ -77,12 +88,105 @@
   height: var(--panel-head-h);
   flex: none;
   padding: 0 8px 0 14px;
+  border-bottom: var(--hair) solid var(--divider);
   color: var(--fg-2);
   font-size: var(--fs-sm);
   font-weight: 500;
 }
 .terminal-drawer-head > .ic {
   color: var(--muted);
+}
+.terminal-drawer-title {
+  flex: none;
+}
+/* 当前标签的 shell 名：标题后面一个弱一档的小字 */
+.terminal-drawer-shell {
+  flex: none;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+}
+
+/* ─── 终端标签：一行可横向滚动的小标签，当前的浮起一层；关闭按钮悬停或选中时出现 ─── */
+.terminal-tabs {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-4);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.terminal-tabs::-webkit-scrollbar {
+  display: none;
+}
+.terminal-tab {
+  display: flex;
+  max-width: 180px;
+  flex: none;
+  align-items: center;
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.terminal-tab:hover {
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.terminal-tab[data-active] {
+  background: var(--active);
+  color: var(--fg);
+}
+.terminal-tab-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  height: 100%;
+  padding: 0 var(--space-1) 0 var(--space-4);
+  border-radius: var(--r-sm);
+  color: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 450;
+}
+.terminal-tab-label:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: -1px;
+}
+.terminal-tab-close {
+  display: grid;
+  width: var(--control-2xs);
+  height: var(--control-2xs);
+  flex: none;
+  margin-right: var(--space-1);
+  place-items: center;
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.terminal-tab:hover .terminal-tab-close,
+.terminal-tab[data-active] .terminal-tab-close,
+.terminal-tab-close:focus-visible {
+  opacity: 1;
+}
+.terminal-tab-close:hover {
+  background: var(--active);
+  color: var(--fg);
+}
+/* 每个标签一个终端；不是当前标签的只隐藏，shell 与滚动内容都保留 */
+.terminal-pane {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.terminal-pane[hidden] {
+  display: none;
 }
 .terminal-drawer-head .btn.btn-icon {
   width: var(--control-sm);
@@ -104,7 +208,30 @@
 .terminal-view .xterm {
   height: 100%;
   padding: 10px 4px 10px 12px;
+  /*
+    不继承界面的字距与字重：xterm 用自己量出的「W」宽度算每格的字距补偿，量字的元素也在这里面。
+    继承了 body 的 -0.003em 字距，量出来的字比实际画出来的窄，每格多补一点，一行越往右越偏，
+    最后一列（例如 fish 提示符右上角的 ╮）会被挤出可见区域。
+  */
+  font-weight: normal;
+  letter-spacing: normal;
 }
 .terminal-view .xterm-viewport {
   background-color: transparent !important;
+}
+/*
+  xterm 自带的滚动条（取自 VS Code）是一整条 14px 宽的方块。改成和界面其他滚动条一样：
+  细的圆头滑块，贴着右边留一点空；颜色由终端主题从 --scroll-thumb 取。
+  滑块的宽度与位置是 xterm 写在行内样式里的，只能用 !important 覆盖。
+*/
+.terminal-view .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+  left: auto !important;
+  right: var(--space-1);
+  width: var(--space-3) !important;
+  border-radius: var(--r-full);
+  transition: width var(--t-fast) var(--ease);
+}
+.terminal-view .xterm .xterm-scrollable-element > .scrollbar.vertical:hover > .slider,
+.terminal-view .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider.active {
+  width: var(--space-4) !important;
 }

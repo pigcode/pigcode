@@ -20,6 +20,7 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
 import { addProject, installPlugin, launchEnv, openInstallDialog } from "./projects"
+import { expectTerminalText } from "./terminal"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const distDir = resolve(here, "../dist")
@@ -186,7 +187,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     await page.locator(".xterm").click()
     await page.keyboard.type("echo PACKAGED-READY")
     await page.keyboard.press("Enter")
-    await expect(page.locator(".xterm")).toContainText("PACKAGED-READY")
+    await expectTerminalText(page.locator(".xterm"), "PACKAGED-READY")
 
     // 退出：窗口和 Host 一起走。
     await app.close()

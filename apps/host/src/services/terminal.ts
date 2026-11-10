@@ -2,6 +2,7 @@
 import type { Context } from "cordis"
 import { randomUUID } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
+import { basename } from "node:path"
 import { createRequire } from "node:module"
 import { terminateProcessGroup } from "@pigcode/plugin-sdk/node"
 import { threadCwd } from "./worktrees"
@@ -35,17 +36,26 @@ export interface TerminalSession {
   threadId: string
   cols: number
   rows: number
+  /** shell 的名字（例如 zsh），界面标签上显示。 */
+  shell: string
+  /** shell 启动时的工作目录（线程的项目根或 worktree）。 */
+  cwd: string
 }
 
-/** 终端服务入口；同一线程同时最多一个终端。 */
+/** 终端服务入口；同一线程可以同时开多个终端（底部终端的多个标签、右栏的终端标签）。 */
 export interface TerminalService {
   open(threadId: string, cols: number, rows: number): Promise<TerminalSession>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   close(id: string): void
-  /** 关闭这个线程的终端；没有打开的终端时什么也不做。 */
+  /** 关闭这个线程的全部终端；没有打开的终端时什么也不做。 */
   closeThread(threadId: string): void
-  subscribe(id: string, listener: (data: string) => void): () => void
+  /** 订阅输出；onExit 在 shell 自己退出（例如输入 exit）时调用一次。 */
+  subscribe(
+    id: string,
+    listener: (data: string) => void,
+    onExit?: (exitCode: number) => void,
+  ): () => void
 }
 
 declare module "cordis" {
@@ -73,13 +83,15 @@ interface TerminalEntry {
   session: TerminalSession
   pty: PtyLike
   subscribers: Set<(data: string) => void>
+  exitSubscribers: Set<(exitCode: number) => void>
 }
 
 /** 注册 terminal 服务；Host 卸载时终止所有 PTY，终端不跨重启保留。 */
 export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
   const terminals = new Map<string, TerminalEntry>()
-  const byThread = new Map<string, string>()
+  /** 每个线程打开着的终端 id。 */
+  const byThread = new Map<string, Set<string>>()
   /** 正在结束的 PTY；Host 退出前要等它们。 */
   const ending = new Set<Promise<void>>()
 
@@ -102,8 +114,11 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     if (!found) return undefined
     const { threadId } = found.session
     terminals.delete(id)
-    if (byThread.get(threadId) === id) byThread.delete(threadId)
+    const owned = byThread.get(threadId)
+    owned?.delete(id)
+    if (owned?.size === 0) byThread.delete(threadId)
     found.subscribers.clear()
+    found.exitSubscribers.clear()
     return found
   }
 
@@ -118,21 +133,35 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     async open(threadId, cols, rows) {
       validateSize(cols, rows)
       const cwd = await resolveTerminalCwd(ctx, threadId)
-      // 等待 cwd 解析后再检查旧终端，保证并发 open 也最多保留一个。
-      const previous = byThread.get(threadId)
-      if (previous) close(previous)
       const id = `term_${randomUUID()}`
-      const pty = factory.spawn({ cwd, cols, rows, shell: defaultShell() })
-      const session: TerminalSession = { id, threadId, cols, rows }
-      const current: TerminalEntry = { session, pty, subscribers: new Set() }
+      const shell = defaultShell()
+      const pty = factory.spawn({ cwd, cols, rows, shell })
+      const session: TerminalSession = {
+        id,
+        threadId,
+        cols,
+        rows,
+        shell: shellName(shell),
+        cwd,
+      }
+      const current: TerminalEntry = {
+        session,
+        pty,
+        subscribers: new Set(),
+        exitSubscribers: new Set(),
+      }
       terminals.set(id, current)
-      byThread.set(threadId, id)
-      // 输出只广播给当前订阅者；M3 不发 exit 通知，退出后由 UI 重新 open。
+      const owned = byThread.get(threadId) ?? new Set<string>()
+      owned.add(id)
+      byThread.set(threadId, owned)
+      // 输出只广播给当前订阅者；shell 自己退出时通知订阅者，界面据此关掉这个标签。
       pty.onData((data) => {
         for (const listener of [...current.subscribers]) listener(data)
       })
-      pty.onExit(() => {
+      pty.onExit(({ exitCode }) => {
+        const listeners = [...current.exitSubscribers]
         detach(id)
+        for (const listener of listeners) listener(exitCode)
       })
       return session
     },
@@ -145,14 +174,15 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     },
     close,
     closeThread(threadId) {
-      const id = byThread.get(threadId)
-      if (id) close(id)
+      for (const id of [...(byThread.get(threadId) ?? [])]) close(id)
     },
-    subscribe(id, listener) {
+    subscribe(id, listener, onExit) {
       const found = entry(id)
       found.subscribers.add(listener)
+      if (onExit) found.exitSubscribers.add(onExit)
       return () => {
         found.subscribers.delete(listener)
+        if (onExit) found.exitSubscribers.delete(onExit)
       }
     },
   }
@@ -188,6 +218,11 @@ function validateSize(cols: number, rows: number): void {
   if (!Number.isInteger(cols) || cols <= 0 || !Number.isInteger(rows) || rows <= 0) {
     throw new Error(`invalid terminal size: ${cols}x${rows}`)
   }
+}
+
+/** shell 路径的显示名：/bin/zsh → zsh，C:\\Windows\\System32\\cmd.exe → cmd。 */
+export function shellName(shell: string): string {
+  return basename(shell.replaceAll("\\", "/")).replace(/\.exe$/i, "") || shell
 }
 
 /** 当前平台的默认 shell；Windows 使用 ConPTY 对应的 COMSPEC。 */

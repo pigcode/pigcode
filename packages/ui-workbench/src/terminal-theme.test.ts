@@ -65,6 +65,16 @@ describe("terminalTheme", () => {
     expect(theme.selectionBackground).toMatch(/^mix:color-mix\(in srgb, oklch/)
   })
 
+  it("colours the scrollbar with the same tokens as every other scrollbar", () => {
+    const theme = terminalTheme(
+      (name) => name,
+      (css) => css,
+    )
+    expect(theme.scrollbarSliderBackground).toBe("--scroll-thumb")
+    expect(theme.scrollbarSliderHoverBackground).toBe("--scroll-thumb-hover")
+    expect(theme.scrollbarSliderActiveBackground).toBe("--scroll-thumb-hover")
+  })
+
   it("derives the semantic ANSI colours from the status tokens", () => {
     const dark = pageTokens(defaultAppearance, "dark")
     const theme = terminalTheme(dark, resolve)
