@@ -144,12 +144,32 @@
   设置侧栏的搜索框是 SearchField，和侧栏的行一样高。侧栏是灰底，白底框会浮在上面，
   所以这里用和侧栏融在一起的浅灰底，只靠细描边勾出外框；聚焦时底色不变，描边加深。
 */
+/*
+  设置侧栏的搜索框：底色和导航行选中时一样，外面一圈比聚焦描边淡的细边，悬停时细边深一档；
+  聚焦时底色不变，只换成聚焦描边。图标和占位文字用弱一档的颜色，不和导航抢视线。
+*/
 .side-search {
-  margin-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
 }
 .search-field.side-search,
 .search-field.side-search:focus-within {
-  background: var(--field);
+  background: var(--active);
+}
+.search-field.side-search {
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.search-field.side-search:hover {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.search-field.side-search:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+.search-field.side-search > .ic,
+.search-field.side-search > input::placeholder {
+  color: var(--faint);
+}
+.search-field.side-search:focus-within > .ic {
+  color: var(--muted);
 }
 
 /* ─── 项目行与会话行 ───────────────────────────────────── */
