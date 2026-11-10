@@ -1,6 +1,6 @@
 /*
   工具行展开后的内容：命令、技能、任务输出与通用工具的卡片，终端命令与输出，内联 diff，MCP 结果，
-  截图与浏览器步骤，提问的历史行，思考，子 agent 的过程卡片，退出计划模式交上来的计划，以及工具行的悬停提示。
+  截图与浏览器步骤，提问的历史行，思考，子 agent 的过程卡片，工作流卡片，退出计划模式交上来的计划，以及工具行的悬停提示。
 */
 /* ─── 展开后的卡片：命令、技能、任务输出、通用工具 ─── */
 .tool-card {
@@ -364,6 +364,236 @@
   overflow: auto;
   font-size: var(--cv-fs);
   line-height: 1.6;
+}
+
+/*
+  工作流卡片：一行摘要后面的一排小点是每个 agent 的状态；展开后按阶段列出 agent，
+  每个 agent 一行：状态图标、标签、在做的事或结论、耗时与 token，点开看任务和完整结论。
+*/
+.workflow-name {
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+}
+.workflow-pips {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+}
+.workflow-pip {
+  width: var(--workflow-pip);
+  height: var(--workflow-pip);
+  border-radius: 50%;
+  background: var(--cv-border);
+  transition: background var(--t-fast);
+}
+.workflow-pip[data-state="running"] {
+  background: var(--accent);
+  animation: workflow-pulse 1.4s ease-in-out infinite;
+}
+.workflow-pip[data-state="done"] {
+  background: var(--cv-success);
+}
+.workflow-pip[data-state="failed"] {
+  background: var(--cv-removed);
+}
+@keyframes workflow-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workflow-pip[data-state="running"] {
+    animation: none;
+  }
+}
+.workflow-card {
+  gap: 14px;
+}
+.workflow-overview {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.workflow-description {
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--cv-fs);
+  line-height: 1.5;
+}
+.workflow-usage {
+  flex: none;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.workflow-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workflow-phase-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.workflow-phase-index {
+  display: grid;
+  width: var(--workflow-phase-badge);
+  height: var(--workflow-phase-badge);
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cv-surface);
+  color: var(--fg-2);
+  font-size: var(--cv-fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-phase-title {
+  color: var(--fg);
+  font-weight: 500;
+}
+.workflow-phase-count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.workflow-agents {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  list-style: none;
+}
+.workflow-agent-head {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: var(--workflow-phase-badge) auto minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: var(--cv-fs-sm);
+  text-align: left;
+}
+.workflow-agent-head:not(:disabled):hover {
+  background: var(--hover);
+}
+.workflow-agent-head:disabled {
+  cursor: default;
+}
+.workflow-agent-status {
+  display: grid;
+  place-items: center;
+}
+.workflow-agent-icon {
+  color: var(--cv-subtlest);
+}
+.workflow-agent[data-state="done"] .workflow-agent-icon {
+  color: var(--cv-success);
+}
+.workflow-agent[data-state="failed"] .workflow-agent-icon {
+  color: var(--cv-removed);
+}
+.workflow-agent-label {
+  max-width: 220px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-agent-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cv-subtle);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-inline-code {
+  padding: 0 4px;
+  border-radius: var(--r-xs);
+  background: var(--cv-inline-code);
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: inherit;
+}
+.workflow-agent[data-state="queued"] .workflow-agent-label,
+.workflow-agent[data-state="stopped"] .workflow-agent-label {
+  color: var(--cv-subtle);
+}
+.workflow-agent-usage {
+  color: var(--cv-subtlest);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workflow-agent-chev {
+  color: var(--cv-subtlest);
+  transition: transform var(--t-fast);
+}
+.workflow-agent[data-open] .workflow-agent-chev {
+  transform: rotate(90deg);
+}
+.workflow-agent-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 8px calc(var(--workflow-phase-badge) + 14px);
+  padding-left: 12px;
+  border-left: 1px solid var(--cv-hairline);
+}
+.workflow-agent-text {
+  max-height: 220px;
+  overflow: auto;
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+}
+.workflow-failure {
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: var(--cv-fs-sm);
+}
+.workflow-script-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cv-subtle);
+  font-size: var(--cv-fs-sm);
+}
+.workflow-script-toggle:hover {
+  color: var(--fg);
+}
+.workflow-script-toggle .ic {
+  transition: transform var(--t-fast);
+}
+.workflow-script-toggle[aria-expanded="true"] .ic {
+  transform: rotate(90deg);
+}
+.workflow-script-code {
+  max-height: 280px;
+  margin: 8px 0 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--cv-surface);
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-code);
+  line-height: 1.55;
+  white-space: pre;
 }
 
 /* 退出计划模式交上来的计划 */

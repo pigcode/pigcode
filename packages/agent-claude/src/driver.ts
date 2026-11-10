@@ -184,7 +184,8 @@ export class ClaudeDriver implements AgentDriver {
           ? {
               settings: {
                 ...(input.fast ? { fastMode: true } : {}),
-                ...(input.ultracode ? { ultracode: true } : {}),
+                // Ultracode 靠 Workflow 工具干活；有的账号默认没开 Workflows，只传 ultracode 会没有效果。
+                ...(input.ultracode ? { ultracode: true, enableWorkflows: true } : {}),
               },
             }
           : {}),

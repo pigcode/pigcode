@@ -80,3 +80,34 @@ test("a sub-agent added from + is its own conversation next to the main thread",
     await app.close()
   }
 })
+
+test("a workflow shows its phases and agents live, then folds into the finished turn", async () => {
+  const { app, page } = await openThread("workflow", { PIGCODE_FAKE_STEP_MS: "700" })
+  try {
+    await page.locator(".tiptap").click()
+    await page.keyboard.type("workflow")
+    await page.keyboard.press("Enter")
+
+    // 运行中：卡片自动展开，一行摘要是当前阶段和完成数，按阶段列出 agent。
+    const card = page.locator(".workflow-row")
+    await expect(card.locator(".tool-row-head")).toContainText("audit-exports")
+    await expect(card.locator(".tool-row-head")).toContainText(/检查文件 · \d\/4 完成/)
+    await expect(card.locator(".workflow-phase-title")).toHaveText(["检查文件", "汇总"])
+    await expect(card.locator(".workflow-agent[data-state='running']").first()).toBeVisible()
+    await expect(card.locator(".workflow-pip")).toHaveCount(4)
+
+    // 跑完以后这一轮的工作折起来；展开看每个 agent 的结论和总用量。
+    await expect(page.locator(".msg-ai").filter({ hasText: "工作流完成了" })).toBeVisible({
+      timeout: 20_000,
+    })
+    await page.getByRole("button", { name: /已工作/ }).click()
+    await expect(card.locator(".workflow-agent[data-state='done']")).toHaveCount(4)
+    await expect(card.locator(".workflow-usage")).toContainText("tokens")
+    await card.getByText("check:src/math.ts").click()
+    await expect(card.locator(".workflow-agent-body")).toContainText("没有校验参数类型")
+    await card.getByRole("button", { name: "工作流脚本" }).click()
+    await expect(card.locator(".workflow-script-code")).toContainText("export const meta")
+  } finally {
+    await app.close()
+  }
+})

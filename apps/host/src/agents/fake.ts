@@ -1,4 +1,5 @@
 /** 确定性的 fake agent，用于验证协议、UI 和插件模型。 */
+import { FAKE_WORKFLOW_TEXT, fakeWorkflowScript } from "./fake-workflow"
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type {
@@ -27,7 +28,13 @@ const CHUNKS = ["Hello", " from", " fake", " agent"]
 
 /** 长跑输入的标记；用于验证 run 中断与进程清理。 */
 export const FAKE_LONG_RUN_TEXT = "long"
-export { FAKE_SCRIPT_TEXT, FAKE_SHOWCASE_TEXT, FAKE_SUBAGENT_TEXT, FAKE_TOOL_RENDERERS_TEXT }
+export {
+  FAKE_SCRIPT_TEXT,
+  FAKE_SHOWCASE_TEXT,
+  FAKE_SUBAGENT_TEXT,
+  FAKE_TOOL_RENDERERS_TEXT,
+  FAKE_WORKFLOW_TEXT,
+}
 
 /**
  * fake agent 的模型目录：一个可调思考深度，一个不可调，用来覆盖两种界面状态。
@@ -178,7 +185,9 @@ export class FakeAgentDriver implements AgentDriver {
             ? fakeShowcaseScript
             : input.text === FAKE_TOOL_RENDERERS_TEXT
               ? fakeToolRenderersScript
-              : null
+              : input.text === FAKE_WORKFLOW_TEXT
+                ? fakeWorkflowScript
+                : null
     if (script) {
       await runFakeScript(runtime, this.stepMs, script)
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })

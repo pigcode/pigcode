@@ -115,6 +115,9 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
         status: event.status,
       })
       return
+    case "workflow.updated":
+      hooks.append(run.threadId, run.runId, "workflow.updated", event.workflow)
+      return
     case "usage.updated":
       hooks.append(run.threadId, run.runId, "usage.updated", { usage: event.usage })
       return

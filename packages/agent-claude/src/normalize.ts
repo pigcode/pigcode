@@ -1,6 +1,16 @@
 /** 把 Claude Agent SDK 消息映射为 Pigcode 规范化事件。 */
 import type { SDKMessage } from "@anthropic-ai/claude-agent-sdk"
 import type { AgentEvent } from "@pigcode/contracts"
+import {
+  WORKFLOW_TOOL,
+  createTaskState,
+  hasPendingTasks,
+  isWorkflowCall,
+  taskEvents,
+  workflowRejected,
+  workflowStarted,
+  type TaskState,
+} from "./workflow"
 
 /** 子 agent 的展示信息；由 Task/Agent tool_use 创建，tool_result 时移除。 */
 interface SubagentInfo {
@@ -16,11 +26,19 @@ export interface NormalizeState {
   lastText: string
   toolNames: Map<string, string>
   subagents: Map<string, SubagentInfo>
+  /** 后台任务与工作流。 */
+  tasks: TaskState
 }
 
 /** 创建一次 run 专属的归一化状态。 */
 export function createNormalizeState(): NormalizeState {
-  return { streamedText: "", lastText: "", toolNames: new Map(), subagents: new Map() }
+  return {
+    streamedText: "",
+    lastText: "",
+    toolNames: new Map(),
+    subagents: new Map(),
+    tasks: createTaskState(),
+  }
 }
 
 /** 只有非空 parent_tool_use_id 才需要写入事件 payload。 */
@@ -47,6 +65,8 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
     events.push({ type: "session.started", nativeSessionId: message.session_id })
     return events
   }
+  const tasks = taskEvents(state.tasks, message)
+  if (tasks) return tasks
   if (message.type === "stream_event") {
     const parentToolUseId = message.parent_tool_use_id ?? null
     const event = message.event
@@ -73,6 +93,11 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
         state.toolNames.set(block.id, block.name)
         if (block.name === "Task" || block.name === "Agent") {
           events.push(subagentStarted(block.id, block.name, block.input, parentToolUseId, state))
+          continue
+        }
+        // 工作流画成一张单独的卡片，不再当普通工具行。
+        if (block.name === WORKFLOW_TOOL) {
+          events.push(workflowStarted(state.tasks, block.id, block.input, parentToolUseId))
           continue
         }
         events.push({
@@ -110,6 +135,14 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
     for (const block of content) {
       if (block.type !== "tool_result") continue
       const toolCallId = block.tool_use_id
+      if (isWorkflowCall(state.tasks, toolCallId)) {
+        // 工具立刻返回「已在后台启动」，进度与结果走后台任务消息；只有报错时工作流直接失败。
+        state.toolNames.delete(toolCallId)
+        if (block.is_error !== true) continue
+        const rejected = workflowRejected(state.tasks, toolCallId, toolResultText(block.content))
+        if (rejected) events.push(rejected)
+        continue
+      }
       const subagent = state.subagents.get(toolCallId)
       if (subagent) {
         const isError = block.is_error === true
@@ -150,6 +183,9 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
       type: "usage.updated",
       usage: { modelUsage: message.modelUsage, totalCostUsd: message.total_cost_usd },
     })
+    // 还有后台任务（工作流、后台子 agent）在跑：主回合结束了，run 还没有。
+    // 它们跑完后 CLI 会在同一个会话里续一个回合，那个回合的 result 才是结束。
+    if (hasPendingTasks(state.tasks)) return events
     events.push({ type: "run.completed" })
   }
   return events
@@ -202,4 +238,15 @@ export function fastModeNotice(
     level: "info",
     key: reason && FAST_REASONS.has(reason) ? `fast.unavailable.${reason}` : "fast.unavailable",
   }
+}
+
+/** 工具结果里的文字：字符串或文本块数组。 */
+function toolResultText(content: unknown): string | undefined {
+  if (typeof content === "string") return asText(content.trim())
+  if (!Array.isArray(content)) return undefined
+  const parts = content.flatMap((part) => {
+    const text = asText(asRecord(part)?.text)
+    return text ? [text] : []
+  })
+  return asText(parts.join("\n").trim())
 }

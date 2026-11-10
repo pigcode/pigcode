@@ -26,6 +26,7 @@ import { todoItems, type TodoItem } from "./tool-fields"
 import { isHiddenTool, toolFamily } from "./tool-identity"
 import type { ToolCall, ToolStatus } from "./tool-meta"
 import { groupTools, type GroupKind } from "./work-groups"
+import { collectWorkflows, type WorkflowCall } from "./workflow-card"
 
 /** 一轮里的一项工作。 */
 export type WorkItem =
@@ -34,6 +35,7 @@ export type WorkItem =
   | { kind: "tool"; key: string; tool: ToolCall }
   | { kind: GroupKind; key: string; tools: ToolCall[] }
   | { kind: "subagent"; key: string; subagent: SubagentCall }
+  | { kind: "workflow"; key: string; workflow: WorkflowCall }
   | { kind: "question"; key: string; request: QuestionRequestView; answers: string[] | undefined }
 
 /** 一轮的状态；waiting 表示在等用户审批或回答。 */
@@ -125,6 +127,8 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
   const resolved = collectResolved(sorted)
   const answered = collectAnswers(sorted)
   const subagents = collectSubagents(sorted)
+  const workflows = collectWorkflows(sorted)
+  const seenWorkflows = new Set<string>()
   const entries: TimelineEntry[] = []
   const turns = new Map<string, Turn>()
   const drafts = new Map<string, Draft>()
@@ -222,6 +226,15 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
         if (subagent) turn.work.push({ kind: "subagent", key: `subagent-${subagent.id}`, subagent })
         break
       }
+      case "workflow.updated": {
+        // 第一份快照的位置就是卡片在这一轮里的位置；后面的快照只更新同一张卡片。
+        const id = asText(payload?.toolCallId)
+        const workflow = id ? workflows.get(id) : undefined
+        if (!id || !workflow || seenWorkflows.has(id)) break
+        seenWorkflows.add(id)
+        turn.work.push({ kind: "workflow", key: `workflow-${id}`, workflow })
+        break
+      }
       case "plan.updated": {
         const items = todoItems(payload?.plan ?? payload?.steps ?? payload)
         if (items.length > 0) turn.plan = items
@@ -283,13 +296,16 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
   return entries
 }
 
-/** 一轮结束时还在运行的工具与子 agent 记为已停止。 */
+/** 一轮结束时还在运行的工具、子 agent 与工作流记为已停止。 */
 function stopUnfinished(item: WorkItem): WorkItem {
   if (item.kind === "tool" && item.tool.status === "running") {
     return { ...item, tool: { ...item.tool, status: "stopped" } }
   }
   if (item.kind === "subagent" && item.subagent.status === "running") {
     return { ...item, subagent: { ...item.subagent, status: "interrupted" } }
+  }
+  if (item.kind === "workflow" && item.workflow.status === "running") {
+    return { ...item, workflow: { ...item.workflow, status: "stopped" } }
   }
   return item
 }

@@ -148,7 +148,12 @@ describe("Claude model catalog", () => {
     await driver.send(opus, { text: "hello", fast: true }, runtime)
     expect(captured[3]?.settings).toEqual({ fastMode: true })
     await driver.send(opus, { text: "hello", ultracode: true, fast: true }, runtime)
-    expect(captured[4]?.settings).toEqual({ fastMode: true, ultracode: true })
+    // Ultracode 要靠 Workflows，有的账号默认没开，一起打开。
+    expect(captured[4]?.settings).toEqual({
+      fastMode: true,
+      ultracode: true,
+      enableWorkflows: true,
+    })
     // 别的 agent 才有的档位不传给 Claude。
     await driver.send(opus, { text: "hello", effort: "turbo" }, runtime)
     expect(captured[5]).not.toHaveProperty("effort")

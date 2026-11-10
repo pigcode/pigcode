@@ -167,13 +167,13 @@ export async function walkShell(walk: Walk): Promise<void> {
   await page.getByRole("button", { name: contains(t("composer.modelMenu")) }).click()
   await expect(page.getByRole("listbox", { name: "Fake Agent" }).getByRole("option")).toHaveCount(2)
   await step("menu-agent-model")
-  await page.keyboard.press("Escape")
 
+  // 权限在模型选择器的底栏里；选完全访问时选择器先关掉，再弹确认框。
   const fullAccess = contains(t("composer.permission.full"))
   await page.getByRole("button", { name: startsWith(t("composer.permission.title")) }).click()
-  await expect(page.getByRole("menuitem", { name: fullAccess })).toBeVisible()
+  await expect(page.getByRole("menuitemradio", { name: fullAccess })).toBeVisible()
   await step("menu-permission")
-  await page.getByRole("menuitem", { name: fullAccess }).click()
+  await page.getByRole("menuitemradio", { name: fullAccess }).click()
   const confirm = page.getByRole("button", { name: t("composer.permission.full.confirm") })
   await expect(confirm).toBeVisible()
   await step("dialog-full-access")

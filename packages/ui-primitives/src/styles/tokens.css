@@ -474,6 +474,9 @@
   --model-effort-dot: 4px;
   --model-effort-ring: 6px;
   --model-fast-icon: 11px;
+  /* 工作流卡片：一行摘要后每个 agent 的小点、阶段序号的圆底（agent 行的状态图标与它同宽） */
+  --workflow-pip: 6px;
+  --workflow-phase-badge: 18px;
   --side-foot-h: 52px;
   --subagent-icon-size: 22px;
   --palette-icon-size: 24px;

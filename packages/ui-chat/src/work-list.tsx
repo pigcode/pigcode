@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { MessageText } from "./message-item"
 import { ReasoningBlock } from "./reasoning"
 import { AgentRow } from "./subagent-card"
+import { WorkflowRow } from "./workflow-card"
 import type { ToolCall } from "./tool-meta"
 import { BrowserGroup, CommandGroup, ExploreGroup, QuestionHistoryRow, ToolBlock } from "./tools"
 import type { WorkItem } from "./turns"
@@ -42,6 +43,8 @@ function WorkItemView({
       return <BrowserGroup tools={item.tools} renderChild={renderChild} />
     case "subagent":
       return <AgentRow subagent={item.subagent} />
+    case "workflow":
+      return <WorkflowRow workflow={item.workflow} />
     case "question":
       return (
         <QuestionHistoryRow

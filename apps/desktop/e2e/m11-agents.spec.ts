@@ -119,6 +119,8 @@ test("an agent can hold several instances, and threads bind to the one they used
     await page.getByRole("button", { name: /Agent 与模型/ }).click()
     await page.getByRole("tab", { name: "公司 API" }).click()
     await page.getByRole("option", { name: /Fake Sage/ }).click()
+    // 选完模型弹层不关，按 Esc 收起再输入。
+    await page.keyboard.press("Escape")
     await page.locator(".tiptap").click()
     await page.keyboard.type("hello instance")
     await page.keyboard.press("Enter")
