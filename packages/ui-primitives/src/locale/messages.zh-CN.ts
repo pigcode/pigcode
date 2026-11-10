@@ -342,6 +342,8 @@ export const zhCN = {
     "插件工具没有接上：{name} 服务启动失败。这一轮里模型看不到插件工具。",
   "chat.notice.host.restarted":
     "应用重启过，这一轮被中断了。等审批的请求也跟着 agent 进程一起没了，需要重新发一条消息。",
+  "chat.notice.ultracode.unavailable":
+    "Ultracode 这一轮没有生效：这个模型不支持，或者 Workflows 被关掉了，按普通方式运行。",
   "chat.notice.fast.unavailable": "快速模式这一轮没有生效，按标准速度运行。",
   "chat.notice.fast.unavailable.extra_usage_disabled":
     "快速模式这一轮没有生效：账号没有开启额外用量，按标准速度运行。",

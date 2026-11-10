@@ -29,6 +29,7 @@ import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
 import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
+import { readUltracode } from "./ultracode"
 import { answerRecord, parseQuestions } from "./questions"
 
 /** 可注入的 query 实现，便于测试替换真实 CLI 进程。 */
@@ -243,6 +244,16 @@ export class ClaudeDriver implements AgentDriver {
     runtime.signal.addEventListener("abort", onAbort, { once: true })
     if (runtime.signal.aborted) onAbort()
 
+    // 打开了 Ultracode：问一下 CLI 这一轮是不是真的开起来了，开不了（模型不支持、Workflows 被策略关掉）就提示。
+    if (input.ultracode) {
+      void readUltracode(queryStream)
+        .then((state) => {
+          if (state?.available === false && !runtime.signal.aborted) {
+            runtime.emit({ type: "notice", level: "info", key: "ultracode.unavailable" })
+          }
+        })
+        .catch(() => undefined)
+    }
     const iterator = queryStream[Symbol.asyncIterator]()
     const aborted = abortedSignal(state.controller.signal)
     try {

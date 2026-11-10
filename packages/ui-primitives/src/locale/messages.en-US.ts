@@ -348,6 +348,8 @@ export const enUS = {
     "Plugin tools are not connected: the {name} server failed to start. The model cannot see plugin tools in this turn.",
   "chat.notice.host.restarted":
     "Pigcode restarted, so this turn was interrupted. Any pending approvals went with the agent process — send the message again to continue.",
+  "chat.notice.ultracode.unavailable":
+    "Ultracode did not apply: this model does not support it or Workflows are turned off, so this turn ran normally.",
   "chat.notice.fast.unavailable": "Fast mode did not apply to this turn; it ran at standard speed.",
   "chat.notice.fast.unavailable.extra_usage_disabled":
     "Fast mode did not apply: extra usage is not turned on for this account, so this turn ran at standard speed.",

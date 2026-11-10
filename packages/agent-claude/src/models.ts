@@ -3,18 +3,25 @@ import type { EffortLevel, ModelInfo, Query, SDKUserMessage } from "@anthropic-a
 import type { ReasoningEffort } from "@pigcode/contracts"
 import { asReasoningEffort, sortEfforts, type AgentModelInfo } from "@pigcode/plugin-sdk"
 import type { ClaudeDetection } from "./detect"
+import { askUltracode, realModelId, ultracodeAnswers, type UltracodeAnswers } from "./ultracode"
 
 /** 读取目录时注入的依赖；测试替换 query 与检测。 */
 export interface ClaudeModelSource {
   queryFn: (params: {
     prompt: string | AsyncIterable<SDKUserMessage>
-    options: { pathToClaudeCodeExecutable?: string; env?: Record<string, string | undefined> }
+    options: {
+      pathToClaudeCodeExecutable?: string
+      env?: Record<string, string | undefined>
+      settings?: Record<string, unknown>
+    }
   }) => Query
   executable: string | undefined
   /** 设置页里的环境变量（含 CLAUDE_CONFIG_DIR）；没有覆盖时缺省。 */
   env?: NodeJS.ProcessEnv | undefined
   detect: () => Promise<Pick<ClaudeDetection, "installed" | "loggedIn">>
   timeoutMs?: number
+  /** 读目录时问 Ultracode 的时间预算；剩下的模型在后台接着问。缺省 1.5 秒。 */
+  ultracodeBudgetMs?: number
 }
 
 const CLAUDE_EFFORTS: ReasoningEffort[] = ["low", "medium", "high", "xhigh", "max"]
@@ -36,9 +43,8 @@ export const CLAUDE_FALLBACK_MODELS: AgentModelInfo[] = [
     isDefault: false,
     efforts: CLAUDE_EFFORTS,
     defaultEffort: null,
-    // 读不到目录时按 Opus 系列都支持快速模式与 Ultracode 处理；CLI 不支持时自己忽略。
+    // 读不到目录时按 Opus 系列支持快速模式处理；CLI 不支持时自己退回标准速度。
     fast: true,
-    ultracode: true,
   },
   {
     id: "sonnet",
@@ -50,8 +56,14 @@ export const CLAUDE_FALLBACK_MODELS: AgentModelInfo[] = [
   { id: "haiku", displayName: "Haiku", isDefault: false, efforts: [], defaultEffort: null },
 ]
 
-/** 把 SDK 的 ModelInfo 转成目录条目；第一项是 CLI 的默认选择。 */
-export function parseClaudeModels(models: readonly ModelInfo[]): AgentModelInfo[] {
+/**
+ * 把 SDK 的 ModelInfo 转成目录条目；第一项是 CLI 的默认选择。
+ * ultracode 是问过 CLI 的结果（见 ultracode.ts），没问到的模型不标。
+ */
+export function parseClaudeModels(
+  models: readonly ModelInfo[],
+  ultracode: UltracodeAnswers = new Map(),
+): AgentModelInfo[] {
   return models.flatMap((model, index): AgentModelInfo[] => {
     if (!model.value) return []
     const efforts =
@@ -72,22 +84,10 @@ export function parseClaudeModels(models: readonly ModelInfo[]): AgentModelInfo[
         efforts,
         defaultEffort: null,
         ...(model.supportsFastMode ? { fast: true } : {}),
-        ...(supportsUltracode(model.resolvedModel ?? model.value) ? { ultracode: true } : {}),
+        ...(ultracode.get(realModelId(model)) === true ? { ultracode: true } : {}),
       },
     ]
   })
-}
-
-/**
- * 支持 Ultracode 的模型：SDK 的模型信息里没有这一项，按真实模型 id 的前缀判断（和 T3 Code 的列表一致，
- * 外加同系列的新版本）。别名用 SDK 给的 resolvedModel 对上。判断错了也无妨：不支持的模型或关掉了
- * Workflows 时，CLI 会静默忽略这个设置（2.1.321 实测）。
- */
-const ULTRACODE_MODELS = /^claude-(opus-5|fable-5|opus-4-8)/
-
-/** 这个模型 id 是否支持 Ultracode。 */
-export function supportsUltracode(modelId: string): boolean {
-  return ULTRACODE_MODELS.test(modelId)
 }
 
 /** Claude 认得的档位。 */
@@ -134,31 +134,62 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
+/** 同一份 CLI 配置（可执行文件、配置目录、API 地址）问过的 Ultracode 结果共用一张表。 */
+function answersKey(source: ClaudeModelSource): string {
+  const env = source.env ?? {}
+  return JSON.stringify([
+    source.executable ?? "",
+    env.CLAUDE_CONFIG_DIR ?? "",
+    env.ANTHROPIC_BASE_URL ?? "",
+  ])
+}
+
 /**
- * 读取 Claude Code 的模型目录。只有 CLI 已安装且登录时才启动一次 SDK 会话；
- * 会话不发送消息，读完目录立即关闭，不消耗额度。
+ * 读取 Claude Code 的模型目录。只有 CLI 已安装且登录时才启动一次 SDK 会话；会话不发送消息，不消耗额度。
+ * 读完目录后在预算内问几个模型能不能打开 Ultracode，剩下的在后台问完再关会话，结果记住给下一次用。
+ * 会话打开 Workflows：Ultracode 要靠它，run 里打开 Ultracode 时也一起打开。
  */
 export async function listClaudeModels(source: ClaudeModelSource): Promise<AgentModelInfo[]> {
   const detection = await source.detect().catch(() => ({ installed: false, loggedIn: false }))
   if (!detection.installed || !detection.loggedIn) return CLAUDE_FALLBACK_MODELS
   const input = idleInput()
   let stream: Query | undefined
+  /** 后台还在问的时候由后台负责关会话。 */
+  let handedOff = false
+  const close = (query: Query | undefined) => {
+    input.close()
+    query?.close()
+  }
   try {
     stream = source.queryFn({
       prompt: input.iterable,
       options: {
         ...(source.executable ? { pathToClaudeCodeExecutable: source.executable } : {}),
         ...(source.env ? { env: source.env } : {}),
+        settings: { enableWorkflows: true },
       },
     })
-    const models = parseClaudeModels(
-      await withTimeout(stream.supportedModels(), source.timeoutMs ?? 15_000),
-    )
+    const timeoutMs = source.timeoutMs ?? 15_000
+    const raw = await withTimeout(stream.supportedModels(), timeoutMs)
+    const table = ultracodeAnswers(answersKey(source))
+    const asking = stream
+    const deadline = Date.now() + (source.ultracodeBudgetMs ?? 1_500)
+    const supported = await withTimeout(
+      askUltracode(asking, raw, table, deadline),
+      timeoutMs,
+    ).catch(() => false)
+    const models = parseClaudeModels(raw, table)
+    // 时间到了还有没问的模型：后台接着问，问完再关会话；读目录不等它。
+    if (supported && raw.some((model) => model.value && !table.has(realModelId(model)))) {
+      handedOff = true
+      void withTimeout(askUltracode(asking, raw, table, Infinity), 60_000)
+        .catch(() => undefined)
+        .finally(() => close(asking))
+    }
     return models.length > 0 ? models : CLAUDE_FALLBACK_MODELS
   } catch {
     return CLAUDE_FALLBACK_MODELS
   } finally {
-    input.close()
-    stream?.close()
+    if (!handedOff) close(stream)
   }
 }

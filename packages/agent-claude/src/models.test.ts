@@ -165,16 +165,25 @@ describe("Claude model catalog", () => {
     expect(toClaudeEffort("xhigh")).toBe("xhigh")
   })
 
-  it("marks Ultracode on the model families that have it, matching aliases by their real id", () => {
+  it("marks Ultracode from what the CLI answered, matching aliases by their real id", () => {
     const models = [
       { value: "opus", resolvedModel: "claude-opus-5-5", displayName: "Opus", description: "" },
-      { value: "claude-opus-4-8", displayName: "Opus 4.8", description: "" },
-      { value: "haiku", resolvedModel: "claude-haiku-5-5", displayName: "Haiku", description: "" },
+      { value: "claude-opus-5-5", displayName: "Opus 5.5", description: "" },
+      { value: "claude-opus-4-6", displayName: "Opus 4.6", description: "" },
+      { value: "claude-legacy", displayName: "Legacy", description: "" },
     ] as ModelInfo[]
-    expect(parseClaudeModels(models).map(({ id, ultracode }) => ({ id, ultracode }))).toEqual([
+    const answers = new Map([
+      ["claude-opus-5-5", true],
+      ["claude-opus-4-6", false],
+    ])
+    expect(
+      parseClaudeModels(models, answers).map(({ id, ultracode }) => ({ id, ultracode })),
+    ).toEqual([
       { id: "opus", ultracode: true },
-      { id: "claude-opus-4-8", ultracode: true },
-      { id: "haiku", ultracode: undefined },
+      { id: "claude-opus-5-5", ultracode: true },
+      { id: "claude-opus-4-6", ultracode: undefined },
+      // 还没问到的模型先不标。
+      { id: "claude-legacy", ultracode: undefined },
     ])
   })
 
