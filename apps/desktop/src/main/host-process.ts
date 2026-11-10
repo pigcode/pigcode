@@ -1,14 +1,18 @@
-/** 启动并监督 Host utilityProcess，分配控制与应用两条 MessageChannel。 */
+/** 启动并监督 Host utilityProcess：一条控制 MessageChannel，页面每次加载另开一条应用 MessageChannel。 */
 import { appendFileSync, mkdirSync } from "node:fs"
 import { dirname } from "node:path"
 import { MessageChannelMain, utilityProcess } from "electron"
 import type { MessagePortMain, UtilityProcess } from "electron"
 
-/** 由 main 持有的 Host 子进程与两条端口。 */
+/** 由 main 持有的 Host 子进程与控制端口。 */
 export interface HostProcess {
   child: UtilityProcess
-  appPort: MessagePortMain
   controlPort: MessagePortMain
+  /**
+   * 给页面开一条新的应用连接，返回页面这一端。端口只能转交一次，所以页面每次加载（包括刷新）都要新开；
+   * Host 只服务最新的连接。Host 已经退出时返回的端口没有人应答，新 Host 起来后会再给页面一个。
+   */
+  connectPage(): MessagePortMain
   /** 通知 Host 清理后退出；Host 退出或超时被强制结束后完成。 */
   stop(): Promise<void>
 }
@@ -59,7 +63,6 @@ const HOST_STOP_TIMEOUT_MS = 5000
 /** 以 utilityProcess 方式启动 Host，并把端口转交给子进程。 */
 export function startHostProcess(entry: string, profileDir: string): HostProcess {
   const control = new MessageChannelMain()
-  const app = new MessageChannelMain()
   const child = utilityProcess.fork(entry, [], {
     stdio: "pipe",
     env: { ...process.env, PIGCODE_PROFILE_DIR: profileDir },
@@ -72,11 +75,15 @@ export function startHostProcess(entry: string, profileDir: string): HostProcess
   // 重启的 Host 追加到同一个文件；分隔线把几次启动的输出分开。
   append(`\n=== host started ${new Date().toISOString()} ===\n`)
   pipeOutput(child, append)
-  child.postMessage({ type: "ports" }, [control.port1, app.port1])
+  child.postMessage({ type: "ports" }, [control.port1])
   return {
     child,
     controlPort: control.port2,
-    appPort: app.port2,
+    connectPage() {
+      const page = new MessageChannelMain()
+      if (!exited) child.postMessage({ type: "page" }, [page.port1])
+      return page.port2
+    },
     stop() {
       return new Promise((resolve) => {
         if (exited) {

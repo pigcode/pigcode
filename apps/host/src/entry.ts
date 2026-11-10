@@ -1,4 +1,4 @@
-/** Host utilityProcess 入口：接收 main 转交的端口并启动 RPC。 */
+/** Host utilityProcess 入口：接收 main 转交的端口，启动服务，在页面的连接上提供 RPC。 */
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createHostAppFromProfile, requireCoreService } from "./kernel/app"
@@ -6,6 +6,7 @@ import { sweepOrphanedProcesses } from "@pigcode/plugin-sdk/node"
 import { writeBootGraph } from "./kernel/boot"
 import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
+import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
 import { attachQuitState } from "./rpc/quit-state"
 import { apply as pluginsPlugin } from "./services/plugins"
@@ -31,9 +32,32 @@ if (!parentPort) {
 /** 已经创建的应用；退出时要运行它所有服务的清理。 */
 let hostApp: { fiber: { dispose(): Promise<unknown> } } | undefined
 
+/** 页面连接；页面每次加载（包括刷新）main 都会新开一条，换上以后 RPC 服务不变。 */
+const page = new PageTransport()
+/** 启动完成后的 RPC 服务；在这之前送来的页面连接先等着。 */
+let rpc: RpcServer | undefined
+/** Host 还在启动时送来的页面连接。 */
+let waitingPage: HostMessagePort | undefined
+
+/** 接上页面的新连接，释放旧页面的订阅。 */
+function servePage(port: HostMessagePort): void {
+  if (!rpc) {
+    waitingPage?.close()
+    waitingPage = port
+    return
+  }
+  rpc.releasePage()
+  page.attach(new MessagePortTransport(port))
+}
+
 parentPort.on("message", (event) => {
   if (event.data?.type === "shutdown") {
     void shutdown()
+    return
+  }
+  if (event.data?.type === "page") {
+    const port = event.ports[0]
+    if (port) servePage(port)
     return
   }
   void bootstrap(event).catch((error: unknown) => {
@@ -66,11 +90,10 @@ function coreProfileDir(): string {
   )
 }
 
-/** 收到端口后创建 kernel，并在应用端口上启动 RPC。 */
+/** 收到控制端口后创建 kernel；完成后接上已经在等的页面连接。 */
 async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   if (event.data?.type !== "ports") return
-  const [control, appPort] = event.ports
-  if (!appPort) return
+  const [control] = event.ports
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
   const profile = await loadProfile(coreProfileDir(), "desktop")
@@ -94,7 +117,12 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
-  new RpcServer(ctx, new MessagePortTransport(appPort)).start()
+  rpc = new RpcServer(ctx, page)
+  rpc.start()
+  if (waitingPage) {
+    servePage(waitingPage)
+    waitingPage = undefined
+  }
   // 控制端口承载两件事：内置浏览器的动作（agent 的 browser_* 工具经它交给 main 执行），
   // 以及退出前查询还有多少在跑的工作。
   if (control) {

@@ -8,7 +8,6 @@ import {
   nativeTheme,
   shell,
   type MessageBoxSyncOptions,
-  type MessagePortMain,
   type Tray,
 } from "electron"
 import { join } from "node:path"
@@ -19,7 +18,7 @@ import {
   readFolderPickerLabels,
   readPathKind,
 } from "./folder-picker"
-import { startHostProcess, type HostProcess } from "./host-process"
+import { createHostSupervisor } from "./host-supervisor"
 import { hidesOnClose } from "./lifecycle"
 import {
   DEFAULT_PREFERENCES,
@@ -35,7 +34,14 @@ import { confirmQuit } from "./quit-prompt"
 import { askQuitState, hasPendingWork } from "./quit-check"
 import { clearDownloads } from "./update-download"
 import { createUpdates } from "./updates"
-import { decideRestart, readHostFatal } from "./host-restart"
+import {
+  DEV_LOCK_WAIT_MS,
+  acquireInstanceLock,
+  rendererUrl,
+  restartedByElectronVite,
+  watchHostBuild,
+  watchesHostBuild,
+} from "./dev-mode"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
 import { appIcon } from "./app-icons"
@@ -67,12 +73,9 @@ import {
 
 registerPrivilegedSchemes()
 
-let host: HostProcess | undefined
 let mainWindow: BrowserWindow | undefined
 let quitting = false
 let unsavedLabels: UnsavedGuardLabels = DEFAULT_UNSAVED_LABELS
-/** 连续快速失败的次数与最近一次 Host 报告的失败原因，见 host-restart.ts。 */
-let hostQuickFailures = 0
 /** 退出流程里停 Host：只停一次，停完才放行 will-quit。 */
 let hostStop: Promise<void> | undefined
 let hostStopped = false
@@ -80,13 +83,10 @@ let hostStopped = false
 let tray: Tray | undefined
 /** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
 let preferences: Preferences = { ...DEFAULT_PREFERENCES }
-/** Host 的控制端口：退出前经它查询还有多少工作。Host 退出后置空。 */
-let hostControlPort: MessagePortMain | undefined
 /** 用户在退出确认框里选了退出；之后的 app.quit() 不再重复询问。 */
 let quitConfirmed = false
 /** 正在进行的退出检查；连点退出时复用。 */
 let quitCheck: Promise<void> | undefined
-let lastHostFatal: string | null = null
 const browser = setupBrowser(() => mainWindow)
 
 /** 把应用内相对路径解析到 app.getAppPath() 之下。 */
@@ -260,47 +260,30 @@ function registerNativeBridge(): void {
 registerNativeBridge()
 
 /** 连续启动失败后不再重启 Host，弹出错误对话框说明原因。 */
-function showHostFailure(count: number): void {
+function showHostFailure(count: number, fatal: string | null): void {
   const text = hostFailureText(app.getLocale())
   const options = {
     type: "error" as const,
     message: text.message,
-    detail: hostFailureDetail(text, count, lastHostFatal),
+    detail: hostFailureDetail(text, count, fatal),
   }
   if (mainWindow && !mainWindow.isDestroyed()) void dialog.showMessageBox(mainWindow, options)
   else void dialog.showMessageBox(options)
 }
 
-/** 启动 Host；退出后按 host-restart.ts 的策略退避重启，连续快速失败太多次时停下并报错。 */
-function startHost(): HostProcess {
-  const next = startHostProcess(resolveAppPath("out/host/index.mjs"), profileDir())
-  const startedAt = Date.now()
-  hostControlPort = next.controlPort
-  browser.attachControlPort(next.controlPort)
-  next.child.on("message", (message: unknown) => {
-    lastHostFatal = readHostFatal(message) ?? lastHostFatal
-  })
-  next.child.on("exit", () => {
-    hostControlPort = undefined
-    if (quitting) return
-    const decision = decideRestart(hostQuickFailures, Date.now() - startedAt)
-    hostQuickFailures = decision.quickFailures
-    if (decision.quickFailures === 0) lastHostFatal = null
-    if (decision.action === "give-up") {
-      host = undefined
-      showHostFailure(decision.quickFailures)
-      return
+/** Host 的启动与重启。每个新 Host 起来后把控制端口交给浏览器面板；页面已经打开时给页面开一条新连接。 */
+const hosts = createHostSupervisor({
+  entry: resolveAppPath("out/host/index.mjs"),
+  profileDir,
+  quitting: () => quitting,
+  onStart(host) {
+    browser.attachControlPort(host.controlPort)
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+      mainWindow.webContents.postMessage("pigcode:port", null, [host.connectPage()])
     }
-    setTimeout(() => {
-      if (quitting) return
-      host = startHost()
-      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
-        mainWindow.webContents.postMessage("pigcode:port", null, [host.appPort])
-      }
-    }, decision.delayMs)
-  })
-  return next
-}
+  },
+  onGiveUp: showHostFailure,
+})
 
 /** 托盘：隐藏窗口以后从这里找回窗口或退出。Linux 没有托盘（关窗口直接退出）。 */
 function ensureTray(): void {
@@ -375,7 +358,8 @@ export async function createWindow(): Promise<BrowserWindow> {
     quitConfirmed = false
   })
   window.webContents.on("did-finish-load", () => {
-    if (host) window.webContents.postMessage("pigcode:port", null, [host.appPort])
+    const host = hosts.current
+    if (host) window.webContents.postMessage("pigcode:port", null, [host.connectPage()])
   })
   window.on("close", (event) => {
     if (quitting || !hidesOnClose()) return
@@ -385,7 +369,7 @@ export async function createWindow(): Promise<BrowserWindow> {
     ensureTray()
     showHiddenHint(app.getLocale())
   })
-  await window.loadURL("pigcode://app/index.html")
+  await window.loadURL(rendererUrl(process.env, app.isPackaged))
   return window
 }
 
@@ -398,10 +382,25 @@ app.setName("Pigcode")
  * 再次启动时把已有窗口带到前台后退出。显式指定 PIGCODE_PROFILE_DIR（E2E、并排的多个 profile）不加锁。
  */
 const singleInstance = process.env.PIGCODE_PROFILE_DIR === undefined
-if (singleInstance && !app.requestSingleInstanceLock()) {
-  app.quit()
-} else {
-  app.on("second-instance", () => showWindow())
+// electron-vite 重启 Electron 时旧进程可能还没放开锁，开发时多等一会儿（dev-mode.ts）。
+const lockWaitMs = restartedByElectronVite(process.env, app.isPackaged) ? DEV_LOCK_WAIT_MS : 0
+void acquireInstanceLock(() => !singleInstance || app.requestSingleInstanceLock(), lockWaitMs).then(
+  (locked) => {
+    if (locked) start()
+    else {
+      // 从终端启动（pnpm dev）时说明一下，否则进程一声不响就退出了。
+      console.log(`Pigcode is already running with ${profileDir()}; switched to that window.`)
+      app.quit()
+    }
+  },
+)
+
+/** 拿到单实例锁以后启动应用。 */
+function start(): void {
+  // 正在退出的实例不再把窗口叫回来：开发时新进程会在旧进程退出期间反复尝试拿锁。
+  app.on("second-instance", () => {
+    if (!quitting) showWindow()
+  })
   // 提前开始读，Electron 准备好的这段时间也算在内，窗口少等一会儿。
   const shellEnv = applyLoginShellEnv()
   app.whenReady().then(async () => {
@@ -413,13 +412,16 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
     // 上一次下载的安装包没用了（版本已经换了，或者用户没点「打开安装包」）。
     void clearDownloads().catch(() => undefined)
     updates.start()
-    host = startHost()
+    hosts.start()
+    if (watchesHostBuild(process.env, app.isPackaged)) {
+      watchHostBuild(resolveAppPath("out/host/build-id"), () => hosts.reload())
+    }
     mainWindow = await openMainWindow()
     ensureTray()
 
     if (process.env.PIGCODE_E2E === "1") {
       app.on("pigcode:test-kill-host" as never, () => {
-        host?.child.kill()
+        hosts.current?.child.kill()
       })
     }
   })
@@ -429,6 +431,7 @@ if (singleInstance && !app.requestSingleInstanceLock()) {
 // 这里先拦下退出，等 Host 清理完再真正退出，否则 Agent 和终端的进程来不及结束。
 app.on("will-quit", (event) => {
   quitting = true
+  const host = hosts.current
   if (!host || hostStopped) return
   event.preventDefault()
   hostStop ??= host.stop().finally(() => {
@@ -444,7 +447,7 @@ app.on("activate", () => showWindow())
 
 /** 退出前问一次 Host：有任务在跑时让用户确认，避免一个 Cmd+Q 就把 agent 和终端都停掉。 */
 async function checkBeforeQuit(): Promise<void> {
-  const port = hostControlPort
+  const port = hosts.controlPort
   const state = port ? await askQuitState(port) : null
   // Host 不在或没应答时直接退出：没有工作可保，也不能把应用卡住。
   if (!state || !hasPendingWork(state) || (await confirmQuit(() => mainWindow, state))) {

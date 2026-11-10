@@ -108,4 +108,25 @@ describe("thread subscription rpc", () => {
     server.stop()
     await ctx.fiber.dispose()
   })
+
+  it("drops the old page's subscriptions when the page changes but keeps serving requests", async () => {
+    const { ctx, thread, transport, server } = await setup()
+    await subscribe(transport, thread.id, "sub-1")
+
+    server.releasePage()
+    ctx.sessions.append(threadEvent(thread.id, 1))
+
+    // 新页面重新订阅：收到的第一条就是订阅的应答（旧订阅还在的话，先到的会是 thread.event），
+    // 错过的事件从游标开始补上，之后照常推送。
+    const again = await subscribe(transport, thread.id, "sub-2")
+    expect(again).toMatchObject({ id: "sub-2", result: { events: [{ seq: 1 }] } })
+    ctx.sessions.append(threadEvent(thread.id, 2))
+    await expect(transport.client.next()).resolves.toMatchObject({
+      method: "thread.event",
+      params: { seq: 2 },
+    })
+
+    server.stop()
+    await ctx.fiber.dispose()
+  })
 })

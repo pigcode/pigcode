@@ -60,6 +60,29 @@ The work stays open while running and when a run fails or is stopped.
   (language, wrap and copy, highlighted with Shiki). Pending approvals and questions stay
   visible below the work.
 
+## Development
+
+```bash
+pnpm dev
+```
+
+starts the desktop app with live reload:
+
+- Renderer code is served by the Vite dev server: components update in place, other modules
+  reload the page, and the page reconnects to the Host on its own.
+- Host code (`apps/host`, the built-in agent plugins and the packages they use) is rebuilt by
+  `scripts/build-host.ts --watch`; after a successful rebuild the main process restarts the Host
+  without closing the window. Running agents and terminals end with the old Host. A failed rebuild
+  keeps the running Host.
+- Main process and preload changes rebuild too; electron-vite restarts Electron for the main
+  process and reloads the page for the preload.
+
+Arguments go to `electron-vite dev`, and anything after `--` goes to Electron:
+`pnpm dev --remoteDebuggingPort 9222 --inspect 9229 -- --user-data-dir=/tmp/pigcode-dev`.
+`pnpm dev` uses the default profile, so quit any other Pigcode on that profile first, or set
+`PIGCODE_PROFILE_DIR`. The quit confirmation is off in this mode (`PIGCODE_QUIT_CONFIRM=1` turns it
+back on) because restarting Electron goes through the normal quit flow.
+
 ## TypeScript
 
 Everything is TypeScript, including scripts and configs. Scripts run with Node's built-in

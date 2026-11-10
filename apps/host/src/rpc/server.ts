@@ -29,6 +29,10 @@ export class RpcServer {
   private disposers: Array<() => void> = []
   /** 每个线程只保留一个实时监听器；重复订阅先释放旧的。 */
   private readonly subscriptions = new Map<string, () => void>()
+  /** 页面打开的终端的输出订阅。 */
+  private terminalSubscriptions: Array<() => void> = []
+  /** 换过几次页面；页面换掉以后才完成的 terminal.open 不再为旧页面订阅输出。 */
+  private page = 0
 
   constructor(
     private readonly ctx: Context,
@@ -46,10 +50,21 @@ export class RpcServer {
 
   /** 停止监听并释放所有订阅。 */
   stop(): void {
-    for (const unsubscribe of this.subscriptions.values()) unsubscribe()
-    this.subscriptions.clear()
+    this.releasePage()
     for (const dispose of this.disposers) dispose()
     this.disposers = []
+  }
+
+  /**
+   * 页面换了（刷新或重新加载）：释放旧页面的线程与终端订阅，新页面会自己重新订阅。
+   * 正在进行的 run 不受影响，它们的流式输出经同一个传输发给新页面。
+   */
+  releasePage(): void {
+    this.page += 1
+    for (const unsubscribe of this.subscriptions.values()) unsubscribe()
+    this.subscriptions.clear()
+    for (const unsubscribe of this.terminalSubscriptions) unsubscribe()
+    this.terminalSubscriptions = []
   }
 
   private async handle(message: unknown): Promise<void> {
@@ -453,8 +468,10 @@ export class RpcServer {
         return this.ctx.worktrees.remove((parsed as { threadId: string }).threadId)
       case "terminal.open": {
         const value = parsed as { threadId: string; cols: number; rows: number }
+        const page = this.page
         const terminal = await this.ctx.terminal.open(value.threadId, value.cols, value.rows)
-        this.disposers.push(
+        if (page !== this.page) return terminal
+        this.terminalSubscriptions.push(
           this.ctx.terminal.subscribe(terminal.id, (data) => {
             this.transport.send({
               jsonrpc: "2.0",

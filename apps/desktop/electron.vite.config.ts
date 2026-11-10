@@ -29,8 +29,8 @@ const sharedModules: Record<string, string> = {
  * 让 Vite 输出共享模块文件，但不把它们作为脚本插进 index.html。
  *
  * 页面只通过 import map 按包名取这些模块（宿主自己的组件也这么 import）；如果 Vite 再把每个入口作为
- * `<script type="module">` 插进页面，只是多一次已经缓存过的导入，没有意义。主进程始终加载
- * `out/renderer/index.html`，开发模式同样用这份构建产物。
+ * `<script type="module">` 插进页面，只是多一次已经缓存过的导入，没有意义。
+ * 只在构建时生效；开发模式下 main 加载 dev server，共享模块见 sharedModulesFromSource。
  */
 function sharedModuleEntries(): Plugin {
   return {
@@ -41,6 +41,25 @@ function sharedModuleEntries(): Plugin {
       handler(html: string) {
         return html.replace(/[ \t]*<script[^>]+shared\/[^"]+\.js"[^>]*><\/script>\n?/g, "")
       },
+    },
+  }
+}
+
+/**
+ * 开发模式下的共享模块：dev server 没有 `shared/*.js`，import map 改成指向入口源码 `/src/shared/*.ts`。
+ *
+ * 宿主自己的代码 import "react" 时，Vite 把它改写成预构建依赖的 URL；入口源码里的 import 被改写成同一个
+ * URL，插件经 import map 拿到的仍然是宿主正在用的那份 React 与 `@pigcode/ui-primitives`（ADR-0002）。
+ */
+function sharedModulesFromSource(): Plugin {
+  return {
+    name: "pigcode:shared-modules-from-source",
+    apply: "serve",
+    transformIndexHtml(html: string) {
+      return html.replace(/"\.\/(shared\/[^"]+)\.js"/g, (match, name: string) => {
+        const source = sharedModules[name]
+        return source ? JSON.stringify(`/${source.replace(/^src\/renderer\//, "")}`) : match
+      })
     },
   }
 }
@@ -62,7 +81,7 @@ export default defineConfig({
   renderer: {
     define,
     root: "src/renderer",
-    plugins: [react(), sharedModuleEntries()],
+    plugins: [react(), sharedModuleEntries(), sharedModulesFromSource()],
     // electron-vite 默认不压缩；渲染进程的脚本压缩后体积约减半，冷启动解析更快。
     build: {
       outDir: "out/renderer",
