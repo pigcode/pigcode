@@ -6,7 +6,7 @@ import type { Project, Thread } from "@pigcode/contracts"
 import {
   Button,
   EmptyState,
-  EntityAvatar,
+  AgentIcon,
   ListRow,
   Menu,
   formatShortcut,
@@ -311,21 +311,21 @@ export function WorkspaceSidebar({
                       <EmptyState size="compact" title={t("sidebar.noThreads")} />
                     ) : null}
                     {projectThreads.map((thread) => {
-                      const instanceId =
-                        thread.lastInstanceId ?? thread.lastAgentId ?? thread.defaultAgentId
+                      const agentId = thread.lastAgentId ?? thread.defaultAgentId
+                      const instanceId = thread.lastInstanceId ?? agentId
                       const agentName = agentNames[instanceId] ?? instanceId
-                      // 缩写只是装饰；读屏器读 agent 的全名。
+                      // 图标只是装饰；读屏器读 agent 的全名，悬停时也显示全名。
                       return row(
                         thread,
-                        <>
-                          <EntityAvatar
-                            id={instanceId}
+                        <span className="sess-agent" title={agentName}>
+                          <AgentIcon
+                            agentId={agentId}
+                            instanceId={instanceId}
                             name={agentName}
-                            size="inline"
-                            className="sess-agent"
+                            size="sm"
                           />
                           <span className="sr-only">{agentName}</span>
-                        </>,
+                        </span>,
                       )
                     })}
                   </div>

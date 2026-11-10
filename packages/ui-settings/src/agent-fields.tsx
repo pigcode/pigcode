@@ -1,5 +1,4 @@
-// Agent 设置表单的控件：按 manifest 声明的字段类型渲染，另有环境变量与自定义模型编辑器。
-import { useState, type KeyboardEvent } from "react"
+// Agent 设置表单的控件：按 manifest 声明的字段类型渲染，另有环境变量编辑器。模型列表在 agent-models。
 import { FolderOpen, Plus, X } from "lucide-react"
 import {
   environmentEntriesSchema,
@@ -173,79 +172,6 @@ export function EnvironmentEditor({
         <Plus className="ic ic-sm" aria-hidden="true" />
         {t("agents.env.add")}
       </Button>
-    </div>
-  )
-}
-
-/** 自定义模型编辑器：列表加一个输入框，回车或点「添加」追加。 */
-export function CustomModelsEditor({
-  models,
-  onChange,
-}: {
-  models: readonly string[]
-  onChange: (models: string[]) => void
-}) {
-  const { t } = useLocale()
-  const [draft, setDraft] = useState("")
-  const [error, setError] = useState<string | null>(null)
-
-  function add(): void {
-    const id = draft.trim()
-    if (!id) return
-    if (models.includes(id)) {
-      setError(t("agents.models.duplicate"))
-      return
-    }
-    onChange([...models, id])
-    setDraft("")
-    setError(null)
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
-    if (event.key !== "Enter" || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    add()
-  }
-
-  return (
-    <div className="agent-models">
-      <p className="agent-muted">{t("agents.models.description")}</p>
-      {models.length > 0 ? (
-        <ul className="agent-model-list" aria-label={t("agents.section.models")}>
-          {models.map((model) => (
-            <li key={model} className="agent-model-chip">
-              <span className="mono">{model}</span>
-              <button
-                type="button"
-                aria-label={t("agents.models.remove").replace("{model}", model)}
-                onClick={() => onChange(models.filter((item) => item !== model))}
-              >
-                <X className="ic ic-sm" aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="agent-input-row">
-        <Input
-          className="agent-input mono"
-          aria-label={t("agents.models.placeholder")}
-          placeholder={t("agents.models.placeholder")}
-          value={draft}
-          maxLength={256}
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(event) => {
-            setDraft(event.target.value)
-            setError(null)
-          }}
-          onKeyDown={onKeyDown}
-        />
-        <Button size="sm" type="button" disabled={!draft.trim()} onClick={add}>
-          {t("agents.models.add")}
-        </Button>
-      </div>
-      {error ? <p className="error-text">{error}</p> : null}
     </div>
   )
 }

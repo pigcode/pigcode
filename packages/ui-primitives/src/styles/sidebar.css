@@ -192,12 +192,15 @@
   -webkit-mask-image: linear-gradient(90deg, var(--mask-fill) calc(100% - 28px), transparent);
   mask-image: linear-gradient(90deg, var(--mask-fill) calc(100% - 28px), transparent);
 }
-/* agent 缩写是 inline 尺寸的 EntityAvatar，字体与字号在这里给 */
-.entity-avatar.sess-agent {
+/* 会话所用 agent 的图标：和 t3code 一样调淡，不和标题抢视线；选中或悬停的行恢复 */
+.sess-agent {
+  display: inline-flex;
   flex: none;
-  font-family: var(--font-mono);
-  font-size: var(--fs-4xs);
-  letter-spacing: 0.02em;
+  opacity: 0.6;
+}
+.sess:hover .sess-agent,
+.sess.is-active .sess-agent {
+  opacity: 0.9;
 }
 /* 按时间排列时显示会话所在的项目 */
 .sess-project {

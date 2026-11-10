@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { ChevronDown, Loader2, Star } from "lucide-react"
 import {
+  AgentIcon,
   EmptyState,
-  EntityAvatar,
   Popover,
   SearchField,
   formatShortcut,
@@ -119,7 +119,10 @@ export function ModelPicker({
   }, [open, tab, catalog, onLoadModels])
 
   const rows = useMemo<Row[]>(() => {
-    const all: Row[] =
+    // 设置里隐藏的模型不列出；正在用的那个除外，否则勾选标记没地方显示。
+    const listed = (row: Row) =>
+      !row.model.hidden || (row.agent.id === agentId && row.model.id === currentModel?.id)
+    const all: Row[] = (
       tab === FAVORITES
         ? preferences.favorites.flatMap((key) => {
             const [favoriteAgent, ...rest] = key.split("/")
@@ -131,6 +134,7 @@ export function ModelPicker({
             const entry = agents.find((item) => item.id === tab)
             return entry ? [{ agent: entry, model }] : []
           })
+    ).filter(listed)
     if (!query) return all
     return all
       .map((row) => ({
@@ -140,7 +144,7 @@ export function ModelPicker({
       .filter((entry) => entry.score >= 0)
       .sort((left, right) => right.score - left.score)
       .map((entry) => entry.row)
-  }, [tab, query, catalog, agents, preferences.favorites])
+  }, [tab, query, catalog, agents, preferences.favorites, agentId, currentModel?.id])
 
   // 收藏页需要各 agent 的目录才能显示名字。
   useEffect(() => {
@@ -232,7 +236,9 @@ export function ModelPicker({
         title={`${t("composer.modelMenu")} ${formatShortcut("Mod+/")}`}
         aria-label={`${t("composer.modelMenu")}: ${chipParts.filter(Boolean).join(" · ")}`}
       >
-        {agent ? <EntityAvatar id={agent.id} name={agent.label} size="sm" /> : null}
+        {agent ? (
+          <AgentIcon agentId={agent.agentId} instanceId={agent.id} name={agent.label} />
+        ) : null}
         <span className="model-name truncate">{chipLabel}</span>
         {effort ? <span className="model-depth">{effortLabel(effort, t)}</span> : null}
         {switches.map((name) => (
@@ -285,7 +291,12 @@ export function ModelPicker({
                       aria-label={item.label}
                       onClick={() => setTab(item.id)}
                     >
-                      <EntityAvatar id={item.id} name={item.label} size="md" />
+                      <AgentIcon
+                        agentId={item.agentId}
+                        instanceId={item.id}
+                        name={item.label}
+                        size="lg"
+                      />
                     </button>
                   ))}
                 </nav>

@@ -287,6 +287,63 @@
   opacity: 0.45;
 }
 
+/* ─── 标签页（Tabs）：文字标签排成一行，底下一条细线；选中的标签下面一条滑动的指示线 ─── */
+.tabs-list {
+  position: relative;
+  display: flex;
+  gap: var(--space-7);
+  box-shadow: inset 0 calc(-1 * var(--hair)) 0 var(--border-strong);
+}
+.tabs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--control-lg);
+  padding: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color var(--t-fast) var(--ease);
+}
+.tabs-tab:hover {
+  color: var(--fg-2);
+}
+.tabs-tab[data-active] {
+  color: var(--fg);
+}
+.tabs-tab:focus-visible {
+  outline: 1px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.tabs-tab[data-disabled] {
+  opacity: 0.45;
+}
+/* 标签上的计数：一个小号的浅色数字 */
+.tabs-count {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+}
+.tabs-tab[data-active] .tabs-count {
+  color: var(--muted);
+}
+.tabs-indicator {
+  position: absolute;
+  bottom: 0;
+  left: var(--active-tab-left);
+  width: var(--active-tab-width);
+  border-bottom: 1.5px solid var(--fg);
+  border-radius: var(--r-full);
+  transition:
+    left var(--t-med) var(--ease),
+    width var(--t-med) var(--ease);
+}
+.tabs-panel:focus-visible {
+  outline: none;
+}
+
 /* ─── 滑块 ─────────────────────────────────────────────── */
 .slider {
   position: relative;

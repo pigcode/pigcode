@@ -157,7 +157,7 @@
   background: var(--ok);
   content: "";
 }
-.rail-btn[data-unavailable="true"] .entity-avatar {
+.rail-btn[data-unavailable="true"] .agent-icon {
   opacity: 0.4;
 }
 .rail-sep {
@@ -472,7 +472,7 @@
 }
 
 /* 输入框里的胶囊：模型名、档位，开着的模式各一个小图标，非默认权限时一个小徽标 */
-.chip-btn.model-chip .entity-avatar {
+.chip-btn.model-chip .agent-icon {
   margin-right: 1px;
 }
 .model-chip-switch {

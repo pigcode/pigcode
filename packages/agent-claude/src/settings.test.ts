@@ -146,7 +146,8 @@ exit 1
       installed: true,
       version: "9.9.9 (Claude Code)",
       authenticated: true,
-      account: "max · claude.ai",
+      account: "Claude Max",
+      email: null,
       command: bin,
       error: null,
     })

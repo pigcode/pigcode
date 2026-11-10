@@ -1,5 +1,5 @@
 /*
-  设置页与插件管理页：SettingPage 的页面宽度与页头，分区标题，分组卡片与卡片里的设置行，插件能力的标签列表。
+  设置页与插件管理页：SettingPage 的页面宽度与页头，分区标题，分组卡片与卡片里的设置行。
   设置行是 ListRow，这里用 .group > .list-row 只改间距与分隔线。
 */
 .page {
@@ -96,11 +96,4 @@
     flex-direction: column;
     align-items: flex-start;
   }
-}
-/* Agent 功能的标签列表 */
-.agent-feature-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
 }

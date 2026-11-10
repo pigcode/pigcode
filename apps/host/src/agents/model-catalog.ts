@@ -1,4 +1,4 @@
-/** 模型目录：把各 driver 的模型条目统一成协议形状，追加用户的自定义模型，并缓存读取结果。 */
+/** 模型目录：把各 driver 的模型条目统一成协议形状，套用用户的模型偏好（自定义、隐藏、排序），并缓存读取结果。 */
 import { asReasoningEffort, sortEfforts } from "@pigcode/plugin-sdk"
 import type { AgentCommand, AgentModel } from "@pigcode/contracts"
 import type { AgentCommandInfo, AgentModelInfo } from "./driver"
@@ -75,6 +75,26 @@ export function withCustomModels(
     })
   }
   return [...models, ...custom]
+}
+
+/**
+ * 套用实例的模型偏好：追加自定义模型，按用户排好的顺序排（没排过的按原顺序跟在后面），
+ * 隐藏的模型标上 hidden。目录照样完整返回，设置页要列出全部模型；选择器自己跳过 hidden。
+ */
+export function applyModelPreferences(
+  models: readonly AgentModel[],
+  preferences: { custom: readonly string[]; hidden: readonly string[]; order: readonly string[] },
+): AgentModel[] {
+  const all = withCustomModels(models, preferences.custom)
+  const rank = new Map(preferences.order.map((id, index) => [id, index]))
+  const original = new Map(all.map((model, index) => [model.id, index]))
+  const hidden = new Set(preferences.hidden)
+  const position = (model: AgentModel) => rank.get(model.id) ?? Number.POSITIVE_INFINITY
+  return [...all]
+    .sort(
+      (a, b) => position(a) - position(b) || (original.get(a.id) ?? 0) - (original.get(b.id) ?? 0),
+    )
+    .map((model) => (hidden.has(model.id) ? { ...model, hidden: true } : model))
 }
 
 /** 模型目录缓存的选项；测试可以注入时钟。 */

@@ -4,9 +4,11 @@
  */
 import { useCallback, useContext, useEffect, useState } from "react"
 import type { AgentInstance, AgentList, AgentStatus } from "@pigcode/contracts"
+import { useAppStore } from "@pigcode/client-runtime"
 import { AgentsPage, AppearancePage } from "@pigcode/ui-settings"
 import type { CoreDeps } from "./app"
 import { refreshAgentViews } from "./agent-context"
+import { useModelCatalog } from "./agents"
 import { AppearanceContext } from "./builtin-settings-pages"
 
 export { GeneralPage } from "@pigcode/ui-settings"
@@ -26,6 +28,10 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   const [statuses, setStatuses] = useState<Record<string, AgentStatus>>({})
   const [detecting, setDetecting] = useState(false)
   const { connection } = deps
+  // 展开实例时读它的模型目录；改完设置（自定义模型、可执行文件）后换一个版本号重读。
+  const [modelRevision, setModelRevision] = useState(0)
+  const connected = useAppStore(deps.store).status === "connected"
+  const { catalog, load } = useModelCatalog(connection, modelRevision, connected)
 
   const refresh = useCallback(async (): Promise<void> => {
     setList((await connection.call("agent.list", {})) as AgentList)
@@ -60,12 +66,14 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   async function afterPluginChange(): Promise<void> {
     await refresh()
     setStatuses({})
+    setModelRevision((value) => value + 1)
     await Promise.all([detect(), refreshAgentViews(deps), deps.plugins.reload()])
   }
 
   /** 改完一个实例：刷新列表、重新检测它，并让输入框重读模型目录（可执行文件或账号可能换了）。 */
   async function afterInstanceChange(instanceId: string, agentId?: string): Promise<void> {
     await refresh()
+    setModelRevision((value) => value + 1)
     await Promise.all([
       detect({ ...(agentId ? { agentId } : {}), instanceId, refresh: true }),
       refreshAgentViews(deps),
@@ -79,6 +87,8 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       defaultInstanceId={list.defaultInstanceId}
       statuses={statuses}
       detecting={detecting}
+      models={catalog}
+      onLoadModels={load}
       onDetect={() => detect({ refresh: true })}
       onSetEnabled={async (agent, enabled) => {
         if (!agent.pluginId) return

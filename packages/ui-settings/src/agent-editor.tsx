@@ -1,11 +1,11 @@
 /**
- * 实例的详情面板：右侧一列卡片，从上到下是实例本身（名字、启用、默认、删除）、运行设置、
- * 环境变量、自定义模型、Agent 功能与检测详情。一份实例一次编辑一个，保存按钮在底部。
+ * 实例展开后的设置（参照 t3code 设置页里实例的展开区）：最上面是概览（介绍、账号、版本与可执行文件），
+ * 下面按标签页分开：模型（显示、排序、自定义）、运行设置、环境变量，自建实例还有一页「实例」
+ * （改名、删除）。保存条在最下面，所有标签页的改动一起保存，对之后新建的会话生效。
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import { Check, ExternalLink, Trash2 } from "lucide-react"
+import { Check, Trash2 } from "lucide-react"
 import {
-  CUSTOM_MODELS_KEY,
   localizeText,
   type AgentInstance,
   type AgentSummary,
@@ -14,27 +14,24 @@ import {
   type AgentStatus,
 } from "@pigcode/contracts"
 import {
-  Badge,
   Button,
-  EntityAvatar,
   Input,
-  StatusDot,
-  Switch,
+  Tabs,
   hostErrorMessageKey,
   toHostError,
   useLocale,
 } from "@pigcode/ui-primitives"
 import {
-  CustomModelsEditor,
   EnvironmentEditor,
   FieldControl,
   finalEnvironment,
   readEnvironment,
   type PickPath,
 } from "./agent-fields"
-import { agentFeatureKeys } from "./agent-features"
-import { instanceLabel } from "./agent-instances"
-import { instanceHeadline } from "./agent-status"
+import { ModelsEditor, arrangeModels, type AgentModelInfo } from "./agent-models"
+import { AgentOverview } from "./agent-overview"
+
+export type { AgentModelInfo } from "./agent-models"
 
 /** 详情面板需要的回调；保存失败时抛错，由面板展示原因。 */
 export interface AgentEditorProps {
@@ -43,6 +40,11 @@ export interface AgentEditorProps {
   instance: AgentInstance
   /** 这个实例的检测结果。 */
   status: AgentStatus | undefined
+  /** 账号邮箱是否显示原文；和卡片头共用。 */
+  revealed?: boolean | undefined
+  onReveal?: (() => void) | undefined
+  /** 这个实例的模型目录（含已保存的自定义模型）；缺少表示还在读取。 */
+  models?: readonly AgentModelInfo[] | undefined
   /** 新会话默认使用的实例 id。 */
   defaultInstanceId: string | null
   onSave: (values: AgentSettingsValues) => Promise<void>
@@ -73,46 +75,50 @@ function cleanValues(agent: AgentSummary, values: AgentSettingsValues): AgentSet
   return next
 }
 
-/** 两份设置是否相同；对象键顺序不影响结果。 */
+/** 留空的值：保存时 Host 会去掉，比较时当作没有。 */
+function blank(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  )
+}
+
+/** 两份设置是否相同；对象键顺序与留空的项不影响结果。 */
 function sameValues(left: AgentSettingsValues, right: AgentSettingsValues): boolean {
   const normalize = (values: AgentSettingsValues) =>
     JSON.stringify(
       Object.keys(values)
+        .filter((key) => !blank(values[key]))
         .sort()
         .map((key) => [key, values[key]]),
     )
   return normalize(left) === normalize(right)
 }
 
-function customModelsOf(values: AgentSettingsValues): string[] {
-  const models = values[CUSTOM_MODELS_KEY]
-  return Array.isArray(models)
-    ? models.filter((item): item is string => typeof item === "string")
-    : []
-}
+/** 标签页。 */
+type EditorTab = "models" | "runtime" | "env" | "instance"
 
-/** 一张分节卡片：标题、可选的说明与右侧的头部操作，下面是内容。 */
-function Section({
+/** 标签页里的一组：可选的小标题与说明，下面是内容。 */
+function Block({
   title,
   description,
-  action,
   children,
 }: {
-  title: string
+  title?: string | undefined
   description?: string | undefined
-  action?: ReactNode | undefined
   children: ReactNode
 }) {
   return (
-    <section className="agent-card" aria-label={title}>
-      <header className="agent-card-head">
-        <div className="agent-card-heading">
-          <h2>{title}</h2>
+    <section className="agent-block" aria-label={title}>
+      {title || description ? (
+        <header className="agent-block-head">
+          {title ? <h3>{title}</h3> : null}
           {description ? <p className="agent-muted">{description}</p> : null}
-        </div>
-        {action ? <div className="agent-card-action">{action}</div> : null}
-      </header>
-      <div className="agent-card-body">{children}</div>
+        </header>
+      ) : null}
+      {children}
     </section>
   )
 }
@@ -122,6 +128,9 @@ export function AgentEditor({
   agent,
   instance,
   status,
+  revealed = false,
+  onReveal,
+  models,
   defaultInstanceId,
   onSave,
   onUpdateInstance,
@@ -154,13 +163,34 @@ export function AgentEditor({
     (field): field is Exclude<AgentSettingField, { type: "env" }> => field.type !== "env",
   )
   const envFields = agent.fields.filter((field) => field.type === "env")
-  const headline = instanceHeadline(agent, instance, status)
   const isDefault = instance.isDefault
   const isDefaultForSessions = defaultInstanceId === instance.instanceId
+  const modelRows = useMemo(() => (models ? arrangeModels(models, draft) : null), [models, draft])
+  const tabs: { value: EditorTab; label: string; count?: number | undefined }[] = [
+    ...(agent.customModels || models
+      ? [
+          {
+            value: "models" as const,
+            label: t("agents.section.models"),
+            count: modelRows?.length,
+          },
+        ]
+      : []),
+    ...(runtimeFields.length > 0
+      ? [{ value: "runtime" as const, label: t("agents.section.runtime") }]
+      : []),
+    ...(envFields.length > 0 ? [{ value: "env" as const, label: t("agents.section.env") }] : []),
+    ...(isDefault
+      ? []
+      : [{ value: "instance" as const, label: t("agents.instance.section.identity") }]),
+  ]
+  const [tab, setTab] = useState<EditorTab>(tabs[0]?.value ?? "runtime")
+  const activeTab = tabs.some((item) => item.value === tab) ? tab : (tabs[0]?.value ?? tab)
 
-  const set = (key: string, value: unknown) => {
+  const set = (key: string, value: unknown) => patch({ [key]: value })
+  const patch = (changes: Record<string, unknown>) => {
     setNotice(null)
-    setDraft((current) => ({ ...current, [key]: value }))
+    setDraft((current) => ({ ...current, ...changes }))
   }
 
   /** 统一处理实例操作：期间禁用按钮，失败时把原因写进提示。 */
@@ -198,232 +228,184 @@ export function AgentEditor({
     return key ? t(key) : t("agents.failed").replace("{reason}", info.message)
   }
 
+  /** 设为新会话默认：默认实例放在说明那一行的右边，其余实例放在「实例」一块里。 */
+  const setDefaultButton = (
+    <Button
+      size="sm"
+      variant={isDefault ? "ghost" : undefined}
+      type="button"
+      disabled={saving || isDefaultForSessions || !instance.enabled}
+      onClick={() => void run(() => onSetDefaultInstance(instance.instanceId))}
+    >
+      <Check className="ic ic-sm" aria-hidden="true" />
+      {isDefaultForSessions
+        ? t("agents.instance.isSessionDefault")
+        : t("agents.instance.setDefault")}
+    </Button>
+  )
+
   return (
     <div className="agent-editor">
-      <header className="agent-editor-head">
-        <EntityAvatar id={instance.instanceId} name={instanceLabel(agent, instance)} />
-        <div className="agent-editor-title">
-          <h1 className="truncate">{instanceLabel(agent, instance)}</h1>
-          <p className="agent-editor-meta">
-            <code className="mono truncate">{instance.instanceId}</code>
-            <span className="agent-editor-status" data-tone={headline.tone}>
-              <StatusDot tone={headline.tone} />
-              {t(headline.label)}
-            </span>
-            {instance.isDefault ? <Badge>{t("agents.instance.default")}</Badge> : null}
-            {instance.enabled ? null : <Badge>{t("agents.instance.disabled")}</Badge>}
-          </p>
-        </div>
-        {agent.homepage && onOpenExternal ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            type="button"
-            onClick={() => onOpenExternal(agent.homepage ?? "")}
-          >
-            {t("agents.homepage")}
-            <ExternalLink className="ic ic-sm" aria-hidden="true" />
-          </Button>
-        ) : null}
-      </header>
+      <AgentOverview
+        agent={agent}
+        status={status}
+        revealed={revealed}
+        onReveal={onReveal}
+        action={isDefault ? setDefaultButton : undefined}
+        onOpenExternal={onOpenExternal}
+      />
 
-      {agent.description ? (
-        <p className="agent-description">{localizeText(agent.description, locale)}</p>
-      ) : null}
-
-      <Section
-        title={t("agents.instance.section.identity")}
-        action={
-          <Switch
-            aria-label={t("agents.instance.enable")}
-            checked={instance.enabled}
-            disabled={saving}
-            onCheckedChange={(enabled) =>
-              void run(() => onUpdateInstance(instance.instanceId, { enabled }))
-            }
-          />
-        }
-      >
-        {isDefault ? (
-          <p className="agent-muted">{t("agents.instance.isDefaultHint")}</p>
-        ) : (
-          <div className="agent-identity">
-            <div className="field">
-              <label className="label" htmlFor="agent-instance-label">
-                {t("agents.instance.name")}
-              </label>
-              <div className="agent-input-row">
-                <Input
-                  id="agent-instance-label"
-                  className="agent-input"
-                  value={label}
-                  maxLength={120}
-                  disabled={saving}
-                  onChange={(event) => setLabel(event.target.value)}
-                />
-                <Button
-                  size="sm"
-                  type="button"
-                  disabled={saving || !renamed}
-                  onClick={() =>
-                    void run(async () => {
-                      await onUpdateInstance(instance.instanceId, { label: label.trim() })
-                      setNotice({ kind: "ok", text: t("agents.saved") })
-                    })
-                  }
-                >
-                  {t("agents.instance.rename")}
-                </Button>
-              </div>
-            </div>
-            <div className="agent-identity-actions">
-              <Button
-                size="sm"
-                type="button"
-                disabled={saving || isDefaultForSessions}
-                onClick={() => void run(() => onSetDefaultInstance(instance.instanceId))}
-              >
-                <Check className="ic ic-sm" aria-hidden="true" />
-                {isDefaultForSessions
-                  ? t("agents.instance.isSessionDefault")
-                  : t("agents.instance.setDefault")}
-              </Button>
-              {confirmRemove ? (
-                <>
-                  <Button
-                    size="sm"
-                    variant="danger"
-                    type="button"
-                    disabled={saving}
-                    onClick={() => void run(() => onRemoveInstance(instance.instanceId))}
-                  >
-                    {t("agents.instance.removeConfirm")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    type="button"
-                    onClick={() => setConfirmRemove(false)}
-                  >
-                    {t("agents.instance.cancel")}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => setConfirmRemove(true)}
-                >
-                  <Trash2 className="ic ic-sm" aria-hidden="true" />
-                  {t("agents.instance.remove")}
-                </Button>
-              )}
-            </div>
-            {confirmRemove ? (
-              <p className="agent-muted">{t("agents.instance.removeHint")}</p>
-            ) : null}
-          </div>
-        )}
-      </Section>
-
-      {runtimeFields.length > 0 ? (
-        <Section title={t("agents.section.runtime")}>
-          <div className="agent-fields">
-            {runtimeFields.map((field) => (
-              <div className="agent-field" key={field.key}>
-                <div className="agent-field-label">
-                  <span>{localizeText(field.label, locale)}</span>
-                  {field.description ? (
-                    <span className="agent-muted">{localizeText(field.description, locale)}</span>
-                  ) : null}
-                </div>
-                <FieldControl
-                  field={field}
-                  value={draft[field.key]}
-                  onChange={(value) => set(field.key, value)}
-                  onPickPath={onPickPath}
-                />
-              </div>
+      {tabs.length > 0 ? (
+        <Tabs.Root
+          className="agent-tabs"
+          value={activeTab}
+          onValueChange={(value) => setTab(value as EditorTab)}
+        >
+          <Tabs.List aria-label={t("agents.tabs")}>
+            {tabs.map((item) => (
+              <Tabs.Tab key={item.value} value={item.value}>
+                {item.label}
+                {item.count !== undefined ? <span className="tabs-count">{item.count}</span> : null}
+              </Tabs.Tab>
             ))}
-          </div>
-        </Section>
+          </Tabs.List>
+
+          <Tabs.Panel value="models">
+            <Block description={t("agents.models.description")}>
+              <ModelsEditor
+                catalog={models}
+                values={draft}
+                allowCustom={agent.customModels}
+                onChange={patch}
+              />
+            </Block>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="runtime">
+            <Block>
+              <div className="agent-fields">
+                {runtimeFields.map((field) => (
+                  <div className="agent-field" key={field.key}>
+                    <div className="agent-field-label">
+                      <span>{localizeText(field.label, locale)}</span>
+                      {field.description ? (
+                        <span className="agent-muted">
+                          {localizeText(field.description, locale)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <FieldControl
+                      field={field}
+                      value={draft[field.key]}
+                      onChange={(value) => set(field.key, value)}
+                      onPickPath={onPickPath}
+                    />
+                  </div>
+                ))}
+              </div>
+            </Block>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="env">
+            {envFields.map((field) => {
+              const fieldLabel = localizeText(field.label, locale)
+              return (
+                <Block
+                  key={field.key}
+                  {...(envFields.length > 1 ? { title: fieldLabel } : {})}
+                  {...(field.description
+                    ? { description: localizeText(field.description, locale) }
+                    : {})}
+                >
+                  <EnvironmentEditor
+                    label={fieldLabel}
+                    entries={readEnvironment(draft[field.key])}
+                    onChange={(entries) => set(field.key, entries)}
+                  />
+                </Block>
+              )
+            })}
+          </Tabs.Panel>
+
+          {isDefault ? null : (
+            <Tabs.Panel value="instance">
+              <Block>
+                <div className="agent-field">
+                  <label className="agent-field-label" htmlFor="agent-instance-label">
+                    <span>{t("agents.instance.name")}</span>
+                  </label>
+                  <div className="agent-input-row">
+                    <Input
+                      id="agent-instance-label"
+                      className="agent-input"
+                      value={label}
+                      maxLength={120}
+                      disabled={saving}
+                      onChange={(event) => setLabel(event.target.value)}
+                    />
+                    <Button
+                      size="sm"
+                      type="button"
+                      disabled={saving || !renamed}
+                      onClick={() =>
+                        void run(async () => {
+                          await onUpdateInstance(instance.instanceId, { label: label.trim() })
+                          setNotice({ kind: "ok", text: t("agents.saved") })
+                        })
+                      }
+                    >
+                      {t("agents.instance.rename")}
+                    </Button>
+                  </div>
+                  <p className="agent-muted">
+                    {t("agents.instance.idLabel")} <code>{instance.instanceId}</code>
+                  </p>
+                </div>
+                <div className="agent-identity-actions">
+                  {setDefaultButton}
+                  {confirmRemove ? (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void run(() => onRemoveInstance(instance.instanceId))}
+                      >
+                        {t("agents.instance.removeConfirm")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        type="button"
+                        onClick={() => setConfirmRemove(false)}
+                      >
+                        {t("agents.instance.cancel")}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => setConfirmRemove(true)}
+                    >
+                      <Trash2 className="ic ic-sm" aria-hidden="true" />
+                      {t("agents.instance.remove")}
+                    </Button>
+                  )}
+                </div>
+                {confirmRemove ? (
+                  <p className="agent-muted">{t("agents.instance.removeHint")}</p>
+                ) : null}
+              </Block>
+            </Tabs.Panel>
+          )}
+        </Tabs.Root>
       ) : null}
 
-      {envFields.map((field) => {
-        const fieldLabel = localizeText(field.label, locale)
-        return (
-          <Section
-            key={field.key}
-            title={fieldLabel}
-            {...(field.description ? { description: localizeText(field.description, locale) } : {})}
-          >
-            <EnvironmentEditor
-              label={fieldLabel}
-              entries={readEnvironment(draft[field.key])}
-              onChange={(entries) => set(field.key, entries)}
-            />
-          </Section>
-        )
-      })}
-
-      {agent.customModels ? (
-        <Section title={t("agents.section.models")}>
-          <CustomModelsEditor
-            models={customModelsOf(draft)}
-            onChange={(models) => set(CUSTOM_MODELS_KEY, models)}
-          />
-        </Section>
-      ) : null}
-
-      {status || agent.features ? (
-        <Section title={t("agents.section.diagnostics")}>
-          <dl className="agent-facts">
-            {status?.command ? (
-              <>
-                <dt>{t("agents.command")}</dt>
-                <dd className="mono">{status.command}</dd>
-              </>
-            ) : null}
-            {status?.installed && status.version ? (
-              <>
-                <dt>{t("agents.version")}</dt>
-                <dd>{status.version}</dd>
-              </>
-            ) : null}
-            {status?.account ? (
-              <>
-                <dt>{t("agents.account")}</dt>
-                <dd>{status.account}</dd>
-              </>
-            ) : null}
-            {status && !status.installed && agent.installHint ? (
-              <>
-                <dt>{t("agents.installHint")}</dt>
-                <dd>{localizeText(agent.installHint, locale)}</dd>
-              </>
-            ) : null}
-            {status?.error || (!agent.registered && agent.error) ? (
-              <>
-                <dt>{t("agents.error")}</dt>
-                <dd className="error-text">{status?.error ?? agent.error}</dd>
-              </>
-            ) : null}
-          </dl>
-          {agent.features ? (
-            <div className="agent-feature-list">
-              {agentFeatureKeys.map((feature) => (
-                <Badge key={feature.key} variant={agent.features?.[feature.key] ? "ok" : "neutral"}>
-                  {t(feature.labelKey)}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-        </Section>
-      ) : null}
-
-      <footer className="agent-actions">
+      <footer className="agent-actions" data-dirty={dirty || undefined}>
         {onUninstall ? (
           confirmUninstall ? (
             <Button

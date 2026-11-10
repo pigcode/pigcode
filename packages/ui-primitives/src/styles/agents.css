@@ -1,256 +1,387 @@
-/* ─── Agent 设置页：主从两栏 ─────────────────────────────
-   左边是全部实例的列表，右边是选中实例的分节卡片。
-   窄窗口里两栏换成上下：列表在上面、详情在下面。 */
-
+/*
+  ─── Agent 设置页（参照 t3code 的 Agent 设置页）───────────────
+  页面和其他设置页一样是单列：「新会话」一张卡片，下面每个实例一张卡片。卡片头整块可点：
+  品牌色的图标方块、名字、状态与登录的账号，右边是展开箭头与启用开关。展开后卡片浮起一点，
+  里面依次是概览（介绍、账号信息格）、标签页（模型、运行、环境变量、实例）与保存条。
+*/
 .agents-page .page-head {
-  margin-bottom: 18px;
-}
-.agents-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-6);
-  align-items: start;
-}
-/* 页面宽度够时两栏：左栏固定 17rem，与 T3 的 grid-cols-[17rem_minmax(0,1fr)] 一致 */
-@container (min-width: 760px) {
-  .agents-layout {
-    grid-template-columns: 17rem minmax(0, 1fr);
-    gap: var(--space-8);
-  }
-  .agents-master {
-    position: sticky;
-    top: 0;
-    max-height: calc(100vh - var(--page-head-h) - 96px);
-  }
-  .agents-master-list {
-    max-height: calc(100vh - var(--page-head-h) - 200px);
-    overflow-y: auto;
-  }
+  align-items: flex-start;
 }
 
-/* ─── 左栏：实例列表 ─── */
-.agents-master {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--space-1);
-  overflow: hidden;
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
-}
-.agents-master-list {
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-2);
-}
-.agents-master-list:empty {
-  display: none;
-}
-.list-row.agent-row {
-  gap: var(--space-4);
-  padding: 8px var(--space-4);
-}
-.agent-row + .agent-row {
-  box-shadow: inset 0 1px 0 var(--divider);
-  border-radius: 0;
-}
-.agent-row[data-selected] {
-  border-radius: var(--r-md);
-  box-shadow: none;
-}
-.agent-row-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-}
-.agent-row-status {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 5px;
-}
-.agent-row-detail {
-  color: var(--faint);
-}
-.agent-row-status[data-tone="idle"] {
-  color: var(--faint);
-}
-/* 列表底部一行添加：整行可点，顶上一根细线 */
-.agents-add {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: 10px var(--space-5);
-  color: var(--muted);
-  font-size: var(--fs-md);
-  text-align: left;
-  transition:
-    background var(--t-fast),
-    color var(--t-fast);
-}
-.agents-add:hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.agents-add + .agents-add {
-  box-shadow: inset 0 1px 0 var(--divider);
-}
-/* 空列表：和列表行一样的内边距，不给卡片留空框 */
-.agents-master-list .empty-state[data-size="compact"] {
-  padding: var(--space-5) var(--space-4);
-}
-
-/* 新会话默认实例：标题在左，选择器在右；和上面两栏留一档间距 */
+/* 新会话默认实例：标题在左，选择器在右 */
 .agents-default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-6);
-  margin-bottom: var(--space-5);
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
+  gap: var(--space-7);
+  padding: 11px 14px;
 }
 .agents-default-label {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 1px;
-  font-size: var(--fs-sm);
+  gap: 2px;
+  font-size: var(--fs-md);
 }
 .agents-default .select-trigger {
-  width: 200px;
+  width: 220px;
   flex: none;
 }
 
-/* ─── 右栏：详情卡片 ─── */
-.agents-detail {
-  min-width: 0;
-}
-.agent-editor {
+/* ─── 实例卡片 ─── */
+.agents-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
-.agent-editor-head {
+.agents-list > .empty-state[data-size="compact"] {
+  padding: 24px 14px;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.agent-card {
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  transition: box-shadow var(--t-med) var(--ease);
+}
+.agent-card[data-open] {
+  box-shadow: var(--shadow-raised), var(--shadow-composer);
+}
+.agent-row {
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  min-width: 0;
-  padding: 2px var(--space-1);
+  padding-right: 14px;
 }
-.agent-editor-title {
+/* 卡片头：展开按钮铺满左边这一块，里面的文字不接鼠标，只有邮箱的显示按钮浮在上面可点 */
+.agent-row-main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 12px 4px 12px 12px;
+}
+.agent-row-main > :not(.agent-row-hit) {
+  pointer-events: none;
+}
+.agent-row-hit {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-panel) 0 0 var(--r-panel);
+}
+.agent-row-hit:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--border-focus);
+}
+.agent-row-main .sensitive {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* 图标方块：Claude 用品牌橙的浅底，其余用中性浅底，外面一圈细边 */
+.agent-tile {
+  position: relative;
+  display: grid;
+  width: var(--control-lg);
+  height: var(--control-lg);
+  flex: none;
+  place-items: center;
+  border-radius: var(--r-lg);
+  background: var(--field);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  --agent-icon-ring: var(--surface);
+}
+.agent-tile[data-brand="claude"] {
+  background: color-mix(in oklch, var(--brand-claude) 13%, transparent);
+  box-shadow: inset 0 0 0 var(--hair) color-mix(in oklch, var(--brand-claude) 28%, transparent);
+}
+.agent-row-text {
   display: flex;
   min-width: 0;
   flex: 1;
   flex-direction: column;
   gap: 3px;
 }
-.agent-editor-title h1 {
-  font-size: var(--fs-heading);
-  font-weight: 620;
-  letter-spacing: -0.015em;
-}
-.agent-editor-meta {
+.agent-row-title {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
+}
+.agent-row-name {
+  min-width: 0;
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 560;
+  letter-spacing: -0.005em;
+}
+/* 自建实例的 id：等宽小字，带浅底 */
+.agent-row-id {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  background: var(--field);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+}
+.agent-row-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.agent-row-state {
+  flex: none;
+}
+.agent-row-status[data-tone="error"] .agent-row-state {
+  color: var(--bad-text);
+}
+.agent-row-status[data-tone="warning"] .agent-row-state {
+  color: var(--warn-text);
+}
+/* 登录的账号：邮箱跟在状态后面，前面一个小圆点隔开 */
+.agent-row-state + .agent-row-email::before {
+  margin-right: 6px;
+  color: var(--faint);
+  content: "·";
+}
+.agent-row-main:hover .agent-row-caret {
+  color: var(--fg-2);
+}
+
+/* 敏感文字（账号邮箱）：默认是打乱的字符加模糊，点一下显示原文 */
+.sensitive {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  padding: 0 var(--space-2);
+  margin: 0 calc(-1 * var(--space-2));
+  border-radius: var(--r-xs);
+  color: var(--fg-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--t-fast) var(--ease),
+    filter var(--t-fast) var(--ease);
+}
+.sensitive:not([data-revealed]) > span {
+  filter: blur(3px);
+  user-select: none;
+}
+.sensitive:hover {
+  background: var(--hover);
+}
+.sensitive:hover:not([data-revealed]) > span {
+  filter: blur(2px);
+}
+.sensitive:focus-visible {
+  outline: 1px solid var(--border-focus);
+}
+.agent-stat .sensitive {
+  color: var(--fg);
+}
+/* 订阅：小号的胶囊 */
+.agent-plan {
+  flex: none;
+  max-width: 40%;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--field);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  color: var(--fg-2);
+  font-size: var(--fs-2xs);
+  line-height: 17px;
+}
+.agent-row-caret {
+  flex: none;
+  margin-left: var(--space-3);
+  color: var(--faint);
+  transition: transform var(--t-med) var(--ease);
+}
+.agent-row[data-open] .agent-row-caret {
+  transform: rotate(180deg);
+}
+
+/* ─── 展开区 ─── */
+.agent-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-7);
+  padding: 2px 16px 0 56px;
+}
+
+/* 概览：介绍一行，下面一块浅底的信息格 */
+.agent-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+.agent-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.agent-intro .btn {
+  flex: none;
+  margin-top: -3px;
+}
+.agent-description {
   min-width: 0;
   color: var(--muted);
   font-size: var(--fs-sm);
-}
-.agent-editor-meta .mono {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--faint);
-}
-.agent-editor-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.agent-editor-status[data-tone="idle"] {
-  color: var(--faint);
-}
-.agent-description {
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  line-height: 1.6;
-  padding: 0 var(--space-1);
+  line-height: 1.5;
 }
 .agent-link {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   margin-left: 6px;
-  color: var(--link);
+  color: var(--accent-text);
+  font-size: inherit;
 }
 .agent-link:hover {
   text-decoration: underline;
 }
-
-/* 一张卡片：标题与说明在上，内容在下；卡片之间留一档间距 */
-.agent-card {
-  display: flex;
-  flex-direction: column;
+.agent-panel {
   overflow: hidden;
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
+  border-radius: var(--r-lg);
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
 }
-.agent-card-head {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-6) 0;
+/* 账号、订阅、版本三格一行；可执行文件的路径长，单独占下面一整行 */
+.agent-stats {
+  display: grid;
+  margin: 0;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
 }
-.agent-card-heading {
+.agent-stat {
   display: flex;
   min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+}
+.agent-stat + .agent-stat {
+  box-shadow: inset var(--hair) 0 0 var(--border);
+}
+.agent-stat:nth-child(4) {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: baseline;
+  gap: var(--space-6);
+  box-shadow: inset 0 var(--hair) 0 var(--border);
+}
+.agent-stat:nth-child(4) dt {
+  flex: none;
+}
+.agent-stat:nth-child(4) dd {
   flex: 1;
+}
+.agent-stat dt {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.agent-stat dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--fg);
+  font-size: var(--fs-sm);
+}
+.agent-stat dd.mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.agent-stat-empty {
+  color: var(--faint);
+}
+/* 没装、没登录或出错：信息格下面一条带警示色的提示 */
+.agent-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: 9px 12px;
+  border-top: var(--hair) solid var(--border);
+  background: var(--warn-soft);
+  color: var(--warn-text);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+.agent-callout .ic {
+  flex: none;
+  margin-top: 2px;
+}
+.agent-callout strong {
+  font-weight: 600;
+}
+.agent-callout p {
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+.agent-features {
+  color: var(--faint);
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+}
+.agent-features > span {
+  margin-right: 6px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+/* 标签页：标签行下面是内容 */
+.agent-tabs .tabs-panel {
+  padding-top: var(--space-6);
+}
+.agent-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.agent-block + .agent-block {
+  margin-top: var(--space-7);
+}
+.agent-block-head {
+  display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.agent-card-heading h2 {
-  font-size: var(--fs-md);
+.agent-block-head h3 {
+  color: var(--fg);
+  font-size: var(--fs-sm);
   font-weight: 600;
-  letter-spacing: -0.005em;
 }
-.agent-card-action {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--space-3);
+.agent-muted {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
 }
-.agent-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-6) var(--space-6);
-}
-.agent-card-body:empty {
-  display: none;
-}
-
-/* 实例卡片：名称输入与改名、默认与删除操作 */
-.agent-identity {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+.agent-muted code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
 }
 .agent-identity-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
+  gap: 6px;
 }
 .agent-fields {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 14px;
 }
 .agent-field {
   display: flex;
@@ -260,18 +391,15 @@
 .agent-field-label {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  color: var(--fg);
+  gap: 2px;
   font-size: var(--fs-sm);
+  font-weight: 500;
 }
-.agent-muted {
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+.agent-field-label .agent-muted {
+  font-weight: 400;
 }
 .agent-input-row {
   display: flex;
-  align-items: center;
   gap: 6px;
 }
 .agent-input {
@@ -291,79 +419,187 @@
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto;
   gap: 6px;
-  align-items: center;
 }
 .agent-add {
   align-self: flex-start;
 }
+.agent-text-btn {
+  color: var(--accent-text);
+  font-size: var(--fs-sm);
+}
+.agent-text-btn:hover {
+  text-decoration: underline;
+}
+
+/* ─── 模型列表：一张带细边的表，最多 320 高后滚动 ─── */
 .agent-models {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.agent-model-list {
+.agent-models-head {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
-.agent-model-chip {
-  display: inline-flex;
+.agent-model-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 3px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+  list-style: none;
+}
+.agent-model {
+  position: relative;
+  display: flex;
+  min-height: var(--row-h);
   align-items: center;
-  gap: 4px;
-  padding: 3px 4px 3px 9px;
-  border-radius: var(--r-full);
-  background: var(--field);
-  box-shadow: inset 0 0 0 1px var(--border);
+  gap: 6px;
+  padding: 3px 8px 3px 2px;
+  border-radius: var(--r-md);
   font-size: var(--fs-sm);
 }
-/* 带列表前缀：圆形的移除按钮比全局焦点环（html :focus-visible）优先 */
-.agent-model-list .agent-model-chip button {
-  display: grid;
-  place-items: center;
-  width: var(--control-2xs);
-  height: var(--control-2xs);
-  border-radius: 50%;
-  color: var(--muted);
-}
-.agent-model-chip button:hover {
+.agent-model:hover {
   background: var(--hover);
+}
+.agent-model[data-dragging] {
+  opacity: 0.4;
+}
+/* 拖动时的落点：一条强调色的细线 */
+.agent-model[data-drop]::after {
+  position: absolute;
+  right: 6px;
+  left: 6px;
+  border-top: 2px solid var(--accent);
+  border-radius: var(--r-full);
+  content: "";
+}
+.agent-model[data-drop="before"]::after {
+  top: -1px;
+}
+.agent-model[data-drop="after"]::after {
+  bottom: -1px;
+}
+.agent-model-grip {
+  display: grid;
+  width: var(--control-2xs);
+  flex: none;
+  place-items: center;
+  color: var(--faint);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.agent-model:hover .agent-model-grip {
+  opacity: 1;
+}
+.agent-model-list[data-dragging] .agent-model-grip {
+  cursor: grabbing;
+}
+.agent-model-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+.agent-model-name {
+  min-width: 0;
   color: var(--fg);
 }
-
-/* 检测卡片：左边一列是名称，右边是值 */
-.agent-facts {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 5px 14px;
-  font-size: var(--fs-sm);
+.agent-model-id {
+  min-width: 0;
+  color: var(--faint);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
 }
-.agent-facts:empty {
-  display: none;
-}
-.agent-facts dt {
+/* 关掉的模型：文字变淡 */
+.agent-model[data-hidden] .agent-model-name {
   color: var(--muted);
 }
-.agent-facts dd {
-  color: var(--fg-2);
-  overflow-wrap: anywhere;
+.agent-model[data-hidden] .agent-model-id,
+.agent-model[data-hidden] .agent-model-cap,
+.agent-model[data-hidden] .agent-model-tag {
+  opacity: 0.6;
 }
-.agent-feature-list {
+.agent-model-cap {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--warn-text);
+}
+.agent-model-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--muted);
+  font-size: var(--fs-4xs);
+  font-weight: 500;
+  line-height: 16px;
+}
+.agent-model-tag[data-kind="default"] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+/* 上移、下移与移除：悬停或聚焦时才出现，不占地方 */
+.agent-model-tools {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex: none;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity var(--t-fast) var(--ease);
+}
+.agent-model:hover .agent-model-tools,
+.agent-model:focus-within .agent-model-tools {
+  opacity: 1;
+}
+.agent-icon-btn {
+  display: grid;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  place-items: center;
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.agent-icon-btn:hover:not(:disabled) {
+  background: var(--active);
+  color: var(--fg);
+}
+.agent-icon-btn[data-tone="danger"]:hover {
+  color: var(--bad-text);
+}
+.agent-icon-btn:disabled {
+  opacity: 0.35;
+}
+/* 行里的开关小一号 */
+.switch.agent-model-switch {
+  --control-xs: var(--control-2xs);
+  --switch-w: calc(var(--control-2xs) * 1.6);
+  margin-left: var(--space-2);
+}
+.agent-model-skeleton {
+  height: var(--row-h-compact);
+  margin: 4px 6px;
+  border-radius: var(--r-sm);
 }
 
-/* 保存条：贴在这张详情的最下面，左边的提示与右边的按钮 */
+/* 保存条：展开区的最下面，左边恢复默认与卸载，右边提示、撤销与保存；有改动时整条染上强调色 */
 .agent-actions {
-  position: sticky;
-  bottom: 0;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
+  margin: 0 -16px 0 -56px;
+  padding: 10px 16px 10px 56px;
+  border-top: var(--hair) solid var(--border-strong);
+  border-radius: 0 0 var(--r-panel) var(--r-panel);
+  transition: background var(--t-med) var(--ease);
+}
+.agent-actions[data-dirty] {
+  background: var(--accent-soft);
 }
 .agent-actions .spacer {
   flex: 1;
@@ -372,10 +608,36 @@
   color: var(--muted);
   font-size: var(--fs-sm);
 }
+.agent-actions[data-dirty] .agent-notice {
+  color: var(--accent-text);
+  font-weight: 500;
+}
 /* 保存失败的提示沿用 .error-text 的颜色与字号 */
 .agent-notice.error-text {
   color: var(--bad-text);
-  font-size: var(--fs-xs);
+}
+
+@media (max-width: 640px) {
+  .agents-default {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .agents-default .select-trigger {
+    width: 100%;
+  }
+  .agent-editor {
+    padding-left: 16px;
+  }
+  .agent-actions {
+    margin-left: -16px;
+    padding-left: 16px;
+  }
+  .agent-stats {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .agent-stat:nth-child(3) {
+    box-shadow: inset 0 var(--hair) 0 var(--border);
+  }
 }
 
 /* ─── 新建实例的向导 ─── */

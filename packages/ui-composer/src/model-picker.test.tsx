@@ -202,6 +202,25 @@ describe("ModelPicker", () => {
     await waitFor(() => expect(screen.queryByRole("listbox", { name: "Codex" })).toBeNull())
   })
 
+  it("skips models hidden in the settings unless one is in use", async () => {
+    const catalog: ComposerModelCatalog = {
+      ...CATALOG,
+      claude: [
+        ...(CATALOG.claude ?? []),
+        { id: "sonnet", label: "Sonnet", isDefault: false, efforts: [], hidden: true },
+        { id: "fable", label: "Fable", isDefault: false, efforts: [], hidden: true },
+      ],
+    }
+    const { chip } = renderPicker({ catalog, modelId: "fable" })
+    await userEvent.click(chip())
+    const list = await screen.findByRole("listbox", { name: "Claude Code" })
+    const names = within(list)
+      .getAllByRole("option")
+      .map((option) => option.textContent ?? "")
+    expect(names.some((name) => name.includes("Sonnet"))).toBe(false)
+    expect(names.some((name) => name.includes("Fable"))).toBe(true)
+  })
+
   it("loads an agent's catalog only when it is shown", async () => {
     const onLoadModels = vi.fn()
     const { chip } = renderPicker({ catalog: {}, onLoadModels })

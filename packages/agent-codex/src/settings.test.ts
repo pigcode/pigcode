@@ -146,6 +146,7 @@ exit 1
       version: "codex-cli 9.0.0",
       authenticated: true,
       account: "Logged in using ChatGPT",
+      email: null,
       command: bin,
       error: null,
     })

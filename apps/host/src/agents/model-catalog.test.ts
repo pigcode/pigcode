@@ -2,6 +2,7 @@
 import type { AgentModel } from "@pigcode/contracts"
 import { describe, expect, it, vi } from "vitest"
 import {
+  applyModelPreferences,
   asReasoningEffort,
   createModelCatalogCache,
   normalizeModels,
@@ -96,5 +97,30 @@ describe("model catalog cache", () => {
     cache.invalidate("fake")
     await cache.get("fake", load)
     expect(load).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe("model preferences", () => {
+  it("appends custom models, applies the saved order and flags hidden models", () => {
+    const catalog = [model("a"), model("b"), model("c")]
+    const result = applyModelPreferences(catalog, {
+      custom: ["x", "b"],
+      hidden: ["a"],
+      order: ["c", "x"],
+    })
+    // 排过的在前（c、x），没排过的按原顺序跟在后面；目录里已有的 b 不当自定义模型重复添加。
+    expect(result.map((item) => item.id)).toEqual(["c", "x", "a", "b"])
+    expect(result.find((item) => item.id === "x")?.custom).toBe(true)
+    expect(result.filter((item) => item.hidden).map((item) => item.id)).toEqual(["a"])
+  })
+
+  it("ignores order entries for models that are not in the catalog", () => {
+    const result = applyModelPreferences([model("a"), model("b")], {
+      custom: [],
+      hidden: ["gone"],
+      order: ["gone", "b"],
+    })
+    expect(result.map((item) => item.id)).toEqual(["b", "a"])
+    expect(result.some((item) => item.hidden)).toBe(false)
   })
 })

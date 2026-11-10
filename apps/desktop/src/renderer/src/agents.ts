@@ -22,6 +22,7 @@ export function toComposerModel(model: AgentModel): ComposerModel {
     ...(model.fast ? { fast: true } : {}),
     ...(model.ultracode ? { ultracode: true } : {}),
     ...(model.custom ? { custom: true } : {}),
+    ...(model.hidden ? { hidden: true } : {}),
   }
 }
 

@@ -6,6 +6,9 @@
 import { randomUUID } from "node:crypto"
 import {
   CUSTOM_MODELS_KEY,
+  HIDDEN_MODELS_KEY,
+  MODEL_ORDER_KEY,
+  MODEL_PREFERENCE_KEYS,
   customModelsSchema,
   type AgentInstance,
   type AgentSettingsValues,
@@ -53,16 +56,16 @@ function isBlank(value: unknown): boolean {
 }
 
 /**
- * 规范化要保存的设置：去掉留空的项，自定义模型去首尾空白、去重。
- * 自定义模型的格式不对时抛出可读的错误，不写入。
+ * 规范化要保存的设置：去掉留空的项，模型偏好（自定义模型、隐藏、排序）去首尾空白、去重。
+ * 模型偏好的格式不对时抛出可读的错误，不写入。
  */
 export function normalizeAgentSettings(values: Record<string, unknown>): AgentSettingsValues {
   const result: AgentSettingsValues = {}
   for (const [key, value] of Object.entries(values)) {
     if (isBlank(value)) continue
-    if (key === CUSTOM_MODELS_KEY) {
+    if (MODEL_PREFERENCE_KEYS.includes(key)) {
       const parsed = customModelsSchema.safeParse(value)
-      if (!parsed.success) throw new Error("customModels must be a list of model ids")
+      if (!parsed.success) throw new Error(`${key} must be a list of model ids`)
       const unique = [...new Set(parsed.data)]
       if (unique.length > 0) result[key] = unique
       continue
@@ -72,10 +75,26 @@ export function normalizeAgentSettings(values: Record<string, unknown>): AgentSe
   return result
 }
 
-/** 自定义模型 id；没有或格式不对时为空。 */
-export function customModelIds(settings: AgentSettingsValues): string[] {
-  const parsed = customModelsSchema.safeParse(settings[CUSTOM_MODELS_KEY])
+/** 一个模型偏好键下的模型 id；没有或格式不对时为空。 */
+function modelIds(settings: AgentSettingsValues, key: string): string[] {
+  const parsed = customModelsSchema.safeParse(settings[key])
   return parsed.success ? parsed.data : []
+}
+
+/** 实例的模型偏好：自定义模型、在选择器里隐藏的模型与用户排好的顺序。 */
+export interface ModelPreferences {
+  custom: string[]
+  hidden: string[]
+  order: string[]
+}
+
+/** 从实例的设置值里读出模型偏好。 */
+export function modelPreferences(settings: AgentSettingsValues): ModelPreferences {
+  return {
+    custom: modelIds(settings, CUSTOM_MODELS_KEY),
+    hidden: modelIds(settings, HIDDEN_MODELS_KEY),
+    order: modelIds(settings, MODEL_ORDER_KEY),
+  }
 }
 
 /** 存在 `agentInstances` 里的一个实例；默认实例不存，直接读 `agents.<agentId>`。 */

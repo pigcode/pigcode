@@ -69,6 +69,8 @@ export const agentModelSchema = z.object({
   ultracode: z.boolean().optional(),
   /** 用户在 agent 设置里添加的模型 id，不在 agent 自己的目录里。 */
   custom: z.boolean().optional(),
+  /** 用户在设置里把它从模型选择器里隐藏了；设置页照常列出。 */
+  hidden: z.boolean().optional(),
 })
 
 /**

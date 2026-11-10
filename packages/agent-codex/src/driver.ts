@@ -12,6 +12,7 @@ import type {
   AgentStatus,
   UserInput,
 } from "@pigcode/plugin-sdk"
+import { parseCodexAccount, type CodexAccount } from "./account"
 import { CodexRpcClient } from "./client"
 import { detectCodex, type CodexDetection } from "./detect"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
@@ -53,6 +54,9 @@ export interface CodexDriverOptions {
   detect?: (launch: CodexLaunch) => Promise<CodexDetection>
 }
 
+/** 读账号最多等这么久；app-server 起不来时检测不能一直卡着。 */
+const ACCOUNT_TIMEOUT_MS = 8000
+
 /** 基于 `codex app-server --stdio` 的 Codex driver。 */
 export class CodexDriver implements AgentDriver {
   readonly id = "codex"
@@ -93,16 +97,44 @@ export class CodexDriver implements AgentDriver {
       options.detect ?? ((launch) => detectCodex({ command: launch.command, env: launch.env }))
   }
 
-  /** 只读检测：版本与登录状态，用设置页里的可执行文件与 CODEX_HOME。 */
+  /**
+   * 只读检测：版本与登录状态，用设置页里的可执行文件与 CODEX_HOME。
+   * 装着时再问 app-server 的 `account/read` 要登录方式、订阅与邮箱；问不到就用 `login status` 的结论。
+   */
   async detect(settings: AgentSettingsValues): Promise<AgentStatus> {
-    const detection = await this.probe(codexLaunch(settings))
+    const launch = codexLaunch(settings)
+    const detection = await this.probe(launch)
+    const account = detection.installed ? await this.readAccount(launch) : null
+    const known = account?.loggedIn ?? null
+    const authenticated = detection.installed ? (known ?? detection.loggedIn) : null
     return {
       installed: detection.installed,
       version: detection.version,
-      authenticated: detection.installed ? detection.loggedIn : null,
-      account: detection.account,
+      authenticated,
+      account: authenticated ? (account?.label ?? detection.account) : null,
+      email: authenticated ? (account?.email ?? detection.email ?? null) : null,
       command: detection.command,
-      error: detection.error,
+      // 账号读到了已登录，login status 的报错就不用再提。
+      error: known ? null : detection.error,
+    }
+  }
+
+  /** 临时启动 app-server 读一次账号；超时或出错时返回 null。 */
+  private async readAccount(launch: CodexLaunch): Promise<CodexAccount | null> {
+    const client = this.openClient(launch)
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), ACCOUNT_TIMEOUT_MS).unref?.()
+    })
+    const read = (async () => {
+      await client.request("initialize", {
+        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+      })
+      return parseCodexAccount(await client.request("account/read", {}))
+    })().catch(() => null)
+    try {
+      return await Promise.race([read, timeout])
+    } finally {
+      void this.closeClient(client)
     }
   }
 

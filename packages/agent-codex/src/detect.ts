@@ -11,8 +11,10 @@ export interface CodexDetection {
   command: string
   version: string | null
   loggedIn: boolean
-  /** `codex login status` 的说明，例如「Logged in using ChatGPT」。 */
+  /** 登录方式与订阅，例如「ChatGPT Pro」；读不到账号时退回 `codex login status` 的说明。 */
   account: string | null
+  /** ChatGPT 账号的邮箱；API Key 登录或读不到时为空。 */
+  email?: string | null
   error: string | null
 }
 
@@ -54,9 +56,11 @@ export async function detectCodex(options: DetectCodexOptions = {}): Promise<Cod
     return base
   }
   try {
+    // 新版 CLI 把「Logged in using ChatGPT」写在 stderr，两个都要看。
     const status = await run(["login", "status"])
-    base.loggedIn = parseLoginStatus(status.stdout)
-    base.account = base.loggedIn ? firstLine(status.stdout) : null
+    const output = `${status.stdout}\n${status.stderr}`
+    base.loggedIn = parseLoginStatus(output)
+    base.account = base.loggedIn ? firstLine(output) : null
   } catch (error) {
     // `login status` 未登录时可能以非零退出；输出仍可判定为未登录，不算检测失败。
     const output = commandOutput(error)

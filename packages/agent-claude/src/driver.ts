@@ -101,12 +101,13 @@ export class ClaudeDriver implements AgentDriver {
   /** 只读检测：版本与登录状态，用设置页里的可执行文件与环境变量。 */
   async detect(settings: AgentSettingsValues): Promise<AgentStatus> {
     const detection = await this.probe(claudeLaunch(settings, this.fixedExecutable))
-    const account = [detection.subscriptionType, detection.authMethod].filter(Boolean).join(" · ")
+    const account = claudePlan(detection.subscriptionType, detection.authMethod)
     return {
       installed: detection.installed,
       version: detection.version,
       authenticated: detection.installed ? detection.loggedIn : null,
       account: account || null,
+      email: detection.email ?? null,
       command: detection.command,
       error: detection.error,
     }
@@ -410,4 +411,14 @@ function toPermissionResult(
     }
   }
   return { behavior: "allow" }
+}
+
+/**
+ * 订阅或登录方式的显示名：claude.ai 订阅写成「Claude Max」，没有订阅时用登录方式
+ * （例如 API Key 或第三方云），两样都没有时为 null。
+ */
+export function claudePlan(subscription: string | null, authMethod: string | null): string | null {
+  const plan = subscription?.trim()
+  if (plan) return `Claude ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`
+  return authMethod?.trim() || null
 }

@@ -13,6 +13,8 @@ export interface ClaudeDetection {
   loggedIn: boolean
   authMethod: string | null
   subscriptionType: string | null
+  /** 登录账号的邮箱；API Key 或第三方云登录时为空。 */
+  email?: string | null
   error: string | null
 }
 
@@ -60,10 +62,12 @@ export async function detectClaude(options: DetectClaudeOptions = {}): Promise<C
       loggedIn?: boolean
       authMethod?: string
       subscriptionType?: string
+      email?: string
     }
     base.loggedIn = parsed.loggedIn === true
     base.authMethod = parsed.authMethod ?? null
     base.subscriptionType = parsed.subscriptionType ?? null
+    base.email = parsed.loggedIn === true && parsed.email ? parsed.email : null
   } catch (error) {
     base.error = error instanceof Error ? error.message : String(error)
   }

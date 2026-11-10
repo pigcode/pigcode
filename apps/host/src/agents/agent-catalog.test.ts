@@ -101,6 +101,18 @@ describe("agent catalog", () => {
     const { done } = await ctx.agents.startRun(thread.id, "hi")
     await done
     expect(calls.sessions.at(-1)?.settings).toEqual(saved)
+
+    // 隐藏与排序跟自定义模型一样存在实例的设置里，目录照样完整返回。
+    ctx.agents.updateSettings("alpha", {
+      ...saved,
+      hiddenModels: ["alpha-base"],
+      modelOrder: ["alpha-preview"],
+    })
+    const arranged = await ctx.agents.models("alpha")
+    expect(arranged.map((item) => [item.id, item.hidden === true])).toEqual([
+      ["alpha-preview", false],
+      ["alpha-base", true],
+    ])
     await ctx.fiber.dispose()
   })
 

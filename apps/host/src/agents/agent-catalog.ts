@@ -12,9 +12,9 @@ import {
   DEFAULT_INSTANCE_KEY,
   createDetectionCache,
   createInstance as createStoredInstance,
-  customModelIds,
   forcedAgentId,
   listInstances as listStoredInstances,
+  modelPreferences,
   normalizeAgentSettings,
   pickDefaultAgent,
   agentSettingsKey,
@@ -27,10 +27,10 @@ import {
 } from "./agent-settings"
 import type { AgentDriver, AgentSettingsValues } from "./driver"
 import {
+  applyModelPreferences,
   createModelCatalogCache,
   normalizeCommands,
   normalizeModels,
-  withCustomModels,
 } from "./model-catalog"
 import { listAgentModels } from "./switching"
 
@@ -160,11 +160,11 @@ export function createAgentCatalog(
       const driver = drivers.get(agentId)
       const instance = instanceFor(agentId, instanceId)
       const settings = instance.values
-      // 只缓存 agent 自己的目录；自定义模型每次现取，改完设置立刻出现在选择器里。
+      // 只缓存 agent 自己的目录；模型偏好每次现取，改完设置立刻反映到选择器里。
       const models = await catalogs.get(instance.instanceId, async () =>
         normalizeModels(await listAgentModels(driver, settings)),
       )
-      return withCustomModels(models, customModelIds(settings))
+      return applyModelPreferences(models, modelPreferences(settings))
     },
     async commands(agentId, instanceId, cwd) {
       const driver = drivers.get(agentId)

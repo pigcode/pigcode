@@ -1,6 +1,6 @@
 /**
- * Agent 与插件的头像：名字的缩写，底色按 id 取一个稳定的色相。模型菜单、输入框胶囊、子代理标签、
- * 设置里的 Agent 与插件列表和侧栏会话行都用它，同一个 agent 在哪里都是同样的字母和颜色。
+ * 插件与第三方 Agent 的头像：名字的缩写，底色按 id 取一个稳定的色相，同一个插件在哪里都是同样的字母和颜色。
+ * 认得出品牌的 Agent 用 AgentIcon 画标志，认不出时它也退回这个头像。
  * 样式在 indicators.css。
  */
 import type { CSSProperties, ComponentProps } from "react"
@@ -36,8 +36,11 @@ export function entityMark(id: string, name: string): EntityMark {
   return { initials, hue }
 }
 
-/** 头像尺寸：sm 用在菜单、胶囊与标签里，md 是模型菜单的左栏，lg 是设置里的列表，inline 是一行文字里的彩色缩写。 */
-export type EntityAvatarSize = "sm" | "md" | "lg" | "inline"
+/**
+ * 头像尺寸：sm 16px，md 26px，lg 32px（插件列表），inline 是一行文字里的彩色缩写，
+ * fill 跟随外层 AgentIcon 的尺寸（认不出品牌的 Agent 用它代替标志）。
+ */
+export type EntityAvatarSize = "sm" | "md" | "lg" | "inline" | "fill"
 
 export type EntityAvatarProps = Omit<ComponentProps<"span">, "children"> & {
   id: string

@@ -100,6 +100,8 @@ export interface ComposerModel {
   efforts: readonly ReasoningEffort[]
   /** 用户在 agent 设置里添加的模型。 */
   custom?: boolean | undefined
+  /** 用户在 agent 设置里把它从选择器里隐藏了；正在用的模型照样显示。 */
+  hidden?: boolean | undefined
   /** 支持快速模式。 */
   fast?: boolean | undefined
   /** 支持 Ultracode。 */
@@ -118,7 +120,7 @@ export interface ComposerModelChoice {
   modelId: string
 }
 
-/** 当前实际使用的模型：线程记录的模型，否则目录里的默认模型，再否则第一个。 */
+/** 当前实际使用的模型：线程记录的模型，否则目录里的默认模型，再否则第一个没隐藏的。 */
 export function resolveModel(
   models: readonly ComposerModel[] | undefined,
   modelId: string | null | undefined,
@@ -127,6 +129,7 @@ export function resolveModel(
   return (
     models.find((model) => model.id === modelId) ??
     models.find((model) => model.isDefault) ??
+    models.find((model) => !model.hidden) ??
     models[0] ??
     null
   )

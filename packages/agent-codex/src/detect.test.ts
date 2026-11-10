@@ -49,4 +49,22 @@ exit 1
     expect(result.version).toContain("0.163.0")
     expect(result.loggedIn).toBe(true)
   })
+
+  it("reads the login status that newer CLIs print to stderr", async () => {
+    if (process.platform === "win32") return
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-"))
+    const bin = await writeCli(
+      dir,
+      "codex",
+      `#!/bin/sh
+if [ "$1" = "--version" ]; then echo "codex-cli 0.167.0"; exit 0; fi
+if [ "$1" = "login" ]; then echo "Logged in using ChatGPT" >&2; exit 0; fi
+exit 1
+`,
+      [],
+    )
+    const result = await detectCodex({ command: bin })
+    expect(result.loggedIn).toBe(true)
+    expect(result.account).toBe("Logged in using ChatGPT")
+  })
 })

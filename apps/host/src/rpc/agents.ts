@@ -5,6 +5,7 @@
 import type { Context } from "cordis"
 import {
   CUSTOM_MODELS_KEY,
+  MODEL_PREFERENCE_KEYS,
   customModelsSchema,
   environmentEntriesSchema,
   type AgentList,
@@ -112,7 +113,7 @@ function matchesField(field: AgentSettingField, value: unknown): boolean {
 }
 
 /**
- * 校验要保存的设置：只接受 agent 声明过的字段与 customModels，类型不对时抛出可读的错误，
+ * 校验要保存的设置：只接受 agent 声明过的字段与模型偏好（customModels、hiddenModels、modelOrder），类型不对时抛出可读的错误，
  * 避免把界面或脚本传来的杂项写进 settings.json。
  */
 export function validateAgentSettings(
@@ -121,12 +122,17 @@ export function validateAgentSettings(
 ): void {
   const fields = new Map(agent.fields.map((field) => [field.key, field]))
   for (const [key, value] of Object.entries(values)) {
-    if (key === CUSTOM_MODELS_KEY) {
-      if (!agent.customModels && Array.isArray(value) && value.length > 0) {
+    if (MODEL_PREFERENCE_KEYS.includes(key)) {
+      if (
+        key === CUSTOM_MODELS_KEY &&
+        !agent.customModels &&
+        Array.isArray(value) &&
+        value.length > 0
+      ) {
         throw new Error(`${agent.agentId} does not accept custom models`)
       }
       if (value !== null && !customModelsSchema.safeParse(value).success) {
-        throw new Error("customModels must be a list of model ids")
+        throw new Error(`${key} must be a list of model ids`)
       }
       continue
     }

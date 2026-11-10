@@ -8,6 +8,16 @@ import { agentFeaturesSchema } from "./domain"
 
 /** 自定义模型的键：Host 把这里的模型 id 追加到 agent 的模型目录。 */
 export const CUSTOM_MODELS_KEY = "customModels"
+/** 在输入框模型选择器里隐藏的模型 id；设置页仍然列出它们，可以随时打开。 */
+export const HIDDEN_MODELS_KEY = "hiddenModels"
+/** 用户排好的模型顺序；没列进来的模型按 agent 目录原来的顺序排在后面。 */
+export const MODEL_ORDER_KEY = "modelOrder"
+/** 由 Host 统一处理的模型偏好键，值都是模型 id 列表，插件不能占用。 */
+export const MODEL_PREFERENCE_KEYS: readonly string[] = [
+  CUSTOM_MODELS_KEY,
+  HIDDEN_MODELS_KEY,
+  MODEL_ORDER_KEY,
+]
 
 /** 可本地化的文案：一段文字，或按 locale（`zh-CN`、`en-US`、`en`…）给出的多段文字。 */
 export const localizedTextSchema = z.union([
@@ -15,11 +25,13 @@ export const localizedTextSchema = z.union([
   z.record(z.string().min(1), z.string().min(1)),
 ])
 
-/** 设置键名；`customModels` 由 Host 统一处理，插件不能占用。 */
+/** 设置键名；模型偏好键由 Host 统一处理，插件不能占用。 */
 const settingKeySchema = z
   .string()
   .regex(/^[a-zA-Z][a-zA-Z0-9_]*$/)
-  .refine((key) => key !== CUSTOM_MODELS_KEY, { message: "customModels is reserved" })
+  .refine((key) => !MODEL_PREFERENCE_KEYS.includes(key), {
+    message: "model preference keys are reserved",
+  })
 
 const fieldBase = {
   key: settingKeySchema,
@@ -61,7 +73,7 @@ export const environmentEntriesSchema = z.array(
   z.object({ name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), value: z.string() }),
 )
 
-/** 自定义模型列表：去掉首尾空白后的非空 id，最长 256 个字符。 */
+/** 模型 id 列表（自定义模型、隐藏的模型、排序）：去掉首尾空白后的非空 id，最长 256 个字符。 */
 export const customModelsSchema = z.array(z.string().trim().min(1).max(256))
 
 /** Agent 插件在 manifest 里声明的贡献：agent id、介绍与设置字段。 */
@@ -91,7 +103,7 @@ export const agentContributionSchema = z
     }
   })
 
-/** agent 的设置值：键为字段 key，另加 Host 处理的 customModels。 */
+/** agent 的设置值：键为字段 key，另加 Host 处理的模型偏好（customModels、hiddenModels、modelOrder）。 */
 export const agentSettingsValuesSchema = z.record(z.string(), z.unknown())
 
 /**
@@ -123,8 +135,10 @@ export const agentStatusSchema = z.object({
   installed: z.boolean(),
   version: z.string().nullable(),
   authenticated: z.boolean().nullable(),
-  /** 登录方式、订阅等补充说明，例如「Max · claude.ai」。 */
+  /** 登录方式、订阅等补充说明，例如「Max · claude.ai」「ChatGPT Pro」。 */
   account: z.string().nullable().optional(),
+  /** 登录账号的邮箱；CLI 不告诉或用 API Key 时为空。 */
+  email: z.string().nullable().optional(),
   /** 实际使用的可执行文件。 */
   command: z.string().nullable().optional(),
   error: z.string().nullable().optional(),

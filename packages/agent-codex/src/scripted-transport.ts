@@ -19,6 +19,8 @@ export interface ReplayScript {
   forkedThreadId?: string
   /** model/list 的应答；未指定时返回单个默认模型。 */
   modelList?: unknown
+  /** account/read 的应答；未指定时不应答。 */
+  account?: unknown
   onTurnStart?: (message: SentMessage, transport: ScriptedTransport) => void
   onTurnInterrupt?: (message: SentMessage, transport: ScriptedTransport) => void
 }
@@ -58,6 +60,10 @@ export class ScriptedTransport extends ReplayCodexTransport {
           data: [{ id: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", isDefault: true }],
         },
       })
+      return
+    }
+    if (message.method === "account/read" && this.script.account !== undefined) {
+      this.push({ id: message.id, result: this.script.account })
       return
     }
     if (message.method === "turn/start") {

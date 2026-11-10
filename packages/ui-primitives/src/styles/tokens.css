@@ -150,6 +150,8 @@
 
   /* 收藏的星标；内置浏览器里网页的底色（网页默认白底，不随主题变） */
   --favorite: #e5a00d;
+  /* Claude 的品牌橙：两种主题相同（t3code 的 ClaudeAI 图标） */
+  --brand-claude: #d97757;
   --browser-page-bg: #fff;
 }
 
@@ -263,6 +265,8 @@
   --subagent-node-fg: #c8cd90;
 
   --favorite: #e5a00d;
+  /* Claude 的品牌橙：两种主题相同（t3code 的 ClaudeAI 图标） */
+  --brand-claude: #d97757;
   --browser-page-bg: #fff;
 }
 
@@ -412,6 +416,13 @@
   --avatar-sm: 16px;
   --avatar-md: 26px;
   --avatar-lg: 32px;
+  /* Agent 品牌图标：xs 模型行 / sm 侧栏会话行 / md 胶囊、菜单、标签 / lg 模型菜单左栏与设置；非默认实例的角标高度与字号 */
+  --agent-icon-xs: 12px;
+  --agent-icon-sm: 14px;
+  --agent-icon-md: 16px;
+  --agent-icon-lg: 20px;
+  --agent-badge: 11px;
+  --agent-badge-fs: 7px;
   /* 运行中的 3×3 点阵：整体边长与每个点的边长 */
   --dot-matrix-size: 10px;
   --dot-matrix-dot: 2px;
