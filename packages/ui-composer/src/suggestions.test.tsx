@@ -104,7 +104,7 @@ describe("composer suggestions", () => {
   it("lists the agent's skills and commands after Pigcode's own and inserts the chosen one", async () => {
     const onSubmit = vi.fn()
     const run = vi.fn()
-    const loadAgentCommands = vi.fn(async (_instanceId: string) => AGENT_COMMANDS)
+    const loadAgentCommands = vi.fn(async () => AGENT_COMMANDS)
     const editor = renderComposer({
       onSubmit,
       agentId: "claude",
