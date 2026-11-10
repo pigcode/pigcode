@@ -11,7 +11,8 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:ultracode": "node scripts/gen-ultracode.ts"
   },
   "engines": {
     "pigcode": ">=0.1.0-0"

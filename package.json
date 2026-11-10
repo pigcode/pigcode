@@ -19,6 +19,7 @@
     "real:codex": "node scripts/real-smoke.ts codex",
     "real:codex:multi": "node scripts/real-smoke.ts codex-multi",
     "create-plugin": "node scripts/create-plugin.ts",
+    "gen:ultracode": "pnpm --filter @pigcode/agent-claude gen:ultracode",
     "postinstall": "node scripts/fix-node-pty-helper.ts"
   },
   "devDependencies": {
