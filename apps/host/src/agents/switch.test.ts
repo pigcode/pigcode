@@ -82,6 +82,31 @@ async function setup(agentId = "fake") {
 }
 
 describe("agent switching", () => {
+  it("holds the handoff back while the message starts with an agent command", async () => {
+    const { ctx, thread, claude } = await setup()
+    await (
+      await ctx.agents.startRun(thread.id, "build the login page")
+    ).done
+    await ctx.agents.switchAgent(thread.id, "claude", null)
+
+    await (
+      await ctx.agents.startRun(thread.id, "/compact keep the decisions")
+    ).done
+    expect(claude.inputs[0]?.text).toBe("/compact keep the decisions")
+    expect(claude.inputs[0]?.handoff).toBeUndefined()
+
+    await (
+      await ctx.agents.startRun(thread.id, "/usr/lib/foo 在哪")
+    ).done
+    expect(claude.inputs[1]?.handoff).toContain("build the login page")
+
+    await (
+      await ctx.agents.startRun(thread.id, "and the signup page")
+    ).done
+    expect(claude.inputs[2]?.handoff).toBeUndefined()
+    await ctx.fiber.dispose()
+  })
+
   it("switches agent and passes a handoff to the next run", async () => {
     const { ctx, thread, claude } = await setup()
     const first = await ctx.agents.startRun(thread.id, "build the login page")

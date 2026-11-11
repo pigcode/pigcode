@@ -161,7 +161,7 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
           agentId,
           handoff: Boolean(asText(payload?.handoff)),
         })
-      } else if (asText(payload?.handoff)) {
+      } else if (asText(payload?.handoff) && payload?.deferred !== true) {
         entries.push({ kind: "brief", key: `brief-${event.seq}` })
       }
       continue

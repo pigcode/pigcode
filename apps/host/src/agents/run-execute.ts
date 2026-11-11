@@ -3,7 +3,8 @@ import type { Context } from "cordis"
 import type { AgentRuntime, ApprovalDecision, QuestionRequest, UserInput } from "./driver"
 import type { ActiveRun } from "./run-queue"
 import { mapAgentEvent, type RunEventHooks } from "./run-events"
-import { freshSessionHandoff } from "./switching"
+import { startsWithAgentCommand } from "./agent-command"
+import { deferHandoff, freshSessionHandoff } from "./switching"
 
 /** execute 需要的 Host 闭包。 */
 export interface ExecuteDeps {
@@ -79,6 +80,12 @@ export function createExecute(
       const handoff = freshSessionHandoff(deps.ctx, run.threadId, run.runId)
       const rest: UserInput = { ...input }
       delete rest.handoff
+      // 以 Agent 命令开头的消息不带交接，交接记下来留给下一轮。
+      if (handoff !== null && startsWithAgentCommand(input.text)) {
+        deferHandoff(deps.ctx, run.threadId, handoff)
+        await execute(run, rest)
+        return
+      }
       await execute(run, handoff === null ? rest : { ...rest, handoff })
     } catch (error) {
       fail(run, error)

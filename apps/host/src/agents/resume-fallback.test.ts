@@ -131,6 +131,21 @@ describe("resuming native sessions", () => {
     })
   }
 
+  for (const lose of ["create", "send"] as const) {
+    it(`keeps the new session's handoff for the next turn when the message is a command (${lose})`, async () => {
+      const { ctx, run, restart, inputs } = await setup(lose)
+      await run("build the parser")
+      restart()
+      await run("/compact")
+      expect(inputs.at(-1)?.text).toBe("/compact")
+      expect(inputs.at(-1)?.handoff).toBeUndefined()
+
+      await run("now add tests")
+      expect(inputs.at(-1)?.handoff).toContain("build the parser")
+      await ctx.fiber.dispose()
+    })
+  }
+
   it("still fails a run whose error is not a missing session", async () => {
     const { ctx, thread, driver } = await setup("none")
     driver.send = async (_session, _input, runtime) => {

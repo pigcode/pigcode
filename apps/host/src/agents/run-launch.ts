@@ -5,7 +5,8 @@ import type { RunStore } from "../storage/run-store"
 import type { AgentSessionStore } from "./session-store"
 import type { AgentSessionHandle, AgentSettingsValues, UserInput } from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
-import { freshSessionHandoff, pendingHandoff } from "./switching"
+import { startsWithAgentCommand } from "./agent-command"
+import { deferHandoff, freshSessionHandoff, pendingHandoff } from "./switching"
 
 /** launchRun 需要的最小 Host 依赖；由 registry 组装，避免 registry 超过 500 行。 */
 export interface LaunchDeps {
@@ -59,14 +60,19 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     const handoff = lost
       ? freshSessionHandoff(deps.ctx, run.threadId, run.runId)
       : pendingHandoff(deps.ctx, run.threadId)
+    // 以 Agent 命令开头的消息原样发出，CLI 才认得出命令；交接推迟到下一轮。
+    const defer = handoff !== null && startsWithAgentCommand(entry.input.text)
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {
       agentId: run.driver.id,
       instanceId: entry.instanceId,
       agentSessionId: run.session.id,
+      ...(defer ? { handoffDeferred: true } : {}),
     })
+    // 新开会话的交接还没记在任何地方，推迟时要记下来；切换留下的交接本来就在事件里。
+    if (defer && lost) deferHandoff(deps.ctx, run.threadId, handoff)
     deps.activeRuns.set(run.runId, run)
-    void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })
+    void deps.execute(run, handoff === null || defer ? entry.input : { ...entry.input, handoff })
   } catch (error) {
     const message = messageOf(error)
     deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })

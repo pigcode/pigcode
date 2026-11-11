@@ -155,8 +155,29 @@ export function pendingHandoff(ctx: Context, threadId: string): string | null {
     }
   }
   if (handoff === null) return null
-  const consumed = events.some((event) => event.type === "run.started" && event.seq > handoffSeq)
+  // 以 Agent 命令开头的那一轮不带交接（run.started 上记了 handoffDeferred），交接留给下一轮。
+  const consumed = events.some(
+    (event) =>
+      event.type === "run.started" &&
+      event.seq > handoffSeq &&
+      (event.payload as { handoffDeferred?: unknown } | null)?.handoffDeferred !== true,
+  )
   return consumed ? null : handoff
+}
+
+/**
+ * 这一轮带不了的交接（用户消息以 Agent 命令开头）记成待发，下一轮再带上。
+ * 写在这一轮的 run.started 之后，所以下一轮的 pendingHandoff 会读到它。
+ */
+export function deferHandoff(ctx: Context, threadId: string, handoff: string): void {
+  ctx.sessions.append({
+    threadId,
+    runId: null,
+    type: "thread.updated",
+    payload: { handoff, deferred: true },
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+  })
 }
 
 /** 读取尚未被下一次 run 消费的原生 fork 源；一个 fork 只使用一次。 */
