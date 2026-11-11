@@ -13,10 +13,16 @@ import { BROWSER_ACTION_LABELS, fitViewport } from "@pigcode/ui-workbench"
 import { browserSessions, useBrowserVersion } from "./browser-sessions"
 import { CANCEL_PICKER_SCRIPT, pickerScript } from "./browser-picker"
 
-/** 一个浏览器标签：属于哪个线程、首次打开的地址。 */
+/** 一个浏览器标签：在哪个面板里、属于哪个线程、首次打开的地址。 */
 export interface HostedBrowser {
   id: string
-  threadId: string
+  /** 面板在 App 里的 key；标签的标题与图标写回这个面板。 */
+  slotKey: string
+  /**
+   * 新会话草稿里打开的浏览器还不属于会话，为 null：这时不交给 agent 控制，
+   * 草稿建成会话后换成会话 id，再交给那个会话的 agent。
+   */
+  threadId: string | null
   initialUrl?: string | undefined
 }
 
@@ -174,11 +180,14 @@ function HostedWebview({
       reported = key
       report.current(browser, patch)
     }
+    /** 页面就绪后交给会话的 agent；草稿里还没有会话，等建好会话、threadId 变了再交。 */
+    const registerWithAgent = () => {
+      if (registered || !threadId) return
+      registered = true
+      void window.pigcodeNative?.browser?.register(id, threadId, webview.getWebContentsId())
+    }
     const onReady = () => {
-      if (!registered) {
-        registered = true
-        void window.pigcodeNative?.browser?.register(id, threadId, webview.getWebContentsId())
-      }
+      registerWithAgent()
       sync()
     }
     const onNavigated = (event: Event) => {
@@ -243,6 +252,13 @@ function HostedWebview({
       ["render-process-gone", onGone],
     ]
     for (const [type, listener] of listeners) webview.addEventListener(type, listener)
+    // 草稿建成会话时 threadId 才有值，页面早就绪了，不会再来 dom-ready：能取到 webContents 就直接交。
+    try {
+      webview.getWebContentsId()
+      registerWithAgent()
+    } catch {
+      // 还没就绪；等 dom-ready。
+    }
     browserSessions.register(id, {
       back: () => webview.goBack(),
       forward: () => webview.goForward(),

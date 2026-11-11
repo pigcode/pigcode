@@ -266,6 +266,7 @@ export const zhCN = {
   "workbench.terminal": "终端",
   "workbench.checkpoint": "检查点",
   "workbench.createCheckpoint": "创建检查点",
+  "workbench.checkpointNeedsThread": "发出第一条消息后才有检查点",
   "workbench.terminalOpening": "正在打开终端…",
   "workbench.diffBase": "Diff 基准",
   "workbench.diffBaseDefault": "默认（最近的基线）",

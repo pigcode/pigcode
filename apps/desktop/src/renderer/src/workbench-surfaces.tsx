@@ -43,12 +43,12 @@ export function BrowserPane({ tab, active }: SurfaceRenderProps) {
 /** 终端：切走后保持挂载，shell 会话保留；工具栏里可以再开一个或结束这个。 */
 export function TerminalPane({ tab, active }: SurfaceRenderProps) {
   const { t } = useLocale()
-  const { connection, threadId, add, close } = useWorkbench()
+  const { connection, scope, add, close } = useWorkbench()
   return (
     <div className="surface-pane" hidden={!active}>
       <TerminalSurface
         connection={connection}
-        threadId={threadId}
+        owner={scope}
         active={active}
         tools={
           <>
@@ -79,22 +79,27 @@ export function TerminalPane({ tab, active }: SurfaceRenderProps) {
   )
 }
 
-/** 文件树：上面是 worktree 选择；打开的文件替换这个标签，文件树收进文件标签的侧栏。 */
+/**
+ * 文件树：上面是 worktree 选择（worktree 属于会话，新会话草稿里没有）；
+ * 打开的文件替换这个标签，文件树收进文件标签的侧栏。
+ */
 export function FilesPane({ tab }: SurfaceRenderProps) {
   const { worktrees, fileProps, openFile } = useWorkbench()
   return (
     <div className="surface-pane workbench-files">
-      <div className="workbench-worktree-compact">
-        <WorktreePicker
-          worktrees={worktrees.worktrees}
-          activePath={worktrees.activePath}
-          onCreate={worktrees.create}
-          onSwitch={worktrees.switchTo}
-          onRemove={worktrees.remove}
-          busy={worktrees.busy}
-          compact
-        />
-      </div>
+      {worktrees.available ? (
+        <div className="workbench-worktree-compact">
+          <WorktreePicker
+            worktrees={worktrees.worktrees}
+            activePath={worktrees.activePath}
+            onCreate={worktrees.create}
+            onSwitch={worktrees.switchTo}
+            onRemove={worktrees.remove}
+            busy={worktrees.busy}
+            compact
+          />
+        </div>
+      ) : null}
       <FilesSurface {...fileProps} onOpenFile={(path) => openFile(path, tab.id)} />
     </div>
   )

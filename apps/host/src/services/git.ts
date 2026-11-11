@@ -6,7 +6,7 @@ import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, sep } from "node:path"
 import { promisify } from "node:util"
-import { threadCwd } from "./worktrees"
+import { scopeCwd, threadCwd, type WorkspaceScope } from "./worktrees"
 
 const exec = promisify(execFile)
 
@@ -39,8 +39,9 @@ export interface CheckpointRef {
 
 /** 工作台需要的 Git 操作。 */
 export interface GitService {
-  status(threadId: string): Promise<GitStatus>
-  diff(threadId: string, base: string, head: string): Promise<string>
+  /** scope 是会话 id，或者新会话草稿的项目（看项目根目录）。 */
+  status(scope: WorkspaceScope): Promise<GitStatus>
+  diff(scope: WorkspaceScope, base: string, head: string): Promise<string>
   capture(threadId: string, runId: string, phase: string): Promise<CheckpointRef>
   restore(threadId: string, commitSha: string): Promise<string[]>
 }
@@ -76,8 +77,8 @@ export class NotAGitRepoError extends Error {
  */
 export const apply: GitPlugin = (ctx) => {
   const service: GitService = {
-    status: (threadId) => status(threadCwd(ctx, threadId)),
-    diff: (threadId, base, head) => diff(threadCwd(ctx, threadId), base, head),
+    status: (scope) => status(scopeCwd(ctx, scope)),
+    diff: (scope, base, head) => diff(scopeCwd(ctx, scope), base, head),
     capture: (threadId, runId, phase) => capture(threadCwd(ctx, threadId), threadId, runId, phase),
     restore: (threadId, commitSha) => restore(threadCwd(ctx, threadId), commitSha),
   }

@@ -10,6 +10,7 @@ import {
   NEW_THREAD_DRAFT_KEY,
   draftProjectId,
   materializeDraft,
+  onDraftMaterialized,
   resetDraftOptions,
   updateDraftOptions,
 } from "./new-thread-draft"
@@ -106,6 +107,22 @@ describe("new thread draft", () => {
     expect(activeWhenMoved).toBeNull()
     // 刚建好的会话没有历史要回放：不用等订阅就能显示问候。
     expect(store.getSnapshot().threadStates["t-new"]?.loaded).toBe(true)
+  })
+
+  it("announces the new thread before it becomes the current one", async () => {
+    const store = storeWith("p2")
+    const { connection } = fakeConnection()
+    const seen: Array<{ id: string; activeWhenAnnounced: string | null }> = []
+    const off = onDraftMaterialized((thread) =>
+      seen.push({ id: thread.id, activeWhenAnnounced: store.getSnapshot().activeThreadId }),
+    )
+
+    await materializeDraft(connection, store, "zh-CN")
+    off()
+    await materializeDraft(connection, store, "zh-CN")
+
+    // 草稿里开着的底部终端靠它交给新会话：必须赶在当前会话切过去之前。
+    expect(seen).toEqual([{ id: "t-new", activeWhenAnnounced: null }])
   })
 
   it("passes on the agent, model and permission chosen in the draft", async () => {

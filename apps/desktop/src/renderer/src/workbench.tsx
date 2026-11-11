@@ -20,16 +20,23 @@ import { getDraft, setDraft, useDraftVersion } from "./file-drafts"
 import { FileSurface } from "./files-surface"
 import { usePullRequest } from "./use-pull-request"
 import { useWorktrees } from "./use-worktrees"
+import { scopeThreadId, type WorkspaceScope } from "./workspace-scope"
 import {
   WorkbenchContext,
   type CheckpointRecord,
   type WorkbenchContextValue,
 } from "./workbench-context"
 
-/** 右侧面板属性；标签状态由 App 按线程保存，线程切换时父组件用 key 重新挂载以释放终端。 */
+/**
+ * 右侧面板属性；标签状态由 App 按 slotKey 保存，切换会话时父组件用 key 重新挂载以释放终端。
+ * 新会话草稿里也能打开（参照 ZCode）：scope 是草稿的项目，文件、Diff、PR 看项目根目录；
+ * 草稿建成会话后 slotKey 不变，面板不重新挂载，scope 换成会话。
+ */
 export interface WorkbenchPanelProps {
   connection: Connection
-  threadId: string
+  scope: WorkspaceScope
+  /** 面板在 App 里的 key；文件的未保存修改按它记，草稿变成会话后不变。 */
+  slotKey: string
   panel: PanelSurfaceState
   onPanelChange: (update: (state: PanelSurfaceState) => PanelSurfaceState) => void
   /** 标签栏右侧的布局按钮。 */
@@ -62,7 +69,8 @@ async function callRpc<T>(connection: Connection, method: string, params: unknow
 /** 右侧面板；文件、Diff、PR 的数据只在对应标签激活时加载，终端与浏览器标签切走后保持挂载。 */
 export function WorkbenchPanel({
   connection,
-  threadId,
+  scope: scopeProp,
+  slotKey,
   panel,
   onPanelChange,
   controls,
@@ -72,6 +80,13 @@ export function WorkbenchPanel({
 }: WorkbenchPanelProps) {
   const { t } = useLocale()
   const surfaceContributions = useContributions("surface")
+  // App 每次渲染都给一个新对象；按 id 固定下来，依赖它的读取才不会每次重跑。
+  const threadId = scopeThreadId(scopeProp)
+  const projectId = "projectId" in scopeProp ? scopeProp.projectId : null
+  const scope = useMemo<WorkspaceScope>(
+    () => (threadId ? { threadId } : { projectId: projectId ?? "" }),
+    [threadId, projectId],
+  )
   const tab: string | null =
     panel.surfaces.find((surface) => surface.id === panel.activeId)?.kind ?? null
   // 保存文件、恢复检查点、切换 worktree 都会改动工作目录，与 agent 改文件一样要让文件树、
@@ -91,10 +106,14 @@ export function WorkbenchPanel({
   const worktrees = useWorktrees(connection, threadId, onError, () =>
     setLocalRevision((count) => count + 1),
   )
-  const pr = usePullRequest(connection, threadId, tab === "pr")
+  const pr = usePullRequest(connection, scope, tab === "pr")
 
-  /** 重新拉取 checkpoint 列表；Diff 与 Checkpoint tab 共用。 */
+  /** 重新拉取 checkpoint 列表；Diff 与 Checkpoint tab 共用。检查点属于会话的 run，草稿里没有。 */
   const refreshCheckpoints = useCallback(async (): Promise<void> => {
+    if (!threadId) {
+      setCheckpoints([])
+      return
+    }
     const list = await callRpc<CheckpointRecord[]>(connection, "checkpoint.list", { threadId })
     setCheckpoints(list)
   }, [connection, threadId])
@@ -133,7 +152,7 @@ export function WorkbenchPanel({
     setDiffLoading(true)
     setDiffError(null)
     void callRpc<string>(connection, "git.diff", {
-      threadId,
+      ...scope,
       base: baseSha ?? "HEAD",
       head: headSha,
     })
@@ -152,9 +171,10 @@ export function WorkbenchPanel({
     return () => {
       cancelled = true
     }
-  }, [tab, threadId, connection, baseSha, headSha])
+  }, [tab, scope, connection, baseSha, headSha])
 
   async function createCheckpoint(): Promise<void> {
+    if (!threadId) return
     setCheckpointBusy(true)
     setCheckpointError(null)
     try {
@@ -168,6 +188,7 @@ export function WorkbenchPanel({
   }
 
   async function restoreCheckpoint(checkpointId: string): Promise<void> {
+    if (!threadId) return
     setCheckpointBusy(true)
     setCheckpointError(null)
     try {
@@ -195,7 +216,7 @@ export function WorkbenchPanel({
   /** 关闭标签；有未保存修改的文件标签先确认。 */
   function close(id: string): void {
     const surface = panel.surfaces.find((item) => item.id === id)
-    if (surface?.kind === "file" && surface.path && getDraft(threadId, surface.path) !== null) {
+    if (surface?.kind === "file" && surface.path && getDraft(slotKey, surface.path) !== null) {
       setPendingClose(surface)
       return
     }
@@ -212,16 +233,17 @@ export function WorkbenchPanel({
     () =>
       panel.surfaces.map((surface) =>
         surface.kind === "file" && surface.path
-          ? { ...surface, dirty: getDraft(threadId, surface.path) !== null }
+          ? { ...surface, dirty: getDraft(slotKey, surface.path) !== null }
           : surface,
       ),
     // draftVersion 变化时重新读取草稿。
-    [panel.surfaces, threadId, draftVersion],
+    [panel.surfaces, slotKey, draftVersion],
   )
 
   const fileProps = {
     connection,
-    threadId,
+    scope,
+    draftKey: slotKey,
     rootName: projectName,
     revision,
     onError,
@@ -230,7 +252,7 @@ export function WorkbenchPanel({
 
   const context: WorkbenchContextValue = {
     connection,
-    threadId,
+    scope,
     add,
     close,
     openFile,
@@ -259,6 +281,9 @@ export function WorkbenchPanel({
       <div className="workbench">
         <RightPanel
           threadId={threadId}
+          unavailable={(id) =>
+            id === "checkpoint" && !threadId ? "workbench.checkpointNeedsThread" : null
+          }
           surfaces={surfaces}
           activeId={panel.activeId}
           onActivate={(id) => onPanelChange((state) => ({ ...state, activeId: id }))}
@@ -295,7 +320,7 @@ export function WorkbenchPanel({
             const surface = pendingClose
             setPendingClose(null)
             if (!surface) return
-            if (surface.path) setDraft(threadId, surface.path, null)
+            if (surface.path) setDraft(slotKey, surface.path, null)
             onPanelChange((state) => closeSurface(state, surface.id))
           }}
         />

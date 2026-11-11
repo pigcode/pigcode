@@ -3,7 +3,7 @@ import type { Context } from "cordis"
 import { pullRequestInfoSchema, type HostErrorCode, type PullRequestInfo } from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
-import { threadCwd } from "./worktrees"
+import { scopeCwd, type WorkspaceScope } from "./worktrees"
 import { currentBranch } from "./git"
 
 const exec = promisify(execFile)
@@ -17,8 +17,8 @@ export const PR_JSON_FIELDS = "number,url,state,title,headRefName,baseRefName"
 /** 执行一次 gh；参数与 cwd 都由服务解析，测试可注入 fake。 */
 export type GhRunner = (args: string[], cwd: string) => Promise<string>
 
-/** 从线程 ID 解析仓库目录；Host 只在服务注册时绑定这一层。 */
-export type CwdResolver = (threadId: string) => string
+/** 从会话 id 或草稿的项目解析仓库目录；Host 只在服务注册时绑定这一层。 */
+export type CwdResolver = (scope: WorkspaceScope) => string
 
 /** 读取 cwd 的当前分支；detached HEAD 返回 null。 */
 export type BranchReader = (cwd: string) => Promise<string | null>
@@ -83,8 +83,9 @@ export interface CreatePullRequestInput {
 
 /** 工作台使用的 GitHub PR 操作。 */
 export interface GithubServiceInterface {
-  status(threadId: string): Promise<PullRequestInfo | null>
-  create(threadId: string, input: CreatePullRequestInput): Promise<PullRequestInfo>
+  /** scope 是会话 id，或者新会话草稿的项目（看项目根目录的当前分支）。 */
+  status(scope: WorkspaceScope): Promise<PullRequestInfo | null>
+  create(scope: WorkspaceScope, input: CreatePullRequestInput): Promise<PullRequestInfo>
 }
 
 declare module "cordis" {
@@ -110,7 +111,7 @@ export const defaultGhRunner: GhRunner = async (args, cwd) => {
 
 /** 注册 github 服务；线程 cwd 与分支读取都留在 Host 内。 */
 export const apply: GithubPlugin = (ctx) => {
-  ctx.provide("github", new GithubService(defaultGhRunner, (threadId) => threadCwd(ctx, threadId)))
+  ctx.provide("github", new GithubService(defaultGhRunner, (scope) => scopeCwd(ctx, scope)))
 }
 
 apply.inject = inject
@@ -124,8 +125,8 @@ export class GithubService implements GithubServiceInterface {
   ) {}
 
   /** 查询当前分支的 PR；分支不存在 PR 时返回 null。 */
-  async status(threadId: string): Promise<PullRequestInfo | null> {
-    const cwd = this.cwdOf(threadId)
+  async status(scope: WorkspaceScope): Promise<PullRequestInfo | null> {
+    const cwd = this.cwdOf(scope)
     const branch = await this.branchOf(cwd)
     if (branch === null) return null
 
@@ -139,11 +140,11 @@ export class GithubService implements GithubServiceInterface {
   }
 
   /** 从当前分支创建 PR；body 省略时显式传空字符串，保持参数稳定。 */
-  async create(threadId: string, input: CreatePullRequestInput): Promise<PullRequestInfo> {
+  async create(scope: WorkspaceScope, input: CreatePullRequestInput): Promise<PullRequestInfo> {
     const title = input.title.trim()
     if (title.length === 0) throw new Error("pull request title is required")
 
-    const cwd = this.cwdOf(threadId)
+    const cwd = this.cwdOf(scope)
     const branch = await this.branchOf(cwd)
     if (branch === null) throw new Error("cannot create a pull request from a detached HEAD")
 

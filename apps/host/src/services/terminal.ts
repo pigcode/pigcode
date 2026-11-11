@@ -30,10 +30,19 @@ export interface PtyFactory {
   spawn(input: PtySpawnInput): PtyLike
 }
 
+/**
+ * 终端挂在谁身上：会话里开的终端挂在会话上（cwd 是会话的工作目录，可能是 worktree）；
+ * 新会话草稿里还没有会话，终端挂在草稿的项目上（cwd 是项目根目录）。
+ */
+export type TerminalOwner = { threadId: string } | { projectId: string }
+
 /** 打开的终端会话；id 用于后续 write/resize/close/subscribe。 */
 export interface TerminalSession {
   id: string
-  threadId: string
+  /** 在新会话草稿里打开的终端没有会话。 */
+  threadId: string | null
+  /** 终端所在的项目；会话里开的终端是会话的项目。 */
+  projectId: string
   cols: number
   rows: number
   /** shell 的名字（例如 zsh），界面标签上显示。 */
@@ -44,12 +53,14 @@ export interface TerminalSession {
 
 /** 终端服务入口；同一线程可以同时开多个终端（底部终端的多个标签、右栏的终端标签）。 */
 export interface TerminalService {
-  open(threadId: string, cols: number, rows: number): Promise<TerminalSession>
+  open(owner: TerminalOwner, cols: number, rows: number): Promise<TerminalSession>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   close(id: string): void
   /** 关闭这个线程的全部终端；没有打开的终端时什么也不做。 */
   closeThread(threadId: string): void
+  /** 关闭这个项目里的全部终端，包括它的会话里的和草稿里开的。 */
+  closeProject(projectId: string): void
   /** 订阅输出；onExit 在 shell 自己退出（例如输入 exit）时调用一次。 */
   subscribe(
     id: string,
@@ -90,8 +101,6 @@ interface TerminalEntry {
 export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
   const terminals = new Map<string, TerminalEntry>()
-  /** 每个线程打开着的终端 id。 */
-  const byThread = new Map<string, Set<string>>()
   /** 正在结束的 PTY；Host 退出前要等它们。 */
   const ending = new Set<Promise<void>>()
 
@@ -112,11 +121,7 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   function detach(id: string): TerminalEntry | undefined {
     const found = terminals.get(id)
     if (!found) return undefined
-    const { threadId } = found.session
     terminals.delete(id)
-    const owned = byThread.get(threadId)
-    owned?.delete(id)
-    if (owned?.size === 0) byThread.delete(threadId)
     found.subscribers.clear()
     found.exitSubscribers.clear()
     return found
@@ -130,15 +135,16 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   }
 
   const service: TerminalService = {
-    async open(threadId, cols, rows) {
+    async open(owner, cols, rows) {
       validateSize(cols, rows)
-      const cwd = await resolveTerminalCwd(ctx, threadId)
+      const { threadId, projectId, cwd } = await resolveTerminalCwd(ctx, owner)
       const id = `term_${randomUUID()}`
       const shell = defaultShell()
       const pty = factory.spawn({ cwd, cols, rows, shell })
       const session: TerminalSession = {
         id,
         threadId,
+        projectId,
         cols,
         rows,
         shell: shellName(shell),
@@ -151,9 +157,6 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
         exitSubscribers: new Set(),
       }
       terminals.set(id, current)
-      const owned = byThread.get(threadId) ?? new Set<string>()
-      owned.add(id)
-      byThread.set(threadId, owned)
       // 输出只广播给当前订阅者；shell 自己退出时通知订阅者，界面据此关掉这个标签。
       pty.onData((data) => {
         for (const listener of [...current.subscribers]) listener(data)
@@ -174,7 +177,14 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     },
     close,
     closeThread(threadId) {
-      for (const id of [...(byThread.get(threadId) ?? [])]) close(id)
+      for (const [id, found] of [...terminals]) {
+        if (found.session.threadId === threadId) close(id)
+      }
+    },
+    closeProject(projectId) {
+      for (const [id, found] of [...terminals]) {
+        if (found.session.projectId === projectId) close(id)
+      }
     },
     subscribe(id, listener, onExit) {
       const found = entry(id)
@@ -191,17 +201,34 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   ctx.effect(() => async () => {
     for (const found of terminals.values()) endPty(found.pty)
     terminals.clear()
-    byThread.clear()
     await Promise.all(ending)
   })
 }
 
 apply.inject = inject
 
-/** 解析终端 cwd：与 agent 相同的线程工作目录；realpath 消除符号链接。 */
-async function resolveTerminalCwd(ctx: Context, threadId: string): Promise<string> {
-  // cwd 只来自数据库中的项目根或服务创建的 worktree，不接受用户传入的相对路径。
-  const cwd = threadCwd(ctx, threadId)
+/**
+ * 解析终端 cwd：会话里与 agent 相同（会话的工作目录），草稿里是项目根目录；realpath 消除符号链接。
+ * cwd 只来自数据库中的项目根或服务创建的 worktree，不接受调用方传入的路径。
+ */
+async function resolveTerminalCwd(
+  ctx: Context,
+  owner: TerminalOwner,
+): Promise<{ threadId: string | null; projectId: string; cwd: string }> {
+  if ("threadId" in owner) {
+    const thread = ctx.threads.get(owner.threadId)
+    if (!thread) throw new Error(`thread not found: ${owner.threadId}`)
+    const cwd = await usableDirectory(threadCwd(ctx, owner.threadId))
+    return { threadId: thread.id, projectId: thread.projectId, cwd }
+  }
+  // 草稿只会落在侧栏里的项目上；已经移除的项目不再开终端。
+  const project = ctx.projects.list().find((item) => item.id === owner.projectId)
+  if (!project) throw new Error(`project not found: ${owner.projectId}`)
+  return { threadId: null, projectId: project.id, cwd: await usableDirectory(project.rootPath) }
+}
+
+/** 解开符号链接并确认是一个目录。 */
+async function usableDirectory(cwd: string): Promise<string> {
   let resolved: string
   try {
     resolved = await realpath(cwd)

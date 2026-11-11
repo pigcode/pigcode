@@ -151,6 +151,23 @@ export function activeWorktreePath(db: PigcodeDatabase, threadId: string): strin
 }
 
 /**
+ * 文件、Git 状态、Diff 与 PR 看的是哪个目录：会话 id（会话的工作目录），或者新会话草稿的项目
+ * （还没有会话，看项目根目录）。
+ */
+export type WorkspaceScope = string | { projectId: string }
+
+/** 解析 WorkspaceScope 的目录；草稿只会落在侧栏里的项目上，已经移除的项目报错。 */
+export function scopeCwd(
+  ctx: Pick<Context, "threads" | "projects" | "storage">,
+  scope: WorkspaceScope,
+): string {
+  if (typeof scope === "string") return threadCwd(ctx, scope)
+  const project = ctx.projects.list().find((item) => item.id === scope.projectId)
+  if (!project) throw new Error(`project not found: ${scope.projectId}`)
+  return project.rootPath
+}
+
+/**
  * 线程的工作目录：自己的活动 worktree > 主会话的活动 worktree（子代理与主会话共用目录）> 项目根目录。
  * agent、终端、文件树、Git 与 PR 都用它，保证它们看到的是同一个目录。
  */

@@ -9,7 +9,7 @@ import {
   useContributions,
   type SurfaceContribution,
 } from "@pigcode/client-runtime"
-import { FileIcon, Menu, useLocale } from "@pigcode/ui-primitives"
+import { FileIcon, Menu, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { FILE_SURFACE_KIND, type PanelSurface } from "./surface-state"
 
 export * from "./surface-state"
@@ -45,11 +45,17 @@ interface SurfaceOption {
   reason: string | undefined
 }
 
-/** 把 Surface 扩展点的内容分成内置与插件两组，文字换成当前语言。 */
-function useSurfaceOptions(): { builtin: SurfaceOption[]; plugins: SurfaceOption[] } {
+/**
+ * 把 Surface 扩展点的内容分成内置与插件两组，文字换成当前语言。
+ * unavailable 是容器给的额外限制（新会话草稿里没有检查点），和 Surface 自己的原因一样显示。
+ */
+function useSurfaceOptions(unavailable?: (surfaceId: string) => MessageKey | null): {
+  builtin: SurfaceOption[]
+  plugins: SurfaceOption[]
+} {
   const { t } = useLocale()
   const options = useContributions("surface").map((surface) => {
-    const reason = surface.unavailable?.()
+    const reason = unavailable?.(surface.id) ?? surface.unavailable?.()
     return {
       surface,
       name: contributionText(t, surface.title),
@@ -65,7 +71,10 @@ function useSurfaceOptions(): { builtin: SurfaceOption[]; plugins: SurfaceOption
 
 /** 右侧面板属性；标签内容由容器渲染为 children，以便终端与浏览器在切换标签时保持挂载。 */
 export interface RightPanelProps {
-  threadId: string
+  /** 新会话草稿里没有会话，为 null。 */
+  threadId: string | null
+  /** 当前不能打开的 Surface 与原因；返回 null 表示可以打开。 */
+  unavailable?: ((surfaceId: string) => MessageKey | null) | undefined
   surfaces: readonly PanelSurface[]
   activeId: string | null
   onActivate: (id: string) => void
@@ -331,6 +340,7 @@ function AddSurfaceMenu({
 /** 右侧面板；标签与激活状态完全受控。 */
 export function RightPanel({
   threadId,
+  unavailable,
   surfaces,
   activeId,
   onActivate,
@@ -340,7 +350,7 @@ export function RightPanel({
   children,
 }: RightPanelProps) {
   const labels = useRightPanelLabels()
-  const { builtin, plugins } = useSurfaceOptions()
+  const { builtin, plugins } = useSurfaceOptions(unavailable)
   const contributions = useContributions("surface")
   const tablist = useRef<HTMLDivElement | null>(null)
   const activeTitle = surfaces.find((surface) => surface.id === activeId)?.title
@@ -355,7 +365,7 @@ export function RightPanel({
   }, [activeId, activeTitle, surfaces.length])
 
   return (
-    <aside className="right-panel" aria-label={labels.panel} data-thread-id={threadId}>
+    <aside className="right-panel" aria-label={labels.panel} data-thread-id={threadId ?? undefined}>
       <div className="right-panel-bar">
         <div className="surface-tabs" role="tablist" aria-label={labels.tabs} ref={tablist}>
           {surfaces.map((surface) => {

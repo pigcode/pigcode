@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
 import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { TerminalView, type TerminalHandle } from "@pigcode/ui-workbench"
+import type { WorkspaceScope } from "./workspace-scope"
 
 /** terminal.open 返回的会话。 */
 export interface TerminalSession {
@@ -27,10 +28,17 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+/** 终端挂在谁身上：会话里挂在会话上；新会话草稿里还没有会话，挂在草稿的项目上（开在项目根目录）。 */
+export type TerminalOwner = WorkspaceScope
+
 /** 终端 surface 属性。 */
 export interface TerminalSurfaceProps {
   connection: Connection
-  threadId: string
+  /**
+   * 只在启动 shell 时读一次：草稿变成会话后 owner 换成会话，已经开着的 shell 不重开，
+   * 里面跑着的命令也不会断。
+   */
+  owner: TerminalOwner
   /** 当前是否可见；变为可见时聚焦。 */
   active: boolean
   /** 浮在终端右上角的操作按钮。 */
@@ -44,7 +52,7 @@ export interface TerminalSurfaceProps {
 /** 一个独立的 shell 会话。 */
 export function TerminalSurface({
   connection,
-  threadId,
+  owner,
   active,
   tools,
   onOpened,
@@ -67,6 +75,8 @@ export function TerminalSurface({
   // 回调可能每次渲染都换；放进 ref，打开终端的 effect 不因此重跑。
   const callbacks = useRef({ onOpened, onExit })
   callbacks.current = { onOpened, onExit }
+  const ownerRef = useRef(owner)
+  ownerRef.current = owner
 
   useEffect(() => {
     if (!measured) return undefined
@@ -74,7 +84,7 @@ export function TerminalSurface({
     let openedId: string | null = null
     const opening = { ...size.current }
     void connection
-      .call("terminal.open", { threadId, ...opening })
+      .call("terminal.open", { ...ownerRef.current, ...opening })
       .then((result) => {
         const session = result as TerminalSession
         openedId = session.id
@@ -108,7 +118,7 @@ export function TerminalSurface({
         void connection.call("terminal.close", { terminalId: openedId }).catch(() => undefined)
       }
     }
-  }, [connection, threadId, measured])
+  }, [connection, measured])
 
   useEffect(() => {
     if (!terminalId) return undefined

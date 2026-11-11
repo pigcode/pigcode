@@ -45,7 +45,14 @@ test("quitting the app ends what is running in a terminal", async () => {
 
 test("archiving a thread ends what is running in its terminal", async () => {
   const { app, page, root } = await openThread("cleanup-archive", { SHELL: "/bin/bash" })
+  // 终端在新会话草稿里打开：Host 上它属于项目。发出第一条消息后它交给新会话，
+  // 归档这个会话时也要结束它里面的进程。
   const pid = await startBackgroundProcess(page, root, "archive")
+  await page.locator(".tiptap").click()
+  await page.keyboard.type("hello")
+  await page.keyboard.press("Enter")
+  await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
+  expect(isAlive(pid)).toBe(true)
   await page.locator(".sess").first().click({ button: "right" })
   await page.getByRole("menuitem", { name: "归档" }).click()
   await expect.poll(() => isAlive(pid), { timeout: 5000 }).toBe(false)

@@ -8,6 +8,7 @@ import type { CheckpointPhase } from "@pigcode/ui-workbench"
 import type { FilesSurface } from "./files-surface"
 import type { usePullRequest } from "./use-pull-request"
 import type { useWorktrees } from "./use-worktrees"
+import type { WorkspaceScope } from "./workspace-scope"
 
 /** checkpoint.list 返回的记录；只保留 UI 需要的字段。 */
 export interface CheckpointRecord {
@@ -22,7 +23,8 @@ export interface CheckpointRecord {
 /** 内置 Surface 需要的一切。 */
 export interface WorkbenchContextValue {
   connection: Connection
-  threadId: string
+  /** 会话，或者新会话草稿的项目。 */
+  scope: WorkspaceScope
   /** 打开一个 Surface（扩展点上的 id）。 */
   add(kind: string): void
   /** 关闭一个标签；有未保存修改的文件标签先确认。 */

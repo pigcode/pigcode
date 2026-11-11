@@ -14,13 +14,17 @@ function browserTitle(url: string | null | undefined, locale: Locale): string {
 
 export function useBrowserOpen({
   panels,
+  keyOf,
   threadId,
   view,
   setPanels,
   onOpenRight,
   locale,
 }: {
+  /** 按 slot key 保存的面板。 */
   panels: Record<string, PanelSurfaceState>
+  /** 会话的面板 key：由草稿建成的会话沿用草稿的 key。 */
+  keyOf: (threadId: string) => string
   /** 当前正在看的线程；不是这个线程时只加标签，不动右栏。 */
   threadId: string | null
   view: string
@@ -30,25 +34,26 @@ export function useBrowserOpen({
   locale: Locale
 }): void {
   // 事件回调用最新的界面状态，但不必因为状态变化重新订阅。
-  const latest = useRef({ panels, threadId, view, onOpenRight })
-  latest.current = { panels, threadId, view, onOpenRight }
+  const latest = useRef({ panels, keyOf, threadId, view, onOpenRight })
+  latest.current = { panels, keyOf, threadId, view, onOpenRight }
 
   useEffect(
     () =>
       window.pigcodeNative?.browser?.onOpen(({ threadId: target, url }) => {
         const current = latest.current
-        const existing = current.panels[target]?.surfaces
+        const key = current.keyOf(target)
+        const existing = current.panels[key]?.surfaces
           .filter((surface) => surface.kind === "browser")
           .at(-1)
         const id = existing?.id ?? `browser-${crypto.randomUUID()}`
         setPanels((all) => {
-          const panel = all[target] ?? EMPTY_SURFACE_STATE
+          const panel = all[key] ?? EMPTY_SURFACE_STATE
           if (panel.surfaces.some((surface) => surface.id === id)) {
-            return { ...all, [target]: { ...panel, activeId: id } }
+            return { ...all, [key]: { ...panel, activeId: id } }
           }
           return {
             ...all,
-            [target]: {
+            [key]: {
               surfaces: [
                 ...panel.surfaces,
                 {

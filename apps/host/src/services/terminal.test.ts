@@ -151,7 +151,7 @@ describe("terminal service", () => {
     const pty = fakePty((write) => `echo:${write}`)
     const { ctx, thread, root } = await setupTerminal(pty)
 
-    const opened = await ctx.terminal.open(thread.id, 80, 24)
+    const opened = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
     const unsubscribe = ctx.terminal.subscribe(opened.id, (chunk) => data.push(chunk))
 
     ctx.terminal.write(opened.id, "hi\n")
@@ -177,8 +177,8 @@ describe("terminal service", () => {
     const pty = fakePty()
     const { ctx, thread } = await setupTerminal(pty)
 
-    const first = await ctx.terminal.open(thread.id, 80, 24)
-    const second = await ctx.terminal.open(thread.id, 120, 40)
+    const first = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    const second = await ctx.terminal.open({ threadId: thread.id }, 120, 40)
 
     expect(second.id).not.toBe(first.id)
     // 新开一个不会关掉前一个：底部终端的每个标签各有自己的 shell。
@@ -197,7 +197,7 @@ describe("terminal service", () => {
   it("tells subscribers when the shell exits by itself, not when it is closed", async () => {
     const pty = fakePty()
     const { ctx, thread } = await setupTerminal(pty)
-    const closed = await ctx.terminal.open(thread.id, 80, 24)
+    const closed = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
     const exits: number[] = []
     ctx.terminal.subscribe(
       closed.id,
@@ -207,7 +207,7 @@ describe("terminal service", () => {
     ctx.terminal.close(closed.id)
     expect(exits).toEqual([])
 
-    const exited = await ctx.terminal.open(thread.id, 80, 24)
+    const exited = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
     ctx.terminal.subscribe(
       exited.id,
       () => undefined,
@@ -226,13 +226,13 @@ describe("terminal service", () => {
   it("cleans up after the pty exits", async () => {
     const pty = fakePty()
     const { ctx, thread } = await setupTerminal(pty)
-    const opened = await ctx.terminal.open(thread.id, 80, 24)
+    const opened = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
 
     pty.exit(0)
 
     expect(() => ctx.terminal.write(opened.id, "after-exit")).toThrow("terminal not found")
     // 退出后同一线程可以重新打开终端。
-    const reopened = await ctx.terminal.open(thread.id, 80, 24)
+    const reopened = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
     expect(reopened.id).not.toBe(opened.id)
   })
 
@@ -249,7 +249,7 @@ describe("terminal service", () => {
       )
       .run("wt_test", project.id, thread.id, worktree, "pigcode/test", new Date().toISOString())
 
-    await ctx.terminal.open(thread.id, 80, 24)
+    await ctx.terminal.open({ threadId: thread.id }, 80, 24)
 
     expect(pty.spawns[0]?.cwd).toBe(await realpath(worktree))
   })
@@ -258,9 +258,9 @@ describe("terminal service", () => {
     const pty = fakePty()
     const { ctx, thread, project } = await setupTerminal(pty)
     const other = ctx.threads.create(project.id, "Other", "fake")
-    await ctx.terminal.open(thread.id, 80, 24)
-    await ctx.terminal.open(thread.id, 80, 24)
-    const kept = await ctx.terminal.open(other.id, 80, 24)
+    await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    const kept = await ctx.terminal.open({ threadId: other.id }, 80, 24)
 
     ctx.terminal.closeThread(thread.id)
     expect(pty.killCount).toBe(2)
@@ -270,11 +270,66 @@ describe("terminal service", () => {
     expect(pty.killCount).toBe(2)
   })
 
+  it("opens a terminal in a project's root before there is a thread", async () => {
+    const pty = fakePty()
+    const { ctx, project, root } = await setupTerminal(pty)
+
+    const opened = await ctx.terminal.open({ projectId: project.id }, 90, 30)
+
+    // 新会话草稿里开的终端：没有会话，开在项目根目录。
+    expect(opened).toMatchObject({
+      threadId: null,
+      projectId: project.id,
+      cwd: await realpath(root),
+    })
+    expect(pty.spawns[0]).toMatchObject({ cwd: await realpath(root), cols: 90, rows: 30 })
+    // 归档哪个会话都不会关它；会话里开的终端带着会话的项目。
+    const thread = ctx.threads.create(project.id, "Later", "fake")
+    const inThread = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    expect(inThread).toMatchObject({ threadId: thread.id, projectId: project.id })
+    ctx.terminal.closeThread(thread.id)
+    expect(pty.killCount).toBe(1)
+    expect(() => ctx.terminal.write(opened.id, "x")).not.toThrow()
+  })
+
+  it("closes every terminal of a removed project, drafts' and threads' alike", async () => {
+    const pty = fakePty()
+    const { ctx, project, thread } = await setupTerminal(pty)
+    const otherRoot = await mkdtemp(join(tmpdir(), "pigcode-terminal-other-"))
+    roots.push(otherRoot)
+    const other = ctx.projects.add(otherRoot)
+    const draft = await ctx.terminal.open({ projectId: project.id }, 80, 24)
+    const inThread = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    const kept = await ctx.terminal.open({ projectId: other.id }, 80, 24)
+
+    ctx.terminal.closeProject(project.id)
+
+    expect(pty.killCount).toBe(2)
+    expect(() => ctx.terminal.write(draft.id, "x")).toThrow("terminal not found")
+    expect(() => ctx.terminal.write(inThread.id, "x")).toThrow("terminal not found")
+    expect(() => ctx.terminal.write(kept.id, "x")).not.toThrow()
+  })
+
+  it("refuses a project that is missing or was removed from the sidebar", async () => {
+    const pty = fakePty()
+    const { ctx, project } = await setupTerminal(pty)
+    await expect(ctx.terminal.open({ projectId: "proj_missing" }, 80, 24)).rejects.toThrow(
+      "project not found",
+    )
+    ctx.projects.remove(project.id)
+    await expect(ctx.terminal.open({ projectId: project.id }, 80, 24)).rejects.toThrow(
+      "project not found",
+    )
+    expect(pty.spawns).toEqual([])
+  })
+
   it("rejects unknown threads and terminals", async () => {
     const pty = fakePty()
     const { ctx } = await setupTerminal(pty)
 
-    await expect(ctx.terminal.open("th_missing", 80, 24)).rejects.toThrow("thread not found")
+    await expect(ctx.terminal.open({ threadId: "th_missing" }, 80, 24)).rejects.toThrow(
+      "thread not found",
+    )
     expect(() => ctx.terminal.write("term_missing", "x")).toThrow("terminal not found")
     expect(() => ctx.terminal.resize("term_missing", 80, 24)).toThrow("terminal not found")
     expect(() => ctx.terminal.close("term_missing")).toThrow("terminal not found")

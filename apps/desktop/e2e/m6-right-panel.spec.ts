@@ -58,6 +58,11 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
       .locator(".proj-add")
       .click()
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
+    // 先发一条消息建好会话：这个用例看的是标签按会话保存（草稿里的右栏见 draft-workspace.spec.ts）。
+    await page.locator(".tiptap").click()
+    await page.keyboard.type("hello")
+    await page.keyboard.press("Enter")
+    await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
 
     // 右栏收起时布局按钮在线程头；打开后出现在面板标签栏，并显示启动器。
     const header = page.locator(".panel-top")
@@ -106,8 +111,8 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await expect(page.locator(".browser-hosted[data-shown]")).toBeVisible()
     await expect.poll(() => heading(app)).toBe("second page")
 
-    // 标签按线程保存：新会话草稿里没有右栏，打开右栏时才建线程，新线程显示启动器；
-    // 切回来后浏览器还是离开时的页面，没有重新加载。
+    // 标签按线程保存：新会话草稿各记各的开关，进来时右栏收起；打开后是草稿自己的空面板（不建会话），
+    // 显示启动器；切回来后浏览器还是离开时的页面，没有重新加载。
     await page
       .locator(".proj-block")
       .filter({ hasText: "pigcode-m6-e2e" })

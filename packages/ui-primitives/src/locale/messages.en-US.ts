@@ -271,6 +271,7 @@ export const enUS = {
   "workbench.terminal": "Terminal",
   "workbench.checkpoint": "Checkpoints",
   "workbench.createCheckpoint": "Create checkpoint",
+  "workbench.checkpointNeedsThread": "Checkpoints start with the first message",
   "workbench.terminalOpening": "Opening terminal…",
   "workbench.diffBase": "Diff base",
   "workbench.diffBaseDefault": "Default (latest baseline)",

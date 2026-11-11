@@ -34,7 +34,7 @@ async function openShell() {
   await ctx.plugin(terminal)
   const project = ctx.projects.add(root)
   const thread = ctx.threads.create(project.id, "Terminal", "fake")
-  const session = await ctx.terminal.open(thread.id, 80, 24)
+  const session = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
   let output = ""
   ctx.terminal.subscribe(session.id, (data) => {
     output += data

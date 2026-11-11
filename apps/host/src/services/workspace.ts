@@ -15,7 +15,7 @@ import {
   type WorkspaceEntry,
   type WriteFileResult,
 } from "./workspace-files"
-import { threadCwd } from "./worktrees"
+import { scopeCwd, type WorkspaceScope } from "./worktrees"
 
 export type {
   DirectoryEntry,
@@ -47,25 +47,29 @@ export interface WriteOptions {
   eol?: "lf" | "crlf" | undefined
 }
 
-/** 工作区读写入口。 */
+/** 工作区读写入口；scope 是会话 id，或者新会话草稿的项目（看项目根目录）。 */
 export interface WorkspaceService {
-  /** 线程工作目录的绝对路径。 */
-  root(threadId: string): string
-  tree(threadId: string): Promise<WorkspaceEntry[]>
+  /** 工作目录的绝对路径。 */
+  root(scope: WorkspaceScope): string
+  tree(scope: WorkspaceScope): Promise<WorkspaceEntry[]>
   /** 项目根目录里的文件；还没有会话（新会话草稿）时用。 */
   projectTree(projectId: string): Promise<WorkspaceEntry[]>
   /** 列出一个目录；空字符串表示工作目录本身。 */
-  list(threadId: string, path?: string): Promise<DirectoryListing>
+  list(scope: WorkspaceScope, path?: string): Promise<DirectoryListing>
   /** 按路径模糊搜索文件与目录。 */
-  searchPaths(threadId: string, query: string, limit?: number): Promise<PathSearchResult>
-  readFile(threadId: string, path: string, encoding?: "text" | "image"): Promise<ReadFileResult>
+  searchPaths(scope: WorkspaceScope, query: string, limit?: number): Promise<PathSearchResult>
+  readFile(
+    scope: WorkspaceScope,
+    path: string,
+    encoding?: "text" | "image",
+  ): Promise<ReadFileResult>
   writeFile(
-    threadId: string,
+    scope: WorkspaceScope,
     path: string,
     text: string,
     options?: WriteOptions,
   ): Promise<WriteFileResult>
-  search(threadId: string, query: string, glob?: string): Promise<SearchMatch[]>
+  search(scope: WorkspaceScope, query: string, glob?: string): Promise<SearchMatch[]>
 }
 
 declare module "cordis" {
@@ -87,9 +91,9 @@ export interface WorkspacePlugin {
 export const apply: WorkspacePlugin = (ctx) => {
   const index = createPathIndex()
   const service: WorkspaceService = {
-    root: (threadId) => threadCwd(ctx, threadId),
-    async tree(threadId) {
-      const files = await index.files(threadCwd(ctx, threadId))
+    root: (scope) => scopeCwd(ctx, scope),
+    async tree(scope) {
+      const files = await index.files(scopeCwd(ctx, scope))
       return files.map((path) => ({ path, type: "file" as const }))
     },
     async projectTree(projectId) {
@@ -98,19 +102,18 @@ export const apply: WorkspacePlugin = (ctx) => {
       const files = await index.files(project.rootPath)
       return files.map((path) => ({ path, type: "file" as const }))
     },
-    list: (threadId, path = "") => listDirectory(threadCwd(ctx, threadId), path),
-    async searchPaths(threadId, query, limit) {
-      return searchPaths(await index.files(threadCwd(ctx, threadId)), query, limit)
+    list: (scope, path = "") => listDirectory(scopeCwd(ctx, scope), path),
+    async searchPaths(scope, query, limit) {
+      return searchPaths(await index.files(scopeCwd(ctx, scope)), query, limit)
     },
-    readFile: (threadId, path, encoding) =>
-      readWorkspaceFile(threadCwd(ctx, threadId), path, encoding),
-    async writeFile(threadId, path, text, options = {}) {
-      const root = threadCwd(ctx, threadId)
+    readFile: (scope, path, encoding) => readWorkspaceFile(scopeCwd(ctx, scope), path, encoding),
+    async writeFile(scope, path, text, options = {}) {
+      const root = scopeCwd(ctx, scope)
       const result = await writeWorkspaceFile(root, path, text, options)
       index.invalidate(root)
       return result
     },
-    search: (threadId, query, glob) => searchFiles(threadCwd(ctx, threadId), query, glob),
+    search: (scope, query, glob) => searchFiles(scopeCwd(ctx, scope), query, glob),
   }
   ctx.provide("workspace", service)
 }

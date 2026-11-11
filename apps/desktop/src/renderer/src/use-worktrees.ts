@@ -1,4 +1,7 @@
-/** 线程的 git worktree：列表与当前选择来自 Host，创建、切换、移除后通知调用方工作目录变了。 */
+/**
+ * 线程的 git worktree：列表与当前选择来自 Host，创建、切换、移除后通知调用方工作目录变了。
+ * worktree 属于会话；新会话草稿里（threadId 为 null）没有 worktree，也不能创建。
+ */
 import { useEffect, useState } from "react"
 import type { Connection } from "@pigcode/client-runtime"
 
@@ -19,7 +22,7 @@ function messageOf(error: unknown): string {
  */
 export function useWorktrees(
   connection: Connection,
-  threadId: string,
+  threadId: string | null,
   onError: (message: string) => void,
   onChanged: () => void,
 ) {
@@ -29,6 +32,11 @@ export function useWorktrees(
 
   // 重开应用后从 Host 恢复列表与当前选择。
   useEffect(() => {
+    if (!threadId) {
+      setWorktrees([])
+      setActivePath(null)
+      return undefined
+    }
     let cancelled = false
     void (
       connection.call("worktree.list", { threadId }) as Promise<{
@@ -47,10 +55,11 @@ export function useWorktrees(
     }
   }, [connection, threadId])
 
-  async function run(action: () => Promise<void>): Promise<void> {
+  async function run(action: (threadId: string) => Promise<void>): Promise<void> {
+    if (!threadId) return
     setBusy(true)
     try {
-      await action()
+      await action(threadId)
       onChanged()
     } catch (error) {
       onError(messageOf(error))
@@ -60,11 +69,13 @@ export function useWorktrees(
   }
 
   return {
+    /** 草稿里没有 worktree 可选，界面隐藏选择器。 */
+    available: threadId !== null,
     worktrees,
     activePath,
     busy,
     create: () =>
-      run(async () => {
+      run(async (threadId) => {
         const worktree = (await connection.call("worktree.create", { threadId })) as WorktreeRecord
         setWorktrees((current) => [
           ...current.filter((item) => item.path !== worktree.path),
@@ -73,7 +84,7 @@ export function useWorktrees(
         setActivePath(worktree.path)
       }),
     switchTo: (path: string) =>
-      run(async () => {
+      run(async (threadId) => {
         const worktree = (await connection.call("worktree.switch", {
           threadId,
           path,
@@ -81,7 +92,7 @@ export function useWorktrees(
         setActivePath(worktree.path)
       }),
     remove: () =>
-      run(async () => {
+      run(async (threadId) => {
         await connection.call("worktree.remove", { threadId })
         setWorktrees((current) => current.filter((item) => item.path !== activePath))
         setActivePath(null)

@@ -177,6 +177,62 @@ describe("workbench rpc", { timeout: 30_000 }, () => {
     expect(closed.error).toBeUndefined()
   })
 
+  it("opens a draft's terminal on its project and wants exactly one owner", async () => {
+    const { project, thread, transport } = await setupWorkbenchRpc()
+    const opened = await call(transport, "1", "terminal.open", {
+      projectId: project.id,
+      cols: 80,
+      rows: 24,
+    })
+    expect(opened.result).toMatchObject({ threadId: null, projectId: project.id })
+
+    const both = await call(transport, "2", "terminal.open", {
+      threadId: thread.id,
+      projectId: project.id,
+      cols: 80,
+      rows: 24,
+    })
+    expect(both.error).toBeDefined()
+    const neither = await call(transport, "3", "terminal.open", { cols: 80, rows: 24 })
+    expect(neither.error).toBeDefined()
+  })
+
+  it("serves files, git status and diff on a draft's project before there is a thread", async () => {
+    const { ctx, project, transport } = await setupWorkbenchRpc()
+    const scope = { projectId: project.id }
+
+    const listed = await call(transport, "1", "workspace.list", { ...scope, path: "" })
+    expect(listed.result).toMatchObject({
+      entries: [expect.objectContaining({ name: "README.md" })],
+    })
+    const read = await call(transport, "2", "workspace.readFile", { ...scope, path: "README.md" })
+    expect(read.result).toMatchObject({ text: "# pigcode\n" })
+    const written = await call(transport, "3", "workspace.writeFile", {
+      ...scope,
+      path: "README.md",
+      text: "# draft edit\n",
+    })
+    expect(written.error).toBeUndefined()
+
+    // 草稿里看的是项目根目录的未提交改动。
+    const status = await call(transport, "4", "git.status", scope)
+    expect(JSON.stringify(status.result)).toContain("README.md")
+    const diff = await call(transport, "5", "git.diff", {
+      ...scope,
+      base: "HEAD",
+      head: "WORKTREE",
+    })
+    expect(diff.result).toContain("+# draft edit")
+
+    // 两个都给、都不给、项目已经移除，都拒绝。
+    const both = await call(transport, "6", "workspace.root", { ...scope, threadId: "th_x" })
+    expect(both.error).toBeDefined()
+    expect((await call(transport, "7", "git.status", {})).error).toBeDefined()
+    ctx.projects.remove(project.id)
+    const removed = await call(transport, "8", "workspace.root", scope)
+    expect(removed.error?.message).toContain("project not found")
+  })
+
   it("dispatches worktree lifecycle commands", async () => {
     const { ctx, thread, transport } = await setupWorkbenchRpc()
     const created = await call(transport, "1", "worktree.create", { threadId: thread.id })

@@ -8,6 +8,27 @@ const scheduleTitle = z.string().trim().max(120)
 /** 结束日期；null 表示永不结束。 */
 const scheduleEndsAt = z.string().datetime().nullable()
 
+/**
+ * 右侧面板与终端看的是哪个目录：会话里传 threadId（会话的工作目录，可能是 worktree）；
+ * 新会话草稿里还没有会话，传草稿的 projectId（项目根目录）。两个只能给一个。
+ */
+const workspaceScope = {
+  threadId: z.string().min(1).optional(),
+  projectId: z.string().min(1).optional(),
+}
+
+/** 给带 workspaceScope 的参数加上「threadId 与 projectId 只给一个」的检查。 */
+function scoped<T extends z.ZodRawShape>(shape: T) {
+  return z.object({ ...workspaceScope, ...shape }).refine(
+    (value) => {
+      // T 是泛型，推不出这两个字段一定在；它们来自上面的 workspaceScope。
+      const owner = value as { threadId?: string; projectId?: string }
+      return (owner.threadId === undefined) !== (owner.projectId === undefined)
+    },
+    { message: "needs exactly one of threadId or projectId" },
+  )
+}
+
 /** 只读检测；refresh 跳过缓存重新运行，agentId 只检测这个 agent，instanceId 只检测这个实例。 */
 const agentDetectParams = z.object({
   agentId: z.string().min(1).optional(),
@@ -168,48 +189,39 @@ export const commandSchemas = {
   /** 删除市场；从它装的插件保留。 */
   "marketplace.remove": z.object({ id: z.string().min(1) }),
   "plugin.bootGraph": z.object({}),
-  "workspace.tree": z.object({ threadId: z.string().min(1) }),
-  /** 线程工作目录的绝对路径；复制完整路径、在文件管理器中显示时用。 */
-  "workspace.root": z.object({ threadId: z.string().min(1) }),
-  /** 列出一个目录；path 为空表示线程的工作目录。 */
-  "workspace.list": z.object({
-    threadId: z.string().min(1),
-    path: z.string().max(4096).default(""),
-  }),
+  "workspace.tree": scoped({}),
+  /** 工作目录的绝对路径；复制完整路径、在文件管理器中显示时用。 */
+  "workspace.root": scoped({}),
+  /** 列出一个目录；path 为空表示工作目录本身。 */
+  "workspace.list": scoped({ path: z.string().max(4096).default("") }),
   /** 按路径模糊搜索文件与目录。 */
-  "workspace.searchPaths": z.object({
-    threadId: z.string().min(1),
+  "workspace.searchPaths": scoped({
     query: z.string().trim().min(1).max(256),
     limit: z.number().int().min(1).max(500).optional(),
   }),
   /** 读取文件；encoding 为 image 时图片按 base64 返回。 */
-  "workspace.readFile": z.object({
-    threadId: z.string().min(1),
+  "workspace.readFile": scoped({
     path: z.string().min(1),
     encoding: z.enum(["text", "image"]).optional(),
   }),
   /** 保存编辑；expectedMtimeMs 防止覆盖别处的修改，eol 按原文件的换行符写回。 */
-  "workspace.writeFile": z.object({
-    threadId: z.string().min(1),
+  "workspace.writeFile": scoped({
     path: z.string().min(1),
     text: z.string().max(5 * 1024 * 1024),
     expectedMtimeMs: z.number().nonnegative().optional(),
     eol: z.enum(["lf", "crlf"]).optional(),
   }),
-  "workspace.search": z.object({
-    threadId: z.string().min(1),
+  "workspace.search": scoped({
     query: z.string().min(1),
     glob: z.string().optional(),
   }),
-  "git.status": z.object({ threadId: z.string().min(1) }),
-  "git.diff": z.object({
-    threadId: z.string().min(1),
+  "git.status": scoped({}),
+  "git.diff": scoped({
     base: z.string().min(1),
     head: z.string().min(1),
   }),
-  "pr.status": z.object({ threadId: z.string().min(1) }),
-  "pr.create": z.object({
-    threadId: z.string().min(1),
+  "pr.status": scoped({}),
+  "pr.create": scoped({
     title: z.string().min(1),
     body: z.string().optional(),
     base: z.string().min(1).optional(),
@@ -248,8 +260,8 @@ export const commandSchemas = {
   "worktree.create": z.object({ threadId: z.string().min(1) }),
   "worktree.switch": z.object({ threadId: z.string().min(1), path: z.string().min(1) }),
   "worktree.remove": z.object({ threadId: z.string().min(1) }),
-  "terminal.open": z.object({
-    threadId: z.string().min(1),
+  /** 会话里开终端传 threadId；新会话草稿里传草稿的 projectId，终端开在项目根目录。 */
+  "terminal.open": scoped({
     cols: z.number().int().positive(),
     rows: z.number().int().positive(),
   }),

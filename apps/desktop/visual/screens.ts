@@ -396,7 +396,7 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await page.keyboard.press("Escape")
   await expect(page.getByRole("dialog")).toBeHidden()
 
-  // 还没发过消息，侧栏里没有会话：回到新会话草稿，打开右栏时才按草稿建会话。
+  // 还没发过消息，侧栏里没有会话：回到新会话草稿。草稿里也能打开右栏，不建会话（检查点置灰）。
   await page
     .locator(".side-actions")
     .getByRole("button", { name: t("nav.newThread") })

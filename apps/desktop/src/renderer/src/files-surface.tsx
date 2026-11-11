@@ -16,11 +16,18 @@ import {
 } from "@pigcode/ui-workbench"
 import { getDraft, setDraft, useDraftVersion } from "./file-drafts"
 import type { Translate } from "./workbench-labels"
+import type { WorkspaceScope } from "./workspace-scope"
 
 /** 两种文件 surface 共用的属性。 */
 interface FilesBaseProps {
   connection: Connection
-  threadId: string
+  /** 会话，或者新会话草稿的项目。 */
+  scope: WorkspaceScope
+  /**
+   * 未保存的修改与文件树的展开状态按它记：右侧面板的 key，草稿建成会话后不变，
+   * 草稿里改了一半的文件跟着到会话里。
+   */
+  draftKey: string
   /** 项目名，显示为文件树与面包屑的根。 */
   rootName: string
   /** agent 改过文件、保存或恢复检查点后递增，重新读取目录与文件。 */
@@ -42,9 +49,9 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-/** 线程工作目录的绝对路径；切换 worktree 后会变，每次用到时现取。 */
-async function workspaceRoot(connection: Connection, threadId: string): Promise<string> {
-  return ((await connection.call("workspace.root", { threadId })) as { root: string }).root
+/** 工作目录的绝对路径；切换 worktree 后会变，每次用到时现取。 */
+async function workspaceRoot(connection: Connection, scope: WorkspaceScope): Promise<string> {
+  return ((await connection.call("workspace.root", scope)) as { root: string }).root
 }
 
 /** 拼出绝对路径；Windows 的根目录用反斜杠。 */
@@ -56,30 +63,30 @@ function absolutePath(root: string, path: string): string {
 }
 
 /** 目录读取与路径搜索；回调保持稳定，资源管理器据此决定何时重读。 */
-function useWorkspaceApi(connection: Connection, threadId: string) {
+function useWorkspaceApi(connection: Connection, scope: WorkspaceScope) {
   const loadDirectory = useCallback(
     (path: string) =>
-      connection.call("workspace.list", { threadId, path }) as Promise<ExplorerListing>,
-    [connection, threadId],
+      connection.call("workspace.list", { ...scope, path }) as Promise<ExplorerListing>,
+    [connection, scope],
   )
   const searchPaths = useCallback(
     (query: string) =>
       connection.call("workspace.searchPaths", {
-        threadId,
+        ...scope,
         query,
       }) as Promise<ExplorerSearchResult>,
-    [connection, threadId],
+    [connection, scope],
   )
   return { loadDirectory, searchPaths }
 }
 
 /** 工作区的 git 改动；不是 git 仓库时为 null。 */
-function useGitDecorations(connection: Connection, threadId: string, revision: number) {
+function useGitDecorations(connection: Connection, scope: WorkspaceScope, revision: number) {
   const [changes, setChanges] = useState<Array<{ path: string; status: string }> | null>(null)
   useEffect(() => {
     let cancelled = false
     void (
-      connection.call("git.status", { threadId }) as Promise<{
+      connection.call("git.status", scope) as Promise<{
         changed: Array<{ path: string; status: string }>
       }>
     )
@@ -92,14 +99,14 @@ function useGitDecorations(connection: Connection, threadId: string, revision: n
     return () => {
       cancelled = true
     }
-  }, [connection, threadId, revision])
+  }, [connection, scope, revision])
   return useMemo(() => (changes ? gitDecorations(changes) : null), [changes])
 }
 
 /** 文件或目录的右键菜单：打开、添加到对话、复制路径、在文件管理器中显示。 */
 async function showEntryMenu(options: {
   connection: Connection
-  threadId: string
+  scope: WorkspaceScope
   entry: { path: string; kind: "file" | "directory" }
   point: { x: number; y: number }
   t: Translate
@@ -125,10 +132,7 @@ async function showEntryMenu(options: {
     else if (choice === "mention") requestComposerMention(entry.path)
     else if (choice === "copy-relative") await copyText(entry.path)
     else if (choice === "copy-path" || choice === "reveal") {
-      const path = absolutePath(
-        await workspaceRoot(options.connection, options.threadId),
-        entry.path,
-      )
+      const path = absolutePath(await workspaceRoot(options.connection, options.scope), entry.path)
       if (choice === "copy-path") await copyText(path)
       else await window.pigcodeNative?.revealPath?.(path)
     }
@@ -140,15 +144,16 @@ async function showEntryMenu(options: {
 /** 文件树标签：占满整个面板的资源管理器。 */
 export function FilesSurface({
   connection,
-  threadId,
+  scope,
+  draftKey,
   rootName,
   revision,
   onOpenFile,
   onError,
 }: FilesBaseProps) {
   const { t } = useLocale()
-  const api = useWorkspaceApi(connection, threadId)
-  const git = useGitDecorations(connection, threadId, revision)
+  const api = useWorkspaceApi(connection, scope)
+  const git = useGitDecorations(connection, scope, revision)
   return (
     <div className="files-surface">
       <FileExplorer
@@ -158,9 +163,9 @@ export function FilesSurface({
         onOpenFile={onOpenFile}
         revision={revision}
         git={git}
-        stateKey={`explorer:${threadId}`}
+        stateKey={`explorer:${draftKey}`}
         onContextMenu={(entry, point) =>
-          void showEntryMenu({ connection, threadId, entry, point, t, onOpenFile, onError })
+          void showEntryMenu({ connection, scope, entry, point, t, onOpenFile, onError })
         }
       />
     </div>
@@ -223,7 +228,8 @@ export interface FileSurfaceProps extends FilesBaseProps {
 /** 文件标签：读取、编辑与保存一个文件，左侧可以展开文件树。 */
 export function FileSurface({
   connection,
-  threadId,
+  scope,
+  draftKey,
   rootName,
   revision,
   onOpenFile,
@@ -233,8 +239,8 @@ export function FileSurface({
   line,
 }: FileSurfaceProps) {
   const { t } = useLocale()
-  const api = useWorkspaceApi(connection, threadId)
-  const git = useGitDecorations(connection, threadId, revision)
+  const api = useWorkspaceApi(connection, scope)
+  const git = useGitDecorations(connection, scope, revision)
   const aside = useExplorerAside()
   const [file, setFile] = useState<FileViewerFile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -245,16 +251,16 @@ export function FileSurface({
   const fileRef = useRef(file)
   fileRef.current = file
   useDraftVersion()
-  const draft = getDraft(threadId, path)
+  const draft = getDraft(draftKey, path)
 
   const read = useCallback(
     () =>
       connection.call("workspace.readFile", {
-        threadId,
+        ...scope,
         path,
         ...(isImage(path) ? { encoding: "image" } : {}),
       }) as Promise<FileViewerFile>,
-    [connection, threadId, path],
+    [connection, scope, path],
   )
 
   // 打开时读取；revision 变化时，没有草稿就静默重读，有草稿只检查磁盘上的文件是否变了。
@@ -265,7 +271,7 @@ export function FileSurface({
       .then((next) => {
         if (cancelled) return
         const current = fileRef.current
-        if (getDraft(threadId, path) !== null && current) {
+        if (getDraft(draftKey, path) !== null && current) {
           if (next.mtimeMs !== current.mtimeMs) setConflict(true)
           return
         }
@@ -280,22 +286,22 @@ export function FileSurface({
     return () => {
       cancelled = true
     }
-  }, [read, revision, threadId, path])
+  }, [read, revision, draftKey, path])
 
   async function save(force = false): Promise<void> {
-    const text = getDraft(threadId, path)
+    const text = getDraft(draftKey, path)
     if (text === null || !file) return
     setSaving(true)
     try {
       const saved = (await connection.call("workspace.writeFile", {
-        threadId,
+        ...scope,
         path,
         text,
         eol: file.eol,
         ...(force ? {} : { expectedMtimeMs: file.mtimeMs }),
       })) as { size: number; mtimeMs: number }
       setFile({ ...file, text, size: saved.size, mtimeMs: saved.mtimeMs })
-      setDraft(threadId, path, null)
+      setDraft(draftKey, path, null)
       setConflict(false)
       onSaved?.()
     } catch (reason) {
@@ -330,9 +336,9 @@ export function FileSurface({
             activeKind={focusDirectory !== null ? "directory" : "file"}
             revision={revision}
             git={git}
-            stateKey={`explorer:${threadId}`}
+            stateKey={`explorer:${draftKey}`}
             onContextMenu={(entry, point) =>
-              void showEntryMenu({ connection, threadId, entry, point, t, onOpenFile, onError })
+              void showEntryMenu({ connection, scope, entry, point, t, onOpenFile, onError })
             }
           />
         </aside>
@@ -344,12 +350,12 @@ export function FileSurface({
         loading={loading}
         error={error}
         draft={draft}
-        onDraftChange={(text) => setDraft(threadId, path, text)}
+        onDraftChange={(text) => setDraft(draftKey, path, text)}
         onSave={() => void save()}
         saving={saving}
         conflict={conflict}
         onReload={() => {
-          setDraft(threadId, path, null)
+          setDraft(draftKey, path, null)
           setConflict(false)
           setLoading(true)
           void read()
@@ -367,7 +373,7 @@ export function FileSurface({
         onMore={(point) =>
           void showEntryMenu({
             connection,
-            threadId,
+            scope,
             entry: { path, kind: "file" },
             point,
             t,

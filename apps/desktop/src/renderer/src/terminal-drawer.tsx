@@ -4,6 +4,8 @@
  * 右边是新建终端与关闭面板。切换标签不会关掉其他终端：每个标签的 shell 一直在，只是不显示。
  * shell 自己退出（例如输入 exit）时关掉它的标签；关掉最后一个标签就收起面板，下次打开时再新开一个。
  * 收起面板时只隐藏，shell 会话保留。
+ * 新会话草稿里也能打开（参照 ZCode，终端不必依附会话）：终端开在草稿的项目根目录，不建会话；
+ * 第一次发送建好会话后，抽屉原样留给这个会话。
  */
 import {
   useEffect,
@@ -15,7 +17,7 @@ import {
 import { Plus, SquareTerminal, X } from "lucide-react"
 import type { Connection } from "@pigcode/client-runtime"
 import { Button, useLocale } from "@pigcode/ui-primitives"
-import { TerminalSurface, type TerminalSession } from "./terminal-surface"
+import { TerminalSurface, type TerminalOwner, type TerminalSession } from "./terminal-surface"
 
 const MIN_HEIGHT = 140
 const DEFAULT_HEIGHT = 260
@@ -23,7 +25,8 @@ const DEFAULT_HEIGHT = 260
 /** 底部终端属性。 */
 export interface TerminalDrawerProps {
   connection: Connection
-  threadId: string
+  /** 会话，或者草稿的项目；只决定之后新开的终端挂在哪，已经开着的不受影响。 */
+  owner: TerminalOwner
   open: boolean
   onClose: () => void
 }
@@ -62,7 +65,7 @@ export function terminalTitles(tabs: readonly TerminalTab[], fallback: string): 
   })
 }
 
-export function TerminalDrawer({ connection, threadId, open, onClose }: TerminalDrawerProps) {
+export function TerminalDrawer({ connection, owner, open, onClose }: TerminalDrawerProps) {
   const { t } = useLocale()
   const [height, setHeight] = useState(DEFAULT_HEIGHT)
   // 最近一个标签的序号；只在事件与 effect 里递增，StrictMode 重复调用初始化函数也不会跳号。
@@ -240,7 +243,7 @@ export function TerminalDrawer({ connection, threadId, open, onClose }: Terminal
           >
             <TerminalSurface
               connection={connection}
-              threadId={threadId}
+              owner={owner}
               active={open && selected}
               onOpened={(session) => opened(tab.key, session)}
               onExit={() => close(tab.key)}

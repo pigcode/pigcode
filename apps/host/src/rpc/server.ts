@@ -18,11 +18,21 @@ import { buildSubagentBrief } from "../agents/switching"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { forwardTerminal } from "./terminal-notify"
+import type { WorkspaceScope } from "../services/worktrees"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
 function errorCode(error: unknown): string {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : null
   return isHostErrorCode(code) ? code : "COMMAND_FAILED"
+}
+
+/**
+ * 右侧面板与终端的 threadId / projectId 转成服务用的 WorkspaceScope：会话 id，或者草稿的项目。
+ * 契约保证两个只给了一个。
+ */
+function scopeOf(value: { threadId?: string | undefined; projectId?: string | undefined }) {
+  const scope: WorkspaceScope = value.threadId ?? { projectId: value.projectId ?? "" }
+  return scope
 }
 
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
@@ -118,10 +128,8 @@ export class RpcServer {
             this.ctx.agents.cancelRun(run.runId)
           }
         }
-        // 终端也一样：之后没有界面能关它，里面的进程会一直跑下去。
-        for (const thread of this.ctx.threads.list(value.projectId)) {
-          this.ctx.get("terminal")?.closeThread(thread.id)
-        }
+        // 终端也一样（会话里的和草稿里开的）：之后没有界面能关它，里面的进程会一直跑下去。
+        this.ctx.get("terminal")?.closeProject(value.projectId)
         return project
       }
       case "thread.list":
@@ -365,56 +373,47 @@ export class RpcServer {
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
       case "workspace.tree":
-        return this.ctx.workspace.tree((parsed as { threadId: string }).threadId)
+        return this.ctx.workspace.tree(scopeOf(parsed as CommandParams<"workspace.tree">))
       case "project.files":
         return this.ctx.workspace.projectTree((parsed as { projectId: string }).projectId)
       case "workspace.root":
-        return { root: this.ctx.workspace.root((parsed as { threadId: string }).threadId) }
+        return {
+          root: this.ctx.workspace.root(scopeOf(parsed as CommandParams<"workspace.root">)),
+        }
       case "workspace.list": {
-        const value = parsed as { threadId: string; path: string }
-        return this.ctx.workspace.list(value.threadId, value.path)
+        const value = parsed as CommandParams<"workspace.list">
+        return this.ctx.workspace.list(scopeOf(value), value.path)
       }
       case "workspace.searchPaths": {
-        const value = parsed as { threadId: string; query: string; limit?: number }
-        return this.ctx.workspace.searchPaths(value.threadId, value.query, value.limit)
+        const value = parsed as CommandParams<"workspace.searchPaths">
+        return this.ctx.workspace.searchPaths(scopeOf(value), value.query, value.limit)
       }
       case "workspace.readFile": {
-        const value = parsed as { threadId: string; path: string; encoding?: "text" | "image" }
-        return this.ctx.workspace.readFile(value.threadId, value.path, value.encoding)
+        const value = parsed as CommandParams<"workspace.readFile">
+        return this.ctx.workspace.readFile(scopeOf(value), value.path, value.encoding)
       }
       case "workspace.writeFile": {
-        const value = parsed as {
-          threadId: string
-          path: string
-          text: string
-          expectedMtimeMs?: number
-          eol?: "lf" | "crlf"
-        }
-        return this.ctx.workspace.writeFile(value.threadId, value.path, value.text, {
+        const value = parsed as CommandParams<"workspace.writeFile">
+        return this.ctx.workspace.writeFile(scopeOf(value), value.path, value.text, {
           expectedMtimeMs: value.expectedMtimeMs,
           eol: value.eol,
         })
       }
       case "workspace.search": {
-        const value = parsed as { threadId: string; query: string; glob?: string }
-        return this.ctx.workspace.search(value.threadId, value.query, value.glob)
+        const value = parsed as CommandParams<"workspace.search">
+        return this.ctx.workspace.search(scopeOf(value), value.query, value.glob)
       }
       case "git.status":
-        return this.ctx.git.status((parsed as { threadId: string }).threadId)
+        return this.ctx.git.status(scopeOf(parsed as CommandParams<"git.status">))
       case "git.diff": {
-        const value = parsed as { threadId: string; base: string; head: string }
-        return this.ctx.git.diff(value.threadId, value.base, value.head)
+        const value = parsed as CommandParams<"git.diff">
+        return this.ctx.git.diff(scopeOf(value), value.base, value.head)
       }
       case "pr.status":
-        return this.ctx.github.status((parsed as { threadId: string }).threadId)
+        return this.ctx.github.status(scopeOf(parsed as CommandParams<"pr.status">))
       case "pr.create": {
-        const value = parsed as {
-          threadId: string
-          title: string
-          body?: string
-          base?: string
-        }
-        return this.ctx.github.create(value.threadId, {
+        const value = parsed as CommandParams<"pr.create">
+        return this.ctx.github.create(scopeOf(value), {
           title: value.title,
           ...(value.body === undefined ? {} : { body: value.body }),
           ...(value.base === undefined ? {} : { base: value.base }),
@@ -468,9 +467,11 @@ export class RpcServer {
       case "worktree.remove":
         return this.ctx.worktrees.remove((parsed as { threadId: string }).threadId)
       case "terminal.open": {
-        const value = parsed as { threadId: string; cols: number; rows: number }
+        const value = parsed as CommandParams<"terminal.open">
         const page = this.page
-        const terminal = await this.ctx.terminal.open(value.threadId, value.cols, value.rows)
+        const scope = scopeOf(value)
+        const owner = typeof scope === "string" ? { threadId: scope } : scope
+        const terminal = await this.ctx.terminal.open(owner, value.cols, value.rows)
         if (page !== this.page) return terminal
         this.terminalSubscriptions.push(
           forwardTerminal(this.ctx.terminal, terminal.id, (message) =>

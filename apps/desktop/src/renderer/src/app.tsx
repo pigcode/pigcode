@@ -42,7 +42,9 @@ import {
   type NavLocation,
 } from "./navigation"
 import { loadAgentFeatures } from "./agent-context"
-import { NEW_THREAD_DRAFT_KEY, draftProjectId, materializeDraft } from "./new-thread-draft"
+import { NEW_THREAD_DRAFT_KEY, draftProjectId } from "./new-thread-draft"
+import { usePanelOpen } from "./use-panel-open"
+import { useWorkspaceSlot } from "./use-workspace-slot"
 import { workspaceRevision } from "./workspace-revision"
 
 // 工作台（xterm、diff）与底部终端在第一次打开时才加载，冷启动只加载聊天需要的代码。
@@ -109,13 +111,21 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const [selectedPage, setSelectedPage] = useState<string>(DEFAULT_SETTINGS_PAGE)
   // 选中的设置页被移除（插件停用或卸载）时退回通用页，内容区不留空白。
   const settingsPage = settingsPageOrFallback(settingsPages, selectedPage)
-  const [rightOpen, setRightOpen] = useState(false)
   // 右栏第一次打开后才挂载（按需加载工作台代码），之后收起只隐藏，终端与浏览器标签保留。
   const [rightStarted, setRightStarted] = useState(false)
   const [rightMaximized, setRightMaximized] = useState(false)
-  const [terminalOpen, setTerminalOpen] = useState(false)
   // 底部终端第一次打开后才挂载，之后收起只隐藏，shell 会话保留到切换线程。
   const [terminalStarted, setTerminalStarted] = useState(false)
+  const activeThreadId = state.activeThreadId
+  // 草稿里也能打开右栏和底部终端（参照 ZCode）：它们挂在草稿的项目上，不建会话；
+  // 第一次发送建好会话后原样交给它。草稿各自记着右栏、终端开没开，新草稿默认收起。
+  // 插槽不随设置、插件、定时任务页变：离开聊天时右栏和终端只是收起，回来时不重新挂载。
+  const draftProject = !state.activeThreadId ? draftProjectId(state) : null
+  const inChat = view === "chat"
+  const slot = useWorkspaceSlot(activeThreadId, draftProject)
+  const { rightOpen, setRightOpen, terminalOpen, setTerminalOpen } = usePanelOpen(
+    draftProject ? slot.key : null,
+  )
   const [panels, setPanels] = useState<Record<string, PanelSurfaceState>>({})
   const [history, setHistory] = useState<NavHistory>(EMPTY_HISTORY)
   // 每次进入新会话草稿递增，草稿页据此把光标放回输入框。
@@ -213,26 +223,6 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
   }
 
-  /**
-   * 右栏和终端挂在会话上：在草稿里打开它们时先按草稿建会话（ZCode：必须挂在会话上的操作才建会话），
-   * 建好再打开。返回这次是不是按草稿处理的。
-   */
-  function openFromDraft(target: "right" | "terminal"): boolean {
-    if (view !== "chat" || store.getSnapshot().activeThreadId) return false
-    void materializeDraft(connection, store, locale)
-      .then(() => {
-        if (target === "terminal") {
-          setTerminalStarted(true)
-          setTerminalOpen(true)
-          return
-        }
-        setRightOpen(true)
-        setRightMaximized(false)
-      })
-      .catch((error: unknown) => store.update({ error: messageOf(error) }))
-    return true
-  }
-
   /** 沿历史后退或前进；先去掉已经不存在的会话和已经移除的设置页。 */
   function travel(direction: "back" | "forward"): void {
     const live = new Set(
@@ -267,38 +257,36 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     () => mergeChildStatus(state.threads, state.threadStates),
     [state.threads, state.threadStates],
   )
-  const activeThreadId = view === "chat" ? state.activeThreadId : null
   const activeProjectName =
-    state.projects.find((project) => project.id === activeThread?.projectId)?.name ?? ""
+    state.projects.find((project) => project.id === (activeThread?.projectId ?? draftProject))
+      ?.name ?? ""
   const activeEvents = activeThreadId ? state.threadStates[activeThreadId]?.events : undefined
   const activeRevision = useMemo(() => workspaceRevision(activeEvents ?? []), [activeEvents])
 
-  // 草稿里有项目时布局按钮也能用：点了先建会话再打开。
-  const draftReady = view === "chat" && !state.activeThreadId && draftProjectId(state) !== null
-
   function toggleRight(): void {
-    if (openFromDraft("right")) return
+    if (!inChat || !slot.scope) return
     setRightOpen((value) => !value)
     setRightMaximized(false)
   }
 
   function toggleTerminal(): void {
-    if (openFromDraft("terminal")) return
-    if (!activeThreadId) return
+    if (!inChat || !slot.scope) return
     setTerminalStarted(true)
     setTerminalOpen((value) => !value)
   }
 
-  function updatePanel(threadId: string, update: (panel: PanelSurfaceState) => PanelSurfaceState) {
+  /** 改一个面板的标签；key 是 slot key（会话 id，或者草稿的 key）。 */
+  function updatePanel(key: string, update: (panel: PanelSurfaceState) => PanelSurfaceState) {
     setPanels((current) => ({
       ...current,
-      [threadId]: update(current[threadId] ?? EMPTY_SURFACE_STATE),
+      [key]: update(current[key] ?? EMPTY_SURFACE_STATE),
     }))
   }
 
   // agent 调用浏览器工具时，main 让界面给它的线程开（或亮出）浏览器标签；正在看这个线程时展开右栏。
   useBrowserOpen({
     panels,
+    keyOf: slot.keyOf,
     threadId: state.activeThreadId,
     view,
     setPanels,
@@ -313,7 +301,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   function openSurface(kind: "file" | "diff", path?: string): void {
     const threadId = state.activeThreadId
     if (!threadId) return
-    updatePanel(threadId, (panel) =>
+    updatePanel(slot.keyOf(threadId), (panel) =>
       kind === "file" && path
         ? openFileSurface(panel, path, `file-${crypto.randomUUID()}`)
         : addSurface(panel, "diff", `diff-${crypto.randomUUID()}`, () => "Diff"),
@@ -322,24 +310,26 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     setRightMaximized(false)
   }
 
+  // 草稿里开的浏览器也挂着；它还不属于哪个会话，agent 用不了，建好会话后才交给那个会话的 agent。
+  const { threadOf } = slot
   const browsers = useMemo(() => {
     const live = new Set(
       state.threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
     )
-    return Object.entries(panels).flatMap(([threadId, panel]) =>
-      live.has(threadId)
-        ? panel.surfaces
-            .filter((surface) => surface.kind === "browser")
-            .map((surface) => ({ id: surface.id, threadId, initialUrl: surface.url }))
-        : [],
-    )
-  }, [panels, state.threads])
+    return Object.entries(panels).flatMap(([key, panel]) => {
+      const threadId = threadOf(key)
+      if (threadId !== null && !live.has(threadId)) return []
+      return panel.surfaces
+        .filter((surface) => surface.kind === "browser")
+        .map((surface) => ({ id: surface.id, slotKey: key, threadId, initialUrl: surface.url }))
+    })
+  }, [panels, state.threads, threadOf])
 
   const layoutControls = (maximizable: boolean) => (
     <PanelLayoutControls
-      rightOpen={rightOpen && activeThreadId !== null}
+      rightOpen={rightOpen && slot.scope !== null}
       onToggleRight={toggleRight}
-      terminalOpen={terminalOpen && activeThreadId !== null}
+      terminalOpen={terminalOpen && slot.scope !== null}
       onToggleTerminal={toggleTerminal}
       {...(maximizable
         ? {
@@ -347,7 +337,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
             onToggleMaximize: () => setRightMaximized((value) => !value),
           }
         : {})}
-      disabled={!activeThreadId && !draftReady}
+      disabled={!slot.scope}
     />
   )
 
@@ -400,17 +390,20 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           })
           .catch((error: unknown) => store.update({ error: messageOf(error) }))
       }}
-      rightOpen={rightOpen}
+      rightOpen={rightOpen && inChat}
       rightMaximized={rightMaximized}
       rightPanel={
-        activeThreadId && (rightStarted || rightOpen) ? (
+        slot.scope && slot.key && (rightStarted || rightOpen) ? (
           <Suspense fallback={null}>
             <WorkbenchPanel
-              key={activeThreadId}
+              key={slot.key}
               connection={connection}
-              threadId={activeThreadId}
-              panel={panels[activeThreadId] ?? EMPTY_SURFACE_STATE}
-              onPanelChange={(update) => updatePanel(activeThreadId, update)}
+              scope={slot.scope}
+              slotKey={slot.key}
+              panel={panels[slot.key] ?? EMPTY_SURFACE_STATE}
+              onPanelChange={(update) => {
+                if (slot.key) updatePanel(slot.key, update)
+              }}
               controls={layoutControls(true)}
               onError={(message) => store.update({ error: message })}
               projectName={activeProjectName}
@@ -420,13 +413,13 @@ export function App({ store, connection, plugins, locale }: AppProps) {
         ) : undefined
       }
       bottomPanel={
-        activeThreadId && terminalStarted ? (
+        slot.scope && slot.key && terminalStarted ? (
           <Suspense fallback={null}>
             <TerminalDrawer
-              key={activeThreadId}
+              key={slot.key}
               connection={connection}
-              threadId={activeThreadId}
-              open={terminalOpen}
+              owner={slot.scope}
+              open={terminalOpen && inChat}
               onClose={() => setTerminalOpen(false)}
             />
           </Suspense>
@@ -438,20 +431,23 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       <BrowserHost
         browsers={browsers}
         onPage={(browser, patch) =>
-          updatePanel(browser.threadId, (panel) => updateSurface(panel, browser.id, patch))
+          updatePanel(browser.slotKey, (panel) => updateSurface(panel, browser.id, patch))
         }
       />
-      {view === "chat" ? (
+      {/* 聊天页一直挂着：去设置、插件、定时任务页时只隐藏，回来不必重画整条时间线、重新拉取 Agent
+          与模型列表，滚动位置也还在。 */}
+      <div className="chat-keep" data-hidden={inChat ? undefined : ""} inert={!inChat}>
         <ChatViewContainer
           deps={{ connection, store, plugins }}
           rightOpen={rightOpen}
           onToggleRight={toggleRight}
-          layoutControls={rightOpen && activeThreadId ? null : layoutControls(false)}
+          layoutControls={rightOpen && slot.scope ? null : layoutControls(false)}
           onOpenFile={(path: string) => openSurface("file", path)}
           onOpenDiff={() => openSurface("diff")}
           draftFocus={draftFocus}
         />
-      ) : view === "plugins" ? (
+      </div>
+      {inChat ? null : view === "plugins" ? (
         <PluginsView
           deps={{ connection, store, plugins }}
           onStartDraft={(prefill) => {

@@ -43,6 +43,23 @@
   min-height: 0;
   overflow: hidden;
 }
+/*
+  聊天页的外层（app.tsx）：去设置、插件、定时任务页时不卸载，只是叠到下面藏起来。
+  content-visibility: hidden 跳过它的布局和绘制，同时留着渲染状态和滚动位置，回来时不用重新排版。
+*/
+.chat-keep {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.chat-keep[data-hidden] {
+  position: absolute;
+  inset: 0;
+  content-visibility: hidden;
+  pointer-events: none;
+}
 .panel-scroll {
   flex: 1;
   overflow: auto;
