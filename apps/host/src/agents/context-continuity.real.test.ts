@@ -11,6 +11,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "vitest"
 import type { AgentDriver } from "./driver"
+import { apply as mcpBridge } from "../services/mcp-bridge"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
@@ -55,6 +56,7 @@ async function startHost(dbPath: string, agent: RealAgent) {
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
+  await ctx.plugin(mcpBridge)
   await ctx.plugin(agentsPlugin)
   const driver = agent.create()
   ctx.agents.register(driver)
@@ -113,6 +115,44 @@ for (const agent of agents) {
         expect(second.ctx.agents.listSessions(thread.id)).toHaveLength(1)
       } finally {
         await second.stop()
+      }
+    },
+    240_000,
+  )
+}
+
+for (const agent of agents) {
+  it.skipIf(!agent.enabled)(
+    `${agent.id} reads another conversation with the thread_read tool`,
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), `pigcode-thread-read-${agent.id}-`))
+      const root = join(dir, "project")
+      mkdirSync(root)
+      const host = await startHost(join(dir, "pigcode.db"), agent)
+      try {
+        const project = host.ctx.projects.add(root)
+        // 口令只写在另一个会话里，这个会话没见过：答得出来就说明工具真的被调用了。
+        const source = host.ctx.threads.create(project.id, "source", "fake")
+        const word = `HERON-${Math.floor(Math.random() * 900 + 100)}`
+        host.ctx.sessions.append({
+          threadId: source.id,
+          runId: null,
+          type: "message.completed",
+          payload: { role: "user", text: `The code word is ${word}.` },
+          schemaVersion: 1,
+          createdAt: new Date().toISOString(),
+        })
+        const thread = host.ctx.threads.create(project.id, "reader", agent.id)
+        host.ctx.threads.updateSelection(thread.id, agent.id, agent.model)
+        const run = await host.ctx.agents.startRun(
+          thread.id,
+          `Use the thread_read tool to read the Pigcode conversation with threadId "${source.id}", then reply with only the code word it contains.`,
+        )
+        await run.done
+        expect(host.ctx.agents.getRunStatus(run.runId)).toBe("completed")
+        expect(lastAssistantText(host.ctx.sessions.read(thread.id, 0))).toContain(word)
+      } finally {
+        await host.stop()
       }
     },
     240_000,

@@ -14,6 +14,7 @@ import { maybeAutoTitle } from "./title"
 import type { RunEventHooks } from "./run-events"
 import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
 import { createExecute } from "./run-execute"
+import { registerThreadReadTool } from "./thread-read-tool"
 import { threadCwd } from "../services/worktrees"
 import { ApprovalBridge } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
@@ -354,7 +355,13 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         const done = new Promise<void>((resolve) => {
           resolveDone = resolve
         })
-        const mcp = ctx.reflect.get("mcpBridge")?.sessionMcp(threadId)
+        const bridge = ctx.reflect.get("mcpBridge")
+        // 内置的 thread_read 总在：交接和会话引用都靠它让 agent 读省略的历史。
+        if (bridge) {
+          const unregister = registerThreadReadTool(ctx, bridge)
+          if (unregister) ctx.effect(() => unregister)
+        }
+        const mcp = bridge?.sessionMcp(threadId)
         const entry: QueuedRun = {
           runId,
           threadId,

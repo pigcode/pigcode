@@ -36,7 +36,7 @@ describe("handoff selection", () => {
     const selection = select(items, 16_000)
     expect(selection.omittedCount).toBe(0)
     expect(selection.selectedItemIds).toEqual(["i1", "i2", "i3", "i4"])
-    expect(selection.text).not.toContain("pigcode_thread_read")
+    expect(selection.text).not.toContain("thread_read")
     expect(selection.text.indexOf("build the parser")).toBeLessThan(selection.text.indexOf("fixed"))
   })
 
@@ -51,7 +51,7 @@ describe("handoff selection", () => {
     expect(selection.text).toContain("LAST REQUEST")
     expect(selection.omittedCount).toBeGreaterThan(0)
     // 省略了东西时告诉 agent 去哪里读。
-    expect(selection.text).toContain('pigcode_thread_read tool: {"threadId":"t"}')
+    expect(selection.text).toContain('thread_read tool of the pigcode MCP server: {"threadId":"t"}')
     // 挑出来的最近几条是最新的那几条。
     expect(selection.text).toContain("step 59")
     expect(selection.text).not.toContain("step 0 ")
@@ -92,7 +92,7 @@ describe("handoff selection", () => {
     const selection = select([item("user_message", "goal")], 0)
     expect(selection.selectedItemIds).toEqual([])
     expect(selection.text).toContain("omitted 1")
-    expect(selection.text).toContain("pigcode_thread_read")
+    expect(selection.text).toContain("thread_read tool")
   })
 })
 

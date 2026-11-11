@@ -5,6 +5,7 @@ import type { ActiveRun } from "./run-queue"
 import { mapAgentEvent, type RunEventHooks } from "./run-events"
 import { handoffForRun } from "./handoff-delivery"
 import { freshSessionHandoff } from "./switching"
+import { isThreadReadTool } from "./thread-read-tool"
 
 /** execute 需要的 Host 闭包。 */
 export interface ExecuteDeps {
@@ -46,9 +47,12 @@ export function createExecute(
         mapAgentEvent(run, event, deps.hooks)
       },
       requestApproval: (request) =>
-        isCurrent(run)
-          ? deps.requestApproval(run, request)
-          : Promise.resolve<ApprovalDecision>("deny"),
+        !isCurrent(run)
+          ? Promise.resolve<ApprovalDecision>("deny")
+          : // 内置的 thread_read 只读会话历史，不弹审批；否则交接里让 agent 去读，它会停在那里等人点。
+            isThreadReadTool(request.toolName)
+            ? Promise.resolve<ApprovalDecision>("allow-once")
+            : deps.requestApproval(run, request),
       askQuestions: (request) =>
         isCurrent(run) ? deps.askQuestions(run, request) : Promise.resolve([]),
     }
