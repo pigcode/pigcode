@@ -28,6 +28,12 @@ export interface NormalizeState {
   subagents: Map<string, SubagentInfo>
   /** 后台任务与工作流。 */
   tasks: TaskState
+  /** 主 agent 最近一次请求的上下文：输入（含缓存）加输出，以及用的是哪个模型。 */
+  mainContext?: { usedTokens: number; model: string }
+  /** 会话开始时向 CLI 问到的窗口和自动压缩线；driver 在 init 后写入。 */
+  contextLimit?: { maxTokens: number | null; autoCompactTokens: number | null }
+  /** 这一轮结束时的占用已经报过；之后才到的开局占用不能再盖掉它。 */
+  contextReported?: boolean
 }
 
 /** 创建一次 run 专属的归一化状态。 */
@@ -88,6 +94,7 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
   }
   if (message.type === "assistant") {
     const parentToolUseId = message.parent_tool_use_id ?? null
+    if (!parentToolUseId) rememberMainContext(message.message, state)
     for (const block of message.message.content) {
       if (block.type === "tool_use") {
         state.toolNames.set(block.id, block.name)
@@ -191,6 +198,11 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
       type: "usage.updated",
       usage: { modelUsage: message.modelUsage, totalCostUsd: message.total_cost_usd },
     })
+    const context = contextEvent(state, message.modelUsage)
+    if (context) {
+      events.push(context)
+      state.contextReported = true
+    }
     // 还有后台任务（工作流、后台子 agent）在跑：主回合结束了，run 还没有。
     // 它们跑完后 CLI 会在同一个会话里续一个回合，那个回合的 result 才是结束。
     if (hasPendingTasks(state.tasks)) return events
@@ -257,4 +269,43 @@ function toolResultText(content: unknown): string | undefined {
     return text ? [text] : []
   })
   return asText(parts.join("\n").trim())
+}
+
+/** 记下主 agent 这次请求占了多少上下文；子 agent 的请求在它们自己的上下文里，不算。 */
+function rememberMainContext(
+  message: { model?: unknown; usage?: unknown },
+  state: NormalizeState,
+): void {
+  const usage = message.usage as Record<string, unknown> | undefined
+  if (!usage || typeof message.model !== "string") return
+  const count = (key: string): number => {
+    const value = usage[key]
+    return typeof value === "number" && Number.isFinite(value) ? value : 0
+  }
+  const usedTokens =
+    count("input_tokens") +
+    count("cache_creation_input_tokens") +
+    count("cache_read_input_tokens") +
+    count("output_tokens")
+  if (usedTokens > 0) state.mainContext = { usedTokens, model: message.model }
+}
+
+/**
+ * 一轮结束时的上下文占用。窗口优先用 init 时问到的（含自动压缩线），没问到就用 result 里这个模型的窗口。
+ */
+export function contextEvent(
+  state: NormalizeState,
+  modelUsage: Record<string, { contextWindow?: number }> | undefined,
+): AgentEvent | null {
+  const main = state.mainContext
+  if (!main) return null
+  const window = modelUsage?.[main.model]?.contextWindow
+  return {
+    type: "context.updated",
+    usedTokens: Math.round(main.usedTokens),
+    maxTokens:
+      state.contextLimit?.maxTokens ??
+      (typeof window === "number" && window > 0 ? Math.round(window) : null),
+    autoCompactTokens: state.contextLimit?.autoCompactTokens ?? null,
+  }
 }

@@ -185,6 +185,13 @@ export class FakeAgentDriver implements AgentDriver {
       runtime.emit({ type: "run.completed" })
       return
     }
+    if (input.text === FAKE_CONTEXT_TEXT) {
+      // 和真实 Agent 一样，一轮结束时报一次上下文占用；数字固定，好在界面上检查。
+      runtime.emit({ type: "message.completed", text: FAKE_CONTEXT_TEXT_REPLY })
+      runtime.emit({ type: "context.updated", ...FAKE_CONTEXT_USAGE })
+      runtime.emit({ type: "run.completed" })
+      return
+    }
     if (input.text === FAKE_APPROVAL_TEXT) {
       await runFakeApproval(runtime)
       if (!runtime.signal.aborted) runtime.emit({ type: "run.completed" })
@@ -251,6 +258,19 @@ export const FAKE_APPROVAL_TEXT = "approve"
 
 /** 触发会话提示的输入。 */
 export const FAKE_NOTICE_TEXT = "notice"
+
+/** 触发上下文占用的输入。 */
+export const FAKE_CONTEXT_TEXT = "context"
+
+/** 上下文占用那一轮的回答。 */
+export const FAKE_CONTEXT_TEXT_REPLY = "看一下现在用了多少上下文。"
+
+/** 上下文占用那一轮报的数字：已用 84%，离自动压缩还剩 6k。 */
+export const FAKE_CONTEXT_USAGE = {
+  usedTokens: 168_000,
+  maxTokens: 200_000,
+  autoCompactTokens: 174_000,
+}
 
 /** 提示那一轮的回答；证明提示不影响对话继续。 */
 export const FAKE_NOTICE_TEXT_REPLY = "插件工具这次用不了，其余照常。"

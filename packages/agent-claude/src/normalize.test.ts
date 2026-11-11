@@ -433,6 +433,7 @@ describe("normalizeSdkMessage", () => {
       "message.delta",
       "message.completed",
       "usage.updated",
+      "context.updated",
       "run.completed",
     ])
     expect(state.streamedText).toBe("OK")

@@ -45,6 +45,22 @@
     "editor editor editor editor editor"
     "attach . mode model send";
 }
+/* 有上下文占用时多一列圆环，放在模型和发送之间；没有数据时不占位，布局和原来一样。 */
+.composer.has-meter {
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+}
+.composer.is-compact.has-meter {
+  grid-template-areas: "attach editor mode model meter send";
+}
+.composer.is-expanded.has-meter {
+  grid-template-areas:
+    "chips chips chips chips chips chips"
+    "editor editor editor editor editor editor"
+    "attach . mode model meter send";
+}
+.composer .context-meter {
+  grid-area: meter;
+}
 .composer-editor {
   grid-area: editor;
   min-width: 0;
@@ -260,4 +276,45 @@
   .composer .chip-btn .chip-label-optional {
     display: none;
   }
+}
+
+/* ─── 上下文占用圆环 ─────────────────────────────────────── */
+.context-meter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  border-radius: 50%;
+  cursor: default;
+}
+.context-meter svg {
+  width: var(--icon-cv);
+  height: var(--icon-cv);
+  transform: rotate(-90deg);
+}
+.context-meter-track,
+.context-meter-fill {
+  fill: none;
+  stroke-width: 2;
+}
+.context-meter-track {
+  stroke: var(--border-strong);
+}
+.context-meter-fill {
+  stroke: var(--muted);
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--t-med) var(--ease);
+}
+.context-meter[data-level="high"] .context-meter-fill {
+  stroke: var(--warn);
+}
+.context-meter[data-level="full"] .context-meter-fill {
+  stroke: var(--warn-text);
+}
+/* 外观沿用 .tip-popup，只把几行文字竖着排 */
+.context-meter-tip {
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-2xs);
 }

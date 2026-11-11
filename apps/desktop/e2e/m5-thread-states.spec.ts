@@ -90,6 +90,23 @@ test("a notice from the agent stays visible outside the folded work", async () =
   await app.close()
 })
 
+test("the composer shows how much context the session uses", async () => {
+  const { app, page } = await openThread("thread-context", { PIGCODE_FAKE_DELAY_MS: "300" })
+  const row = rows(page, "pigcode-e2e-thread-context")
+
+  // 还没有数据时不显示圆环。
+  await expect(page.locator(".composer .context-meter")).toHaveCount(0)
+  await send(page, "context")
+  await expect(row("context")).toHaveAttribute("data-status", "completed", { timeout: 15_000 })
+  const meter = page.locator(".composer .context-meter")
+  // 圆环按自动压缩线算：168k / 174k 已经过了 95%。文字里的百分比按整个窗口算。
+  await expect(meter).toHaveAttribute("data-level", "full")
+  await expect(meter).toHaveAttribute("aria-label", /已用 168k \/ 200k（84%）/)
+  await meter.hover()
+  await expect(page.locator(".context-meter-tip")).toContainText("到 174k 自动压缩，还剩 6k")
+  await app.close()
+})
+
 test("a failed run shows as failed in the sidebar and in the timeline", async () => {
   const { app, page } = await openThread("thread-failed", { PIGCODE_FAKE_DELAY_MS: "300" })
   const row = rows(page, "pigcode-e2e-thread-failed")

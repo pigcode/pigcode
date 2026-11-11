@@ -121,6 +121,13 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
     case "usage.updated":
       hooks.append(run.threadId, run.runId, "usage.updated", { usage: event.usage })
       return
+    case "context.updated":
+      hooks.append(run.threadId, run.runId, "context.updated", {
+        usedTokens: event.usedTokens,
+        maxTokens: event.maxTokens,
+        autoCompactTokens: event.autoCompactTokens,
+      })
+      return
     case "plan.updated":
       hooks.append(run.threadId, run.runId, "plan.updated", {
         plan: event.plan,

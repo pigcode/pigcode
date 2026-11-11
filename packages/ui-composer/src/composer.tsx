@@ -34,13 +34,14 @@ import {
   type ComposerCommand,
 } from "./composer-editor"
 import { useAgentCommandSource } from "./agent-commands"
+import { ContextMeter, type ContextUsage } from "./context-meter"
 import { ComposerModelControls } from "./composer-model-controls"
 import { useRunPreferences } from "./model-preferences"
 import { SuggestionPanel } from "./suggestion-panel"
 import { SuggestionStore } from "./suggestion-store"
 import { COMPOSER_MENTION_EVENT, mentionPathOf } from "./composer-mention"
 import { ComposerContextChips, useComposerContexts, withContexts } from "./composer-context"
-import { useWrapped } from "./composer-layout"
+import { composerClass, useWrapped } from "./composer-layout"
 
 /** 发送时附带的选项；思考深度、快速模式与 Ultracode 来自当前模型与用户偏好。两个开关只在开着时出现。 */
 export interface ComposerSubmitOptions {
@@ -80,6 +81,8 @@ export interface ComposerProps {
   canPlan?: boolean
   /** agent 不支持中断时隐藏停止按钮。 */
   canInterrupt?: boolean
+  /** 会话当前的上下文占用；没有数据时不显示圆环。 */
+  contextUsage?: ContextUsage | null
   /** 是否启用智能标点；默认开启。 */
   smartPunctuation?: boolean
   /** 空会话首次出现时自动聚焦输入区。 */
@@ -117,6 +120,7 @@ export function Composer({
   onPermissionMode,
   canPlan = true,
   canInterrupt = true,
+  contextUsage = null,
   smartPunctuation = true,
   autoFocus = false,
   focusKey,
@@ -405,11 +409,7 @@ export function Composer({
   }
 
   const card = (
-    <div
-      className={["composer", tall ? "is-tall" : "", expanded ? "is-expanded" : "is-compact"]
-        .filter(Boolean)
-        .join(" ")}
-    >
+    <div className={composerClass({ tall, expanded, meter: Boolean(contextUsage) })}>
       <SuggestionPanel store={store} />
       <ComposerContextChips contexts={attached.contexts} onRemove={attached.remove} />
       <EditorContent editor={editor} className="composer-editor" />
@@ -456,6 +456,7 @@ export function Composer({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
       />
+      {contextUsage ? <ContextMeter usage={contextUsage} /> : null}
       {running && canInterrupt ? (
         <Button
           variant="plain"

@@ -37,6 +37,10 @@ it.skipIf(!enabled)(
       expect(completed.text).toContain("OK")
     }
     expect(events.some((event) => event.type === "usage.updated")).toBe(true)
+    // 一轮结束时报上下文占用，窗口大小来自 CLI。
+    const context = events.filter((event) => event.type === "context.updated").at(-1)
+    expect(context?.type === "context.updated" && context.usedTokens > 0).toBe(true)
+    expect(context?.type === "context.updated" && (context.maxTokens ?? 0) > 0).toBe(true)
     expect(events.some((event) => event.type === "run.failed")).toBe(false)
   },
   120_000,

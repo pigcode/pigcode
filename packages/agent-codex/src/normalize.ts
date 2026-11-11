@@ -224,11 +224,32 @@ function normalizePlan(record: UnknownRecord): AgentEvent[] {
   ]
 }
 
-/** 映射 thread/tokenUsage/updated；usage 保留 Codex 原始结构。 */
+/** 映射 thread/tokenUsage/updated；usage 保留 Codex 原始结构，另外换算出上下文占用。 */
 function normalizeUsage(record: UnknownRecord): AgentEvent[] {
   const usage = record.tokenUsage ?? record.usage
   if (usage === undefined) return []
-  return [{ type: "usage.updated", usage }]
+  const context = codexContext(usage)
+  return context ? [{ type: "usage.updated", usage }, context] : [{ type: "usage.updated", usage }]
+}
+
+/**
+ * Codex 的上下文占用：`last` 是最近一次请求（输入含缓存 + 输出），也就是现在上下文里有多少；
+ * `total` 是整个 thread 的累计用量，不能当占用。`modelContextWindow` 已经是可用窗口。
+ */
+function codexContext(usage: unknown): AgentEvent | null {
+  if (typeof usage !== "object" || usage === null) return null
+  const record = usage as UnknownRecord
+  const last = record.last
+  if (typeof last !== "object" || last === null) return null
+  const used = (last as UnknownRecord).totalTokens
+  if (typeof used !== "number" || !Number.isFinite(used) || used < 0) return null
+  const window = record.modelContextWindow
+  return {
+    type: "context.updated",
+    usedTokens: Math.round(used),
+    maxTokens: typeof window === "number" && window > 0 ? Math.round(window) : null,
+    autoCompactTokens: null,
+  }
 }
 
 /** 依据 turn.status 映射 run 终态；inProgress 等中间状态不产生事件。 */

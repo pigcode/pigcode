@@ -36,6 +36,7 @@ import { SubagentView } from "./subagent-view"
 import { ThreadTabs, type ThreadTabsProps } from "./thread-tabs"
 import { TurnNavigator } from "./turn-navigator"
 import { buildTimeline } from "./turns"
+import { latestContextUsage } from "./context-usage"
 
 /** 线程头切换入口需要的 agent 展示信息。 */
 export interface AgentOption {
@@ -185,6 +186,7 @@ export function ChatView({
     [events, canApprove],
   )
   const runOpen = useMemo(() => isRunOpen(events), [events])
+  const contextUsage = useMemo(() => latestContextUsage(events), [events])
   const running = Boolean(streamingText) || runOpen
   const streaming = streamingText.length > 0
   const timeline = useMemo(
@@ -277,6 +279,7 @@ export function ChatView({
     ...(loadAgentCommands ? { loadAgentCommands } : {}),
     canPlan,
     canInterrupt,
+    contextUsage,
   } satisfies ComposerProps
   const shownProject = projectName ?? folderName
 

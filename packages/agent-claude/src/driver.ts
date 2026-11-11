@@ -30,6 +30,7 @@ import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { listClaudeCommands } from "./commands"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
+import { readContextUsage } from "./context-usage"
 import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
 import { readUltracode } from "./ultracode"
 import { answerRecord, parseQuestions } from "./questions"
@@ -282,6 +283,18 @@ export class ClaudeDriver implements AgentDriver {
         const next = await Promise.race([nextPromise, aborted])
         if (next === "aborted" || next.done) break
         for (const event of normalizeSdkMessage(next.value, normalizeState)) runtime.emit(event)
+        // 会话开始时问一次窗口和压缩线：一轮结束时的占用要用它，输入框也能马上显示开局的占用。
+        if (next.value.type === "system" && next.value.subtype === "init") {
+          void readContextUsage(queryStream)
+            .then((usage) => {
+              if (!usage) return
+              normalizeState.contextLimit = usage.limit
+              if (!runtime.signal.aborted && !normalizeState.contextReported) {
+                runtime.emit(usage.event)
+              }
+            })
+            .catch(() => undefined)
+        }
         const notice = input.fast ? fastModeNotice(next.value) : null
         if (notice) runtime.emit(notice)
       }

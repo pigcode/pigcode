@@ -210,6 +210,38 @@ describe("normalizeCodexNotification", () => {
     })
   })
 
+  it("derives the context occupancy from the last request, not the thread total", () => {
+    // 2026-11-11 从 codex-cli 0.167.0 录下来的通知。
+    const tokenUsage = {
+      total: {
+        totalTokens: 52000,
+        inputTokens: 51000,
+        cachedInputTokens: 9344,
+        cacheWriteInputTokens: 0,
+        outputTokens: 1000,
+        reasoningOutputTokens: 14,
+      },
+      last: {
+        totalTokens: 20128,
+        inputTokens: 20107,
+        cachedInputTokens: 9344,
+        cacheWriteInputTokens: 0,
+        outputTokens: 21,
+        reasoningOutputTokens: 14,
+      },
+      modelContextWindow: 828400,
+    }
+    const events = normalizeCodexNotification("thread/tokenUsage/updated", {
+      threadId: "t",
+      turnId: "u",
+      tokenUsage,
+    })
+    expect(events).toEqual([
+      { type: "usage.updated", usage: tokenUsage },
+      { type: "context.updated", usedTokens: 20128, maxTokens: 828400, autoCompactTokens: null },
+    ])
+  })
+
   it("maps turn status to run terminal events", () => {
     expect(
       normalizeCodexNotification("turn/completed", { turn: { id: "t", status: "completed" } }),

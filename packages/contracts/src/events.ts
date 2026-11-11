@@ -23,6 +23,7 @@ export const threadEventTypeSchema = z.enum([
   "notice",
   "file.changed",
   "usage.updated",
+  "context.updated",
   "subagent.started",
   "subagent.completed",
   "workflow.updated",
@@ -164,6 +165,16 @@ export const agentEventSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("workflow.updated"), workflow: workflowSnapshotSchema }),
   z.object({ type: z.literal("usage.updated"), usage: z.unknown() }),
+  /**
+   * 会话当前的上下文占用：已用多少 token、窗口多大、到多少自动压缩。不知道的填 null。
+   * 和 usage.updated 分开：那个是计费用量的原始结构，这个只说占用。
+   */
+  z.object({
+    type: z.literal("context.updated"),
+    usedTokens: z.number().int().nonnegative(),
+    maxTokens: z.number().int().positive().nullable(),
+    autoCompactTokens: z.number().int().positive().nullable(),
+  }),
   z.object({
     type: z.literal("plan.updated"),
     plan: z.unknown(),
