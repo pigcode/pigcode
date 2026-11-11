@@ -6,17 +6,32 @@ import type { ThemeDefinition } from "./theme-presets"
 import type { ThemePreference } from "./theme-model"
 import { parseThemePreference } from "./theme-model"
 
-/** 对 bg、fg、accent 的单项覆盖。 */
-export type ColorOverride = Partial<Record<"bg" | "fg" | "accent", Hex>>
+/** 可单独修改的颜色：背景、前景、强调色，以及 diff 的新增行和删除行。 */
+export type ColorKey = "bg" | "fg" | "accent" | "diffAdded" | "diffRemoved"
+
+/** 全部可修改的颜色，顺序即设置页和主题代码里的顺序。 */
+export const colorKeys: readonly ColorKey[] = ["accent", "bg", "fg", "diffAdded", "diffRemoved"]
+
+/** 对各颜色的单项覆盖。 */
+export type ColorOverride = Partial<Record<ColorKey, Hex>>
 
 /** 某个主题在浅色、深色下各自的颜色修改。 */
 export type ModeOverrides = Partial<Record<"light" | "dark", ColorOverride>>
 
-/** 一个模式使用的主题、强调色方式和界面字体。 */
+/** 界面字体的预设；其余字符串是用户填写的字体名。 */
+export type UiFontPreset = "system" | "inter" | "source-han"
+
+/** 代码字体的预设；其余字符串是用户填写的字体名。 */
+export type CodeFontPreset = "system" | "jetbrains" | "fira" | "menlo"
+
+export const uiFontPresets: readonly UiFontPreset[] = ["system", "inter", "source-han"]
+export const codeFontPresets: readonly CodeFontPreset[] = ["system", "jetbrains", "fira", "menlo"]
+
+/** 一个模式使用的主题、强调色方式和界面字体（预设 id 或字体名）。 */
 export type ThemeSlot = {
   themeId: string
   accentMode: "default" | "custom"
-  uiFont: "system" | "inter" | "source-han"
+  uiFont: string
 }
 
 /** 全部外观设置，带版本号。 */
@@ -28,6 +43,8 @@ export type AppearanceSettings = {
   dark: ThemeSlot
   overrides: Record<string, ModeOverrides>
   glass: number
+  /** 侧栏与窗口边框的透明度，0 是不透明；需要系统磨砂材质（macOS、Windows）。 */
+  sidebarTranslucency: number
   contrast: number
   uiSize: number
   contentSize: number
@@ -36,7 +53,8 @@ export type AppearanceSettings = {
   uiWeight: "regular" | "medium"
   contentFont: "same" | "serif" | "rounded"
   contentWeight: "regular" | "medium"
-  codeFont: "system" | "jetbrains" | "fira" | "menlo"
+  /** 预设 id 或字体名。 */
+  codeFont: string
   codeWeight: "regular" | "medium"
   smartPunctuation: boolean
   fullWidth: boolean
@@ -58,6 +76,7 @@ export const defaultAppearance: AppearanceSettings = {
   dark: defaultSlot,
   overrides: {},
   glass: 60,
+  sidebarTranslucency: 0,
   contrast: 45,
   uiSize: 13,
   contentSize: 14,
@@ -97,20 +116,41 @@ function bool(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback
 }
 
+/**
+ * 把用户填写的字体名整理成能放进 font-family 引号里的文本：去掉引号、反斜杠、分号和括号，
+ * 合并空白，最长 64 个字符；整理后为空时返回 null。
+ */
+export function cleanFontName(value: string): string | null {
+  const cleaned = value
+    .replace(/["'\\;{}<>()]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 64)
+    .trim()
+  return cleaned || null
+}
+
+/** 字体设置：预设 id 原样保留，其他字符串按字体名整理，整理不出来时用 fallback。 */
+function parseFont<T extends string>(value: unknown, presets: readonly T[], fallback: T): string {
+  if (typeof value !== "string") return fallback
+  if (presets.some((item) => item === value)) return value
+  return cleanFontName(value) ?? fallback
+}
+
 function parseSlot(value: unknown): ThemeSlot {
   if (!isRecord(value)) return defaultSlot
   return {
     themeId:
       typeof value.themeId === "string" && value.themeId ? value.themeId : defaultSlot.themeId,
     accentMode: pick(value.accentMode, ["default", "custom"], defaultSlot.accentMode),
-    uiFont: pick(value.uiFont, ["system", "inter", "source-han"], defaultSlot.uiFont),
+    uiFont: parseFont(value.uiFont, uiFontPresets, "system"),
   }
 }
 
 function parseColorOverride(value: unknown): ColorOverride | undefined {
   if (!isRecord(value)) return undefined
   const result: ColorOverride = {}
-  for (const key of ["bg", "fg", "accent"] as const) {
+  for (const key of colorKeys) {
     const raw = value[key]
     const hex = typeof raw === "string" ? parseHex(raw) : null
     if (hex) result[key] = hex
@@ -143,6 +183,7 @@ function fromObject(o: Obj): AppearanceSettings {
     dark: parseSlot(o.dark),
     overrides: parseOverrides(o.overrides),
     glass: num(o.glass, d.glass, 0, 100, 1),
+    sidebarTranslucency: num(o.sidebarTranslucency, d.sidebarTranslucency, 0, 100, 1),
     contrast: num(o.contrast, d.contrast, 0, 100, 1),
     uiSize: num(o.uiSize, d.uiSize, 11, 18, 0.5),
     contentSize: num(o.contentSize, d.contentSize, 11, 20, 0.5),
@@ -151,7 +192,7 @@ function fromObject(o: Obj): AppearanceSettings {
     uiWeight: pick(o.uiWeight, ["regular", "medium"], d.uiWeight),
     contentFont: pick(o.contentFont, ["same", "serif", "rounded"], d.contentFont),
     contentWeight: pick(o.contentWeight, ["regular", "medium"], d.contentWeight),
-    codeFont: pick(o.codeFont, ["system", "jetbrains", "fira", "menlo"], d.codeFont),
+    codeFont: parseFont(o.codeFont, codeFontPresets, "system"),
     codeWeight: pick(o.codeWeight, ["regular", "medium"], d.codeWeight),
     smartPunctuation: bool(o.smartPunctuation, d.smartPunctuation),
     fullWidth: bool(o.fullWidth, d.fullWidth),
@@ -227,7 +268,7 @@ export function activeSlot(settings: AppearanceSettings, resolved: "light" | "da
 export function setOverride(
   settings: AppearanceSettings,
   resolved: "light" | "dark",
-  key: "bg" | "fg" | "accent",
+  key: ColorKey,
   value: Hex | null,
 ): AppearanceSettings {
   const { themeId } = activeSlot(settings, resolved)
@@ -242,6 +283,44 @@ export function setOverride(
   if (Object.keys(nextEntry).length > 0) overrides[themeId] = nextEntry
   else delete overrides[themeId]
   return { ...settings, overrides }
+}
+
+/**
+ * 改某个模式的主题槽。不分别设置时先把浅色槽复制给深色槽再打开分别设置，
+ * 所以另一个模式看到的效果不变。
+ */
+export function editSlot(
+  settings: AppearanceSettings,
+  resolved: "light" | "dark",
+  patch: Partial<ThemeSlot>,
+): AppearanceSettings {
+  const split = settings.splitModes
+    ? settings
+    : { ...settings, splitModes: true, dark: settings.light }
+  return { ...split, [resolved]: { ...split[resolved], ...patch } }
+}
+
+/** 同时改两个模式的界面字体（设置页只有一个界面字体）。 */
+export function setUiFont(settings: AppearanceSettings, uiFont: string): AppearanceSettings {
+  return {
+    ...settings,
+    light: { ...settings.light, uiFont },
+    dark: { ...settings.dark, uiFont },
+  }
+}
+
+/** 清掉某个模式当前主题的全部颜色修改，强调色回到主题默认；另一个模式不变。 */
+export function resetMode(
+  settings: AppearanceSettings,
+  resolved: "light" | "dark",
+): AppearanceSettings {
+  const { themeId } = activeSlot(settings, resolved)
+  const entry = { ...settings.overrides[themeId] }
+  delete entry[resolved]
+  const overrides = { ...settings.overrides }
+  if (Object.keys(entry).length > 0) overrides[themeId] = entry
+  else delete overrides[themeId]
+  return editSlot({ ...settings, overrides }, resolved, { accentMode: "default" })
 }
 
 /** 回到默认设置，只保留高级区的展开状态。 */

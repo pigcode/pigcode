@@ -1,5 +1,6 @@
 /** 英文消息目录；key 必须与 zh-CN 完全一致。 */
 import { agentsEnUS } from "./agents.messages"
+import { appearanceEnUS } from "./appearance.messages"
 import { browserEnUS } from "./browser.messages"
 import { conversationEnUS } from "./conversation.messages"
 import { filesEnUS } from "./files.messages"
@@ -11,6 +12,7 @@ import { workbenchEnUS } from "./workbench.messages"
 
 export const enUS = {
   ...agentsEnUS,
+  ...appearanceEnUS,
   ...browserEnUS,
   ...conversationEnUS,
   ...filesEnUS,

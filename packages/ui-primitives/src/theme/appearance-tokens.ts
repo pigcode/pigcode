@@ -2,7 +2,8 @@
 import type { Hex } from "./color-math"
 import { black, mixHex, readableOn, white } from "./color-math"
 import type { AppearanceSettings } from "./appearance-settings"
-import { activeSlot } from "./appearance-settings"
+import type { CodeFontPreset, UiFontPreset } from "./appearance-settings"
+import { activeSlot, cleanFontName } from "./appearance-settings"
 import type { GlassTint, Paint } from "./appearance-glass"
 import {
   blendPaint,
@@ -18,13 +19,15 @@ import {
 } from "./appearance-glass"
 import type { ThemeDefinition } from "./theme-presets"
 import { findTheme } from "./theme-presets"
-import { splitAlpha } from "./theme-tokens"
+import { splitAlpha, supportsTranslucency } from "./theme-tokens"
 
 /** 推导时需要的运行环境：当前实际模式、是否有系统磨砂、平台和系统的减少动态偏好。 */
 export type AppearanceEnvironment = {
   resolved: "light" | "dark"
   glass: boolean
   platform: string
+  /** 系统版本（Windows 用来判断有没有 acrylic）；不知道时留空。 */
+  systemVersion?: string | undefined
   prefersReducedMotion: boolean
 }
 
@@ -115,10 +118,21 @@ const cjkSans = `"PingFang SC", "Hiragino Sans GB", "Segoe UI Variable Text", "M
 const uiChain = `-apple-system, BlinkMacSystemFont, "SF Pro Text", ${cjkSans}, sans-serif`
 const monoChain = `"SF Mono", ui-monospace, "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace`
 
-const uiFonts: Record<AppearanceSettings["light"]["uiFont"], string | null> = {
+const uiFonts: Record<UiFontPreset, string | null> = {
   system: null,
   inter: `"Inter", ${uiChain}`,
   "source-han": `"Source Han Sans SC", ${uiChain}`,
+}
+
+/** 预设查表；不是预设时把字体名放在对应字体链的最前面，系统没有这个字体就落到后面的。 */
+function fontStack(
+  value: string,
+  presets: Record<string, string | null>,
+  chain: string,
+): string | null {
+  if (Object.hasOwn(presets, value)) return presets[value] ?? null
+  const name = cleanFontName(value)
+  return name ? `"${name}", ${chain}` : null
 }
 
 const contentFonts: Record<AppearanceSettings["contentFont"], string | null> = {
@@ -127,7 +141,7 @@ const contentFonts: Record<AppearanceSettings["contentFont"], string | null> = {
   rounded: `ui-rounded, "SF Pro Rounded", ${cjkSans}, sans-serif`,
 }
 
-const codeFonts: Record<AppearanceSettings["codeFont"], string | null> = {
+const codeFonts: Record<CodeFontPreset, string | null> = {
   system: null,
   jetbrains: `"JetBrains Mono", ${monoChain}`,
   fira: `"Fira Code", ${monoChain}`,
@@ -159,7 +173,14 @@ export function contrastFactor(contrast: number): number {
 }
 
 /** 当前模式下实际要推导的颜色；null 表示沿用 tokens.css。 */
-type ResolvedColors = { bg: Hex | null; fg: Hex | null; accent: Hex | null; custom: boolean }
+type ResolvedColors = {
+  bg: Hex | null
+  fg: Hex | null
+  accent: Hex | null
+  custom: boolean
+  diffAdded: Hex | null
+  diffRemoved: Hex | null
+}
 
 function resolveColors(
   settings: AppearanceSettings,
@@ -177,6 +198,8 @@ function resolveColors(
     fg: changed.fg ?? base?.fg ?? null,
     accent,
     custom: isCustom && accent !== null,
+    diffAdded: changed.diffAdded ?? base?.diffAdded ?? null,
+    diffRemoved: changed.diffRemoved ?? base?.diffRemoved ?? null,
   }
 }
 
@@ -227,6 +250,23 @@ function glassTint(bg: Hex, tone: Tone): GlassTint {
   return tone === "light"
     ? { ground: bg, raised: mixHex(bg, white, 0.7), popover: mixHex(bg, white, 0.6) }
     : { ground: bg, raised: white, popover: mixHex(bg, white, 0.055) }
+}
+
+/** diff 的新增行和删除行：行底是半透明的同色，符号和对话里的增删计数直接用这个颜色。 */
+function diffGroup(colors: ResolvedColors, tone: Tone): Vars {
+  const alpha = tone === "light" ? 0.14 : 0.18
+  const vars: Vars = {}
+  if (colors.diffAdded) {
+    vars["--diff-add-bg"] = withAlpha(colors.diffAdded, alpha)
+    vars["--diff-add-fg"] = colors.diffAdded
+    vars["--cv-diff-added"] = colors.diffAdded
+  }
+  if (colors.diffRemoved) {
+    vars["--diff-remove-bg"] = withAlpha(colors.diffRemoved, alpha)
+    vars["--diff-remove-fg"] = colors.diffRemoved
+    vars["--cv-diff-removed"] = colors.diffRemoved
+  }
+  return vars
 }
 
 function textGroup(fg: Hex, ground: Hex): Vars {
@@ -290,6 +330,7 @@ function colorVars(
     vars["--term-bg"] = tone === "light" ? mixHex(bg, white, 0.7) : mixHex(bg, black, 0.2)
   }
   if (fg) vars["--term-fg"] = fg
+  Object.assign(vars, diffGroup(colors, tone))
   const g = settings.glass
   const glassMix = env.glass ? Math.min(1, g / defaultGlass) : 0
   if (bg || settings.contrast !== defaultContrast || (glassMix < 1 && env.glass)) {
@@ -299,6 +340,26 @@ function colorVars(
   return vars
 }
 
+/**
+ * 侧栏透明度：把窗口底色（侧栏和窗口边框露出来的那层）换成半透明，内容区仍是不透明的卡片。
+ * 透明度 100 时页面不再画底色，只剩系统的磨砂材质；材质自带模糊和底色，文字仍然清楚。
+ * 磨砂模式自己管窗口底色，这里不插手。
+ */
+function translucencyVars(
+  colors: ResolvedColors,
+  settings: AppearanceSettings,
+  env: AppearanceEnvironment,
+): Vars {
+  const t = settings.sidebarTranslucency
+  if (t <= 0 || env.glass || !supportsTranslucency(env.platform, env.systemVersion)) return {}
+  const tone = colors.bg ? toneOf(colors.bg) : env.resolved
+  const window = colors.bg
+    ? paintAt(surfacePaints(colors.bg, tone), "--window").color
+    : tokenPaint(defaultTokens[env.resolved]("--window")).color
+  // --window-solid 是同一个颜色的不透明版本：Windows 的原生标题栏按钮要一个不透明的底色
+  return { "--window": withAlpha(window, round3(1 - t / 100)), "--window-solid": window }
+}
+
 function typeVars(settings: AppearanceSettings, env: AppearanceEnvironment): Vars {
   const d = { uiSize: 13, contentSize: 14, codeSize: 11.5 }
   const vars: Vars = {}
@@ -306,9 +367,9 @@ function typeVars(settings: AppearanceSettings, env: AppearanceEnvironment): Var
   if (settings.contentSize !== d.contentSize) vars["--fs-content"] = `${settings.contentSize}px`
   if (settings.codeSize !== d.codeSize) vars["--fs-code"] = `${settings.codeSize}px`
   const fonts: [string, string | null][] = [
-    ["--font-ui", uiFonts[activeSlot(settings, env.resolved).uiFont]],
+    ["--font-ui", fontStack(activeSlot(settings, env.resolved).uiFont, uiFonts, uiChain)],
     ["--font-content", contentFonts[settings.contentFont]],
-    ["--font-mono", codeFonts[settings.codeFont]],
+    ["--font-mono", fontStack(settings.codeFont, codeFonts, monoChain)],
     ["--font-weight-ui", settings.uiWeight === "medium" ? "500" : null],
     ["--font-weight-content", settings.contentWeight === "medium" ? "500" : null],
     ["--font-weight-code", settings.codeWeight === "medium" ? "500" : null],
@@ -334,6 +395,10 @@ function attrsFor(
   if (settings.fullWidth) attrs["data-fullwidth"] = "true"
   // 只要输出了强调组就写 data-accent，滑块填充和焦点光晕随之使用强调色
   if (colors.accent) attrs["data-accent"] = colors.custom ? "custom" : "theme"
+  const canTranslucent = supportsTranslucency(env.platform, env.systemVersion)
+  if (settings.sidebarTranslucency > 0 && !env.glass && canTranslucent) {
+    attrs["data-translucent"] = "true"
+  }
   return attrs
 }
 
@@ -348,7 +413,11 @@ export function deriveAppearance(
 ): AppearanceOutput {
   const colors = resolveColors(settings, custom, env.resolved)
   return {
-    vars: { ...colorVars(colors, settings, env), ...typeVars(settings, env) },
+    vars: {
+      ...colorVars(colors, settings, env),
+      ...translucencyVars(colors, settings, env),
+      ...typeVars(settings, env),
+    },
     attrs: attrsFor(settings, colors, env),
   }
 }

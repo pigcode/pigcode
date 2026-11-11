@@ -32,12 +32,19 @@ export function SettingPage({
   )
 }
 
-/** 设置分组；不给标题时作为页面的第一组直接显示。 */
+/**
+ * 设置分组；不给标题时作为页面的第一组直接显示。actions 放在分组标题右边；
+ * plain 时内容直接放在页面上，不套分组卡片（内容自己画卡片或不需要卡片时用）。
+ */
 export function SettingSection({
   title,
+  actions,
+  plain = false,
   children,
 }: {
   title?: string | undefined
+  actions?: ReactNode | undefined
+  plain?: boolean | undefined
   children: ReactNode
 }) {
   return (
@@ -45,9 +52,10 @@ export function SettingSection({
       {title ? (
         <div className="section-head">
           <h2>{title}</h2>
+          {actions ? <div className="section-actions">{actions}</div> : null}
         </div>
       ) : null}
-      <div className="group">{children}</div>
+      {plain ? children : <div className="group">{children}</div>}
     </section>
   )
 }

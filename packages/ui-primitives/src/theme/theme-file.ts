@@ -14,14 +14,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-/** 从任意值读出一组主题颜色；bg 或 fg 不是合法 `#RRGGBB` 时返回 null，非法 accent 被丢弃。 */
+/** 从任意值读出一组主题颜色；bg 或 fg 不是合法 `#RRGGBB` 时返回 null，非法的 accent 与 diff 颜色被丢弃。 */
 export function parseThemeColors(value: unknown): ThemeColors | null {
   if (!isRecord(value)) return null
-  const bg = typeof value.bg === "string" ? parseHex(value.bg) : null
-  const fg = typeof value.fg === "string" ? parseHex(value.fg) : null
+  const hex = (key: string) => {
+    const raw = value[key]
+    return typeof raw === "string" ? parseHex(raw) : null
+  }
+  const bg = hex("bg")
+  const fg = hex("fg")
   if (!bg || !fg) return null
-  const accent = typeof value.accent === "string" ? parseHex(value.accent) : null
-  return accent ? { bg, fg, accent } : { bg, fg }
+  const colors: ThemeColors = { bg, fg }
+  for (const key of ["accent", "diffAdded", "diffRemoved"] as const) {
+    const color = hex(key)
+    if (color) colors[key] = color
+  }
+  return colors
 }
 
 function uniqueName(name: string, existing: readonly string[]): string {
@@ -29,6 +37,16 @@ function uniqueName(name: string, existing: readonly string[]): string {
   let n = 2
   while (existing.includes(`${name} ${n}`)) n += 1
   return `${name} ${n}`
+}
+
+/** 把一个名字变成不与 existingNames 重复的名字：重复时在后面加 2、3…… */
+export function uniqueThemeName(name: string, existing: readonly string[]): string {
+  return uniqueName(name, existing)
+}
+
+/** 把一套浅色、深色颜色写成主题文件（pigcode-theme/1，两空格缩进）。 */
+export function exportThemeFile(name: string, light: ThemeColors, dark: ThemeColors): string {
+  return JSON.stringify({ schema: SCHEMA, name, light, dark }, null, 2)
 }
 
 /** 解析主题 JSON 文本：保证成功时 builtIn 为 false、light/dark 齐全、名字不与 existingNames 重复。 */

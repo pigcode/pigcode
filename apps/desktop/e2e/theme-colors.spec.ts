@@ -96,3 +96,30 @@ test("the native title bar follows the Appearance mode", async () => {
   await expect(mode.getByRole("radio", { name: "跟随系统" })).toBeChecked()
   await app.close()
 })
+
+test("sidebar translucency really makes the native window background clear", async () => {
+  // Linux 没有系统磨砂材质，滑块是禁用的
+  test.skip(process.platform === "linux", "no system material on Linux")
+  const { app, page } = await openThread("translucency")
+  const nativeBackground = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((item) => item.isVisible())
+      return window?.getBackgroundColor() ?? null
+    })
+  const opaque = await nativeBackground()
+
+  await page.getByRole("button", { name: "设置", exact: true }).click()
+  await page.getByRole("button", { name: "外观", exact: true }).first().click()
+  const slider = page.getByRole("slider", { name: "侧栏透明度" })
+  await slider.focus()
+  await page.keyboard.press("End")
+  await expect(page.locator("html")).toHaveAttribute("data-translucent", "true")
+  // getBackgroundColor 不带透明度：#00000000 读回来是 #000000。
+  // 如果主进程写的是 "transparent"，Electron 会把它解析成白色 #FFFFFF，磨砂就被白底挡住了。
+  await expect.poll(nativeBackground).toBe("#000000")
+
+  await page.keyboard.press("Home")
+  await expect(page.locator("html")).not.toHaveAttribute("data-translucent", "true")
+  await expect.poll(nativeBackground).toBe(opaque)
+  await app.close()
+})

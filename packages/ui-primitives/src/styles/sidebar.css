@@ -356,6 +356,10 @@
       visibility var(--t-med);
     box-shadow: var(--shadow-pop);
   }
+  /* 侧栏透明时窗口底色是半透明的；抽屉盖在内容上，要换回不透明的底 */
+  :root[data-translucent="true"] .sidebar {
+    background: var(--popover);
+  }
   .app.is-drawer-open .sidebar {
     visibility: visible;
     transform: none;

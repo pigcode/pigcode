@@ -2,6 +2,22 @@
 // 以及由 token 算出原生标题栏的颜色。不碰 DOM 和 React，主进程也能用。
 import type { Hex } from "./color-math"
 import { oklchToHex, parseHex } from "./color-math"
+
+export { clearWindowColor } from "./color-math"
+
+/** Windows 11 22H2：Electron 的 backgroundMaterial（mica、acrylic）从这一版起才有效。 */
+const WINDOWS_MATERIAL_BUILD = 22621
+
+/**
+ * 有没有能透出桌面的系统磨砂材质：macOS 都有；Windows 要 11 22H2 以上（systemVersion 形如 "10.0.22631"），
+ * 更早的版本把窗口底色设成透明只会变黑；Linux 没有。
+ */
+export function supportsTranslucency(platform: string, systemVersion = ""): boolean {
+  if (platform === "darwin") return true
+  if (platform !== "win32") return false
+  const build = Number(systemVersion.split(".")[2])
+  return Number.isFinite(build) && build >= WINDOWS_MATERIAL_BUILD
+}
 import type { ResolvedTheme } from "./theme-model"
 
 /** 按变量名读 token 的 CSS 值；没有这个 token 时返回空串。 */

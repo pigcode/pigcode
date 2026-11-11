@@ -1,5 +1,6 @@
 /** 简体中文消息目录；新增 key 时先加在这里，成组的文案放在单独的模块里合并进来。 */
 import { agentsZhCN } from "./agents.messages"
+import { appearanceZhCN } from "./appearance.messages"
 import { browserZhCN } from "./browser.messages"
 import { conversationZhCN } from "./conversation.messages"
 import { filesZhCN } from "./files.messages"
@@ -10,6 +11,7 @@ import { workbenchZhCN } from "./workbench.messages"
 
 export const zhCN = {
   ...agentsZhCN,
+  ...appearanceZhCN,
   ...browserZhCN,
   ...conversationZhCN,
   ...filesZhCN,

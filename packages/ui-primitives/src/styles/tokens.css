@@ -74,6 +74,12 @@
   --warn-soft: oklch(74% 0.15 70 / 0.16);
   --bad-soft: oklch(59% 0.21 25 / 0.1);
 
+  /* diff 的新增行和删除行，外观设置可以单独改 */
+  --diff-add-bg: var(--ok-soft);
+  --diff-add-fg: var(--ok-text);
+  --diff-remove-bg: var(--bad-soft);
+  --diff-remove-fg: var(--bad-text);
+
   /* 数据 */
   --track: oklch(21% 0.006 286 / 0.08);
   --avatar: oklch(91% 0 0);
@@ -143,6 +149,9 @@
   --cv-inline-code: color-mix(in oklab, var(--fg) 7%, transparent);
   --cv-added: #1e8a3e;
   --cv-removed: #e03131;
+  /* 对话里 diff 的标记色；外观设置的新增行、删除行改的是这两个，错误提示仍用上面两个 */
+  --cv-diff-added: var(--cv-added);
+  --cv-diff-removed: var(--cv-removed);
   --cv-success: #1e8a3e;
   --cv-shimmer-strong: var(--fg);
   --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
@@ -216,6 +225,12 @@
   --warn-soft: oklch(80% 0.14 75 / 0.14);
   --bad-soft: oklch(68% 0.18 25 / 0.14);
 
+  /* diff 的新增行和删除行，外观设置可以单独改 */
+  --diff-add-bg: var(--ok-soft);
+  --diff-add-fg: var(--ok-text);
+  --diff-remove-bg: var(--bad-soft);
+  --diff-remove-fg: var(--bad-text);
+
   --track: oklch(100% 0 0 / 0.09);
   --avatar: oklch(29% 0 0);
 
@@ -262,6 +277,9 @@
   --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
   --cv-added: #46bf72;
   --cv-removed: #ff5c5c;
+  /* 对话里 diff 的标记色；外观设置的新增行、删除行改的是这两个，错误提示仍用上面两个 */
+  --cv-diff-added: var(--cv-added);
+  --cv-diff-removed: var(--cv-removed);
   --cv-success: #46bf72;
   --file-node-fg: #8fc5ef;
   --subagent-node-fg: #c8cd90;

@@ -2,6 +2,7 @@
 interface Window {
   pigcodeNative?: {
     platform: string
+    systemVersion?: string
     appVersion?(): Promise<string>
     setThemeSource(source: "light" | "dark" | "system"): Promise<void>
     windowControl(action: "minimize" | "maximize" | "close"): Promise<void>
@@ -9,6 +10,8 @@ interface Window {
     isFullScreen?(): Promise<boolean>
     onFullScreenChange?(listener: (fullScreen: boolean) => void): () => void
     setTitleBarColors?(colors: { color: string; symbolColor: string }): Promise<void>
+    setWindowTranslucent?(translucent: boolean): Promise<void>
+    saveTextFile?(fileName: string, text: string): Promise<boolean>
     popupMenu?(
       items: ReadonlyArray<
         | { type: "separator" }

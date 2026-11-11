@@ -3,6 +3,8 @@ import { contextBridge, ipcRenderer } from "electron"
 
 contextBridge.exposeInMainWorld("pigcodeNative", {
   platform: process.platform,
+  // Windows 用它判断有没有 acrylic（11 22H2 以上）；沙箱里的 process 也有这个方法
+  systemVersion: process.getSystemVersion(),
   appVersion: (): Promise<string> => ipcRenderer.invoke("pigcode:app-version"),
   getPreferences: (): Promise<{
     launchAtLogin: boolean
@@ -41,6 +43,10 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   },
   setTitleBarColors: (colors: { color: string; symbolColor: string }) =>
     ipcRenderer.invoke("pigcode:title-bar", colors),
+  setWindowTranslucent: (translucent: boolean) =>
+    ipcRenderer.invoke("pigcode:set-translucent", translucent),
+  saveTextFile: (fileName: string, text: string): Promise<boolean> =>
+    ipcRenderer.invoke("pigcode:save-text-file", fileName, text),
   popupMenu: (items: unknown[], position: { x: number; y: number }): Promise<string | null> =>
     ipcRenderer.invoke("pigcode:menu", items, position),
   pickFolder: (labels?: { title?: string; buttonLabel?: string }): Promise<string | null> =>

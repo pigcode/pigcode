@@ -28,6 +28,7 @@ import {
   type Preferences,
 } from "./preferences"
 import { setKeepAwake } from "./keep-awake"
+import { registerAppearanceIpc } from "./appearance-ipc"
 import { applyLoginShellEnv } from "./shell-env"
 import { createTray, showHiddenHint } from "./tray"
 import { confirmQuit } from "./quit-prompt"
@@ -63,13 +64,7 @@ import {
   readUnsavedGuardLabels,
   type UnsavedGuardLabels,
 } from "./unsaved-guard"
-import {
-  TITLE_BAR_HEIGHT,
-  createMainWindowOptions,
-  readThemeSource,
-  readTitleBarColors,
-  usesTitleBarOverlay,
-} from "./window-options"
+import { createMainWindowOptions } from "./window-options"
 
 registerPrivilegedSchemes()
 
@@ -130,10 +125,7 @@ function profileDir(): string {
 function registerNativeBridge(): void {
   // 设置页显示的版本就是 package.json 的版本，electron 在启动时读一次。
   ipcMain.handle("pigcode:app-version", () => app.getVersion())
-  ipcMain.handle("pigcode:set-theme", (_event, value: unknown) => {
-    const source = readThemeSource(value)
-    if (source) nativeTheme.themeSource = source
-  })
+
   ipcMain.handle("pigcode:window", (event, action: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) return
@@ -149,12 +141,11 @@ function registerNativeBridge(): void {
   ipcMain.handle("pigcode:is-full-screen", (event) => {
     return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false
   })
-  // 原生窗口按钮的底色与图标色跟随页面当前外观；macOS 的交通灯不需要。
-  ipcMain.handle("pigcode:title-bar", (event, value: unknown) => {
-    const colors = readTitleBarColors(value)
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!colors || !window || !usesTitleBarOverlay(process.platform)) return
-    window.setTitleBarOverlay({ ...colors, height: TITLE_BAR_HEIGHT })
+  registerAppearanceIpc(ipcMain, BrowserWindow, nativeTheme, {
+    platform: process.platform,
+    systemVersion: process.getSystemVersion(),
+    downloads: () => app.getPath("downloads"),
+    showSaveDialog: (parent, options) => dialog.showSaveDialog(parent, options),
   })
   // 标题栏菜单由页面描述、主进程弹出原生菜单；返回被点击的命令 id。
   ipcMain.handle("pigcode:menu", (event, items: unknown, position: unknown) => {

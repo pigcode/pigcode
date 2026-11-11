@@ -9,6 +9,12 @@ type Rgb = [number, number, number]
 export const white: Hex = "#FFFFFF"
 export const black: Hex = "#000000"
 
+/**
+ * 完全透明的窗口底色，给 Electron 的 setBackgroundColor 用（八位写法是 #AARRGGBB）。
+ * 不能写成 "transparent"：Electron 43 会把它解析成白色，窗口就成了不透明的白底。
+ */
+export const clearWindowColor = "#00000000"
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
 

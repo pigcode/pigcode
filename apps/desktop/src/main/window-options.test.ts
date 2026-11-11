@@ -6,6 +6,8 @@ import {
   createMainWindowOptions,
   defaultTitleBarColors,
   readTitleBarColors,
+  windowBackground,
+  windowMaterial,
 } from "./window-options"
 
 function optionsFor(platform: NodeJS.Platform, dark = false) {
@@ -77,5 +79,35 @@ describe("readTitleBarColors", () => {
     expect(readTitleBarColors({ color: "#ffffff" })).toBeNull()
     expect(readTitleBarColors("#ffffff")).toBeNull()
     expect(readTitleBarColors(null)).toBeNull()
+  })
+})
+
+describe("windowBackground", () => {
+  it("uses eight-digit clear black when translucent, never the word transparent", () => {
+    // Electron 把 "transparent" 解析成白色，磨砂材质会被白底挡住
+    expect(windowBackground(true, false)).toBe("#00000000")
+    expect(windowBackground(true, true)).toBe("#00000000")
+  })
+
+  it("goes back to the default window color when opaque", () => {
+    expect(windowBackground(false, false)).toBe(defaultTitleBarColors(false)?.color)
+    expect(windowBackground(false, true)).toBe(defaultTitleBarColors(true)?.color)
+  })
+})
+
+describe("windowMaterial", () => {
+  it("swaps to the clearer material while translucent and back afterwards", () => {
+    expect(windowMaterial("darwin", true)).toEqual({ vibrancy: "fullscreen-ui" })
+    expect(windowMaterial("darwin", false)).toEqual({ vibrancy: "sidebar" })
+    expect(windowMaterial("win32", true)).toEqual({ backgroundMaterial: "acrylic" })
+    expect(windowMaterial("win32", false)).toEqual({ backgroundMaterial: "mica" })
+    expect(windowMaterial("linux", true)).toBeNull()
+  })
+
+  it("the opaque material is the one the window is created with", () => {
+    const mac = createMainWindowOptions({ platform: "darwin", preloadPath: "/p", isPackaged: true })
+    expect(windowMaterial("darwin", false)).toEqual({ vibrancy: mac.vibrancy })
+    const win = createMainWindowOptions({ platform: "win32", preloadPath: "/p", isPackaged: true })
+    expect(windowMaterial("win32", false)).toEqual({ backgroundMaterial: win.backgroundMaterial })
   })
 })

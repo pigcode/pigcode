@@ -75,14 +75,14 @@
   min-width: 0;
 }
 .diff-line-add {
-  background: var(--ok-soft);
+  background: var(--diff-add-bg);
 }
 .diff-line-add .diff-line-sign {
-  color: var(--ok-text);
+  color: var(--diff-add-fg);
 }
 .diff-line-remove {
-  background: var(--bad-soft);
+  background: var(--diff-remove-bg);
 }
 .diff-line-remove .diff-line-sign {
-  color: var(--bad-text);
+  color: var(--diff-remove-fg);
 }

@@ -160,11 +160,11 @@
 }
 .diff-count .add,
 .file-summary .add {
-  color: var(--cv-added);
+  color: var(--cv-diff-added);
 }
 .diff-count .del,
 .file-summary .del {
-  color: var(--cv-removed);
+  color: var(--cv-diff-removed);
 }
 .file-chip {
   display: inline-flex;

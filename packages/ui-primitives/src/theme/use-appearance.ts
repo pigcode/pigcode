@@ -54,6 +54,7 @@ export function useAppearance() {
         resolved,
         glass: document.documentElement.dataset.glass === "true",
         platform: window.pigcodeNative?.platform ?? "",
+        systemVersion: window.pigcodeNative?.systemVersion,
         prefersReducedMotion,
       }),
     [settings, customThemes, resolved, prefersReducedMotion],
@@ -72,12 +73,22 @@ export function useAppearance() {
   useEffect(() => {
     const native = window.pigcodeNative
     if (!native?.setTitleBarColors) return
-    const colors = titleBarColors(documentTokenReader(), resolveCssColor)
+    // 侧栏透明时 --window 是半透明的，读不成标题栏要的六位颜色；改读同色的不透明版本
+    const tokens = documentTokenReader()
+    const reader = (name: string) =>
+      name === "--window" ? tokens("--window-solid") || tokens(name) : tokens(name)
+    const colors = titleBarColors(reader, resolveCssColor)
     const key = colors ? `${colors.color}${colors.symbolColor}` : ""
     if (!colors || key === reportedTitleBar.current) return
     reportedTitleBar.current = key
     void native.setTitleBarColors(colors)
   }, [output, resolved])
+
+  // 侧栏透明时让主进程把窗口底色设成透明，系统磨砂材质才能透出来
+  const translucent = output.attrs["data-translucent"] === "true"
+  useEffect(() => {
+    void window.pigcodeNative?.setWindowTranslucent?.(translucent)
+  }, [translucent])
 
   useEffect(() => {
     saveAppearance(window.localStorage, settings)

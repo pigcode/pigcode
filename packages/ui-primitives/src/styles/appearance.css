@@ -1,0 +1,568 @@
+/*
+  外观设置页。整页只有一个视觉主角：主题小窗——用主题自己的颜色画的缩小 Pigcode 窗口，
+  出现在模式缩略图、主题大预览和主题列表三处。小窗的尺寸全部用 cqw（小窗自身宽度的百分比），
+  所以同一套结构在 140px 的缩略图和 560px 的大预览里比例一致；颜色来自 --pv-* 变量（theme-preview.ts）。
+  其余部分（分组、设置行、颜色色片、主题代码）保持安静，沿用设置页的卡片与细线。
+*/
+
+/* ─── 分组标题右边的控件、分组说明 ─────────────────────────── */
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.section-note {
+  max-width: 62ch;
+  margin: -2px 4px 10px;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.55;
+}
+
+/* ─── 主题小窗 ─────────────────────────────────────────── */
+.mini-frame {
+  display: block;
+  container-type: inline-size;
+  min-width: 0;
+}
+.mini {
+  display: flex;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: 3cqw;
+  background: var(--pv-window);
+  color: var(--pv-fg);
+}
+.mini-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1.1cqw;
+  width: 27%;
+  padding: 3cqw 2.2cqw;
+  background: var(--pv-sidebar);
+}
+.mini-dots {
+  display: flex;
+  gap: 1cqw;
+  margin: 0 0 1.8cqw 0.6cqw;
+}
+.mini-dots i {
+  width: 1.6cqw;
+  aspect-ratio: 1;
+  border-radius: var(--r-full);
+  background: var(--pv-faint);
+}
+.mini-row {
+  display: block;
+  padding: 1.3cqw 1.5cqw;
+  border-radius: 1.2cqw;
+}
+.mini-row.is-active {
+  background: var(--pv-hover);
+}
+.mini-bar {
+  display: block;
+  height: 1.2cqw;
+  border-radius: var(--r-full);
+  background: var(--pv-faint);
+}
+.mini-bar.is-fg {
+  background: var(--pv-fg);
+  opacity: 0.72;
+}
+.mini-bar.is-accent {
+  background: var(--pv-accent);
+}
+.mini-bar.is-add {
+  background: var(--pv-add);
+  opacity: 0.5;
+}
+.mini-bar.is-remove {
+  background: var(--pv-remove);
+  opacity: 0.5;
+}
+.mini-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2.4cqw;
+  min-width: 0;
+  margin: 1.4cqw 1.4cqw 1.4cqw 0;
+  padding: 3.4cqw 4.4cqw 2.4cqw;
+  border-radius: 2cqw;
+  background: var(--pv-bg);
+  box-shadow: 0 0 0 1px var(--pv-line);
+}
+.mini-bubble {
+  display: block;
+  align-self: flex-end;
+  width: 34%;
+  padding: 1.7cqw 2.2cqw;
+  border-radius: 2.2cqw;
+  background: var(--pv-card);
+  box-shadow: 0 0 0 1px var(--pv-line);
+}
+.mini-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5cqw;
+}
+.mini-diff {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.9cqw 0;
+  border-radius: 1.6cqw;
+  background: var(--pv-card);
+  box-shadow: 0 0 0 1px var(--pv-line);
+  font-family: var(--font-mono);
+  font-size: 2.3cqw;
+  line-height: 1;
+}
+.mini-diff > span {
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+  padding: 1.1cqw 2.4cqw;
+}
+.mini-diff > .is-add {
+  background: var(--pv-add-soft);
+}
+.mini-diff > .is-remove {
+  background: var(--pv-remove-soft);
+}
+.mini-diff i {
+  flex: none;
+  width: 1.6cqw;
+  font-style: normal;
+}
+.mini-diff > .is-add i {
+  color: var(--pv-add);
+}
+.mini-diff > .is-remove i {
+  color: var(--pv-remove);
+}
+.mini-composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding: 1.3cqw 1.3cqw 1.3cqw 2.8cqw;
+  border-radius: 2.8cqw;
+  background: var(--pv-card);
+  box-shadow: 0 0 0 1px var(--pv-line);
+}
+.mini-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 4.2cqw;
+  aspect-ratio: 1;
+  border-radius: var(--r-full);
+  background: var(--pv-accent);
+  color: var(--pv-on-accent);
+}
+.mini-send svg {
+  width: 62%;
+  height: 62%;
+  stroke-width: 2.6;
+}
+
+/* ─── 模式：三扇窗口缩略图 ───────────────────────────────── */
+.mode-picker {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-7);
+}
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-2);
+  text-align: left;
+  cursor: pointer;
+}
+.mode-thumb {
+  position: relative;
+  display: block;
+  border-radius: var(--r-lg);
+  box-shadow: 0 0 0 var(--hair) var(--border-strong);
+  transition: box-shadow 0.16s var(--ease);
+}
+.mode-thumb .mini {
+  border-radius: var(--r-lg);
+}
+/* 跟随系统：深色那一扇盖在浅色上，沿一条斜线切开 */
+.mode-thumb-dark {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(60% 0, 100% 0, 100% 100%, 40% 100%);
+}
+.mode-label {
+  padding-left: 2px;
+  font-size: var(--fs-md);
+}
+.mode-card:hover .mode-thumb {
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.mode-card[data-checked] {
+  color: var(--fg);
+}
+.mode-card[data-checked] .mode-label {
+  font-weight: 560;
+}
+.mode-card[data-checked] .mode-thumb,
+.theme-tile[data-checked] .mini {
+  box-shadow: 0 0 0 2px var(--primary);
+}
+.mode-card:focus-visible,
+.theme-tile:focus-visible {
+  outline: none;
+}
+.mode-card:focus-visible .mode-thumb,
+.theme-tile:focus-visible .mini {
+  box-shadow:
+    0 0 0 2px var(--primary),
+    0 0 0 5px var(--accent-ring);
+}
+
+/* ─── 主题工作台：大预览、主题列表、颜色 ───────────────────── */
+.theme-studio {
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.theme-stage {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+  background: var(--panel);
+  border-bottom: var(--hair) solid var(--border);
+}
+.theme-stage .mini-frame {
+  flex: 1;
+  max-width: 420px;
+}
+.theme-stage .mini {
+  aspect-ratio: 16 / 8.2;
+  border-radius: 1.6cqw;
+  box-shadow:
+    0 0 0 var(--hair) var(--border-strong),
+    var(--shadow-pop);
+}
+.theme-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: var(--space-7) var(--space-6);
+  padding: var(--space-8) var(--space-8) var(--space-2);
+}
+.theme-tile-wrap {
+  position: relative;
+  min-width: 0;
+}
+.theme-tile {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg-2);
+  text-align: left;
+  cursor: pointer;
+}
+.theme-tile .mini {
+  border-radius: var(--r-md);
+  box-shadow: 0 0 0 var(--hair) var(--border-strong);
+  transition: box-shadow 0.16s var(--ease);
+}
+.theme-tile:hover .mini {
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.theme-tile-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-left: 2px;
+  font-size: var(--fs-sm);
+}
+.theme-tile[data-checked] .theme-tile-name {
+  color: var(--fg);
+  font-weight: 560;
+}
+.theme-tile-name .ic {
+  flex: none;
+  color: var(--primary);
+}
+/* 「我的主题」右上角的删除按钮：悬停或键盘聚焦到这张卡片时才出现 */
+.theme-tile-remove {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: var(--control-xs);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-full);
+  background: var(--popover);
+  box-shadow:
+    var(--shadow-btn),
+    0 0 0 var(--hair) var(--border-strong);
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s var(--ease);
+}
+.theme-tile-remove svg {
+  width: 12px;
+}
+.theme-tile-wrap:hover .theme-tile-remove,
+.theme-tile-wrap:focus-within .theme-tile-remove {
+  opacity: 1;
+}
+.theme-tile-remove:hover {
+  color: var(--bad-text);
+}
+.theme-notice {
+  margin: -2px 4px 10px;
+  font-size: var(--fs-sm);
+}
+.theme-notice[data-tone="ok"] {
+  color: var(--ok-text);
+}
+.theme-notice[data-tone="error"] {
+  color: var(--bad-text);
+}
+.theme-colors {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-6);
+  margin-top: var(--space-7);
+  padding: var(--space-7) var(--space-8) var(--space-8);
+  border-top: var(--hair) solid var(--border);
+}
+.color-chips {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+.color-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.color-chip-swatch {
+  position: relative;
+  width: var(--control-lg);
+  aspect-ratio: 1;
+  margin-bottom: var(--space-3);
+  border-radius: var(--r-full);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+}
+/* 系统取色器铺满色块但看不见：点色块就打开它，键盘焦点画在色块上 */
+.color-chip-swatch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.color-chip-swatch:has(input:focus-visible) {
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 3px var(--accent-ring);
+}
+.color-chip-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.color-chip-reset {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-xs);
+  aspect-ratio: 1;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+.color-chip-reset svg {
+  width: 12px;
+}
+.color-chip-reset:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+/* 十六进制值平时像一行小字，点进去才显出输入框 */
+.input.color-chip-hex {
+  height: var(--control-xs);
+  width: 100%;
+  max-width: 10ch;
+  margin-left: calc(-1 * var(--space-2));
+  padding: 0 var(--space-2);
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+}
+.input.color-chip-hex:hover {
+  background: var(--hover);
+}
+.input.color-chip-hex:focus {
+  background: var(--field);
+  box-shadow: var(--shadow-field-focus);
+  color: var(--fg);
+}
+.theme-colors-reset {
+  flex: none;
+}
+
+/* ─── 主题代码 ─────────────────────────────────────────── */
+.code-panel {
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  transition: box-shadow 0.16s var(--ease);
+}
+.code-panel:focus-within {
+  box-shadow:
+    var(--shadow-raised),
+    0 0 0 3px var(--accent-ring);
+}
+.code-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-7);
+  border-bottom: var(--hair) solid var(--border);
+}
+.code-panel-title {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.code-panel-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+.code-panel-code {
+  margin: 0;
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  overflow-x: auto;
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.7;
+  white-space: pre;
+}
+.tok-prefix {
+  color: var(--faint);
+}
+.tok-key {
+  color: var(--muted);
+}
+.tok-string {
+  color: var(--fg);
+}
+.tok-literal {
+  color: var(--primary);
+}
+.tok-swatch {
+  display: inline-block;
+  width: 0.85em;
+  aspect-ratio: 1;
+  margin-right: 0.45em;
+  border-radius: var(--r-full);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  vertical-align: -0.08em;
+}
+.textarea.code-panel-input {
+  display: block;
+  width: 100%;
+  padding: var(--space-6) var(--space-7) var(--space-7);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+  line-height: 1.7;
+  resize: vertical;
+}
+.textarea.code-panel-input:focus {
+  outline: none;
+  box-shadow: none;
+}
+.code-panel-error {
+  margin: 0;
+  padding: var(--space-5) var(--space-7);
+  border-top: var(--hair) solid var(--border);
+  background: var(--bad-soft);
+  color: var(--bad-text);
+  font-size: var(--fs-sm);
+}
+
+/* ─── 字体与滑块 ───────────────────────────────────────── */
+.appearance-slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 190px;
+}
+.font-field {
+  width: 190px;
+}
+
+@media (max-width: 640px) {
+  .theme-stage {
+    padding: 20px;
+  }
+  .theme-colors {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .color-chips {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: var(--space-7);
+  }
+  .section-head:has(.section-actions) {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-thumb,
+  .theme-tile .mini,
+  .theme-tile-remove,
+  .code-panel {
+    transition: none;
+  }
+}

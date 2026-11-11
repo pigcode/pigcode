@@ -174,12 +174,12 @@
   grid-template-columns: 48px 20px minmax(0, 1fr);
 }
 .idiff-line.is-add {
-  background: color-mix(in srgb, var(--cv-added) 14%, transparent);
-  box-shadow: inset 3px 0 0 var(--cv-added);
+  background: color-mix(in srgb, var(--cv-diff-added) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cv-diff-added);
 }
 .idiff-line.is-remove {
-  background: color-mix(in srgb, var(--cv-removed) 14%, transparent);
-  box-shadow: inset 3px 0 0 var(--cv-removed);
+  background: color-mix(in srgb, var(--cv-diff-removed) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--cv-diff-removed);
 }
 .idiff-gutter {
   position: sticky;
@@ -193,10 +193,10 @@
   user-select: none;
 }
 .idiff-line.is-add .idiff-gutter {
-  color: var(--cv-added);
+  color: var(--cv-diff-added);
 }
 .idiff-line.is-remove .idiff-gutter {
-  color: var(--cv-removed);
+  color: var(--cv-diff-removed);
 }
 .idiff-line.is-gap .idiff-gutter {
   border-right: 0;
@@ -207,10 +207,10 @@
   user-select: none;
 }
 .idiff-line.is-add .idiff-marker {
-  color: var(--cv-added);
+  color: var(--cv-diff-added);
 }
 .idiff-line.is-remove .idiff-marker {
-  color: var(--cv-removed);
+  color: var(--cv-diff-removed);
 }
 .idiff-line.is-gap .idiff-code {
   color: var(--cv-subtlest);

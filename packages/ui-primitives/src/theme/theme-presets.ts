@@ -1,8 +1,8 @@
 // 负责内置主题表和按 id 查找主题；颜色取自外观设置规格 §5.1。
 import type { Hex } from "./color-math"
 
-/** 一个模式下的主题颜色；accent 缺省表示使用主题自己的规则。 */
-export type ThemeColors = { bg: Hex; fg: Hex; accent?: Hex }
+/** 一个模式下的主题颜色；accent 缺省表示使用主题自己的规则，diff 两色缺省时沿用 tokens.css。 */
+export type ThemeColors = { bg: Hex; fg: Hex; accent?: Hex; diffAdded?: Hex; diffRemoved?: Hex }
 
 /** 一套主题。light/dark 为 null 表示沿用 tokens.css 原值（仅 pigclaude）。 */
 export type ThemeDefinition = {

@@ -2,6 +2,7 @@
 import type { BrowserWindowConstructorOptions } from "electron"
 import tokensCss from "@pigcode/ui-primitives/styles/tokens.css?raw"
 import {
+  clearWindowColor,
   parseCssColor,
   titleBarColors,
   tokenBlock,
@@ -40,6 +41,29 @@ export function defaultTitleBarColors(dark: boolean): TitleBarColors | null {
   const colors = titleBarColors(tokens, parseCssColor)
   if (!colors) console.warn("tokens.css: --window / --fg-2 could not be parsed for the title bar")
   return colors
+}
+
+/**
+ * 侧栏透明时换用的系统材质。macOS 默认的 sidebar 材质最灰，透过来几乎只剩灰色；
+ * fullscreen-ui 在浅色、深色下都能透出背后的颜色。Windows 的 acrylic 比 mica 更透。
+ * 关掉透明时换回创建窗口时的材质。
+ */
+export function windowMaterial(
+  platform: NodeJS.Platform,
+  translucent: boolean,
+): { vibrancy: "sidebar" | "fullscreen-ui" } | { backgroundMaterial: "mica" | "acrylic" } | null {
+  if (platform === "darwin") return { vibrancy: translucent ? "fullscreen-ui" : "sidebar" }
+  if (platform === "win32") return { backgroundMaterial: translucent ? "acrylic" : "mica" }
+  return null
+}
+
+/**
+ * 窗口底色：侧栏透明时完全透明，否则是默认主题的窗口色（解析不了 tokens.css 时也透明）。
+ * 透明必须用八位十六进制：Electron 把 "transparent" 解析成白色，磨砂材质就被白底挡住了。
+ */
+export function windowBackground(translucent: boolean, dark: boolean): string {
+  if (translucent) return clearWindowColor
+  return defaultTitleBarColors(dark)?.color ?? clearWindowColor
 }
 
 /** 校验渲染进程上报的标题栏颜色；只接受 6 位十六进制色，其他输入返回 null。 */
