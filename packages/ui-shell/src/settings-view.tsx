@@ -2,6 +2,7 @@
 import { Component, type ReactNode } from "react"
 import { useContributions, type SettingsPageContribution } from "@pigcode/client-runtime"
 import { EmptyState, useLocale } from "@pigcode/ui-primitives"
+import { PanelTop } from "./shell"
 
 /** 打开设置时默认的页，也是当前页被移除后退回的页。 */
 export const DEFAULT_SETTINGS_PAGE = "general"
@@ -38,12 +39,13 @@ export class PageErrorBoundary extends Component<
   }
 }
 
-/** 画 id 为 page 的设置页；每一页换进来时重新挂载。 */
+/** 画 id 为 page 的设置页；每一页换进来时重新挂载。顶栏和其他页面一样是窗口拖动区。 */
 export function SettingsView({ page }: { page: string }) {
   const { t } = useLocale()
   const current = useContributions("settingsPage").find((item) => item.id === page)
   return (
     <section className="view" aria-label={t("settings.title")}>
+      <PanelTop />
       <div className="panel-scroll">
         {current ? (
           <PageErrorBoundary
