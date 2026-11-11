@@ -56,20 +56,15 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       startFresh: () => startFresh(entry, deps, run.session.id),
     }
     // 带上还没发出的交接（切换 Agent、子代理说明）；原生会话接不上时，新会话还要带上这一轮之前的对话。
-    const fresh = lost ? freshSessionHandoff(deps.ctx, run.threadId, run.runId) : null
+    const fresh = lost
+      ? freshSessionHandoff(deps.ctx, run.threadId, run.runId, entry.input.text, entry.instanceId)
+      : null
     const handoff = handoffForRun(
       deps.ctx.storage.db,
       run.threadId,
       run.runId,
       entry.input.text,
-      fresh === null
-        ? null
-        : {
-            threadId: run.threadId,
-            strategy: "fresh_session",
-            text: fresh,
-            toInstanceId: entry.instanceId,
-          },
+      fresh,
     )
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {

@@ -196,6 +196,11 @@ const MIGRATIONS: Migration[] = [
     backfillThreadItems(db)
     carryOverPendingHandoffs(db)
   },
+  (db) => {
+    // 工具调用条目的 id 改成按 run 区分（同一个调用 id 可能在不同轮里重复），重新从事件日志生成一遍。
+    db.exec(`DELETE FROM thread_items`)
+    backfillThreadItems(db)
+  },
 ]
 
 /**

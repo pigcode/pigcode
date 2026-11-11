@@ -116,8 +116,10 @@ describe("sub-agent threads", () => {
     const brief = recorder.inputs[1]?.input.handoff ?? ""
     expect(brief).toContain("sub-agent working next to the main agent (rec)")
     expect(brief).toContain('"修登录"')
-    expect(brief).toContain("- user: 检查登录流程")
-    expect(brief).toContain("- assistant: done: 检查登录流程")
+    expect(brief).toMatch(/\[Historical user; user_message; run=[^\]]+\]\n检查登录流程/)
+    expect(brief).toMatch(
+      /\[Historical assistant; assistant_message; [^\]]*agent=rec[^\]]*\]\ndone: 检查登录流程/,
+    )
 
     await vi.waitFor(() => expect(ctx.agents.listRuns()).toHaveLength(0))
     await call("run.start", { threadId: child.id, text: "继续" })

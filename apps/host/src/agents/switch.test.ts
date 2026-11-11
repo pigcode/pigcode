@@ -134,16 +134,12 @@ describe("agent switching", () => {
       delivery: "pending",
     })
     const handoff = record?.text
-    expect(handoff).toBe(
-      [
-        "Previous agent: fake",
-        "Recent conversation:",
-        "- user: build the login page",
-        "- assistant: Hello from fake agent",
-        "Recent tools: (none)",
-        "Continue from here. Do not repeat completed work.",
-      ].join("\n"),
+    expect(handoff).toContain("carried on by fake before you joined")
+    expect(handoff).toContain("Selected 2 intact items from this conversation; omitted 0.")
+    expect(handoff).toMatch(
+      /\]\nbuild the login page\n\n\[Historical assistant;[^\]]*\]\nHello from fake agent$/,
     )
+    expect(record?.selectedItemIds).toHaveLength(2)
     expect(switched.handoff).toBe(handoff)
 
     const updated = ctx.threads.get(thread.id)
@@ -219,7 +215,7 @@ describe("agent switching", () => {
     await ctx.fiber.dispose()
   })
 
-  it("includes recent messages and tool names in a cross-agent handoff", async () => {
+  it("includes the messages, commands and file changes in a cross-agent handoff", async () => {
     const { ctx, thread } = await setup()
     const fake = recordingDriver("fake", { tools: ["Bash", "ApplyPatch"] })
     ctx.agents.register(fake.driver)
@@ -230,17 +226,20 @@ describe("agent switching", () => {
     await second.done
 
     const switched = await ctx.agents.switchAgent(thread.id, "claude", null)
-    expect(switched.handoff).toBe(
-      [
-        "Previous agent: fake",
-        "Recent conversation:",
-        "- assistant: fake reply",
-        "- user: second",
-        "- assistant: fake reply",
-        "Recent tools: Bash, ApplyPatch",
-        "Continue from here. Do not repeat completed work.",
-      ].join("\n"),
+    // 两轮的用户消息、回答都在；命令和改文件也在，按发生的顺序。
+    const kinds = [...(switched.handoff ?? "").matchAll(/\[Historical \w+; (\w+);/g)].map(
+      (match) => match[1],
     )
+    expect(kinds).toEqual([
+      "user_message",
+      "command",
+      "file_change",
+      "assistant_message",
+      "user_message",
+      "command",
+      "file_change",
+      "assistant_message",
+    ])
     await ctx.fiber.dispose()
   })
 

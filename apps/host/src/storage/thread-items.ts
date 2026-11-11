@@ -69,7 +69,7 @@ export function projectThreadItem(db: Database.Database, event: ThreadEvent): vo
       if (!callId) return
       const kind = toolKind(name)
       insert(db, event, {
-        id: `tool:${event.threadId}:${callId}`,
+        id: toolItemId(event, callId),
         kind,
         status: "running",
         text: renderTool(kind, name, payload.input, undefined, undefined),
@@ -81,7 +81,7 @@ export function projectThreadItem(db: Database.Database, event: ThreadEvent): vo
     case "tool.completed": {
       const callId = callIdOf(payload)
       if (!callId) return
-      const id = `tool:${event.threadId}:${callId}`
+      const id = toolItemId(event, callId)
       const existing = db
         .prepare(`SELECT payload_json, kind FROM thread_items WHERE id = ?`)
         .get(id) as { payload_json: string; kind: ThreadItemKind } | undefined
@@ -119,7 +119,7 @@ export function projectThreadItem(db: Database.Database, event: ThreadEvent): vo
         .filter((part): part is string => typeof part === "string" && part.trim() !== "")
         .join("\n")
       insert(db, event, {
-        id: `tool:${event.threadId}:${callId}`,
+        id: toolItemId(event, callId),
         kind: "subagent",
         status: "running",
         text: `Sub-agent: ${description}`.trim(),
@@ -131,7 +131,7 @@ export function projectThreadItem(db: Database.Database, event: ThreadEvent): vo
     case "subagent.completed": {
       const callId = callIdOf(payload)
       if (!callId) return
-      const id = `tool:${event.threadId}:${callId}`
+      const id = toolItemId(event, callId)
       const existing = db.prepare(`SELECT text FROM thread_items WHERE id = ?`).get(id) as
         { text: string } | undefined
       if (!existing) return
@@ -326,6 +326,11 @@ function toolKind(name: string): ThreadItemKind {
   if (FILE_TOOLS.has(name)) return "file_change"
   if (SUBAGENT_TOOLS.has(name)) return "subagent"
   return "tool"
+}
+
+/** 工具调用条目的 id：同一个调用 id 只在一轮里唯一（测试替身、某些 CLI 每轮从头编号），所以带上 run。 */
+function toolItemId(event: ThreadEvent, callId: string): string {
+  return `tool:${event.runId ?? event.threadId}:${callId}`
 }
 
 function callIdOf(payload: Row): string | null {

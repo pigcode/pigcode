@@ -77,14 +77,8 @@ export function createExecute(
       await run.driver.dispose(run.session).catch(() => undefined)
       if (!run.startFresh) throw new Error("agent session cannot be restarted")
       run.session = await run.startFresh()
-      const fresh = freshSessionHandoff(deps.ctx, run.threadId, run.runId)
-      const handoff = handoffForRun(
-        deps.ctx.storage.db,
-        run.threadId,
-        run.runId,
-        input.text,
-        fresh === null ? null : { threadId: run.threadId, strategy: "fresh_session", text: fresh },
-      )
+      const fresh = freshSessionHandoff(deps.ctx, run.threadId, run.runId, input.text)
+      const handoff = handoffForRun(deps.ctx.storage.db, run.threadId, run.runId, input.text, fresh)
       const rest: UserInput = { ...input }
       delete rest.handoff
       await execute(run, handoff === null ? rest : { ...rest, handoff })

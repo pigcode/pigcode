@@ -2,7 +2,14 @@
 import type { Context } from "cordis"
 import type { AgentSession } from "@pigcode/contracts"
 import type { AgentSessionStore } from "./session-store"
-import { HandoffStore } from "../storage/handoff-store"
+import { HandoffStore, type NewHandoff } from "../storage/handoff-store"
+import { ThreadItemStore } from "../storage/thread-items"
+import {
+  buildSelection,
+  handoffBudget,
+  type HandoffSelection,
+  type TargetContext,
+} from "./handoff-builder"
 import type { AgentDriver, AgentModelInfo, AgentSettingsValues } from "./driver"
 
 /** 取 driver 的模型目录；不支持动态目录的 Agent 返回空数组。 */
@@ -42,84 +49,64 @@ export interface Switch {
   forkFromNativeSessionId: string | null
 }
 
-/** handoff 中保留的最近消息条数与工具名数量。 */
-const HANDOFF_MESSAGE_LIMIT = 3
-const HANDOFF_TOOL_LIMIT = 3
-
-/** 线程最近的对话与工具名，按时间顺序。 */
-function recentContext(
+/**
+ * 从会话条目里按预算挑出要交接的内容（#79）。excludeRunId 那一轮自己的输入会原样发出，不放进交接；
+ * afterPosition 用来只交接某个位置之后的增量。没有可交接的条目时返回 null。
+ */
+export function composeHandoff(
   ctx: Context,
   threadId: string,
-  excludeRunId?: string,
-): { messages: Array<{ role: string; text: string }>; tools: string[] } {
-  // 正在跑的这一轮自己的用户消息会原样发给 agent，不再放进交接里重复一遍。
-  const events = ctx.sessions
-    .read(threadId, 0)
-    .filter((event) => excludeRunId === undefined || event.runId !== excludeRunId)
-  const messages: Array<{ role: string; text: string }> = []
-  const tools: string[] = []
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index]
-    if (!event) continue
-    if (typeof event.payload !== "object" || event.payload === null) continue
-    const payload = event.payload as Record<string, unknown>
-    if (event.type === "message.completed" && messages.length < HANDOFF_MESSAGE_LIMIT) {
-      const role = payload.role
-      const text = payload.text
-      if ((role === "user" || role === "assistant") && typeof text === "string") {
-        messages.push({ role, text })
-      }
-    }
-    if (
-      (event.type === "tool.completed" || event.type === "tool.started") &&
-      tools.length < HANDOFF_TOOL_LIMIT
-    ) {
-      const name = payload.name
-      if (typeof name === "string" && !tools.includes(name)) tools.push(name)
-    }
-    if (messages.length >= HANDOFF_MESSAGE_LIMIT && tools.length >= HANDOFF_TOOL_LIMIT) break
-  }
-  // 反向扫描得到的是从新到旧，输出时恢复为时间顺序。
-  return { messages: messages.reverse(), tools: tools.reverse() }
+  options: {
+    heading: string
+    excludeRunId?: string
+    afterPosition?: number
+    target?: TargetContext | null
+    userText?: string
+    tokenCap?: number
+  },
+): HandoffSelection | null {
+  const items = new ThreadItemStore(ctx.storage.db).list(threadId, {
+    ...(options.afterPosition !== undefined ? { afterPosition: options.afterPosition } : {}),
+    ...(options.excludeRunId !== undefined ? { excludeRunId: options.excludeRunId } : {}),
+  })
+  return buildSelection({
+    items,
+    heading: options.heading,
+    threadId,
+    budget: handoffBudget({
+      target: options.target ?? null,
+      userText: options.userText ?? "",
+      ...(options.tokenCap !== undefined ? { tokenCap: options.tokenCap } : {}),
+    }),
+  })
 }
 
-function contextLines(context: ReturnType<typeof recentContext>): string[] {
-  return [
-    "Recent conversation:",
-    ...(context.messages.length > 0
-      ? context.messages.map((message) => `- ${message.role}: ${message.text}`)
-      : ["- (none)"]),
-    `Recent tools: ${context.tools.length > 0 ? context.tools.join(", ") : "(none)"}`,
-  ]
-}
-
-/**
- * 生成换 Agent 时的 handoff：最近三条 user/assistant 文本与最近使用过的工具名。
- * 同一个 Agent 的切换优先原生 fork，只有无法 fork 时才走这里。
- */
-export function buildHandoff(ctx: Context, threadId: string, excludeRunId?: string): string {
+/** 交接开头那一行：之前是哪个（些）Agent 在做。 */
+function previousAgentsLine(ctx: Context, threadId: string): string {
   const thread = ctx.threads.get(threadId)
-  const previousAgent = thread?.lastAgentId ?? thread?.defaultAgentId ?? "unknown"
-  return [
-    `Previous agent: ${previousAgent}`,
-    ...contextLines(recentContext(ctx, threadId, excludeRunId)),
-    "Continue from here. Do not repeat completed work.",
-  ].join("\n")
+  const previous =
+    thread?.lastInstanceId ?? thread?.lastAgentId ?? thread?.defaultAgentId ?? "unknown"
+  return `Context handoff: this conversation was carried on by ${previous} before you joined. Continue from here; do not repeat completed work.`
 }
 
+/** 子代理的说明最多 6k token：它主要做自己的事，主会话的近况只是背景。 */
+const SUBAGENT_BRIEF_TOKENS = 6_000
+
 /**
- * 子代理的第一条消息前附带的说明：它和主会话共用一个工作目录，并带上主会话最近的对话，
+ * 子代理的第一条消息前附带的说明：它和主会话共用一个工作目录，并带上主会话按预算挑出的历史，
  * 让子代理知道主 agent 在做什么。主会话还没聊过时返回 null。
  */
-export function buildSubagentBrief(ctx: Context, parentThreadId: string): string | null {
-  if (!hasConversation(ctx, parentThreadId)) return null
+export function buildSubagentBrief(ctx: Context, parentThreadId: string): HandoffSelection | null {
   const parent = ctx.threads.get(parentThreadId)
-  const mainAgent = parent?.lastAgentId ?? parent?.defaultAgentId ?? "unknown"
-  return [
-    `You are a sub-agent working next to the main agent (${mainAgent}) of the task "${parent?.title ?? ""}", in the same working directory.`,
-    ...contextLines(recentContext(ctx, parentThreadId)),
-    "Do what the user asks you below. Build on the main agent's work instead of redoing it, and avoid editing files it is changing unless asked.",
-  ].join("\n")
+  const mainAgent =
+    parent?.lastInstanceId ?? parent?.lastAgentId ?? parent?.defaultAgentId ?? "unknown"
+  return composeHandoff(ctx, parentThreadId, {
+    heading: [
+      `You are a sub-agent working next to the main agent (${mainAgent}) of the task "${parent?.title ?? ""}", in the same working directory.`,
+      "Do what the user asks you below. Build on the main agent's work instead of redoing it, and avoid editing files it is changing unless asked.",
+    ].join("\n"),
+    tokenCap: SUBAGENT_BRIEF_TOKENS,
+  })
 }
 
 /**
@@ -132,7 +119,7 @@ export function recordSubagentBrief(ctx: Context, threadId: string, parentThread
   const record = new HandoffStore(ctx.storage.db).create({
     threadId,
     strategy: "subagent_brief",
-    text: brief,
+    ...brief,
   })
   ctx.sessions.append({
     threadId,
@@ -144,23 +131,31 @@ export function recordSubagentBrief(ctx: Context, threadId: string, parentThread
   })
 }
 
-/** 线程里是否已经有过对话消息；excludeRunId 那一轮不算。 */
-function hasConversation(ctx: Context, threadId: string, excludeRunId?: string): boolean {
-  return ctx.sessions
-    .read(threadId, 0)
-    .some(
-      (event) =>
-        event.type === "message.completed" &&
-        (excludeRunId === undefined || event.runId !== excludeRunId),
-    )
-}
-
 /**
  * 原生会话接不上（resume 失败）、这一轮改开新会话时带的交接：这一轮之前的对话。
  * 这一轮之前还没聊过时返回 null。
  */
-export function freshSessionHandoff(ctx: Context, threadId: string, runId: string): string | null {
-  return hasConversation(ctx, threadId, runId) ? buildHandoff(ctx, threadId, runId) : null
+export function freshSessionHandoff(
+  ctx: Context,
+  threadId: string,
+  runId: string,
+  userText: string,
+  toInstanceId?: string,
+): NewHandoff | null {
+  const selection = composeHandoff(ctx, threadId, {
+    heading:
+      "Context handoff: the agent's previous session for this conversation could not be resumed, so this is a new session. Continue from here; do not repeat completed work.",
+    excludeRunId: runId,
+    userText,
+  })
+  return selection === null
+    ? null
+    : {
+        threadId,
+        strategy: "fresh_session",
+        ...selection,
+        ...(toInstanceId ? { toInstanceId } : {}),
+      }
 }
 
 /** 读取尚未被下一次 run 消费的原生 fork 源；一个 fork 只使用一次。 */
@@ -198,10 +193,11 @@ export async function switchAgent(
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
   const forkFromNativeSessionId = activeSession?.nativeSessionId ?? null
-  const handoff =
-    forkFromNativeSessionId === null && hasConversation(ctx, threadId)
-      ? buildHandoff(ctx, threadId)
+  const selection =
+    forkFromNativeSessionId === null
+      ? composeHandoff(ctx, threadId, { heading: previousAgentsLine(ctx, threadId) })
       : null
+  const handoff = selection?.text ?? null
   const now = new Date().toISOString()
   const previous = ctx.threads.get(threadId)
   const previousInstance = previous?.lastInstanceId ?? previous?.defaultInstanceId ?? null
@@ -216,7 +212,7 @@ export async function switchAgent(
       : new HandoffStore(ctx.storage.db).create({
           threadId,
           strategy: "switch",
-          text: handoff,
+          ...selection!,
           fromInstanceIds: previousInstance ? [previousInstance] : [],
           toInstanceId: chosenInstance,
         })

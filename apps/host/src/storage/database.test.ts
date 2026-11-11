@@ -14,8 +14,8 @@ function columns(db: Database.Database, table: string): string[] {
 describe("openDatabase", () => {
   it("creates the whole schema in one step, with foreign keys on", () => {
     const db = openDatabase(":memory:")
-    expect(SCHEMA_VERSION).toBe(3)
-    expect(db.pragma("user_version", { simple: true })).toBe(3)
+    expect(SCHEMA_VERSION).toBe(4)
+    expect(db.pragma("user_version", { simple: true })).toBe(4)
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1)
     const tables = db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
