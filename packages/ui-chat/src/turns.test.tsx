@@ -168,7 +168,12 @@ describe("buildTimeline", () => {
       true,
     )
     expect(entries.map((entry) => entry.kind)).toEqual(["turn", "switch", "turn"])
-    expect(entries[1]).toMatchObject({ agentId: "codex", handoff: true })
+    expect(entries[1]).toMatchObject({
+      agentId: "codex",
+      handoff: true,
+      resumed: false,
+      items: null,
+    })
     expect(entries[2]?.kind === "turn" ? entries[2].turn.status : null).toBe("running")
   })
 
@@ -313,5 +318,28 @@ describe("turn rendering", () => {
   it("draws a marker divider when the agent changes", () => {
     renderList([...scriptedRun(), event(30, "thread.updated", { agentId: "codex" }, null)])
     expect(screen.getByRole("separator").textContent).toBe("已切换到 codex")
+  })
+
+  it.each([
+    [{ resumed: true }, "已切换到 codex · 接回原来的会话"],
+    [
+      { resumed: true, handoffId: "h", handoffItems: 3, handoffOmitted: 0 },
+      "已切换到 codex · 接回原来的会话，补上离开后的 3 条",
+    ],
+    [
+      { handoffId: "h", handoffItems: 12, handoffOmitted: 0 },
+      "已切换到 codex · 新会话，交接了 12 条",
+    ],
+    [
+      { handoffId: "h", handoffItems: 12, handoffOmitted: 40 },
+      "已切换到 codex · 新会话，交接了 12 条，省略 40 条",
+    ],
+    [{ handoff: "old text" }, "已切换到 codex · 上下文以摘要交接"],
+  ])("says how the context carried over: %j", (payload, text) => {
+    renderList([
+      ...scriptedRun(),
+      event(30, "thread.updated", { agentId: "codex", ...payload }, null),
+    ])
+    expect(screen.getByRole("separator").textContent).toBe(text)
   })
 })

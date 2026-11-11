@@ -6,7 +6,7 @@
 import { useCallback, useMemo, useRef } from "react"
 import type { ThreadEvent } from "@pigcode/contracts"
 import { ArrowLeftRight, Waypoints, type LucideIcon } from "lucide-react"
-import { useLocale } from "@pigcode/ui-primitives"
+import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
 import { TurnView } from "./turn-view"
@@ -122,9 +122,8 @@ export function MessageList({
           }
           if (entry.kind === "switch") {
             const name = agentName?.(entry.agentId) ?? entry.agentId
-            const label = `${t("chat.switch.to").replace("{agent}", name)}${
-              entry.handoff ? ` · ${t("chat.switch.handoff")}` : ""
-            }`
+            const detail = switchDetail(entry, t)
+            const label = `${t("chat.switch.to").replace("{agent}", name)}${detail ? ` · ${detail}` : ""}`
             return (
               <MarkerDivider key={entry.key} icon={ArrowLeftRight} label={label} role="separator" />
             )
@@ -145,4 +144,26 @@ export function MessageList({
       </div>
     </ConversationActionsContext.Provider>
   )
+}
+
+/**
+ * 切换标记后半句：接回了原来的会话还是开了新会话，交接了几条（#78）。
+ * 旧事件没有条数时沿用「上下文以摘要交接」。
+ */
+function switchDetail(
+  entry: Extract<TimelineEntry, { kind: "switch" }>,
+  t: (key: MessageKey) => string,
+): string | null {
+  const counted = (key: MessageKey) =>
+    t(key)
+      .replace("{items}", String(entry.items ?? 0))
+      .replace("{omitted}", String(entry.omitted ?? 0))
+  if (entry.resumed) {
+    return entry.handoff && entry.items !== null
+      ? counted("chat.switch.resumedWithDelta")
+      : t("chat.switch.resumed")
+  }
+  if (!entry.handoff) return null
+  if (entry.items === null) return t("chat.switch.handoff")
+  return counted(entry.omitted ? "chat.switch.freshWithOmitted" : "chat.switch.fresh")
 }

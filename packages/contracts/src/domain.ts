@@ -174,7 +174,11 @@ export const agentSessionSchema = z.object({
   instanceId: z.string().min(1).nullable().default(null),
   nativeSessionId: z.string().nullable(),
   cwd: z.string().min(1),
-  status: z.enum(["active", "stopped", "orphaned"]),
+  /**
+   * active 正在用；parked 切到别的 Agent 实例时停放，切回来时接着用；orphaned Host 重启时留下的，
+   * 下一轮接着用；stopped 原生会话已经接不上，不再用。
+   */
+  status: z.enum(["active", "parked", "stopped", "orphaned"]),
   createdAt: z.string().datetime(),
   stoppedAt: z.string().datetime().nullable(),
 })

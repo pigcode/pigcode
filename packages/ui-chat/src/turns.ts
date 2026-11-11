@@ -74,7 +74,18 @@ export interface Turn {
 /** 时间线上的一项：一轮对话、切换 agent 的分隔线，或子代理带上主会话近况的提示。 */
 export type TimelineEntry =
   | { kind: "turn"; turn: Turn }
-  | { kind: "switch"; key: string; agentId: string; handoff: boolean }
+  | {
+      kind: "switch"
+      key: string
+      agentId: string
+      /** 这次切换带了交接。 */
+      handoff: boolean
+      /** 接回了这个实例原来停放的原生会话。 */
+      resumed: boolean
+      /** 交接里放了几条、省略了几条；旧事件没有这两个数时为 null。 */
+      items: number | null
+      omitted: number | null
+    }
   | { kind: "brief"; key: string }
 
 function emptyTurn(key: string, runId: string | null): Turn {
@@ -161,6 +172,9 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
           agentId,
           // 以前交接的文字直接写在事件里，现在只写交接记录的 id。
           handoff: Boolean(asText(payload?.handoff) || asText(payload?.handoffId)),
+          resumed: payload?.resumed === true,
+          items: typeof payload?.handoffItems === "number" ? payload.handoffItems : null,
+          omitted: typeof payload?.handoffOmitted === "number" ? payload.handoffOmitted : null,
         })
       } else if (
         (asText(payload?.handoff) && payload?.deferred !== true) ||

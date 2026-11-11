@@ -158,3 +158,56 @@ for (const agent of agents) {
     240_000,
   )
 }
+
+/** 两个都开着时才跑：Claude → Codex → Claude（#78）。 */
+it.skipIf(!agents.every((agent) => agent.enabled))(
+  "switching back to Claude resumes its session and catches it up on Codex's turn",
+  async () => {
+    const [claude, codex] = agents as [RealAgent, RealAgent]
+    const dir = mkdtempSync(join(tmpdir(), "pigcode-switch-back-"))
+    const root = join(dir, "project")
+    mkdirSync(root)
+    const ctx = new Context()
+    await ctx.plugin(storage, { path: join(dir, "pigcode.db") })
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(mcpBridge)
+    await ctx.plugin(agentsPlugin)
+    const claudeDriver = claude.create()
+    const codexDriver = codex.create()
+    ctx.agents.register(claudeDriver)
+    ctx.agents.register(codexDriver)
+    try {
+      const project = ctx.projects.add(root)
+      const thread = ctx.threads.create(project.id, "switch back", "claude")
+      ctx.threads.updateSelection(thread.id, "claude", claude.model)
+      const send = async (text: string) => {
+        const run = await ctx.agents.startRun(thread.id, text)
+        await run.done
+        expect(ctx.agents.getRunStatus(run.runId)).toBe("completed")
+      }
+      await send("Remember the first code word: OTTER-17. Reply with exactly OK.")
+      await ctx.agents.switchAgent(thread.id, "codex", codex.model)
+      await send("Remember the second code word: MAPLE-58. Reply with exactly OK.")
+      await ctx.agents.switchAgent(thread.id, "claude", claude.model)
+      await send("What are the two code words? Reply with only the two words separated by a space.")
+
+      const events = ctx.sessions.read(thread.id, 0)
+      const answer = lastAssistantText(events)
+      expect(answer).toContain("OTTER-17")
+      expect(answer).toContain("MAPLE-58")
+      const back = events.filter((event) => event.type === "thread.updated").at(-1)
+      expect(back?.payload).toMatchObject({ agentId: "claude", resumed: true })
+      // 接回的是同一个 Claude 会话：Claude 只有一行会话记录。
+      const rows = ctx.agents.listSessions(thread.id).filter((row) => row.agentId === "claude")
+      expect(rows).toHaveLength(1)
+    } finally {
+      ctx.agents.cancelAll()
+      await ctx.fiber.dispose()
+      await claudeDriver.close?.()
+      await codexDriver.close?.()
+    }
+  },
+  480_000,
+)

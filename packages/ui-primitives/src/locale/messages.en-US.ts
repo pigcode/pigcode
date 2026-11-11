@@ -316,6 +316,11 @@ export const enUS = {
   "pr.creating": "Creating…",
   "chat.switch.to": "Switched to {agent}",
   "chat.switch.handoff": "context handed off as a summary",
+  "chat.switch.resumed": "resumed its earlier session",
+  "chat.switch.resumedWithDelta":
+    "resumed its earlier session with {items} items from while it was away",
+  "chat.switch.fresh": "new session, {items} items handed over",
+  "chat.switch.freshWithOmitted": "new session, {items} items handed over, {omitted} omitted",
   "chat.tabs.label": "Thread tabs",
   "chat.tabs.close": "Close",
   "chat.subagent.open": "Open in tab",

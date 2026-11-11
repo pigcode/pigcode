@@ -89,6 +89,13 @@ function previousAgentsLine(ctx: Context, threadId: string): string {
   return `Context handoff: this conversation was carried on by ${previous} before you joined. Continue from here; do not repeat completed work.`
 }
 
+/** 增量交接开头那一行：接回原来的会话，下面是离开以后发生的事。 */
+function deltaLine(ctx: Context, threadId: string): string {
+  const thread = ctx.threads.get(threadId)
+  const previous = thread?.lastInstanceId ?? thread?.lastAgentId ?? "another agent"
+  return `Context handoff: you are back in your earlier session of this conversation. While you were away, ${previous} continued it; below is what happened since you left. Continue from here; do not repeat completed work.`
+}
+
 /** 子代理的说明最多 6k token：它主要做自己的事，主会话的近况只是背景。 */
 const SUBAGENT_BRIEF_TOKENS = 6_000
 
@@ -189,14 +196,27 @@ export async function switchAgent(
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const chosenInstance = instanceId ?? agentId
-  // 同一个 Agent 且存在 active 原生会话时优先 fork；否则生成换 Agent 的 handoff。
+  // 三种接法（#78）：
+  // - 同一个实例、原生会话还在用（只换模型）：原生 fork，不需要交接；
+  // - 这个实例在这个会话里用过、原生会话停放着：下一轮接回它，只交接它离开之后发生的事；
+  // - 都没有：新会话，交接整个会话。
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
   const forkFromNativeSessionId = activeSession?.nativeSessionId ?? null
-  const selection =
+  const parked =
     forkFromNativeSessionId === null
-      ? composeHandoff(ctx, threadId, { heading: previousAgentsLine(ctx, threadId) })
-      : null
+      ? sessions.findResumable(threadId, agentId, chosenInstance)
+      : undefined
+  const since = parked
+    ? new ThreadItemStore(ctx.storage.db).lastPositionOfSession(threadId, parked.id)
+    : null
+  const resumed = parked !== undefined && since !== null
+  const selection =
+    forkFromNativeSessionId !== null
+      ? null
+      : resumed
+        ? composeHandoff(ctx, threadId, { heading: deltaLine(ctx, threadId), afterPosition: since })
+        : composeHandoff(ctx, threadId, { heading: previousAgentsLine(ctx, threadId) })
   const handoff = selection?.text ?? null
   const now = new Date().toISOString()
   const previous = ctx.threads.get(threadId)
@@ -204,15 +224,19 @@ export async function switchAgent(
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
   for (const session of active) await disposeActive?.(session)
   ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance)
-  sessions.stopActive(threadId, now)
-  // 交接记在 thread_handoffs 里，下一轮发送时带上；事件里只留它的 id，时间线据此画「以摘要交接」。
+  // 子进程关了，原生会话留着：切回来时接着用。
+  sessions.parkActive(threadId, now)
+  // 交接记在 thread_handoffs 里，下一轮发送时带上；事件里只留它的 id，时间线据此画切换标记。
+  // 之前切换留下、还没发出去的交接是给别的实例的，先作废。
+  const handoffs = new HandoffStore(ctx.storage.db)
+  handoffs.supersedeSwitches(threadId)
   const record =
-    handoff === null
+    selection === null
       ? null
-      : new HandoffStore(ctx.storage.db).create({
+      : handoffs.create({
           threadId,
-          strategy: "switch",
-          ...selection!,
+          strategy: resumed ? "switch_delta" : "switch",
+          ...selection,
           fromInstanceIds: previousInstance ? [previousInstance] : [],
           toInstanceId: chosenInstance,
         })
@@ -225,7 +249,14 @@ export async function switchAgent(
       instanceId: chosenInstance,
       modelId,
       ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : {}),
-      ...(record ? { handoffId: record.id } : {}),
+      ...(resumed ? { resumed: true } : {}),
+      ...(record
+        ? {
+            handoffId: record.id,
+            handoffItems: record.selectedItemIds.length,
+            handoffOmitted: record.omittedCount,
+          }
+        : {}),
     },
     schemaVersion: 1,
     createdAt: now,

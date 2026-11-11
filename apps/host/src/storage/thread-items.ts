@@ -258,6 +258,17 @@ export class ThreadItemStore {
     return row ? mapItem(row) : undefined
   }
 
+  /** 这个 Agent 会话最后参与到哪个位置：它写下的最后一条条目；没参与过时为 null。 */
+  lastPositionOfSession(threadId: string, agentSessionId: string): number | null {
+    const row = this.db
+      .prepare(
+        `SELECT MAX(position) AS position FROM thread_items
+         WHERE thread_id = ? AND agent_session_id = ?`,
+      )
+      .get(threadId, agentSessionId) as { position: number | null }
+    return row.position ?? null
+  }
+
   /** 会话里最后一条条目的位置；还没有条目时为 0。 */
   lastPosition(threadId: string): number {
     const row = this.db

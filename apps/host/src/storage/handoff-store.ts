@@ -6,10 +6,12 @@ import type Database from "better-sqlite3"
 import { randomUUID } from "node:crypto"
 
 /**
- * 交接的来由：切换 Agent（switch）、原生会话接不上开了新会话（fresh_session）、子代理的第一条消息（subagent_brief）、
+ * 交接的来由：切换 Agent 时交接整个会话（switch），或者接回原来的原生会话、只补它离开后的增量（switch_delta）；
+ * 原生会话接不上开了新会话（fresh_session）、子代理的第一条消息（subagent_brief）、
  * 用户在输入框里引用了别的会话（thread_reference）。
  */
-export type HandoffStrategy = "switch" | "fresh_session" | "subagent_brief" | "thread_reference"
+export type HandoffStrategy =
+  "switch" | "switch_delta" | "fresh_session" | "subagent_brief" | "thread_reference"
 
 /**
  * 投递状态：pending 等下一轮带上；inline 已经拼在用户消息前发出；injected 已经作为历史注入原生会话；
@@ -49,7 +51,7 @@ export type NewHandoff = Pick<Handoff, "threadId" | "strategy" | "text"> &
   >
 
 /** 切换和新开会话的交接说的都是「到现在为止的对话」，新的一份出来，旧的还没发的就没用了。 */
-const REPLACEABLE: readonly HandoffStrategy[] = ["switch", "fresh_session"]
+const REPLACEABLE: readonly HandoffStrategy[] = ["switch", "switch_delta", "fresh_session"]
 
 export class HandoffStore {
   constructor(private readonly db: Database.Database) {}
@@ -105,6 +107,19 @@ export class HandoffStore {
         )
     })()
     return handoff
+  }
+
+  /**
+   * 作废还没发出去的切换交接：又换了一次 Agent，之前那份说的是交给别的实例，已经没用了。
+   */
+  supersedeSwitches(threadId: string): void {
+    this.db
+      .prepare(
+        `UPDATE thread_handoffs SET delivery = 'superseded', updated_at = ?
+         WHERE thread_id = ? AND delivery = 'pending'
+           AND strategy IN (${REPLACEABLE.map(() => "?").join(", ")})`,
+      )
+      .run(new Date().toISOString(), threadId, ...REPLACEABLE)
   }
 
   /** 这个会话还没发出去的交接，按记下的先后排。 */

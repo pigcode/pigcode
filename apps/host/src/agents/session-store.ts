@@ -28,7 +28,8 @@ export class AgentSessionStore {
   }
 
   /**
-   * 读取线程在这个实例上最近一个还能接续的原生会话：活跃的，或者 Host 重启时标成 orphaned 的。
+   * 读取线程在这个实例上最近一个还能接续的原生会话：活跃的、切走时停放（parked）的，或者 Host 重启时
+   * 标成 orphaned 的。
    * 只返回已经拿到原生 id 的行；没有原生 id 的行接不上任何东西。
    */
   findResumable(
@@ -40,7 +41,7 @@ export class AgentSessionStore {
       .prepare(
         `SELECT * FROM agent_sessions
          WHERE thread_id = ? AND agent_id = ? AND COALESCE(instance_id, agent_id) = ?
-           AND status IN ('active', 'orphaned') AND native_session_id IS NOT NULL
+           AND status IN ('active', 'parked', 'orphaned') AND native_session_id IS NOT NULL
          ORDER BY created_at DESC, rowid DESC
          LIMIT 1`,
       )
@@ -96,12 +97,12 @@ export class AgentSessionStore {
     return input.draft
   }
 
-  /** 把同一线程里 id 对应的 orphaned 行恢复成 active；没有这一行时返回 undefined。 */
+  /** 把同一线程里 id 对应的 orphaned 或 parked 行恢复成 active；没有这一行时返回 undefined。 */
   private revive(sessionId: string, threadId: string): AgentSession | undefined {
     const changed = this.db
       .prepare(
         `UPDATE agent_sessions SET status = 'active', stopped_at = NULL
-         WHERE id = ? AND thread_id = ? AND status = 'orphaned'`,
+         WHERE id = ? AND thread_id = ? AND status IN ('orphaned', 'parked')`,
       )
       .run(sessionId, threadId).changes
     if (changed === 0) return undefined
@@ -116,11 +117,14 @@ export class AgentSessionStore {
       .run(nativeSessionId, sessionId)
   }
 
-  /** 把线程所有活跃会话标记为 stopped；切换 Agent 或实例时调用。 */
-  stopActive(threadId: string, at: string): number {
+  /**
+   * 切换 Agent 或实例时把线程里活跃的会话停放（parked）：子进程由调用方关掉，原生会话还在，
+   * 切回这个实例时接着用（#78）。
+   */
+  parkActive(threadId: string, at: string): number {
     return this.db
       .prepare(
-        `UPDATE agent_sessions SET status = 'stopped', stopped_at = ?
+        `UPDATE agent_sessions SET status = 'parked', stopped_at = ?
          WHERE thread_id = ? AND status = 'active'`,
       )
       .run(at, threadId).changes

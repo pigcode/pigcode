@@ -34,7 +34,8 @@ function recordingDriver(
     async createSession(input) {
       created.push(input)
       return {
-        id: `ps_${id}_${created.length}`,
+        // 和真实 driver 一样沿用 Host 传进来的会话 id。
+        id: input.sessionId ?? `ps_${id}_${created.length}`,
         threadId: input.threadId,
         cwd: input.cwd,
         nativeSessionId: input.nativeSessionId ?? null,
@@ -149,7 +150,8 @@ describe("agent switching", () => {
     const oldSession = ctx.agents
       .listSessions(thread.id)
       .find((session) => session.agentId === "fake")
-    expect(oldSession?.status).toBe("stopped")
+    // 切走的会话停放着，切回来时还能接上（#78）。
+    expect(oldSession?.status).toBe("parked")
     expect(oldSession?.stoppedAt).not.toBeNull()
 
     const next = await ctx.agents.startRun(thread.id, "continue")
@@ -166,6 +168,66 @@ describe("agent switching", () => {
     const third = await ctx.agents.startRun(thread.id, "again")
     await third.done
     expect(claude.inputs[1]).toEqual({ text: "again" })
+    await ctx.fiber.dispose()
+  })
+
+  it("resumes the earlier session when switching back and hands over only what happened since", async () => {
+    const { ctx, thread } = await setup("alpha")
+    const alpha = recordingDriver("alpha", { nativeSessionId: "native_a" })
+    const beta = recordingDriver("beta", { nativeSessionId: "native_b" })
+    ctx.agents.register(alpha.driver)
+    ctx.agents.register(beta.driver)
+    const run = async (text: string) => (await ctx.agents.startRun(thread.id, text)).done
+
+    await run("alpha builds the parser")
+    const toBeta = await ctx.agents.switchAgent(thread.id, "beta", null)
+    expect(toBeta.handoff).toContain("alpha builds the parser")
+    await run("beta adds tests")
+
+    await ctx.agents.switchAgent(thread.id, "alpha", null)
+    const marker = ctx.sessions
+      .read(thread.id, 0)
+      .filter((event) => event.type === "thread.updated")
+      .at(-1)?.payload as Record<string, unknown>
+    expect(marker).toMatchObject({
+      agentId: "alpha",
+      resumed: true,
+      handoffItems: 2,
+      handoffOmitted: 0,
+    })
+    const delta = new HandoffStore(ctx.storage.db).get(marker.handoffId as string)
+    expect(delta?.strategy).toBe("switch_delta")
+
+    await run("alpha, carry on")
+    // 接回原来的原生会话，而不是开新的。
+    expect(alpha.created.at(-1)?.nativeSessionId).toBe("native_a")
+    const handoff = alpha.inputs.at(-1)?.handoff ?? ""
+    expect(handoff).toContain("you are back in your earlier session")
+    expect(handoff).toContain("beta adds tests")
+    expect(handoff).toContain("beta reply")
+    // 它自己原来的那段不再交接一遍。
+    expect(handoff).not.toContain("alpha builds the parser")
+    const alphaRows = ctx.agents.listSessions(thread.id).filter((row) => row.agentId === "alpha")
+    expect(alphaRows.map((row) => row.status)).toEqual(["active"])
+    await ctx.fiber.dispose()
+  })
+
+  it("resumes without a handoff when nothing happened while the agent was away", async () => {
+    const { ctx, thread } = await setup("alpha")
+    const alpha = recordingDriver("alpha", { nativeSessionId: "native_a" })
+    ctx.agents.register(alpha.driver)
+    ctx.agents.register(recordingDriver("beta").driver)
+    await (
+      await ctx.agents.startRun(thread.id, "alpha builds the parser")
+    ).done
+    await ctx.agents.switchAgent(thread.id, "beta", null)
+    const back = await ctx.agents.switchAgent(thread.id, "alpha", null)
+    expect(back.handoff).toBeNull()
+    await (
+      await ctx.agents.startRun(thread.id, "go on")
+    ).done
+    expect(alpha.created.at(-1)?.nativeSessionId).toBe("native_a")
+    expect(alpha.inputs.at(-1)).toEqual({ text: "go on" })
     await ctx.fiber.dispose()
   })
 
