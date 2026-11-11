@@ -2,14 +2,7 @@
 import type { Context } from "cordis"
 import type { RunStatus, ThreadEvent } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
-import type {
-  ApprovalDecision,
-  ApprovalRequest,
-  AgentRunConfig,
-  AgentRuntime,
-  AgentDriver,
-  UserInput,
-} from "./driver"
+import type { ApprovalRequest, AgentRunConfig, AgentDriver } from "./driver"
 import { FakeAgentDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
 import { forcedAgentId } from "./agent-settings"
@@ -18,8 +11,9 @@ import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
 import { maybeAutoTitle } from "./title"
-import { mapAgentEvent, type RunEventHooks } from "./run-events"
+import type { RunEventHooks } from "./run-events"
 import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
+import { createExecute } from "./run-execute"
 import { threadCwd } from "../services/worktrees"
 import { ApprovalBridge } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
@@ -188,38 +182,13 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     }
   }
 
-  /** 异步执行 driver.send；异常统一转成 run.failed。 */
-  async function execute(run: ActiveRun, input: UserInput): Promise<void> {
-    const runtime: AgentRuntime = {
-      signal: run.controller.signal,
-      emit: (event) => mapAgentEvent(run, event, runEventHooks),
-      requestApproval: (request) => {
-        if (activeRuns.get(run.runId) !== run) return Promise.resolve<ApprovalDecision>("deny")
-        return requestApproval(run.threadId, run.runId, request).decision
-      },
-      askQuestions: (request) =>
-        activeRuns.get(run.runId) === run ? questions.ask(run, request) : Promise.resolve([]),
-    }
-    try {
-      await run.driver.send(run.session, input, runtime)
-      if (activeRuns.get(run.runId) === run) {
-        finishRun(run, "completed", "run.completed", {})
-      }
-    } catch (error) {
-      if (activeRuns.get(run.runId) !== run) return
-      const message = error instanceof Error ? error.message : String(error)
-      finishRun(
-        run,
-        "failed",
-        "run.failed",
-        { message },
-        {
-          code: "AGENT_ERROR",
-          message,
-        },
-      )
-    }
-  }
+  const execute = createExecute({
+    ctx,
+    activeRuns,
+    hooks: runEventHooks,
+    requestApproval: (run, request) => requestApproval(run.threadId, run.runId, request).decision,
+    askQuestions: (run, request) => questions.ask(run, request),
+  })
 
   /** launchRun 所需的 Host 闭包；放在 execute 之后以便引用。 */
   const launchDeps: LaunchDeps = {
@@ -364,7 +333,10 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       if (reserved) launching += 1
       try {
         const startedAt = new Date().toISOString()
-        const activeSession = agentSessions.findActive(threadId, driver.id, instance.instanceId)
+        // Host 重启后原生会话标成了 orphaned，也要接回来，否则每次重启都会悄悄换成空的原生会话。
+        const activeSession =
+          agentSessions.findActive(threadId, driver.id, instance.instanceId) ??
+          agentSessions.findResumable(threadId, driver.id, instance.instanceId)
         const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
         const runId = `run_${randomUUID()}`
         // 会话在 launchRun 中创建；排队阶段不启动 Codex app-server/Claude Query。

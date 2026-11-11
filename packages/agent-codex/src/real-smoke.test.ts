@@ -41,3 +41,25 @@ it.skipIf(!enabled)(
   },
   120_000,
 )
+
+it.skipIf(!enabled)(
+  "reports a missing native thread in a way the Host recognises",
+  async () => {
+    const driver = new CodexDriver()
+    // 这个 id 不对应任何 rollout：thread/resume 直接报错，不消耗额度。
+    const error = await driver
+      .createSession({
+        threadId: "real-missing",
+        cwd: process.cwd(),
+        permissionMode: "workspace-write",
+        nativeSessionId: "019a0000-0000-7000-8000-000000000000",
+      })
+      .then(
+        () => null,
+        (reason: unknown) => reason,
+      )
+    expect(error).toBeInstanceOf(Error)
+    expect(driver.isSessionNotFound((error as Error).message)).toBe(true)
+  },
+  60_000,
+)

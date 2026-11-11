@@ -319,6 +319,11 @@ export class ClaudeDriver implements AgentDriver {
     await this.endState(state)
   }
 
+  /** `resume` 的会话文件不存在时，CLI 在 stderr 写 `No conversation found with session ID: <id>` 后退出。 */
+  isSessionNotFound(message: string): boolean {
+    return /No conversation found with session ID/i.test(message)
+  }
+
   /** 插件停用或 Host 退出时结束所有会话，不留下 Claude Code 子进程。 */
   async close(): Promise<void> {
     const states = [...this.sessionStates.values()]

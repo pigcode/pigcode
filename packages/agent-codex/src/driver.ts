@@ -373,6 +373,11 @@ export class CodexDriver implements AgentDriver {
     }
   }
 
+  /** `thread/resume` 找不到原生 thread 时，app-server 0.167 回 `no rollout found for thread id <id>`。 */
+  isSessionNotFound(message: string): boolean {
+    return /no rollout found for thread id/i.test(message)
+  }
+
   /** 插件停用时关闭所有 app-server，包括空闲等待复用的。 */
   async close(): Promise<void> {
     this.sessions.clear()

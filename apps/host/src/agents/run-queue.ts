@@ -18,6 +18,13 @@ export interface ActiveRun {
   liveText: string
   /** 当前这段思考第一次流出增量的时间；思考结束时据此记下持续时长。 */
   reasoningStartedAt?: number | undefined
+  /**
+   * 这一轮在接续已有的原生会话（resume 或 fork），原生会话还没回应过。此时 driver 报「原生会话不存在」
+   * 就改开新会话重试，而不是让 run 失败。
+   */
+  resuming?: boolean
+  /** 开一个新的原生会话替换这一轮的会话；原来那一行标成 stopped。 */
+  startFresh?: () => Promise<AgentSessionHandle>
 }
 
 /**

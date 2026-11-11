@@ -177,6 +177,26 @@ describe("normalizeSdkMessage", () => {
     expect(events).toEqual([{ type: "run.failed", message: "error_during_execution" }])
   })
 
+  it("puts the result's errors into run.failed", () => {
+    const events = normalizeSdkMessage(
+      {
+        type: "result",
+        subtype: "error_during_execution",
+        is_error: true,
+        errors: ["No conversation found with session ID: abc"],
+        session_id: "s1",
+        uuid: "u1",
+      } as never,
+      createNormalizeState(),
+    )
+    expect(events).toEqual([
+      {
+        type: "run.failed",
+        message: "error_during_execution: No conversation found with session ID: abc",
+      },
+    ])
+  })
+
   it("maps Task tool use and result to subagent lifecycle events", () => {
     const state = createNormalizeState()
     const started = normalizeSdkMessage(

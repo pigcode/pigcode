@@ -49,8 +49,12 @@ const HANDOFF_TOOL_LIMIT = 3
 function recentContext(
   ctx: Context,
   threadId: string,
+  excludeRunId?: string,
 ): { messages: Array<{ role: string; text: string }>; tools: string[] } {
-  const events = ctx.sessions.read(threadId, 0)
+  // 正在跑的这一轮自己的用户消息会原样发给 agent，不再放进交接里重复一遍。
+  const events = ctx.sessions
+    .read(threadId, 0)
+    .filter((event) => excludeRunId === undefined || event.runId !== excludeRunId)
   const messages: Array<{ role: string; text: string }> = []
   const tools: string[] = []
   for (let index = events.length - 1; index >= 0; index -= 1) {
@@ -92,12 +96,12 @@ function contextLines(context: ReturnType<typeof recentContext>): string[] {
  * 生成换 Agent 时的 handoff：最近三条 user/assistant 文本与最近使用过的工具名。
  * 同一个 Agent 的切换优先原生 fork，只有无法 fork 时才走这里。
  */
-export function buildHandoff(ctx: Context, threadId: string): string {
+export function buildHandoff(ctx: Context, threadId: string, excludeRunId?: string): string {
   const thread = ctx.threads.get(threadId)
   const previousAgent = thread?.lastAgentId ?? thread?.defaultAgentId ?? "unknown"
   return [
     `Previous agent: ${previousAgent}`,
-    ...contextLines(recentContext(ctx, threadId)),
+    ...contextLines(recentContext(ctx, threadId, excludeRunId)),
     "Continue from here. Do not repeat completed work.",
   ].join("\n")
 }
@@ -117,9 +121,23 @@ export function buildSubagentBrief(ctx: Context, parentThreadId: string): string
   ].join("\n")
 }
 
-/** 线程里是否已经有过对话消息。 */
-function hasConversation(ctx: Context, threadId: string): boolean {
-  return ctx.sessions.read(threadId, 0).some((event) => event.type === "message.completed")
+/** 线程里是否已经有过对话消息；excludeRunId 那一轮不算。 */
+function hasConversation(ctx: Context, threadId: string, excludeRunId?: string): boolean {
+  return ctx.sessions
+    .read(threadId, 0)
+    .some(
+      (event) =>
+        event.type === "message.completed" &&
+        (excludeRunId === undefined || event.runId !== excludeRunId),
+    )
+}
+
+/**
+ * 原生会话接不上（resume 失败）、这一轮改开新会话时带的交接：这一轮之前的对话。
+ * 这一轮之前还没聊过时返回 null。
+ */
+export function freshSessionHandoff(ctx: Context, threadId: string, runId: string): string | null {
+  return hasConversation(ctx, threadId, runId) ? buildHandoff(ctx, threadId, runId) : null
 }
 
 /** 读取尚未被下一次 run 消费的 handoff；一个 handoff 只注入一次。 */

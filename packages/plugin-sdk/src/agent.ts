@@ -139,4 +139,9 @@ export interface AgentDriver {
   interrupt(session: AgentSessionHandle): Promise<void>
   /** 释放会话资源；插件卸载或切换 Agent 时调用。 */
   dispose(session: AgentSessionHandle): Promise<void>
+  /**
+   * 这条错误是不是「要接续的原生会话已经不存在」（会话文件被删、换了配置目录）。Host 据此改开新会话
+   * 并带上交接，而不是让这个会话每次发送都失败。没实现时一律视为否。
+   */
+  isSessionNotFound?(message: string): boolean
 }

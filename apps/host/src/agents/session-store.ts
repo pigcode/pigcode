@@ -28,8 +28,37 @@ export class AgentSessionStore {
   }
 
   /**
-   * 复用线程在这个实例上的活跃会话；不存在时插入 driver 新建的会话行。
-   * 复用时保留原行 id 与 native id，供下一次 send 传 resume。
+   * 读取线程在这个实例上最近一个还能接续的原生会话：活跃的，或者 Host 重启时标成 orphaned 的。
+   * 只返回已经拿到原生 id 的行；没有原生 id 的行接不上任何东西。
+   */
+  findResumable(
+    threadId: string,
+    agentId: string,
+    instanceId?: string | null,
+  ): AgentSession | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM agent_sessions
+         WHERE thread_id = ? AND agent_id = ? AND COALESCE(instance_id, agent_id) = ?
+           AND status IN ('active', 'orphaned') AND native_session_id IS NOT NULL
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT 1`,
+      )
+      .get(threadId, agentId, instanceId ?? agentId)
+    return row ? mapAgentSession(row) : undefined
+  }
+
+  /** 原生会话已经不存在（resume 失败）时把这一行停掉，以后不再拿它来接续。 */
+  stop(sessionId: string, at: string): void {
+    this.db
+      .prepare(`UPDATE agent_sessions SET status = 'stopped', stopped_at = ? WHERE id = ?`)
+      .run(at, sessionId)
+  }
+
+  /**
+   * 复用线程在这个实例上的会话；不存在时插入 driver 新建的会话行。
+   * 复用时保留原行 id 与 native id，供下一次 send 传 resume。Host 重启后接回的 orphaned 行
+   * 在这里重新标成 active。
    */
   reuseOrCreate(input: {
     draft: AgentSessionHandle
@@ -38,7 +67,9 @@ export class AgentSessionStore {
     createdAt: string
   }): AgentSessionHandle {
     const instanceId = input.instanceId ?? input.agentId
-    const existing = this.findActive(input.draft.threadId, input.agentId, instanceId)
+    const existing =
+      this.findActive(input.draft.threadId, input.agentId, instanceId) ??
+      this.revive(input.draft.id, input.draft.threadId)
     if (existing) {
       return {
         ...input.draft,
@@ -63,6 +94,19 @@ export class AgentSessionStore {
         input.createdAt,
       )
     return input.draft
+  }
+
+  /** 把同一线程里 id 对应的 orphaned 行恢复成 active；没有这一行时返回 undefined。 */
+  private revive(sessionId: string, threadId: string): AgentSession | undefined {
+    const changed = this.db
+      .prepare(
+        `UPDATE agent_sessions SET status = 'active', stopped_at = NULL
+         WHERE id = ? AND thread_id = ? AND status = 'orphaned'`,
+      )
+      .run(sessionId, threadId).changes
+    if (changed === 0) return undefined
+    const row = this.db.prepare(`SELECT * FROM agent_sessions WHERE id = ?`).get(sessionId)
+    return row ? mapAgentSession(row) : undefined
   }
 
   /** Agent 回报原生会话 id 后更新会话行。 */

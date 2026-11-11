@@ -3,9 +3,9 @@ import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { RunStore } from "../storage/run-store"
 import type { AgentSessionStore } from "./session-store"
-import type { AgentSettingsValues, UserInput } from "./driver"
+import type { AgentSessionHandle, AgentSettingsValues, UserInput } from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
-import { pendingHandoff } from "./switching"
+import { freshSessionHandoff, pendingHandoff } from "./switching"
 
 /** launchRun 需要的最小 Host 依赖；由 registry 组装，避免 registry 超过 500 行。 */
 export interface LaunchDeps {
@@ -28,26 +28,17 @@ export interface LaunchDeps {
 /** 启动排队 run：此时才创建 Agent 会话，避免为未开始的 run 提前启动子进程。 */
 export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<void> {
   try {
-    const draft = await entry.driver.createSession({
-      threadId: entry.threadId,
-      cwd: entry.cwd,
-      nativeSessionId: entry.forkFromNativeSessionId ? null : entry.nativeSessionId,
-      ...(entry.forkFromNativeSessionId
-        ? { forkFromNativeSessionId: entry.forkFromNativeSessionId }
-        : {}),
-      permissionMode: entry.permissionMode,
-      model: entry.model,
-      ...(entry.sessionId ? { sessionId: entry.sessionId } : {}),
-      ...(entry.mcp ? { mcp: entry.mcp } : {}),
-      settings: deps.settingsFor(entry.driver.id, entry.instanceId),
-    })
-    const session = deps.agentSessions.reuseOrCreate({
-      draft,
-      agentId: entry.driver.id,
-      instanceId: entry.instanceId,
-      createdAt: entry.queuedAt,
-    })
-    deps.runs.setAgentSessionId(entry.runId, session.id)
+    const resuming = Boolean(entry.nativeSessionId ?? entry.forkFromNativeSessionId)
+    let session: AgentSessionHandle
+    let lost = false
+    try {
+      session = await openSession(entry, deps, true)
+    } catch (error) {
+      // Codex 在 createSession 里 thread/resume；原生 thread 不在了就改开新的，而不是每次都失败。
+      if (!resuming || !entry.driver.isSessionNotFound?.(messageOf(error))) throw error
+      session = await startFresh(entry, deps, entry.sessionId)
+      lost = true
+    }
     const run: ActiveRun = {
       runId: entry.runId,
       threadId: entry.threadId,
@@ -60,9 +51,14 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       resolveDone: entry.resolveDone,
       approvals: new Set(),
       liveText: "",
+      resuming: resuming && !lost,
+      startFresh: () => startFresh(entry, deps, run.session.id),
     }
     // 切换 Agent 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
-    const handoff = pendingHandoff(deps.ctx, run.threadId)
+    // 原生会话接不上时，新会话要带上这一轮之前的对话。
+    const handoff = lost
+      ? freshSessionHandoff(deps.ctx, run.threadId, run.runId)
+      : pendingHandoff(deps.ctx, run.threadId)
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {
       agentId: run.driver.id,
@@ -72,10 +68,61 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     deps.activeRuns.set(run.runId, run)
     void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    const message = messageOf(error)
     deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })
     deps.append(entry.threadId, entry.runId, "run.failed", { message })
     deps.activeThreads.delete(entry.threadId)
     entry.resolveDone()
   }
+}
+
+/** 让 driver 建会话并写会话行；resume 为 false 时不接续任何原生会话、也不复用旧行。 */
+async function openSession(
+  entry: QueuedRun,
+  deps: LaunchDeps,
+  resume: boolean,
+): Promise<AgentSessionHandle> {
+  const fork = resume ? entry.forkFromNativeSessionId : undefined
+  const draft = await entry.driver.createSession({
+    threadId: entry.threadId,
+    cwd: entry.cwd,
+    nativeSessionId: fork || !resume ? null : entry.nativeSessionId,
+    ...(fork ? { forkFromNativeSessionId: fork } : {}),
+    permissionMode: entry.permissionMode,
+    model: entry.model,
+    ...(resume && entry.sessionId ? { sessionId: entry.sessionId } : {}),
+    ...(entry.mcp ? { mcp: entry.mcp } : {}),
+    settings: deps.settingsFor(entry.driver.id, entry.instanceId),
+  })
+  const session = deps.agentSessions.reuseOrCreate({
+    draft,
+    agentId: entry.driver.id,
+    instanceId: entry.instanceId,
+    createdAt: entry.queuedAt,
+  })
+  deps.runs.setAgentSessionId(entry.runId, session.id)
+  return session
+}
+
+/**
+ * 要接续的原生会话已经不存在：停掉旧的会话行，开一个新的原生会话，并在时间线上说明。
+ * 旧行必须先停掉，否则 reuseOrCreate 会又把它找回来。
+ */
+async function startFresh(
+  entry: QueuedRun,
+  deps: LaunchDeps,
+  lostSessionId: string | undefined,
+): Promise<AgentSessionHandle> {
+  const now = new Date().toISOString()
+  if (lostSessionId) deps.agentSessions.stop(lostSessionId, now)
+  const session = await openSession(entry, deps, false)
+  deps.append(entry.threadId, entry.runId, "notice", {
+    level: "warning",
+    key: "session.resumeFailed",
+  })
+  return session
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

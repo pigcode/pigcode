@@ -171,7 +171,15 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
   }
   if (message.type === "result") {
     if (message.subtype !== "success" || message.is_error) {
-      const failure = message.subtype === "success" ? message.result : message.subtype
+      // 出错的 result 在 errors 里带着原因（例如 resume 时会话文件不存在），只给 subtype 用户看不出是什么错，
+      // Host 也认不出「原生会话不存在」。
+      const details = message.subtype === "success" ? [] : (message.errors ?? [])
+      const failure =
+        message.subtype === "success"
+          ? message.result
+          : details.length > 0
+            ? `${message.subtype}: ${details.join("\n")}`
+            : message.subtype
       events.push({ type: "run.failed", message: failure })
       return events
     }

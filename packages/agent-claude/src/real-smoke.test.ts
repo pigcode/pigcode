@@ -41,3 +41,35 @@ it.skipIf(!enabled)(
   },
   120_000,
 )
+
+it.skipIf(!enabled)(
+  "reports a missing native session in a way the Host recognises",
+  async () => {
+    const events: AgentEvent[] = []
+    const driver = new ClaudeDriver()
+    // 这个 id 不对应任何会话文件：CLI 在发请求前就退出，不消耗额度。
+    const session = await driver.createSession({
+      threadId: "real-missing",
+      cwd: process.cwd(),
+      permissionMode: "dontAsk",
+      nativeSessionId: "3f2b8c1e-0000-4000-8000-000000000000",
+    })
+    try {
+      await driver.send(
+        session,
+        { text: "hi" },
+        {
+          signal: new AbortController().signal,
+          emit: (event) => events.push(event),
+          requestApproval: async () => "deny",
+        },
+      )
+    } finally {
+      await driver.dispose(session)
+    }
+    const failed = events.find((event) => event.type === "run.failed")
+    expect(failed?.type).toBe("run.failed")
+    if (failed?.type === "run.failed") expect(driver.isSessionNotFound(failed.message)).toBe(true)
+  },
+  60_000,
+)
