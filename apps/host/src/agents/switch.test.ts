@@ -5,6 +5,7 @@ import type { CreateSessionInput, AgentDriver, AgentSessionHandle, UserInput } f
 import { ClaudeDriver } from "@pigcode/agent-claude/driver"
 import { replayQuery } from "@pigcode/agent-claude/replay"
 import { FakeAgentDriver } from "./fake"
+import { HandoffStore } from "../storage/handoff-store"
 import { apply as agentsPlugin } from "./registry"
 import { MemoryTransport } from "../rpc/memory-transport"
 import { RpcServer } from "../rpc/server"
@@ -123,7 +124,16 @@ describe("agent switching", () => {
       agentId: "claude",
       modelId: "claude-sonnet",
     })
-    const handoff = (handoffEvent?.payload as { handoff: string }).handoff
+    // 交接记在 thread_handoffs 里，事件只带它的 id。
+    const handoffId = (handoffEvent?.payload as { handoffId: string }).handoffId
+    const record = new HandoffStore(ctx.storage.db).get(handoffId)
+    expect(record).toMatchObject({
+      strategy: "switch",
+      fromInstanceIds: ["fake"],
+      toInstanceId: "claude",
+      delivery: "pending",
+    })
+    const handoff = record?.text
     expect(handoff).toBe(
       [
         "Previous agent: fake",
@@ -149,6 +159,10 @@ describe("agent switching", () => {
     const next = await ctx.agents.startRun(thread.id, "continue")
     await next.done
     expect(claude.inputs[0]).toEqual({ text: "continue", handoff })
+    expect(new HandoffStore(ctx.storage.db).get(handoffId)).toMatchObject({
+      delivery: "inline",
+      targetRunId: next.runId,
+    })
     // 换 Agent 时没有可 fork 的原生会话，createSession 不携带 fork 源。
     expect(claude.created[0]?.forkFromNativeSessionId).toBeUndefined()
 

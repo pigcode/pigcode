@@ -1,6 +1,7 @@
 /** 只追加事件日志；写入与投影由上层在同一事务中完成。 */
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { PigcodeDatabase } from "./database"
+import { projectThreadItem } from "./thread-items"
 
 /** 尚未分配 seq 的新线程事件。 */
 export type NewThreadEvent = Omit<ThreadEvent, "seq">
@@ -9,25 +10,26 @@ export type NewThreadEvent = Omit<ThreadEvent, "seq">
 export class EventStore {
   constructor(private readonly db: PigcodeDatabase) {}
 
-  /** 追加一条事件并返回带 seq 的完整事件。 */
+  /** 追加一条事件并返回带 seq 的完整事件；会话条目在同一个事务里跟着写，要么都写进去，要么都不写。 */
   append(event: NewThreadEvent): ThreadEvent {
-    const result = this.db
-      .prepare(
-        `INSERT INTO thread_events (thread_id, run_id, type, payload_json, schema_version, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        event.threadId,
-        event.runId,
-        event.type,
-        JSON.stringify(event.payload),
-        event.schemaVersion,
-        event.createdAt,
-      )
-    return {
-      ...event,
-      seq: Number(result.lastInsertRowid),
-    }
+    return this.db.transaction(() => {
+      const result = this.db
+        .prepare(
+          `INSERT INTO thread_events (thread_id, run_id, type, payload_json, schema_version, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          event.threadId,
+          event.runId,
+          event.type,
+          JSON.stringify(event.payload),
+          event.schemaVersion,
+          event.createdAt,
+        )
+      const stored: ThreadEvent = { ...event, seq: Number(result.lastInsertRowid) }
+      projectThreadItem(this.db, stored)
+      return stored
+    })()
   }
 
   /** 读取指定线程中 seq 大于游标的事件，按 seq 升序返回。 */

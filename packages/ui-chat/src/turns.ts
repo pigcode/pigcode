@@ -159,9 +159,13 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
           kind: "switch",
           key: `switch-${event.seq}`,
           agentId,
-          handoff: Boolean(asText(payload?.handoff)),
+          // 以前交接的文字直接写在事件里，现在只写交接记录的 id。
+          handoff: Boolean(asText(payload?.handoff) || asText(payload?.handoffId)),
         })
-      } else if (asText(payload?.handoff) && payload?.deferred !== true) {
+      } else if (
+        (asText(payload?.handoff) && payload?.deferred !== true) ||
+        payload?.handoffStrategy === "subagent_brief"
+      ) {
         entries.push({ kind: "brief", key: `brief-${event.seq}` })
       }
       continue

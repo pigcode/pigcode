@@ -1,5 +1,6 @@
 /** 管理 SQLite schema 版本；迁移只向前。 */
 import type Database from "better-sqlite3"
+import { backfillThreadItems } from "./thread-items"
 
 /** 一次迁移：一段 SQL，或者需要先看当前 schema 再决定怎么改的函数。 */
 type Migration = string | ((db: Database.Database) => void)
@@ -154,7 +155,96 @@ const MIGRATIONS: Migration[] = [
   ALTER TABLE threads ADD COLUMN last_instance_id TEXT;
   ALTER TABLE agent_sessions ADD COLUMN instance_id TEXT;
   `,
+  (db) => {
+    // 会话条目与交接记录（pigcode/monorepo#77）。条目从事件日志投影出来，这里一次回填已有会话。
+    db.exec(`
+      CREATE TABLE thread_items (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        position INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        run_id TEXT,
+        agent_id TEXT,
+        instance_id TEXT,
+        agent_session_id TEXT,
+        parent_tool_use_id TEXT,
+        status TEXT NOT NULL,
+        text TEXT NOT NULL,
+        payload_json TEXT NOT NULL,
+        updated_seq INTEGER NOT NULL
+      );
+      CREATE INDEX idx_thread_items_position ON thread_items(thread_id, position);
+
+      CREATE TABLE thread_handoffs (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        strategy TEXT NOT NULL,
+        from_instance_ids TEXT NOT NULL DEFAULT '[]',
+        to_instance_id TEXT,
+        covered_from INTEGER,
+        covered_to INTEGER,
+        selected_item_ids TEXT NOT NULL DEFAULT '[]',
+        omitted_count INTEGER NOT NULL DEFAULT 0,
+        text TEXT NOT NULL,
+        delivery TEXT NOT NULL,
+        target_run_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_thread_handoffs_thread ON thread_handoffs(thread_id, delivery);
+    `)
+    backfillThreadItems(db)
+    carryOverPendingHandoffs(db)
+  },
 ]
+
+/**
+ * 以前交接写在 thread.updated 的 handoff 字段里，后面没有 run.started 就算还没发。
+ * 升级时把这样还没发的交接搬进 thread_handoffs，免得升级后第一条消息丢了交接。
+ */
+function carryOverPendingHandoffs(db: Database.Database): void {
+  const rows = db
+    .prepare(
+      `SELECT seq, thread_id, type, payload_json, created_at FROM thread_events
+       WHERE type IN ('thread.updated', 'run.started') ORDER BY seq ASC`,
+    )
+    .all() as Array<{
+    seq: number
+    thread_id: string
+    type: string
+    payload_json: string
+    created_at: string
+  }>
+  const pending = new Map<string, { text: string; subagent: boolean; createdAt: string }>()
+  for (const row of rows) {
+    const payload = JSON.parse(row.payload_json) as Record<string, unknown>
+    if (row.type === "run.started") {
+      if (payload.handoffDeferred !== true) pending.delete(row.thread_id)
+      continue
+    }
+    if (typeof payload.handoff === "string" && payload.handoff.length > 0) {
+      pending.set(row.thread_id, {
+        text: payload.handoff,
+        subagent: !payload.agentId,
+        createdAt: row.created_at,
+      })
+    }
+  }
+  const insert = db.prepare(
+    `INSERT INTO thread_handoffs (id, thread_id, strategy, text, delivery, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
+  )
+  for (const [threadId, handoff] of pending) {
+    insert.run(
+      `ho_legacy_${threadId}`,
+      threadId,
+      handoff.subagent ? "subagent_brief" : "switch",
+      handoff.text,
+      handoff.createdAt,
+      handoff.createdAt,
+    )
+  }
+}
 
 /** 最新的 schema 版本，也就是迁移的个数。 */
 export const SCHEMA_VERSION = MIGRATIONS.length

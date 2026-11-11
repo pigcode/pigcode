@@ -5,8 +5,8 @@ import type { RunStore } from "../storage/run-store"
 import type { AgentSessionStore } from "./session-store"
 import type { AgentSessionHandle, AgentSettingsValues, UserInput } from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
-import { startsWithAgentCommand } from "./agent-command"
-import { deferHandoff, freshSessionHandoff, pendingHandoff } from "./switching"
+import { handoffForRun } from "./handoff-delivery"
+import { freshSessionHandoff } from "./switching"
 
 /** launchRun 需要的最小 Host 依赖；由 registry 组装，避免 registry 超过 500 行。 */
 export interface LaunchDeps {
@@ -55,24 +55,30 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       resuming: resuming && !lost,
       startFresh: () => startFresh(entry, deps, run.session.id),
     }
-    // 切换 Agent 后的第一条消息注入一次 handoff；事件读取要在 run.started 之前。
-    // 原生会话接不上时，新会话要带上这一轮之前的对话。
-    const handoff = lost
-      ? freshSessionHandoff(deps.ctx, run.threadId, run.runId)
-      : pendingHandoff(deps.ctx, run.threadId)
-    // 以 Agent 命令开头的消息原样发出，CLI 才认得出命令；交接推迟到下一轮。
-    const defer = handoff !== null && startsWithAgentCommand(entry.input.text)
+    // 带上还没发出的交接（切换 Agent、子代理说明）；原生会话接不上时，新会话还要带上这一轮之前的对话。
+    const fresh = lost ? freshSessionHandoff(deps.ctx, run.threadId, run.runId) : null
+    const handoff = handoffForRun(
+      deps.ctx.storage.db,
+      run.threadId,
+      run.runId,
+      entry.input.text,
+      fresh === null
+        ? null
+        : {
+            threadId: run.threadId,
+            strategy: "fresh_session",
+            text: fresh,
+            toInstanceId: entry.instanceId,
+          },
+    )
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {
       agentId: run.driver.id,
       instanceId: entry.instanceId,
       agentSessionId: run.session.id,
-      ...(defer ? { handoffDeferred: true } : {}),
     })
-    // 新开会话的交接还没记在任何地方，推迟时要记下来；切换留下的交接本来就在事件里。
-    if (defer && lost) deferHandoff(deps.ctx, run.threadId, handoff)
     deps.activeRuns.set(run.runId, run)
-    void deps.execute(run, handoff === null || defer ? entry.input : { ...entry.input, handoff })
+    void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })
   } catch (error) {
     const message = messageOf(error)
     deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })

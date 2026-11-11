@@ -2,6 +2,7 @@
 import type { Context } from "cordis"
 import type { AgentSession } from "@pigcode/contracts"
 import type { AgentSessionStore } from "./session-store"
+import { HandoffStore } from "../storage/handoff-store"
 import type { AgentDriver, AgentModelInfo, AgentSettingsValues } from "./driver"
 
 /** 取 driver 的模型目录；不支持动态目录的 Agent 返回空数组。 */
@@ -121,6 +122,28 @@ export function buildSubagentBrief(ctx: Context, parentThreadId: string): string
   ].join("\n")
 }
 
+/**
+ * 给刚建好的子代理会话记一份说明（主会话的近况），第一条消息时带上；主会话还没聊过时什么也不做。
+ * 事件里只带交接记录的 id，时间线据此在子代理会话开头画一行说明。
+ */
+export function recordSubagentBrief(ctx: Context, threadId: string, parentThreadId: string): void {
+  const brief = buildSubagentBrief(ctx, parentThreadId)
+  if (!brief) return
+  const record = new HandoffStore(ctx.storage.db).create({
+    threadId,
+    strategy: "subagent_brief",
+    text: brief,
+  })
+  ctx.sessions.append({
+    threadId,
+    runId: null,
+    type: "thread.updated",
+    payload: { handoffId: record.id, handoffStrategy: record.strategy },
+    schemaVersion: 1,
+    createdAt: new Date().toISOString(),
+  })
+}
+
 /** 线程里是否已经有过对话消息；excludeRunId 那一轮不算。 */
 function hasConversation(ctx: Context, threadId: string, excludeRunId?: string): boolean {
   return ctx.sessions
@@ -138,46 +161,6 @@ function hasConversation(ctx: Context, threadId: string, excludeRunId?: string):
  */
 export function freshSessionHandoff(ctx: Context, threadId: string, runId: string): string | null {
   return hasConversation(ctx, threadId, runId) ? buildHandoff(ctx, threadId, runId) : null
-}
-
-/** 读取尚未被下一次 run 消费的 handoff；一个 handoff 只注入一次。 */
-export function pendingHandoff(ctx: Context, threadId: string): string | null {
-  const events = ctx.sessions.read(threadId, 0)
-  let handoff: string | null = null
-  let handoffSeq = -1
-  for (const event of events) {
-    if (event.type !== "thread.updated") continue
-    if (typeof event.payload !== "object" || event.payload === null) continue
-    const value = (event.payload as { handoff?: unknown }).handoff
-    if (typeof value === "string" && value.length > 0) {
-      handoff = value
-      handoffSeq = event.seq
-    }
-  }
-  if (handoff === null) return null
-  // 以 Agent 命令开头的那一轮不带交接（run.started 上记了 handoffDeferred），交接留给下一轮。
-  const consumed = events.some(
-    (event) =>
-      event.type === "run.started" &&
-      event.seq > handoffSeq &&
-      (event.payload as { handoffDeferred?: unknown } | null)?.handoffDeferred !== true,
-  )
-  return consumed ? null : handoff
-}
-
-/**
- * 这一轮带不了的交接（用户消息以 Agent 命令开头）记成待发，下一轮再带上。
- * 写在这一轮的 run.started 之后，所以下一轮的 pendingHandoff 会读到它。
- */
-export function deferHandoff(ctx: Context, threadId: string, handoff: string): void {
-  ctx.sessions.append({
-    threadId,
-    runId: null,
-    type: "thread.updated",
-    payload: { handoff, deferred: true },
-    schemaVersion: 1,
-    createdAt: new Date().toISOString(),
-  })
 }
 
 /** 读取尚未被下一次 run 消费的原生 fork 源；一个 fork 只使用一次。 */
@@ -220,10 +203,23 @@ export async function switchAgent(
       ? buildHandoff(ctx, threadId)
       : null
   const now = new Date().toISOString()
+  const previous = ctx.threads.get(threadId)
+  const previousInstance = previous?.lastInstanceId ?? previous?.defaultInstanceId ?? null
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
   for (const session of active) await disposeActive?.(session)
   ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance)
   sessions.stopActive(threadId, now)
+  // 交接记在 thread_handoffs 里，下一轮发送时带上；事件里只留它的 id，时间线据此画「以摘要交接」。
+  const record =
+    handoff === null
+      ? null
+      : new HandoffStore(ctx.storage.db).create({
+          threadId,
+          strategy: "switch",
+          text: handoff,
+          fromInstanceIds: previousInstance ? [previousInstance] : [],
+          toInstanceId: chosenInstance,
+        })
   ctx.sessions.append({
     threadId,
     runId: null,
@@ -232,7 +228,8 @@ export async function switchAgent(
       agentId,
       instanceId: chosenInstance,
       modelId,
-      ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : { handoff }),
+      ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : {}),
+      ...(record ? { handoffId: record.id } : {}),
     },
     schemaVersion: 1,
     createdAt: now,

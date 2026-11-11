@@ -3,8 +3,8 @@ import type { Context } from "cordis"
 import type { AgentRuntime, ApprovalDecision, QuestionRequest, UserInput } from "./driver"
 import type { ActiveRun } from "./run-queue"
 import { mapAgentEvent, type RunEventHooks } from "./run-events"
-import { startsWithAgentCommand } from "./agent-command"
-import { deferHandoff, freshSessionHandoff } from "./switching"
+import { handoffForRun } from "./handoff-delivery"
+import { freshSessionHandoff } from "./switching"
 
 /** execute 需要的 Host 闭包。 */
 export interface ExecuteDeps {
@@ -77,15 +77,16 @@ export function createExecute(
       await run.driver.dispose(run.session).catch(() => undefined)
       if (!run.startFresh) throw new Error("agent session cannot be restarted")
       run.session = await run.startFresh()
-      const handoff = freshSessionHandoff(deps.ctx, run.threadId, run.runId)
+      const fresh = freshSessionHandoff(deps.ctx, run.threadId, run.runId)
+      const handoff = handoffForRun(
+        deps.ctx.storage.db,
+        run.threadId,
+        run.runId,
+        input.text,
+        fresh === null ? null : { threadId: run.threadId, strategy: "fresh_session", text: fresh },
+      )
       const rest: UserInput = { ...input }
       delete rest.handoff
-      // 以 Agent 命令开头的消息不带交接，交接记下来留给下一轮。
-      if (handoff !== null && startsWithAgentCommand(input.text)) {
-        deferHandoff(deps.ctx, run.threadId, handoff)
-        await execute(run, rest)
-        return
-      }
       await execute(run, handoff === null ? rest : { ...rest, handoff })
     } catch (error) {
       fail(run, error)

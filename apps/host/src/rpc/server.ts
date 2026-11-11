@@ -14,7 +14,7 @@ import type {
   PermissionMode,
   ReasoningEffort,
 } from "@pigcode/contracts"
-import { buildSubagentBrief } from "../agents/switching"
+import { recordSubagentBrief } from "../agents/switching"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { forwardTerminal } from "./terminal-notify"
@@ -199,19 +199,7 @@ export class RpcServer {
           createdAt: now,
         })
         // 子代理的第一条消息前带上主会话的近况；只注入一次，之后按子代理自己的会话继续。
-        const brief = value.parentThreadId
-          ? buildSubagentBrief(this.ctx, value.parentThreadId)
-          : null
-        if (brief) {
-          this.ctx.sessions.append({
-            threadId: thread.id,
-            runId: null,
-            type: "thread.updated",
-            payload: { handoff: brief },
-            schemaVersion: 1,
-            createdAt: now,
-          })
-        }
+        if (value.parentThreadId) recordSubagentBrief(this.ctx, thread.id, value.parentThreadId)
         return thread
       }
       case "thread.subscribe": {
