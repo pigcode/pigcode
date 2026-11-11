@@ -328,7 +328,8 @@ describe("AgentsPage", () => {
     expect(screen.getByRole("combobox", { name: "新会话使用" }).textContent).toContain("公司 API")
 
     await userEvent.click(screen.getByRole("combobox", { name: "新会话使用" }))
-    await userEvent.click(screen.getByRole("option", { name: "自动" }))
+    // 弹出层是异步挂上的，机器忙的时候点开后不会马上出现（CI 的 macOS 上偶发失败过）。
+    await userEvent.click(await screen.findByRole("option", { name: "自动" }, { timeout: 3_000 }))
     await waitFor(() => expect(props.onSetDefault).toHaveBeenCalledWith(null))
   })
 
