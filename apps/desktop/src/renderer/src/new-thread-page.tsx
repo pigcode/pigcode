@@ -3,6 +3,7 @@
  * 没发出去时文字放回输入框，不会丢。
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useThreadOptions } from "./thread-options"
 import type { AgentFeatures } from "@pigcode/contracts"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import { NewThreadView } from "@pigcode/ui-chat"
@@ -61,6 +62,7 @@ export function NewThreadPage({
   const [pending, setPending] = useState(false)
   const projectId = draftProjectId(state)
   const project = state.projects.find((item) => item.id === projectId)
+  const threadChoices = useThreadOptions(state.threads, state.projects, null, projectId)
 
   // 选过的实例停用、删除或卸载以后退回默认实例。
   const chosenGone =
@@ -135,6 +137,7 @@ export function NewThreadPage({
       onPermissionMode={(mode) => updateDraftOptions({ permissionMode: mode })}
       canPlan={features?.plan ?? true}
       {...(files ? { files } : {})}
+      threads={threadChoices}
       commands={commands}
       loadAgentCommands={loadAgentCommands}
       onSubmit={(text, submitOptions) => void submit(text, submitOptions)}

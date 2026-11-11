@@ -22,6 +22,8 @@ export interface ConversationActions {
   onOpenFile?: ((path: string) => void) | undefined
   onViewDiff?: ((path?: string) => void) | undefined
   onOpenSubagent?: ((id: string) => void) | undefined
+  /** 打开用户 @ 引用的另一个会话（#81）。 */
+  onOpenThread?: ((threadId: string) => void) | undefined
 }
 
 export const ConversationActionsContext = createContext<ConversationActions>({})

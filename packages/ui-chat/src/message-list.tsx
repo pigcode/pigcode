@@ -30,6 +30,7 @@ export interface MessageListProps {
   onOpenFile?: ((path: string) => void) | undefined
   onViewDiff?: ((path?: string) => void) | undefined
   onOpenSubagent?: ((id: string) => void) | undefined
+  onOpenThread?: ((threadId: string) => void) | undefined
   /** 运行中命令已经流出的输出，按工具调用 id。 */
   liveOutput?: Readonly<Record<string, string>> | undefined
   onAnswer?: ((requestId: string, answers: string[]) => void) | undefined
@@ -79,6 +80,7 @@ export function MessageList({
   onOpenFile,
   onViewDiff,
   onOpenSubagent,
+  onOpenThread,
   liveOutput,
   onAnswer,
 }: MessageListProps) {
@@ -94,9 +96,16 @@ export function MessageList({
   const openFile = useStable(onOpenFile)
   const viewDiff = useStable(onViewDiff)
   const openSubagent = useStable(onOpenSubagent)
+  const openThread = useStable(onOpenThread)
   const actions = useMemo<ConversationActions>(
-    () => ({ root, onOpenFile: openFile, onViewDiff: viewDiff, onOpenSubagent: openSubagent }),
-    [root, openFile, viewDiff, openSubagent],
+    () => ({
+      root,
+      onOpenFile: openFile,
+      onViewDiff: viewDiff,
+      onOpenSubagent: openSubagent,
+      onOpenThread: openThread,
+    }),
+    [root, openFile, viewDiff, openSubagent, openThread],
   )
   // 流式文本、思考与命令输出都属于最后一个还没结束的轮；其余轮拿不到它们，不会因此重渲染。
   const openKey = useMemo(() => {

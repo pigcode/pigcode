@@ -4,6 +4,7 @@
  * 审批都作用在当前标签所在的会话上。
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { useThreadOptions } from "./thread-options"
 import type { PermissionMode, Thread } from "@pigcode/contracts"
 import {
   contributionText,
@@ -47,6 +48,8 @@ export interface ChatControls {
   onOpenFile?: (path: string) => void
   /** 在右栏打开 Diff。 */
   onOpenDiff?: () => void
+  /** 打开用户 @ 引用的会话（#81）。 */
+  onOpenThread?: (threadId: string) => void
   /** 每次进入新会话草稿都会变；变了就把光标放回草稿的输入框。 */
   draftFocus?: number
 }
@@ -80,6 +83,7 @@ export function ChatViewContainer({
   onToggleRight,
   layoutControls,
   onOpenFile,
+  onOpenThread,
   onOpenDiff,
   draftFocus,
 }: { deps: CoreDeps } & ChatControls) {
@@ -94,6 +98,12 @@ export function ChatViewContainer({
     : active
   const mainId = main?.id ?? null
   const project = state.projects.find((item) => item.id === main?.projectId)
+  const threadChoices = useThreadOptions(
+    state.threads,
+    state.projects,
+    mainId,
+    main?.projectId ?? null,
+  )
   const connected = state.status === "connected"
   const agents = useAgents(deps.connection, state.agentRevision, connected)
   const featuresByAgent = useAgentFeatures(deps.connection, state.agentRevision, connected)
@@ -356,6 +366,8 @@ export function ChatViewContainer({
         onSelectModel={selectModel}
         onPermissionMode={setPermissionMode}
         {...(files ? { files } : {})}
+        threads={threadChoices}
+        {...(onOpenThread ? { onOpenThread } : {})}
         commands={commands}
         loadAgentCommands={loadAgentCommands}
         rightOpen={rightOpen}

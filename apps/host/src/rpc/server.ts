@@ -263,6 +263,7 @@ export class RpcServer {
           fast?: boolean
           ultracode?: boolean
           instanceId?: string
+          references?: Array<{ kind: "thread"; threadId: string }>
         }
         const { runId } = await this.ctx.agents.startRun(
           value.threadId,
@@ -279,6 +280,7 @@ export class RpcServer {
             ...(value.fast ? { fast: true } : {}),
             ...(value.ultracode ? { ultracode: true } : {}),
             ...(value.instanceId ? { instanceId: value.instanceId } : {}),
+            ...(value.references ? { references: value.references } : {}),
           },
         )
         return { runId }

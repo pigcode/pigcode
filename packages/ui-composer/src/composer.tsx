@@ -39,15 +39,22 @@ import { ComposerModelControls } from "./composer-model-controls"
 import { useRunPreferences } from "./model-preferences"
 import { SuggestionPanel } from "./suggestion-panel"
 import { SuggestionStore } from "./suggestion-store"
-import { COMPOSER_MENTION_EVENT, mentionPathOf } from "./composer-mention"
+import { COMPOSER_MENTION_EVENT, mentionOf } from "./composer-mention"
 import { ComposerContextChips, useComposerContexts, withContexts } from "./composer-context"
 import { composerClass, useWrapped } from "./composer-layout"
+import {
+  editorReferences,
+  type ComposerReference,
+  type ComposerThreadOption,
+} from "./composer-threads"
 
 /** 发送时附带的选项；思考深度、快速模式与 Ultracode 来自当前模型与用户偏好。两个开关只在开着时出现。 */
 export interface ComposerSubmitOptions {
   effort: ReasoningEffort | null
   fast?: true
   ultracode?: true
+  /** @ 引用的会话；没有引用时不出现。 */
+  references?: ComposerReference[]
 }
 
 /** 会话输入区 props；agent、模型、权限都由调用方控制，思考深度与收藏保存在本机偏好里。 */
@@ -95,6 +102,8 @@ export interface ComposerProps {
   draftKey?: string | null
   /** @ 引用时可选的项目文件（相对路径）。 */
   files?: () => Promise<readonly string[]>
+  /** @ 引用时可选的会话（#81），按最近活动排好、不含当前会话。 */
+  threads?: readonly ComposerThreadOption[]
   /** / 命令；内置的切换模型与权限之外的命令由调用方提供。 */
   commands?: readonly ComposerCommand[]
   /** 读一个 Agent 实例的 / 命令与 skill；输入框获得焦点时预取当前实例的，调用方负责缓存。 */
@@ -127,6 +136,7 @@ export function Composer({
   header,
   draftKey = null,
   files,
+  threads,
   commands = [],
   loadAgentCommands,
 }: ComposerProps) {
@@ -165,7 +175,7 @@ export function Composer({
   const agentSource = useAgentCommandSource(agentId, loadAgentCommands)
 
   // 编辑器只创建一次；回调与配置通过 ref 读取最新值。
-  const latest = useRef({
+  const live = {
     onSubmit,
     running,
     disabled,
@@ -179,26 +189,12 @@ export function Composer({
     inputLabel: t("composer.input"),
     smartPunctuation,
     files,
-    commands: allCommands,
-    agentCommands: agentSource,
-  })
-  latest.current = {
-    onSubmit,
-    running,
-    disabled,
-    effort,
-    fast,
-    ultracode,
-    permissionMode,
-    availableModes,
-    onPermissionMode,
-    placeholder: placeholder ?? t("composer.placeholder"),
-    inputLabel: t("composer.input"),
-    smartPunctuation,
-    files,
+    threads,
     commands: allCommands,
     agentCommands: agentSource,
   }
+  const latest = useRef(live)
+  latest.current = live
   const editorRef = useRef<Editor | null>(null)
   const draftKeyRef = useRef<string | null>(draftKey)
   const attached = useComposerContexts(
@@ -219,10 +215,12 @@ export function Composer({
     const text = editorText(editor)
     const { contexts, clear } = contextsRef.current
     if (!text && contexts.length === 0) return
+    const references = editorReferences(editor)
     current.onSubmit(withContexts(text, contexts), {
       effort: current.effort,
       ...(current.fast ? { fast: true as const } : {}),
       ...(current.ultracode ? { ultracode: true as const } : {}),
+      ...(references.length > 0 ? { references } : {}),
     })
     if (text) rememberSent(text)
     historyRef.current = null
@@ -258,6 +256,7 @@ export function Composer({
         placeholder: () => latest.current.placeholder,
         smartPunctuation: () => latest.current.smartPunctuation,
         files: () => latest.current.files,
+        threads: () => latest.current.threads,
         commands: () => latest.current.commands,
         agentCommands: () => latest.current.agentCommands,
       },
@@ -369,17 +368,17 @@ export function Composer({
     [],
   )
 
-  // 文件树的「添加到对话」：在光标处插入 @文件 引用，与输入 @ 选中的效果相同。
+  // 文件树的「添加到对话」、侧栏的「在输入框里引用」：在光标处插入引用，与输入 @ 选中的效果相同。
   useEffect(() => {
     if (!editor) return undefined
     const onMention = (event: Event): void => {
-      const path = mentionPathOf(event)
-      if (!path || disabled) return
+      const mention = mentionOf(event)
+      if (!mention || disabled) return
       editor
         .chain()
         .focus()
         .insertContent([
-          { type: "mention", attrs: { id: path, label: path } },
+          { type: "mention", attrs: mention },
           { type: "text", text: " " },
         ])
         .run()

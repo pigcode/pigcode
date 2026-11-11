@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import {
+  type ComposerThreadOption,
   Composer,
   prefillComposer,
   type ComposerAgent,
@@ -57,6 +58,8 @@ export interface NewThreadViewProps {
   canPlan?: boolean
   /** @ 引用时可选的项目文件。 */
   files?: () => Promise<readonly string[]>
+  /** @ 引用时可选的会话（#81）。 */
+  threads?: readonly ComposerThreadOption[]
   commands?: readonly ComposerCommand[]
   /** 读 Agent 实例的 / 命令与 skill；容器应调用 agent.commands（带项目）并缓存。 */
   loadAgentCommands?: ComposerProps["loadAgentCommands"]
@@ -295,6 +298,7 @@ export function NewThreadView({
   onPermissionMode,
   canPlan = true,
   files,
+  threads,
   commands,
   loadAgentCommands,
   onSubmit,
@@ -340,6 +344,7 @@ export function NewThreadView({
           onPermissionMode={onPermissionMode}
           canPlan={canPlan}
           {...(files ? { files } : {})}
+          {...(threads ? { threads } : {})}
           {...(commands ? { commands } : {})}
           {...(loadAgentCommands ? { loadAgentCommands } : {})}
         />

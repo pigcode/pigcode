@@ -33,6 +33,8 @@ export interface StartRunOptions {
   ultracode?: boolean
   /** 本次 run 用的实例；缺省时沿用线程最近的实例。 */
   instanceId?: string
+  /** 用户在输入框里 @ 引用的会话（#81）。 */
+  references?: ReadonlyArray<{ kind: "thread"; threadId: string }>
 }
 
 /** 交给 driver 的输入：文本加上这次 run 选的思考深度、快速模式与 Ultracode。 */

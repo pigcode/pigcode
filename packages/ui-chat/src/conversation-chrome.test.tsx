@@ -156,3 +156,32 @@ describe("StatusPanel", () => {
     expect(container.querySelector(".status-panel")).toBeNull()
   })
 })
+
+describe("thread references in the user bubble", () => {
+  it("draws a referenced thread as a chip that opens it, and still shows file mentions", async () => {
+    const onOpenThread = vi.fn()
+    inLocale(
+      <UserBubble
+        text="看 @重构解析器 和 @src/parser.ts 再对照 @修登录"
+        references={[
+          { threadId: "t1", title: "重构解析器" },
+          { threadId: "t2", title: "修登录" },
+        ]}
+      />,
+      { onOpenThread },
+    )
+    const chips = screen.getAllByRole("button", { name: /重构解析器|修登录/ })
+    expect(chips.map((chip) => chip.textContent)).toEqual(["重构解析器", "修登录"])
+    expect(document.querySelector(".mention-file:not(.mention-thread)")?.textContent).toBe(
+      "parser.ts",
+    )
+    await userEvent.click(chips[1]!)
+    expect(onOpenThread).toHaveBeenCalledWith("t2")
+  })
+
+  it("leaves @text alone when the message did not record it as a reference", () => {
+    inLocale(<UserBubble text="ping @重构解析器 please" />)
+    expect(document.querySelector(".mention-thread")).toBeNull()
+    expect(document.body.textContent).toContain("ping @重构解析器 please")
+  })
+})

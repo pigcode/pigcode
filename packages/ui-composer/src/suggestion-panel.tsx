@@ -1,9 +1,17 @@
 /**
- * @ 文件与 / 命令的建议面板：贴在输入框上沿，宽度与输入框一致。
+ * @ 文件、会话与 / 命令的建议面板：贴在输入框上沿，宽度与输入框一致。
  * 命令分三种来源，用图标和右侧的小标签区分：Pigcode 自己的命令、Agent 内置命令、skill 与自定义命令。
  */
-import { useEffect, useRef, useSyncExternalStore } from "react"
-import { FileText, Loader2, Slash, Sparkles, SquareTerminal, type LucideIcon } from "lucide-react"
+import { Fragment, useEffect, useRef, useSyncExternalStore } from "react"
+import {
+  FileText,
+  Loader2,
+  MessagesSquare,
+  Slash,
+  Sparkles,
+  SquareTerminal,
+  type LucideIcon,
+} from "lucide-react"
 import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import type { SuggestionItem, SuggestionStore } from "./suggestion-store"
 
@@ -14,6 +22,7 @@ const ICONS: Record<NonNullable<SuggestionItem["source"]>, LucideIcon> = {
 }
 
 function itemIcon(item: SuggestionItem): LucideIcon {
+  if (item.kind === "thread") return MessagesSquare
   return item.kind === "file" ? FileText : ICONS[item.source ?? "pigcode"]
 }
 
@@ -38,8 +47,14 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
   }, [snapshot.index, snapshot.items])
 
   if (!snapshot.active) return null
+  // @ 菜单里有会话时分成「会话」「文件」两组，标题改成「引用」；只有文件时和以前一样。
+  const grouped = snapshot.items.some((item) => item.kind === "thread")
   const title =
-    snapshot.kind === "file" ? t("composer.suggest.files") : t("composer.suggest.commands")
+    snapshot.kind === "file"
+      ? grouped
+        ? t("composer.suggest.mentions")
+        : t("composer.suggest.files")
+      : t("composer.suggest.commands")
   return (
     <div className="popup menu-popup suggest-panel" role="listbox" aria-label={title} ref={listRef}>
       <div className="menu-label suggest-title">
@@ -63,28 +78,41 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
         const tag =
           item.source === "builtin" || item.source === "skill"
             ? t(`composer.suggest.source.${item.source}`)
-            : null
+            : item.archived
+              ? t("composer.suggest.archived")
+              : null
+        const groupStart = grouped && snapshot.items[index - 1]?.kind !== item.kind
         return (
-          <div
-            key={`${item.kind}-${item.id}`}
-            role="option"
-            aria-selected={active}
-            data-highlighted={active ? "" : undefined}
-            data-source={item.source}
-            className="menu-item"
-            onMouseEnter={() => store.highlight(index)}
-            onMouseDown={(event) => {
-              // 保持编辑器焦点，选择由 suggestion 插件完成。
-              event.preventDefault()
-              store.choose(index)
-            }}
-          >
-            <Icon className="ic ic-sm" aria-hidden="true" />
-            <span className="suggest-label">{path ? path.name : item.label}</span>
-            {item.hint ? <span className="suggest-hint">{item.hint}</span> : null}
-            <span className="suggest-detail truncate">{path ? path.dir : (item.detail ?? "")}</span>
-            {tag ? <span className="suggest-tag">{tag}</span> : null}
-          </div>
+          <Fragment key={`${item.kind}-${item.id}`}>
+            {groupStart ? (
+              <div className="menu-label suggest-group" role="presentation">
+                {item.kind === "thread"
+                  ? t("composer.suggest.group.threads")
+                  : t("composer.suggest.group.files")}
+              </div>
+            ) : null}
+            <div
+              role="option"
+              aria-selected={active}
+              data-highlighted={active ? "" : undefined}
+              data-source={item.source}
+              className="menu-item"
+              onMouseEnter={() => store.highlight(index)}
+              onMouseDown={(event) => {
+                // 保持编辑器焦点，选择由 suggestion 插件完成。
+                event.preventDefault()
+                store.choose(index)
+              }}
+            >
+              <Icon className="ic ic-sm" aria-hidden="true" />
+              <span className="suggest-label">{path ? path.name : item.label}</span>
+              {item.hint ? <span className="suggest-hint">{item.hint}</span> : null}
+              <span className="suggest-detail truncate">
+                {path ? path.dir : (item.detail ?? "")}
+              </span>
+              {tag ? <span className="suggest-tag">{tag}</span> : null}
+            </div>
+          </Fragment>
         )
       })}
     </div>

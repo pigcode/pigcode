@@ -79,6 +79,8 @@ export interface ShellProps {
   /** 会话行右键菜单的重命名与归档；两个都传时才有右键菜单。 */
   onRenameThread?: (threadId: string, title: string) => void
   onArchiveThread?: (threadId: string) => void
+  /** 会话行右键菜单里的「在输入框里引用」。 */
+  onReferenceThread?: (thread: Thread) => void
   /** 项目行右键菜单的重命名与从侧栏移除；两个都传时才有右键菜单。 */
   onRenameProject?: (projectId: string, name: string) => void
   onRemoveProject?: (projectId: string) => void
@@ -138,6 +140,7 @@ export function Shell({
   onOpenThread,
   onRenameThread,
   onArchiveThread,
+  onReferenceThread,
   onRenameProject,
   onRemoveProject,
   children,
@@ -401,6 +404,7 @@ export function Shell({
             activeNav={view === "schedules" || view === "plugins" ? view : undefined}
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}
+            onReferenceThread={onReferenceThread}
             onRenameProject={onRenameProject}
             onRemoveProject={onRemoveProject}
             shortcutHints={shortcutHints}

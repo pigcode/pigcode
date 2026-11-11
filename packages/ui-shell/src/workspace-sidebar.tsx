@@ -44,6 +44,8 @@ export interface WorkspaceSidebarProps {
   /** 会话行右键菜单里的重命名与归档；两个都传时才有菜单。 */
   onRenameThread?: ((threadId: string, title: string) => void) | undefined
   onArchiveThread?: ((threadId: string) => void) | undefined
+  /** 会话行右键菜单里的「在输入框里引用」（#81）；不传时没有这一项。 */
+  onReferenceThread?: ((thread: Thread) => void) | undefined
   /** 项目行右键菜单里的重命名与移除；两个都传时才有菜单，菜单里另有「在文件管理器中打开」。 */
   onRenameProject?: ((projectId: string, name: string) => void) | undefined
   onRemoveProject?: ((projectId: string) => void) | undefined
@@ -138,6 +140,7 @@ export function WorkspaceSidebar({
   activeNav,
   onRenameThread,
   onArchiveThread,
+  onReferenceThread,
   onRenameProject,
   onRemoveProject,
   shortcutHints = false,
@@ -173,6 +176,16 @@ export function WorkspaceSidebar({
     onRenameThread && onArchiveThread
       ? [
           { icon: "pencil", label: t("sidebar.rename"), run: () => setRenamingId(thread.id) },
+          // 当前会话引用自己没有意义。
+          ...(onReferenceThread && thread.id !== activeThreadId
+            ? [
+                {
+                  icon: "chat",
+                  label: t("sidebar.reference"),
+                  run: () => onReferenceThread(thread),
+                },
+              ]
+            : []),
           { icon: "archive", label: t("sidebar.archive"), run: () => onArchiveThread(thread.id) },
         ]
       : []

@@ -9,7 +9,9 @@ export interface SuggestionItem {
   id: string
   label: string
   detail?: string | undefined
-  kind: "file" | "command"
+  kind: "file" | "thread" | "command"
+  /** 已归档的会话。 */
+  archived?: boolean | undefined
   /** 命令的来源与参数提示；文件没有。 */
   source?: "pigcode" | "builtin" | "skill" | undefined
   hint?: string | undefined

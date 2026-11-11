@@ -46,6 +46,8 @@ export interface Turn {
   key: string
   runId: string | null
   userText: string | null
+  /** 用户这条消息 @ 引用的会话（#81）。 */
+  userReferences: ReadonlyArray<{ threadId: string; title: string }>
   agentId: string | null
   status: TurnStatus
   startedAt: string | null
@@ -93,6 +95,7 @@ function emptyTurn(key: string, runId: string | null): Turn {
     key,
     runId,
     userText: null,
+    userReferences: [],
     agentId: null,
     status: "completed",
     startedAt: null,
@@ -204,6 +207,7 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
         if (!text) break
         if (asText(payload?.role) === "user") {
           turn.userText = text
+          turn.userReferences = referencesOf(payload?.references)
           break
         }
         draft.texts.push({ text, at: event.createdAt })
@@ -375,4 +379,15 @@ export function hasPendingApproval(events: ThreadEvent[]): boolean {
     if (request && !resolved.has(request.id)) return true
   }
   return false
+}
+
+/** 用户消息里记下的会话引用；格式不对的项跳过。 */
+function referencesOf(value: unknown): Array<{ threadId: string; title: string }> {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    const record = item as { threadId?: unknown; title?: unknown } | null
+    return typeof record?.threadId === "string" && typeof record.title === "string"
+      ? [{ threadId: record.threadId, title: record.title }]
+      : []
+  })
 }

@@ -102,6 +102,11 @@ export const commandSchemas = {
     fast: z.boolean().optional(),
     /** 本次 run 打开 Ultracode；只对目录里标了 ultracode 的模型生效，其余 driver 忽略。 */
     ultracode: z.boolean().optional(),
+    /** 用户在输入框里 @ 引用的会话；Host 给 agent 附上它们的摘要和读取方法。 */
+    references: z
+      .array(z.object({ kind: z.literal("thread"), threadId: z.string().min(1) }))
+      .max(10)
+      .optional(),
   }),
   "run.list": z.object({}),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),

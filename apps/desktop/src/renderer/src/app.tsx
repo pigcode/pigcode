@@ -3,6 +3,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
 import type { Thread } from "@pigcode/contracts"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import { useAppearance, type Locale } from "@pigcode/ui-primitives"
+import { requestComposerThreadMention } from "@pigcode/ui-composer"
 export type { ChatControls, CoreDeps } from "./chat-container"
 import {
   AppRenderer,
@@ -371,6 +372,11 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           store.update({ error: messageOf(error) }),
         )
       }}
+      onReferenceThread={(thread) => {
+        // 在当前会话（或草稿）的输入框里插入这个会话的引用；在设置等页面时先回到聊天。
+        setView("chat")
+        requestComposerThreadMention(thread.id, thread.title)
+      }}
       onArchiveThread={(threadId) => {
         void archiveThread(connection, store, threadId)
           .then((next) => {
@@ -444,6 +450,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           layoutControls={rightOpen && slot.scope ? null : layoutControls(false)}
           onOpenFile={(path: string) => openSurface("file", path)}
           onOpenDiff={() => openSurface("diff")}
+          onOpenThread={openThread}
           draftFocus={draftFocus}
         />
       </div>

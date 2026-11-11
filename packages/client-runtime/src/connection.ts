@@ -83,7 +83,13 @@ export class Connection {
   async startRun(
     threadId: string,
     text: string,
-    options: { effort?: ReasoningEffort | null; fast?: boolean; ultracode?: boolean } = {},
+    options: {
+      effort?: ReasoningEffort | null
+      fast?: boolean
+      ultracode?: boolean
+      /** 输入框里 @ 引用的会话（#81）。 */
+      references?: ReadonlyArray<{ kind: "thread"; threadId: string }>
+    } = {},
   ): Promise<void> {
     if (!this.client) throw new Error("host not connected")
     await this.client.call("run.start", {
@@ -92,6 +98,14 @@ export class Connection {
       ...(options.effort ? { effort: options.effort } : {}),
       ...(options.fast ? { fast: true } : {}),
       ...(options.ultracode ? { ultracode: true } : {}),
+      ...(options.references?.length
+        ? {
+            references: options.references.map((reference) => ({
+              kind: reference.kind,
+              threadId: reference.threadId,
+            })),
+          }
+        : {}),
     })
   }
 

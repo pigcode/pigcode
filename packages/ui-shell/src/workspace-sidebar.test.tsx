@@ -294,6 +294,28 @@ describe("WorkspaceSidebar", () => {
     expect(onArchiveThread).toHaveBeenCalledExactlyOnceWith("t1")
   })
 
+  it("mentions a thread in the composer from its context menu, but not the open one", async () => {
+    const onReferenceThread = vi.fn()
+    renderSidebar({ onRenameThread: vi.fn(), onArchiveThread: vi.fn(), onReferenceThread })
+
+    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "在输入框里引用" }))
+    expect(onReferenceThread).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ id: "t1", title: "First thread" }),
+    )
+    cleanup()
+
+    renderSidebar({
+      onRenameThread: vi.fn(),
+      onArchiveThread: vi.fn(),
+      onReferenceThread,
+      activeThreadId: "t1",
+    })
+    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
+    await screen.findByRole("menuitem", { name: "归档" })
+    expect(screen.queryByRole("menuitem", { name: "在输入框里引用" })).toBeNull()
+  })
+
   it("has no context menu when renaming and archiving are not wired", () => {
     renderSidebar()
 

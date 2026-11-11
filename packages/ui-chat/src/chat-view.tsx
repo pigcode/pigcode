@@ -16,6 +16,7 @@ import {
 import type { AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
 import { ArrowDown, ArrowLeft, Ellipsis, PanelRight, Waypoints } from "lucide-react"
 import {
+  type ComposerThreadOption,
   Composer,
   type ComposerAgent,
   type ComposerCommand,
@@ -82,6 +83,8 @@ export interface ChatViewProps {
   onPermissionMode?: (mode: PermissionMode) => void
   /** @ 引用时可选的项目文件。 */
   files?: () => Promise<readonly string[]>
+  /** @ 引用时可选的会话（#81）。 */
+  threads?: readonly ComposerThreadOption[]
   /** 输入框里的 / 命令。 */
   commands?: readonly ComposerCommand[]
   /** 读 Agent 实例的 / 命令与 skill；容器应调用 agent.commands（带线程）并缓存。 */
@@ -104,6 +107,8 @@ export interface ChatViewProps {
   subagent?: SubagentCall | null | undefined
   /** 在标签页中打开时间线里的派生子代理。 */
   onOpenSubagent?: ((id: string) => void) | undefined
+  /** 打开用户 @ 引用的会话。 */
+  onOpenThread?: ((threadId: string) => void) | undefined
   /** 从派生子代理的只读视图回到主会话。 */
   onBackToMain?: (() => void) | undefined
   /** 还没有消息时代替问候的文案；子代理会话用它说明共用工作目录。 */
@@ -150,6 +155,7 @@ export function ChatView({
   onSelectModel,
   onPermissionMode,
   files,
+  threads,
   commands,
   loadAgentCommands,
   onOpenFile,
@@ -161,6 +167,7 @@ export function ChatView({
   tabs,
   subagent = null,
   onOpenSubagent,
+  onOpenThread,
   onBackToMain,
   empty,
   liveOutput,
@@ -275,6 +282,7 @@ export function ChatView({
     permissionMode: thread?.permissionMode ?? "workspace-write",
     ...(thread && onPermissionMode ? { onPermissionMode } : {}),
     ...(files ? { files } : {}),
+    ...(threads ? { threads } : {}),
     ...(commands ? { commands } : {}),
     ...(loadAgentCommands ? { loadAgentCommands } : {}),
     canPlan,
@@ -367,6 +375,7 @@ export function ChatView({
                   onOpenFile={onOpenFile}
                   onViewDiff={onViewDiff}
                   onOpenSubagent={onOpenSubagent}
+                  onOpenThread={onOpenThread}
                   liveOutput={liveOutput}
                   onAnswer={onAnswer}
                 />

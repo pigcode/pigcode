@@ -1,10 +1,10 @@
 /**
  * 用户消息（参照 ZCode 的 ConversationUserInputBubble）：靠右的浅色气泡，细边框、右上角小圆角，
  * 最宽 576px。超过 120px 高时折叠并向下渐隐，底部一个圆形按钮展开或收起。@ 引用的文件显示成
- * 带图标的文件名，能打开时可以点击。悬停时气泡下方出现复制。
+ * 带图标的文件名，@ 引用的会话显示成带图标的会话标题，能打开时可以点击。悬停时气泡下方出现复制。
  */
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Check, ChevronDown, ChevronUp, Copy } from "lucide-react"
+import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { Check, ChevronDown, ChevronUp, Copy, MessagesSquare } from "lucide-react"
 import { FileIcon, copyText, useLocale } from "@pigcode/ui-primitives"
 import { splitPath } from "./tool-fields"
 import { relativePath, useConversationActions } from "./tools/common"
@@ -53,8 +53,70 @@ function Mention({ path }: { path: string }) {
   )
 }
 
-/** 把文本里的 @ 引用换成文件名标签。 */
-export function renderMentions(text: string): ReactNode[] {
+/** @ 引用的会话（#81）：带图标的会话标题，能打开时点一下就切过去。 */
+function ThreadMention({ threadId, title }: { threadId: string; title: string }) {
+  const { onOpenThread } = useConversationActions()
+  const content = (
+    <>
+      <MessagesSquare className="ic ic-xs" aria-hidden="true" />
+      <span className="mention-name">{title}</span>
+    </>
+  )
+  if (!onOpenThread) {
+    return (
+      <span className="mention-file mention-thread" title={title}>
+        {content}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className="mention-file mention-thread is-link"
+      title={title}
+      onClick={() => onOpenThread(threadId)}
+    >
+      {content}
+    </button>
+  )
+}
+
+/**
+ * 把文本里的 @ 引用换成标签：先找消息记下的会话引用（`@标题`，长标题优先），其余部分再按文件引用处理。
+ */
+export function renderMentions(
+  text: string,
+  references: ReadonlyArray<{ threadId: string; title: string }> = [],
+): ReactNode[] {
+  if (references.length === 0) return renderFileMentions(text)
+  const byLength = [...references].sort((a, b) => b.title.length - a.title.length)
+  const nodes: ReactNode[] = []
+  let rest = text
+  for (let segment = 0; ; segment += 1) {
+    let found: { index: number; reference: (typeof byLength)[number] } | null = null
+    for (const reference of byLength) {
+      const index = rest.indexOf(`@${reference.title}`)
+      if (index >= 0 && (found === null || index < found.index)) found = { index, reference }
+    }
+    if (!found) {
+      nodes.push(<Fragment key={`t${segment}`}>{renderFileMentions(rest)}</Fragment>)
+      return nodes
+    }
+    const before = rest.slice(0, found.index)
+    if (before) nodes.push(<Fragment key={`t${segment}`}>{renderFileMentions(before)}</Fragment>)
+    nodes.push(
+      <ThreadMention
+        key={`m${segment}`}
+        threadId={found.reference.threadId}
+        title={found.reference.title}
+      />,
+    )
+    rest = rest.slice(found.index + found.reference.title.length + 1)
+  }
+}
+
+/** 把文本里的 @路径 换成文件名标签。 */
+function renderFileMentions(text: string): ReactNode[] {
   const nodes: ReactNode[] = []
   let last = 0
   for (const match of text.matchAll(MENTION)) {
@@ -98,7 +160,13 @@ function CopyAction({ text }: { text: string }) {
 }
 
 /** 渲染一条用户消息。 */
-export const UserBubble = memo(function UserBubble({ text }: { text: string }) {
+export const UserBubble = memo(function UserBubble({
+  text,
+  references = [],
+}: {
+  text: string
+  references?: ReadonlyArray<{ threadId: string; title: string }>
+}) {
   const { t } = useLocale()
   const body = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(COLLAPSED_HEIGHT)
@@ -133,7 +201,7 @@ export const UserBubble = memo(function UserBubble({ text }: { text: string }) {
             maxHeight: `${expanded ? Math.max(height, COLLAPSED_HEIGHT) : COLLAPSED_HEIGHT}px`,
           }}
         >
-          {renderMentions(text)}
+          {renderMentions(text, references)}
         </div>
         {expandable ? (
           <div className="msg-user-more">

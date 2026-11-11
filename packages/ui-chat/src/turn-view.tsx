@@ -126,7 +126,7 @@ function TurnViewImpl({
       data-turn={turn.key}
       data-user={turn.userText ? true : undefined}
     >
-      {turn.userText ? <UserBubble text={turn.userText} /> : null}
+      {turn.userText ? <UserBubble text={turn.userText} references={turn.userReferences} /> : null}
       {turn.runId !== null || !ended ? (
         <WorkHeader
           turn={turn}

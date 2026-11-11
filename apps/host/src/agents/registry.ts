@@ -15,6 +15,7 @@ import type { RunEventHooks } from "./run-events"
 import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
 import { createExecute } from "./run-execute"
 import { registerThreadReadTool } from "./thread-read-tool"
+import { recordThreadReferences } from "./thread-reference"
 import { threadCwd } from "../services/worktrees"
 import { ApprovalBridge } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
@@ -349,7 +350,13 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           startedAt,
         })
         maybeAutoTitle(ctx, thread, text, runId, append)
-        append(threadId, runId, "message.completed", { role: "user", text })
+        // @ 引用的会话：说明记成这一轮的交接，消息里记下引用，用户气泡据此画可点的标签。
+        const references = recordThreadReferences(ctx, threadId, options.references ?? [])
+        append(threadId, runId, "message.completed", {
+          role: "user",
+          text,
+          ...(references.length > 0 ? { references } : {}),
+        })
 
         let resolveDone: () => void = () => undefined
         const done = new Promise<void>((resolve) => {
