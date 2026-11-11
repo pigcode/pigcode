@@ -13,6 +13,7 @@ import { expect, it } from "vitest"
 import type { AgentDriver } from "./driver"
 import { apply as mcpBridge } from "../services/mcp-bridge"
 import { apply as projects } from "../services/projects"
+import { apply as settings } from "../services/settings"
 import { apply as sessions } from "../services/sessions"
 import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
@@ -210,4 +211,52 @@ it.skipIf(!agents.every((agent) => agent.enabled))(
     }
   },
   480_000,
+)
+
+it.skipIf(!agents[0]!.enabled)(
+  "a second Claude instance with the same config directory continues the first one's session",
+  async () => {
+    const claude = agents[0]!
+    const dir = mkdtempSync(join(tmpdir(), "pigcode-shared-instance-"))
+    const root = join(dir, "project")
+    mkdirSync(root)
+    const ctx = new Context()
+    await ctx.plugin(storage, { path: join(dir, "pigcode.db") })
+    await ctx.plugin(settings, {})
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(agentsPlugin, { fake: false })
+    const driver = claude.create()
+    ctx.agents.register(driver)
+    try {
+      // 新实例从默认实例复制设置：配置目录相同，原生会话文件是共用的。
+      const work = ctx.agents.createInstance("claude", "work")
+      const project = ctx.projects.add(root)
+      const thread = ctx.threads.create(project.id, "shared", "claude")
+      ctx.threads.updateSelection(thread.id, "claude", claude.model)
+      const send = async (text: string) => {
+        const run = await ctx.agents.startRun(thread.id, text)
+        await run.done
+        expect(ctx.agents.getRunStatus(run.runId)).toBe("completed")
+      }
+      await send("Remember the code word: CEDAR-64. Reply with exactly OK.")
+      const switched = await ctx.agents.switchAgent(
+        thread.id,
+        "claude",
+        claude.model,
+        work.instanceId,
+      )
+      // fork 了默认实例的原生会话，不需要交接。
+      expect(switched.forkFromNativeSessionId).not.toBeNull()
+      expect(switched.handoff).toBeNull()
+      await send("What is the code word? Reply with only the code word.")
+      expect(lastAssistantText(ctx.sessions.read(thread.id, 0))).toContain("CEDAR-64")
+    } finally {
+      ctx.agents.cancelAll()
+      await ctx.fiber.dispose()
+      await driver.close?.()
+    }
+  },
+  240_000,
 )

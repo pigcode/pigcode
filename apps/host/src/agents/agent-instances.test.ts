@@ -191,4 +191,60 @@ describe("agent instances", () => {
     })
     await ctx.fiber.dispose()
   })
+
+  it("forks a session from another instance that keeps its sessions in the same place", async () => {
+    const ctx = await setup()
+    const created: CreateSessionInput[] = []
+    const inputs: Array<{ text: string; handoff?: string | undefined }> = []
+    let next = 0
+    const driver: AgentDriver = {
+      id: "alpha",
+      displayName: "alpha",
+      features: new FakeAgentDriver().features,
+      async createSession(input) {
+        created.push(input)
+        return {
+          id: input.sessionId ?? `s_${(next += 1)}`,
+          threadId: input.threadId,
+          cwd: input.cwd,
+          nativeSessionId: input.nativeSessionId ?? null,
+          permissionMode: "workspace-write",
+          model: null,
+        }
+      },
+      async send(session, input, runtime) {
+        inputs.push(input)
+        session.nativeSessionId ??= `native_${created.length}`
+        runtime.emit({ type: "session.started", nativeSessionId: session.nativeSessionId })
+        runtime.emit({ type: "message.completed", text: `reply to ${input.text}` })
+        runtime.emit({ type: "run.completed" })
+      },
+      interrupt: async () => undefined,
+      dispose: async () => undefined,
+      continuationKey: (settings) => `alpha:${String(settings.configDir ?? "~/.alpha")}`,
+    }
+    ctx.agents.register(driver)
+    const same = ctx.agents.createInstance("alpha", "同一目录")
+    const other = ctx.agents.createInstance("alpha", "另一个目录")
+    ctx.agents.updateSettings("alpha", { configDir: "/elsewhere" }, other.instanceId)
+    const project = ctx.projects.add("/tmp/pigcode-shared-instances")
+    const thread = ctx.threads.create(project.id, "T", "alpha")
+    const run = async (text: string) => (await ctx.agents.startRun(thread.id, text)).done
+
+    await run("plan the parser")
+    // 配置目录相同：fork 默认实例的原生会话，没有新的东西可交接。
+    const toSame = await ctx.agents.switchAgent(thread.id, "alpha", null, same.instanceId)
+    expect(toSame.forkFromNativeSessionId).toBe("native_1")
+    expect(toSame.handoff).toBeNull()
+    await run("write it")
+    expect(created.at(-1)).toMatchObject({ forkFromNativeSessionId: "native_1" })
+    expect(inputs.at(-1)?.handoff).toBeUndefined()
+
+    // 配置目录不同：接不上，交接整个会话。
+    const toOther = await ctx.agents.switchAgent(thread.id, "alpha", null, other.instanceId)
+    expect(toOther.forkFromNativeSessionId).toBeNull()
+    expect(toOther.handoff).toContain("plan the parser")
+    expect(toOther.handoff).toContain("write it")
+    await ctx.fiber.dispose()
+  })
 })

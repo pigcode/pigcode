@@ -10,6 +10,9 @@ import {
 } from "@anthropic-ai/claude-agent-sdk"
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
+import { homedir } from "node:os"
+import { join, resolve } from "node:path"
+import { expandHome } from "@pigcode/plugin-sdk/node"
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -330,6 +333,15 @@ export class ClaudeDriver implements AgentDriver {
     if (!state) return
     this.sessionStates.delete(session.id)
     await this.endState(state)
+  }
+
+  /** 会话文件放在 CLAUDE_CONFIG_DIR（缺省 ~/.claude）下：配置目录相同的实例能接着用彼此的会话。 */
+  continuationKey(settings: AgentSettingsValues): string {
+    const dir =
+      claudeLaunch(settings, this.fixedExecutable).env?.CLAUDE_CONFIG_DIR ??
+      process.env.CLAUDE_CONFIG_DIR ??
+      join(homedir(), ".claude")
+    return `claude:${resolve(expandHome(dir))}`
   }
 
   /** `resume` 的会话文件不存在时，CLI 在 stderr 写 `No conversation found with session ID: <id>` 后退出。 */

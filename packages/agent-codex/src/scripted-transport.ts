@@ -21,6 +21,8 @@ export interface ReplayScript {
   modelList?: unknown
   /** account/read 的应答；未指定时不应答。 */
   account?: unknown
+  /** 有没有 thread/inject_items（0.167 起有）；false 时像旧版一样回「方法不存在」。缺省为有。 */
+  injectItems?: boolean
   onTurnStart?: (message: SentMessage, transport: ScriptedTransport) => void
   onTurnInterrupt?: (message: SentMessage, transport: ScriptedTransport) => void
 }
@@ -64,6 +66,14 @@ export class ScriptedTransport extends ReplayCodexTransport {
     }
     if (message.method === "account/read" && this.script.account !== undefined) {
       this.push({ id: message.id, result: this.script.account })
+      return
+    }
+    if (message.method === "thread/inject_items") {
+      this.push(
+        this.script.injectItems === false
+          ? { id: message.id, error: { code: -32601, message: "method not found" } }
+          : { id: message.id, result: {} },
+      )
       return
     }
     if (message.method === "turn/start") {

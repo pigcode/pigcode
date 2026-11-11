@@ -160,6 +160,27 @@ describe("CodexDriver", () => {
     })
   })
 
+  it("puts the handoff before the text when the app-server cannot inject items", async () => {
+    const { driver, transport } = setup({
+      injectItems: false,
+      onTurnStart: (message, replay) => {
+        replay.push({ id: message.id, result: { turn: { id: "turn_1" } } })
+        setTimeout(() => {
+          replay.push({
+            method: "turn/completed",
+            params: { turn: { id: "turn_1", status: "completed" } },
+          })
+        }, 0)
+      },
+    })
+    const session = await driver.createSession({ threadId: "t1", cwd: "/tmp" })
+    const { runtime } = runtimeFor()
+    await driver.send(session, { text: "hello", handoff: "context" }, runtime)
+    expect(messageOf(transport, "turn/start")?.params).toMatchObject({
+      input: [{ type: "text", text: "context\n\nhello" }],
+    })
+  })
+
   it("normalizes a replayed turn into Agent events", async () => {
     const frames = readFrames("fixtures/simple.jsonl")
     const { driver, transport } = setup({
@@ -175,9 +196,16 @@ describe("CodexDriver", () => {
 
     await driver.send(session, { text: "hello", handoff: "context" }, runtime)
 
+    // 交接作为历史消息注入，用户这一轮的消息保持原文（#82）。
+    expect(messageOf(transport, "thread/inject_items")?.params).toEqual({
+      threadId: "th_native",
+      items: [
+        { type: "message", role: "user", content: [{ type: "input_text", text: "context" }] },
+      ],
+    })
     expect(messageOf(transport, "turn/start")?.params).toMatchObject({
       threadId: "th_native",
-      input: [{ type: "text", text: "context\n\nhello" }],
+      input: [{ type: "text", text: "hello" }],
     })
     expect(events).toContainEqual({ type: "message.delta", text: "OK" })
     expect(events).toContainEqual({

@@ -311,6 +311,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         modelId ?? null,
         (session) => disposeSession(drivers, session),
         instance.instanceId,
+        (id) =>
+          drivers.get(agentId)?.continuationKey?.(agents.settingsForInstance(agentId, id)) ?? null,
       )
     },
     async startRun(threadId, text, emitLive, options = {}) {

@@ -1,6 +1,9 @@
 /** Codex adapter：每 session 一个 app-server 子进程，经 NDJSON JSON-RPC 通信。 */
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
+import { homedir } from "node:os"
+import { join, resolve } from "node:path"
+import { expandHome } from "@pigcode/plugin-sdk/node"
 import type {
   CreateSessionInput,
   AgentCommandInfo,
@@ -14,6 +17,7 @@ import type {
 } from "@pigcode/plugin-sdk"
 import { parseCodexAccount, type CodexAccount } from "./account"
 import { CodexRpcClient } from "./client"
+import { waitForTurn } from "./turn-wait"
 import { detectCodex, type CodexDetection } from "./detect"
 import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
 import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
@@ -283,7 +287,12 @@ export class CodexDriver implements AgentDriver {
       return toElicitationResponse(await runtime.requestApproval(request))
     })
 
-    const text = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
+    // 交接优先用 thread/inject_items 作为历史消息注入，用户这一轮的消息保持原文；
+    // 不支持时（旧版 app-server）退回拼在用户消息前（#82）。
+    const injected = input.handoff
+      ? await injectHandoff(client, state.nativeThreadId, input.handoff)
+      : false
+    const text = input.handoff && !injected ? `${input.handoff}\n\n${input.text}` : input.text
     const onAbort = (): void => {
       void interruptTurn(state)
     }
@@ -373,6 +382,13 @@ export class CodexDriver implements AgentDriver {
     }
   }
 
+  /** rollout 放在 CODEX_HOME（缺省 ~/.codex）下：目录相同的实例能接着用彼此的 thread。 */
+  continuationKey(settings: AgentSettingsValues): string {
+    const dir =
+      codexLaunch(settings).env?.CODEX_HOME ?? process.env.CODEX_HOME ?? join(homedir(), ".codex")
+    return `codex:${resolve(expandHome(dir))}`
+  }
+
   /** `thread/resume` 找不到原生 thread 时，app-server 0.167 回 `no rollout found for thread id <id>`。 */
   isSessionNotFound(message: string): boolean {
     return /no rollout found for thread id/i.test(message)
@@ -428,6 +444,26 @@ function createThreadParams(input: CreateSessionInput): Record<string, unknown> 
   }
 }
 
+/**
+ * 把交接作为一条历史消息注入原生 thread（app-server 0.167 起有 thread/inject_items）。
+ * 方法不存在（-32601）或请求被拒时返回 false，由调用方拼在用户消息前；这两种情况下都没有注入任何东西。
+ */
+export async function injectHandoff(
+  client: Pick<CodexRpcClient, "request">,
+  threadId: string,
+  handoff: string,
+): Promise<boolean> {
+  try {
+    await client.request("thread/inject_items", {
+      threadId,
+      items: [{ type: "message", role: "user", content: [{ type: "input_text", text: handoff }] }],
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** 把通知映射后逐条交给 run 的实时事件出口。 */
 function emit(runtime: AgentRuntime, method: string, params: unknown): void {
   for (const event of normalizeCodexNotification(method, params)) runtime.emit(event)
@@ -445,54 +481,4 @@ async function interruptTurn(state: CodexSessionState): Promise<void> {
   } catch {
     // 服务端可能已结束该 turn；中断失败不阻塞 run 的终态处理。
   }
-}
-
-/** 等待匹配 turnId 的 turn/completed，或等待 run 的取消信号。 */
-function waitForTurn(
-  client: CodexRpcClient,
-  turnId: string | null,
-  signal: AbortSignal,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let dispose: () => void = () => undefined
-    const finish = (): void => {
-      if (settled) return
-      settled = true
-      dispose()
-      signal.removeEventListener("abort", finish)
-      resolve()
-    }
-    const disposeCompleted = client.onNotification("turn/completed", (params) => {
-      const completed = completedTurnId(params)
-      if (turnId && completed && completed !== turnId) return
-      finish()
-    })
-    // app-server 中途退出时这一轮不会再有 turn/completed；以失败结束，而不是一直等。
-    const disposeClose = client.onClose((reason) => {
-      if (settled) return
-      settled = true
-      dispose()
-      signal.removeEventListener("abort", finish)
-      reject(reason)
-    })
-    dispose = () => {
-      disposeCompleted()
-      disposeClose()
-    }
-    signal.addEventListener("abort", finish, { once: true })
-    if (signal.aborted) finish()
-  })
-}
-
-/** 从 turn/completed 的 params 中读取 turn id。 */
-function completedTurnId(params: unknown): string | undefined {
-  if (typeof params !== "object" || params === null) return undefined
-  const record = params as Record<string, unknown>
-  const turn = record.turn
-  if (typeof turn === "object" && turn !== null) {
-    const id = (turn as Record<string, unknown>).id
-    if (typeof id === "string") return id
-  }
-  return typeof record.turnId === "string" ? record.turnId : undefined
 }

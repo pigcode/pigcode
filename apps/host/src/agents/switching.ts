@@ -193,12 +193,15 @@ export async function switchAgent(
   modelId: string | null,
   disposeActive?: (session: AgentSession) => Promise<void>,
   instanceId?: string | null,
+  /** 实例的原生会话放在哪里（driver.continuationKey）；值相同的实例能接着用彼此的原生会话（#82）。 */
+  keyFor?: (instanceId: string) => string | null,
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const chosenInstance = instanceId ?? agentId
   // 三种接法（#78）：
   // - 同一个实例、原生会话还在用（只换模型）：原生 fork，不需要交接；
   // - 这个实例在这个会话里用过、原生会话停放着：下一轮接回它，只交接它离开之后发生的事；
+  // - 同一个 Agent 的另一个实例用过、配置目录相同：fork 它的原生会话，也只交接增量（#82）；
   // - 都没有：新会话，交接整个会话。
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
@@ -207,10 +210,18 @@ export async function switchAgent(
     forkFromNativeSessionId === null
       ? sessions.findResumable(threadId, agentId, chosenInstance)
       : undefined
-  const since = parked
-    ? new ThreadItemStore(ctx.storage.db).lastPositionOfSession(threadId, parked.id)
+  const shared =
+    forkFromNativeSessionId === null && !parked && keyFor
+      ? findShared(sessions.listByThread(threadId), agentId, chosenInstance, keyFor)
+      : undefined
+  const source = parked ?? shared
+  const since = source
+    ? new ThreadItemStore(ctx.storage.db).lastPositionOfSession(threadId, source.id)
     : null
-  const resumed = parked !== undefined && since !== null
+  const resumed = source !== undefined && since !== null
+  // 别的实例的原生会话不接回来（那是它自己的），fork 一份给这个实例。
+  const forkFrom =
+    forkFromNativeSessionId ?? (shared && resumed ? (shared.nativeSessionId ?? null) : null)
   const selection =
     forkFromNativeSessionId !== null
       ? null
@@ -248,7 +259,7 @@ export async function switchAgent(
       agentId,
       instanceId: chosenInstance,
       modelId,
-      ...(forkFromNativeSessionId !== null ? { forkFromNativeSessionId } : {}),
+      ...(forkFrom !== null ? { forkFromNativeSessionId: forkFrom } : {}),
       ...(resumed ? { resumed: true } : {}),
       ...(record
         ? {
@@ -261,5 +272,34 @@ export async function switchAgent(
     schemaVersion: 1,
     createdAt: now,
   })
-  return { agentId, instanceId: chosenInstance, modelId, handoff, forkFromNativeSessionId }
+  return {
+    agentId,
+    instanceId: chosenInstance,
+    modelId,
+    handoff,
+    forkFromNativeSessionId: forkFrom,
+  }
+}
+
+/**
+ * 同一个 Agent 的其他实例在这个会话里留下的、原生会话和目标实例放在同一处的最近一个会话。
+ */
+function findShared(
+  rows: readonly AgentSession[],
+  agentId: string,
+  instanceId: string,
+  keyFor: (instanceId: string) => string | null,
+): AgentSession | undefined {
+  const target = keyFor(instanceId)
+  if (!target) return undefined
+  return [...rows]
+    .reverse()
+    .find(
+      (row) =>
+        row.agentId === agentId &&
+        (row.instanceId ?? row.agentId) !== instanceId &&
+        row.nativeSessionId !== null &&
+        row.status !== "stopped" &&
+        keyFor(row.instanceId ?? row.agentId) === target,
+    )
 }

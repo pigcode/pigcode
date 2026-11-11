@@ -144,4 +144,9 @@ export interface AgentDriver {
    * 并带上交接，而不是让这个会话每次发送都失败。没实现时一律视为否。
    */
   isSessionNotFound?(message: string): boolean
+  /**
+   * 原生会话存在哪里：两个实例算出来的值相同，就能接着用对方的原生会话（例如配置目录相同的两个 Claude 实例）。
+   * 返回 null 或没实现时，只有同一个实例的原生会话能接（#82）。
+   */
+  continuationKey?(settings: AgentSettingsValues): string | null
 }

@@ -67,3 +67,39 @@ it.skipIf(!enabled)(
   },
   60_000,
 )
+
+it.skipIf(!enabled)(
+  "injects a handoff as history the model can use",
+  async () => {
+    const events: AgentEvent[] = []
+    const driver = new CodexDriver()
+    const session = await driver.createSession({
+      threadId: "real-inject",
+      cwd: process.cwd(),
+      permissionMode: "workspace-write",
+    })
+    try {
+      // 暗号只在交接里：答得出来说明注入的历史模型看得到。
+      await driver.send(
+        session,
+        {
+          text: "What is the code word from the earlier conversation? Reply with only the code word.",
+          handoff:
+            "Context handoff: earlier in this conversation the user said the code word is LYNX-31.",
+        },
+        {
+          signal: new AbortController().signal,
+          emit: (event) => events.push(event),
+          requestApproval: async () => "deny",
+        },
+      )
+    } finally {
+      await driver.dispose(session)
+    }
+    const answer = events
+      .flatMap((event) => (event.type === "message.completed" ? [event.text] : []))
+      .join("\n")
+    expect(answer).toContain("LYNX-31")
+  },
+  120_000,
+)
