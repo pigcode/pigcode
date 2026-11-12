@@ -7,6 +7,14 @@ import { handoffForRun } from "./handoff-delivery"
 import { freshSessionHandoff } from "./switching"
 import { isThreadReadTool } from "./thread-read-tool"
 
+/**
+ * 一轮运行完全收不到 Agent 事件多久后提示用户（#83）。
+ * Codex 偶尔会在 turn/start 之后不再发任何通知，界面就一直转圈；这里只提示，不替用户中断。
+ * 长时间没有输出的命令也可能触发，所以文案要允许「继续等」。
+ */
+const STALL_NOTICE_MS = 120_000
+const STALL_NOTICE_SECONDS = STALL_NOTICE_MS / 1000
+
 /** execute 需要的 Host 闭包。 */
 export interface ExecuteDeps {
   ctx: Context
@@ -36,9 +44,37 @@ export function createExecute(
     let lost = false
     const isLost = (message: string): boolean =>
       run.resuming === true && run.driver.isSessionNotFound?.(message) === true
+    // 每来一条 Agent 事件就重新计时；等审批或等用户回答时不算卡住，把计时停掉。
+    let stallTimer: ReturnType<typeof setTimeout> | undefined
+    let stallNoticed = false
+    const clearStall = (): void => {
+      if (stallTimer === undefined) return
+      clearTimeout(stallTimer)
+      stallTimer = undefined
+    }
+    const armStall = (): void => {
+      clearStall()
+      if (stallNoticed || !isCurrent(run)) return
+      stallTimer = setTimeout(() => {
+        stallTimer = undefined
+        if (!isCurrent(run)) return
+        stallNoticed = true
+        mapAgentEvent(
+          run,
+          {
+            type: "notice",
+            level: "warning",
+            key: "run.stalled",
+            params: { seconds: String(STALL_NOTICE_SECONDS) },
+          },
+          deps.hooks,
+        )
+      }, STALL_NOTICE_MS)
+    }
     const runtime: AgentRuntime = {
       signal: run.controller.signal,
       emit: (event) => {
+        armStall()
         if (event.type === "session.started") run.resuming = false
         if (event.type === "run.failed" && isLost(event.message)) {
           lost = true
@@ -46,20 +82,26 @@ export function createExecute(
         }
         mapAgentEvent(run, event, deps.hooks)
       },
-      requestApproval: (request) =>
-        !isCurrent(run)
-          ? Promise.resolve<ApprovalDecision>("deny")
-          : // 内置的 thread_read 只读会话历史，不弹审批；否则交接里让 agent 去读，它会停在那里等人点。
-            isThreadReadTool(request.toolName)
-            ? Promise.resolve<ApprovalDecision>("allow-once")
-            : deps.requestApproval(run, request),
-      askQuestions: (request) =>
-        isCurrent(run) ? deps.askQuestions(run, request) : Promise.resolve([]),
+      requestApproval: (request) => {
+        if (!isCurrent(run)) return Promise.resolve<ApprovalDecision>("deny")
+        // 内置的 thread_read 只读会话历史，不弹审批；否则交接里让 agent 去读，它会停在那里等人点。
+        if (isThreadReadTool(request.toolName))
+          return Promise.resolve<ApprovalDecision>("allow-once")
+        clearStall()
+        return deps.requestApproval(run, request).finally(armStall)
+      },
+      askQuestions: (request) => {
+        if (!isCurrent(run)) return Promise.resolve([])
+        clearStall()
+        return deps.askQuestions(run, request).finally(armStall)
+      },
     }
+    armStall()
     try {
       await run.driver.send(run.session, input, runtime)
       if (!isCurrent(run)) return
       if (lost) {
+        clearStall()
         await retryWithFreshSession(run, input)
         return
       }
@@ -67,10 +109,13 @@ export function createExecute(
     } catch (error) {
       if (!isCurrent(run)) return
       if (isLost(error instanceof Error ? error.message : String(error))) {
+        clearStall()
         await retryWithFreshSession(run, input)
         return
       }
       fail(run, error)
+    } finally {
+      clearStall()
     }
   }
 

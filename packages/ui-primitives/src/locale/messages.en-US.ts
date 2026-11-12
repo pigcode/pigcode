@@ -362,6 +362,8 @@ export const enUS = {
   "chat.error": "Run failed",
   "chat.notice.mcp.bridge.failed":
     "Plugin tools are not connected: the {name} server failed to start. The model cannot see plugin tools in this turn.",
+  "chat.notice.run.stalled":
+    "No response from the agent for {seconds} seconds; it may be stuck. Interrupt this turn and try again, or keep waiting if it is running a long command that prints nothing.",
   "chat.notice.host.restarted":
     "Pigcode restarted, so this turn was interrupted. Any pending approvals went with the agent process — send the message again to continue.",
   "chat.notice.session.resumeFailed":

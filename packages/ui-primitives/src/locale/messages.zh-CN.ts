@@ -356,6 +356,8 @@ export const zhCN = {
   /* 会话提示：Agent 只给稳定的键（如 mcp.bridge.failed），界面在 chat.notice.<键> 里找文案。 */
   "chat.notice.mcp.bridge.failed":
     "插件工具没有接上：{name} 服务启动失败。这一轮里模型看不到插件工具。",
+  "chat.notice.run.stalled":
+    "已经 {seconds} 秒没有收到 Agent 的任何回应，它可能卡住了。可以中断这一轮后重试；如果它正在跑一个长时间没有输出的命令，也可以继续等。",
   "chat.notice.host.restarted":
     "应用重启过，这一轮被中断了。等审批的请求也跟着 agent 进程一起没了，需要重新发一条消息。",
   "chat.notice.session.resumeFailed":
