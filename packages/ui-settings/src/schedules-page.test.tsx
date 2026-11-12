@@ -264,13 +264,17 @@ describe("SchedulesPage editor", () => {
   })
 
   it("creates a custom repeat every two weeks that ends on a date", async () => {
+    // 自定义重复默认选中今天；先点掉它再选另一个星期几，否则测试在星期四会只剩空选择。
+    const today = new Date().getDay()
+    const day = (today + 1) % 7
     const props = renderPage()
     await openCreate()
     await choose("频率", "自定义")
     const dialog = await screen.findByRole("dialog", { name: "自定义重复" })
     fireEvent.change(within(dialog).getByLabelText("间隔数值"), { target: { value: "2" } })
     await choose("间隔单位", "周")
-    await userEvent.click(within(dialog).getByRole("button", { name: longDay(4) }))
+    await userEvent.click(within(dialog).getByRole("button", { name: longDay(today) }))
+    await userEvent.click(within(dialog).getByRole("button", { name: longDay(day) }))
     await userEvent.click(within(dialog).getByRole("radio", { name: "指定日期" }))
     fireEvent.change(within(dialog).getByLabelText("结束日期"), { target: { value: "2026-12-31" } })
     await userEvent.click(within(dialog).getByRole("button", { name: "确定" }))
@@ -283,7 +287,7 @@ describe("SchedulesPage editor", () => {
         rule: {
           kind: "everyWeeks",
           every: 2,
-          days: daysAfter([4]),
+          days: daysAfter([today, day]),
           time: "09:00",
           anchor: expect.any(String),
         },
