@@ -7,8 +7,8 @@
 版本号只有一个来源：`apps/desktop/package.json` 的 `version`。
 
 ```sh
-# 在 pigcode/pigcode 的 main 上
-pnpm --dir apps/desktop version patch --no-git-tag-version   # 或 minor / major
+# 在 pigcode/pigcode 的 main 上；pnpm 10 没有 version 命令，交给 npm 改这个唯一的版本号
+pnpm --dir apps/desktop exec npm version patch --no-git-tag-version   # 或 minor / major，或写死 0.2.0-beta.1
 git commit -am "chore: release 0.2.0"
 git push
 git tag v0.2.0
