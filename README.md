@@ -242,3 +242,16 @@ PIGCODE_REAL_CODEX=1 PIGCODE_CODEX_MODEL=gpt-6.1-sol pnpm real:codex:multi
 ```
 
 It is skipped unless `PIGCODE_REAL_CODEX=1`, so it never consumes quota by default.
+
+## Real MCP tools
+
+Checks that each real CLI can list and call a plugin MCP tool. The tool returns a random
+secret, so an answer containing it proves the model actually called the tool. Set the flag
+for each agent you want to run:
+
+```bash
+PIGCODE_REAL_CLAUDE=1 PIGCODE_REAL_CODEX=1 pnpm real:mcp
+```
+
+If the Claude CLI's default model is not on your proxy or gateway, add
+`PIGCODE_CLAUDE_MODEL=<model>`.

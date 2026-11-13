@@ -1,9 +1,7 @@
 /**
  * 真实 Agent 的 MCP：Claude Code 和 Codex 都要能列出并调用插件工具。
- * 默认跳过；跑法：PIGCODE_REAL_CLAUDE=1 pnpm exec vitest run apps/host/src/agents/mcp-tools.real.test.ts
- * （Codex 用 PIGCODE_REAL_CODEX=1，也可以两个一起设）。
- *
- * Claude 这一半在本机还没跑通，CLI 指向的代理不认这些模型 id。
+ * 默认跳过；跑法：PIGCODE_REAL_CLAUDE=1 PIGCODE_REAL_CODEX=1 pnpm real:mcp
+ * （只跑设置了的 Agent；代理没有 CLI 的默认模型时加 PIGCODE_CLAUDE_MODEL）。
  */
 import { randomUUID } from "node:crypto"
 import type { AgentEvent } from "@pigcode/contracts"
