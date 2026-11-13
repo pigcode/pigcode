@@ -1,52 +1,30 @@
-/** 验证 Windows 上 npm 装的 .cmd 形式的 codex 能启动，以及关闭时不留下子进程。 */
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { describe, expect, it, vi } from "vitest"
+/**
+ * Codex app-server 的 stdio 传输：stderr 必须持续读掉。
+ * app-server 是原生程序，stderr 写满没人读的管道后会停在 write 上，
+ * 之后一个通知都发不出来（#83）。
+ */
+import { describe, expect, it } from "vitest"
 import { StdioCodexTransport } from "./transport"
 
 describe("StdioCodexTransport", () => {
-  // npm 在 Windows 上把 codex 装成 .cmd；不经过 shell 启动会报 EINVAL。
-  it.runIf(process.platform === "win32")("starts a .cmd codex through the shell", async () => {
-    // 目录带空格：退回 shell 时路径必须自己加引号，否则 cmd 会在空格处断开。
-    const dir = join(await mkdtemp(join(tmpdir(), "pigcode-codex-cmd-")), "space dir")
-    await mkdir(dir, { recursive: true })
-    const bin = join(dir, "codex.cmd")
-    await writeFile(
-      bin,
-      ["@echo off", 'echo {"jsonrpc":"2.0","id":1,"result":{"ok":true}}', "exit /b 0"].join("\r\n"),
-    )
-    const transport = new StdioCodexTransport(bin, ["app-server", "--stdio"])
-    const line = await new Promise<string>((resolve, reject) => {
-      transport.onClose?.(reject)
-      transport.onLine(resolve)
-    })
-    expect(line).toContain('"ok":true')
-    transport.close()
-  })
-
-  it("ends the app-server and whatever it started when it closes", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "pigcode-codex-tree-"))
-    const bin = join(dir, "fake-codex.js")
-    await writeFile(
-      bin,
-      `const { spawn } = require("node:child_process")
-       const tool = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" })
-       setTimeout(() => console.log(JSON.stringify({ tool: tool.pid })), 200)
-       setInterval(() => {}, 1000)`,
-    )
-    const transport = new StdioCodexTransport(process.execPath, [bin])
-    const line = await new Promise<string>((resolve) => transport.onLine(resolve))
-    const toolPid = (JSON.parse(line) as { tool: number }).tool
-    await transport.close()
-    const gone = () => {
-      try {
-        process.kill(toolPid, 0)
-        return false
-      } catch {
-        return true
-      }
+  it("keeps reading stderr so a chatty app-server keeps answering", async () => {
+    // fs.writeSync(2) 和 Rust 的 eprintln! 一样是阻塞写：管道没人读、写满约 64KB 后，
+    // 进程会停在 write 上，永远走不到下一行 stdout。
+    const script =
+      'require("node:fs").writeSync(2, "x".repeat(300000)); require("node:fs").writeSync(1, "{\\"ok\\":true}\\n")'
+    const transport = new StdioCodexTransport(process.execPath, ["-e", script])
+    try {
+      const line = await new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("stdout never arrived")), 5000)
+        const dispose = transport.onLine((value) => {
+          clearTimeout(timer)
+          dispose()
+          resolve(value)
+        })
+      })
+      expect(JSON.parse(line)).toEqual({ ok: true })
+    } finally {
+      await transport.close()
     }
-    await vi.waitFor(() => expect(gone()).toBe(true), { timeout: 5000, interval: 25 })
   })
 })

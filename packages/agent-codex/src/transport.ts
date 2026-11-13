@@ -8,6 +8,9 @@ import {
   type OwnedProcessTree,
 } from "@pigcode/plugin-sdk/node"
 
+/** 退出原因里保留的 stderr 末尾长度。 */
+const STDERR_TAIL_CHARS = 2000
+
 /** 按行收发 NDJSON 的最小传输接口；协议层不感知进程与回放的区别。 */
 export interface CodexTransport {
   send(line: string): void
@@ -29,6 +32,7 @@ export class StdioCodexTransport implements CodexTransport {
   private readonly listeners = new Set<(line: string) => void>()
   private readonly closeListeners = new Set<(reason: Error) => void>()
   private closed: Error | null = null
+  private stderrTail = ""
 
   constructor(
     command = "codex",
@@ -49,10 +53,24 @@ export class StdioCodexTransport implements CodexTransport {
       this.finish(new Error(`codex app-server unavailable: ${error.message}`)),
     )
     this.child.on("exit", (code, signal) =>
-      this.finish(new Error(`codex app-server exited (${signal ?? `code ${String(code)}`})`)),
+      this.finish(
+        new Error(
+          withStderr(
+            `codex app-server exited (${signal ?? `code ${String(code)}`})`,
+            this.stderrTail,
+          ),
+        ),
+      ),
     )
     // 进程退出后写 stdin 会得到 EPIPE；结束原因已经由 exit/error 报告。
     this.child.stdin.on("error", () => undefined)
+    // Codex 把运行日志写到 stderr。没人读的管道写满约 64KB 后，原生进程会停在 write 上，
+    // 之后一个通知都发不出来（#83）。持续读掉，并留最后一段给退出原因用。
+    this.child.stderr.setEncoding("utf8")
+    this.child.stderr.on("data", (chunk: string) => {
+      this.stderrTail = (this.stderrTail + chunk).slice(-STDERR_TAIL_CHARS)
+    })
+    this.child.stderr.on("error", () => undefined)
     createInterface({ input: this.child.stdout }).on("line", (line) => {
       for (const listener of this.listeners) listener(line)
     })
@@ -87,6 +105,12 @@ export class StdioCodexTransport implements CodexTransport {
     for (const listener of [...this.closeListeners]) listener(reason)
     this.closeListeners.clear()
   }
+}
+
+/** 进程退出原因后面补上 stderr 末尾；真正的错误通常在那里。 */
+function withStderr(message: string, stderrTail: string): string {
+  const detail = stderrTail.trim()
+  return detail && !message.includes(detail) ? `${message}: ${detail}` : message
 }
 
 /** 测试用回放传输：记录发送内容，并可主动推入服务端消息。 */
