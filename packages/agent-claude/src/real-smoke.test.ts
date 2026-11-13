@@ -15,6 +15,8 @@ it.skipIf(!enabled)(
       threadId: "real-smoke",
       cwd: process.cwd(),
       permissionMode: "dontAsk",
+      // 代理或自定义网关可能没有 CLI 的默认模型；设置后换成本机可用的模型再跑。
+      ...(process.env.PIGCODE_CLAUDE_MODEL ? { model: process.env.PIGCODE_CLAUDE_MODEL } : {}),
     })
     try {
       await driver.send(

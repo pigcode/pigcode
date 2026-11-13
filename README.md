@@ -209,6 +209,12 @@ pnpm real:claude
 The test uses the installed and authenticated Claude Code CLI with a minimal
 prompt. It never logs in and never reads credential files.
 
+If the CLI's default model does not exist on your proxy or gateway, pick one it has:
+
+```bash
+PIGCODE_REAL_CLAUDE=1 PIGCODE_CLAUDE_MODEL=<model> pnpm real:claude
+```
+
 ## Real Codex smoke
 
 Set `PIGCODE_REAL_CODEX=1` and run:
