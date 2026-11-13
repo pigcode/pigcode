@@ -10,6 +10,7 @@ import { join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { describe, expect, it } from "vitest"
 import {
+  checkPluginCompatibility,
   pluginManifestSchema,
   readAgentContribution,
   type PluginManifest,
@@ -51,6 +52,14 @@ async function applyHostEntry(dir: string) {
 }
 
 describe("create-plugin", () => {
+  it("asks for a version range that admits prereleases", async () => {
+    const dir = await generate("ui", "version-check")
+    const manifest = await manifestOf(dir)
+    // 写成 >=0.1.0 会让 0.1.0-beta.2 生成出来的插件在同一次预发布里被判成不兼容。
+    expect(manifest.engines?.pigcode).toBe(">=0.1.0-0")
+    expect(checkPluginCompatibility(manifest)).toBeNull()
+  })
+
   it("generates an Agent plugin with the agent names", async () => {
     const dir = await generate("agent", "demo-echo")
     expect((await readdir(dir)).sort()).toEqual(["index.ts", "package.json"])

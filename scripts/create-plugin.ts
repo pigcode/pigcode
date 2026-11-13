@@ -96,7 +96,7 @@ function manifestFor(
   displayName: string,
 ): GeneratedManifest {
   const base = { name: pkgName, version: "0.1.0", type: "module" as const }
-  const engines = { pigcode: ">=0.1.0" }
+  const engines = { pigcode: ">=0.1.0-0" } // -0 才包含预发布，0.1.0-beta.2 不小于 0.1.0
   if (kind === "agent") {
     return {
       ...base,
