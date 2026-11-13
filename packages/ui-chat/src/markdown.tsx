@@ -7,6 +7,7 @@ import type { ReactNode } from "react"
 import { Check } from "lucide-react"
 import { CodeBlock } from "./code-block"
 import { parseBlocks, type Block, type ListItem } from "./markdown-blocks"
+import { MarkdownLink } from "./markdown-link"
 
 export { parseBlocks } from "./markdown-blocks"
 
@@ -29,9 +30,15 @@ const INLINE = new RegExp(
   ].join("|"),
 )
 
-/** 只放行 http、https 与 mailto 链接，其余按普通文本显示。 */
+/** 只放行不含凭据的 http、https 与 mailto 链接。 */
 function safeHref(href: string): string | null {
-  return /^(https?:|mailto:)/i.test(href) ? href : null
+  if (!/^(https?:|mailto:)/i.test(href)) return null
+  try {
+    const url = new URL(href)
+    return url.username || url.password ? null : href
+  } catch {
+    return null
+  }
 }
 
 /** 图片只放行网络地址与内嵌的 data 图片。 */
@@ -40,7 +47,7 @@ function safeImage(src: string): string | null {
 }
 
 /** 渲染行内 Markdown。 */
-export function renderInline(text: string, keyPrefix = "i"): ReactNode[] {
+export function renderInline(text: string, keyPrefix = "i", allowLinks = true): ReactNode[] {
   const nodes: ReactNode[] = []
   let rest = text
   let key = 0
@@ -53,13 +60,13 @@ export function renderInline(text: string, keyPrefix = "i"): ReactNode[] {
     if (match.index > 0) nodes.push(rest.slice(0, match.index))
     const id = `${keyPrefix}-${key}`
     key += 1
-    nodes.push(inlineNode(match, id))
+    nodes.push(inlineNode(match, id, allowLinks))
     rest = rest.slice(match.index + match[0].length)
   }
   return nodes
 }
 
-function inlineNode(match: RegExpExecArray, id: string): ReactNode {
+function inlineNode(match: RegExpExecArray, id: string, allowLinks: boolean): ReactNode {
   const [whole, , code, alt, src, label, href, angle, strong, strongAlt, strike, em, emAlt] = match
   const bare = match[13]
   const escaped = match[14]
@@ -75,29 +82,31 @@ function inlineNode(match: RegExpExecArray, id: string): ReactNode {
     )
   }
   if (label !== undefined && href !== undefined) {
-    const safe = safeHref(href)
+    const safe = allowLinks ? safeHref(href) : null
     return safe ? (
-      <a key={id} href={safe} target="_blank" rel="noopener noreferrer">
-        {renderInline(label, id)}
-      </a>
+      <MarkdownLink key={id} href={safe}>
+        {renderInline(label, id, false)}
+      </MarkdownLink>
     ) : (
-      renderInline(label, id)
+      renderInline(label, id, allowLinks)
     )
   }
   const url = angle ?? bare
   if (url !== undefined) {
-    return (
-      <a key={id} href={url} target="_blank" rel="noopener noreferrer">
+    return allowLinks && safeHref(url) ? (
+      <MarkdownLink key={id} href={url}>
         {url}
-      </a>
+      </MarkdownLink>
+    ) : (
+      url
     )
   }
   if (strong !== undefined || strongAlt !== undefined) {
-    return <strong key={id}>{renderInline(strong ?? strongAlt ?? "", id)}</strong>
+    return <strong key={id}>{renderInline(strong ?? strongAlt ?? "", id, allowLinks)}</strong>
   }
-  if (strike !== undefined) return <del key={id}>{renderInline(strike, id)}</del>
+  if (strike !== undefined) return <del key={id}>{renderInline(strike, id, allowLinks)}</del>
   if (em !== undefined || emAlt !== undefined) {
-    return <em key={id}>{renderInline(em ?? emAlt ?? "", id)}</em>
+    return <em key={id}>{renderInline(em ?? emAlt ?? "", id, allowLinks)}</em>
   }
   if (escaped !== undefined) return escaped
   return <br key={id} />

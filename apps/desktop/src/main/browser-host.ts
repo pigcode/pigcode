@@ -5,13 +5,19 @@
 import {
   app,
   ipcMain,
+  session,
   shell,
   webContents,
   type BrowserWindow,
   type MessagePortMain,
 } from "electron"
 import { BrowserAgent, type BrowserRequest, type GuestContents } from "./browser-agent"
-import { BROWSER_PARTITION, isAllowedBrowserUrl, readBrowserExternalUrl } from "./browser-policy"
+import {
+  BROWSER_PARTITION,
+  isAllowedBrowserUrl,
+  readBrowserExternalUrl,
+  readBrowserWebUrl,
+} from "./browser-policy"
 
 function isBrowserRequest(value: unknown): value is BrowserRequest {
   if (typeof value !== "object" || value === null) return false
@@ -92,11 +98,17 @@ export function setupBrowser(getWindow: () => BrowserWindow | undefined): Browse
   ipcMain.handle("pigcode:browser-unregister", (_event, sessionId: unknown) => {
     if (typeof sessionId === "string") agent.unregister(sessionId)
   })
-  // 「在默认浏览器中打开」：本机的 http 开发服务器也要能打开，所以和 agent 官网的外链分开；不接受带凭据的地址。
+  // 本机的 http 开发服务器也能用系统浏览器打开；邮件地址交给系统的邮件应用。
   ipcMain.handle("pigcode:browser-external", async (_event, value: unknown) => {
     const url = readBrowserExternalUrl(value)
     if (!url) throw new Error("URL_NOT_ALLOWED")
     await shell.openExternal(url)
+  })
+  ipcMain.handle("pigcode:browser-save-link", (_event, value: unknown) => {
+    const url = readBrowserWebUrl(value)
+    if (!url) throw new Error("URL_NOT_ALLOWED")
+    // 让 Electron 根据响应头和 URL 建议文件名，并显示系统保存对话框。
+    session.fromPartition(BROWSER_PARTITION).downloadURL(url)
   })
   return {
     attachControlPort(port) {

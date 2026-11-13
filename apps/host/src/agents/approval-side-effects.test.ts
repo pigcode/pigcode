@@ -131,7 +131,9 @@ describe.each([
       await rm(root, { recursive: true, force: true })
     })
     const project = ctx.projects.add(root)
-    const thread = ctx.threads.create(project.id, "Approval", agent)
+    const thread = ctx.threads.create(project.id, "Approval", agent, undefined, {
+      permissionMode: "approval-required",
+    })
     const run = await ctx.agents.startRun(thread.id, "write the file")
     const requestId = await vi.waitFor(() => {
       const [pending] = ctx.agents.listPendingRequests(thread.id)

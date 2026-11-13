@@ -1,7 +1,8 @@
 // 外观设置页用到的小控件：滑块、颜色色片和字体输入框。
-import { useEffect, useId, useState } from "react"
-import { X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { ChevronDown, X } from "lucide-react"
 import {
+  Autocomplete,
   Input,
   Slider,
   fontDisplayName,
@@ -163,7 +164,7 @@ export function ColorChips({
   )
 }
 
-/** 字体名输入框：失去焦点或回车时提交，空白表示系统默认。 */
+/** 选择预设字体，或输入本机字体名后按回车或移开焦点。 */
 export function FontField({
   kind,
   label,
@@ -176,36 +177,72 @@ export function FontField({
   onChange: (value: string) => void
 }) {
   const { t } = useLocale()
-  const listId = useId()
+  const system = t("settings.appearance.font.system")
   const shown = fontDisplayName(kind, value)
+  const options = [system, ...presetFontNames(kind)]
   const [text, setText] = useState(shown)
+  const actions = useRef<{ close: () => void; unmount: () => void }>(null)
   useEffect(() => setText(shown), [shown])
-  const commit = () => {
-    const next = fontFromDisplayName(kind, text)
+  function commit(name: string): void {
+    const next = fontFromDisplayName(kind, name === system ? "" : name)
     if (next !== value) onChange(next)
-    else setText(shown)
+    setText(fontDisplayName(kind, next))
   }
   return (
-    <>
-      <Input
-        className="font-field"
-        aria-label={label}
-        placeholder={t("settings.appearance.font.system")}
-        value={text}
-        list={listId}
-        spellCheck={false}
-        style={{ fontFamily: text.trim() ? `"${text.trim()}"` : undefined }}
-        onChange={(event) => setText(event.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") commit()
-        }}
-      />
-      <datalist id={listId}>
-        {presetFontNames(kind).map((name) => (
-          <option key={name} value={name} />
-        ))}
-      </datalist>
-    </>
+    <Autocomplete.Root
+      actionsRef={actions}
+      items={options}
+      filter={(option, query) =>
+        query === shown || option.toLowerCase().includes(query.toLowerCase())
+      }
+      value={text}
+      openOnInputClick
+      onValueChange={(next, details) => {
+        if (details.reason === "item-press") commit(next)
+        else if (details.reason === "input-change") setText(next)
+      }}
+      onOpenChange={(open, details) => {
+        if (!open && details.reason === "escape-key") setText(shown)
+      }}
+    >
+      <Autocomplete.InputGroup className="font-field">
+        <Autocomplete.Input
+          aria-label={label}
+          placeholder={system}
+          spellCheck={false}
+          onBlur={(event) => commit(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (
+              event.key !== "Enter" ||
+              event.nativeEvent.isComposing ||
+              event.currentTarget.getAttribute("aria-activedescendant")
+            )
+              return
+            event.preventDefault()
+            commit(text)
+            actions.current?.close()
+          }}
+        />
+        <Autocomplete.Trigger
+          className="font-field-trigger"
+          aria-label={fill(t("settings.appearance.font.showPresets"), { field: label })}
+        >
+          <ChevronDown className="ic ic-sm" aria-hidden="true" />
+        </Autocomplete.Trigger>
+      </Autocomplete.InputGroup>
+      <Autocomplete.Portal>
+        <Autocomplete.Positioner sideOffset={4} align="end">
+          <Autocomplete.Popup className="font-field-popup">
+            <Autocomplete.List>
+              {(option: string) => (
+                <Autocomplete.Item key={option} value={option}>
+                  {option}
+                </Autocomplete.Item>
+              )}
+            </Autocomplete.List>
+          </Autocomplete.Popup>
+        </Autocomplete.Positioner>
+      </Autocomplete.Portal>
+    </Autocomplete.Root>
   )
 }

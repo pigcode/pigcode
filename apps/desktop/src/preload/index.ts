@@ -6,6 +6,16 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   // Windows 用它判断有没有 acrylic（11 22H2 以上）；沙箱里的 process 也有这个方法
   systemVersion: process.getSystemVersion(),
   appVersion: (): Promise<string> => ipcRenderer.invoke("pigcode:app-version"),
+  getUpdateState: (): Promise<import("@pigcode/contracts").DesktopUpdateState> =>
+    ipcRenderer.invoke("pigcode:update-state"),
+  performUpdate: (): Promise<import("@pigcode/contracts").DesktopUpdateState> =>
+    ipcRenderer.invoke("pigcode:update-action"),
+  onUpdateState: (listener: (state: import("@pigcode/contracts").DesktopUpdateState) => void) => {
+    const handler = (_event: unknown, state: import("@pigcode/contracts").DesktopUpdateState) =>
+      listener(state)
+    ipcRenderer.on("pigcode:update-state", handler)
+    return () => ipcRenderer.removeListener("pigcode:update-state", handler)
+  },
   getPreferences: (): Promise<{
     launchAtLogin: boolean
     showInDock: boolean
@@ -74,6 +84,10 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   > => ipcRenderer.invoke("pigcode:list-open-apps"),
   openWithApp: (appId: string, path: string): Promise<void> =>
     ipcRenderer.invoke("pigcode:open-with-app", appId, path),
+  openWorkspaceFile: (root: string, path: string, appId: string | null): Promise<void> =>
+    ipcRenderer.invoke("pigcode:open-workspace-file", root, path, appId),
+  saveWorkspaceFile: (root: string, path: string): Promise<boolean> =>
+    ipcRenderer.invoke("pigcode:save-workspace-file", root, path),
   previewOpen: (url: string): Promise<{ id: string }> =>
     ipcRenderer.invoke("pigcode:preview-open", url),
   previewClose: (id?: string): void => {
@@ -87,6 +101,7 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     },
     openExternal: (url: string): Promise<void> =>
       ipcRenderer.invoke("pigcode:browser-external", url),
+    saveLink: (url: string): Promise<void> => ipcRenderer.invoke("pigcode:browser-save-link", url),
     onOpen: (listener: (request: { threadId: string; url: string | null }) => void) => {
       const handler = (_event: unknown, value: { threadId: string; url: string | null }) =>
         listener(value)

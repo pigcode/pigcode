@@ -4,6 +4,16 @@ interface Window {
     platform: string
     systemVersion?: string
     appVersion?(): Promise<string>
+    getUpdateState?(): Promise<import("@pigcode/contracts").DesktopUpdateState>
+    performUpdate?(): Promise<import("@pigcode/contracts").DesktopUpdateState>
+    onUpdateState?(
+      listener: (state: import("@pigcode/contracts").DesktopUpdateState) => void,
+    ): () => void
+    checkForUpdates?(): Promise<{
+      status: "up-to-date" | "update-available" | "error"
+      version?: string
+      url?: string
+    }>
     setThemeSource(source: "light" | "dark" | "system"): Promise<void>
     windowControl(action: "minimize" | "maximize" | "close"): Promise<void>
     isMaximized(): Promise<boolean>
@@ -50,14 +60,17 @@ interface Window {
     >
     /** 用指定应用打开文件夹；不是已存在的目录或应用不在本机时拒绝。 */
     openWithApp?(appId: string, path: string): Promise<void>
+    openWorkspaceFile?(root: string, path: string, appId: string | null): Promise<void>
+    saveWorkspaceFile?(root: string, path: string): Promise<boolean>
     previewOpen(url: string): Promise<{ id: string }>
     previewClose(id?: string): void
     /** 右栏内置浏览器：登记 webview，接收 agent 打开浏览器与操作的通知。 */
     browser?: {
       register(sessionId: string, threadId: string, webContentsId: number): Promise<void>
       unregister(sessionId: string): void
-      /** 在系统默认浏览器里打开内置浏览器的当前页面；只接受 http/https。 */
+      /** http/https 交给默认浏览器，mailto 交给默认邮件应用。 */
       openExternal(url: string): Promise<void>
+      saveLink(url: string): Promise<void>
       onOpen(listener: (request: { threadId: string; url: string | null }) => void): () => void
       onActivity(
         listener: (activity: {

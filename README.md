@@ -99,21 +99,26 @@ and git worktrees. Checkpoints are stored under
 Files, git, the terminal and PR creation all follow the thread's worktree: its own, then
 the parent thread's, then the project folder.
 
-Files works like t3code's explorer:
+Open the Files surface from the right panel or use Browse files on a project in the sidebar.
+The layout follows ZCode, with a shared toolbar above the directory and preview.
 
 - The tree loads folders lazily, dims git-ignored entries, and marks changed files with
   their git status. Opening a folder whose only child is a folder opens the whole chain as
   one row (`main/java/com/example`). Typing in the filter searches every path in the
   worktree.
-- Arrow keys move and expand, `↵` opens, and the context menu opens a file, mentions it in
-  the composer, copies its absolute or relative path, or reveals it in the file manager.
+- Arrow keys move and expand, and `↵` previews. The toolbar can show only files with Git
+  changes. The context menu can open a file in an external editor, save a copy, mention it in
+  the composer, copy its absolute or relative path, or reveal it in the file manager.
   Dragging a row onto the composer mentions it as well.
-- Files open in tabs with syntax highlighting (Shiki, following the app theme). Text files
-  are editable: `⌘S` saves, a dot marks unsaved tabs, and closing one asks first; so does
+- A click reuses the preview tab. Use `⌘`/`Ctrl`-click or the context menu to open a separate
+  tab. Editing keeps the tab open. Text files are editable with theme-aware Shiki highlighting.
+  `⌘S` saves, a dot marks unsaved tabs, and closing one asks first; so does
   closing, quitting or reloading the window while any file is unsaved. If the file changed
   on disk since it was opened, saving stops and offers to reload or overwrite.
-  Files over 1 MB open read-only with the first 1 MB shown; images show a preview.
-- When the panel is narrow the tree becomes a drawer over the file instead of a column.
+  Files over 1 MB open read-only with the first 1 MB shown. Images show a preview, and Markdown
+  can switch between a rendered preview and editable source.
+- Drag the divider to resize the directory, or collapse it from the toolbar. A narrow panel
+  switches between the directory and preview.
   The tree refreshes after agent runs, saves, checkpoint restores and worktree changes.
 
 After a clean install, rebuild the native PTY helper for Electron before running the
@@ -140,9 +145,8 @@ Plugins are ordinary npm packages with a `pigcode` manifest field. Agent, Capabi
 and UI plugins load and unload without restarting the app.
 
 Every agent is a plugin. Claude Code and Codex ship with the app as built-in plugins:
-they can be disabled but not uninstalled. Other agents are installed on demand from
-Settings → Agent → Install agent (an npm spec, a tarball, or a local folder), and any
-plugin can be installed from the Plugins page in the sidebar.
+they can be disabled but not uninstalled. Install and uninstall third-party Agent plugins
+from the Plugins page in the sidebar.
 
 Settings → Agent shows each agent's status (installed, version, signed in), the Agent
 features it supports, and the settings its plugin declares. The built-in agents have the same

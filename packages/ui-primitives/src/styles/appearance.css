@@ -539,7 +539,30 @@
   width: 190px;
 }
 .font-field {
+  position: relative;
   width: 190px;
+}
+.font-field > .input {
+  padding-inline-end: var(--control-md);
+}
+.font-field-trigger {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: grid;
+  width: var(--control-md);
+  place-items: center;
+  color: var(--muted);
+}
+.font-field-trigger:hover {
+  color: var(--fg);
+}
+.menu-popup.font-field-popup {
+  width: var(--anchor-width);
+  min-width: 0;
+}
+.font-field-popup[data-empty] {
+  display: none;
 }
 
 @media (max-width: 640px) {

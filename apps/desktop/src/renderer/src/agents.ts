@@ -37,6 +37,7 @@ export function toComposerAgents(list: AgentList): ComposerAgent[] {
           id: instance.instanceId,
           agentId: agent.agentId,
           label: instance.isDefault ? agent.displayName : instance.label,
+          executionModes: agent.executionModes ?? null,
         })),
     )
 }

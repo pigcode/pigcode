@@ -186,7 +186,7 @@ function DetailsBody({
             <>
               <span className="plugin-dialog-hint">{t("plugins.uninstallHint")}</span>
               <Button size="sm" variant="ghost" type="button" onClick={() => setConfirming(false)}>
-                {t("agents.install.cancel")}
+                {t("common.cancel")}
               </Button>
               <Button
                 size="sm"

@@ -5,13 +5,21 @@
 import { useCallback, useContext, useEffect, useState } from "react"
 import type { AgentInstance, AgentList, AgentStatus } from "@pigcode/contracts"
 import { useAppStore } from "@pigcode/client-runtime"
-import { AgentsPage, AppearancePage } from "@pigcode/ui-settings"
+import {
+  AgentsPage,
+  AppearancePage,
+  GeneralPage as GeneralSettingsPage,
+} from "@pigcode/ui-settings"
 import type { CoreDeps } from "./app"
 import { refreshAgentViews } from "./agent-context"
 import { useModelCatalog } from "./agents"
 import { AppearanceContext } from "./builtin-settings-pages"
+import { useUpdateCenter } from "./update-center"
 
-export { GeneralPage } from "@pigcode/ui-settings"
+export function GeneralPage() {
+  const updates = useUpdateCenter()
+  return <GeneralSettingsPage onShowUpdates={() => updates.show()} />
+}
 
 /** 外观页：用 App 持有的外观控制器，改动立即作用到整个窗口。 */
 export function AppearanceContainer() {
@@ -20,6 +28,8 @@ export function AppearanceContainer() {
 
 /** Agent 页容器：列表与设置来自 agent.list，状态来自只读检测；改动后刷新输入框里的实例。 */
 export function AgentsContainer({ deps }: { deps: CoreDeps }) {
+  const updates = useUpdateCenter()
+  const cliUpdates = updates.cli
   const [list, setList] = useState<AgentList>({
     agents: [],
     defaultAgentId: null,
@@ -30,8 +40,13 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   const { connection } = deps
   // 展开实例时读它的模型目录；改完设置（自定义模型、可执行文件）后换一个版本号重读。
   const [modelRevision, setModelRevision] = useState(0)
-  const connected = useAppStore(deps.store).status === "connected"
-  const { catalog, load } = useModelCatalog(connection, modelRevision, connected)
+  const appState = useAppStore(deps.store)
+  const connected = appState.status === "connected"
+  const { catalog, load } = useModelCatalog(
+    connection,
+    modelRevision + appState.agentRevision,
+    connected,
+  )
 
   const refresh = useCallback(async (): Promise<void> => {
     setList((await connection.call("agent.list", {})) as AgentList)
@@ -60,7 +75,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       deps.store.update({ error: error instanceof Error ? error.message : String(error) }),
     )
     void detect().catch(() => undefined)
-  }, [refresh, detect, deps.store])
+  }, [refresh, detect, deps.store, appState.agentRevision])
 
   /** 插件集合变了：重读列表与检测，通知输入框与线程头，并重新加载 UI 插件。 */
   async function afterPluginChange(): Promise<void> {
@@ -68,6 +83,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     setStatuses({})
     setModelRevision((value) => value + 1)
     await Promise.all([detect(), refreshAgentViews(deps), deps.plugins.reload()])
+    if (Object.keys(cliUpdates.states).length > 0) await cliUpdates.check()
   }
 
   /** 改完一个实例：刷新列表、重新检测它，并让输入框重读模型目录（可执行文件或账号可能换了）。 */
@@ -78,10 +94,16 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       detect({ ...(agentId ? { agentId } : {}), instanceId, refresh: true }),
       refreshAgentViews(deps),
     ])
+    if (cliUpdates.states[instanceId]) await cliUpdates.check(instanceId)
   }
 
   return (
     <AgentsPage
+      cliUpdates={cliUpdates.states}
+      checkingCliUpdates={cliUpdates.checking}
+      onCheckCliUpdates={cliUpdates.check}
+      onUpdateCli={cliUpdates.update}
+      onShowUpdates={updates.show}
       agents={list.agents}
       defaultAgentId={list.defaultAgentId}
       defaultInstanceId={list.defaultInstanceId}
@@ -131,15 +153,6 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         await connection.call("agent.removeInstance", { instanceId })
         await refresh()
         await refreshAgentViews(deps)
-      }}
-      onInstall={async (spec) => {
-        await connection.call("plugin.install", { spec })
-        await afterPluginChange()
-      }}
-      onUninstall={async (agent) => {
-        if (!agent.pluginId) return
-        await connection.call("plugin.uninstall", { id: agent.pluginId })
-        await afterPluginChange()
       }}
       onPickPath={(kind) => window.pigcodeNative?.pickPath?.(kind) ?? Promise.resolve(null)}
       onOpenExternal={(url) => void window.pigcodeNative?.openExternal?.(url)}

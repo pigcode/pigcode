@@ -1,11 +1,12 @@
 /**
- * 文件资源管理器（参照 t3code）：目录按需加载，单子目录链合并成一行，搜索框按路径模糊搜索并显示
+ * 文件导航：目录按需加载，单子目录链合并成一行，搜索框按路径模糊搜索并显示
  * 带祖先目录的结果树；被忽略的条目淡化，git 改动带颜色与字母；只渲染可见的行；键盘可完整操作；
  * 右键弹出菜单，拖到输入框插入 @路径。
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
 import {
-  ChevronsDownUp,
+  Ellipsis,
+  FileDiff,
   FolderOpen,
   Loader2,
   RefreshCw,
@@ -16,6 +17,7 @@ import { EmptyState, SearchField, useLocale } from "@pigcode/ui-primitives"
 import { ExplorerRow, rowId } from "./file-explorer-row"
 import {
   ancestorsOf,
+  changedRows,
   searchTree,
   visibleRows,
   type DirectoryState,
@@ -43,6 +45,9 @@ export interface FileExplorerProps {
   loadDirectory: (path: string) => Promise<ExplorerListing>
   searchPaths: (query: string) => Promise<ExplorerSearchResult>
   onOpenFile: (path: string) => void
+  onRefresh?: (() => void) | undefined
+  onRootMenu?: ((point: { x: number; y: number }) => void) | undefined
+  onOpenFileTab?: ((path: string) => void) | undefined
   /** 当前打开的文件或要定位的目录：展开祖先并滚到它。 */
   activePath?: string | null | undefined
   /** activePath 是目录时也展开它本身（从面包屑跳过来）。 */
@@ -56,19 +61,25 @@ export interface FileExplorerProps {
         point: { x: number; y: number },
       ) => void)
     | undefined
-  /** 同一个 key 的展开状态在组件重新挂载后保留（切换标签、收起侧栏）。 */
+  /** 同一个 key 的导航状态在组件重新挂载后保留。 */
   stateKey?: string | undefined
-  /** 窄的侧栏样式：没有根目录标题。 */
+  /** 窄的侧栏样式。 */
   compact?: boolean | undefined
 }
 
-/** 按 stateKey 保存的展开状态与已加载目录。 */
+/** 按 stateKey 保存的目录、展开状态、搜索和筛选。 */
 const memory = new Map<
   string,
-  { directories: Map<string, DirectoryState>; expanded: Set<string> }
+  {
+    directories: Map<string, DirectoryState>
+    expanded: Set<string>
+    query: string
+    changedOnly: boolean
+  }
 >()
 
 const OVERSCAN = 8
+const SEARCH_LIMIT = 256
 
 /** 渲染资源管理器。 */
 export function FileExplorer({
@@ -76,6 +87,9 @@ export function FileExplorer({
   loadDirectory,
   searchPaths,
   onOpenFile,
+  onRefresh,
+  onRootMenu,
+  onOpenFileTab,
   activePath = null,
   activeKind = "file",
   revision = 0,
@@ -92,7 +106,8 @@ export function FileExplorer({
   const [expanded, setExpanded] = useState(() => remembered?.expanded ?? new Set<string>())
   const [loading, setLoading] = useState<ReadonlySet<string>>(new Set())
   const [failed, setFailed] = useState<ReadonlyMap<string, string>>(new Map())
-  const [query, setQuery] = useState("")
+  const [query, setQuery] = useState(() => remembered?.query ?? "")
+  const [changedOnly, setChangedOnly] = useState(() => remembered?.changedOnly ?? false)
   const [results, setResults] = useState<ExplorerSearchResult | null>(null)
   const [searching, setSearching] = useState(false)
   const [focused, setFocused] = useState<string | null>(null)
@@ -106,8 +121,8 @@ export function FileExplorer({
   const rowHeight = 24
 
   useEffect(() => {
-    if (stateKey) memory.set(stateKey, { directories, expanded })
-  }, [stateKey, directories, expanded])
+    if (stateKey) memory.set(stateKey, { directories, expanded, query, changedOnly })
+  }, [stateKey, directories, expanded, query, changedOnly])
 
   /** 读取一个目录；目录只有一个子目录时顺着展开下去，与紧凑文件夹配合。 */
   async function load(path: string, autoExpand = false): Promise<DirectoryState | null> {
@@ -177,7 +192,7 @@ export function FileExplorer({
 
   // 搜索：输入停顿 120ms 后查询；清空时回到目录树。
   useEffect(() => {
-    const text = query.trim()
+    const text = query.trim().slice(0, SEARCH_LIMIT)
     if (!text) {
       setResults(null)
       setSearching(false)
@@ -201,15 +216,22 @@ export function FileExplorer({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [query, searchPaths])
+  }, [query, searchPaths, revision])
 
+  const filteringChanges = changedOnly && git !== null
+  const changeFilterLabel = t(changedOnly ? "files.showAll" : "files.changedOnly")
   const rows = useMemo<VisibleRow[]>(() => {
+    const changed = (entry: { path: string; kind: "file" | "directory" }) =>
+      git?.files.has(entry.path) === true ||
+      (entry.kind === "directory" && git?.directories.has(entry.path) === true)
     if (results) {
-      const tree = searchTree(results.entries)
+      const tree = searchTree(filteringChanges ? results.entries.filter(changed) : results.entries)
       return visibleRows(tree.directories, tree.expanded)
     }
-    return visibleRows(directories, expanded)
-  }, [results, directories, expanded])
+    return filteringChanges && git
+      ? changedRows(directories, expanded, git.files, changed)
+      : visibleRows(directories, expanded)
+  }, [results, directories, expanded, git, filteringChanges])
 
   // 量出可视高度；jsdom 等没有 ResizeObserver 的环境按一屏估算。
   useEffect(() => {
@@ -268,11 +290,6 @@ export function FileExplorer({
     setFocused(row.path)
     if (row.kind === "file") onOpenFile(row.path)
     else toggle(row)
-  }
-
-  function collapseAll(): void {
-    setExpanded(new Set())
-    setQuery("")
   }
 
   function onTreeKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -334,7 +351,7 @@ export function FileExplorer({
   const rootError = failed.get("")
   // 树里没有行时显示的空状态：没有匹配、读取失败、目录是空的，或者还在读取。
   const empty: { icon: ReactNode; title: string; description?: string | undefined } | null = results
-    ? results.entries.length === 0 && !searching
+    ? rows.length === 0 && !searching
       ? { icon: <SearchX className="ic" />, title: t("files.noMatches") }
       : null
     : rootError
@@ -343,51 +360,20 @@ export function FileExplorer({
           title: t("files.loadFailed"),
           description: rootError,
         }
-      : rootState && rootState.entries.length === 0
-        ? {
-            icon: <FolderOpen className="ic" />,
-            title: t("files.empty"),
-            description: t("files.emptyHint"),
-          }
-        : !rootState
-          ? { icon: <Loader2 className="ic spin" />, title: t("files.loading") }
-          : null
+      : filteringChanges && rootState && rows.length === 0
+        ? { icon: <FileDiff className="ic" />, title: t("files.noChanges") }
+        : rootState && rootState.entries.length === 0
+          ? {
+              icon: <FolderOpen className="ic" />,
+              title: t("files.empty"),
+              description: t("files.emptyHint"),
+            }
+          : !rootState
+            ? { icon: <Loader2 className="ic spin" />, title: t("files.loading") }
+            : null
 
   return (
     <div className={compact ? "fx fx-compact" : "fx"}>
-      <div className="fx-head">
-        {compact ? null : (
-          <span className="fx-root truncate" title={rootName}>
-            {rootName}
-          </span>
-        )}
-        <span className="fx-actions">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={t("files.refresh")}
-            title={t("files.refresh")}
-            onClick={() => {
-              void load("")
-              for (const path of expanded) void load(path)
-            }}
-          >
-            <RefreshCw
-              className={loading.size > 0 ? "ic ic-sm spin" : "ic ic-sm"}
-              aria-hidden="true"
-            />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={t("files.collapseAll")}
-            title={t("files.collapseAll")}
-            onClick={collapseAll}
-          >
-            <ChevronsDownUp className="ic ic-sm" aria-hidden="true" />
-          </button>
-        </span>
-      </div>
       <SearchField
         size="compact"
         className="fx-search"
@@ -405,6 +391,58 @@ export function FileExplorer({
           }
         }}
       />
+      <div className="fx-head">
+        <span className="fx-root truncate" title={rootName}>
+          {rootName}
+        </span>
+        <span className="fx-actions">
+          {onRootMenu ? (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label={t("files.rootMenu")}
+              title={t("files.rootMenu")}
+              onClick={(event) => {
+                const box = event.currentTarget.getBoundingClientRect()
+                onRootMenu({ x: box.left, y: box.bottom })
+              }}
+            >
+              <Ellipsis className="ic ic-sm" aria-hidden="true" />
+            </button>
+          ) : null}
+          {git !== null ? (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-pressed={changedOnly}
+              aria-label={changeFilterLabel}
+              title={changeFilterLabel}
+              onClick={() => setChangedOnly((value) => !value)}
+            >
+              <FileDiff className="ic ic-sm" aria-hidden="true" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={t("files.refresh")}
+            title={t("files.refresh")}
+            onClick={() => {
+              if (onRefresh) {
+                onRefresh()
+                return
+              }
+              void load("")
+              for (const path of expanded) void load(path)
+            }}
+          >
+            <RefreshCw
+              className={loading.size > 0 ? "ic ic-sm spin" : "ic ic-sm"}
+              aria-hidden="true"
+            />
+          </button>
+        </span>
+      </div>
       {results?.truncated ? <p className="fx-note">{t("files.searchTruncated")}</p> : null}
       <div
         ref={scroller}
@@ -438,6 +476,9 @@ export function FileExplorer({
               decoration={row.kind === "file" ? git?.files.get(row.path) : undefined}
               changedInside={row.kind === "directory" && git?.directories.has(row.path) === true}
               onActivate={() => activate(row)}
+              onOpenTab={
+                row.kind === "file" && onOpenFileTab ? () => onOpenFileTab(row.path) : undefined
+              }
               onContextMenu={
                 onContextMenu
                   ? (point) => {

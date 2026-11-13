@@ -1,3 +1,4 @@
+import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
 /** Claude Code adapter；SDK 负责进程、流式与权限回调。 */
 import {
   query,
@@ -13,6 +14,8 @@ import { randomUUID } from "node:crypto"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { expandHome } from "@pigcode/plugin-sdk/node"
+import { prepareClaudeCliUpdate } from "./cli-update"
+import { claudeExecutionModes, claudePermissionMode, syncClaudePlanMode } from "./permissions"
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -69,6 +72,7 @@ interface DriverSessionState {
 
 /** 基于 @anthropic-ai/claude-agent-sdk 的 Claude Code driver。 */
 export class ClaudeDriver implements AgentDriver {
+  readonly executionModes = claudeExecutionModes
   readonly id = "claude"
   readonly displayName = "Claude Code"
   readonly features: AgentFeatures = {
@@ -103,6 +107,10 @@ export class ClaudeDriver implements AgentDriver {
   }
 
   /** 只读检测：版本与登录状态，用设置页里的可执行文件与环境变量。 */
+  prepareCliUpdate(settings: AgentSettingsValues) {
+    return prepareClaudeCliUpdate(settings, this.fixedExecutable)
+  }
+
   async detect(settings: AgentSettingsValues): Promise<AgentStatus> {
     const detection = await this.probe(claudeLaunch(settings, this.fixedExecutable))
     const account = claudePlan(detection.subscriptionType, detection.authMethod)
@@ -169,7 +177,8 @@ export class ClaudeDriver implements AgentDriver {
       cwd: input.cwd,
       // fork 会产生新的原生会话，创建时还不知道其 id，不能沿用父会话 id。
       nativeSessionId: input.forkFromNativeSessionId ? null : (input.nativeSessionId ?? null),
-      permissionMode: input.permissionMode ?? "workspace-write",
+      permissionMode: input.permissionMode ?? DEFAULT_RUNTIME_MODE,
+      planMode: input.planMode ?? input.permissionMode === "plan",
       model: input.model ?? null,
     }
   }
@@ -224,12 +233,12 @@ export class ClaudeDriver implements AgentDriver {
         ...(Object.keys(launch.extraArgs).length > 0 ? { extraArgs: launch.extraArgs } : {}),
         // 插件工具以进程内 SDK MCP server 暴露，生命周期跟随本次 Query。
         ...(mcpServer ? { mcpServers: { pigcode: mcpServer as McpServerConfig } } : {}),
-        permissionMode: mapPermissionMode(session.permissionMode),
+        permissionMode: claudePermissionMode(session.permissionMode, session.planMode === true),
         spawnClaudeCodeProcess: (spawnOptions) => {
           state.cli = spawnClaudeCli(spawnOptions)
           return state.cli.process
         },
-        ...(session.permissionMode === "danger-full-access"
+        ...(claudePermissionMode(session.permissionMode, false) === "bypassPermissions"
           ? { allowDangerouslySkipPermissions: true }
           : {}),
         canUseTool: async (toolName, toolInput, options) => {
@@ -246,6 +255,13 @@ export class ClaudeDriver implements AgentDriver {
               updatedInput: { ...toolInput, answers: answerRecord(questions, answers) },
             }
           }
+          if (
+            !session.planMode &&
+            claudePermissionMode(session.permissionMode, false) === "bypassPermissions" &&
+            toolName !== "ExitPlanMode" &&
+            toolName !== "AskUserQuestion"
+          )
+            return { behavior: "allow", updatedInput: toolInput }
           const request: ApprovalRequest = { toolName, input: toolInput }
           if (options.title !== undefined) request.title = options.title
           if (options.displayName !== undefined) request.displayName = options.displayName
@@ -253,6 +269,18 @@ export class ClaudeDriver implements AgentDriver {
           if (options.blockedPath !== undefined) request.blockedPath = options.blockedPath
           if (options.suggestions !== undefined) request.suggestions = options.suggestions
           const decision = await runtime.requestApproval(request)
+          if (toolName === "ExitPlanMode" && decision !== "deny") {
+            return {
+              behavior: "allow",
+              updatedPermissions: [
+                {
+                  type: "setMode",
+                  mode: claudePermissionMode(session.permissionMode, false),
+                  destination: "session",
+                },
+              ],
+            }
+          }
           return toPermissionResult(decision, toolName, options.suggestions)
         },
       },
@@ -285,7 +313,10 @@ export class ClaudeDriver implements AgentDriver {
         void nextPromise.catch(() => undefined)
         const next = await Promise.race([nextPromise, aborted])
         if (next === "aborted" || next.done) break
-        for (const event of normalizeSdkMessage(next.value, normalizeState)) runtime.emit(event)
+        for (const event of normalizeSdkMessage(next.value, normalizeState)) {
+          syncClaudePlanMode(event, session, runtime)
+          runtime.emit(event)
+        }
         // 会话开始时问一次窗口和压缩线：一轮结束时的占用要用它，输入框也能马上显示开局的占用。
         if (next.value.type === "system" && next.value.subtype === "init") {
           void readContextUsage(queryStream)
@@ -405,23 +436,6 @@ function abortedSignal(signal: AbortSignal): Promise<"aborted"> {
     }
     signal.addEventListener("abort", () => resolve("aborted"), { once: true })
   })
-}
-
-/** 把 Pigcode 权限模式映射到 Claude SDK 的 permissionMode。 */
-function mapPermissionMode(mode: string): NonNullable<Options["permissionMode"]> {
-  switch (mode) {
-    case "read-only":
-      return "plan"
-    case "danger-full-access":
-      return "bypassPermissions"
-    case "plan":
-      return "plan"
-    case "dontAsk":
-      // 真实冒烟使用 dontAsk：不弹权限提示，未预授权的工具直接拒绝。
-      return "dontAsk"
-    default:
-      return "default"
-  }
 }
 
 /** 把审批决议转换为 canUseTool 需要的 PermissionResult。 */

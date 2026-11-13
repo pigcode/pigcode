@@ -34,6 +34,7 @@ export interface WorkspaceSidebarProps {
   onToggleProject: (projectId: string, expanded: boolean) => void
   onOpenThread: (threadId: string) => void
   onNewThread: (projectId?: string) => void
+  onBrowseFiles?: ((projectId: string) => void) | undefined
   onOpenSettings?: () => void
   /** 定时任务入口；不传时不显示。 */
   onOpenSchedules?: () => void
@@ -135,6 +136,7 @@ export function WorkspaceSidebar({
   onToggleProject,
   onOpenThread,
   onNewThread,
+  onBrowseFiles,
   onOpenSchedules,
   onOpenPlugins,
   activeNav,
@@ -317,6 +319,7 @@ export function WorkspaceSidebar({
                   actions={projectActions(project)}
                   onToggle={() => onToggleProject(project.id, !open)}
                   onNewThread={() => onNewThread(project.id)}
+                  onBrowseFiles={onBrowseFiles ? () => onBrowseFiles(project.id) : undefined}
                 />
                 {open ? (
                   <div className="proj-sessions">

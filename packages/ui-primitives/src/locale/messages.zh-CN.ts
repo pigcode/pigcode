@@ -8,6 +8,7 @@ import { newThreadZhCN } from "./new-thread.messages"
 import { pluginsZhCN } from "./plugins.messages"
 import { schedulesZhCN } from "./schedules.messages"
 import { workbenchZhCN } from "./workbench.messages"
+import { updatesZhCN } from "./updates.messages"
 
 export const zhCN = {
   ...agentsZhCN,
@@ -19,6 +20,7 @@ export const zhCN = {
   ...pluginsZhCN,
   ...schedulesZhCN,
   ...workbenchZhCN,
+  ...updatesZhCN,
   "nav.newThread": "新会话",
   "nav.search": "搜索",
   "nav.projects": "项目",
@@ -219,8 +221,13 @@ export const zhCN = {
   "composer.ultracode.hint": "Claude 把任务拆给多个子代理并行完成，耗时和用量更多",
   "composer.ultracode.unsupported": "此模型不支持 Ultracode",
   "composer.permission.title": "权限",
-  "composer.permission.ask": "每次询问",
-  "composer.permission.ask.description": "改文件、运行命令前先问你",
+  "composer.build.short": "执行",
+  "composer.plan.short": "计划",
+  "composer.permission.confirmTitle": "启用{mode}？",
+  "composer.permission.confirm": "启用{mode}",
+  "composer.permission.ask": "按需审批",
+  "composer.permission.ask.description": "已授权的操作自动执行，需要额外权限时询问",
+  "composer.permission.ask.codexDescription": "允许项目内读写和运行命令，超出权限时询问",
   "composer.permission.plan": "计划模式",
   "composer.permission.plan.description": "先给出计划，确认前不改文件",
   "composer.permission.readOnly": "只读",
@@ -258,18 +265,7 @@ export const zhCN = {
   "chat.question.multi": "可多选",
   "chat.question.other": "其他（自己填写）",
   "chat.question.submit": "提交回答",
-  "chat.environment": "会话环境",
-  "chat.environment.close": "关闭会话环境",
-  "chat.environment.agent": "Agent",
-  "chat.environment.cwd": "工作目录",
-  "chat.environment.model": "模型",
-  "chat.environment.permission": "权限模式",
   "chat.agent.next": "下一次消息将使用",
-  "chat.environment.unknown": "—",
-  "chat.permission.readOnly": "只读",
-  "chat.permission.workspaceWrite": "工作区可写",
-  "chat.permission.dangerFullAccess": "完全访问",
-  "chat.permission.plan": "计划模式",
   "workbench.files": "文件",
   "workbench.diff": "Diff",
   "workbench.terminal": "终端",
@@ -395,5 +391,6 @@ export const zhCN = {
   "status.connecting": "正在连接 Host…",
   "status.dismiss": "关闭提示",
   "thread.defaultTitle": "新会话",
-  "app.noAgent": "没有可用的 agent：在「设置 → Agent」里启用或安装一个。",
+  "app.noAgent":
+    "没有可用的 agent。请在「设置 → Agent」启用已有的 agent，或在「插件」页安装 agent 插件。",
 } as const

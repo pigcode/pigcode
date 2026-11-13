@@ -1,3 +1,6 @@
+import { DEFAULT_RUNTIME_MODE, type AgentPermissionMode } from "@pigcode/contracts"
+import { PlanToggle } from "./plan-toggle"
+import { permissionLabel, permissionIcon, permissionNeedsConfirmation } from "./permission-options"
 /**
  * 模型选择器：左栏是 Agent 实例（以及收藏），右栏是选中实例的模型列表与搜索；底栏从左到右是快速模式与
  * Ultracode 两个开关、当前模型的思考深度滑块与权限。只有选中某个实例才会列出它自己的模型。
@@ -15,7 +18,6 @@ import {
 } from "@pigcode/ui-primitives"
 import {
   effortLabel,
-  permissionKeys,
   resolveEffort,
   resolveSwitch,
   resolveModel,
@@ -30,7 +32,6 @@ import { EffortControl } from "./model-effort"
 import { modelKey, useModelPreferences } from "./model-preferences"
 import { SwitchButton, SwitchMark, switchLabel } from "./model-switch"
 import { ModelRow, type ModelPickerRow } from "./model-row"
-import { PERMISSION_ICONS } from "./permission-menu"
 import { PermissionSwitch } from "./permission-switch"
 
 /** 底栏里的开关，按这个顺序排；胶囊上的小图标与读屏文字也按它。 */
@@ -40,7 +41,7 @@ const MODEL_SWITCHES: readonly ModelSwitch[] = ["fast", "ultracode"]
 const FAVORITES = "__favorites__"
 
 /** 默认的权限：胶囊上不为它画图标。 */
-const DEFAULT_PERMISSION: PermissionMode = "workspace-write"
+const DEFAULT_PERMISSION: PermissionMode = DEFAULT_RUNTIME_MODE
 
 /** 模型选择器的属性；目录由调用方按实例懒加载。 */
 export interface ModelPickerProps {
@@ -54,8 +55,10 @@ export interface ModelPickerProps {
   onSelectModel?: ((choice: ComposerModelChoice) => void) | undefined
   /** 当前线程的权限；底栏切换，胶囊上在非默认时显示图标。 */
   permissionMode?: PermissionMode
+  planMode?: boolean
+  onPlanMode?: ((value: boolean) => void) | undefined
   /** 底栏里可选的权限。 */
-  permissionModes?: readonly PermissionMode[]
+  permissionModes?: readonly AgentPermissionMode[]
   /** 选了一个权限；完全访问由调用方先确认。没有时底栏不显示权限。 */
   onPermissionMode?: ((mode: PermissionMode) => void) | undefined
   /** 运行中不能切换实例或模型；思考深度、速度与权限仍可调整，下一次发送生效。 */
@@ -76,6 +79,8 @@ export function ModelPicker({
   onLoadModels,
   onSelectModel,
   permissionMode = DEFAULT_PERMISSION,
+  planMode = false,
+  onPlanMode,
   permissionModes = [],
   onPermissionMode,
   locked = false,
@@ -83,7 +88,7 @@ export function ModelPicker({
   open,
   onOpenChange,
 }: ModelPickerProps) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const preferences = useModelPreferences()
   const agent = agents.find((item) => item.id === agentId) ?? null
   const currentModel = resolveModel(agentId ? catalog[agentId] : undefined, modelId)
@@ -218,14 +223,20 @@ export function ModelPicker({
   const loading = tab !== FAVORITES && catalog[tab] === undefined
   const tabAgent = agents.find((item) => item.id === tab)
   const chipLabel = currentModel?.label ?? agent?.label ?? t("composer.model.choose")
-  const PermissionIcon = PERMISSION_ICONS[permissionMode]
+  const selectedPermission = permissionModes.find((mode) => mode.id === permissionMode)
+  const PermissionIcon = permissionIcon(selectedPermission)
+  const defaultPermission = DEFAULT_PERMISSION
+  const showPermissionBadge =
+    permissionMode !== defaultPermission ||
+    Boolean(selectedPermission && permissionNeedsConfirmation(selectedPermission))
   const showPermission = onPermissionMode !== undefined && permissionModes.length > 0
   const chipParts = [
     agent?.label,
     currentModel?.label,
     effort ? effortLabel(effort, t) : null,
     ...switches.map((name) => switchLabel(name, t)),
-    permissionMode !== DEFAULT_PERMISSION ? t(permissionKeys[permissionMode].label) : null,
+    showPermissionBadge ? permissionLabel(selectedPermission, locale) : null,
+    planMode ? t("composer.permission.plan") : null,
   ]
   return (
     <Popover.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
@@ -233,6 +244,9 @@ export function ModelPicker({
         className="chip-btn model-chip"
         type="button"
         data-mode={permissionMode}
+        data-elevated={
+          (selectedPermission && permissionNeedsConfirmation(selectedPermission)) || undefined
+        }
         title={`${t("composer.modelMenu")} ${formatShortcut("Mod+/")}`}
         aria-label={`${t("composer.modelMenu")}: ${chipParts.filter(Boolean).join(" · ")}`}
       >
@@ -244,8 +258,15 @@ export function ModelPicker({
         {switches.map((name) => (
           <SwitchMark key={name} name={name} />
         ))}
-        {permissionMode !== DEFAULT_PERMISSION ? (
-          <span className="model-chip-mode" data-mode={permissionMode}>
+        {planMode ? <span className="model-depth">{t("composer.plan.short")}</span> : null}
+        {showPermissionBadge ? (
+          <span
+            className="model-chip-mode"
+            data-mode={permissionMode}
+            data-elevated={
+              (selectedPermission && permissionNeedsConfirmation(selectedPermission)) || undefined
+            }
+          >
             <PermissionIcon className="ic ic-sm" aria-hidden="true" />
           </span>
         ) : null}
@@ -386,13 +407,16 @@ export function ModelPicker({
                     />
                   ) : null}
                 </div>
-                {showPermission ? (
-                  <PermissionSwitch
-                    value={permissionMode}
-                    modes={permissionModes}
-                    onChange={onPermissionMode}
-                  />
-                ) : null}
+                <div className="model-execution-controls">
+                  {onPlanMode ? <PlanToggle value={planMode} onChange={onPlanMode} /> : null}
+                  {showPermission ? (
+                    <PermissionSwitch
+                      value={permissionMode}
+                      modes={permissionModes}
+                      onChange={onPermissionMode}
+                    />
+                  ) : null}
+                </div>
               </div>
             </div>
           </Popover.Popup>

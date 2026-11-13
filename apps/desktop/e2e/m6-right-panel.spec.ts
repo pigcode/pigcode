@@ -64,8 +64,10 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await page.keyboard.press("Enter")
     await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
 
-    // 右栏收起时布局按钮在线程头；打开后出现在面板标签栏，并显示启动器。
+    // 底部终端始终与「打开」同在聊天顶部，右栏展开只迁移右栏自己的按钮。
     const header = page.locator(".panel-top")
+    const terminalToggle = header.getByRole("button", { name: "切换底部终端" })
+    const terminalButton = await terminalToggle.elementHandle()
     await header.getByRole("button", { name: "切换右侧面板" }).click()
     const bar = page.locator(".right-panel-bar")
     await expect(page.getByLabel("打开一个面板")).toBeVisible()
@@ -74,6 +76,11 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
       "true",
     )
     await expect(header.getByRole("button", { name: "切换右侧面板" })).toHaveCount(0)
+    await expect(terminalToggle).toBeVisible()
+    expect(
+      await terminalToggle.evaluate((button, before) => button === before, terminalButton),
+    ).toBe(true)
+    await expect(bar.getByRole("button", { name: "切换底部终端" })).toHaveCount(0)
 
     // 焦点不在输入框时，单键 B 打开浏览器。
     await page.locator(".right-panel-body").click({ position: { x: 8, y: 8 } })
@@ -143,12 +150,18 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await expect(page.locator("main.panel")).toBeHidden()
     await bar.getByRole("button", { name: "还原面板大小" }).click()
     await expect(page.locator("main.panel")).toBeVisible()
+    await bar.getByRole("button", { name: "最大化面板" }).click()
+    await page.keyboard.press("Control+Backquote")
+    await expect(page.locator("main.panel")).toBeVisible()
+    const drawer = page.getByRole("region", { name: "底部终端" })
+    await expect(drawer).toBeVisible()
+    await terminalToggle.click()
+    await expect(drawer).toBeHidden()
 
     // 收起右栏后标签仍在；⌃` 打开底部终端并能执行命令，再按一次隐藏。
     await bar.getByRole("button", { name: "切换右侧面板" }).click()
     await expect(page.locator(".right-panel")).toBeHidden()
     await page.keyboard.press("Control+Backquote")
-    const drawer = page.getByRole("region", { name: "底部终端" })
     await expect(drawer.locator(".xterm")).toBeVisible()
     await drawer.locator(".xterm").click()
     await page.keyboard.type("echo DRAWER_OK")

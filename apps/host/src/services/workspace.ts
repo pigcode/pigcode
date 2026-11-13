@@ -57,7 +57,12 @@ export interface WorkspaceService {
   /** 列出一个目录；空字符串表示工作目录本身。 */
   list(scope: WorkspaceScope, path?: string): Promise<DirectoryListing>
   /** 按路径模糊搜索文件与目录。 */
-  searchPaths(scope: WorkspaceScope, query: string, limit?: number): Promise<PathSearchResult>
+  searchPaths(
+    scope: WorkspaceScope,
+    query: string,
+    limit?: number,
+    refresh?: boolean,
+  ): Promise<PathSearchResult>
   readFile(
     scope: WorkspaceScope,
     path: string,
@@ -103,8 +108,10 @@ export const apply: WorkspacePlugin = (ctx) => {
       return files.map((path) => ({ path, type: "file" as const }))
     },
     list: (scope, path = "") => listDirectory(scopeCwd(ctx, scope), path),
-    async searchPaths(scope, query, limit) {
-      return searchPaths(await index.files(scopeCwd(ctx, scope)), query, limit)
+    async searchPaths(scope, query, limit, refresh) {
+      const root = scopeCwd(ctx, scope)
+      if (refresh) index.invalidate(root)
+      return searchPaths(await index.files(root), query, limit)
     },
     readFile: (scope, path, encoding) => readWorkspaceFile(scopeCwd(ctx, scope), path, encoding),
     async writeFile(scope, path, text, options = {}) {

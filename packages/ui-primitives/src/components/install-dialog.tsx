@@ -1,6 +1,6 @@
 /**
- * 安装插件的对话框（Agent 页与插件管理页共用）：npm 包、tarball 或本地插件目录，可选「选择文件夹」，
- * 并提示插件以 Host 权限运行。安装失败时显示原因并保持打开，成功后关闭并清空输入。
+ * 插件页的安装对话框，支持 GitHub 仓库、npm 包、tarball 和本地插件目录。
+ * 安装失败时显示原因并保持打开，成功后关闭并清空输入。
  */
 import { useState, type FormEvent } from "react"
 import { FolderOpen, ShieldAlert } from "lucide-react"

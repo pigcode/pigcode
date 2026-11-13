@@ -1,3 +1,6 @@
+import type { AgentPermissionMode } from "@pigcode/contracts"
+import { PlanToggle } from "./plan-toggle"
+import { permissionNeedsConfirmation } from "./permission-options"
 /**
  * 输入框工具栏里的模型与权限：有可选 Agent 时是模型选择器（权限在它的底栏里），
  * 没有时只剩一个权限胶囊。开启完全访问的确认框画在选择器外面。
@@ -20,8 +23,10 @@ export interface ComposerModelControlsProps {
   onSelectModel: (choice: ComposerModelChoice) => void
   /** 调用方允许切换模型。 */
   selectable: boolean
+  planMode: boolean
+  onPlanMode?: ((value: boolean) => void) | undefined
   permissionMode: PermissionMode
-  permissionModes: readonly PermissionMode[]
+  permissionModes: readonly AgentPermissionMode[]
   onPermissionMode?: ((mode: PermissionMode) => void) | undefined
   running: boolean
   side: "top" | "bottom"
@@ -39,6 +44,8 @@ export function ComposerModelControls({
   onSelectModel,
   selectable,
   permissionMode,
+  planMode,
+  onPlanMode,
   permissionModes,
   onPermissionMode,
   running,
@@ -46,15 +53,18 @@ export function ComposerModelControls({
   open,
   onOpenChange,
 }: ComposerModelControlsProps) {
-  const permission = usePermissionChange(permissionMode, onPermissionMode)
+  const permission = usePermissionChange(permissionMode, permissionModes, onPermissionMode)
   if (agents.length === 0) {
     return (
-      <PermissionMenu
-        value={permissionMode}
-        modes={permissionModes}
-        onChange={onPermissionMode}
-        side={side}
-      />
+      <>
+        {onPlanMode ? <PlanToggle value={planMode} onChange={onPlanMode} /> : null}
+        <PermissionMenu
+          value={permissionMode}
+          modes={permissionModes}
+          onChange={onPermissionMode}
+          side={side}
+        />
+      </>
     )
   }
   return (
@@ -67,12 +77,19 @@ export function ComposerModelControls({
         onLoadModels={onLoadModels}
         onSelectModel={onSelectModel}
         permissionMode={permissionMode}
+        planMode={planMode}
+        onPlanMode={onPlanMode}
         permissionModes={permissionModes}
         onPermissionMode={
           onPermissionMode
             ? (mode) => {
                 // 完全访问的确认框画在选择器外面，先把选择器关掉。
-                if (mode === "danger-full-access") onOpenChange(false)
+                if (
+                  permissionModes.some(
+                    (item) => item.id === mode && permissionNeedsConfirmation(item),
+                  )
+                )
+                  onOpenChange(false)
                 permission.request(mode)
               }
             : undefined

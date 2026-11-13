@@ -1,46 +1,16 @@
 // 负责定义会话输入区的权限、思考深度、模型选择和键盘选项。
-import type { KnownReasoningEffort, PermissionMode, ReasoningEffort } from "@pigcode/contracts"
+import type {
+  AgentExecutionModes,
+  KnownReasoningEffort,
+  PermissionMode,
+  ReasoningEffort,
+} from "@pigcode/contracts"
 import type { MessageKey } from "@pigcode/ui-primitives"
 
 export type { PermissionMode, ReasoningEffort }
 
 /** 纯键盘事件结果。 */
 export type ComposerKeyAction = "submit" | "newline" | "ignore"
-
-/** 权限菜单里的顺序；完全访问放在最后，选中前需要确认。 */
-export const permissionModes = [
-  "workspace-write",
-  "plan",
-  "read-only",
-  "danger-full-access",
-] as const satisfies readonly PermissionMode[]
-
-/** ⇧Tab 轮换的权限；完全访问不参与轮换，只能从菜单里显式开启。 */
-export const cyclePermissionModes = [
-  "workspace-write",
-  "plan",
-  "read-only",
-] as const satisfies readonly PermissionMode[]
-
-/** 权限模式的文案。 */
-export const permissionKeys: Record<
-  PermissionMode,
-  { label: MessageKey; description: MessageKey }
-> = {
-  "workspace-write": {
-    label: "composer.permission.ask",
-    description: "composer.permission.ask.description",
-  },
-  plan: { label: "composer.permission.plan", description: "composer.permission.plan.description" },
-  "read-only": {
-    label: "composer.permission.readOnly",
-    description: "composer.permission.readOnly.description",
-  },
-  "danger-full-access": {
-    label: "composer.permission.full",
-    description: "composer.permission.full.description",
-  },
-}
 
 /** 已知思考深度的文案；各 agent 只展示自己模型支持的档位。 */
 export const effortKeys: Record<KnownReasoningEffort, MessageKey> = {
@@ -69,15 +39,7 @@ export function getComposerKeyAction(key: string, shiftKey: boolean): ComposerKe
   return shiftKey ? "newline" : "submit"
 }
 
-/** 轮换到下一个权限；当前是不在轮换里的模式（完全访问）时回到默认。 */
-export function nextPermissionMode(
-  current: PermissionMode,
-  available: readonly PermissionMode[],
-): PermissionMode {
-  const cycle = cyclePermissionModes.filter((mode) => available.includes(mode))
-  const index = cycle.indexOf(current as (typeof cyclePermissionModes)[number])
-  return cycle[(index + 1) % cycle.length] ?? "workspace-write"
-}
+export { nextPermissionMode } from "./permission-options"
 
 /** 输入框里可选的一项：一个 Agent 实例（默认实例就是 Agent 自己）。 */
 export interface ComposerAgent {
@@ -87,6 +49,7 @@ export interface ComposerAgent {
   agentId: string
   /** 显示名：实例名；默认实例用 Agent 名。 */
   label: string
+  executionModes?: AgentExecutionModes | null
   /** 检测到 CLI 未安装时为 false；未知时视为可用。 */
   installed?: boolean | undefined
 }

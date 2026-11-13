@@ -12,12 +12,12 @@ import {
   addSurface,
   closeSurface,
   openFileSurface,
+  updateSurface,
   type PanelSurface,
   type PanelSurfaceState,
 } from "@pigcode/ui-workbench"
 import { DiscardDraftDialog } from "./discard-draft-dialog"
 import { getDraft, setDraft, useDraftVersion } from "./file-drafts"
-import { FileSurface } from "./files-surface"
 import { usePullRequest } from "./use-pull-request"
 import { useWorktrees } from "./use-worktrees"
 import { scopeThreadId, type WorkspaceScope } from "./workspace-scope"
@@ -46,6 +46,8 @@ export interface WorkbenchPanelProps {
   projectName: string
   /** agent 改过文件（工具调用结束、run 结束）时递增，文件树与打开的文件据此重读。 */
   workspaceRevision: number
+  checkoutRevision: number
+  onCheckoutChanged: () => void
 }
 
 let surfaceSeq = 0
@@ -77,6 +79,8 @@ export function WorkbenchPanel({
   onError,
   projectName,
   workspaceRevision,
+  checkoutRevision,
+  onCheckoutChanged,
 }: WorkbenchPanelProps) {
   const { t } = useLocale()
   const surfaceContributions = useContributions("surface")
@@ -87,13 +91,13 @@ export function WorkbenchPanel({
     () => (threadId ? { threadId } : { projectId: projectId ?? "" }),
     [threadId, projectId],
   )
-  const tab: string | null =
-    panel.surfaces.find((surface) => surface.id === panel.activeId)?.kind ?? null
+  const activeSurface = panel.surfaces.find((surface) => surface.id === panel.activeId)
+  const tab = activeSurface?.kind ?? null
   // 保存文件、恢复检查点、切换 worktree 都会改动工作目录，与 agent 改文件一样要让文件树、
   // git 标记与打开的文件重读。
   const [localRevision, setLocalRevision] = useState(0)
-  const revision = workspaceRevision + localRevision
-  const [pendingClose, setPendingClose] = useState<PanelSurface | null>(null)
+  const revision = workspaceRevision + localRevision + checkoutRevision
+  const [pendingClose, setPendingClose] = useState<PanelSurface[] | null>(null)
   const draftVersion = useDraftVersion()
   const [checkpoints, setCheckpoints] = useState<CheckpointRecord[]>([])
   const [checkpointError, setCheckpointError] = useState<string | null>(null)
@@ -103,10 +107,8 @@ export function WorkbenchPanel({
   const [diffError, setDiffError] = useState<string | null>(null)
   const [diffBase, setDiffBase] = useState<string | null>(null)
   // 切换或新建 worktree 会换掉线程的工作目录，同样要重读文件树与打开的文件。
-  const worktrees = useWorktrees(connection, threadId, onError, () =>
-    setLocalRevision((count) => count + 1),
-  )
-  const pr = usePullRequest(connection, scope, tab === "pr")
+  const worktrees = useWorktrees(connection, threadId, onError, onCheckoutChanged)
+  const pr = usePullRequest(connection, scope, tab === "pr", checkoutRevision)
 
   /** 重新拉取 checkpoint 列表；Diff 与 Checkpoint tab 共用。检查点属于会话的 run，草稿里没有。 */
   const refreshCheckpoints = useCallback(async (): Promise<void> => {
@@ -213,19 +215,68 @@ export function WorkbenchPanel({
     )
   }
 
-  /** 关闭标签；有未保存修改的文件标签先确认。 */
-  function close(id: string): void {
-    const surface = panel.surfaces.find((item) => item.id === id)
-    if (surface?.kind === "file" && surface.path && getDraft(slotKey, surface.path) !== null) {
-      setPendingClose(surface)
-      return
-    }
-    onPanelChange((state) => closeSurface(state, id))
+  const hasDraft = (surface: PanelSurface) =>
+    surface.kind === FILE_SURFACE_KIND &&
+    surface.path !== undefined &&
+    getDraft(slotKey, surface.path) !== null
+
+  function closeTabs(tabs: readonly PanelSurface[]): void {
+    onPanelChange((state) => tabs.reduce((next, surface) => closeSurface(next, surface.id), state))
   }
 
-  /** 打开文件标签；从文件树标签打开时文件树收进文件标签的侧栏，原标签被替换。 */
-  function openFile(path: string, replace?: string): void {
-    onPanelChange((state) => openFileSurface(state, path, nextSurfaceId(), { replace }))
+  /** 批量关闭时先确认所有草稿，再一起关闭。 */
+  function requestClose(tabs: PanelSurface[]): void {
+    if (tabs.some(hasDraft)) {
+      setPendingClose(tabs)
+      return
+    }
+    closeTabs(tabs)
+  }
+
+  function close(id: string): void {
+    requestClose(panel.surfaces.filter((item) => item.id === id))
+  }
+
+  async function showFileTabMenu(id: string, point: { x: number; y: number }): Promise<void> {
+    const popup = window.pigcodeNative?.popupMenu
+    if (!popup) return
+    const choice = await popup(
+      [
+        { id: "close", label: t("files.tabs.close") },
+        {
+          id: "close-others",
+          label: t("files.tabs.closeOthers"),
+          enabled: panel.surfaces.length > 1,
+        },
+        { id: "close-all", label: t("files.tabs.closeAll") },
+      ],
+      point,
+    )
+    if (choice === "close") close(id)
+    else if (choice === "close-others")
+      requestClose(panel.surfaces.filter((surface) => surface.id !== id))
+    else if (choice === "close-all") requestClose(panel.surfaces)
+  }
+
+  /** 单击复用当前预览，显式打开或编辑过的标签保留。 */
+  function openFile(path: string, sourceId: string, preview: boolean): void {
+    onPanelChange((state) => {
+      const source = state.surfaces.find((surface) => surface.id === sourceId)
+      const currentPreview = state.surfaces.find((surface) => surface.preview)
+      const alreadyOpen = state.surfaces.some(
+        (surface) => surface.kind === FILE_SURFACE_KIND && surface.path === path,
+      )
+      const replace =
+        preview &&
+        !alreadyOpen &&
+        currentPreview?.path &&
+        getDraft(slotKey, currentPreview.path) === null
+          ? currentPreview.id
+          : source?.kind === "files"
+            ? source.id
+            : undefined
+      return openFileSurface(state, path, nextSurfaceId(), { replace, preview })
+    })
   }
 
   // 文件标签的标题后面带一个圆点表示未保存。
@@ -248,6 +299,9 @@ export function WorkbenchPanel({
     revision,
     onError,
     onSaved: () => setLocalRevision((count) => count + 1),
+    onEdit: activeSurface?.preview
+      ? () => onPanelChange((state) => updateSurface(state, activeSurface.id, { preview: false }))
+      : undefined,
   }
 
   const context: WorkbenchContextValue = {
@@ -288,23 +342,25 @@ export function WorkbenchPanel({
           activeId={panel.activeId}
           onActivate={(id) => onPanelChange((state) => ({ ...state, activeId: id }))}
           onClose={close}
+          onFileTabMenu={(id, point) =>
+            void showFileTabMenu(id, point).catch((error: unknown) => onError(messageOf(error)))
+          }
           onAdd={add}
           controls={controls}
         >
+          {activeSurface && (tab === FILE_SURFACE_KIND || tab === "files") ? (
+            <Fragment key="file-navigation">
+              {surfaceContributions
+                .find((item) => item.id === "files")
+                ?.render({
+                  tab: activeSurface,
+                  active: true,
+                })}
+            </Fragment>
+          ) : null}
           {panel.surfaces.map((surface) => {
+            if (surface.kind === FILE_SURFACE_KIND || surface.kind === "files") return null
             const active = surface.id === panel.activeId
-            if (surface.kind === FILE_SURFACE_KIND) {
-              return active ? (
-                <div key={surface.id} className="surface-pane">
-                  <FileSurface
-                    {...fileProps}
-                    path={surface.path ?? ""}
-                    line={surface.line}
-                    onOpenFile={(path) => openFile(path)}
-                  />
-                </div>
-              ) : null
-            }
             // 已经注销的 Surface（插件刚停用）不渲染；App 随即关掉它的标签。
             const contribution = surfaceContributions.find((item) => item.id === surface.kind)
             if (!contribution || (!active && !contribution.keepMounted)) return null
@@ -314,14 +370,15 @@ export function WorkbenchPanel({
           })}
         </RightPanel>
         <DiscardDraftDialog
-          file={pendingClose?.title ?? null}
+          files={pendingClose?.filter(hasDraft).map((surface) => surface.title) ?? null}
           onCancel={() => setPendingClose(null)}
           onDiscard={() => {
-            const surface = pendingClose
             setPendingClose(null)
-            if (!surface) return
-            if (surface.path) setDraft(slotKey, surface.path, null)
-            onPanelChange((state) => closeSurface(state, surface.id))
+            if (!pendingClose) return
+            for (const surface of pendingClose) {
+              if (surface.path && hasDraft(surface)) setDraft(slotKey, surface.path, null)
+            }
+            closeTabs(pendingClose)
           }}
         />
       </div>

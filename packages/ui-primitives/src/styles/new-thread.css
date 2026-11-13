@@ -16,6 +16,7 @@
   width: 100%;
   max-width: var(--col);
   margin: 0 auto;
+  container: new-thread / inline-size;
 }
 
 /* ─── 问候 ─────────────────────────────────────────────── */
@@ -94,6 +95,214 @@
   width: 300px;
   max-height: min(var(--available-height, 360px), 360px);
   overflow-y: auto;
+}
+
+.composer-head:has(.draft-branch) {
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+}
+.composer-head:has(.draft-branch) .draft-project {
+  max-width: 35%;
+}
+.draft-workspace-divider {
+  flex: none;
+  width: var(--hair);
+  height: var(--icon-sm);
+  margin-inline: var(--space-2);
+  background: var(--border);
+}
+.composer-head .draft-branch {
+  max-width: min(230px, 42%);
+  color: var(--muted);
+}
+.composer-head .draft-branch:hover,
+.composer-head .draft-branch[aria-expanded="true"] {
+  color: var(--fg);
+}
+.composer-head .draft-project > .ic,
+.composer-head .draft-branch > .ic {
+  flex: none;
+}
+.composer-head .draft-worktree {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: none;
+  margin-left: auto;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-5);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition: color var(--t-fast);
+}
+.composer-head .draft-worktree:hover,
+.composer-head .draft-worktree[data-checked] {
+  color: var(--fg-2);
+}
+.composer-head .draft-worktree:has([data-disabled]) {
+  cursor: default;
+  color: var(--muted);
+}
+.draft-worktree .switch {
+  width: var(--control-md);
+  height: calc(var(--control-xs) - var(--space-2));
+}
+.draft-worktree .switch > .switch-thumb {
+  width: var(--space-6);
+  height: var(--space-6);
+}
+.draft-worktree .switch[aria-checked="true"] > .switch-thumb {
+  transform: translateX(var(--space-6));
+}
+.popup.draft-branch-menu {
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(320px, var(--available-height, 320px));
+  overflow: hidden;
+  background: var(--popover);
+  transform-origin: var(--transform-origin);
+}
+.draft-branch-search {
+  flex: none;
+  padding: var(--space-3) var(--space-3);
+  border-bottom: var(--hair) solid var(--divider);
+}
+.draft-branch-search .search-field {
+  gap: var(--space-4);
+}
+.draft-branch-search .draft-branch-input,
+.draft-branch-search .draft-branch-input:focus {
+  box-shadow: none;
+  background: none;
+}
+.draft-branch-search .ic {
+  flex: none;
+  color: var(--muted);
+}
+.draft-branch-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-3);
+  scroll-padding-block: var(--space-3);
+}
+.draft-branch-group {
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.draft-branch-list .draft-branch-option {
+  min-height: var(--control-lg);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-sm);
+}
+.draft-branch-option[aria-current="true"] {
+  background: var(--active);
+  color: var(--fg);
+}
+.draft-branch-option[aria-current="true"] .draft-branch-name {
+  font-weight: 500;
+}
+.draft-branch-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--icon-sm);
+  color: var(--accent);
+}
+.draft-branch-check > .ic {
+  color: inherit;
+}
+.draft-branch-current {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.draft-branch-footer {
+  flex: none;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-top: var(--hair) solid var(--divider);
+}
+.draft-branch-create {
+  min-height: var(--control-lg);
+  gap: var(--space-4);
+  padding-inline: var(--space-4);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+}
+.draft-branch-create:hover,
+.draft-branch-create:focus-visible {
+  background: var(--active);
+}
+.draft-branch-note {
+  flex: none;
+  margin: 0;
+  padding: var(--space-5) var(--space-6);
+  border-top: var(--hair) solid var(--divider);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.draft-branch-empty {
+  padding: var(--space-7) var(--space-6);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.draft-branch-empty:empty {
+  display: none;
+}
+@container new-thread (max-width: 380px) {
+  .composer-head:has(.draft-branch) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: var(--space-2);
+  }
+  .composer-head:has(.draft-branch) .draft-project {
+    max-width: 100%;
+    justify-self: start;
+  }
+  .draft-workspace-divider {
+    display: none;
+  }
+  .composer-head .draft-worktree {
+    grid-column: 2;
+    grid-row: 1;
+    margin-left: 0;
+  }
+  .composer-head .draft-branch {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    max-width: 100%;
+    justify-self: start;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .popup.draft-branch-menu {
+    transition:
+      opacity var(--t-fast) var(--ease),
+      transform var(--t-fast) var(--ease);
+  }
+  .draft-branch-menu[data-starting-style],
+  .draft-branch-menu[data-ending-style] {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+.draft-workspace-status {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-3) 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.draft-workspace-status.error-text {
+  color: var(--bad-text);
+  white-space: pre-wrap;
 }
 
 /* ─── 输入框下方的建议：描边小胶囊，点一下预填进输入框 ─────── */

@@ -1,3 +1,4 @@
+import { TEST_MODES } from "./permission-fixture"
 /** 验证 composer 的提交、清空、停止、纯文本正文、历史翻找、草稿与权限切换。 */
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
@@ -17,7 +18,7 @@ afterEach(() => {
 function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
   const view = render(
     <LocaleProvider locale="zh-CN">
-      <Composer onSubmit={() => {}} onStop={() => {}} {...props} />
+      <Composer executionModes={TEST_MODES} onSubmit={() => {}} onStop={() => {}} {...props} />
     </LocaleProvider>,
   )
   return {
@@ -26,7 +27,13 @@ function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
     rerenderWith: (next: Partial<ComponentProps<typeof Composer>>) =>
       view.rerender(
         <LocaleProvider locale="zh-CN">
-          <Composer onSubmit={() => {}} onStop={() => {}} {...props} {...next} />
+          <Composer
+            executionModes={TEST_MODES}
+            onSubmit={() => {}}
+            onStop={() => {}}
+            {...props}
+            {...next}
+          />
         </LocaleProvider>,
       ),
   }
@@ -231,32 +238,36 @@ describe("Composer", () => {
     const { editor, rerenderWith } = renderComposer({ onPermissionMode })
     await userEvent.click(editor)
     await userEvent.keyboard("{Shift>}{Tab}{/Shift}")
-    expect(onPermissionMode).toHaveBeenLastCalledWith("plan")
+    expect(onPermissionMode).toHaveBeenLastCalledWith("approval-required")
 
-    rerenderWith({ onPermissionMode, permissionMode: "read-only" })
+    rerenderWith({ onPermissionMode, permissionMode: "auto" })
     await userEvent.click(screen.getByRole("textbox"))
     await userEvent.keyboard("{Shift>}{Tab}{/Shift}")
-    expect(onPermissionMode).toHaveBeenLastCalledWith("workspace-write")
+    expect(onPermissionMode).toHaveBeenLastCalledWith("approval-required")
 
-    rerenderWith({ onPermissionMode, permissionMode: "workspace-write", canPlan: false })
+    rerenderWith({
+      onPermissionMode,
+      permissionMode: "approval-required",
+      executionModes: { ...TEST_MODES, plan: false },
+    })
     await userEvent.click(screen.getByRole("textbox"))
     await userEvent.keyboard("{Shift>}{Tab}{/Shift}")
-    expect(onPermissionMode).toHaveBeenLastCalledWith("read-only")
+    expect(onPermissionMode).toHaveBeenLastCalledWith("auto-accept-edits")
   })
 
   it("asks before turning on full access from the permission menu", async () => {
     const onPermissionMode = vi.fn()
-    renderComposer({ onPermissionMode })
-    const chip = screen.getByRole("button", { name: "权限: 每次询问" })
+    renderComposer({ onPermissionMode, permissionMode: "approval-required" })
+    const chip = screen.getByRole("button", { name: "权限: 监督审批" })
     await userEvent.click(chip)
-    await userEvent.click(await screen.findByRole("menuitem", { name: /只读/ }))
-    expect(onPermissionMode).toHaveBeenLastCalledWith("read-only")
+    await userEvent.click(await screen.findByRole("menuitem", { name: /接受编辑/ }))
+    expect(onPermissionMode).toHaveBeenLastCalledWith("auto-accept-edits")
 
     await userEvent.click(chip)
     await userEvent.click(await screen.findByRole("menuitem", { name: /完全访问/ }))
     expect(onPermissionMode).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole("dialog", { name: "开启完全访问？" })).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "开启完全访问" }))
-    expect(onPermissionMode).toHaveBeenLastCalledWith("danger-full-access")
+    expect(await screen.findByRole("dialog", { name: "启用完全访问？" })).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "启用完全访问" }))
+    expect(onPermissionMode).toHaveBeenLastCalledWith("full-access")
   })
 })

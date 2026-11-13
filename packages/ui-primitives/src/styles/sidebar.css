@@ -184,18 +184,18 @@
 .sess {
   margin-bottom: var(--space-1);
 }
-.icon-btn.proj-add {
+.icon-btn:is(.proj-add, .proj-files) {
   width: var(--control-xs);
   height: var(--control-xs);
   border-radius: var(--r-sm);
   opacity: 0;
 }
-.proj-row:hover .proj-add,
-.proj-row:has(:focus-visible) .proj-add {
+.proj-row:hover :is(.proj-add, .proj-files),
+.proj-row:has(:focus-visible) :is(.proj-add, .proj-files) {
   opacity: 1;
 }
-.icon-btn.proj-add:hover,
-.icon-btn.proj-add:focus-visible {
+.icon-btn:is(.proj-add, .proj-files):hover,
+.icon-btn:is(.proj-add, .proj-files):focus-visible {
   background: none;
   color: var(--fg);
 }

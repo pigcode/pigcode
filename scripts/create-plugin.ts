@@ -460,11 +460,7 @@ function printResult(target: string, kind: Kind, pkgName: string, files: string[
   console.log(`  ${target}`)
   console.log("")
   console.log("安装方式:")
-  if (kind === "agent") {
-    console.log("  桌面端: 设置 → Agent → 安装 agent，填入上面的路径")
-  } else {
-    console.log("  桌面端: 设置 → 插件 → 在“插件目录或 npm 包”中填入上面的路径")
-  }
+  console.log("  桌面端在侧栏打开「插件 → 添加 → 安装插件」，填入上面的路径。")
   console.log(`  RPC:    plugin.installLocal { "sourceDir": "${target}" }`)
   if (kind === "ui") {
     console.log("")

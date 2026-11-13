@@ -35,6 +35,7 @@ export type { AgentModelInfo } from "./agent-models"
 
 /** 详情面板需要的回调；保存失败时抛错，由面板展示原因。 */
 export interface AgentEditorProps {
+  cliUpdate?: ReactNode
   agent: AgentSummary
   /** 正在编辑的实例。 */
   instance: AgentInstance
@@ -54,7 +55,6 @@ export interface AgentEditorProps {
   ) => Promise<void>
   onRemoveInstance: (instanceId: string) => Promise<void>
   onSetDefaultInstance: (instanceId: string) => Promise<void>
-  onUninstall?: (() => Promise<void>) | undefined
   onPickPath?: PickPath | undefined
   /** 打开外部链接（官网）；没有时不显示链接。 */
   onOpenExternal?: ((url: string) => void) | undefined
@@ -125,6 +125,7 @@ function Block({
 
 /** 渲染实例的详情面板；保存成功后以 Host 返回的值为准。 */
 export function AgentEditor({
+  cliUpdate,
   agent,
   instance,
   status,
@@ -136,7 +137,6 @@ export function AgentEditor({
   onUpdateInstance,
   onRemoveInstance,
   onSetDefaultInstance,
-  onUninstall,
   onPickPath,
   onOpenExternal,
 }: AgentEditorProps) {
@@ -145,7 +145,6 @@ export function AgentEditor({
   const [label, setLabel] = useState(instance.label)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
-  const [confirmUninstall, setConfirmUninstall] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
 
   // Host 推来新的值（保存成功、别处修改、切换实例）时重置草稿。
@@ -154,7 +153,6 @@ export function AgentEditor({
     setLabel(instance.label)
     setNotice(null)
     setConfirmRemove(false)
-    setConfirmUninstall(false)
   }, [instance.instanceId, instance.label, instance.values])
 
   const dirty = useMemo(() => !sameValues(draft, instance.values), [draft, instance.values])
@@ -253,6 +251,7 @@ export function AgentEditor({
         onReveal={onReveal}
         action={isDefault ? setDefaultButton : undefined}
         onOpenExternal={onOpenExternal}
+        versionControl={cliUpdate}
       />
 
       {tabs.length > 0 ? (
@@ -406,27 +405,6 @@ export function AgentEditor({
       ) : null}
 
       <footer className="agent-actions" data-dirty={dirty || undefined}>
-        {onUninstall ? (
-          confirmUninstall ? (
-            <Button
-              size="sm"
-              variant="danger"
-              type="button"
-              onClick={() => void onUninstall().finally(() => setConfirmUninstall(false))}
-            >
-              {t("agents.uninstallConfirm")}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="ghost"
-              type="button"
-              onClick={() => setConfirmUninstall(true)}
-            >
-              {t("agents.uninstall")}
-            </Button>
-          )
-        ) : null}
         <Button
           size="sm"
           variant="ghost"

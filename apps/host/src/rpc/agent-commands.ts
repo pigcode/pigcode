@@ -65,6 +65,12 @@ export async function dispatchAgentCommand(
 ): Promise<unknown> {
   const value = parsed as Params
   switch (command) {
+    case "agent.cliUpdates":
+      return ctx.agents.cliUpdates()
+    case "agent.checkCliUpdates":
+      return ctx.agents.checkCliUpdates(value.instanceId as string | undefined)
+    case "agent.updateCli":
+      return ctx.agents.updateCli(value.instanceId as string)
     case "agent.detect":
       return ctx.agents.detect({
         agentId: value.agentId as string | undefined,

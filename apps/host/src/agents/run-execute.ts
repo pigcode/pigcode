@@ -1,3 +1,4 @@
+import { updateThreadModes } from "./execution-modes"
 /** 执行一轮 run：调用 driver.send，把事件映射成线程事件；原生会话接不上时换新会话重试一次。 */
 import type { Context } from "cordis"
 import type { AgentRuntime, ApprovalDecision, QuestionRequest, UserInput } from "./driver"
@@ -89,6 +90,10 @@ export function createExecute(
           return Promise.resolve<ApprovalDecision>("allow-once")
         clearStall()
         return deps.requestApproval(run, request).finally(armStall)
+      },
+      setPlanMode: (planMode) => {
+        if (!isCurrent(run) || deps.ctx.threads.get(run.threadId)?.planMode === planMode) return
+        updateThreadModes(deps.ctx, run.threadId, { planMode })
       },
       askQuestions: (request) => {
         if (!isCurrent(run)) return Promise.resolve([])

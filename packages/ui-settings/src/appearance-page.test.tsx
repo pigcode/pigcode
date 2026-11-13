@@ -1,6 +1,7 @@
 /** 外观设置页：模式缩略图、主题列表、颜色色片和主题代码面板都写进对应的外观设置。 */
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { useState } from "react"
 import {
   LocaleProvider,
@@ -139,6 +140,25 @@ describe("AppearancePage", () => {
     fireEvent.change(field, { target: { value: "Berkeley Mono" } })
     fireEvent.blur(field)
     expect(latest.codeFont).toBe("Berkeley Mono")
+  })
+
+  it("selects a preset with the keyboard and resets to the system font", async () => {
+    renderPage()
+    const user = userEvent.setup()
+    const field = screen.getByRole<HTMLInputElement>("combobox", { name: "界面字体" })
+
+    await user.type(field, "Inter")
+    await screen.findByRole("option", { name: "Inter" })
+    await user.keyboard("{ArrowDown}{Enter}")
+    expect(latest.light.uiFont).toBe("inter")
+    expect(latest.dark.uiFont).toBe("inter")
+    expect(field.value).toBe("Inter")
+
+    await user.click(screen.getByRole("button", { name: "显示界面字体预设" }))
+    await user.click(await screen.findByRole("option", { name: "系统默认" }))
+    expect(latest.light.uiFont).toBe("system")
+    expect(latest.dark.uiFont).toBe("system")
+    expect(field.value).toBe("")
   })
 
   it("imports a theme file into my themes, uses it, and can delete it again", async () => {

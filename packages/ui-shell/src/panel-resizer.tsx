@@ -13,10 +13,13 @@ import { createPortal } from "react-dom"
 import { useLocale } from "@pigcode/ui-primitives"
 
 /** 一块可调宽度的面板：范围、默认宽度与保存的位置；最大宽度可以随窗口变化。 */
-interface PanelWidth {
+interface PanelSize {
   min: number
   initial: number
   max: () => number
+}
+
+interface PanelWidth extends PanelSize {
   storageKey: string
 }
 
@@ -40,7 +43,7 @@ const RIGHT: PanelWidth = {
 /** 方向键一次调整的宽度。 */
 const KEY_STEP = 24
 
-function clampWidth(panel: PanelWidth, width: number): number {
+function clampWidth(panel: PanelSize, width: number): number {
   return Math.min(panel.max(), Math.max(panel.min, Math.round(width)))
 }
 
@@ -89,7 +92,7 @@ export function useRightWidth(): [number, (width: number) => void] {
 }
 
 interface ResizerProps {
-  panel: PanelWidth
+  panel: PanelSize
   /** 分隔条在面板的哪一边：往这一边拖、按这一边的方向键时面板变宽。 */
   edge: "left" | "right"
   label: string
@@ -98,7 +101,8 @@ interface ResizerProps {
   onChange: (width: number) => void
 }
 
-function Resizer({ panel, edge, label, className, width, onChange }: ResizerProps) {
+/** 可拖动、用键盘调整或双击复位的面板分隔条。 */
+export function Resizer({ panel, edge, label, className, width, onChange }: ResizerProps) {
   const [dragging, setDragging] = useState(false)
   const endDrag = useRef<(() => void) | null>(null)
   const grow = edge === "right" ? 1 : -1

@@ -1,5 +1,6 @@
 /** Git 服务：状态、diff 与隐藏 ref checkpoint；所有命令都通过 execFile 直接执行。 */
 import type { Context } from "cordis"
+import type { GitBranches } from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { rm } from "node:fs/promises"
@@ -18,6 +19,7 @@ const CHECKPOINT_PREFIX = "refs/pigcode/checkpoints"
 const INDEX_PREFIX = "pigcode-index-"
 /** 无法识别的 git 仓库时使用的错误码。 */
 export const NOT_A_GIT_REPO = "NOT_A_GIT_REPO"
+const GIT_ENV = { ...process.env, LC_ALL: "C" }
 
 /** 一条工作区变更；status 保留 porcelain 的两位状态码。 */
 export interface GitChange {
@@ -41,6 +43,8 @@ export interface CheckpointRef {
 export interface GitService {
   /** scope 是会话 id，或者新会话草稿的项目（看项目根目录）。 */
   status(scope: WorkspaceScope): Promise<GitStatus>
+  branches(projectId: string): Promise<GitBranches | null>
+  switchBranch(projectId: string, branch: string, create?: boolean): Promise<GitBranches | null>
   diff(scope: WorkspaceScope, base: string, head: string): Promise<string>
   capture(threadId: string, runId: string, phase: string): Promise<CheckpointRef>
   restore(threadId: string, commitSha: string): Promise<string[]>
@@ -78,6 +82,21 @@ export class NotAGitRepoError extends Error {
 export const apply: GitPlugin = (ctx) => {
   const service: GitService = {
     status: (scope) => status(scopeCwd(ctx, scope)),
+    branches: (projectId) => branches(scopeCwd(ctx, { projectId })),
+    async switchBranch(projectId, branch, create = false) {
+      const cwd = scopeCwd(ctx, { projectId })
+      if (branch.startsWith("-") || branch.includes("\0")) throw new Error("Invalid branch name")
+      await runGit(cwd, ["check-ref-format", `refs/heads/${branch}`]).catch(() => {
+        throw new Error(`Invalid branch name: ${branch}`)
+      })
+      await runGit(cwd, [
+        "switch",
+        "--no-guess",
+        "--no-overwrite-ignore",
+        ...(create ? ["--create", branch] : ["--", branch]),
+      ])
+      return branches(cwd)
+    },
     diff: (scope, base, head) => diff(scopeCwd(ctx, scope), base, head),
     capture: (threadId, runId, phase) => capture(threadCwd(ctx, threadId), threadId, runId, phase),
     restore: (threadId, commitSha) => restore(threadCwd(ctx, threadId), commitSha),
@@ -87,10 +106,34 @@ export const apply: GitPlugin = (ctx) => {
 
 apply.inject = inject
 
+/** 读取分支和 HEAD，不扫描工作区文件；普通目录和 bare 仓库没有分支控件。 */
+async function branches(cwd: string): Promise<GitBranches | null> {
+  try {
+    if ((await runGit(cwd, ["rev-parse", "--is-inside-work-tree"])).trim() !== "true") return null
+  } catch (error) {
+    if (error instanceof NotAGitRepoError) return null
+    throw error
+  }
+  const [branch, head, refs] = await Promise.all([
+    currentBranch(cwd),
+    headCommit(cwd),
+    runGit(cwd, ["for-each-ref", "--format=%(refname)%00%(symref)", "refs/heads", "refs/remotes"]),
+  ])
+  const localBranches: string[] = []
+  const remoteBranches: string[] = []
+  for (const line of refs.split(/\r?\n/)) {
+    const [ref, symbolicTarget] = line.split("\0")
+    if (!ref || symbolicTarget) continue
+    if (ref.startsWith("refs/heads/")) localBranches.push(ref.slice("refs/heads/".length))
+    if (ref.startsWith("refs/remotes/")) remoteBranches.push(ref.slice("refs/remotes/".length))
+  }
+  return { currentBranch: branch, head, localBranches, remoteBranches }
+}
+
 /** 读取 porcelain 状态；分支名单独查询，detached HEAD 返回 null。 */
 export async function status(cwd: string): Promise<GitStatus> {
   const [output, branch] = await Promise.all([
-    runGit(cwd, ["status", "--porcelain=v1", "-z"]),
+    runGit(cwd, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
     currentBranch(cwd),
   ])
   return { branch, changed: parseStatus(output) }
@@ -215,7 +258,7 @@ async function runGit(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Pro
     const { stdout } = await exec("git", args, {
       cwd,
       maxBuffer: MAX_BUFFER,
-      env: env ? { ...process.env, ...env } : process.env,
+      env: { ...GIT_ENV, ...env },
     })
     return stdout
   } catch (error) {
@@ -235,8 +278,8 @@ async function runGitOrNull(cwd: string, args: string[]): Promise<string | null>
 
 /** 当前分支名；unborn 分支也能返回名称，detached HEAD 返回 null。 */
 export async function currentBranch(cwd: string): Promise<string | null> {
-  const output = await runGitOrNull(cwd, ["symbolic-ref", "--short", "-q", "HEAD"])
-  return output === null ? null : output.trim() || null
+  const output = await runGitOrNull(cwd, ["symbolic-ref", "-q", "HEAD"])
+  return output?.trim().replace(/^refs\/heads\//, "") || null
 }
 
 /** HEAD 提交；空仓库返回 null，checkpoint 就作为根提交。 */

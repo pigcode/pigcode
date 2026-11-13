@@ -44,7 +44,7 @@ function useAppVersion(): string | null {
 }
 
 /** 渲染通用设置；启动与更新开关只在本页保留状态，侧栏排法保存在本机并同步到侧栏。 */
-export function GeneralPage() {
+export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | undefined } = {}) {
   const { t } = useLocale()
   const [grouping, setGrouping] = useSidebarGrouping()
   const version = useAppVersion()
@@ -139,9 +139,13 @@ export function GeneralPage() {
           {update?.status === "update-available" && update.url ? (
             <Button
               variant="secondary"
-              onClick={() => void nativeBridge()?.openExternal?.(update.url ?? "")}
+              onClick={() =>
+                onShowUpdates
+                  ? onShowUpdates()
+                  : void nativeBridge()?.openExternal?.(update.url ?? "")
+              }
             >
-              {t("settings.general.openDownload")}
+              {t(onShowUpdates ? "updates.view" : "settings.general.openDownload")}
             </Button>
           ) : null}
           <Button

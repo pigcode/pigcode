@@ -96,6 +96,24 @@ describe("CodexDriver options", () => {
       approvalPolicy: "never",
       sandbox: "danger-full-access",
     })
+    // 从完全访问切回默认/只读也必须恢复审批策略，不能复用 never 的旧进程。
+    for (const mode of ["workspace-write", "read-only"] as const) {
+      const previous = transports.at(-1)!
+      const restricted = await driver.createSession({
+        threadId: "t1",
+        cwd: "/tmp",
+        sessionId: "ps_1",
+        nativeSessionId: first.nativeSessionId,
+        permissionMode: mode,
+      })
+      expect(restricted.permissionMode).toBe(mode)
+      expect(previous.closed).toBe(true)
+      expect(messageOf(transports.at(-1)!, "thread/resume")?.params).toMatchObject({
+        threadId: "th_native",
+        approvalPolicy: mode === "read-only" ? "untrusted" : "on-request",
+        sandbox: mode,
+      })
+    }
     await driver.dispose(widened)
   })
 

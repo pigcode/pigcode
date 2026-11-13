@@ -79,28 +79,33 @@ export function TerminalPane({ tab, active }: SurfaceRenderProps) {
   )
 }
 
-/**
- * 文件树：上面是 worktree 选择（worktree 属于会话，新会话草稿里没有）；
- * 打开的文件替换这个标签，文件树收进文件标签的侧栏。
- */
+/** 文件导航与预览共用面板；导航底部保留会话的工作树选择。 */
 export function FilesPane({ tab }: SurfaceRenderProps) {
   const { worktrees, fileProps, openFile } = useWorkbench()
   return (
     <div className="surface-pane workbench-files">
-      {worktrees.available ? (
-        <div className="workbench-worktree-compact">
-          <WorktreePicker
-            worktrees={worktrees.worktrees}
-            activePath={worktrees.activePath}
-            onCreate={worktrees.create}
-            onSwitch={worktrees.switchTo}
-            onRemove={worktrees.remove}
-            busy={worktrees.busy}
-            compact
-          />
-        </div>
-      ) : null}
-      <FilesSurface {...fileProps} onOpenFile={(path) => openFile(path, tab.id)} />
+      <FilesSurface
+        {...fileProps}
+        path={tab.path}
+        line={tab.line}
+        onOpenFile={(path) => openFile(path, tab.id, true)}
+        onOpenFileTab={(path) => openFile(path, tab.id, false)}
+        navigationFooter={
+          worktrees.available ? (
+            <div className="workbench-worktree-compact">
+              <WorktreePicker
+                worktrees={worktrees.worktrees}
+                activePath={worktrees.activePath}
+                onCreate={worktrees.create}
+                onSwitch={worktrees.switchTo}
+                onRemove={worktrees.remove}
+                busy={worktrees.busy}
+                compact
+              />
+            </div>
+          ) : null
+        }
+      />
     </div>
   )
 }

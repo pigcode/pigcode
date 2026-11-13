@@ -67,6 +67,9 @@
   -webkit-app-region: no-drag;
 }
 .window-controls-gap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 1 1 auto;
   min-width: 4px;
 }

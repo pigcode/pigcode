@@ -26,7 +26,7 @@ const claudeFeatures: AgentFeatures = {
 const codexFeatures: AgentFeatures = {
   streaming: true,
   approvals: true,
-  questions: false,
+  questions: true,
   plan: true,
   resume: true,
   fork: true,
@@ -52,7 +52,7 @@ describe("agent features", () => {
   it("keeps Codex feature flags honest", () => {
     const codex = new CodexDriver().features
     expect(codex.approvals).toBe(true)
-    expect(codex.questions).toBe(false)
+    expect(codex.questions).toBe(true)
     // app-server 的 thread/fork 已经实现（driver.test.ts 有回放用例），
     // Host 切模型时也在用，所以这里必须是 true。
     expect(codex.fork).toBe(true)

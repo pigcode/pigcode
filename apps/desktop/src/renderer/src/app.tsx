@@ -1,8 +1,7 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react"
-import type { Thread } from "@pigcode/contracts"
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
-import { useAppearance, type Locale } from "@pigcode/ui-primitives"
+import { translate, useAppearance, type Locale } from "@pigcode/ui-primitives"
 import { requestComposerThreadMention } from "@pigcode/ui-composer"
 export type { ChatControls, CoreDeps } from "./chat-container"
 import {
@@ -11,7 +10,6 @@ import {
   SettingsView,
   settingsPageOrFallback,
   type ShellView,
-  type ThreadStatus,
 } from "@pigcode/ui-shell"
 import {
   EMPTY_SURFACE_STATE,
@@ -47,6 +45,8 @@ import { NEW_THREAD_DRAFT_KEY, draftProjectId } from "./new-thread-draft"
 import { usePanelOpen } from "./use-panel-open"
 import { useWorkspaceSlot } from "./use-workspace-slot"
 import { workspaceRevision } from "./workspace-revision"
+import { mergeChildStatus } from "./thread-status"
+import { UpdateCenterContext, useUpdateCenterState } from "./update-center"
 
 // 工作台（xterm、diff）与底部终端在第一次打开时才加载，冷启动只加载聊天需要的代码。
 const WorkbenchPanel = lazy(() =>
@@ -74,29 +74,6 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-const BUSY: ReadonlySet<ThreadStatus> = new Set(["running", "queued", "waiting-approval"])
-
-/** 侧栏状态：主会话空闲但有子代理在忙时，主会话显示子代理的状态。 */
-export function mergeChildStatus(
-  threads: readonly Thread[],
-  threadStates: Readonly<Record<string, { status: ThreadStatus }>>,
-): Record<string, ThreadStatus> {
-  const result: Record<string, ThreadStatus> = {}
-  for (const [threadId, viewState] of Object.entries(threadStates)) {
-    result[threadId] = viewState.status
-  }
-  for (const thread of threads) {
-    if (!thread.parentThreadId || thread.archivedAt !== null) continue
-    const status = threadStates[thread.id]?.status
-    const parent = result[thread.parentThreadId]
-    if (status && BUSY.has(status) && !(parent && BUSY.has(parent))) {
-      result[thread.parentThreadId] = status
-    }
-  }
-  return result
-}
-
-/** 应用根组件。 */
 export function App({ store, connection, plugins, locale }: AppProps) {
   const state = useAppStore(store)
   const appearance = useAppearance()
@@ -108,6 +85,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     state.status === "connected",
   )
   const agentNames = instanceAgents.names
+  const updates = useUpdateCenterState(connection, store, state.status, agentNames)
   const [view, setView] = useState<ShellView>("chat")
   const [selectedPage, setSelectedPage] = useState<string>(DEFAULT_SETTINGS_PAGE)
   // 选中的设置页被移除（插件停用或卸载）时退回通用页，内容区不留空白。
@@ -131,6 +109,8 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const [history, setHistory] = useState<NavHistory>(EMPTY_HISTORY)
   // 每次进入新会话草稿递增，草稿页据此把光标放回输入框。
   const [draftFocus, setDraftFocus] = useState(0)
+  const [checkoutRevision, setCheckoutRevision] = useState(0)
+  const onCheckoutChanged = useCallback(() => setCheckoutRevision((revision) => revision + 1), [])
   const initialLoadDone = useRef(false)
   const registeredSurfaces = useRef<ReadonlySet<string>>(new Set())
 
@@ -272,16 +252,37 @@ export function App({ store, connection, plugins, locale }: AppProps) {
 
   function toggleTerminal(): void {
     if (!inChat || !slot.scope) return
+    setRightMaximized(false)
     setTerminalStarted(true)
-    setTerminalOpen((value) => !value)
+    setTerminalOpen((value) => rightMaximized || !value)
   }
 
   /** 改一个面板的标签；key 是 slot key（会话 id，或者草稿的 key）。 */
-  function updatePanel(key: string, update: (panel: PanelSurfaceState) => PanelSurfaceState) {
-    setPanels((current) => ({
-      ...current,
-      [key]: update(current[key] ?? EMPTY_SURFACE_STATE),
-    }))
+  const updatePanel = useCallback(
+    (key: string, update: (panel: PanelSurfaceState) => PanelSurfaceState) => {
+      setPanels((current) => ({
+        ...current,
+        [key]: update(current[key] ?? EMPTY_SURFACE_STATE),
+      }))
+    },
+    [],
+  )
+
+  const showRightPanel = useCallback(() => {
+    setRightOpen(true)
+    setRightMaximized(false)
+  }, [setRightOpen])
+
+  function browseProjectFiles(projectId: string): void {
+    const key = slot.draftKeyOf(projectId)
+    startDraft(projectId)
+    updatePanel(key, (panel) =>
+      addSurface(panel, "files", `files-${crypto.randomUUID()}`, () =>
+        translate(locale, "workbench.files"),
+      ),
+    )
+    setRightOpen(true, key)
+    setRightMaximized(false)
   }
 
   // agent 调用浏览器工具时，main 让界面给它的线程开（或亮出）浏览器标签；正在看这个线程时展开右栏。
@@ -291,10 +292,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     threadId: state.activeThreadId,
     view,
     setPanels,
-    onOpenRight: () => {
-      setRightOpen(true)
-      setRightMaximized(false)
-    },
+    onOpenRight: showRightPanel,
     locale,
   })
 
@@ -307,9 +305,22 @@ export function App({ store, connection, plugins, locale }: AppProps) {
         ? openFileSurface(panel, path, `file-${crypto.randomUUID()}`)
         : addSurface(panel, "diff", `diff-${crypto.randomUUID()}`, () => "Diff"),
     )
-    setRightOpen(true)
-    setRightMaximized(false)
+    showRightPanel()
   }
+
+  const openLinkTab = useCallback(
+    (url: string) => {
+      if (!slot.key) return
+      const id = `browser-${crypto.randomUUID()}`
+      const title = new URL(url).host
+      updatePanel(slot.key, (panel) => ({
+        surfaces: [...panel.surfaces, { id, kind: "browser", title, url }],
+        activeId: id,
+      }))
+      showRightPanel()
+    },
+    [slot.key, showRightPanel, updatePanel],
+  )
 
   // 草稿里开的浏览器也挂着；它还不属于哪个会话，agent 用不了，建好会话后才交给那个会话的 agent。
   const { threadOf } = slot
@@ -329,9 +340,9 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const layoutControls = (maximizable: boolean) => (
     <PanelLayoutControls
       rightOpen={rightOpen && slot.scope !== null}
-      onToggleRight={toggleRight}
+      onToggleRight={maximizable || !rightOpen ? toggleRight : undefined}
       terminalOpen={terminalOpen && slot.scope !== null}
-      onToggleTerminal={toggleTerminal}
+      onToggleTerminal={maximizable ? undefined : toggleTerminal}
       {...(maximizable
         ? {
             maximized: rightMaximized,
@@ -345,6 +356,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   return (
     <AppRenderer
       locale={locale}
+      updates={updates.indicator}
       view={view}
       projects={state.projects}
       threads={mainThreads}
@@ -366,6 +378,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
         )
       }}
       onNewThread={startDraft}
+      onBrowseFiles={browseProjectFiles}
       onOpenThread={openThread}
       onRenameThread={(threadId, title) => {
         void renameThread(connection, store, threadId, title).catch((error: unknown) =>
@@ -414,6 +427,8 @@ export function App({ store, connection, plugins, locale }: AppProps) {
               onError={(message) => store.update({ error: message })}
               projectName={activeProjectName}
               workspaceRevision={activeRevision}
+              checkoutRevision={checkoutRevision}
+              onCheckoutChanged={onCheckoutChanged}
             />
           </Suspense>
         ) : undefined
@@ -447,11 +462,14 @@ export function App({ store, connection, plugins, locale }: AppProps) {
           deps={{ connection, store, plugins }}
           rightOpen={rightOpen}
           onToggleRight={toggleRight}
-          layoutControls={rightOpen && slot.scope ? null : layoutControls(false)}
+          layoutControls={layoutControls(false)}
           onOpenFile={(path: string) => openSurface("file", path)}
           onOpenDiff={() => openSurface("diff")}
+          onOpenLinkTab={openLinkTab}
           onOpenThread={openThread}
           draftFocus={draftFocus}
+          checkoutRevision={checkoutRevision}
+          onCheckoutChanged={onCheckoutChanged}
         />
       </div>
       {inChat ? null : view === "plugins" ? (
@@ -472,7 +490,9 @@ export function App({ store, connection, plugins, locale }: AppProps) {
         <SchedulesView deps={{ connection, store, plugins }} onOpenThread={openThread} />
       ) : (
         <AppearanceContext.Provider value={appearance}>
-          <SettingsView page={settingsPage} />
+          <UpdateCenterContext.Provider value={updates}>
+            <SettingsView page={settingsPage} />
+          </UpdateCenterContext.Provider>
         </AppearanceContext.Provider>
       )}
     </AppRenderer>

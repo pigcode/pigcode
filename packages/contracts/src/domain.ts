@@ -27,12 +27,7 @@ export const agentFeaturesSchema = z.object({
 })
 
 /** 线程的执行权限模式。 */
-export const permissionModeSchema = z.enum([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-  "plan",
-])
+export const permissionModeSchema = z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/)
 
 /**
  * 已知的推理强度（思考深度），按从低到高排列；界面给它们起了名字，排序也以它们为准。
@@ -110,6 +105,8 @@ export const threadSchema = z.object({
   lastInstanceId: z.string().min(1).nullable().default(null),
   lastModelId: z.string().nullable(),
   permissionMode: permissionModeSchema,
+  /** 与权限独立，旧客户端没传时按关闭处理。 */
+  planMode: z.boolean().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   archivedAt: z.string().datetime().nullable(),

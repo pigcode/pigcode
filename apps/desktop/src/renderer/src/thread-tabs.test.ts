@@ -2,7 +2,7 @@
 import type { Thread } from "@pigcode/contracts"
 import type { SubagentCall } from "@pigcode/ui-chat"
 import { afterEach, describe, expect, it } from "vitest"
-import { mergeChildStatus } from "./app"
+import { mergeChildStatus } from "./thread-status"
 import {
   buildThreadTabs,
   childThreads,

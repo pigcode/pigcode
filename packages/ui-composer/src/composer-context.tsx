@@ -55,7 +55,7 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function contextsFor(key: string): readonly ComposerContext[] {
+export function contextsFor(key: string): readonly ComposerContext[] {
   return store.get(key) ?? EMPTY
 }
 

@@ -64,6 +64,7 @@ describe("CodexDriver", () => {
 
     expect(messageOf(transport, "initialize")?.params).toEqual({
       clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+      capabilities: { experimentalApi: true },
     })
     expect(messageOf(transport, "thread/start")?.params).toMatchObject({
       cwd: "/tmp/project",
@@ -84,7 +85,7 @@ describe("CodexDriver", () => {
     const { driver, transport } = setup()
     await driver.createSession({ threadId: "t1", cwd: "/tmp", permissionMode: "read-only" })
     expect(messageOf(transport, "thread/start")?.params).toMatchObject({
-      approvalPolicy: "on-request",
+      approvalPolicy: "untrusted",
       sandbox: "read-only",
     })
   })
@@ -100,7 +101,7 @@ describe("CodexDriver", () => {
     expect(messageOf(transport, "thread/resume")?.params).toMatchObject({
       threadId: "th_existing",
       cwd: "/tmp",
-      sandbox: "workspace-write",
+      sandbox: "danger-full-access",
     })
     expect(messageOf(transport, "thread/start")).toBeUndefined()
     expect(session.nativeSessionId).toBe("th_existing")
@@ -122,7 +123,7 @@ describe("CodexDriver", () => {
     expect(messageOf(transport, "thread/fork")?.params).toMatchObject({
       threadId: "th_parent",
       cwd: "/tmp",
-      sandbox: "workspace-write",
+      sandbox: "danger-full-access",
     })
     expect(messageOf(transport, "thread/resume")).toBeUndefined()
     expect(messageOf(transport, "thread/start")).toBeUndefined()

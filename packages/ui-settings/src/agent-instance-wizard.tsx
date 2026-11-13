@@ -139,7 +139,13 @@ export function InstanceCreateWizard({
                 placeholder={t("agents.instance.search")}
               />
               {matches.length === 0 ? (
-                <p className="agent-muted">{t("agents.instance.noAgents")}</p>
+                <p className="agent-muted">
+                  {t(
+                    selectable.length === 0
+                      ? "agents.instance.noAgents"
+                      : "agents.instance.noMatches",
+                  )}
+                </p>
               ) : (
                 <div className="wizard-agents" role="listbox" aria-label={t("agents.list")}>
                   {matches.map((agent) => {

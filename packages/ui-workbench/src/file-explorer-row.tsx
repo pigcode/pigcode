@@ -49,6 +49,7 @@ export interface ExplorerRowProps {
   /** 目录里面有 git 改动。 */
   changedInside: boolean
   onActivate: () => void
+  onOpenTab?: (() => void) | undefined
   onContextMenu?: ((point: { x: number; y: number }) => void) | undefined
 }
 
@@ -66,6 +67,7 @@ export function ExplorerRow({
   decoration,
   changedInside,
   onActivate,
+  onOpenTab,
   onContextMenu,
 }: ExplorerRowProps) {
   return (
@@ -87,7 +89,10 @@ export function ExplorerRow({
       data-git={decoration}
       draggable
       style={{ top, height, paddingLeft: 6 + row.depth * 12 }}
-      onClick={onActivate}
+      onClick={(event) => {
+        if (onOpenTab && (event.metaKey || event.ctrlKey)) onOpenTab()
+        else onActivate()
+      }}
       onContextMenu={(event) => {
         if (!onContextMenu) return
         event.preventDefault()

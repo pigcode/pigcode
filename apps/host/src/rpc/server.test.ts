@@ -162,21 +162,21 @@ describe("rpc server", () => {
         title: "新会话",
         agentId: "fake",
         modelId: "fake-pro",
-        permissionMode: "read-only",
+        permissionMode: "approval-required",
       }),
     ).toMatchObject({
       result: {
         defaultAgentId: "fake",
         lastAgentId: "fake",
         lastModelId: "fake-pro",
-        permissionMode: "read-only",
+        permissionMode: "approval-required",
       },
     })
     // 没选模型和权限时和以前一样：默认模型、每次询问。
     expect(
       await send("2", "thread.create", { projectId: project.id, title: "新会话", agentId: "fake" }),
     ).toMatchObject({
-      result: { lastAgentId: null, lastModelId: null, permissionMode: "workspace-write" },
+      result: { lastAgentId: null, lastModelId: null, permissionMode: "full-access" },
     })
     await ctx.fiber.dispose()
   })

@@ -1,3 +1,4 @@
+import { migrateRuntimeModes } from "./runtime-mode-migration"
 /** 管理 SQLite schema 版本；迁移只向前。 */
 import type Database from "better-sqlite3"
 import { backfillThreadItems } from "./thread-items"
@@ -201,6 +202,27 @@ const MIGRATIONS: Migration[] = [
     db.exec(`DELETE FROM thread_items`)
     backfillThreadItems(db)
   },
+  `ALTER TABLE worktrees ADD COLUMN cwd TEXT`,
+  `ALTER TABLE threads ADD COLUMN plan_mode INTEGER NOT NULL DEFAULT 0;
+   INSERT INTO thread_events (thread_id, run_id, type, payload_json, schema_version, created_at)
+     SELECT id, NULL, 'thread.updated', json_object('permissionMode', 'workspace-write', 'planMode', json('true')),
+       1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now') FROM threads
+       WHERE permission_mode = 'plan'
+         OR (permission_mode = 'read-only' AND COALESCE(last_agent_id, default_agent_id) = 'claude');
+   UPDATE threads SET plan_mode = 1, permission_mode = 'workspace-write'
+     WHERE permission_mode = 'plan'
+       OR (permission_mode = 'read-only' AND COALESCE(last_agent_id, default_agent_id) = 'claude');
+   CREATE TABLE thread_agent_modes (
+     thread_id TEXT NOT NULL REFERENCES threads(id),
+     instance_id TEXT NOT NULL,
+     permission_mode TEXT NOT NULL,
+     plan_mode INTEGER NOT NULL DEFAULT 0,
+     PRIMARY KEY (thread_id, instance_id)
+   );
+   INSERT INTO thread_agent_modes (thread_id, instance_id, permission_mode, plan_mode)
+     SELECT id, COALESCE(last_instance_id, default_instance_id, last_agent_id, default_agent_id),
+       permission_mode, plan_mode FROM threads;`,
+  migrateRuntimeModes,
 ]
 
 /**

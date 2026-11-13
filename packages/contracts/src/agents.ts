@@ -25,6 +25,34 @@ export const localizedTextSchema = z.union([
   z.record(z.string().min(1), z.string().min(1)),
 ])
 
+/** 统一权限菜单选项的展示形状；实际选项由平台定义。 */
+export const agentPermissionModeSchema = z.object({
+  id: z
+    .string()
+    .regex(/^[a-zA-Z][a-zA-Z0-9._-]{0,63}$/)
+    .refine((id) => id !== "plan", "plan is reserved for legacy planning"),
+  label: localizedTextSchema,
+  description: localizedTextSchema,
+  kind: z.enum(["ask", "edit", "auto", "read-only", "full-access", "deny"]),
+  requiresConfirmation: z.boolean().optional(),
+  /** 兼容已有会话的原生模式；未选中时不出现在常用菜单。 */
+  hidden: z.boolean().optional(),
+  command: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .optional(),
+})
+
+/** 声明已接入统一四档权限协议，以及是否支持独立计划模式。 */
+export const agentExecutionModesSchema = z.object({ plan: z.boolean() })
+
+export type AgentPermissionMode = z.infer<typeof agentPermissionModeSchema>
+export type AgentExecutionModes = z.infer<typeof agentExecutionModesSchema>
+export interface AgentModeSelection {
+  permissionMode: string
+  planMode: boolean
+}
+
 /** 设置键名；模型偏好键由 Host 统一处理，插件不能占用。 */
 const settingKeySchema = z
   .string()
@@ -158,6 +186,7 @@ export const agentSummarySchema = z.object({
   registered: z.boolean(),
   /** Agent 功能；driver 没注册时为 null。 */
   features: agentFeaturesSchema.nullable(),
+  executionModes: agentExecutionModesSchema.nullish(),
   description: localizedTextSchema.nullable(),
   homepage: z.string().nullable(),
   installHint: localizedTextSchema.nullable(),
@@ -180,6 +209,23 @@ export const agentListSchema = z.object({
 })
 
 export type LocalizedText = z.infer<typeof localizedTextSchema>
+
+/** 插件报告的 CLI 更新信息；更新任务由 Host 统一排队。 */
+export interface AgentCliUpdateState {
+  instanceId: string
+  agentId: string
+  target: string
+  phase:
+    "checking" | "checked" | "queued" | "waiting" | "running" | "succeeded" | "unchanged" | "failed"
+  currentVersion: string | null
+  latestVersion: string | null
+  available: boolean
+  canUpdate: boolean
+  command: string | null
+  reason: "unsupported" | "not-installed" | "unknown-installation" | "manager-unavailable" | null
+  error: string | null
+  output: string
+}
 export type AgentSettingField = z.infer<typeof agentSettingFieldSchema>
 export type AgentSettingFieldInput = z.input<typeof agentSettingFieldSchema>
 export type EnvironmentEntry = z.infer<typeof environmentEntriesSchema>[number]

@@ -5,8 +5,8 @@
  * 单元测试覆盖不到：Release 的 assets 能不能一路传到挑 DMG 的地方、下载是不是真的
  * 落进 userData。之前的 bug 正是 assets 在中途丢了，只剩永远走下载页。
  *
- * 不真的下载几百兆：GitHub API 和附件下载都指向本地假服务；对话框和「打开安装包」
- * 用桩代替，避免 CI 上没有窗口管理器时卡在 Finder 上。userData 用 --user-data-dir
+ * GitHub API 和附件下载都指向本地假服务；「打开安装包」用桩代替，
+ * 避免 CI 上没有窗口管理器时卡在 Finder 上。userData 用 --user-data-dir
  * 指到临时目录，不碰运行测试的人自己的数据。
  */
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs"
@@ -105,23 +105,15 @@ test("the packaged app downloads the dmg for its architecture", async () => {
       args: ["--lang=zh-CN", `--user-data-dir=${join(dir, "userData")}`],
       env: launchEnv({ PIGCODE_UPDATE_API: api }),
     })
-    await app.firstWindow()
+    const page = await app.firstWindow()
 
-    // 对话框一律选第一个按钮（「打开安装包」），并把要打开的路径记下来。
-    await app.evaluate(({ dialog, shell }) => {
+    // 安装包交给系统之前，记下要打开的路径。
+    await app.evaluate(({ shell }) => {
       const opened: string[] = []
       Object.assign(globalThis, { openedPaths: opened })
-      dialog.showMessageBox = (async (
-        windowOrOptions: unknown,
-        maybeOptions?: { message: string },
-      ) => {
-        const options = maybeOptions ?? (windowOrOptions as { message: string })
-        Object.assign(globalThis, { lastMessage: options.message })
-        return { response: 0, checkboxChecked: false }
-      }) as typeof dialog.showMessageBox
       shell.openPath = (async (target: string) => {
         opened.push(target)
-        // 空串表示成功；返回错误字符串会走「打不开，退回下载页」那条路。
+        // 空串表示成功；返回错误字符串时会保留重试入口。
         return ""
       }) as typeof shell.openPath
     })
@@ -130,7 +122,12 @@ test("the packaged app downloads the dmg for its architecture", async () => {
     // macOS 上 /var 是指向 /private/var 的符号链接，两边都取真实路径再比。
     expect(realpathSync(userData)).toBe(realpathSync(join(dir, "userData")))
 
-    // 启动后 5 秒的第一次后台检查会触发下载；手动检查只回报结果，不走这条路。
+    // 发现更新后，从统一入口下载，再显式打开安装包。
+    await page.getByRole("button", { name: "查看更新", exact: true }).click()
+    const popup = page.locator(".update-center-popup")
+    await popup.getByRole("button", { name: "下载", exact: true }).click()
+    await expect(popup.getByRole("button", { name: "打开安装包", exact: true })).toBeVisible()
+    await popup.getByRole("button", { name: "打开安装包", exact: true }).click()
     const openedPaths = (): Promise<string[]> =>
       app!.evaluate(() => (globalThis as unknown as { openedPaths: string[] }).openedPaths)
     await expect.poll(openedPaths, { timeout: 90_000 }).toHaveLength(1)
@@ -140,10 +137,7 @@ test("the packaged app downloads the dmg for its architecture", async () => {
     // 真的下载了，字节和假服务给的一致。
     expect(readFileSync(packagePath!).equals(DMG_BYTES)).toBe(true)
 
-    const message = await app.evaluate(
-      () => (globalThis as unknown as { lastMessage?: string }).lastMessage,
-    )
-    expect(message).toBe(`新版本 ${version} 已下载`)
+    await expect(popup).toContainText("已下载，等待安装")
   } finally {
     await app?.close()
     server.close()

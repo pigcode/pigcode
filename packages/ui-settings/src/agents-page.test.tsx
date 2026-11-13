@@ -92,8 +92,6 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
     onCreateInstance: vi.fn(async () => "inst_new"),
     onUpdateInstance: vi.fn(async () => undefined),
     onRemoveInstance: vi.fn(async () => undefined),
-    onInstall: vi.fn(async () => undefined),
-    onUninstall: vi.fn(async () => undefined),
     ...overrides,
   }
   render(
@@ -273,27 +271,20 @@ describe("AgentsPage", () => {
     )
   })
 
-  it("offers uninstall only for user-installed agents, with a confirmation", async () => {
-    const props = renderPage()
-    await openInstance("Claude Code")
-    expect(screen.queryByRole("button", { name: "卸载" })).toBeNull()
+  it("keeps third-party agent settings available without an uninstall action", async () => {
+    renderPage()
     await openInstance("Echo")
-    await userEvent.click(screen.getByRole("button", { name: "卸载" }))
-    await userEvent.click(screen.getByRole("button", { name: "确认卸载" }))
-    await waitFor(() =>
-      expect(props.onUninstall).toHaveBeenCalledWith(expect.objectContaining({ agentId: "echo" })),
-    )
+    expect(screen.getByRole("button", { name: "设为新会话默认" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "卸载" })).toBeNull()
   })
 
-  it("installs an agent from the dialog", async () => {
-    const props = renderPage()
-    await userEvent.click(screen.getByRole("button", { name: "安装 agent" }))
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "npm 包或插件目录" }),
-      "pigcode-agent-foo@1.0.0",
-    )
-    await userEvent.click(screen.getByRole("button", { name: "安装" }))
-    await waitFor(() => expect(props.onInstall).toHaveBeenCalledWith("pigcode-agent-foo@1.0.0"))
+  it("shows the CLI install hint when an agent plugin is enabled but the CLI is missing", async () => {
+    renderPage({ statuses: { claude: { installed: false, version: null, authenticated: null } } })
+    expect(cardHead("Claude Code").textContent).toContain("未安装")
+    await openInstance("Claude Code")
+    expect(within(screen.getByRole("note")).getByText("安装 Claude Code")).toBeTruthy()
+    await openTab("运行")
+    expect(screen.getByRole("textbox", { name: "可执行文件" })).toBeTruthy()
   })
 
   it("sets the instance new sessions start with, including back to automatic", async () => {
@@ -333,10 +324,12 @@ describe("AgentsPage", () => {
     await waitFor(() => expect(props.onSetDefault).toHaveBeenCalledWith(null))
   })
 
-  it("shows the empty state when no agent is installed", () => {
+  it("directs users to the Plugins page when there are no agents to configure", async () => {
     renderPage({ agents: [] })
     expect(screen.getByText("还没有 agent")).toBeTruthy()
-    expect(screen.getByText("安装一个 agent 插件开始使用。")).toBeTruthy()
+    expect(screen.getByText("在侧栏的「插件」页安装 agent 插件。")).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
+    expect(screen.getByText("请启用已有的 agent，或在「插件」页安装 agent 插件。")).toBeTruthy()
   })
 
   it("creates another instance through the three-step wizard", async () => {

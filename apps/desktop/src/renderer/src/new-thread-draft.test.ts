@@ -51,8 +51,7 @@ function fakeConnection(defaultAgent: string | null = "claude") {
     if (method === "thread.create") return created
     throw new Error(`unexpected ${method}`)
   })
-  const openThread = vi.fn(async () => undefined)
-  return { connection: { call, openThread } as unknown as Connection, call, openThread }
+  return { connection: { call } as unknown as Connection, call }
 }
 
 function storeWith(activeProjectId: string | null): AppStore {
@@ -74,7 +73,7 @@ describe("new thread draft", () => {
 
   it("creates the thread with the default agent and opens it as the current thread", async () => {
     const store = storeWith("p2")
-    const { connection, call, openThread } = fakeConnection()
+    const { connection, call } = fakeConnection()
 
     await materializeDraft(connection, store, "zh-CN")
 
@@ -90,7 +89,6 @@ describe("new thread draft", () => {
       openThreadIds: ["t-new"],
     })
     expect(store.getSnapshot().threads.map((thread) => thread.id)).toEqual(["t-new"])
-    expect(openThread).toHaveBeenCalledWith("t-new")
   })
 
   it("carries the draft input over while the draft is still showing, and knows the thread is empty", async () => {
@@ -111,18 +109,22 @@ describe("new thread draft", () => {
 
   it("announces the new thread before it becomes the current one", async () => {
     const store = storeWith("p2")
-    const { connection } = fakeConnection()
+    const { connection, call } = fakeConnection()
     const seen: Array<{ id: string; activeWhenAnnounced: string | null }> = []
-    const off = onDraftMaterialized((thread) =>
-      seen.push({ id: thread.id, activeWhenAnnounced: store.getSnapshot().activeThreadId }),
-    )
+    const off = onDraftMaterialized((thread, isolated) => {
+      expect(isolated).toBe(true)
+      seen.push({ id: thread.id, activeWhenAnnounced: store.getSnapshot().activeThreadId })
+    })
 
-    await materializeDraft(connection, store, "zh-CN")
+    await materializeDraft(connection, store, "zh-CN", { baseRef: "refs/remotes/origin/main" })
     off()
-    await materializeDraft(connection, store, "zh-CN")
 
     // 草稿里开着的底部终端靠它交给新会话：必须赶在当前会话切过去之前。
     expect(seen).toEqual([{ id: "t-new", activeWhenAnnounced: null }])
+    expect(call).toHaveBeenCalledWith(
+      "thread.create",
+      expect.objectContaining({ worktree: { baseRef: "refs/remotes/origin/main" } }),
+    )
   })
 
   it("passes on the agent, model and permission chosen in the draft", async () => {

@@ -23,11 +23,11 @@ function mockNative(value: Partial<NonNullable<Window["pigcodeNative"]>>): void 
   Object.defineProperty(window, "pigcodeNative", { configurable: true, value })
 }
 
-function renderButton(path: string) {
+function renderButton(path: string, openFile?: (id: string | null) => Promise<void>) {
   render(
     <LocaleProvider locale="zh-CN">
       <ToastProvider>
-        <OpenInButton path={path} />
+        <OpenInButton path={path} openFile={openFile} />
       </ToastProvider>
     </LocaleProvider>,
   )
@@ -102,6 +102,30 @@ describe("OpenInButton", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: "在 Cursor 中打开" }))
     expect(await screen.findByText("无法打开文件夹 /home/me/gone")).toBeTruthy()
+  })
+
+  it("uses the same split button for files and offers editors and the system default", async () => {
+    const openFile = vi.fn().mockResolvedValue(undefined)
+    mockNative({ platform: "darwin", listOpenApps: vi.fn().mockResolvedValue(APPS) })
+    renderButton("/home/me/project/notes.md", openFile)
+
+    const options = screen.getByRole("button", { name: "选择打开方式" })
+    await userEvent.click(screen.getByRole("button", { name: "使用系统默认应用打开" }))
+    expect(openFile).toHaveBeenLastCalledWith(null)
+    await userEvent.click(options)
+    expect(await screen.findByRole("menuitem", { name: "Cursor" })).toBeTruthy()
+    expect(screen.queryByRole("menuitem", { name: /Finder|Ghostty/ })).toBeNull()
+    await userEvent.click(screen.getByRole("menuitem", { name: "Cursor" }))
+    expect(openFile).toHaveBeenLastCalledWith("cursor")
+    expect(screen.getByRole("button", { name: "在 Cursor 中打开" })).toBeTruthy()
+    expect(window.localStorage.getItem("pigcode.openInFileApp")).toBe("cursor")
+
+    options.focus()
+    await userEvent.keyboard("{ArrowDown}")
+    await userEvent.click(await screen.findByRole("menuitem", { name: "使用系统默认应用打开" }))
+    expect(openFile).toHaveBeenLastCalledWith(null)
+    expect(screen.getByRole("button", { name: "使用系统默认应用打开" })).toBeTruthy()
+    expect(window.localStorage.getItem("pigcode.openInFileApp")).toBeNull()
   })
 
   it("renders nothing without the native bridge", async () => {

@@ -34,16 +34,16 @@ export function usePanelOpen(draftKey: string | null) {
   )
 
   const set = useCallback(
-    (panel: keyof PanelOpen, value: SetStateAction<boolean>) => {
+    (panel: keyof PanelOpen, value: SetStateAction<boolean>, key = draftKey) => {
       const next = (current: PanelOpen): PanelOpen => ({
         ...current,
         [panel]: typeof value === "function" ? value(current[panel]) : value,
       })
-      if (!draftKey) {
+      if (!key) {
         setThreadOpen(next)
         return
       }
-      setDraftOpen((all) => ({ ...all, [draftKey]: next(all[draftKey] ?? CLOSED) }))
+      setDraftOpen((all) => ({ ...all, [key]: next(all[key] ?? CLOSED) }))
     },
     [draftKey],
   )
@@ -51,7 +51,10 @@ export function usePanelOpen(draftKey: string | null) {
   return {
     rightOpen: open.right,
     terminalOpen: open.terminal,
-    setRightOpen: useCallback((value: SetStateAction<boolean>) => set("right", value), [set]),
+    setRightOpen: useCallback(
+      (value: SetStateAction<boolean>, key?: string) => set("right", value, key),
+      [set],
+    ),
     setTerminalOpen: useCallback((value: SetStateAction<boolean>) => set("terminal", value), [set]),
   }
 }

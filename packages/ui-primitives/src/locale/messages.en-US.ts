@@ -9,6 +9,7 @@ import { newThreadEnUS } from "./new-thread.messages"
 import { pluginsEnUS } from "./plugins.messages"
 import { schedulesEnUS } from "./schedules.messages"
 import { workbenchEnUS } from "./workbench.messages"
+import { updatesEnUS } from "./updates.messages"
 
 export const enUS = {
   ...agentsEnUS,
@@ -20,6 +21,7 @@ export const enUS = {
   ...pluginsEnUS,
   ...schedulesEnUS,
   ...workbenchEnUS,
+  ...updatesEnUS,
   "nav.newThread": "New chat",
   "nav.search": "Search",
   "nav.projects": "Projects",
@@ -223,8 +225,15 @@ export const enUS = {
     "Claude splits the work across parallel subagents; takes longer and uses more",
   "composer.ultracode.unsupported": "No Ultracode for this model",
   "composer.permission.title": "Permissions",
-  "composer.permission.ask": "Ask every time",
-  "composer.permission.ask.description": "Ask before editing files or running commands",
+  "composer.build.short": "Build",
+  "composer.plan.short": "Plan",
+  "composer.permission.confirmTitle": "Enable {mode}?",
+  "composer.permission.confirm": "Enable {mode}",
+  "composer.permission.ask": "Ask as needed",
+  "composer.permission.ask.description":
+    "Run authorized actions automatically; ask for additional permissions",
+  "composer.permission.ask.codexDescription":
+    "Read, edit, and run commands in the project; ask beyond that scope",
   "composer.permission.plan": "Plan mode",
   "composer.permission.plan.description": "Plan first, change no files until you approve",
   "composer.permission.readOnly": "Read only",
@@ -263,18 +272,7 @@ export const enUS = {
   "chat.question.multi": "Pick any",
   "chat.question.other": "Other (type your own)",
   "chat.question.submit": "Send answers",
-  "chat.environment": "Session environment",
-  "chat.environment.close": "Close session environment",
-  "chat.environment.agent": "Agent",
-  "chat.environment.cwd": "Working directory",
-  "chat.environment.model": "Model",
-  "chat.environment.permission": "Permission mode",
   "chat.agent.next": "Next message will use",
-  "chat.environment.unknown": "—",
-  "chat.permission.readOnly": "Read only",
-  "chat.permission.workspaceWrite": "Workspace write",
-  "chat.permission.dangerFullAccess": "Full access",
-  "chat.permission.plan": "Plan",
   "workbench.files": "Files",
   "workbench.diff": "Diff",
   "workbench.terminal": "Terminal",
@@ -404,5 +402,6 @@ export const enUS = {
   "status.connecting": "Connecting to the Host…",
   "status.dismiss": "Dismiss",
   "thread.defaultTitle": "New thread",
-  "app.noAgent": "No agent available. Enable or install one in Settings → Agents.",
+  "app.noAgent":
+    "No agent available. Enable one in Settings → Agents or install an agent plugin from the Plugins page.",
 } satisfies Record<keyof typeof zhCN, string>

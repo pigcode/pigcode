@@ -61,16 +61,16 @@
 }
 
 /* ─── 工具栏：权限胶囊、停止按钮 ───────────────────────── */
-.permission-chip[data-mode="danger-full-access"],
-.permission-chip[data-mode="danger-full-access"] > .ic:first-child {
+.permission-chip[data-elevated="true"],
+.permission-chip[data-elevated="true"] > .ic:first-child {
   color: var(--warn-text);
 }
-.permission-chip[data-mode="danger-full-access"] {
+.permission-chip[data-elevated="true"] {
   background: var(--warn-soft);
 }
 /* 悬停和展开菜单时和普通胶囊一样 */
-.permission-chip[data-mode="danger-full-access"]:hover,
-.permission-chip[data-mode="danger-full-access"][aria-expanded="true"] {
+.permission-chip[data-elevated="true"]:hover,
+.permission-chip[data-elevated="true"][aria-expanded="true"] {
   background: var(--hover);
   color: var(--fg);
 }
@@ -445,11 +445,11 @@
 .model-permission-btn[data-mode="read-only"] > .ic:first-child {
   color: var(--accent-text);
 }
-.model-permission-btn[data-mode="danger-full-access"],
-.model-permission-btn[data-mode="danger-full-access"] > .ic {
+.model-permission-btn[data-elevated="true"],
+.model-permission-btn[data-elevated="true"] > .ic {
   color: var(--warn-text);
 }
-.model-permission-btn[data-mode="danger-full-access"]:hover {
+.model-permission-btn[data-elevated="true"]:hover {
   background: var(--warn-soft);
 }
 /* 权限列表从底栏往上展开，画在选择器里面 */
@@ -494,7 +494,7 @@
   background: var(--accent-soft);
   color: var(--accent-text);
 }
-.model-chip-mode[data-mode="danger-full-access"] {
+.model-chip-mode[data-elevated="true"] {
   background: var(--warn-soft);
   color: var(--warn-text);
 }

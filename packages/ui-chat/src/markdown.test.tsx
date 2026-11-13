@@ -88,6 +88,15 @@ describe("Markdown", () => {
     expect(container.textContent).toContain("or x *literal*")
   })
 
+  it("keeps a URL in a link label from becoming a nested link", () => {
+    const { container } = render(
+      <Markdown text="[https://example.com](https://example.com) [private](https://user:pass@example.com)" />,
+    )
+    expect(container.querySelectorAll("a")).toHaveLength(1)
+    expect(screen.getByRole("link", { name: "https://example.com" })).toBeTruthy()
+    expect(screen.queryByRole("link", { name: "private" })).toBeNull()
+  })
+
   it("links bare urls and shows safe images", () => {
     const { container } = render(
       <Markdown

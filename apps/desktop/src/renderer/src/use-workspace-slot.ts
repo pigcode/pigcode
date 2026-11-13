@@ -1,8 +1,7 @@
 /**
  * 右侧面板与底部终端挂在谁身上、按哪个 key 保存（参照 ZCode，它们不必依附会话）。
  * 会话里挂在会话上，key 是会话 id；新会话草稿里挂在草稿的项目上，key 是「第几个草稿 + 项目」。
- * 草稿建成会话时新会话沿用草稿的 key：右栏的标签、底部终端都不重新挂载，草稿里开着的终端、
- * 浏览器、改了一半的文件原样留给这个会话；之后再进草稿换一个新 key。
+ * 在项目原目录建成的会话接过草稿的 key。独立 worktree 会话使用自己的 key，原目录的文件草稿仍归草稿。
  */
 import { useCallback, useEffect, useRef } from "react"
 import { onDraftMaterialized } from "./new-thread-draft"
@@ -17,6 +16,8 @@ export interface WorkspaceSlot {
   key: string | null
   /** 会话的面板 key：由草稿建成的会话沿用草稿的 key。 */
   keyOf(threadId: string): string
+  /** 当前草稿序号下指定项目的面板 key。 */
+  draftKeyOf(projectId: string): string
   /** key 属于哪个会话；还是草稿时为 null。 */
   threadOf(key: string): string | null
 }
@@ -35,7 +36,8 @@ export function useWorkspaceSlot(
 
   useEffect(
     () =>
-      onDraftMaterialized((thread) => {
+      onDraftMaterialized((thread, isolated) => {
+        if (isolated) return
         const key = current.current
         if (!key?.startsWith(DRAFT_PREFIX)) return
         adopted.current.set(thread.id, key)
@@ -49,22 +51,19 @@ export function useWorkspaceSlot(
   }
 
   const keyOf = useCallback((id: string) => adopted.current.get(id) ?? id, [])
+  const draftKeyOf = (projectId: string) => `${DRAFT_PREFIX}${draftSlot.current}:${projectId}`
   const threadOf = useCallback((key: string) => {
     if (!key.startsWith(DRAFT_PREFIX)) return key
     for (const [id, adoptedKey] of adopted.current) if (adoptedKey === key) return id
     return null
   }, [])
 
-  const key = threadId
-    ? keyOf(threadId)
-    : draftProjectId
-      ? `${DRAFT_PREFIX}${draftSlot.current}:${draftProjectId}`
-      : null
+  const key = threadId ? keyOf(threadId) : draftProjectId ? draftKeyOf(draftProjectId) : null
   current.current = key
   const scope: WorkspaceScope | null = threadId
     ? { threadId }
     : draftProjectId
       ? { projectId: draftProjectId }
       : null
-  return { scope, key, keyOf, threadOf }
+  return { scope, key, keyOf, draftKeyOf, threadOf }
 }

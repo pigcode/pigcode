@@ -5,9 +5,9 @@ import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 /** 布局按钮属性；只传入的回调才渲染对应按钮。 */
 export interface PanelLayoutControlsProps {
   rightOpen: boolean
-  onToggleRight: () => void
+  onToggleRight?: (() => void) | undefined
   terminalOpen?: boolean
-  onToggleTerminal?: () => void
+  onToggleTerminal?: (() => void) | undefined
   maximized?: boolean
   onToggleMaximize?: () => void
   /** 没有活动会话时按钮置灰。 */
@@ -62,18 +62,20 @@ export function PanelLayoutControls({
           <PanelBottom className="ic" aria-hidden="true" />
         </Button>
       ) : null}
-      <Button
-        variant="plain"
-        size="icon"
-        type="button"
-        aria-label={rightLabel}
-        title={`${rightLabel} ${formatShortcut("Mod+j")}`}
-        aria-pressed={rightOpen}
-        disabled={disabled}
-        onClick={onToggleRight}
-      >
-        <PanelRight className="ic" aria-hidden="true" />
-      </Button>
+      {onToggleRight ? (
+        <Button
+          variant="plain"
+          size="icon"
+          type="button"
+          aria-label={rightLabel}
+          title={`${rightLabel} ${formatShortcut("Mod+j")}`}
+          aria-pressed={rightOpen}
+          disabled={disabled}
+          onClick={onToggleRight}
+        >
+          <PanelRight className="ic" aria-hidden="true" />
+        </Button>
+      ) : null}
     </div>
   )
 }

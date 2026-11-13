@@ -197,7 +197,6 @@
 .terminal-view {
   flex: 1;
   min-height: 0;
-  padding: 6px;
   overflow: hidden;
   border-radius: var(--r-lg);
   background: var(--term-bg);
@@ -207,7 +206,7 @@
 /* FitAddon 只扣除 .xterm 自身的内边距，所以留白放在这里而不是宿主上。 */
 .terminal-view .xterm {
   height: 100%;
-  padding: 10px 4px 10px 12px;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-5);
   /*
     不继承界面的字距与字重：xterm 用自己量出的「W」宽度算每格的字距补偿，量字的元素也在这里面。
     继承了 body 的 -0.003em 字距，量出来的字比实际画出来的窄，每格多补一点，一行越往右越偏，

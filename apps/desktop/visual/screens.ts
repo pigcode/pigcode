@@ -1,3 +1,4 @@
+import { localizeText, RUNTIME_MODE_OPTIONS } from "@pigcode/contracts"
 /**
  * 视觉用例走过的界面：固定的项目、启动方式和三段操作流程。visual.spec.ts 在每一步截图，
  * e2e/english.spec.ts 用英文界面走同一遍，检查每一步的文字。按钮和标题的名字从语言包里取，
@@ -158,7 +159,7 @@ async function scrollThread(page: Page, fraction: number): Promise<void> {
 
 /** 外壳、输入框、菜单与对话框。 */
 export async function walkShell(walk: Walk): Promise<void> {
-  const { page, step } = walk
+  const { page, step, locale } = walk
   const t = translator(walk.locale)
   await step("shell-empty")
   await createProject(walk, () => step("dialog-add-project"))
@@ -169,12 +170,24 @@ export async function walkShell(walk: Walk): Promise<void> {
   await step("menu-agent-model")
 
   // 权限在模型选择器的底栏里；选完全访问时选择器先关掉，再弹确认框。
-  const fullAccess = contains(t("composer.permission.full"))
+  const fullLabel = localizeText(
+    RUNTIME_MODE_OPTIONS.find((mode) => mode.id === "full-access")!.label,
+    locale,
+  )
+  const supervisedLabel = localizeText(
+    RUNTIME_MODE_OPTIONS.find((mode) => mode.id === "approval-required")!.label,
+    locale,
+  )
+  const fullAccess = contains(fullLabel)
+  await page.getByRole("button", { name: startsWith(t("composer.permission.title")) }).click()
+  await page.getByRole("menuitemradio", { name: contains(supervisedLabel) }).click()
   await page.getByRole("button", { name: startsWith(t("composer.permission.title")) }).click()
   await expect(page.getByRole("menuitemradio", { name: fullAccess })).toBeVisible()
   await step("menu-permission")
   await page.getByRole("menuitemradio", { name: fullAccess }).click()
-  const confirm = page.getByRole("button", { name: t("composer.permission.full.confirm") })
+  const confirm = page.getByRole("button", {
+    name: t("composer.permission.confirm").replace("{mode}", fullLabel),
+  })
   await expect(confirm).toBeVisible()
   await step("dialog-full-access")
   await page.getByRole("button", { name: t("common.cancel") }).click()
@@ -302,6 +315,7 @@ export async function walkWorkbench(walk: Walk): Promise<void> {
   await fileRow("README\\.md").click()
   await expect(page.locator(".right-panel").getByRole("tab", { name: "README.md" })).toBeVisible()
   await expect(pane).toContainText("A small project for screenshots.")
+  await pane.getByRole("button", { name: t("files.viewer.source"), exact: true }).click()
   await expect(pane.locator(".code-line .tok").first()).toBeVisible()
   await step("surface-file-editor")
 

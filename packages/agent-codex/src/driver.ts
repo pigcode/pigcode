@@ -1,9 +1,18 @@
+import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
 /** Codex adapter：每 session 一个 app-server 子进程，经 NDJSON JSON-RPC 通信。 */
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import { homedir } from "node:os"
 import { join, resolve } from "node:path"
 import { expandHome } from "@pigcode/plugin-sdk/node"
+import { prepareCodexCliUpdate } from "./cli-update"
+import {
+  codexExecutionModes,
+  createThreadParams,
+  collaborationMode,
+  turnPermissionParams,
+} from "./permissions"
+import { answerCodexQuestions } from "./questions"
 import type {
   CreateSessionInput,
   AgentCommandInfo,
@@ -44,6 +53,7 @@ interface CodexSessionState {
   finished: boolean
   permissionMode: string
   model: string | null
+  effectiveModel: string | null
   /** 启动这个 app-server 的命令指纹；设置改了就不再复用。 */
   launchKey: string
   /** 会话提示：MCP 桥起不来时攒下来，下一次 send 时补发。 */
@@ -63,15 +73,22 @@ const ACCOUNT_TIMEOUT_MS = 8000
 
 /** 基于 `codex app-server --stdio` 的 Codex driver。 */
 export class CodexDriver implements AgentDriver {
+  private cliRevision = 0
+  prepareCliUpdate(settings: AgentSettingsValues) {
+    return prepareCodexCliUpdate(settings, () => {
+      this.cliRevision += 1
+    })
+  }
+  readonly executionModes = codexExecutionModes
   readonly id = "codex"
   readonly displayName = "Codex"
   // M2 桥接审批、计划、用量与 resume；M5 起通过 `config.mcp_servers` 注入插件工具。
   // fork 走 app-server 的 thread/fork（见 createSession），Host 切模型时已经在用，所以是 true。
-  // questions/rollback/checkpoint/subagents 尚未实现，对应的 Agent 功能保持 false。
+  // request_user_input 接提问卡片；rollback/checkpoint/subagents 尚未实现。
   readonly features: AgentFeatures = {
     streaming: true,
     approvals: true,
-    questions: false,
+    questions: true,
     plan: true,
     resume: true,
     fork: true,
@@ -132,6 +149,7 @@ export class CodexDriver implements AgentDriver {
     const read = (async () => {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+        capabilities: { experimentalApi: true },
       })
       return parseCodexAccount(await client.request("account/read", {}))
     })().catch(() => null)
@@ -146,10 +164,10 @@ export class CodexDriver implements AgentDriver {
   async createSession(input: CreateSessionInput): Promise<AgentSessionHandle> {
     // 复用仍在运行的 app-server：同一原生 thread 的后续 run 不需要重新初始化。
     // 权限模式或模型变了就不复用，下面用 thread/resume 带上新的 sandbox 与审批策略。
-    const permissionMode = input.permissionMode ?? "workspace-write"
+    const permissionMode = input.permissionMode ?? DEFAULT_RUNTIME_MODE
     const model = input.model ?? null
     const launch = codexLaunch(input.settings)
-    const key = launchKey(launch)
+    const key = `${launchKey(launch)}:${this.cliRevision}`
     const reusable = input.forkFromNativeSessionId
       ? undefined
       : input.nativeSessionId
@@ -166,7 +184,8 @@ export class CodexDriver implements AgentDriver {
         threadId: input.threadId,
         cwd: input.cwd,
         nativeSessionId: reusable.nativeThreadId,
-        permissionMode: input.permissionMode ?? "workspace-write",
+        permissionMode: input.permissionMode ?? DEFAULT_RUNTIME_MODE,
+        planMode: input.planMode ?? input.permissionMode === "plan",
         model: input.model ?? null,
       }
     }
@@ -182,6 +201,7 @@ export class CodexDriver implements AgentDriver {
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+        capabilities: { experimentalApi: true },
       })
       const params = createThreadParams(input)
       // 同一 Agent 切换优先原生 fork；fork 返回的新 thread id 用于后续 turn。
@@ -190,13 +210,16 @@ export class CodexDriver implements AgentDriver {
         ? ((await client.request("thread/fork", {
             threadId: forkFrom,
             ...params,
-          })) as { thread?: { id?: string } })
+          })) as { thread?: { id?: string }; model?: string })
         : input.nativeSessionId
           ? ((await client.request("thread/resume", {
               threadId: input.nativeSessionId,
               ...params,
-            })) as { thread?: { id?: string } })
-          : ((await client.request("thread/start", params)) as { thread?: { id?: string } })
+            })) as { thread?: { id?: string }; model?: string })
+          : ((await client.request("thread/start", params)) as {
+              thread?: { id?: string }
+              model?: string
+            })
       const nativeThreadId =
         response.thread?.id ?? (forkFrom ? null : (input.nativeSessionId ?? null))
       const stateKey = nativeThreadId ?? input.threadId
@@ -214,6 +237,7 @@ export class CodexDriver implements AgentDriver {
         interruptRequested: false,
         permissionMode,
         model,
+        effectiveModel: model ?? response.model ?? null,
         launchKey: key,
         notice,
       })
@@ -222,7 +246,8 @@ export class CodexDriver implements AgentDriver {
         threadId: input.threadId,
         cwd: input.cwd,
         nativeSessionId: nativeThreadId,
-        permissionMode: input.permissionMode ?? "workspace-write",
+        permissionMode: input.permissionMode ?? DEFAULT_RUNTIME_MODE,
+        planMode: input.planMode ?? input.permissionMode === "plan",
         model: input.model ?? null,
       }
     } catch (error) {
@@ -276,6 +301,9 @@ export class CodexDriver implements AgentDriver {
       const decision = await runtime.requestApproval({ toolName: "Bash", input: params })
       return toApprovalResponse(decision, "acceptForSession")
     })
+    client.onServerRequest("item/tool/requestUserInput", (params) =>
+      answerCodexQuestions(params, runtime),
+    )
     client.onServerRequest("item/fileChange/requestApproval", async (params) => {
       const decision = await runtime.requestApproval({ toolName: "ApplyPatch", input: params })
       return toApprovalResponse(decision, "acceptForSession")
@@ -301,6 +329,8 @@ export class CodexDriver implements AgentDriver {
       const started = (await client.request("turn/start", {
         threadId: state.nativeThreadId,
         input: [{ type: "text", text }],
+        ...collaborationMode(session.planMode === true, state.effectiveModel, input.effort),
+        ...turnPermissionParams(session.permissionMode, session.cwd),
         // 思考深度只对本轮及之后的轮次生效；没有选择时沿用 Codex 的默认值。
         ...(input.effort ? { effort: input.effort } : {}),
         // 服务档和思考深度一样会沿用；选了快速发 fast，从快速切回标准时发 null 回到默认档。
@@ -353,6 +383,7 @@ export class CodexDriver implements AgentDriver {
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+        capabilities: { experimentalApi: true },
       })
       return await read(client)
     } catch {
@@ -421,26 +452,6 @@ export class CodexDriver implements AgentDriver {
   /** 按原生 thread id 或本地 thread id 查找 session 状态。 */
   private stateFor(session: AgentSessionHandle): CodexSessionState | undefined {
     return this.sessions.get(session.nativeSessionId ?? session.threadId)
-  }
-}
-
-/** 构造 thread/start 或 thread/resume 的共享参数。 */
-function createThreadParams(input: CreateSessionInput): Record<string, unknown> {
-  const permissionMode = input.permissionMode ?? "workspace-write"
-  const sandbox =
-    permissionMode === "read-only"
-      ? "read-only"
-      : permissionMode === "danger-full-access"
-        ? "danger-full-access"
-        : "workspace-write"
-  const model = input.model ?? process.env.PIGCODE_CODEX_MODEL
-  return {
-    cwd: input.cwd,
-    approvalPolicy: permissionMode === "danger-full-access" ? "never" : "on-request",
-    sandbox,
-    ...(model ? { model } : {}),
-    // 插件工具经 stdio 桥接入：app-server 按 config.mcp_servers 启动桥进程。
-    ...(input.mcp ? { config: { mcp_servers: { pigcode: input.mcp.stdioServer() } } } : {}),
   }
 }
 

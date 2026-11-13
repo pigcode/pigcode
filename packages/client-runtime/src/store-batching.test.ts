@@ -139,11 +139,12 @@ describe("AppStore batching", () => {
         { agentId: "codex", modelId: "gpt-6.1-sol", handoff: "x" },
         null,
       ),
-      threadEvent("th_1", 4, "thread.updated", { permissionMode: "everything" }, null),
+      threadEvent("th_1", 4, "thread.updated", { permissionMode: "invalid/permission" }, null),
     ])
     expect(store.getSnapshot().threads[0]).toMatchObject({
       title: "New title",
-      permissionMode: "plan",
+      permissionMode: "workspace-write",
+      planMode: true,
       lastAgentId: "codex",
       lastModelId: "gpt-6.1-sol",
     })

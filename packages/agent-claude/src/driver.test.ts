@@ -214,7 +214,11 @@ describe("ClaudeDriver", () => {
         return replay(params)
       },
     })
-    const session = await driver.createSession({ threadId: "t6", cwd: "/tmp" })
+    const session = await driver.createSession({
+      threadId: "t6",
+      cwd: "/tmp",
+      permissionMode: "approval-required",
+    })
     const approvals: string[] = []
     const asked: unknown[] = []
     let answers: string[] = ["pnpm", "lint, test"]

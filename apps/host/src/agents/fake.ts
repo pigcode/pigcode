@@ -1,6 +1,10 @@
 /** 确定性的 fake agent，用于验证协议、UI 和插件模型。 */
 import { FAKE_WORKFLOW_TEXT, fakeWorkflowScript } from "./fake-workflow"
-import type { AgentFeatures } from "@pigcode/contracts"
+import {
+  DEFAULT_RUNTIME_MODE,
+  type AgentFeatures,
+  type AgentExecutionModes,
+} from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type {
   CreateSessionInput,
@@ -77,6 +81,7 @@ export interface FakeAgentOptions {
 
 /** 不依赖外部进程的确定性 Agent 实现。 */
 export class FakeAgentDriver implements AgentDriver {
+  readonly executionModes: AgentExecutionModes = { plan: true }
   readonly id = "fake"
   readonly displayName = "Fake Agent"
   readonly features: AgentFeatures = {
@@ -115,7 +120,8 @@ export class FakeAgentDriver implements AgentDriver {
       threadId: input.threadId,
       cwd: input.cwd,
       nativeSessionId: input.nativeSessionId ?? null,
-      permissionMode: input.permissionMode ?? "workspace-write",
+      permissionMode: input.permissionMode ?? DEFAULT_RUNTIME_MODE,
+      planMode: input.planMode ?? false,
       model: input.model ?? null,
     }
   }

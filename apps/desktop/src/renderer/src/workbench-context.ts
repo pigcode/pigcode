@@ -29,10 +29,10 @@ export interface WorkbenchContextValue {
   add(kind: string): void
   /** 关闭一个标签；有未保存修改的文件标签先确认。 */
   close(id: string): void
-  /** 打开文件标签；replace 给出时替换那个标签。 */
-  openFile(path: string, replace?: string): void
+  /** 从当前文件导航打开文件，可以复用预览标签或保留独立标签。 */
+  openFile(path: string, sourceId: string, preview: boolean): void
   /** 文件树与文件标签共用的属性。 */
-  fileProps: Omit<ComponentProps<typeof FilesSurface>, "onOpenFile">
+  fileProps: Omit<ComponentProps<typeof FilesSurface>, "onOpenFile" | "onOpenFileTab">
   worktrees: ReturnType<typeof useWorktrees>
   diff: {
     /** 已经提交落盘的 checkpoint；Diff 的基准只从这里选。 */

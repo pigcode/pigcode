@@ -48,6 +48,7 @@ export const appearanceZhCN = {
   "settings.appearance.codeFont": "代码字体",
   "settings.appearance.font.description": "填已安装的字体名，没安装时退回系统字体",
   "settings.appearance.font.system": "系统默认",
+  "settings.appearance.font.showPresets": "显示{field}预设",
   "settings.appearance.codeSize": "代码字号",
   "settings.appearance.contrast": "对比度",
   "settings.appearance.contrast.description": "分隔线、边框和悬停底色的深浅",
@@ -108,6 +109,7 @@ export const appearanceEnUS: Record<keyof typeof appearanceZhCN, string> = {
   "settings.appearance.font.description":
     "Type an installed font name; the system font is used when it is missing",
   "settings.appearance.font.system": "System default",
+  "settings.appearance.font.showPresets": "Show {field} presets",
   "settings.appearance.codeSize": "Code font size",
   "settings.appearance.contrast": "Contrast",
   "settings.appearance.contrast.description": "How strong dividers, borders and hover fills are",

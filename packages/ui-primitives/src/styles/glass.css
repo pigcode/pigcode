@@ -18,14 +18,12 @@
 
 /* 盖在内容上的层自己做一次模糊，避免透出下面的文字 */
 [data-glass="true"] .dialog,
-[data-glass="true"] .drawer,
 [data-glass="true"] .composer {
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
 }
 
-[data-glass="true"] .dialog,
-[data-glass="true"] .drawer {
+[data-glass="true"] .dialog {
   background: var(--popover-glass);
 }
 

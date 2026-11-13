@@ -27,6 +27,8 @@ export interface UpdateSchedulerDeps {
   /** 自动检查失败只写日志，不打扰用户。 */
   log: (message: string) => void
   fetchRelease?: typeof fetchLatestRelease
+  /** 每次检查完成都同步结果，手动和自动检查共用。 */
+  onChecked?: (result: LatestRelease | null | "error") => void
 }
 
 export interface UpdateScheduler {
@@ -48,15 +50,28 @@ export function createUpdateScheduler(deps: UpdateSchedulerDeps): UpdateSchedule
   let startup: NodeJS.Timeout | undefined
   /** 这次运行已经提示过的版本。 */
   let prompted: string | undefined
+  let checking: Promise<LatestRelease | null | "error"> | null = null
 
   /** 查一次并判断有没有新版本。返回完整的 Release，附件要留给调用方挑安装包。 */
-  const findUpdate = async (): Promise<LatestRelease | null | "error"> => {
+  const readUpdate = async (): Promise<LatestRelease | null | "error"> => {
     const release = await fetchRelease(deps.apiUrl(), undefined, undefined, {
       allowPrerelease: deps.allowPrerelease?.() ?? false,
     })
     // 取不到（断网、仓库还私有）算失败；不影响别的功能。
     if (!release) return "error"
     return isNewer(release.version, deps.currentVersion()) ? release : null
+  }
+  const findUpdate = (): Promise<LatestRelease | null | "error"> => {
+    checking ??= readUpdate()
+      .catch(() => "error" as const)
+      .then((found) => {
+        deps.onChecked?.(found)
+        return found
+      })
+      .finally(() => {
+        checking = null
+      })
+    return checking
   }
 
   const checkNow = async (): Promise<UpdateResult> => {

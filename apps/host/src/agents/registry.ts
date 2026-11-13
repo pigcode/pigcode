@@ -1,4 +1,5 @@
 /** 注册 Agent driver，并把一次 run 的规范化事件映射为线程事件。 */
+import { modesOf, modesForSwitch, resolveModes, registeredAgents } from "./execution-modes"
 import type { Context } from "cordis"
 import type { RunStatus, ThreadEvent } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
@@ -17,6 +18,7 @@ import { createExecute } from "./run-execute"
 import { registerThreadReadTool } from "./thread-read-tool"
 import { recordThreadReferences } from "./thread-reference"
 import { threadCwd } from "../services/worktrees"
+import { createCliUpdates } from "./cli-updates"
 import { ApprovalBridge } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
@@ -232,10 +234,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     for (const runId of [...activeRuns.keys()]) interruptRun(runId)
   }
 
-  /**
-   * 注销 driver（插件停用或卸载）：它的会话不能再继续，排队的取消、运行中的中断并释放会话，
-   * 免得留下插件启动的子进程。
-   */
+  /** 注销 driver 时取消排队任务，中断活跃任务并释放会话进程。 */
   function unregisterDriver(driverId: string): void {
     const driver = drivers.get(driverId)
     if (!driver) return
@@ -253,19 +252,25 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     agents.invalidate(driverId)
   }
 
+  const cliUpdates = createCliUpdates(drivers, agents, (id) =>
+    ctx.threads
+      .list()
+      .some(
+        (thread) =>
+          activeThreads.has(thread.id) && (thread.lastAgentId ?? thread.defaultAgentId) === id,
+      ),
+  )
   const service: AgentsService = {
+    cliUpdates: cliUpdates.list,
+    checkCliUpdates: cliUpdates.check,
+    updateCli: cliUpdates.update,
     register(driver) {
+      modesOf(driver)
       drivers.set(driver.id, driver)
       agents.invalidate(driver.id)
     },
     unregister: unregisterDriver,
-    list() {
-      return [...drivers.values()].map((driver) => ({
-        id: driver.id,
-        displayName: driver.displayName,
-        features: driver.features,
-      }))
-    },
+    list: () => registeredAgents(drivers),
     detect: (options) => agents.detect(options),
     models: (agentId, instanceId) => agents.models(agentId, instanceId),
     commands: (agentId, instanceId, cwd) => agents.commands(agentId, instanceId, cwd),
@@ -313,6 +318,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         instance.instanceId,
         (id) =>
           drivers.get(agentId)?.continuationKey?.(agents.settingsForInstance(agentId, id)) ?? null,
+        modesForSwitch(ctx, threadId, agentId),
       )
     },
     async startRun(threadId, text, emitLive, options = {}) {
@@ -321,6 +327,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
       // 切换后使用线程最近选择的 Agent 与实例，未切换过时回退到创建时的默认值。
       const agentId = thread.lastAgentId ?? thread.defaultAgentId
+      if (cliUpdates.isUpdating(agentId))
+        throw new Error("CLI update in progress. Please try again after it finishes.")
       const driver = drivers.get(agentId)
       if (!driver) throw new Error(`agent not found: ${agentId}`)
       const instance = agents.instance(
@@ -328,6 +336,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         options.instanceId ?? thread.lastInstanceId ?? thread.defaultInstanceId,
       )
       if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
+      const selectedModes = resolveModes(modesOf(driver), thread, driver.id)
       const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
       if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
 
@@ -383,7 +392,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           resolveDone,
           queuedAt: startedAt,
           cwd: threadCwd(ctx, thread.id),
-          permissionMode: thread.permissionMode,
+          ...selectedModes,
           model: thread.lastModelId,
           nativeSessionId: forkFrom ? null : (activeSession?.nativeSessionId ?? null),
           ...(forkFrom ? { forkFromNativeSessionId: forkFrom } : {}),
@@ -470,6 +479,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
 
   ctx.provide("agents", service)
   ctx.effect(() => () => {
+    cliUpdates.dispose()
     // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。
     interruptAll()
     queue.clear()

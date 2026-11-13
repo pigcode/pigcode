@@ -124,7 +124,9 @@ export function createPathIndex(options: { ttlMs?: number; now?: () => number } 
       const files = listFiles(root)
       entries.set(root, { files, expiresAt: now() + ttlMs })
       // 读取失败不缓存，下一次重新列出。
-      files.catch(() => entries.delete(root))
+      files.catch(() => {
+        if (entries.get(root)?.files === files) entries.delete(root)
+      })
       return files
     },
     invalidate(root) {

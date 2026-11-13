@@ -1,4 +1,5 @@
 /** 验证输入框里的 agent 选项走到 Host：模型目录、思考深度、权限模式与首次切换不带 handoff；以及 agent.* 命令和改名前命令名的拒绝。 */
+import { FakeAgentDriver } from "../agents/fake"
 import type { AgentModel } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { describe, expect, it, vi } from "vitest"
@@ -15,9 +16,11 @@ import { RpcServer } from "./server"
 function recordingDriver(listModels: () => Promise<AgentModel[]>) {
   const inputs: UserInput[] = []
   const modes: string[] = []
+  const plans: boolean[] = []
   const driver: AgentDriver = {
     id: "rec",
     displayName: "Recorder",
+    executionModes: new FakeAgentDriver().executionModes,
     features: {
       streaming: true,
       approvals: false,
@@ -41,19 +44,21 @@ function recordingDriver(listModels: () => Promise<AgentModel[]>) {
         cwd: input.cwd,
         nativeSessionId: null,
         permissionMode: input.permissionMode ?? "workspace-write",
+        planMode: input.planMode ?? false,
         model: input.model ?? null,
       }
     },
     async send(session, input, runtime) {
       inputs.push(input)
       modes.push(session.permissionMode)
+      plans.push(session.planMode === true)
       runtime.emit({ type: "message.completed", text: "ok" })
     },
     async interrupt() {},
     async dispose() {},
     listModels,
   }
-  return { driver, inputs, modes }
+  return { driver, inputs, modes, plans }
 }
 
 async function setup() {
@@ -124,23 +129,24 @@ describe("agent options over RPC", () => {
     expect(first.runId).toMatch(/^run_/)
     await vi.waitFor(() => expect(recorder.inputs).toHaveLength(1))
     expect(recorder.inputs[0]).toEqual({ text: "go", effort: "high" })
-    expect(recorder.modes[0]).toBe("workspace-write")
+    expect(recorder.modes[0]).toBe("full-access")
 
     await expect(
-      call("thread.setPermissionMode", { threadId: thread.id, permissionMode: "plan" }),
-    ).resolves.toMatchObject({ id: thread.id, permissionMode: "plan" })
-    expect(ctx.threads.get(thread.id)?.permissionMode).toBe("plan")
+      call("thread.setPlanMode", { threadId: thread.id, planMode: true }),
+    ).resolves.toMatchObject({ id: thread.id, permissionMode: "full-access", planMode: true })
+    expect(ctx.threads.get(thread.id)?.planMode).toBe(true)
     const updated = ctx.sessions
       .read(thread.id, 0)
       .filter((event) => event.type === "thread.updated")
       .at(-1)
-    expect(updated?.payload).toEqual({ permissionMode: "plan" })
+    expect(updated?.payload).toEqual({ permissionMode: "full-access", planMode: true })
 
     await vi.waitFor(() => expect(ctx.agents.listRuns()).toHaveLength(0))
     await call("run.start", { threadId: thread.id, text: "again" })
     await vi.waitFor(() => expect(recorder.inputs).toHaveLength(2))
     expect(recorder.inputs[1]).toEqual({ text: "again" })
-    expect(recorder.modes[1]).toBe("plan")
+    expect(recorder.modes[1]).toBe("full-access")
+    expect(recorder.plans).toEqual([false, true])
 
     await expect(
       call("thread.setPermissionMode", { threadId: thread.id, permissionMode: "yolo" }),

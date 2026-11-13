@@ -1,3 +1,4 @@
+import { legacyPermissionMode, type RuntimeMode } from "@pigcode/contracts"
 /** 真正启动排队 run：创建 Agent 会话、写 run.started 并执行 driver。 */
 import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
@@ -95,7 +96,10 @@ async function openSession(
     cwd: entry.cwd,
     nativeSessionId: fork || !resume ? null : entry.nativeSessionId,
     ...(fork ? { forkFromNativeSessionId: fork } : {}),
-    permissionMode: entry.permissionMode,
+    permissionMode: entry.driver.executionModes
+      ? entry.permissionMode
+      : legacyPermissionMode(entry.permissionMode as RuntimeMode),
+    planMode: entry.planMode ?? false,
     model: entry.model,
     ...(resume && entry.sessionId ? { sessionId: entry.sessionId } : {}),
     ...(entry.mcp ? { mcp: entry.mcp } : {}),

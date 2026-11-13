@@ -45,6 +45,7 @@ export interface QueuedRun {
   queuedAt: string
   cwd: string
   permissionMode: string
+  planMode?: boolean
   model: string | null
   nativeSessionId: string | null
   forkFromNativeSessionId?: string

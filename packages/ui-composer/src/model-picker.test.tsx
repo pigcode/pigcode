@@ -1,3 +1,4 @@
+import { TEST_MODES } from "./permission-fixture"
 /** 验证模型选择器：选中 agent 才列出它的模型、懒加载目录、跨 agent 切换、收藏、思考深度、快速模式、权限与列表滚动。 */
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
@@ -16,8 +17,14 @@ import type {
 import { resetModelPreferencesCache } from "./model-preferences"
 
 const AGENTS: ComposerAgent[] = [
-  { id: "claude", agentId: "claude", label: "Claude Code", installed: true },
-  { id: "codex", agentId: "codex", label: "Codex", installed: false },
+  {
+    id: "claude",
+    agentId: "claude",
+    executionModes: TEST_MODES,
+    label: "Claude Code",
+    installed: true,
+  },
+  { id: "codex", agentId: "codex", executionModes: TEST_MODES, label: "Codex", installed: false },
 ]
 
 const CATALOG: ComposerModelCatalog = {
@@ -150,7 +157,7 @@ describe("ModelPicker", () => {
 
   it("starts at 默认 when nothing is stored: bare model name on the chip and no effort sent", async () => {
     const { chip, onSubmit } = renderPicker()
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
     await userEvent.type(screen.getByRole("textbox"), "go")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("go", { effort: null })
@@ -167,7 +174,7 @@ describe("ModelPicker", () => {
     expect((await effortSlider()).getAttribute("aria-valuetext")).toBe("最高")
     await pickEffort("默认")
     expect(JSON.parse(window.localStorage.getItem("pigcode.modelEfforts") ?? "{}")).toEqual({})
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
     expect(chip().textContent).not.toContain("最高")
     await userEvent.keyboard("{Escape}")
     await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "plain")
@@ -288,7 +295,7 @@ describe("ModelPicker", () => {
     // 「默认」是滑块最下面一档，方向键一样能走到它。
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}")
     expect(slider.getAttribute("aria-valuetext")).toBe("默认")
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
 
     await userEvent.keyboard("{Enter}")
     expect(onSelectModel).toHaveBeenCalledWith({
@@ -302,7 +309,7 @@ describe("ModelPicker", () => {
     const { chip, onSubmit } = renderPicker({ catalog: CLAUDE_CATALOG, modelId: "default" })
     // 没选过档位时交给 Claude Code 自己决定：胶囊上不显示，发送时也不带。
     expect(chip().getAttribute("aria-label")).toBe(
-      "Agent 与模型: Claude Code · Default (recommended)",
+      "Agent 与模型: Claude Code · Default (recommended) · 完全访问",
     )
     const input = screen.getByRole("textbox", { name: "给 agent 的消息" })
     await userEvent.type(input, "a")
@@ -378,7 +385,9 @@ describe("ModelPicker", () => {
     await userEvent.click(fast)
     expect(fast.getAttribute("aria-pressed")).toBe("true")
     expect(fast.getAttribute("title")).toBe("快速模式 · 更快 · 计费更高")
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 快速模式")
+    expect(chip().getAttribute("aria-label")).toBe(
+      "Agent 与模型: Claude Code · Opus · 快速模式 · 完全访问",
+    )
     expect(JSON.parse(window.localStorage.getItem("pigcode.fastModels") ?? "[]")).toEqual([
       "claude/opus",
     ])
@@ -405,19 +414,19 @@ describe("ModelPicker", () => {
 
   it("switches permissions from the picker and confirms full access outside it", async () => {
     const onPermissionMode = vi.fn()
-    const { chip } = renderPicker({ onPermissionMode })
+    const { chip } = renderPicker({ onPermissionMode, permissionMode: "approval-required" })
     // 有模型选择器时，权限不再是单独的胶囊。
     expect(screen.queryByRole("button", { name: /^权限/ })).toBeNull()
     await userEvent.click(chip())
-    await userEvent.click(await screen.findByRole("button", { name: "权限: 每次询问" }))
-    await userEvent.click(screen.getByRole("menuitemradio", { name: /只读/ }))
-    expect(onPermissionMode).toHaveBeenLastCalledWith("read-only")
+    await userEvent.click(await screen.findByRole("button", { name: "权限: 监督审批" }))
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /接受编辑/ }))
+    expect(onPermissionMode).toHaveBeenLastCalledWith("auto-accept-edits")
 
-    await userEvent.click(screen.getByRole("button", { name: "权限: 每次询问" }))
+    await userEvent.click(screen.getByRole("button", { name: "权限: 监督审批" }))
     await userEvent.click(screen.getByRole("menuitemradio", { name: /完全访问/ }))
-    expect(onPermissionMode).not.toHaveBeenCalledWith("danger-full-access")
-    await userEvent.click(await screen.findByRole("button", { name: "开启完全访问" }))
-    expect(onPermissionMode).toHaveBeenLastCalledWith("danger-full-access")
+    expect(onPermissionMode).not.toHaveBeenCalledWith("full-access")
+    await userEvent.click(await screen.findByRole("button", { name: "启用完全访问" }))
+    expect(onPermissionMode).toHaveBeenLastCalledWith("full-access")
   })
 
   it("turns Ultracode on per model next to fast mode and sends both", async () => {
@@ -428,7 +437,7 @@ describe("ModelPicker", () => {
     await userEvent.click(ultracode)
     await userEvent.click(screen.getByRole("button", { name: "快速模式" }))
     expect(chip().getAttribute("aria-label")).toBe(
-      "Agent 与模型: Claude Code · Opus · 快速模式 · Ultracode",
+      "Agent 与模型: Claude Code · Opus · 快速模式 · Ultracode · 完全访问",
     )
     expect(JSON.parse(window.localStorage.getItem("pigcode.ultracodeModels") ?? "[]")).toEqual([
       "claude/opus",
@@ -454,9 +463,9 @@ describe("ModelPicker", () => {
   })
 
   it("marks a non-default permission on the chip", () => {
-    const { chip } = renderPicker({ permissionMode: "danger-full-access" })
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
-    expect(chip().querySelector(".model-chip-mode[data-mode='danger-full-access']")).toBeTruthy()
+    const { chip } = renderPicker({ permissionMode: "approval-required" })
+    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 监督审批")
+    expect(chip().querySelector(".model-chip-mode[data-mode='approval-required']")).toBeTruthy()
   })
 
   it("does not switch models while a run is going", async () => {

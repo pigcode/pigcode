@@ -11,7 +11,7 @@ import { openThread } from "./projects"
 import { expectTerminalText, terminalText } from "./terminal"
 
 test("the bottom terminal opens in a draft without creating a thread", async () => {
-  const { app, page } = await openThread("draft-terminal")
+  const { app, page } = await openThread("draft-terminal", { TERM: "dumb" })
   try {
     const project = page.locator(".proj-block").filter({ hasText: "pigcode-e2e-draft-terminal" })
     const rows = project.locator(".sess")
@@ -25,6 +25,9 @@ test("the bottom terminal opens in a draft without creating a thread", async () 
     await expect(xterm).toBeVisible()
     await expect(drawer.getByRole("tab")).toHaveText(["pigcode-e2e-draft-terminal"])
     await xterm.click()
+    await page.keyboard.type("printf 'PIGCODE_TERM=%s\\n' \"$TERM\"")
+    await page.keyboard.press("Enter")
+    await expectTerminalText(xterm, "PIGCODE_TERM=xterm-256color")
     // 用算术展开：输出里出现的结果不会是命令回显本身。
     await page.keyboard.type("export DRAFT_MARK=$((40+2)); echo IN_$(basename $PWD)_$DRAFT_MARK")
     await page.keyboard.press("Enter")
@@ -94,6 +97,7 @@ test("the right panel opens in a draft without creating a thread", async () => {
     await expect(readme).toBeVisible()
     await expect(page.locator(".workbench-worktree-compact")).toHaveCount(0)
     await readme.click()
+    await page.getByRole("button", { name: "源码", exact: true }).click()
     const editor = page.getByRole("textbox", { name: "文件内容 README.md" })
     await expect(editor).toContainText("DRAFT_DIFF_LINE")
     // 改了不保存：建好会话后这份未保存的修改还在。

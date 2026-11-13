@@ -2,15 +2,16 @@
  * Agent 设置页（参照 t3code 的 Agent 设置页，外观和设置里其他页面一致）：
  * 上面是「新会话使用」，下面每个实例一张卡片（每个 Agent 的默认实例在前，其余实例跟在后面）。
  * 卡片头是品牌图标、名字、状态与登录的账号，右边是启用开关与展开箭头；点卡片头就地展开它的设置。
- * 新建实例走三步向导，安装 agent 走安装对话框，入口都在页头。
+ * 从页头的「添加实例」打开三步向导。
  */
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, Plus, RefreshCw } from "lucide-react"
+import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
 import type {
   AgentInstance,
   AgentSettingsValues,
   AgentStatus,
   AgentSummary,
+  AgentCliUpdateState,
 } from "@pigcode/contracts"
 import {
   AgentIcon,
@@ -18,7 +19,6 @@ import {
   agentBrandOf,
   Button,
   EmptyState,
-  InstallDialog,
   Select,
   StatusDot,
   Switch,
@@ -31,11 +31,17 @@ import { InstanceCreateWizard } from "./agent-instance-wizard"
 import { allInstances, instancesOf, type AgentInstanceEntry } from "./agent-instances"
 import { instanceHeadline } from "./agent-status"
 import { SensitiveText } from "./sensitive-text"
+import { AgentCliUpdate } from "./agent-cli-update"
 
 export type { AgentModelInfo } from "./agent-models"
 
 /** Agent 页的数据与操作；操作失败时抛错，页面展示原因。 */
 export interface AgentsPageProps {
+  cliUpdates?: Readonly<Record<string, AgentCliUpdateState>> | undefined
+  checkingCliUpdates?: boolean | undefined
+  onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
+  onUpdateCli?: ((instanceId: string) => Promise<void>) | undefined
+  onShowUpdates?: ((instanceId: string) => void) | undefined
   agents: readonly AgentSummary[]
   /** 用户选择的默认 agent。 */
   defaultAgentId: string | null
@@ -64,8 +70,6 @@ export interface AgentsPageProps {
     patch: { label?: string; enabled?: boolean },
   ) => Promise<void>
   onRemoveInstance: (agent: AgentSummary, instanceId: string) => Promise<void>
-  onInstall: (spec: string) => Promise<void>
-  onUninstall: (agent: AgentSummary) => Promise<void>
   onPickPath?: PickPath | undefined
   onOpenExternal?: ((url: string) => void) | undefined
 }
@@ -84,6 +88,8 @@ function InstanceHead({
   onToggle,
   onReveal,
   onSetEnabled,
+  update,
+  onShowUpdate,
 }: {
   entry: AgentInstanceEntry
   status: AgentStatus | undefined
@@ -95,12 +101,15 @@ function InstanceHead({
   onToggle: () => void
   onReveal: () => void
   onSetEnabled: (enabled: boolean) => void
+  update: AgentCliUpdateState | undefined
+  onShowUpdate: () => void
 }) {
   const { t } = useLocale()
   const { agent, instance, label } = entry
   const headline = instanceHeadline(agent, instance, status)
   const custom = !instance.isDefault
   const signedIn = headline.tone === "ready" && status?.authenticated === true
+  const updating = Boolean(update && ["queued", "waiting", "running"].includes(update.phase))
   return (
     <div className="agent-row" data-open={open || undefined}>
       {/* 整块卡片头可点：展开按钮铺满这一块，邮箱的显示按钮浮在它上面，不嵌套按钮。 */}
@@ -142,6 +151,25 @@ function InstanceHead({
             ) : null}
           </span>
         </span>
+        {update && (update.available || updating) ? (
+          <button
+            className="icon-btn agent-row-update"
+            type="button"
+            aria-label={t("updates.agent").replace("{agent}", label)}
+            title={
+              updating
+                ? t("updates.inProgress")
+                : t("agents.cli.available").replace("{version}", update.latestVersion ?? "")
+            }
+            onClick={onShowUpdate}
+          >
+            {updating ? (
+              <LoaderCircle className="ic ic-sm spin" aria-hidden="true" />
+            ) : (
+              <CircleArrowUp className="ic ic-sm" aria-hidden="true" />
+            )}
+          </button>
+        ) : null}
         <ChevronDown className="ic ic-sm agent-row-caret" aria-hidden="true" />
       </div>
       <Switch
@@ -156,6 +184,11 @@ function InstanceHead({
 
 /** 渲染 Agent 设置页。 */
 export function AgentsPage({
+  cliUpdates = {},
+  checkingCliUpdates = false,
+  onCheckCliUpdates,
+  onUpdateCli,
+  onShowUpdates,
   agents,
   defaultAgentId,
   defaultInstanceId = null,
@@ -170,8 +203,6 @@ export function AgentsPage({
   onCreateInstance,
   onUpdateInstance,
   onRemoveInstance,
-  onInstall,
-  onUninstall,
   onPickPath,
   onOpenExternal,
 }: AgentsPageProps) {
@@ -188,7 +219,6 @@ export function AgentsPage({
     })
   const [pending, setPending] = useState<string | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [installOpen, setInstallOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // 展开的实例被删掉或随插件停用消失时收起。
@@ -238,9 +268,29 @@ export function AgentsPage({
           <p className="sub">{t("agents.sub")}</p>
         </div>
         <div className="actions">
-          <Button size="sm" variant="ghost" type="button" onClick={() => setInstallOpen(true)}>
-            {t("agents.install")}
-          </Button>
+          {onUpdateCli &&
+          Object.values(cliUpdates).some((update) => update.available && update.canUpdate) ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              aria-label={t("agents.cli.updateAll")}
+              title={t("agents.cli.updateAll")}
+              disabled={checkingCliUpdates || pending !== null}
+              onClick={() =>
+                void run("update-clis", async () => {
+                  const targets = new Map(
+                    Object.values(cliUpdates)
+                      .filter((update) => update.available && update.canUpdate)
+                      .map((update) => [update.target, update.instanceId]),
+                  )
+                  await Promise.all([...targets.values()].map(onUpdateCli))
+                })
+              }
+            >
+              {t("agents.cli.updateAllShort")}
+            </Button>
+          ) : null}
           <Button size="sm" type="button" onClick={() => setWizardOpen(true)}>
             <Plus className="ic ic-sm" aria-hidden="true" />
             {t("agents.instance.add")}
@@ -250,11 +300,18 @@ export function AgentsPage({
             variant="ghost"
             type="button"
             aria-label={t("agents.detect")}
-            title={t("agents.detect")}
-            disabled={detecting}
-            onClick={() => void run("detect", onDetect)}
+            title={t(onCheckCliUpdates ? "agents.cli.refresh" : "agents.detect")}
+            disabled={detecting || checkingCliUpdates}
+            onClick={() =>
+              void run("detect", async () => {
+                await Promise.all([onDetect(), onCheckCliUpdates?.()])
+              })
+            }
           >
-            <RefreshCw className={detecting ? "ic ic-sm spin" : "ic ic-sm"} aria-hidden="true" />
+            <RefreshCw
+              className={detecting || checkingCliUpdates ? "ic ic-sm spin" : "ic ic-sm"}
+              aria-hidden="true"
+            />
           </Button>
         </div>
       </header>
@@ -341,6 +398,8 @@ export function AgentsPage({
             return (
               <div key={id} className="agent-card" data-open={open || undefined}>
                 <InstanceHead
+                  update={cliUpdates[id]}
+                  onShowUpdate={() => (onShowUpdates ? onShowUpdates(id) : setOpenId(id))}
                   entry={entry}
                   status={statuses[id]}
                   open={open}
@@ -381,13 +440,19 @@ export function AgentsPage({
                       onRemoveInstance(openEntry.agent, instanceId).then(() => setOpenId(null))
                     }
                     onSetDefaultInstance={(instanceId) => onSetDefault(instanceId)}
-                    onUninstall={
-                      openEntry.agent.pluginId && !openEntry.agent.builtin
-                        ? () => run(openEntry.agent.agentId, () => onUninstall(openEntry.agent))
-                        : undefined
-                    }
                     onPickPath={onPickPath}
                     onOpenExternal={onOpenExternal}
+                    cliUpdate={
+                      onCheckCliUpdates && onUpdateCli ? (
+                        <AgentCliUpdate
+                          version={statuses[id]?.version ?? null}
+                          state={cliUpdates[id]}
+                          checking={checkingCliUpdates}
+                          onCheck={() => onCheckCliUpdates(id)}
+                          onUpdate={() => onUpdateCli(id)}
+                        />
+                      ) : null
+                    }
                   />
                 ) : null}
               </div>
@@ -407,27 +472,6 @@ export function AgentsPage({
           const created = await onCreateInstance(agent, label, copyFrom)
           setOpenId(created)
         }}
-      />
-
-      <InstallDialog
-        open={installOpen}
-        onOpenChange={setInstallOpen}
-        onInstall={onInstall}
-        inputId="agent-install-spec"
-        labels={{
-          close: t("common.close"),
-          title: t("agents.install.title"),
-          description: t("agents.install.description"),
-          spec: t("agents.install.spec"),
-          placeholder: t("agents.install.placeholder"),
-          chooseFolder: t("agents.install.chooseFolder"),
-          trust: t("agents.install.trust"),
-          cancel: t("agents.install.cancel"),
-          submit: t("agents.install.submit"),
-          installing: t("plugins.installing"),
-          failed: t("agents.failed"),
-        }}
-        {...(onPickPath ? { onPickFolder: () => onPickPath("directory") } : {})}
       />
     </div>
   )

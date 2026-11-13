@@ -1,3 +1,4 @@
+import { threadPatchFromEvent } from "./thread-patch"
 /** Renderer 的应用状态；组件通过 useSyncExternalStore 订阅。 */
 import { useSyncExternalStore } from "react"
 import type { Project, AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
@@ -109,42 +110,6 @@ function isSubagentMessage(event: ThreadEvent): boolean {
 }
 
 /** 权限模式的合法值；thread.updated 里的未知值忽略。 */
-const PERMISSION_MODES = new Set<string>([
-  "read-only",
-  "workspace-write",
-  "danger-full-access",
-  "plan",
-])
-
-/**
- * 从 thread.updated 的 payload 中读出线程字段的变化：标题、权限模式、切换后的 agent 与模型。
- * 没有可用字段时返回 null。
- */
-function threadPatchFromEvent(payload: unknown): Partial<Thread> | null {
-  if (typeof payload !== "object" || payload === null) return null
-  const value = payload as {
-    title?: unknown
-    permissionMode?: unknown
-    agentId?: unknown
-    instanceId?: unknown
-    modelId?: unknown
-  }
-  const patch: Partial<Thread> = {}
-  if (typeof value.title === "string" && value.title.trim().length > 0) patch.title = value.title
-  if (typeof value.permissionMode === "string" && PERMISSION_MODES.has(value.permissionMode)) {
-    patch.permissionMode = value.permissionMode as Thread["permissionMode"]
-  }
-  if (typeof value.agentId === "string" && value.agentId.length > 0) {
-    patch.lastAgentId = value.agentId
-    // 旧事件没有 instanceId：按 Agent 的默认实例处理。
-    patch.lastInstanceId =
-      typeof value.instanceId === "string" && value.instanceId.length > 0
-        ? value.instanceId
-        : value.agentId
-    patch.lastModelId = typeof value.modelId === "string" ? value.modelId : null
-  }
-  return Object.keys(patch).length > 0 ? patch : null
-}
 
 /** 从事件 payload 中提取可展示的错误文本。 */
 function errorFromPayload(payload: unknown): string | null {

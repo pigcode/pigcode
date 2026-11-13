@@ -78,6 +78,16 @@ const EXEMPT_SECTIONS: ReadonlyArray<{ file: string; start: string; end: string;
 
 /** 同一个词的其他含义。file 缺省表示所有文件；模式带 g，按命中范围判断。 */
 const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: string }> = [
+  ...[
+    "packages/agent-codex/src/driver.ts",
+    "packages/agent-codex/src/driver.test.ts",
+    "packages/agent-codex/src/permissions.test.ts",
+  ].map((file) => ({
+    file,
+    pattern: /\bcapabilities: \{ experimentalApi: true \}/g,
+    reason:
+      "Codex app-server initialize 的原生协议字段，用于启用计划和提问，不是 Pigcode 的 Agent 功能命名",
+  })),
   {
     pattern: /\b(?:LocaleProvider|ToastProvider)\b/g,
     reason: "React context 的 Provider 组件，只认这两个已有的名字",

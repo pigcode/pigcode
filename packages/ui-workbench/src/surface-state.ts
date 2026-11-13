@@ -22,6 +22,8 @@ export interface PanelSurface {
   line?: number
   /** 有未保存的修改；标签上显示圆点。 */
   dirty?: boolean
+  /** 文件导航打开的临时预览；编辑后或显式打开时保留为独立标签。 */
+  preview?: boolean
 }
 
 /** 一组标签与当前激活的标签；没有标签时 activeId 为 null，面板显示启动器。 */
@@ -71,13 +73,17 @@ export function closeSurface(state: PanelSurfaceState, id: string): PanelSurface
 
 /**
  * 打开一个文件标签：同一文件已经打开时切过去（并更新要定位的行）；
- * replace 给出时用新标签替换那个标签（从文件树标签打开文件时，文件树收进文件标签的侧栏）。
+ * replace 给出时在原位置打开；preview 表示可以由后续的文件预览替换。
  */
 export function openFileSurface(
   state: PanelSurfaceState,
   path: string,
   id: string,
-  options: { line?: number | undefined; replace?: string | undefined } = {},
+  options: {
+    line?: number | undefined
+    replace?: string | undefined
+    preview?: boolean | undefined
+  } = {},
 ): PanelSurfaceState {
   const title = path.split("/").at(-1) ?? path
   const existing = state.surfaces.find(
@@ -86,9 +92,17 @@ export function openFileSurface(
   if (existing) {
     const surfaces = state.surfaces
       .filter((surface) => surface.id !== options.replace || surface.id === existing.id)
-      .map((surface) =>
-        surface.id === existing.id && options.line ? { ...surface, line: options.line } : surface,
-      )
+      .map((surface) => {
+        if (surface.id !== existing.id) return surface
+        const keepOpen = surface.preview && !options.preview
+        return options.line || keepOpen
+          ? {
+              ...surface,
+              ...(options.line ? { line: options.line } : {}),
+              ...(keepOpen ? { preview: false } : {}),
+            }
+          : surface
+      })
     return { surfaces, activeId: existing.id }
   }
   const surface: PanelSurface = {
@@ -97,6 +111,7 @@ export function openFileSurface(
     title,
     path,
     ...(options.line ? { line: options.line } : {}),
+    ...(options.preview ? { preview: true } : {}),
   }
   const index = options.replace
     ? state.surfaces.findIndex((item) => item.id === options.replace)
@@ -125,7 +140,7 @@ export function closeRemovedSurfaces(
 export function updateSurface(
   state: PanelSurfaceState,
   id: string,
-  patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty">>,
+  patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview">>,
 ): PanelSurfaceState {
   return {
     ...state,

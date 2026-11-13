@@ -46,10 +46,22 @@ export function normalizeBrowserUrl(input: string): string | null {
   }
 }
 
-/** 交给系统浏览器打开的地址：只要 http/https，不带用户名密码；不合法时返回 null。 */
-export function readBrowserExternalUrl(value: unknown): string | null {
+/** 浏览器打开或保存的网页地址，拒绝 URL 中的用户名和密码。 */
+export function readBrowserWebUrl(value: unknown): string | null {
   if (typeof value !== "string" || value === "about:blank" || !isAllowedBrowserUrl(value))
     return null
   const url = new URL(value)
   return url.username || url.password ? null : url.toString()
+}
+
+/** 交给系统处理的链接。邮件链接继续使用系统的邮件应用。 */
+export function readBrowserExternalUrl(value: unknown): string | null {
+  if (typeof value === "string" && /^mailto:/i.test(value)) {
+    try {
+      return new URL(value).href
+    } catch {
+      return null
+    }
+  }
+  return readBrowserWebUrl(value)
 }

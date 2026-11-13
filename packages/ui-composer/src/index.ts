@@ -3,7 +3,12 @@ export * from "./composer"
 export * from "./composer-options"
 export { requestComposerMention, requestComposerThreadMention } from "./composer-mention"
 export { requestComposerContext, type ComposerContext } from "./composer-context"
-export { moveComposerDraft, prefillComposer, resetComposerMemory } from "./composer-memory"
+export {
+  captureComposerDraft,
+  moveComposerDraft,
+  prefillComposer,
+  resetComposerMemory,
+} from "./composer-memory"
 export type { ComposerCommand } from "./composer-editor"
 export type { ComposerReference, ComposerThreadOption } from "./composer-threads"
 export { ContextMeter, formatTokens, type ContextUsage } from "./context-meter"

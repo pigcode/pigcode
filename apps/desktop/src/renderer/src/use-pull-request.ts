@@ -10,7 +10,12 @@ import type { WorkspaceScope } from "./workspace-scope"
  * active 为 true（PR 标签可见）时读取；没有 PR 与 gh 错误都作为面板状态展示。
  * 新会话草稿里看项目根目录的当前分支。
  */
-export function usePullRequest(connection: Connection, scope: WorkspaceScope, active: boolean) {
+export function usePullRequest(
+  connection: Connection,
+  scope: WorkspaceScope,
+  active: boolean,
+  checkoutRevision: number,
+) {
   const [pullRequest, setPullRequest] = useState<PullRequestInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -36,7 +41,7 @@ export function usePullRequest(connection: Connection, scope: WorkspaceScope, ac
     return () => {
       cancelled = true
     }
-  }, [active, scope, connection])
+  }, [active, scope, connection, checkoutRevision])
 
   /** 创建 PR；失败时把错误交给面板展示，并继续抛出让表单保持输入。 */
   async function create(input: PrCreateInput): Promise<void> {

@@ -13,14 +13,20 @@ import {
   type AppStore,
   type Connection,
 } from "@pigcode/client-runtime"
-import { useLocale } from "@pigcode/ui-primitives"
-import { ChatView, collectSubagents, type ApprovalDecision } from "@pigcode/ui-chat"
+import { copyText, useLocale } from "@pigcode/ui-primitives"
+import {
+  ChatView,
+  collectSubagents,
+  type ApprovalDecision,
+  type ChatLinkActions,
+} from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
 import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
 import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
 import { NewThreadPage } from "./new-thread-page"
+import { useThreadWorkspaceRoot } from "./use-thread-workspace-root"
 import {
   buildThreadTabs,
   childThreads,
@@ -42,16 +48,20 @@ export interface CoreDeps {
 export interface ChatControls {
   rightOpen?: boolean
   onToggleRight?: () => void
-  /** 线程头末尾的布局按钮；右栏展开时为 null，按钮在右栏标签栏里。 */
+  /** 与「打开」同组的布局按钮。 */
   layoutControls?: ReactNode
   /** 在右栏的文件标签里打开项目内的文件（相对路径）。 */
   onOpenFile?: (path: string) => void
   /** 在右栏打开 Diff。 */
   onOpenDiff?: () => void
+  /** 在右栏新建一个打开此网址的浏览器标签。 */
+  onOpenLinkTab?: (url: string) => void
   /** 打开用户 @ 引用的会话（#81）。 */
   onOpenThread?: (threadId: string) => void
   /** 每次进入新会话草稿都会变；变了就把光标放回草稿的输入框。 */
   draftFocus?: number
+  checkoutRevision?: number
+  onCheckoutChanged?: () => void
 }
 
 /** 把 unknown 错误转成可展示文本。 */
@@ -62,10 +72,13 @@ function messageOf(error: unknown): string {
 /** 项目内的文件转成相对路径；项目外的文件不在文件标签里打开。 */
 function projectRelative(path: string | undefined, root: string | undefined): string | undefined {
   if (!path) return undefined
-  if (!path.startsWith("/") && !/^[a-z]:[\\/]/i.test(path)) return path
+  const windows = /^(?:[a-z]:[\\/]|\\\\)/i.test(path)
+  if (!path.startsWith("/") && !windows) return path
   if (!root) return undefined
-  const prefix = root.endsWith("/") || root.endsWith("\\") ? root : `${root}/`
-  return path.startsWith(prefix) ? path.slice(prefix.length) : undefined
+  const absolute = windows ? path.replaceAll("\\", "/") : path
+  const folder = windows ? root.replaceAll("\\", "/") : root
+  const prefix = folder.endsWith("/") ? folder : `${folder}/`
+  return absolute.startsWith(prefix) ? absolute.slice(prefix.length) : undefined
 }
 
 /** 用 Host 返回的线程记录替换 store 里的同 id 线程。 */
@@ -85,7 +98,10 @@ export function ChatViewContainer({
   onOpenFile,
   onOpenThread,
   onOpenDiff,
+  onOpenLinkTab,
   draftFocus,
+  checkoutRevision = 0,
+  onCheckoutChanged,
 }: { deps: CoreDeps } & ChatControls) {
   const state = useAppStore(deps.store)
   const { t } = useLocale()
@@ -98,6 +114,12 @@ export function ChatViewContainer({
     : active
   const mainId = main?.id ?? null
   const project = state.projects.find((item) => item.id === main?.projectId)
+  const workspaceRoot = useThreadWorkspaceRoot(
+    deps.connection,
+    mainId,
+    state.status === "connected",
+    checkoutRevision,
+  )
   const threadChoices = useThreadOptions(
     state.threads,
     state.projects,
@@ -140,6 +162,41 @@ export function ChatViewContainer({
     (error: unknown) => deps.store.update({ error: messageOf(error) }),
     [deps.store],
   )
+  const linkActions = useMemo<ChatLinkActions | undefined>(() => {
+    const { browser, popupMenu } = window.pigcodeNative ?? {}
+    if (!browser || !popupMenu || !onOpenLinkTab) return undefined
+
+    const openExternal = (url: string) => {
+      void browser.openExternal(url).catch(() => fail(t("chat.link.openFailed")))
+    }
+    return {
+      openExternal,
+      showMenu: (url, point) => {
+        const web = /^https?:/i.test(url)
+        const items = [
+          { id: "open-in", label: t("chat.link.openIn"), enabled: false },
+          ...(web ? [{ id: "new-tab", label: t("chat.link.newTab") }] : []),
+          {
+            id: "open-external",
+            label: t(web ? "chat.link.defaultBrowser" : "chat.link.openEmail"),
+          },
+          { type: "separator" as const },
+          { id: "copy-link", label: t("chat.link.copy") },
+          ...(web ? [{ id: "save-link", label: t("chat.link.saveAs") }] : []),
+        ]
+        void popupMenu(items, point)
+          .then(async (choice) => {
+            if (choice === "new-tab" && web) onOpenLinkTab(url)
+            else if (choice === "open-external") openExternal(url)
+            else if (choice === "copy-link") await copyText(url)
+            else if (choice === "save-link" && web) {
+              await browser.saveLink(url).catch(() => fail(t("chat.link.saveFailed")))
+            }
+          })
+          .catch(fail)
+      },
+    }
+  }, [fail, onOpenLinkTab, t])
 
   const mainEvents = mainId ? (state.threadStates[mainId]?.events ?? state.events) : state.events
   const subagents = useMemo(() => collectSubagents(mainEvents), [mainEvents])
@@ -234,8 +291,11 @@ export function ChatViewContainer({
         instanceId: choice.instanceId,
         modelId: choice.modelId,
       })
-      .then(() => {
+      .then((result) => {
+        const modes = result as { permissionMode?: string; planMode?: boolean }
         patchThread(deps.store, thread.id, {
+          ...(modes.permissionMode ? { permissionMode: modes.permissionMode } : {}),
+          ...(typeof modes.planMode === "boolean" ? { planMode: modes.planMode } : {}),
           lastAgentId: choice.agentId,
           lastInstanceId: choice.instanceId,
           lastModelId: choice.modelId,
@@ -258,6 +318,14 @@ export function ChatViewContainer({
         patchThread(deps.store, thread.id, { permissionMode: thread.permissionMode })
         fail(error)
       })
+  }
+
+  function setPlanMode(planMode: boolean): void {
+    if (!thread) return
+    void deps.connection
+      .call("thread.setPlanMode", { threadId: thread.id, planMode })
+      .then((updated) => patchThread(deps.store, thread.id, updated as Thread))
+      .catch(fail)
   }
 
   /** 关闭子代理标签：用户添加的归档（还在跑的 run 会停下），派生的只是不再显示。 */
@@ -324,6 +392,7 @@ export function ChatViewContainer({
         commands={commands}
         focusKey={draftFocus}
         layoutControls={layoutControls}
+        onBranchChanged={onCheckoutChanged}
       />
     )
   }
@@ -345,7 +414,8 @@ export function ChatViewContainer({
         agents={agents}
         catalog={catalog}
         onLoadModels={load}
-        {...(project ? { cwd: project.rootPath, projectName: project.name } : {})}
+        {...(project ? { projectName: project.name } : {})}
+        {...(workspaceRoot ? { cwd: workspaceRoot } : {})}
         loading={threadId !== null && !state.threadStates[threadId]?.loaded}
         onStart={(text, options) => {
           if (!threadId) return
@@ -357,14 +427,16 @@ export function ChatViewContainer({
         {...(onOpenFile
           ? {
               onOpenFile: (target: string) => {
-                const path = projectRelative(target, project?.rootPath)
+                const path = projectRelative(target, workspaceRoot)
                 if (path) onOpenFile(path)
               },
             }
           : {})}
         {...(onOpenDiff ? { onViewDiff: () => onOpenDiff() } : {})}
+        linkActions={linkActions}
         onSelectModel={selectModel}
         onPermissionMode={setPermissionMode}
+        onPlanMode={setPlanMode}
         {...(files ? { files } : {})}
         threads={threadChoices}
         {...(onOpenThread ? { onOpenThread } : {})}
@@ -373,7 +445,7 @@ export function ChatViewContainer({
         rightOpen={rightOpen}
         {...(onToggleRight ? { onToggleRight } : {})}
         {...(layoutControls !== undefined ? { layoutControls } : {})}
-        {...(project ? { openIn: <OpenInButton path={project.rootPath} /> } : {})}
+        {...(workspaceRoot ? { openIn: <OpenInButton path={workspaceRoot} /> } : {})}
         {...(main
           ? {
               tabs: {

@@ -103,8 +103,8 @@ Agent 插件是 `kind` 为 `agent` 的插件：它在 Host 里注册一个 drive
 - **内置**：Claude Code（[`packages/agent-claude`](../packages/agent-claude)）和 Codex
   （[`packages/agent-codex`](../packages/agent-codex)）随应用发布，列在核心 profile 的
   `builtinPlugins` 里。它们可以在 **设置 → Agent** 里停用，但不能卸载。
-- **按需安装**：其他 agent 在 **设置 → Agent → 安装 agent** 里安装（npm 包、tarball 或本地目录）。
-  装好后和内置 agent 一样出现在设置页和输入框的模型选择器里，也可以随时卸载。
+- **按需安装**：从侧栏的 **插件** 页安装第三方 Agent 插件。
+  装好后和内置 agent 一样出现在设置页和输入框的模型选择器里。需要卸载时，回到 **插件** 页操作。
 
 完整可运行示例见 [`examples/agent-echo`](../examples/agent-echo)：它把用户输入回显出来，
 并演示设置字段怎样传到 driver。
@@ -184,7 +184,7 @@ agent 的介绍和设置字段写在 `package.json` 的 `contributes.agent` 里�
 
 `index.ts` 导出 `apply(ctx)`，在 `ctx.agents` 上注册一个
 [`AgentDriver`](../packages/plugin-sdk/src/agent.ts)。`features` 声明这个 Agent 支持哪些 Agent 功能
-（流式输出、审批、提问、计划模式、MCP 等），界面据此隐藏不支持的控件。driver 的方法：
+（流式输出、审批、提问、计划进度事件、MCP 等），界面据此隐藏不支持的控件。driver 的方法：
 
 | 方法                            | 必须 | 说明                                                                                     |
 | ------------------------------- | ---- | ---------------------------------------------------------------------------------------- |
@@ -280,6 +280,45 @@ export function apply(ctx: PluginHostContext): void {
 [`packages/contracts/src/events.ts`](../packages/contracts/src/events.ts) 中的 `AgentEvent`。
 需要审批时调用 `runtime.requestApproval`；`features.questions` 为 `true` 时可以用
 `runtime.askQuestions` 向用户提问；取消通过 `runtime.signal` 观察。
+
+### 统一权限和计划模式
+
+权限菜单与 T3 Code 使用同一套四档概念，由平台统一定义名称、说明、图标和顺序。
+Agent 插件负责将 `input.permissionMode` 映射到原生 API，不再自定义权限菜单。
+新会话默认 `full-access`；已有会话按原来的实际行为迁移。权限与计划都是会话级选择，切换 Agent 时保持不变。
+
+| 平台 id             | 菜单名称 | Codex                                            | Claude              |
+| ------------------- | -------- | ------------------------------------------------ | ------------------- |
+| `approval-required` | 监督审批 | `untrusted` + `read-only` + `user`               | `default`           |
+| `auto-accept-edits` | 接受编辑 | `on-request` + `workspace-write` + `user`        | `acceptEdits`       |
+| `auto`              | 自动审批 | `on-request` + `workspace-write` + `auto_review` | `auto`              |
+| `full-access`       | 完全访问 | `never` + `danger-full-access` + `user`          | `bypassPermissions` |
+
+`RuntimeMode` 从 `@pigcode/plugin-sdk` 导入。driver 声明 `readonly executionModes = { plan: true }`
+表示接入统一权限协议并支持独立计划模式；没有原生计划能力时写 `plan: false`。
+没有此声明的旧插件仍接收旧权限字符串，自动审批回退为监督审批；插件升级时应实现上表四档。
+未知权限必须拒绝，不能静默变成完全访问。
+
+`permissionMode` 与 `planMode` 分别保存，`createSession(input)` 每轮收到当前选择。
+Codex 每轮显式发送审批策略、审批者和沙箱；原生计划通过 `collaborationMode` 的 `plan/default` 控制。
+Claude 计划期间使用原生 `plan`，退出后恢复当前统一档位的原生权限。
+计划内需要提问时用 `runtime.askQuestions`；原生计划成功进入或退出时用 `runtime.setPlanMode` 同步会话状态。
+`features.plan` 只表示能输出计划进度事件，不控制计划开关。
+
+菜单、Shift+Tab 和 `/` 命令共用平台定义。完全访问不会进入直接切换档位的快捷轮换；
+用户显式从其他档位切到完全访问时仍显示现有确认框。新会话使用平台默认值，子会话继承主会话的权限与计划选择。
+
+### CLI 更新
+
+Agent driver 可以实现 `prepareCliUpdate(settings)`，返回 `AgentCliUpdatePlan`。
+插件根据实例配置识别实际的可执行文件和安装渠道，提供当前版本、最新版本、更新命令说明、
+共享安装的 `target`、执行更新的 `run(runtime)` 和复检版本的 `verify()`。
+不支持自动更新的安装返回说明原因的 `reason`，省略 `run`。
+
+Host 统一提供设置页的检查、单项更新和批量更新入口，合并相同 `target` 的请求并串行执行。
+运行中的 Agent 会话结束后才开始更新。`runtime.onOutput` 用于展示日志，
+`runtime.signal` 用于 Host 退出时终止更新进程。更新完成后，插件应让后续会话使用新 CLI。
+内置 Claude 和 Codex 插件复用 SDK 的 `preparePackageCliUpdate`，包名和原生更新策略由各自插件提供。
 
 ### MCP 工具
 
@@ -832,15 +871,14 @@ Host 入口 import 或 apply 抛错时 Host 照常启动，错误显示在插件
 
 ## 安装与卸载
 
-桌面端有两个入口，背后是同一套安装流程：
+从侧栏打开 **插件** 页。页面分「插件市场」和「已安装」两段。标题栏的「添加」里有三项。
 
-- **设置 → Agent → 安装 agent**：安装 Agent 插件，可以用“选择文件夹…”挑本地目录。
-- **侧栏的插件**：页面分「插件市场」和「已安装」两段。标题栏的「添加」里有三项：
-  - **创建插件**：让 agent 写一个插件，见[让 agent 创建插件](#让-agent-创建插件)。
-  - **添加插件市场**：添加一个插件市场，见[插件市场](#插件市场)。
-  - **安装插件**：直接安装一个插件，填的内容见下文，也可以用“选择文件夹…”。
+- **创建插件**。让 agent 写一个插件，见[让 agent 创建插件](#让-agent-创建插件)。
+- **添加插件市场**。添加一个插件市场，见[插件市场](#插件市场)。
+- **安装插件**。直接安装一个插件，可以填写下列来源，或用「选择文件夹…」挑选本地插件目录。
 
-  已安装的插件按类型分组，每组两列卡片：开关启停，插件有设置页时卡片上有「打开」，点卡片看包名、权限、来源、更新与卸载。
+已安装的插件按类型分组，每组两列卡片。用开关启停插件。插件有设置页时，点「打开」进入设置。
+点卡片查看包名、权限和来源，也可以更新或卸载插件。
 
 「安装插件」可以填的内容：
 
@@ -1009,5 +1047,4 @@ Panel、Surface、设置页都用宿主的 React 和 `@pigcode/ui-primitives`（
 那一份（ADR-0002）。两个 `@pigcode/*` 包没有发布到 npm，所以不写进依赖：直接安装源码目录不需要它们；要在仓库
 里自己打包时才需要（用仓库根目录的 workspace 版本）。打包后把 `pigcode.client` 指向 `./dist/client.js`。
 
-脚本结束时打印本地安装路径：
-agent 填进 **设置 → Agent → 安装 agent**，其他插件填进侧栏 **插件** 页的“插件目录或 npm 包”。
+脚本结束时打印本地安装路径。把路径填进侧栏的 **插件 → 添加 → 安装插件**。

@@ -27,8 +27,8 @@
 @import "./status-panel.css";
 @import "./new-thread.css";
 @import "./composer.css";
+@import "./composer-plan.css";
 @import "./composer-input.css";
-@import "./drawer.css";
 @import "./workbench.css";
 @import "./surface-tabs.css";
 @import "./surface-launcher.css";
@@ -43,6 +43,8 @@
 @import "./settings-page.css";
 @import "./appearance.css";
 @import "./agents.css";
+@import "./cli-updates.css";
+@import "./update-center.css";
 @import "./plugins.css";
 @import "./schedules.css";
 @import "./toast.css";

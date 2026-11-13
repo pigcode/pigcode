@@ -43,6 +43,9 @@ export interface NewThreadViewProps {
   projectId: string | null
   onSelectProject: (projectId: string) => void
   onAddProject: () => void
+  /** 当前项目的分支、项目编辑与 worktree 控件。 */
+  workspaceControls?: ReactNode
+  workspaceStatus?: ReactNode
   /** 输入框的草稿键；建议预填到这里。 */
   draftKey: string
   agents?: readonly ComposerAgent[]
@@ -55,7 +58,8 @@ export interface NewThreadViewProps {
   onSelectModel: (choice: ComposerModelChoice) => void
   permissionMode: PermissionMode
   onPermissionMode: (mode: PermissionMode) => void
-  canPlan?: boolean
+  planMode?: boolean
+  onPlanMode?: (value: boolean) => void
   /** @ 引用时可选的项目文件。 */
   files?: () => Promise<readonly string[]>
   /** @ 引用时可选的会话（#81）。 */
@@ -218,17 +222,19 @@ function ProjectMenu({
   projectId,
   onSelect,
   onAdd,
+  disabled,
 }: {
   projects: readonly NewThreadProject[]
   projectId: string | null
   onSelect: (projectId: string) => void
   onAdd: () => void
+  disabled: boolean
 }) {
   const { t } = useLocale()
   const current = projects.find((project) => project.id === projectId)
   if (projects.length === 0) {
     return (
-      <button type="button" className="chip-btn draft-project" onClick={onAdd}>
+      <button type="button" className="chip-btn draft-project" onClick={onAdd} disabled={disabled}>
         <FolderPlus className="ic" aria-hidden="true" />
         <span>{t("nav.addProject")}</span>
       </button>
@@ -240,6 +246,7 @@ function ProjectMenu({
       <Menu.Trigger
         className="chip-btn draft-project"
         type="button"
+        disabled={disabled}
         aria-label={`${t("newThread.project")}: ${label}`}
         title={current?.rootPath}
       >
@@ -287,6 +294,8 @@ export function NewThreadView({
   projectId,
   onSelectProject,
   onAddProject,
+  workspaceControls,
+  workspaceStatus,
   draftKey,
   agents = [],
   catalog = {},
@@ -296,7 +305,8 @@ export function NewThreadView({
   onSelectModel,
   permissionMode,
   onPermissionMode,
-  canPlan = true,
+  planMode = false,
+  onPlanMode,
   files,
   threads,
   commands,
@@ -321,12 +331,16 @@ export function NewThreadView({
         <Composer
           tall
           header={
-            <ProjectMenu
-              projects={projects}
-              projectId={ready ? projectId : null}
-              onSelect={onSelectProject}
-              onAdd={onAddProject}
-            />
+            <>
+              <ProjectMenu
+                projects={projects}
+                projectId={ready ? projectId : null}
+                onSelect={onSelectProject}
+                onAdd={onAddProject}
+                disabled={pending}
+              />
+              {ready ? workspaceControls : null}
+            </>
           }
           onSubmit={onSubmit}
           onStop={() => undefined}
@@ -342,12 +356,14 @@ export function NewThreadView({
           onSelectModel={onSelectModel}
           permissionMode={permissionMode}
           onPermissionMode={onPermissionMode}
-          canPlan={canPlan}
+          planMode={planMode ?? false}
+          {...(onPlanMode ? { onPlanMode } : {})}
           {...(files ? { files } : {})}
           {...(threads ? { threads } : {})}
           {...(commands ? { commands } : {})}
           {...(loadAgentCommands ? { loadAgentCommands } : {})}
         />
+        {workspaceStatus}
         {ready ? <NewThreadSuggestions draftKey={draftKey} disabled={pending} /> : null}
       </NewThreadStage>
     </section>

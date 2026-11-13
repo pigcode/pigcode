@@ -46,7 +46,7 @@ const thread = {
   lastAgentId: null,
   lastInstanceId: null,
   lastModelId: null,
-  permissionMode: "workspace-write" as const,
+  permissionMode: "full-access" as const,
   createdAt: "2026-10-20T00:00:00.000Z",
   updatedAt: "2026-10-20T00:00:00.000Z",
   archivedAt: null,
@@ -267,7 +267,7 @@ describe("ChatView", () => {
   })
 
   /** plan 为 false 时 composer 的权限菜单里不能出现计划模式。 */
-  it("hides the plan permission option when plan is unsupported", async () => {
+  it("shows shared permissions while hiding unsupported planning", async () => {
     render(
       <LocaleProvider locale="zh-CN">
         <ChatView
@@ -278,8 +278,8 @@ describe("ChatView", () => {
         />
       </LocaleProvider>,
     )
-    await userEvent.click(screen.getByRole("button", { name: "权限: 每次询问" }))
-    expect(await screen.findByRole("menuitem", { name: /只读/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "权限: 完全访问" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "计划模式" })).toBeNull()
     expect(screen.queryByText("计划模式")).toBeNull()
   })
 

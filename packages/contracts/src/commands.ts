@@ -3,6 +3,24 @@ import { z } from "zod"
 import { agentInstancePatchSchema, agentSettingsValuesSchema } from "./agents"
 import { permissionModeSchema, reasoningEffortSchema, scheduleRuleSchema } from "./domain"
 
+/** 分支选择器使用完整 ref，避免同名的本地分支、远端分支或 tag 混淆。 */
+const worktreeStart = z.object({
+  baseRef: z
+    .string()
+    .max(4096)
+    .regex(/^refs\/(heads|remotes)\/.+/)
+    .optional(),
+})
+
+export type WorktreeStart = z.infer<typeof worktreeStart>
+
+export interface GitBranches {
+  currentBranch: string | null
+  head: string | null
+  localBranches: string[]
+  remoteBranches: string[]
+}
+
 /** 定时任务的标题：可以留空。 */
 const scheduleTitle = z.string().trim().max(120)
 /** 结束日期；null 表示永不结束。 */
@@ -80,6 +98,9 @@ export const commandSchemas = {
     modelId: z.string().min(1).optional(),
     /** 新会话草稿里选好的权限模式；缺省是 workspace-write。 */
     permissionMode: permissionModeSchema.optional(),
+    planMode: z.boolean().optional(),
+    /** 新会话在独立 worktree 中启动；没有 baseRef 时使用项目当前 HEAD。 */
+    worktree: worktreeStart.optional(),
   }),
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
   "thread.rename": z.object({
@@ -93,6 +114,7 @@ export const commandSchemas = {
     threadId: z.string().min(1),
     permissionMode: permissionModeSchema,
   }),
+  "thread.setPlanMode": z.object({ threadId: z.string().min(1), planMode: z.boolean() }),
   "run.start": z.object({
     threadId: z.string().min(1),
     text: z.string().min(1),
@@ -123,6 +145,9 @@ export const commandSchemas = {
     answers: z.array(z.string()),
   }),
   "agent.detect": agentDetectParams,
+  "agent.cliUpdates": z.object({}),
+  "agent.checkCliUpdates": z.object({ instanceId: z.string().min(1).optional() }),
+  "agent.updateCli": z.object({ instanceId: z.string().min(1) }),
   "agent.registered": agentRegisteredParams,
   "agent.default": agentDefaultParams,
   "agent.models": agentModelsParams,
@@ -203,6 +228,7 @@ export const commandSchemas = {
   "workspace.searchPaths": scoped({
     query: z.string().trim().min(1).max(256),
     limit: z.number().int().min(1).max(500).optional(),
+    refresh: z.boolean().optional(),
   }),
   /** 读取文件；encoding 为 image 时图片按 base64 返回。 */
   "workspace.readFile": scoped({
@@ -221,6 +247,9 @@ export const commandSchemas = {
     glob: z.string().optional(),
   }),
   "git.status": scoped({}),
+  "git.branches": z.object({ projectId: z.string().min(1) }),
+  "git.switchBranch": z.object({ projectId: z.string().min(1), branch: z.string().min(1) }),
+  "git.createBranch": z.object({ projectId: z.string().min(1), branch: z.string().trim().min(1) }),
   "git.diff": scoped({
     base: z.string().min(1),
     head: z.string().min(1),

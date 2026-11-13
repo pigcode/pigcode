@@ -1,3 +1,9 @@
+import {
+  DEFAULT_RUNTIME_MODE,
+  RUNTIME_MODE_OPTIONS,
+  type AgentExecutionModes,
+} from "@pigcode/contracts"
+import { composerCommands } from "./composer-commands"
 // 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、agent/模型/思考深度/速度/权限选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
 import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
@@ -7,8 +13,6 @@ import { Button, Menu, useLocale } from "@pigcode/ui-primitives"
 import {
   getComposerKeyAction,
   nextPermissionMode,
-  permissionKeys,
-  permissionModes,
   type ComposerAgent,
   type ComposerModelCatalog,
   type ComposerModelChoice,
@@ -84,8 +88,9 @@ export interface ComposerProps {
   onSelectModel?: (choice: ComposerModelChoice) => void
   permissionMode?: PermissionMode
   onPermissionMode?: (mode: PermissionMode) => void
-  /** agent 不支持计划模式时隐藏该权限选项。 */
-  canPlan?: boolean
+  executionModes?: AgentExecutionModes | null
+  planMode?: boolean
+  onPlanMode?: (value: boolean) => void
   /** agent 不支持中断时隐藏停止按钮。 */
   canInterrupt?: boolean
   /** 会话当前的上下文占用；没有数据时不显示圆环。 */
@@ -125,9 +130,11 @@ export function Composer({
   catalog = {},
   onLoadModels,
   onSelectModel,
-  permissionMode = "workspace-write",
+  permissionMode = DEFAULT_RUNTIME_MODE,
   onPermissionMode,
-  canPlan = true,
+  executionModes: explicitModes,
+  planMode = false,
+  onPlanMode,
   canInterrupt = true,
   contextUsage = null,
   smartPunctuation = true,
@@ -140,35 +147,24 @@ export function Composer({
   commands = [],
   loadAgentCommands,
 }: ComposerProps) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
   const store = useMemo(() => new SuggestionStore(), [])
   const { effort, fast, ultracode } = useRunPreferences(agentId, catalog, modelId)
-  const availableModes = canPlan ? permissionModes : permissionModes.filter((id) => id !== "plan")
+  const executionModes =
+    explicitModes ?? agents.find((agent) => agent.id === agentId)?.executionModes
+  const availableModes = RUNTIME_MODE_OPTIONS
 
-  const builtinCommands: ComposerCommand[] = [
-    ...(agents.length > 0
-      ? [
-          {
-            id: "model",
-            label: "/model",
-            description: t("composer.command.model"),
-            keywords: [t("composer.command.model.keyword")],
-            run: () => setPickerOpen(true),
-          },
-        ]
-      : []),
-    ...(onPermissionMode
-      ? availableModes
-          .filter((mode) => mode !== "danger-full-access")
-          .map((mode) => ({
-            id: `permission-${mode}`,
-            label: `/${mode === "workspace-write" ? "ask" : mode === "read-only" ? "readonly" : mode}`,
-            description: t(permissionKeys[mode].label),
-            run: () => onPermissionMode(mode),
-          }))
-      : []),
-  ]
+  const builtinCommands = composerCommands({
+    locale,
+    t,
+    hasAgents: agents.length > 0,
+    modes: availableModes,
+    openModels: () => setPickerOpen(true),
+    onPermissionMode,
+    planMode,
+    onPlanMode: executionModes?.plan || planMode ? onPlanMode : undefined,
+  })
 
   // 同一个 `/` 名字只留第一条：输入框自己的命令在前，外面传进来的重名命令不显示。
   const allCommands = firstPerLabel([...builtinCommands, ...commands])
@@ -216,6 +212,8 @@ export function Composer({
     const { contexts, clear } = contextsRef.current
     if (!text && contexts.length === 0) return
     const references = editorReferences(editor)
+    const key = draftKeyRef.current
+    if (key) saveDraft(key, editor.isEmpty ? null : editor.getJSON())
     current.onSubmit(withContexts(text, contexts), {
       effort: current.effort,
       ...(current.fast ? { fast: true as const } : {}),
@@ -449,6 +447,8 @@ export function Composer({
         selectable={Boolean(onSelectModel)}
         permissionMode={permissionMode}
         permissionModes={availableModes}
+        planMode={planMode}
+        onPlanMode={executionModes?.plan || planMode ? onPlanMode : undefined}
         onPermissionMode={onPermissionMode}
         running={running}
         side={menuSide}

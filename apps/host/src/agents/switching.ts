@@ -1,4 +1,5 @@
 /** 切换 Agent：同一个 Agent 优先原生 fork，换 Agent 时回退到一次性 handoff。 */
+import type { AgentModeSelection } from "@pigcode/contracts"
 import type { Context } from "cordis"
 import type { AgentSession } from "@pigcode/contracts"
 import type { AgentSessionStore } from "./session-store"
@@ -40,6 +41,8 @@ export async function disposeSession(
 /** 切换结果，也是 `thread.switchAgent` 的返回；换 Agent 时写 handoff，同一个 Agent 优先写原生 fork 源。 */
 export interface Switch {
   agentId: string
+  permissionMode?: string
+  planMode?: boolean
   /** 切换后使用的实例；没有实例信息时等于 agentId（默认实例）。 */
   instanceId: string
   modelId: string | null
@@ -195,6 +198,7 @@ export async function switchAgent(
   instanceId?: string | null,
   /** 实例的原生会话放在哪里（driver.continuationKey）；值相同的实例能接着用彼此的原生会话（#82）。 */
   keyFor?: (instanceId: string) => string | null,
+  modes?: AgentModeSelection,
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const chosenInstance = instanceId ?? agentId
@@ -234,7 +238,7 @@ export async function switchAgent(
   const previousInstance = previous?.lastInstanceId ?? previous?.defaultInstanceId ?? null
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
   for (const session of active) await disposeActive?.(session)
-  ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance)
+  ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance, modes)
   // 子进程关了，原生会话留着：切回来时接着用。
   sessions.parkActive(threadId, now)
   // 交接记在 thread_handoffs 里，下一轮发送时带上；事件里只留它的 id，时间线据此画切换标记。
@@ -258,6 +262,7 @@ export async function switchAgent(
     payload: {
       agentId,
       instanceId: chosenInstance,
+      ...modes,
       modelId,
       ...(forkFrom !== null ? { forkFromNativeSessionId: forkFrom } : {}),
       ...(resumed ? { resumed: true } : {}),
@@ -275,6 +280,7 @@ export async function switchAgent(
   return {
     agentId,
     instanceId: chosenInstance,
+    ...modes,
     modelId,
     handoff,
     forkFromNativeSessionId: forkFrom,

@@ -225,6 +225,10 @@ describe("workspace", () => {
     const { ctx, root, thread } = await createFixture(true)
     await writeFile(join(root, "keep.ts"), "a")
     expect((await ctx.workspace.searchPaths(thread.id, "keep")).entries).toHaveLength(1)
+    await writeFile(join(root, "external.ts"), "export {}\n")
+    expect(
+      (await ctx.workspace.searchPaths(thread.id, "external", undefined, true)).entries,
+    ).toEqual([{ path: "external.ts", kind: "file" }])
     await ctx.workspace.writeFile(thread.id, "keep.ts", "b")
     expect((await ctx.workspace.searchPaths(thread.id, "keep")).entries).toHaveLength(1)
     await ctx.fiber.dispose()

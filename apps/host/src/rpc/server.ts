@@ -1,4 +1,5 @@
 /** 把 RPC 请求分发给 Host 服务，并把线程事件推送给订阅者。 */
+import { updateThreadModes } from "../agents/execution-modes"
 import type { Context } from "cordis"
 import type { HostTransport } from "@pigcode/client-runtime/transport"
 import {
@@ -14,7 +15,7 @@ import type {
   PermissionMode,
   ReasoningEffort,
 } from "@pigcode/contracts"
-import { recordSubagentBrief } from "../agents/switching"
+import { createThread } from "./thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { forwardTerminal } from "./terminal-notify"
@@ -165,43 +166,8 @@ export class RpcServer {
         if (!thread) throw new Error(`thread not found: ${value.threadId}`)
         return thread
       }
-      case "thread.create": {
-        const value = parsed as {
-          projectId: string
-          title: string
-          agentId: string
-          instanceId?: string
-          parentThreadId?: string
-          modelId?: string
-          permissionMode?: PermissionMode
-        }
-        const thread = this.ctx.threads.create(
-          value.projectId,
-          value.title,
-          value.agentId,
-          value.parentThreadId,
-          {
-            instanceId: value.instanceId,
-            modelId: value.modelId,
-            permissionMode: value.permissionMode,
-          },
-        )
-        const now = new Date().toISOString()
-        this.ctx.sessions.append({
-          threadId: thread.id,
-          runId: null,
-          type: "thread.created",
-          payload: {
-            title: thread.title,
-            ...(value.parentThreadId ? { parentThreadId: value.parentThreadId } : {}),
-          },
-          schemaVersion: 1,
-          createdAt: now,
-        })
-        // 子代理的第一条消息前带上主会话的近况；只注入一次，之后按子代理自己的会话继续。
-        if (value.parentThreadId) recordSubagentBrief(this.ctx, thread.id, value.parentThreadId)
-        return thread
-      }
+      case "thread.create":
+        return createThread(this.ctx, parsed as CommandParams<"thread.create">)
       case "thread.subscribe": {
         const value = parsed as { threadId: string; cursor: number }
         const events = this.ctx.sessions.read(value.threadId, value.cursor)
@@ -243,17 +209,11 @@ export class RpcServer {
       }
       case "thread.setPermissionMode": {
         const value = parsed as { threadId: string; permissionMode: PermissionMode }
-        const thread = this.ctx.threads.setPermissionMode(value.threadId, value.permissionMode)
-        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
-        this.ctx.sessions.append({
-          threadId: thread.id,
-          runId: null,
-          type: "thread.updated",
-          payload: { permissionMode: thread.permissionMode },
-          schemaVersion: 1,
-          createdAt: new Date().toISOString(),
-        })
-        return thread
+        return updateThreadModes(this.ctx, value.threadId, { permissionMode: value.permissionMode })
+      }
+      case "thread.setPlanMode": {
+        const value = parsed as { threadId: string; planMode: boolean }
+        return updateThreadModes(this.ctx, value.threadId, { planMode: value.planMode })
       }
       case "run.start": {
         const value = parsed as {
@@ -317,6 +277,9 @@ export class RpcServer {
         return { ok: true }
       }
       case "agent.detect":
+      case "agent.cliUpdates":
+      case "agent.checkCliUpdates":
+      case "agent.updateCli":
       case "agent.registered":
       case "agent.default":
       case "agent.models":
@@ -376,7 +339,12 @@ export class RpcServer {
       }
       case "workspace.searchPaths": {
         const value = parsed as CommandParams<"workspace.searchPaths">
-        return this.ctx.workspace.searchPaths(scopeOf(value), value.query, value.limit)
+        return this.ctx.workspace.searchPaths(
+          scopeOf(value),
+          value.query,
+          value.limit,
+          value.refresh,
+        )
       }
       case "workspace.readFile": {
         const value = parsed as CommandParams<"workspace.readFile">
@@ -395,6 +363,17 @@ export class RpcServer {
       }
       case "git.status":
         return this.ctx.git.status(scopeOf(parsed as CommandParams<"git.status">))
+      case "git.branches":
+        return this.ctx.git.branches((parsed as CommandParams<"git.branches">).projectId)
+      case "git.switchBranch":
+      case "git.createBranch": {
+        const value = parsed as CommandParams<"git.switchBranch">
+        return this.ctx.git.switchBranch(
+          value.projectId,
+          value.branch,
+          command === "git.createBranch",
+        )
+      }
       case "git.diff": {
         const value = parsed as CommandParams<"git.diff">
         return this.ctx.git.diff(scopeOf(value), value.base, value.head)

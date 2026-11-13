@@ -25,8 +25,8 @@ describe("tokenBlock", () => {
   it("reads the light block from :root and the dark block separately", () => {
     const light = tokenBlock(css, "light")
     const dark = tokenBlock(css, "dark")
-    expect(light["--window"]).toBe("oklch(95.8% 0 0)")
-    expect(dark["--window"]).toBe("oklch(16% 0 0)")
+    expect(light["--window"]).toBe("oklch(95.6% 0.006 264)")
+    expect(dark["--window"]).toBe("oklch(15.4% 0.006 268)")
     expect(light["--term-red"]).toBe("var(--bad-text)")
     expect(dark["--term-red"]).toBe("var(--bad)")
   })
@@ -75,7 +75,7 @@ describe("titleBarColors", () => {
   it("takes --window and --fg-2 from the default theme", () => {
     const { read } = pageTokens(defaultAppearance, "dark")
     expect(titleBarColors(read, parseCssColor)).toEqual({
-      color: parseCssColor("oklch(16% 0 0)"),
+      color: parseCssColor("oklch(15.4% 0.006 268)"),
       symbolColor: parseCssColor("oklch(84% 0.003 286)"),
     })
   })

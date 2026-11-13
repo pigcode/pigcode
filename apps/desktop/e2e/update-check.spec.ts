@@ -1,43 +1,9 @@
 /** 检查更新（pigcode/monorepo#67）：手动检查显示结果，打开下载页走系统浏览器；自动检查的开关存得住。 */
 import { readFileSync } from "node:fs"
-import { createServer, type Server } from "node:http"
-import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { launchEnv, launchArgs } from "./projects"
-
-/**
- * 假的 Release 列表接口。返回数组：`/releases/latest` 按 GitHub 的定义永远不返回
- * 预发布，所以客户端读的是列表，挑哪一条由「接收预发布版本」的偏好决定。
- */
-async function releaseServer(tag: string | null): Promise<{ url: string; server: Server }> {
-  const server = createServer((request, response) => {
-    if (request.url !== "/releases" || tag === null) {
-      response.writeHead(404).end("not found")
-      return
-    }
-    response.writeHead(200, { "content-type": "application/json" }).end(
-      JSON.stringify([
-        {
-          tag_name: tag,
-          html_url: `https://github.com/pigcode/pigcode/releases/tag/${tag}`,
-          draft: false,
-          prerelease: false,
-          // macOS 走「下载完整包」时要用它挑这个架构的 DMG。
-          assets: [
-            {
-              name: `Pigcode-${tag.replace(/^v/, "")}-arm64.dmg`,
-              browser_download_url: `https://example.invalid/Pigcode-${tag.replace(/^v/, "")}-arm64.dmg`,
-            },
-          ],
-        },
-      ]),
-    )
-  })
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
-  const { port } = server.address() as AddressInfo
-  return { url: `http://127.0.0.1:${String(port)}/releases`, server }
-}
+import { releaseServer } from "./update-fixture"
 
 test("a manual check shows the new version and can open the download page", async () => {
   const { url, server } = await releaseServer("v9.9.9")
@@ -78,7 +44,12 @@ test("a manual check shows the new version and can open the download page", asyn
 
     await page.getByRole("button", { name: "立即检查" }).click()
     await expect(page.getByText("有新版本 9.9.9")).toBeVisible({ timeout: 10_000 })
-    await page.getByRole("button", { name: "打开下载页" }).click()
+    await page.locator(".page").getByRole("button", { name: "查看更新", exact: true }).click()
+    await expect(page.locator(".update-center-popup")).toContainText("9.9.9")
+    await page
+      .locator(".update-center-popup")
+      .getByRole("button", { name: "下载页", exact: true })
+      .click()
     await expect
       .poll(() =>
         app.evaluate(() => (globalThis as unknown as { openedUrls: string[] }).openedUrls),
@@ -90,23 +61,14 @@ test("a manual check shows the new version and can open the download page", asyn
   }
 })
 
-// 已知问题（pigcode/monorepo#72）：只在 Linux CI 的全量运行里失败，单独跑通过。
-// 步骤日志证明桩、窗口、触发都完成了，卡在提示那一步：主进程在 ask() 里先
-// window.show() 再 showMessageBox()，xvfb 下没有窗口管理器，这一步把事件循环
-// 卡住，于是 app.evaluate 永远不返回（poll 的 timeout 也拦不住）。
-// 手动检查（上一条用例）覆盖了同一段提示代码，所以先跳过，不再拖红 CI。
-test.fixme("the background check asks once and opens the download page", async () => {
-  // 恢复这条用例时要先查清根因：Linux CI 的全量运行里必失败，单独跑通过。
-  // 步骤日志显示桩、窗口、启动都正常，卡在提示那一步——主进程在 ask() 里先
-  // window.show() 再 showMessageBox()，xvfb 下没有窗口管理器，事件循环就此挂住，
-  // app.evaluate 永远不返回，连 poll 的 timeout 也拦不住。
-  // 手动检查（上一条用例）覆盖了同一段提示代码。
+test("the background check appears in the unified update entry", async () => {
   const { url, server } = await releaseServer("v9.9.9")
   const app = await electron.launch({
     args: launchArgs(),
     env: launchEnv({ PIGCODE_UPDATE_API: url }),
   })
   try {
+    const page = await app.firstWindow()
     await app.evaluate(({ dialog }) => {
       const prompts: string[] = []
       Object.assign(globalThis, { updatePrompts: prompts })
@@ -119,13 +81,16 @@ test.fixme("the background check asks once and opens the download page", async (
         return { response: 0, checkboxChecked: false }
       }) as typeof dialog.showMessageBox
     })
-    await expect
-      .poll(
-        () =>
-          app.evaluate(() => (globalThis as unknown as { updatePrompts: string[] }).updatePrompts),
-        { timeout: 20_000 },
-      )
-      .toHaveLength(1)
+    await page
+      .locator(".window-controls")
+      .getByRole("button", { name: "查看更新", exact: true })
+      .click()
+    await expect(page.locator(".update-center-popup")).toContainText("9.9.9")
+    expect(
+      await app.evaluate(
+        () => (globalThis as unknown as { updatePrompts: string[] }).updatePrompts,
+      ),
+    ).toEqual([])
   } finally {
     await app.close()
     server.close()

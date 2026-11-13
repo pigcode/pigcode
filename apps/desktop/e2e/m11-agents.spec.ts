@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { _electron as electron, expect, test, type Page } from "@playwright/test"
-import { addProject, launchEnv, openThread, launchArgs } from "./projects"
+import { addProject, installPlugin, launchEnv, openThread, launchArgs } from "./projects"
 
 /** 打开「设置 → Agent」。 */
 async function openAgents(page: Page): Promise<void> {
@@ -79,17 +79,26 @@ test("agents are plugins with settings that reach the composer", async () => {
       "已停用",
     )
 
-    // 从对话框安装 echo agent，再卸载。
-    await page.getByRole("button", { name: "安装 agent" }).click()
+    // 在插件页安装和卸载 echo agent，Agent 设置只提供实例配置。
+    await expect(page.getByRole("button", { name: "安装 agent" })).toHaveCount(0)
+    await page.getByRole("button", { name: "返回应用" }).first().click()
+    await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
     const echo = new URL("../../../examples/agent-echo", import.meta.url).pathname
-    await page.getByRole("textbox", { name: "npm 包或插件目录" }).fill(echo)
-    await page.getByRole("dialog").getByRole("button", { name: "安装", exact: true }).click()
+    await installPlugin(page, echo)
+    await page.getByRole("button", { name: "打开 Echo 的设置" }).click()
     const echoRow = list.locator(".agent-row").filter({ hasText: "Echo" })
     await expect(echoRow).toContainText("就绪")
     await page.screenshot({ path: "test-results/agents-list.png" })
     await page.getByRole("button", { name: "打开 Echo 的设置" }).click()
-    await page.getByRole("button", { name: "卸载", exact: true }).click()
-    await page.getByRole("button", { name: "确认卸载" }).click()
+    await expect(page.getByRole("button", { name: "卸载", exact: true })).toHaveCount(0)
+    await page.getByRole("button", { name: "返回应用" }).first().click()
+    await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+    await page.getByRole("radio", { name: /已安装/ }).click()
+    await page.getByRole("button", { name: "Echo 的更多操作" }).click()
+    await page.getByRole("menuitem", { name: "卸载" }).click()
+    await page.getByRole("dialog").getByRole("button", { name: "确认卸载" }).click()
+    await expect(page.locator('.market-tile[data-plugin="pigcode-agent-echo"]')).toHaveCount(0)
+    await openAgents(page)
     await expect(echoRow).toHaveCount(0)
 
     // 清理：本测试改过的设置不能影响后面的用例。

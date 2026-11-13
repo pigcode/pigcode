@@ -1,6 +1,11 @@
 /** 管理线程记录；线程是与 Agent 无关的持久会话。 */
 import type { Context } from "cordis"
-import type { Thread } from "@pigcode/contracts"
+import {
+  DEFAULT_RUNTIME_MODE,
+  normalizeRuntimeMode,
+  type AgentModeSelection,
+  type Thread,
+} from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 
 /**
@@ -8,9 +13,12 @@ import { randomUUID } from "node:crypto"
  * instanceId 缺省时用 Agent 的默认实例。
  */
 export interface InitialSelection {
+  /** 为新会话预先创建 worktree 时已经分配了 id。 */
+  id?: string | undefined
   instanceId?: string | undefined
   modelId?: string | undefined
   permissionMode?: Thread["permissionMode"] | undefined
+  planMode?: boolean | undefined
 }
 
 /** 线程记录的读写入口。 */
@@ -37,9 +45,11 @@ export interface ThreadsService {
     agentId: string,
     modelId: string | null,
     instanceId?: string | null,
+    modes?: AgentModeSelection,
   ): void
   /** 修改权限模式；下一次 run 起生效，返回更新后的记录。 */
   setPermissionMode(threadId: string, mode: Thread["permissionMode"]): Thread | undefined
+  setExecutionModes(threadId: string, modes: AgentModeSelection): Thread | undefined
 }
 
 declare module "cordis" {
@@ -57,12 +67,12 @@ export interface ThreadsPlugin {
   inject: string[]
 }
 
-/** 注册 threads 服务；新线程默认使用 workspace-write 权限模式。 */
+/** 注册 threads 服务；新线程使用平台默认权限，子会话继承主会话的选择。 */
 export const apply: ThreadsPlugin = (ctx) => {
   const service: ThreadsService = {
     create(projectId, title, agentId, parentThreadId, initial = {}) {
+      const parent = parentThreadId ? service.get(parentThreadId) : undefined
       if (parentThreadId !== undefined) {
-        const parent = service.get(parentThreadId)
         if (!parent) throw new Error(`thread not found: ${parentThreadId}`)
         if (parent.projectId !== projectId) throw new Error("THREAD_PARENT_PROJECT_MISMATCH")
         // 子代理只挂在主会话下，不再嵌套。
@@ -72,7 +82,7 @@ export const apply: ThreadsPlugin = (ctx) => {
       // 旧的调用方不传实例：按 Agent 的默认实例记录。
       const defaultInstanceId = initial.instanceId ?? agentId
       const thread: Thread = {
-        id: `th_${randomUUID()}`,
+        id: initial.id ?? `th_${randomUUID()}`,
         projectId,
         title,
         defaultAgentId: agentId,
@@ -81,7 +91,16 @@ export const apply: ThreadsPlugin = (ctx) => {
         lastAgentId: initial.modelId ? agentId : null,
         lastInstanceId: initial.modelId ? defaultInstanceId : null,
         lastModelId: initial.modelId ?? null,
-        permissionMode: initial.permissionMode ?? "workspace-write",
+        permissionMode:
+          normalizeRuntimeMode(
+            initial.permissionMode ?? parent?.permissionMode ?? DEFAULT_RUNTIME_MODE,
+            agentId,
+          ) ??
+          initial.permissionMode ??
+          parent?.permissionMode ??
+          DEFAULT_RUNTIME_MODE,
+        planMode:
+          initial.planMode ?? (initial.permissionMode === "plan" || parent?.planMode === true),
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
@@ -92,8 +111,8 @@ export const apply: ThreadsPlugin = (ctx) => {
         .prepare(
           `INSERT INTO threads (id, project_id, title, default_agent_id, default_instance_id,
             last_agent_id, last_instance_id, last_model_id, permission_mode, created_at, updated_at,
-            archived_at, last_run_id, parent_thread_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            archived_at, last_run_id, parent_thread_id, plan_mode)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           thread.id,
@@ -110,6 +129,7 @@ export const apply: ThreadsPlugin = (ctx) => {
           thread.archivedAt,
           thread.lastRunId,
           thread.parentThreadId,
+          Number(thread.planMode),
         )
       return thread
     },
@@ -151,7 +171,7 @@ export const apply: ThreadsPlugin = (ctx) => {
         .run(now, threadId, threadId)
       return service.get(threadId)
     },
-    updateSelection(threadId, agentId, modelId, instanceId) {
+    updateSelection(threadId, agentId, modelId, instanceId, modes) {
       ctx.storage.db
         .prepare(
           `UPDATE threads SET last_agent_id = ?, last_instance_id = ?, last_model_id = ?,
@@ -159,12 +179,23 @@ export const apply: ThreadsPlugin = (ctx) => {
            WHERE id = ?`,
         )
         .run(agentId, instanceId ?? agentId, modelId, new Date().toISOString(), threadId)
+      if (modes) service.setExecutionModes(threadId, modes)
     },
     setPermissionMode(threadId, mode) {
+      const thread = service.get(threadId)
+      return service.setExecutionModes(threadId, {
+        permissionMode: mode,
+        planMode: thread?.planMode ?? false,
+      })
+    },
+    setExecutionModes(threadId, modes) {
       ctx.storage.db
-        .prepare(`UPDATE threads SET permission_mode = ?, updated_at = ? WHERE id = ?`)
-        .run(mode, new Date().toISOString(), threadId)
-      return service.get(threadId)
+        .prepare(
+          `UPDATE threads SET permission_mode = ?, plan_mode = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(modes.permissionMode, Number(modes.planMode), new Date().toISOString(), threadId)
+      const thread = service.get(threadId)
+      return thread
     },
   }
   ctx.provide("threads", service)
@@ -185,6 +216,7 @@ function mapThread(row: unknown): Thread {
     lastInstanceId: value.last_instance_id ?? value.last_agent_id ?? null,
     lastModelId: value.last_model_id ?? null,
     permissionMode: value.permission_mode as Thread["permissionMode"],
+    planMode: Number(value.plan_mode) === 1,
     createdAt: value.created_at!,
     updatedAt: value.updated_at!,
     archivedAt: value.archived_at ?? null,

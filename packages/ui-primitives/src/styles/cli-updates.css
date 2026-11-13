@@ -1,0 +1,82 @@
+/* 更新作为版本信息的一部分，详细状态与日志只在浮层中展开。 */
+.agent-stat dd:has(.agent-cli-version) {
+  overflow: visible;
+  white-space: normal;
+}
+.agent-cli-version {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--control-xs);
+}
+.agent-cli-value {
+  min-width: 0;
+}
+.agent-cli-action {
+  flex: none;
+  padding: 0 var(--space-1);
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
+  line-height: var(--control-xs);
+}
+.agent-cli-action:hover {
+  background: var(--active);
+  color: var(--fg);
+}
+.agent-cli-version .agent-cli-more {
+  flex: none;
+  width: var(--control-xs);
+  height: var(--control-xs);
+  color: var(--muted);
+}
+.agent-cli-version .agent-cli-more[data-error] {
+  color: var(--bad-text);
+}
+.popup.agent-cli-popup {
+  display: grid;
+  gap: var(--space-4);
+  width: min(340px, calc(100vw - 32px));
+  max-height: var(--available-height);
+  overflow-y: auto;
+  padding: var(--space-6);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  white-space: normal;
+}
+.agent-cli-status {
+  margin: 0;
+}
+.agent-cli-popup .error-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-cli-command,
+.agent-cli-output {
+  display: block;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.agent-cli-command {
+  color: var(--muted);
+}
+.agent-cli-output {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: var(--space-4);
+  border-radius: var(--r-md);
+  background: var(--field);
+  color: var(--fg-2);
+}
+.agent-cli-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+  border-top: var(--hair) solid var(--divider);
+}

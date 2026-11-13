@@ -34,7 +34,7 @@ function renderView(props: Partial<ComponentProps<typeof NewThreadView>> = {}) {
         draftKey="new-thread"
         agentId={null}
         modelId={null}
-        permissionMode="workspace-write"
+        permissionMode="full-access"
         {...handlers}
         {...props}
       />

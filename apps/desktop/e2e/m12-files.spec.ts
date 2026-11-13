@@ -1,4 +1,4 @@
-/** 文件资源管理器（参照 t3code）：懒加载的树、忽略项、打开与高亮、编辑保存、搜索、自动刷新与冲突。 */
+/** 文件导航与预览：双列、窄面板、标签、原生文件操作、Git 筛选和编辑保存。 */
 import { execFileSync } from "node:child_process"
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -42,18 +42,18 @@ function row(page: Page, scope: string, name: string) {
   return page.locator(`${scope} [role="treeitem"]`).filter({ hasText: new RegExp(`^${name}`) })
 }
 
-/** 添加项目、开一个会话并打开右侧的文件面板。 */
+/** 从项目行打开文件面板；此时只有草稿。 */
 async function openFilesPanel(app: ElectronApplication, root: string): Promise<Page> {
   const page = await app.firstWindow()
   await addProject(app, page, root)
   await page
     .locator(".proj-block")
     .filter({ hasText: "pigcode-e2e-files" })
-    .locator(".proj-add")
+    .getByRole("button", { name: "查看文件" })
     .click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
-  await page.getByLabel("打开一个面板").getByRole("button", { name: /文件/ }).click()
+  await expect(page.getByRole("tab", { name: "文件" })).toBeVisible()
+  await expect(page.locator(".sess")).toHaveCount(0)
   return page
 }
 
@@ -66,7 +66,8 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
   try {
     // 打开文件树：目录在前，被 .gitignore 忽略的 node_modules 淡化显示。
     const page = await openFilesPanel(app, root)
-    const tree = ".files-surface"
+    const tree = ".file-surface-aside"
+    await expect(page.getByText("从目录中选择一个文件")).toBeVisible()
     await expect(page.locator(`${tree} [role="treeitem"]`)).toHaveText([
       "node_modules",
       "src",
@@ -82,31 +83,98 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     await expect(row(page, tree, "index.ts")).toBeVisible()
     await page.screenshot({ path: "test-results/files-explorer.png" })
 
-    // 打开 index.ts：文件树标签换成文件标签，代码有高亮。面板窄时文件树收起，
-    // 点按钮从左边盖出来，选了文件就收起。
+    // 单击复用预览标签；显式打开则保留为单独标签。
     await row(page, tree, "index.ts").click()
     const tabs = page.locator(".right-panel").getByRole("tab")
     await expect(tabs).toHaveText(["index.ts"])
     const editor = page.getByRole("textbox", { name: "文件内容 src/index.ts" })
     await expect(editor).toHaveValue("export const answer: number = 42\n")
     await expect(page.locator(".code-layer .tok").first()).toBeVisible()
-    await expect(page.locator(".file-surface-aside")).toHaveCount(0)
-    await page.getByRole("button", { name: "显示文件树" }).click()
-    await expect(page.locator(".file-surface[data-overlay]")).toBeVisible()
     await expect(row(page, ".file-surface-aside", "index.ts")).toHaveAttribute(
       "data-active",
       "true",
     )
     await row(page, ".file-surface-aside", "README.md").click()
-    await expect(page.locator(".file-surface-aside")).toHaveCount(0)
-    await expect(tabs).toHaveText(["index.ts", "README.md"])
-    await page.getByRole("tab", { name: "index.ts" }).click()
+    await expect(tabs).toHaveText(["README.md"])
+    await expect(
+      page.locator(".file-markdown-preview").getByRole("heading", { name: "Files demo" }),
+    ).toBeVisible()
+    await page.getByRole("button", { name: "源码", exact: true }).click()
+    await expect(page.getByRole("textbox", { name: "文件内容 README.md" })).toHaveValue(
+      "# Files demo\n",
+    )
+    await page.getByRole("button", { name: "预览", exact: true }).click()
+    await expect(
+      page.locator(".file-markdown-preview").getByRole("heading", { name: "Files demo" }),
+    ).toBeVisible()
+    await row(page, tree, "index.ts").click({ modifiers: ["ControlOrMeta"] })
+    await expect(tabs).toHaveText(["README.md", "index.ts"])
+
+    // 调整右栏到最窄时，目录和文件在同一内容区切换。
+    const rightResize = page.getByRole("separator", { name: "右侧面板" })
+    await rightResize.press("Home")
+    await page.getByRole("button", { name: "显示文件导航" }).click()
+    await expect(page.locator(".files-surface[data-navigation-only]")).toBeVisible()
+    await expect(editor).toBeHidden()
+    await row(page, tree, "index.ts").click()
+    await expect(editor).toBeVisible()
+    await rightResize.dblclick()
 
     // 面板最大化后足够宽，文件树停靠在左侧。
     await page.locator(".right-panel-bar").getByRole("button", { name: "最大化面板" }).click()
-    await expect(
-      page.locator(".file-surface:not([data-overlay]) .file-surface-aside"),
-    ).toBeVisible()
+    await expect(page.locator(".file-surface-aside")).toBeVisible()
+    const directoryResize = page.getByRole("separator", { name: "调整文件目录宽度" })
+    const startWidth = Number(await directoryResize.getAttribute("aria-valuenow"))
+    await directoryResize.press("ArrowRight")
+    await expect(directoryResize).toHaveAttribute("aria-valuenow", String(startWidth + 24))
+    await page.getByRole("button", { name: "收起文件导航" }).click()
+    await expect(directoryResize).toHaveCount(0)
+    await expect(editor).toBeVisible()
+    await page.getByRole("button", { name: "显示文件导航" }).click()
+    await expect(directoryResize).toHaveAttribute("aria-valuenow", String(startWidth + 24))
+
+    // 在原生文件菜单选择另存为，验证二进制文件逐字节复制。
+    const copiedImage = join(root, "saved-copy.png")
+    await app.evaluate(({ Menu, dialog, shell }, destination) => {
+      const opened: string[] = []
+      Object.assign(globalThis, { openedWorkspaceFiles: opened })
+      const popup = Menu.prototype.popup
+      Menu.prototype.popup = function (this: InstanceType<typeof Menu>, options) {
+        const choice = this.items.find(
+          (item) => item.label === "另存为…" || item.label === "关闭其他标签",
+        )
+        if (!choice) return popup.call(this, options)
+        choice.click({}, options?.window)
+        options?.callback?.()
+      }
+      dialog.showSaveDialog = (async () => ({
+        canceled: false,
+        filePath: destination,
+      })) as typeof dialog.showSaveDialog
+      shell.openPath = async (path) => {
+        opened.push(path)
+        return ""
+      }
+    }, copiedImage)
+    await row(page, tree, "logo.png").click({ button: "right" })
+    await expect
+      .poll(() => {
+        try {
+          return readFileSync(copiedImage).toString("base64")
+        } catch {
+          return ""
+        }
+      })
+      .toBe(readFileSync(join(root, "logo.png")).toString("base64"))
+    await page.getByRole("button", { name: "使用系统默认应用打开" }).click()
+    await expect
+      .poll(() =>
+        app.evaluate(
+          () => (globalThis as unknown as { openedWorkspaceFiles: string[] }).openedWorkspaceFiles,
+        ),
+      )
+      .toEqual([expect.stringMatching(/[/\\]src[/\\]index\.ts$/)])
+    rmSync(copiedImage)
 
     // 编辑后标签出现未保存圆点；⌘S 保存到磁盘，再次修改别处的内容时提示冲突。
     await editor.click()
@@ -121,9 +189,27 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     )
     // 保存后 git 状态刷新：改过的文件标成 M。
     await expect(row(page, ".file-surface-aside", "index.ts").locator(".fx-git")).toHaveText("M")
+    writeFileSync(join(root, "src", "new-component.ts"), "export {}\n")
+    rmSync(join(root, "logo.png"))
+    await page.getByRole("button", { name: "刷新文件树" }).click()
+    await page.getByRole("button", { name: "仅显示变更文件" }).click()
+    await expect(row(page, tree, "README.md")).toHaveCount(0)
+    await expect(row(page, tree, "index.ts")).toBeVisible()
+    await expect(row(page, tree, "new-component.ts")).toHaveAttribute("data-git", "untracked")
+    await expect(row(page, tree, "logo.png")).toHaveAttribute("data-git", "deleted")
+    writeFileSync(
+      join(root, "logo.png"),
+      execFileSync("git", ["show", "HEAD:logo.png"], { cwd: root }),
+    )
+    await page.getByRole("button", { name: "显示全部文件" }).click()
+    await page.getByRole("button", { name: "刷新文件树" }).click()
     await page.screenshot({ path: "test-results/files-editor.png" })
 
-    await page.keyboard.type("\n// mine")
+    await editor.click()
+    await editor.press("Control+End")
+    await editor.press("Enter")
+    await page.keyboard.type("// mine")
+    await expect(page.locator(".surface-tab-dirty")).toBeVisible()
     await new Promise((resolve) => setTimeout(resolve, 30))
     writeFileSync(join(root, "src", "index.ts"), "// changed elsewhere\n")
     await page.keyboard.press("Control+s")
@@ -140,8 +226,8 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     await expect(
       row(page, ".file-surface-aside", "file-tree.tsx").locator(".fx-match").first(),
     ).toBeVisible()
-    await row(page, ".file-surface-aside", "file-tree.tsx").click()
-    await expect(tabs).toHaveText(["index.ts", "README.md", "file-tree.tsx"])
+    await row(page, ".file-surface-aside", "file-tree.tsx").click({ modifiers: ["ControlOrMeta"] })
+    await expect(tabs).toHaveText(["README.md", "index.ts", "file-tree.tsx"])
     await search.fill("")
 
     // 面包屑：点目录在侧栏里定位到它。
@@ -168,9 +254,7 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     await page.keyboard.type("hello")
     await page.keyboard.press("Enter")
     await expect(page.locator(".msg-ai").filter({ hasText: "Hello from fake agent" })).toBeVisible()
-    await page.getByRole("button", { name: "显示文件树" }).click()
     await expect(row(page, ".file-surface-aside", "NEW_FROM_AGENT.md")).toBeVisible()
-    await page.getByRole("button", { name: "隐藏文件树" }).click()
 
     // 关闭有未保存修改的标签前要确认。
     await page.getByRole("tab", { name: "file-tree.tsx" }).click()
@@ -184,6 +268,20 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     await page.getByRole("button", { name: "关闭 file-tree.tsx" }).click()
     await page.getByRole("button", { name: "放弃修改" }).click()
     await expect(page.getByRole("tab", { name: "file-tree.tsx" })).toHaveCount(0)
+
+    // 从当前图片标签关闭其他标签，批量关闭也要保护编辑中的文件。
+    await page.getByRole("tab", { name: "index.ts" }).click()
+    await editor.click()
+    await page.keyboard.type("// keep this")
+    const imageTab = page.getByRole("tab", { name: "logo.png" })
+    await imageTab.click()
+    await imageTab.click({ button: "right" })
+    await expect(page.getByRole("dialog")).toContainText("index.ts")
+    await page.getByRole("button", { name: "继续编辑" }).click()
+    await expect(page.getByRole("tab", { name: "index.ts" })).toBeVisible()
+    await imageTab.click({ button: "right" })
+    await page.getByRole("button", { name: "放弃修改" }).click()
+    await expect(tabs).toHaveText(["logo.png"])
   } finally {
     await app.close()
   }
@@ -195,7 +293,8 @@ test("closing the window with unsaved file changes asks first", async () => {
   let exited = false
   try {
     const page = await openFilesPanel(app, root)
-    await row(page, ".files-surface", "README.md").click()
+    await row(page, ".file-surface-aside", "README.md").click()
+    await page.getByRole("button", { name: "源码", exact: true }).click()
     await page.getByRole("textbox", { name: "文件内容 README.md" }).click()
     await page.keyboard.type("draft")
     await expect(page.locator(".surface-tab-dirty")).toBeVisible()

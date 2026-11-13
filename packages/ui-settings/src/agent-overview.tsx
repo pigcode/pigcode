@@ -40,6 +40,7 @@ export function AgentOverview({
   onReveal,
   action,
   onOpenExternal,
+  versionControl,
 }: {
   agent: AgentSummary
   status: AgentStatus | undefined
@@ -47,6 +48,7 @@ export function AgentOverview({
   onReveal?: (() => void) | undefined
   action?: ReactNode | undefined
   onOpenExternal?: ((url: string) => void) | undefined
+  versionControl?: ReactNode
 }) {
   const { locale, t } = useLocale()
   const supported = agent.features
@@ -102,7 +104,7 @@ export function AgentOverview({
           </Stat>
           <Stat label={t("agents.plan")}>{status?.authenticated ? status.account : null}</Stat>
           <Stat label={t("agents.version")} mono>
-            {status?.installed ? status.version : null}
+            {versionControl ?? (status?.installed ? status.version : null)}
           </Stat>
           <Stat label={t("agents.command")} mono title={status?.command ?? undefined}>
             {status?.command ?? null}

@@ -20,6 +20,7 @@ interface Window {
       position: { x: number; y: number },
     ): Promise<string | null>
     pickFolder?(labels?: { title?: string; buttonLabel?: string }): Promise<string | null>
+    openExternal?(url: string): Promise<void>
     /** 在系统文件管理器里打开文件夹；不是已存在的目录时拒绝。 */
     openFolder?(path: string): Promise<void>
     /** 本机装了的文件管理器、编辑器与终端；icon 是 data URL，取不到时为 null。 */

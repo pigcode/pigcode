@@ -2,8 +2,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Check, ChevronDown } from "lucide-react"
 import { formatShortcut, useLocale } from "@pigcode/ui-primitives"
-import { permissionKeys, type PermissionMode } from "./composer-options"
-import { PERMISSION_ICONS } from "./permission-menu"
+import type { AgentPermissionMode } from "@pigcode/contracts"
+import {
+  permissionDescription,
+  permissionIcon,
+  permissionLabel,
+  permissionNeedsConfirmation,
+} from "./permission-options"
 
 /**
  * 底栏的权限按钮：点开后在面板里向上展开一列权限。展开的列表画在弹层里面，
@@ -14,15 +19,16 @@ export function PermissionSwitch({
   modes,
   onChange,
 }: {
-  value: PermissionMode
-  modes: readonly PermissionMode[]
-  onChange: (mode: PermissionMode) => void
+  value: string
+  modes: readonly AgentPermissionMode[]
+  onChange: (mode: string) => void
 }) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
-  const Icon = PERMISSION_ICONS[value]
+  const selected = modes.find((mode) => mode.id === value)
+  const Icon = permissionIcon(selected)
 
   useEffect(() => {
     if (!open) return
@@ -62,14 +68,15 @@ export function PermissionSwitch({
         type="button"
         className="model-permission-btn"
         data-mode={value}
+        data-elevated={(selected && permissionNeedsConfirmation(selected)) || undefined}
         aria-haspopup="menu"
         aria-expanded={open}
         title={`${t("composer.permission.title")} ${formatShortcut("Shift+Tab")}`}
-        aria-label={`${t("composer.permission.title")}: ${t(permissionKeys[value].label)}`}
+        aria-label={`${t("composer.permission.title")}: ${permissionLabel(selected, locale)}`}
         onClick={() => setOpen((next) => !next)}
       >
         <Icon className="ic" aria-hidden="true" />
-        <span className="truncate">{t(permissionKeys[value].label)}</span>
+        <span className="truncate">{permissionLabel(selected, locale)}</span>
         <ChevronDown className="ic ic-sm chip-caret" aria-hidden="true" />
       </button>
       {open ? (
@@ -84,29 +91,29 @@ export function PermissionSwitch({
           }}
         >
           {modes.map((mode) => {
-            const ModeIcon = PERMISSION_ICONS[mode]
+            const ModeIcon = permissionIcon(mode)
             return (
               <button
-                key={mode}
+                key={mode.id}
                 type="button"
                 role="menuitemradio"
-                aria-checked={mode === value}
+                aria-checked={mode.id === value}
                 className={
-                  mode === "danger-full-access"
+                  permissionNeedsConfirmation(mode)
                     ? "menu-item permission-item is-danger"
                     : "menu-item permission-item"
                 }
                 onClick={() => {
                   close()
-                  onChange(mode)
+                  onChange(mode.id)
                 }}
               >
                 <ModeIcon className="ic" aria-hidden="true" />
                 <span className="grow">
-                  <span>{t(permissionKeys[mode].label)}</span>
-                  <span className="menu-item-desc">{t(permissionKeys[mode].description)}</span>
+                  <span>{permissionLabel(mode, locale)}</span>
+                  <span className="menu-item-desc">{permissionDescription(mode, locale)}</span>
                 </span>
-                {mode === value ? <Check className="ic check-mark" aria-hidden="true" /> : null}
+                {mode.id === value ? <Check className="ic check-mark" aria-hidden="true" /> : null}
               </button>
             )
           })}

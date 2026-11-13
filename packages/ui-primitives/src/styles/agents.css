@@ -766,7 +766,7 @@
   font-size: var(--fs-xs);
 }
 
-/* ─── 安装对话框（Agent 页与插件管理页共用） ─── */
+/* ─── 插件安装对话框 ─── */
 .dialog.install-dialog {
   width: min(520px, calc(100vw - 48px));
 }

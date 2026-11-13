@@ -36,8 +36,8 @@ export interface ThreadTabsProps {
   agents?: readonly ComposerAgent[] | undefined
 }
 
-/** 标题放不下时才在右缘渐隐；放得下时完整显示。 */
-function TabTitle({ text, main }: { text: string; main: boolean }) {
+/** 子代理标签的标题放不下时在右缘渐隐。 */
+function SubagentTabTitle({ text }: { text: string }) {
   const ref = useRef<HTMLSpanElement>(null)
   const [overflow, setOverflow] = useState(false)
   useLayoutEffect(() => {
@@ -51,11 +51,7 @@ function TabTitle({ text, main }: { text: string; main: boolean }) {
     return () => observer.disconnect()
   }, [text])
   return (
-    <span
-      ref={ref}
-      className={main ? "title-text thread-tab-title" : "thread-tab-title"}
-      data-overflow={overflow || undefined}
-    >
+    <span ref={ref} className="thread-tab-title" data-overflow={overflow || undefined}>
       {text}
     </span>
   )
@@ -132,7 +128,11 @@ export function ThreadTabs({ tabs, activeId, onSelect, onClose, agents = [] }: T
                 onClick={() => onSelect(tab.id)}
               >
                 <TabMark tab={tab} agents={agents} />
-                <TabTitle text={tab.title} main={tab.kind === "main"} />
+                {tab.kind === "main" ? (
+                  <span className="title-text thread-tab-title truncate">{tab.title}</span>
+                ) : (
+                  <SubagentTabTitle text={tab.title} />
+                )}
                 {tab.kind !== "main" && (tab.waiting || tab.running) ? (
                   <StatusDot
                     tone={tab.waiting ? "warning" : "running"}

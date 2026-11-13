@@ -9,6 +9,7 @@ import type { EnvironmentEntry } from "@pigcode/contracts"
 
 export * from "./process-records"
 export * from "./process-tree"
+export * from "./cli-update"
 
 /** 把开头的 `~` 展开成用户主目录；其他路径原样返回。 */
 export function expandHome(path: string, home: string = homedir()): string {

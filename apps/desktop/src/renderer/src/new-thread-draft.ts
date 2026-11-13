@@ -2,10 +2,10 @@
  * 新会话草稿（参照 ZCode 的新建任务）：点「新会话」、⌘N 或项目行的加号只进入草稿，不在 Host 上建会话，
  * 侧栏里也没有它。草稿的项目是 store 里的 activeProjectId；agent、模型与权限记在这里，本次运行内一直沿用。
  * 第一次发送时才按草稿建会话。右侧面板与底部终端不必挂在会话上（参照 ZCode）：草稿里打开时
- * 挂在草稿的项目上，建好会话后原样交给这个会话（见 use-workspace-slot.ts）。
+ * 挂在草稿的项目上。会话也在原目录运行时接过草稿的面板（见 use-workspace-slot.ts）。
  */
 import { useSyncExternalStore } from "react"
-import type { PermissionMode, Thread } from "@pigcode/contracts"
+import type { PermissionMode, Thread, WorktreeStart } from "@pigcode/contracts"
 import type { AppState, AppStore, Connection } from "@pigcode/client-runtime"
 import { moveComposerDraft } from "@pigcode/ui-composer"
 import { translate, type Locale } from "@pigcode/ui-primitives"
@@ -21,14 +21,16 @@ export interface DraftOptions {
   /** 实例所属的 Agent（driver id）；随实例一起记下，建会话时一起交给 Host。 */
   agentId: string | null
   modelId: string | null
-  permissionMode: PermissionMode
+  permissionMode: PermissionMode | null
+  planMode?: boolean
 }
 
 const DEFAULT_OPTIONS: DraftOptions = {
   instanceId: null,
   agentId: null,
   modelId: null,
-  permissionMode: "workspace-write",
+  permissionMode: null,
+  planMode: false,
 }
 
 let options: DraftOptions = DEFAULT_OPTIONS
@@ -55,13 +57,23 @@ export function resetDraftOptions(): void {
   updateDraftOptions(DEFAULT_OPTIONS)
 }
 
-const materializedListeners = new Set<(thread: Thread) => void>()
+/** 权限和计划属于草稿，切换 Agent 或模型时保持同一选择。 */
+export function selectDraftAgent(choice: {
+  instanceId: string
+  agentId: string
+  modelId: string
+}): void {
+  updateDraftOptions(choice)
+}
+
+type MaterializedListener = (thread: Thread, isolated: boolean) => void
+const materializedListeners = new Set<MaterializedListener>()
 
 /**
  * 草稿建成会话时通知（在它成为当前会话之前、同一个同步过程里调用）：草稿里已经开着的右侧面板与
- * 底部终端据此交给新会话，不会因为当前会话变了而关掉重开。返回取消订阅的函数。
+ * 底部终端据此接到新会话的工作目录。返回取消订阅的函数。
  */
-export function onDraftMaterialized(listener: (thread: Thread) => void): () => void {
+export function onDraftMaterialized(listener: MaterializedListener): () => void {
   materializedListeners.add(listener)
   return () => materializedListeners.delete(listener)
 }
@@ -87,6 +99,7 @@ export async function materializeDraft(
   connection: Connection,
   store: AppStore,
   locale: Locale,
+  worktree: WorktreeStart | null = null,
 ): Promise<Thread> {
   const projectId = draftProjectId(store.getSnapshot())
   if (!projectId) throw new Error(translate(locale, "newThread.noProject"))
@@ -100,13 +113,18 @@ export async function materializeDraft(
     agentId,
     instanceId,
     ...(chosen.modelId ? { modelId: chosen.modelId } : {}),
-    ...(chosen.permissionMode !== DEFAULT_OPTIONS.permissionMode
-      ? { permissionMode: chosen.permissionMode }
-      : {}),
+    ...(chosen.permissionMode !== null ? { permissionMode: chosen.permissionMode } : {}),
+    ...(chosen.planMode ? { planMode: true } : {}),
+    ...(worktree ? { worktree } : {}),
   })) as Thread
+  const state = store.getSnapshot()
+  if (state.activeThreadId || draftProjectId(state) !== projectId) {
+    store.update({ threads: [thread, ...state.threads] })
+    return thread
+  }
   // 草稿页还挂着时就搬：它的输入框先交出正在写的内容。
   moveComposerDraft(NEW_THREAD_DRAFT_KEY, thread.id)
-  for (const listener of materializedListeners) listener(thread)
+  for (const listener of materializedListeners) listener(thread, worktree !== null)
   store.update({
     threads: [thread, ...store.getSnapshot().threads],
     activeProjectId: projectId,
@@ -114,6 +132,6 @@ export async function materializeDraft(
   })
   store.openThread(thread.id, { loaded: true })
   store.setActiveThread(thread.id)
-  await connection.openThread(thread.id)
+  updateDraftOptions({ permissionMode: null, planMode: false })
   return thread
 }

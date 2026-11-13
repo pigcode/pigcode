@@ -55,6 +55,7 @@ function fileNameOf(url: string, fallback: string): string {
 export async function downloadPackage(
   asset: LatestAsset,
   fetchImpl: typeof fetch = fetch,
+  onProgress?: (percent: number) => void,
 ): Promise<DownloadedPackage> {
   const dir = downloadDir()
   await mkdir(dir, { recursive: true })
@@ -64,9 +65,13 @@ export async function downloadPackage(
     throw new Error(`update download failed: HTTP ${String(response.status)}`)
   }
   const out = createWriteStream(target)
+  const total = Number(response.headers?.get("content-length") ?? 0)
+  let received = 0
   try {
     // ReadableStream 是 Web 流，Node 里要逐块写；用 for await 让背压自然生效。
     for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) {
+      received += chunk.length
+      if (total > 0) onProgress?.(Math.min(100, (received / total) * 100))
       if (!out.write(chunk)) {
         await new Promise<void>((resolve) => out.once("drain", resolve))
       }

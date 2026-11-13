@@ -95,7 +95,7 @@ export function AddMarketplaceDialog({
                     }}
                   >
                     <FolderOpen className="ic ic-sm" aria-hidden="true" />
-                    {t("agents.install.chooseFolder")}
+                    {t("plugins.chooseFolder")}
                   </Button>
                 ) : null}
               </div>
@@ -126,7 +126,7 @@ export function AddMarketplaceDialog({
           </Dialog.Body>
           <Dialog.Footer>
             <Dialog.Close render={<Button type="button" variant="ghost" disabled={adding} />}>
-              {t("agents.install.cancel")}
+              {t("common.cancel")}
             </Dialog.Close>
             <Button type="submit" variant="primary" disabled={!value || !acknowledged || adding}>
               {adding ? t("plugins.addMarket.adding") : t("plugins.addMarket.submit")}

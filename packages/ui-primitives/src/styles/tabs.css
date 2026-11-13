@@ -38,7 +38,7 @@
 }
 .thread-tab[data-kind="main"] {
   flex-shrink: 0;
-  max-width: 320px;
+  max-width: min(220px, 100%);
 }
 .thread-tab:not([data-kind="main"]) {
   max-width: 220px;
@@ -63,7 +63,7 @@
   overflow: hidden;
   white-space: nowrap;
 }
-/* 标题放不下时在右缘渐隐，和侧栏标题一致 */
+/* 子代理标题放不下时在右缘渐隐。 */
 .thread-tab-title[data-overflow] {
   -webkit-mask-image: linear-gradient(to right, var(--mask-fill) calc(100% - 18px), transparent);
   mask-image: linear-gradient(to right, var(--mask-fill) calc(100% - 18px), transparent);

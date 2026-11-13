@@ -1,17 +1,18 @@
 /**
- * 文件标签的内容：顶部面包屑与操作，下面是可编辑的高亮代码、图片预览或无法预览的说明。
+ * 文件预览：工具栏里的面包屑与操作，和可编辑的高亮代码、图片预览或无法预览的说明。
  * 修改只在保存时写回磁盘；文件在编辑期间被别处改过时给出提示，由用户选择重新加载或覆盖。
  */
 import {
   ChevronRight,
   Ellipsis,
   FileQuestionMark,
+  FolderOpen,
   Loader2,
   PanelLeftClose,
   PanelLeftOpen,
   Save,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { CodeEditor } from "./code-editor"
 import { EmptyState, languageForPath, useLocale } from "@pigcode/ui-primitives"
 
@@ -29,7 +30,7 @@ export interface FileViewerFile {
 
 /** 文件标签属性；读取、保存与草稿都由容器管理。 */
 export interface FileViewerProps {
-  path: string
+  path: string | null
   rootName: string
   file: FileViewerFile | null
   loading?: boolean | undefined
@@ -49,6 +50,15 @@ export interface FileViewerProps {
   onNavigate: (directory: string) => void
   /** 「更多」按钮：容器弹出复制路径、在文件管理器中显示等菜单。 */
   onMore?: ((point: { x: number; y: number }) => void) | undefined
+  /** 交给外部应用打开文件的按钮。 */
+  openIn?: ReactNode
+  preview?: ReactNode
+  previewMode?: "preview" | "source" | undefined
+  onPreviewModeChange?: ((mode: "preview" | "source") => void) | undefined
+  /** 文件导航和预览分隔条，放在共用工具栏下面。 */
+  navigation?: ReactNode
+  /** 面板过窄且正在浏览目录时，保留工具栏，只隐藏文件内容。 */
+  navigationOnly?: boolean | undefined
   revealLine?: number | null | undefined
 }
 
@@ -99,16 +109,24 @@ export function FileViewer({
   onToggleExplorer,
   onNavigate,
   onMore,
+  openIn,
+  preview,
+  previewMode,
+  onPreviewModeChange,
+  navigation,
+  navigationOnly = false,
   revealLine = null,
 }: FileViewerProps) {
   const { t } = useLocale()
-  const segments = path.split("/")
+  const segments = path?.split("/") ?? []
   const dirty = draft !== null
   const editable = Boolean(file && !file.binary && !file.truncated)
-  const language = languageForPath(path)
+  const language = path ? languageForPath(path) : null
 
   let body
-  if (error) body = <p className="workbench-error">{error}</p>
+  if (!path) {
+    body = <EmptyState icon={<FolderOpen className="ic" />} title={t("files.viewer.selectFile")} />
+  } else if (error) body = <p className="workbench-error">{error}</p>
   else if (!file) {
     body = loading ? (
       <EmptyState icon={<Loader2 className="ic spin" />} title={t("files.viewer.loading")} />
@@ -123,9 +141,12 @@ export function FileViewer({
         description={formatSize(file.size)}
       />
     )
+  } else if (previewMode === "preview" && preview !== undefined) {
+    body = preview
   } else {
     body = (
       <CodeEditor
+        key={path}
         value={draft ?? file.text}
         language={language}
         readOnly={!editable}
@@ -140,7 +161,7 @@ export function FileViewer({
   }
 
   return (
-    <section className="file-view" aria-label={path}>
+    <section className="file-view" aria-label={path ?? t("workbench.files")}>
       <header className="file-view-head">
         <button
           type="button"
@@ -158,38 +179,51 @@ export function FileViewer({
             <PanelLeftOpen className="ic ic-sm" aria-hidden="true" />
           )}
         </button>
-        <nav className="file-crumbs" aria-label={t("files.viewer.breadcrumbs")}>
-          <button type="button" className="file-crumb" onClick={() => onNavigate("")}>
-            {rootName}
-          </button>
-          {segments.map((segment, index) => {
-            const last = index === segments.length - 1
-            const directory = segments.slice(0, index + 1).join("/")
-            return (
-              <span key={directory} className="file-crumb-part">
-                <ChevronRight className="ic ic-xs" aria-hidden="true" />
-                {last ? (
-                  <span className="file-crumb is-current" aria-current="page">
-                    {segment}
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="file-crumb"
-                    onClick={() => onNavigate(directory)}
-                  >
-                    {segment}
-                  </button>
-                )}
-              </span>
-            )
-          })}
-        </nav>
+        {path ? (
+          <nav className="file-crumbs" aria-label={t("files.viewer.breadcrumbs")}>
+            <button type="button" className="file-crumb" onClick={() => onNavigate("")}>
+              {rootName}
+            </button>
+            {segments.map((segment, index) => {
+              const last = index === segments.length - 1
+              const directory = segments.slice(0, index + 1).join("/")
+              return (
+                <span key={directory} className="file-crumb-part">
+                  <ChevronRight className="ic ic-xs" aria-hidden="true" />
+                  {last ? (
+                    <span className="file-crumb is-current" aria-current="page">
+                      {segment}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="file-crumb"
+                      onClick={() => onNavigate(directory)}
+                    >
+                      {segment}
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+          </nav>
+        ) : (
+          <span className="file-crumbs file-view-title">{t("workbench.files")}</span>
+        )}
         <span className="file-view-meta">
           {dirty ? <span className="file-dirty">{t("files.viewer.unsaved")}</span> : null}
           {file && !file.binary ? <span>{formatSize(file.size)}</span> : null}
           {file?.eol === "crlf" ? <span>CRLF</span> : null}
         </span>
+        {onPreviewModeChange ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm file-preview-toggle"
+            onClick={() => onPreviewModeChange(previewMode === "preview" ? "source" : "preview")}
+          >
+            {t(previewMode === "preview" ? "files.viewer.source" : "files.viewer.preview")}
+          </button>
+        ) : null}
         {dirty ? (
           <button
             type="button"
@@ -201,6 +235,7 @@ export function FileViewer({
             {saving ? t("files.viewer.saving") : t("files.viewer.save")}
           </button>
         ) : null}
+        {openIn}
         {onMore ? (
           <button
             type="button"
@@ -216,21 +251,26 @@ export function FileViewer({
           </button>
         ) : null}
       </header>
-      {conflict ? (
-        <div className="file-banner" role="alert">
-          <span>{t("files.viewer.conflict")}</span>
-          <button type="button" className="btn btn-sm" onClick={onReload}>
-            {t("files.viewer.reload")}
-          </button>
-          <button type="button" className="btn btn-sm btn-danger" onClick={onOverwrite}>
-            {t("files.viewer.overwrite")}
-          </button>
+      <div className="file-view-split">
+        {navigation}
+        <div className="file-view-content" hidden={navigationOnly}>
+          {conflict ? (
+            <div className="file-banner" role="alert">
+              <span>{t("files.viewer.conflict")}</span>
+              <button type="button" className="btn btn-sm" onClick={onReload}>
+                {t("files.viewer.reload")}
+              </button>
+              <button type="button" className="btn btn-sm btn-danger" onClick={onOverwrite}>
+                {t("files.viewer.overwrite")}
+              </button>
+            </div>
+          ) : null}
+          {file?.truncated && !file.binary ? (
+            <p className="file-banner is-info">{t("files.viewer.truncated")}</p>
+          ) : null}
+          <div className="file-view-body">{body}</div>
         </div>
-      ) : null}
-      {file?.truncated && !file.binary ? (
-        <p className="file-banner is-info">{t("files.viewer.truncated")}</p>
-      ) : null}
-      <div className="file-view-body">{body}</div>
+      </div>
     </section>
   )
 }

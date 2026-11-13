@@ -65,6 +65,7 @@ import {
   type UnsavedGuardLabels,
 } from "./unsaved-guard"
 import { createMainWindowOptions } from "./window-options"
+import { registerWorkspaceFileIpc } from "./workspace-file-ipc"
 
 registerPrivilegedSchemes()
 
@@ -112,9 +113,12 @@ function applyPreferences(next: Preferences): void {
 
 /** 检查更新：启动后一次，之后每 6 小时；同一个版本只提示一次。 */
 const updates = createUpdates({
-  getWindow: () => mainWindow,
   autoCheck: () => preferences.autoCheckUpdates,
   allowPrerelease: () => preferences.prereleaseUpdates,
+  onState: (state) => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed())
+      mainWindow.webContents.send("pigcode:update-state", state)
+  },
 })
 
 function profileDir(): string {
@@ -147,7 +151,7 @@ function registerNativeBridge(): void {
     downloads: () => app.getPath("downloads"),
     showSaveDialog: (parent, options) => dialog.showSaveDialog(parent, options),
   })
-  // 标题栏菜单由页面描述、主进程弹出原生菜单；返回被点击的命令 id。
+  // 页面描述菜单项和位置，主进程弹出原生菜单并返回被点击的命令 id。
   ipcMain.handle("pigcode:menu", (event, items: unknown, position: unknown) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     const menu = readNativeMenu(items, { allowDevRoles: !app.isPackaged })
@@ -179,6 +183,8 @@ function registerNativeBridge(): void {
     )
   })
   ipcMain.handle("pigcode:check-for-updates", () => updates.checkNow())
+  ipcMain.handle("pigcode:update-state", () => updates.getState())
+  ipcMain.handle("pigcode:update-action", () => updates.perform())
   ipcMain.handle("pigcode:preferences-get", () => preferences)
   ipcMain.handle("pigcode:preferences-set", (_event, key: unknown, value: unknown) => {
     const next = withPreference(preferences, key, value)
@@ -249,6 +255,7 @@ function registerNativeBridge(): void {
 }
 
 registerNativeBridge()
+registerWorkspaceFileIpc()
 
 /** 连续启动失败后不再重启 Host，弹出错误对话框说明原因。 */
 function showHostFailure(count: number, fatal: string | null): void {

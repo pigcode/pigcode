@@ -59,8 +59,8 @@ describe("createMainWindowOptions", () => {
 describe("defaultTitleBarColors", () => {
   it("comes from the bundled tokens.css window and secondary text colours", () => {
     // 期望值是 Chromium 把 --window / --fg-2 画进画布读出的像素；深色图标色以前手抄成了 #D4D4D8
-    expect(defaultTitleBarColors(false)).toEqual({ color: "#F1F1F1", symbolColor: "#3F3F46" })
-    expect(defaultTitleBarColors(true)).toEqual({ color: "#0D0D0D", symbolColor: "#CACACC" })
+    expect(defaultTitleBarColors(false)).toEqual({ color: "#EEF0F5", symbolColor: "#3F3F46" })
+    expect(defaultTitleBarColors(true)).toEqual({ color: "#0B0C0F", symbolColor: "#CACACC" })
     expect(readTitleBarColors(defaultTitleBarColors(true))).not.toBeNull()
   })
 })

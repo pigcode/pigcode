@@ -266,11 +266,14 @@ export function realPtyFactory(): PtyFactory {
     spawn(input) {
       const require = createRequire(import.meta.url)
       const pty = require("node-pty") as typeof import("node-pty")
+      const name = "xterm-256color"
       const child = pty.spawn(input.shell, [], {
+        name,
         cwd: input.cwd,
         cols: input.cols,
         rows: input.rows,
-        env: process.env as Record<string, string>,
+        // Shell 应按内置 xterm 的能力输出，启动 Pigcode 的外层终端可能是 TERM=dumb。
+        env: { ...process.env, TERM: name, COLORTERM: "truecolor" },
       })
       return {
         onData: (listener) => void child.onData(listener),

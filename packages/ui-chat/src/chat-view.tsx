@@ -1,5 +1,6 @@
+import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
 /**
- * 聊天主视图：标签栏（主会话与子代理）、消息时间线、输入框与环境抽屉。时间线左侧是会话导航，
+ * 聊天主视图：标签栏（主会话与子代理）、消息时间线与输入框。时间线左侧是会话导航，
  * 右上角浮着状态面板，离开底部时出现圆形的「滚动到底部」按钮。还没有消息时和新会话草稿页一样：
  * 问候、卡片上方带项目的高输入框与建议；会话已经属于这个项目，项目只显示，不能换。历史还没读到时
  * 不知道有没有消息，先按对话的样子摆（输入框在底部），读到了再决定要不要换成问候。
@@ -14,7 +15,7 @@ import {
   type ReactNode,
 } from "react"
 import type { AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
-import { ArrowDown, ArrowLeft, Ellipsis, PanelRight, Waypoints } from "lucide-react"
+import { ArrowDown, ArrowLeft, PanelRight, Waypoints } from "lucide-react"
 import {
   type ComposerThreadOption,
   Composer,
@@ -28,8 +29,8 @@ import {
 } from "@pigcode/ui-composer"
 import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
-import { EnvironmentDrawer, type EnvironmentInfo } from "./environment-drawer"
 import { MessageList } from "./message-list"
+import { ChatLinkContext, type ChatLinkActions } from "./chat-link-actions"
 import { NewThreadHero, NewThreadStage, NewThreadSuggestions, ProjectChip } from "./new-thread-view"
 import { StatusPanel } from "./status-panel"
 import type { SubagentCall } from "./subagent-card"
@@ -81,6 +82,7 @@ export interface ChatViewProps {
   onSelectModel?: (choice: ComposerModelChoice) => void
   /** 修改线程权限模式；容器应调用 thread.setPermissionMode。 */
   onPermissionMode?: (mode: PermissionMode) => void
+  onPlanMode?: (value: boolean) => void
   /** @ 引用时可选的项目文件。 */
   files?: () => Promise<readonly string[]>
   /** @ 引用时可选的会话（#81）。 */
@@ -91,6 +93,7 @@ export interface ChatViewProps {
   loadAgentCommands?: ComposerProps["loadAgentCommands"]
   /** 打开时间线里提到的文件（工具行与 @ 引用里的路径，可能是绝对路径）。 */
   onOpenFile?: (path: string) => void
+  linkActions?: ChatLinkActions | undefined
   /** 在右栏查看改动；path 是要看的文件。 */
   onViewDiff?: (path?: string) => void
   /** 右栏是否展开；提供 onToggleRight 且没有 layoutControls 时在线程头显示右栏按钮。 */
@@ -154,11 +157,13 @@ export function ChatView({
   onLoadModels,
   onSelectModel,
   onPermissionMode,
+  onPlanMode,
   files,
   threads,
   commands,
   loadAgentCommands,
   onOpenFile,
+  linkActions,
   onViewDiff,
   rightOpen = false,
   onToggleRight,
@@ -175,12 +180,10 @@ export function ChatView({
 }: ChatViewProps) {
   const submit = onSubmit ?? onStart
   const { t } = useLocale()
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const threadRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
   // Agent 功能为 false 时隐藏对应控件；还没读到 Agent 功能时保持旧行为。
   const canInterrupt = features?.streaming ?? true
-  const canPlan = features?.plan ?? true
   const canApprove = features?.approvals ?? true
   // 事件数组只在有新事件时变化；流式增量不触发这些整表扫描。
   const visibleEvents = useMemo(
@@ -216,13 +219,6 @@ export function ChatView({
     },
     [agents],
   )
-  const environment: EnvironmentInfo = {
-    // 抽屉显示实例名：默认实例用的是 Agent 的名字，用户新建的实例是自己的名字。
-    agent: instanceId ? agentName(instanceId) : t("chat.environment.unknown"),
-    cwd,
-    modelId,
-    permissionMode: thread?.permissionMode ?? "workspace-write",
-  }
   const folderName = cwd?.split(/[\\/]/).filter(Boolean).at(-1)
   const viewKey = subagent ? `subagent:${subagent.id}` : (thread?.id ?? null)
   // 确定还没有任何一轮：显示问候与居中的高输入框；时间线里只有切换或近况标记时也算。
@@ -279,13 +275,14 @@ export function ChatView({
     catalog,
     ...(onLoadModels ? { onLoadModels } : {}),
     ...(thread && onSelectModel ? { onSelectModel } : {}),
-    permissionMode: thread?.permissionMode ?? "workspace-write",
+    permissionMode: thread?.permissionMode ?? DEFAULT_RUNTIME_MODE,
     ...(thread && onPermissionMode ? { onPermissionMode } : {}),
     ...(files ? { files } : {}),
     ...(threads ? { threads } : {}),
     ...(commands ? { commands } : {}),
     ...(loadAgentCommands ? { loadAgentCommands } : {}),
-    canPlan,
+    planMode: thread?.planMode ?? false,
+    ...(thread && onPlanMode ? { onPlanMode } : {}),
     canInterrupt,
     contextUsage,
   } satisfies ComposerProps
@@ -305,17 +302,6 @@ export function ChatView({
         ) : null}
         <span className="spacer" />
         {thread ? openIn : null}
-        <Button
-          variant="plain"
-          size="icon"
-          type="button"
-          aria-label={t("chat.environment")}
-          title={t("chat.environment")}
-          aria-expanded={drawerOpen}
-          onClick={() => setDrawerOpen((value) => !value)}
-        >
-          <Ellipsis className="ic" aria-hidden="true" />
-        </Button>
         {layoutControls !== undefined ? (
           layoutControls
         ) : onToggleRight ? (
@@ -356,30 +342,32 @@ export function ChatView({
         <>
           <div className="thread-wrap">
             <div className="thread" ref={threadRef} onScroll={handleScroll}>
-              {subagent ? (
-                <SubagentView
-                  subagent={subagent}
-                  root={cwd}
-                  onOpenFile={onOpenFile}
-                  onViewDiff={onViewDiff}
-                />
-              ) : (
-                <MessageList
-                  events={visibleEvents}
-                  timeline={timeline}
-                  streamingText={streamingText}
-                  liveReasoning={liveReasoning}
-                  agentName={agentName}
-                  onApproval={onApproval ?? (() => undefined)}
-                  root={cwd}
-                  onOpenFile={onOpenFile}
-                  onViewDiff={onViewDiff}
-                  onOpenSubagent={onOpenSubagent}
-                  onOpenThread={onOpenThread}
-                  liveOutput={liveOutput}
-                  onAnswer={onAnswer}
-                />
-              )}
+              <ChatLinkContext.Provider value={linkActions}>
+                {subagent ? (
+                  <SubagentView
+                    subagent={subagent}
+                    root={cwd}
+                    onOpenFile={onOpenFile}
+                    onViewDiff={onViewDiff}
+                  />
+                ) : (
+                  <MessageList
+                    events={visibleEvents}
+                    timeline={timeline}
+                    streamingText={streamingText}
+                    liveReasoning={liveReasoning}
+                    agentName={agentName}
+                    onApproval={onApproval ?? (() => undefined)}
+                    root={cwd}
+                    onOpenFile={onOpenFile}
+                    onViewDiff={onViewDiff}
+                    onOpenSubagent={onOpenSubagent}
+                    onOpenThread={onOpenThread}
+                    liveOutput={liveOutput}
+                    onAnswer={onAnswer}
+                  />
+                )}
+              </ChatLinkContext.Provider>
             </div>
             {subagent ? null : <TurnNavigator timeline={timeline} scroller={threadRef} />}
             {subagent ? null : <StatusPanel timeline={timeline} />}
@@ -416,11 +404,6 @@ export function ChatView({
           </div>
         </>
       )}
-      <EnvironmentDrawer
-        open={drawerOpen}
-        info={environment}
-        onClose={() => setDrawerOpen(false)}
-      />
     </section>
   )
 }

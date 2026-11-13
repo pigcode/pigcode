@@ -1,11 +1,7 @@
-/** 验证发现新版本以后做什么：能装的装好再问重启，不能装的只打开下载页。 */
+/** 应用更新通过状态与显式动作接入统一入口。 */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-const showMessageBox = vi.fn()
 const openExternal = vi.fn()
-
-// downloadWithUpdater 在运行时才 import electron-updater；这里换成可观察的替身，
-// 用来确认「接收预发布版本」真的传进去了。
 const { autoUpdater } = vi.hoisted(() => ({
   autoUpdater: {
     autoDownload: true,
@@ -14,234 +10,202 @@ const { autoUpdater } = vi.hoisted(() => ({
     checkForUpdates: vi.fn(async () => ({})),
     downloadUpdate: vi.fn(async () => undefined),
     quitAndInstall: vi.fn(),
+    on: vi.fn(),
+    removeListener: vi.fn(),
   },
 }))
-
 vi.mock("electron", () => ({
-  app: { getLocale: () => "zh-CN", getVersion: () => "0.1.0", isPackaged: true },
-  dialog: { showMessageBox },
+  app: { getVersion: () => "0.1.0", isPackaged: true, quit: vi.fn() },
   shell: { openExternal },
 }))
-
 vi.mock("electron-updater", () => ({ autoUpdater }))
-
 const { createUpdates } = await import("./updates")
-type Options = Omit<Partial<import("./updates").UpdateOptions>, "getWindow" | "autoCheck">
+type Options = Partial<import("./updates").UpdateOptions>
+const release = { version: "0.2.0", url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0" }
 
-const release = {
-  version: "0.2.0",
-  url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0",
-}
-
-beforeEach(() => {
-  vi.useFakeTimers()
-  showMessageBox.mockReset()
-  openExternal.mockReset()
-  autoUpdater.allowPrerelease = false
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = false
-  autoUpdater.checkForUpdates.mockClear()
-  autoUpdater.downloadUpdate.mockClear()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
-
-/** 启动后台检查并跑到第一次检查结束。 */
-async function findUpdate(options: Options): Promise<ReturnType<typeof createUpdates>> {
-  const updates = createUpdates({
-    getWindow: () => undefined,
+function setup(options: Options = {}) {
+  return createUpdates({
     autoCheck: () => true,
     allowPrerelease: () => false,
     fetchRelease: async () => release,
     ...options,
   })
-  updates.start()
-  await vi.advanceTimersByTimeAsync(5000)
-  return updates
 }
 
-describe("update prompt", () => {
-  it("downloads and offers a restart when the package can install updates", async () => {
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.clearAllMocks()
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.allowPrerelease = false
+})
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
+
+describe("unified app updates", () => {
+  it("publishes discovery without downloading or opening another window", async () => {
     const download = vi.fn(async () => true)
-    const requestRestart = vi.fn()
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({ mode: "install", isPackaged: true, download, requestRestart })
-
-    expect(download).toHaveBeenCalledTimes(1)
-    expect(showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "新版本 0.2.0 已下载",
-        buttons: ["重启并更新", "稍后"],
-      }),
-    )
-    // 重启走正常退出流程（before-quit 里的任务确认）。
-    expect(requestRestart).toHaveBeenCalledTimes(1)
-  })
-
-  // 勾了「接收预发布版本」时，调度器会报出 0.2.0-beta.1；electron-updater 自己再查一次
-  // 版本，不知道这个偏好就会去挑稳定版，结果什么都挑不到，用户被退到下载页。
-  it("tells electron-updater whether prereleases are wanted", async () => {
-    showMessageBox.mockResolvedValue({ response: 1 })
-    await findUpdate({ mode: "install", isPackaged: true, allowPrerelease: () => true })
-    // downloadWithUpdater 里的 import("electron-updater") 走模块加载队列，
-    // advanceTimersByTimeAsync 不会等它；换回真实计时器等下载真的开始。
-    vi.useRealTimers()
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
-
-    expect(autoUpdater.allowPrerelease).toBe(true)
-    expect(autoUpdater.autoDownload).toBe(false)
-    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
-    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
-  })
-
-  it("keeps prereleases off when the preference is off", async () => {
-    showMessageBox.mockResolvedValue({ response: 1 })
-    await findUpdate({ mode: "install", isPackaged: true, allowPrerelease: () => false })
-    vi.useRealTimers()
-    await vi.waitFor(() => expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(1))
-
-    expect(autoUpdater.allowPrerelease).toBe(false)
-  })
-
-  it("leaves the install for later when the user picks it", async () => {
-    const requestRestart = vi.fn()
-    showMessageBox.mockResolvedValue({ response: 1 })
-    await findUpdate({
-      mode: "install",
-      isPackaged: true,
-      download: async () => true,
-      requestRestart,
+    const onState = vi.fn()
+    const updates = setup({ mode: "install", isPackaged: true, download, onState })
+    updates.start()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(updates.getState()).toMatchObject({
+      phase: "available",
+      version: "0.2.0",
+      action: "download",
     })
-    expect(requestRestart).not.toHaveBeenCalled()
+    expect(download).not.toHaveBeenCalled()
+    expect(openExternal).not.toHaveBeenCalled()
+    expect(onState).toHaveBeenCalledWith(expect.objectContaining({ phase: "available" }))
   })
 
-  it("falls back to the download page when the download fails", async () => {
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({ mode: "install", isPackaged: true, download: async () => false })
-
-    // 下载失败时只弹这一次：退回下载页。
-    expect(showMessageBox).toHaveBeenCalledTimes(1)
-    const [first] = showMessageBox.mock.calls[0] as [{ message: string }]
-    expect(first.message).toBe("有新版本 0.2.0")
+  it("updates the same state from a manual check", async () => {
+    const updates = setup({ mode: "notify" })
+    expect(await updates.checkNow()).toEqual({ status: "update-available", ...release })
+    expect(updates.getState()).toMatchObject({ phase: "available", action: "open-release" })
+    await updates.perform()
     expect(openExternal).toHaveBeenCalledWith(release.url)
   })
 
-  it("installs and restarts the downloaded update when asked at quit", async () => {
+  it("downloads once, reports progress, and waits for the restart action", async () => {
+    let finish!: (value: boolean) => void
+    const download = vi.fn((progress: (percent: number) => void) => {
+      progress(45)
+      return new Promise<boolean>((resolve) => {
+        finish = resolve
+      })
+    })
+    const requestRestart = vi.fn()
     const install = vi.fn()
-    showMessageBox.mockResolvedValue({ response: 1 })
-    const updates = await findUpdate({
-      mode: "install",
-      isPackaged: true,
-      download: async () => true,
-      install,
-    })
-    // 什么都没下载时不能接管退出。
-    const cold = createUpdates({
-      getWindow: () => undefined,
-      autoCheck: () => false,
-      mode: "install",
-      isPackaged: true,
-      install,
-    })
-    expect(cold.installIfReady()).toBe(false)
-    // 下载过以后，退出交给 electron-updater（它会装好并重新打开应用）。
+    const updates = setup({ mode: "install", isPackaged: true, download, requestRestart, install })
+    await updates.checkNow()
+    const first = updates.perform()
+    expect(updates.perform()).toBe(first)
+    expect(updates.getState()).toMatchObject({ phase: "downloading", progress: 45 })
+    expect(updates.installIfReady()).toBe(false)
+    finish(true)
+    await first
+    expect(download).toHaveBeenCalledTimes(1)
+    expect(updates.getState()).toMatchObject({ phase: "ready", action: "restart", progress: 100 })
+    expect(requestRestart).not.toHaveBeenCalled()
+    await updates.perform()
+    expect(requestRestart).toHaveBeenCalledTimes(1)
     expect(updates.installIfReady()).toBe(true)
     expect(install).toHaveBeenCalledTimes(1)
   })
 
-  it("only opens the download page on macOS and deb packages", async () => {
-    const download = vi.fn(async () => true)
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({ mode: "notify", isPackaged: true, download })
-
-    expect(download).not.toHaveBeenCalled()
-    expect(showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({ message: "有新版本 0.2.0", buttons: ["打开下载页", "稍后"] }),
-    )
-    expect(openExternal).toHaveBeenCalledWith(release.url)
+  it("retains the selected release while a download is running", async () => {
+    let finish!: (value: boolean) => void
+    const fetchRelease = vi.fn(async () => release)
+    const updates = setup({
+      mode: "install",
+      isPackaged: true,
+      fetchRelease,
+      download: () =>
+        new Promise<boolean>((resolve) => {
+          finish = resolve
+        }),
+    })
+    await updates.checkNow()
+    const downloading = updates.perform()
+    await updates.checkNow()
+    expect(fetchRelease).toHaveBeenCalledTimes(1)
+    expect(updates.getState().phase).toBe("downloading")
+    finish(true)
+    await downloading
   })
 
-  // macOS 没签名装不了（ADR 0005），但可以下载完整包再交给系统打开。
-  it("downloads the full package on macOS and opens it when the user agrees", async () => {
-    const openPath = vi.fn(async () => "")
-    const downloadPackage = vi.fn(async () => ({ path: "/tmp/Pigcode-0.2.0-arm64.dmg" }))
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({ mode: "replace", isPackaged: true, openPath, downloadPackage })
-
-    expect(downloadPackage).toHaveBeenCalledTimes(1)
-    expect(showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "新版本 0.2.0 已下载",
-        buttons: ["打开安装包", "稍后"],
-      }),
-    )
-    expect(openPath).toHaveBeenCalledWith("/tmp/Pigcode-0.2.0-arm64.dmg")
-    // 走的是换包，不该同时打开下载页。
-    expect(openExternal).not.toHaveBeenCalled()
+  it("retries a failed download", async () => {
+    const download = vi.fn().mockResolvedValueOnce(false).mockResolvedValue(true)
+    const updates = setup({ mode: "install", isPackaged: true, download })
+    await updates.checkNow()
+    await updates.perform()
+    expect(updates.getState()).toMatchObject({
+      phase: "failed",
+      error: "download",
+      action: "download",
+    })
+    await updates.perform()
+    expect(updates.getState()).toMatchObject({ phase: "ready", error: null })
   })
 
-  it("does not open the package when the user picks later", async () => {
+  it("opens the macOS installer only on the explicit open action", async () => {
     const openPath = vi.fn(async () => "")
-    showMessageBox.mockResolvedValue({ response: 1 })
-    await findUpdate({
+    const downloadPackage = vi.fn(async () => ({ path: "/tmp/Pigcode.dmg" }))
+    const updates = setup({ mode: "replace", isPackaged: true, openPath, downloadPackage })
+    await updates.checkNow()
+    await updates.perform()
+    expect(updates.getState()).toMatchObject({ phase: "ready", action: "open-package" })
+    expect(openPath).not.toHaveBeenCalled()
+    expect(updates.installIfReady()).toBe(false)
+    await updates.perform()
+    expect(openPath).toHaveBeenCalledWith("/tmp/Pigcode.dmg")
+  })
+
+  it("reports installer opening failures and allows another attempt", async () => {
+    const openPath = vi.fn().mockResolvedValueOnce("failed").mockResolvedValue("")
+    const updates = setup({
       mode: "replace",
       isPackaged: true,
       openPath,
       downloadPackage: async () => ({ path: "/tmp/Pigcode.dmg" }),
     })
-    expect(openPath).not.toHaveBeenCalled()
+    await updates.checkNow()
+    await updates.perform()
+    await updates.perform()
+    expect(updates.getState()).toMatchObject({ phase: "failed", error: "open" })
+    await updates.perform()
+    expect(openPath).toHaveBeenCalledTimes(2)
+    expect(updates.getState().error).toBeNull()
+    expect(updates.getState().phase).toBe("ready")
   })
 
-  it("falls back to the download page when the package cannot be downloaded", async () => {
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({
-      mode: "replace",
-      isPackaged: true,
-      downloadPackage: async () => {
-        throw new Error("HTTP 500")
-      },
-    })
-    expect(showMessageBox).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: "有新版本 0.2.0",
-        detail: "下载新版本失败，改为打开下载页。",
-      }),
-    )
-    expect(openExternal).toHaveBeenCalledWith(release.url)
-  })
-
-  it("only replaces when running from a real package", async () => {
-    showMessageBox.mockResolvedValue({ response: 0 })
+  it("uses the release page for development builds", async () => {
     const downloadPackage = vi.fn()
-    await findUpdate({
-      mode: "replace",
-      isPackaged: false,
-      downloadPackage,
-      openPath: async () => "",
-    })
+    const updates = setup({ mode: "replace", isPackaged: false, downloadPackage })
+    await updates.checkNow()
+    expect(updates.getState().action).toBe("open-release")
+    await updates.perform()
+    expect(openExternal).toHaveBeenCalledWith(release.url)
     expect(downloadPackage).not.toHaveBeenCalled()
-    // 开发运行时退回下载页，什么都不假装能做。
+  })
+
+  it("uses the release page when no macOS package matches the architecture", async () => {
+    const updates = setup({ mode: "replace", isPackaged: true, arch: "arm64" })
+    await updates.checkNow()
+    expect(updates.getState().action).toBe("open-release")
+    await updates.perform()
     expect(openExternal).toHaveBeenCalledWith(release.url)
   })
 
-  // 下载好了却打不开（DMG 被删除、系统拒绝），用户至少还能自己去 Release 页面拿。
-  it("falls back to the download page when the package cannot be opened", async () => {
-    showMessageBox.mockResolvedValue({ response: 0 })
-    await findUpdate({
-      mode: "replace",
-      isPackaged: true,
-      downloadPackage: async () => ({ path: "/tmp/Pigcode.dmg" }),
-      // shell.openPath 用错误字符串表示失败，而不是抛异常。
-      openPath: async () => "no application can open it",
-    })
-    expect(showMessageBox).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        message: "有新版本 0.2.0",
-        detail: "安装包打不开，改为打开下载页。",
-      }),
+  it.each([true, false])("passes prerelease preference %s to the installer", async (allow) => {
+    vi.useRealTimers()
+    const updates = setup({ mode: "install", isPackaged: true, allowPrerelease: () => allow })
+    await updates.checkNow()
+    await updates.perform()
+    expect(autoUpdater.allowPrerelease).toBe(allow)
+    expect(autoUpdater.autoDownload).toBe(false)
+    expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
+    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1)
+    expect(autoUpdater.removeListener).toHaveBeenCalledWith(
+      "download-progress",
+      expect.any(Function),
     )
-    expect(openExternal).toHaveBeenCalledWith(release.url)
+  })
+
+  it("clears an old result and reports a failed check", async () => {
+    const fetchRelease = vi
+      .fn()
+      .mockResolvedValueOnce(release)
+      .mockResolvedValueOnce({ ...release, version: "0.1.0" })
+      .mockResolvedValue(null)
+    const updates = setup({ fetchRelease })
+    await updates.checkNow()
+    await updates.checkNow()
+    expect(updates.getState()).toMatchObject({ phase: "idle", version: null, action: null })
+    await updates.checkNow()
+    expect(updates.getState()).toMatchObject({ phase: "failed", error: "check", version: null })
   })
 })

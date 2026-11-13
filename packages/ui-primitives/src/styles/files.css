@@ -1,5 +1,4 @@
-/* ─── 文件资源管理器 ───────────────────────────────────────
-   参照 t3code：紧凑的行、淡化的忽略项、git 改动的颜色与字母、缩进参考线；只渲染可见的行。 */
+/* 文件导航使用 Pigcode 的列表行、搜索框和 Git 状态。 */
 
 .files-surface {
   display: flex;
@@ -27,8 +26,7 @@
 }
 .fx-compact .fx-head {
   min-height: var(--control-md);
-  padding: 4px 4px 0 6px;
-  justify-content: flex-end;
+  padding: 0 var(--space-3) var(--space-1) var(--space-5);
 }
 .fx-root {
   flex: 1;
@@ -48,13 +46,14 @@
   width: var(--control-sm);
   height: var(--control-sm);
 }
+.fx-actions .icon-btn[aria-pressed="true"] {
+  background: var(--active);
+  color: var(--fg);
+}
 /* 搜索框是紧凑的 SearchField，这里只管它四周的间距，左右和树的行对齐 */
 .search-field.fx-search {
   width: auto;
-  margin: var(--space-2) var(--space-3) var(--space-3);
-}
-.fx-compact .search-field.fx-search {
-  margin: var(--space-1) var(--space-3) var(--space-2);
+  margin: var(--space-3) var(--space-3) var(--space-1);
 }
 .fx-note {
   padding: 6px 12px;
@@ -220,50 +219,48 @@
   color: var(--muted);
 }
 
-/* ─── 文件标签：左侧可收起的文件树，右侧面包屑与编辑器 ─────────── */
-.file-surface {
-  position: relative;
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
+/* 文件工具栏横跨目录和预览。窄面板在两者之间切换。 */
 .file-surface-aside {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: none;
-  width: min(260px, 40%);
-  min-width: 190px;
+  min-width: 0;
   border-right: var(--hair) solid var(--divider);
 }
-/* 窄的时候盖在编辑器上，像抽屉一样从左边出来。 */
-.file-surface[data-overlay] .file-surface-aside {
-  position: absolute;
-  top: 35px;
-  bottom: 0;
-  left: 0;
-  z-index: 5;
-  width: min(280px, 86%);
-  background: var(--surface);
-  box-shadow: var(--shadow-pop);
-  animation: file-aside-in 140ms var(--ease);
+.files-surface[data-navigation-only] .file-surface-aside {
+  flex: 1;
+  border-right: 0;
 }
-@keyframes file-aside-in {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
+.panel-resizer.file-navigation-resizer {
+  left: auto;
+  right: -4px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .file-surface[data-overlay] .file-surface-aside {
-    animation: none;
-  }
-}
-.file-view {
+.file-view,
+.file-view-content,
+.file-view-split {
   display: flex;
-  flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
+}
+.file-view,
+.file-view-content {
+  flex-direction: column;
+}
+.file-view-content[hidden] {
+  display: none;
+}
+.file-view-title {
+  color: var(--muted);
+}
+.file-surface-aside .workbench-worktree-compact {
+  border-top: var(--hair) solid var(--divider);
+  border-bottom: 0;
+}
+.file-surface-aside .worktree-compact .select-trigger {
+  flex: 1;
+  max-width: 100%;
 }
 .file-view-head {
   display: flex;
@@ -328,6 +325,20 @@ button.file-crumb:hover {
 .file-save {
   flex: none;
 }
+.file-preview-toggle {
+  flex: none;
+}
+.file-markdown-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: var(--space-7);
+  color: var(--fg);
+  font-family: var(--font-content);
+  font-size: var(--cv-fs);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
 .file-banner {
   display: flex;
   align-items: center;
@@ -351,7 +362,7 @@ button.file-crumb:hover {
   display: flex;
   flex: 1;
   min-height: 0;
-  background: var(--code-bg);
+  background: var(--bg);
 }
 .file-view-body > .empty-state {
   flex: 1;
@@ -383,7 +394,7 @@ button.file-crumb:hover {
   z-index: 2;
   width: var(--code-gutter);
   height: 100%;
-  background: var(--code-bg);
+  background: var(--bg);
   box-shadow: inset calc(-1 * var(--hair)) 0 0 var(--divider);
 }
 .code-gutter span {
@@ -481,7 +492,10 @@ button.file-crumb:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* 标签上的未保存圆点。 */
+/* 预览标签的标题用斜体，未保存的文件显示圆点。 */
+.surface-tab[data-preview] .surface-tab-label {
+  font-style: italic;
+}
 .surface-tab-dirty {
   flex: none;
   width: var(--dot-size);

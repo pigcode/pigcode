@@ -3,6 +3,7 @@ import type {
   PendingRequest,
   AgentCommand,
   AgentFeatures,
+  AgentExecutionModes,
   AgentEvent,
   AgentInstance,
   AgentModel,
@@ -55,11 +56,21 @@ export interface ApprovalHandle {
 
 /** Agent 注册表与运行生命周期入口。 */
 export interface AgentsService {
+  cliUpdates(): Record<string, import("@pigcode/contracts").AgentCliUpdateState>
+  checkCliUpdates(
+    instanceId?: string,
+  ): Promise<Record<string, import("@pigcode/contracts").AgentCliUpdateState>>
+  updateCli(instanceId: string): Promise<import("@pigcode/contracts").AgentCliUpdateState>
   register(driver: AgentDriver): void
   /** 移除插件注册的 driver；插件卸载时由其 effect 清理调用。 */
   unregister(driverId: string): void
   /** 已注册的 Agent 与它们的 Agent 功能。 */
-  list(): Array<{ id: string; displayName: string; features: AgentFeatures }>
+  list(): Array<{
+    id: string
+    displayName: string
+    features: AgentFeatures
+    executionModes?: AgentExecutionModes | null
+  }>
   /** 只读检测：是否安装、版本与登录状态；结果短时缓存，refresh 时重新检测。 */
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
   /** 读取实例的模型目录（含用户添加的自定义模型）；Agent 自己的目录按实例缓存。 */

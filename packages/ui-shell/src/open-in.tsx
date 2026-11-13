@@ -17,6 +17,7 @@ export interface OpenApp {
 }
 
 const PREFERRED_KEY = "pigcode.openInApp"
+const FILE_PREFERRED_KEY = "pigcode.openInFileApp"
 
 /** 按系统习惯称呼文件管理器：访达、资源管理器，其他平台统称文件管理器。 */
 export function revealLabelKey(platform: string = nativePlatform()): MessageKey {
@@ -40,9 +41,9 @@ export function useOpenFailure(): (path: string) => void {
 }
 
 /** 读取上次选的应用。 */
-function readPreferred(): string | null {
+function readPreferred(key: string): string | null {
   try {
-    return window.localStorage.getItem(PREFERRED_KEY)
+    return window.localStorage.getItem(key)
   } catch {
     return null
   }
@@ -82,30 +83,55 @@ function useAppName(): (app: OpenApp) => string {
         : app.name
 }
 
-/** 线程头右侧的分段按钮：左边用选中的应用打开项目，右边换一个应用或复制路径。 */
-export function OpenInButton({ path }: { path: string }) {
+/** 文件与项目共用「打开」分段按钮，按目标类型记住打开方式。 */
+export function OpenInButton({
+  path,
+  openFile,
+}: {
+  /** 用于复制路径和显示错误的绝对路径。 */
+  path: string
+  /** 传入时打开当前文件，appId 为 null 时交给系统默认应用。 */
+  openFile?: ((appId: string | null) => Promise<void>) | undefined
+}) {
   const { t } = useLocale()
   const toast = useToast()
-  const failed = useOpenFailure()
   const nameOf = useAppName()
   const [apps, refresh] = useOpenApps()
-  const [preferred, setPreferred] = useState<string | null>(readPreferred)
-  const selected = apps.find((app) => app.id === preferred) ?? apps[0] ?? null
+  const preferenceKey = openFile ? FILE_PREFERRED_KEY : PREFERRED_KEY
+  const [preferred, setPreferred] = useState(() => readPreferred(preferenceKey))
+  const choices = openFile ? apps.filter((app) => app.kind === "editor") : apps
+  const selected = choices.find((app) => app.id === preferred) ?? (openFile ? null : choices[0])
 
-  function open(app: OpenApp): void {
-    setPreferred(app.id)
+  function open(app: OpenApp | null | undefined): void {
+    const id = app?.id ?? null
+    setPreferred(id)
     try {
-      window.localStorage.setItem(PREFERRED_KEY, app.id)
+      if (id) window.localStorage.setItem(preferenceKey, id)
+      else window.localStorage.removeItem(preferenceKey)
     } catch {
-      // 存储不可用时只记在本次运行里。
+      // 存储不可用时只记在当前按钮里。
     }
-    void window.pigcodeNative?.openWithApp?.(app.id, path).catch(() => failed(path))
+    const opened = openFile
+      ? openFile(id)
+      : app
+        ? window.pigcodeNative?.openWithApp?.(app.id, path)
+        : undefined
+    if (opened) {
+      const failed = t(openFile ? "files.menu.openFailed" : "openIn.failed")
+      void opened.catch(() => toast(`${failed} ${path}`, "alert"))
+    }
   }
 
-  if (!selected) return null
-  const openLabel = t("openIn.editor").replace("{name}", nameOf(selected))
+  if (!selected && !openFile) return null
+  const openLabel = selected
+    ? t("openIn.editor").replace("{name}", nameOf(selected))
+    : t("files.menu.defaultApp")
   return (
-    <div className="open-in-split" role="group" aria-label={t("openIn.title")}>
+    <div
+      className="open-in-split"
+      role="group"
+      aria-label={t(openFile ? "files.menu.openWith" : "openIn.title")}
+    >
       <button
         type="button"
         className="open-in-main"
@@ -113,7 +139,7 @@ export function OpenInButton({ path }: { path: string }) {
         title={openLabel}
         onClick={() => open(selected)}
       >
-        <AppIcon app={selected} />
+        {selected ? <AppIcon app={selected} /> : <Icon name="file" />}
       </button>
       <Menu.Root
         onOpenChange={(next) => {
@@ -131,15 +157,22 @@ export function OpenInButton({ path }: { path: string }) {
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={6}>
             <Menu.Popup className="open-in-menu">
-              {apps.map((app) => (
+              {choices.map((app) => (
                 <Menu.Item key={app.id} className="open-in-item" onClick={() => open(app)}>
                   <AppIcon app={app} />
                   <span className="grow">{nameOf(app)}</span>
-                  {app.id === selected.id ? (
+                  {app.id === selected?.id ? (
                     <Icon name="check" small className="check-mark" />
                   ) : null}
                 </Menu.Item>
               ))}
+              {openFile ? (
+                <Menu.Item onClick={() => open(null)}>
+                  <Icon name="file" small />
+                  <span className="grow">{t("files.menu.defaultApp")}</span>
+                  {!selected ? <Icon name="check" small className="check-mark" /> : null}
+                </Menu.Item>
+              ) : null}
               <Menu.Separator />
               <Menu.Item
                 onClick={() => {

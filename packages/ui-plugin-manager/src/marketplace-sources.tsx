@@ -336,7 +336,7 @@ export function MarketplaceSourcesDialog({
                             type="button"
                             onClick={() => setConfirming(null)}
                           >
-                            {t("agents.install.cancel")}
+                            {t("common.cancel")}
                           </Button>
                           <Button
                             size="sm"

@@ -4,6 +4,7 @@
  */
 import type { JSONContent } from "@tiptap/react"
 import {
+  contextsFor,
   moveComposerContexts,
   prefillComposerContexts,
   resetComposerContexts,
@@ -65,6 +66,19 @@ export function prefillComposer(
   if (draft.contexts) prefillComposerContexts(key, draft.contexts)
   focusRequests.add(key)
   window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key } }))
+}
+
+/** 保存发送时的文档和附件，失败后可把它们原样放回当前草稿或已建好的会话。 */
+export function captureComposerDraft(key: string): (target: string) => void {
+  const content = loadDraft(key)
+  const contexts = contextsFor(key)
+  return (target) => {
+    if (loadDraft(target) || contextsFor(target).length > 0) return
+    saveDraft(target, content)
+    if (contexts.length) prefillComposerContexts(target, contexts)
+    focusRequests.add(target)
+    window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key: target } }))
+  }
 }
 
 /** 还挂着的输入框收到它时把内容存进草稿、清空自己，草稿好搬去别的键。 */

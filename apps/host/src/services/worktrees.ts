@@ -1,11 +1,13 @@
 /** Git worktree 生命周期：创建、切换、移除，并为线程提供活动路径。 */
 import type { Context } from "cordis"
+import type { WorktreeStart } from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { access } from "node:fs/promises"
-import { basename, dirname, join, resolve } from "node:path"
+import { access, mkdtemp, realpath, rm } from "node:fs/promises"
+import { basename, dirname, join, relative, resolve, sep } from "node:path"
 import { promisify } from "node:util"
 import type { PigcodeDatabase } from "../storage/database"
+import { copyWorktreeIncludes } from "./worktree-includes"
 
 const exec = promisify(execFile)
 
@@ -30,6 +32,7 @@ export interface WorktreesService {
   /** 线程创建过、目录还在的 worktree；重开应用后界面据此恢复选择。 */
   list(threadId: string): Promise<WorktreeList>
   create(threadId: string): Promise<Worktree>
+  prepare(projectId: string, threadId: string, start: WorktreeStart): Promise<PreparedWorktree>
   switch(threadId: string, path: string): Promise<Worktree>
   remove(threadId: string): Promise<void>
   activePath(threadId: string): string | null
@@ -51,19 +54,24 @@ export interface WorktreesPlugin {
 }
 
 /** worktrees 表的一行。 */
-interface WorktreeRow {
-  id: string
-  path: string
-  branch: string | null
+interface WorktreeRow extends Worktree {
+  cwd: string | null
+}
+
+/** Git 已创建目录，调用方可以和新会话一起登记，或者在写入失败时清理。 */
+interface PreparedWorktree {
+  persist(): Worktree
+  rollback(): Promise<void>
 }
 
 /** 注册 worktree 服务；路径始终由项目根推导，不接受调用方传入的目标目录。 */
 export const apply: WorktreesPlugin = (ctx) => {
+  const creating = new Map<string, Promise<Worktree>>()
   const service: WorktreesService = {
     async list(threadId) {
       const rows = ctx.storage.db
         .prepare(
-          `SELECT id, path, branch FROM worktrees WHERE thread_id = ? ORDER BY created_at, rowid`,
+          `SELECT id, path, branch, cwd FROM worktrees WHERE thread_id = ? ORDER BY created_at, rowid`,
         )
         .all(threadId) as WorktreeRow[]
       const existing: Worktree[] = []
@@ -72,37 +80,19 @@ export const apply: WorktreesPlugin = (ctx) => {
       }
       return { worktrees: existing, activePath: activeRow(ctx.storage.db, threadId)?.path ?? null }
     },
-    async create(threadId) {
-      const thread = ctx.threads.get(threadId)
-      if (!thread) throw new Error(`thread not found: ${threadId}`)
-      const project = ctx.projects.get(thread.projectId)
-      if (!project) throw new Error(`project not found: ${thread.projectId}`)
-
-      // 重复 create 时复用仍然存在的活动 worktree，避免同一线程堆积目录。
-      const existing = activeRow(ctx.storage.db, threadId)
-      if (existing && (await pathExists(existing.path))) return toWorktree(existing)
-      if (existing) markRemoved(ctx.storage.db, existing.id)
-
-      // 项目目录可能是仓库子目录；worktree 放在顶层仓库的同级目录。
-      const root = (await runGit(project.rootPath, ["rev-parse", "--show-toplevel"])).trim()
-      const shortId = randomUUID().slice(0, 8)
-      const path = join(dirname(root), `${basename(root)}-pigcode-${shortId}`)
-      const branch = `pigcode/${threadId.slice(-8)}`
-      await addWorktree(root, path, branch)
-
-      const id = `wt_${randomUUID()}`
-      ctx.storage.db
-        .prepare(
-          `INSERT INTO worktrees
-           (id, project_id, thread_id, path, branch, status, created_at, removed_at)
-           VALUES (?, ?, ?, ?, ?, 'active', ?, NULL)`,
-        )
-        .run(id, thread.projectId, threadId, path, branch, new Date().toISOString())
-      return { id, path, branch }
+    create(threadId) {
+      const pending = creating.get(threadId)
+      if (pending) return pending
+      const creation = createForThread(ctx, threadId).finally(() => {
+        creating.delete(threadId)
+      })
+      creating.set(threadId, creation)
+      return creation
     },
+    prepare: (projectId, threadId, start) => prepareWorktree(ctx, projectId, threadId, start),
     async switch(threadId, path) {
       const rows = ctx.storage.db
-        .prepare(`SELECT id, path, branch FROM worktrees WHERE thread_id = ?`)
+        .prepare(`SELECT id, path, branch, cwd FROM worktrees WHERE thread_id = ?`)
         .all(threadId) as WorktreeRow[]
       const target = rows.find((row) => resolve(row.path) === resolve(path))
       if (!target) throw new Error(`worktree not found: ${path}`)
@@ -145,9 +135,9 @@ export const apply: WorktreesPlugin = (ctx) => {
 
 apply.inject = inject
 
-/** 读取线程当前的活动 worktree 路径；供 Agent 会话的 cwd 解析复用同一查询。 */
-export function activeWorktreePath(db: PigcodeDatabase, threadId: string): string | null {
-  return activeRow(db, threadId)?.path ?? null
+function activeWorktreeCwd(db: PigcodeDatabase, threadId: string): string | null {
+  const row = activeRow(db, threadId)
+  return row?.cwd ?? row?.path ?? null
 }
 
 /**
@@ -177,10 +167,10 @@ export function threadCwd(
 ): string {
   const thread = ctx.threads.get(threadId)
   if (!thread) throw new Error(`thread not found: ${threadId}`)
-  const own = activeWorktreePath(ctx.storage.db, threadId)
+  const own = activeWorktreeCwd(ctx.storage.db, threadId)
   if (own) return own
   const parent = thread.parentThreadId
-    ? activeWorktreePath(ctx.storage.db, thread.parentThreadId)
+    ? activeWorktreeCwd(ctx.storage.db, thread.parentThreadId)
     : null
   if (parent) return parent
   const project = ctx.projects.get(thread.projectId)
@@ -188,20 +178,104 @@ export function threadCwd(
   return project.rootPath
 }
 
-/** 创建 worktree；移除后分支仍存在时直接复用以避免 `-b` 冲突。 */
-async function addWorktree(root: string, path: string, branch: string): Promise<void> {
-  if (await refExists(root, `refs/heads/${branch}`)) {
-    await runGit(root, ["worktree", "add", path, branch])
-    return
+async function createForThread(ctx: Context, threadId: string): Promise<Worktree> {
+  const thread = ctx.threads.get(threadId)
+  if (!thread) throw new Error(`thread not found: ${threadId}`)
+  const db = ctx.storage.db
+  const existing = activeRow(db, threadId)
+  if (existing && (await pathExists(existing.path))) return toWorktree(existing)
+  const prepared = await prepareWorktree(ctx, thread.projectId, threadId)
+  try {
+    return db.transaction(() => {
+      if (existing) markRemoved(db, existing.id)
+      return prepared.persist()
+    })()
+  } catch (error) {
+    await prepared.rollback()
+    throw error
   }
-  await runGit(root, ["worktree", "add", "-b", branch, path, "HEAD"])
+}
+
+async function prepareWorktree(
+  ctx: Context,
+  projectId: string,
+  threadId: string,
+  start?: WorktreeStart,
+): Promise<PreparedWorktree> {
+  const project = ctx.projects.get(projectId)
+  if (!project) throw new Error(`project not found: ${projectId}`)
+  const projectPath = await realpath(project.rootPath)
+  const checkoutRoot = await runGit(projectPath, ["rev-parse", "--show-toplevel"])
+  const root = checkoutRoot.replace(/\r?\n$/, "")
+  const subdir = relative(root, projectPath)
+  const branch = `pigcode/${threadId.slice(-8)}`
+  const branchRef = `refs/heads/${branch}`
+  // 已有会话重新创建时复用原分支，保留上次 worktree 上的提交。
+  const reuse = !start && (await refExists(root, branchRef))
+  const base = reuse ? branchRef : (start?.baseRef ?? "HEAD")
+  if (start?.baseRef) await runGit(root, ["check-ref-format", base])
+  const commit = (
+    await runGit(root, ["rev-parse", "--verify", "--end-of-options", `${base}^{commit}`])
+  ).trim()
+  if (subdir) {
+    const object = `${commit}:${subdir.split(sep).join("/")}`
+    const kind = await runGit(root, ["cat-file", "-t", object]).catch(() => "")
+    if (kind.trim() !== "tree")
+      throw new Error(`Project directory is missing in ${base}: ${subdir}`)
+  }
+
+  const path = await mkdtemp(join(dirname(root), `${basename(root)}-pigcode-`))
+  const worktree = { id: `wt_${randomUUID()}`, path, branch }
+  // 用 compare-and-swap 创建分支，回滚时只删除这次创建、且没有被移动过的分支。
+  let createdBranch = false
+  async function rollback() {
+    try {
+      await runGit(root, ["worktree", "remove", "--force", "--", path])
+    } catch {
+      // Git 还没登记目录时，只需要清理 mkdtemp 分配的空目录。
+      await rm(path, { recursive: true, force: true })
+    }
+    if (createdBranch) await runGit(root, ["update-ref", "-d", branchRef, commit])
+  }
+  try {
+    if (!reuse) {
+      await runGit(root, ["update-ref", branchRef, commit, "0".repeat(commit.length)])
+      createdBranch = true
+    }
+    await runGit(root, ["worktree", "add", "--", path, branch])
+    if (start) await copyWorktreeIncludes(root, path, (args) => runGit(root, args))
+  } catch (error) {
+    await rollback()
+    throw error
+  }
+  return {
+    persist() {
+      ctx.storage.db
+        .prepare(
+          `INSERT INTO worktrees
+           (id, project_id, thread_id, path, branch, cwd, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'active', ?)`,
+        )
+        .run(
+          worktree.id,
+          projectId,
+          threadId,
+          path,
+          branch,
+          join(path, subdir),
+          new Date().toISOString(),
+        )
+      return worktree
+    },
+    rollback,
+  }
 }
 
 /** 查询线程最新一条 active 行。 */
 function activeRow(db: PigcodeDatabase, threadId: string): WorktreeRow | undefined {
   return db
     .prepare(
-      `SELECT id, path, branch FROM worktrees
+      `SELECT id, path, branch, cwd FROM worktrees
        WHERE thread_id = ? AND status = 'active'
        ORDER BY created_at DESC, rowid DESC
        LIMIT 1`,

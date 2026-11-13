@@ -53,10 +53,12 @@ export function parentOf(path: string): string {
 export function visibleRows(
   directories: ReadonlyMap<string, DirectoryState>,
   expanded: ReadonlySet<string>,
+  include?: (entry: ExplorerEntry) => boolean,
 ): VisibleRow[] {
   const rows: VisibleRow[] = []
   const walk = (directory: string, depth: number): void => {
     for (const entry of directories.get(directory)?.entries ?? []) {
+      if (include && !include(entry)) continue
       if (entry.kind === "file") {
         rows.push({
           path: entry.path,
@@ -95,6 +97,25 @@ export function visibleRows(
   }
   walk("", 0)
   return rows
+}
+
+/** 加入 Git 已删除但磁盘上已经不再有目录项的文件，再按变更过滤目录树。 */
+export function changedRows(
+  directories: ReadonlyMap<string, DirectoryState>,
+  expanded: ReadonlySet<string>,
+  files: ReadonlyMap<string, GitDecoration>,
+  include: (entry: ExplorerEntry) => boolean,
+): VisibleRow[] {
+  const withDeleted = new Map(directories)
+  for (const [path, decoration] of files) {
+    if (decoration !== "deleted") continue
+    const parent = parentOf(path)
+    const listing = withDeleted.get(parent)
+    if (!listing || listing.entries.some((entry) => entry.path === path)) continue
+    const entry: ExplorerEntry = { path, name: path.split("/").at(-1) ?? path, kind: "file" }
+    withDeleted.set(parent, { ...listing, entries: [...listing.entries, entry] })
+  }
+  return visibleRows(withDeleted, expanded, include)
 }
 
 /** 搜索结果构成的临时树：命中的条目加上它们的祖先目录，全部展开。 */

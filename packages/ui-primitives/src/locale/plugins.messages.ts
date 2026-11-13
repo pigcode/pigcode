@@ -18,6 +18,7 @@ export const pluginsZhCN = {
   "plugins.install.title": "安装插件",
   "plugins.install.description":
     "从 GitHub 仓库、npm 包、tarball 或本地插件目录安装。GitHub 仓库直接下载，不需要 git；安装后立即加载，不需要重启 Pigcode。",
+  "plugins.chooseFolder": "选择文件夹…",
   "plugins.install.submit": "安装",
   "plugins.failed": "操作失败：{reason}",
   "plugins.facts.package": "包名",
@@ -202,6 +203,7 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
   "plugins.install.title": "Install a plugin",
   "plugins.install.description":
     "Install from a GitHub repo, an npm package, a tarball or a local plugin folder. GitHub repos download directly, no git needed. It loads right away, no restart needed.",
+  "plugins.chooseFolder": "Choose folder…",
   "plugins.install.submit": "Install",
   "plugins.failed": "Something went wrong: {reason}",
   "plugins.facts.package": "Package",

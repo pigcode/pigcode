@@ -179,6 +179,7 @@ export function ProjectRow({
   actions,
   onToggle,
   onNewThread,
+  onBrowseFiles,
 }: {
   project: Project
   open: boolean
@@ -186,6 +187,7 @@ export function ProjectRow({
   actions: RowAction[]
   onToggle: () => void
   onNewThread: () => void
+  onBrowseFiles?: (() => void) | undefined
 }) {
   const { t } = useLocale()
   const folder = <Icon name={open ? "folder-open" : "folder"} className="proj-folder" />
@@ -207,16 +209,30 @@ export function ProjectRow({
         leading={folder}
         title={project.name}
         actions={
-          <Button
-            variant="plain"
-            className="icon-btn proj-add"
-            type="button"
-            aria-label={t("nav.newThread")}
-            title={t("nav.newThread")}
-            onClick={onNewThread}
-          >
-            <Icon name="plus" small />
-          </Button>
+          <>
+            {onBrowseFiles ? (
+              <Button
+                variant="plain"
+                className="icon-btn proj-files"
+                type="button"
+                aria-label={t("files.viewProjectFiles")}
+                title={t("files.viewProjectFiles")}
+                onClick={onBrowseFiles}
+              >
+                <Icon name="folder-open" small />
+              </Button>
+            ) : null}
+            <Button
+              variant="plain"
+              className="icon-btn proj-add"
+              type="button"
+              aria-label={t("nav.newThread")}
+              title={t("nav.newThread")}
+              onClick={onNewThread}
+            >
+              <Icon name="plus" small />
+            </Button>
+          </>
         }
       />
     </RowMenu>

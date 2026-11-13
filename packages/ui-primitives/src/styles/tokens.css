@@ -3,7 +3,8 @@
   所有颜色只在本文件定义。页面与组件只引用语义变量，不写死色值。
   结构：窗口底色承载标题栏与侧栏；聊天与右侧面板平铺在略亮一层的内容区里，
   用户消息与输入区是再亮一层的卡片。浅色下 macOS 的侧栏更深一些，接近系统侧栏材质。
-  中性色是几乎无彩的灰；强调色是靛蓝，只出现在开关、链接与焦点上。
+  底色带一点和强调色同一色相（264–268）的冷调：浅色是近白的内容区配浅蓝灰的侧栏，
+  深色是蓝黑；强调色是靛蓝，只出现在开关、链接与焦点上。
   悬停、选中、细线一律用带透明度的墨色，叠在任何底色上都成立。
 */
 
@@ -12,12 +13,12 @@
   color-scheme: light;
 
   /* 窗口与表面：window 承载标题栏与侧栏，bg 是内容区，surface 是卡片 */
-  --window: oklch(95.8% 0 0);
-  --wall-1: oklch(95.8% 0 0 / 0);
-  --wall-2: oklch(95.8% 0 0 / 0);
-  --sidebar: oklch(95.8% 0 0 / 0.6);
-  --bg: oklch(97.6% 0 0);
-  --surface: oklch(99% 0 0);
+  --window: oklch(95.6% 0.006 264);
+  --wall-1: oklch(95.6% 0.006 264 / 0);
+  --wall-2: oklch(95.6% 0.006 264 / 0);
+  --sidebar: oklch(95.6% 0.006 264 / 0.6);
+  --bg: oklch(99.3% 0.0015 264);
+  --surface: oklch(100% 0 0);
   --panel: oklch(21% 0.006 286 / 0.035);
   --hover: oklch(21% 0.006 286 / 0.045);
   --active: oklch(21% 0.006 286 / 0.075);
@@ -58,7 +59,7 @@
   --accent-soft-strong: oklch(52% 0.2 264 / 0.15);
   --accent-ring: oklch(52% 0.2 264 / 0.2);
   --accent-text: oklch(46% 0.19 264);
-  --surface-raised: oklch(99% 0 0);
+  --surface-raised: oklch(100% 0 0);
   --surface-sunken: oklch(21% 0.006 286 / 0.03);
 
   /* 状态 */
@@ -110,7 +111,6 @@
   --term-bright-magenta: #a259e6;
   --term-bright-cyan: #1496a8;
   --term-bright-white: #3a3a48;
-  --code-bg: oklch(96% 0.0015 286);
 
   --field-hl: oklch(100% 0 0 / 0.5);
   --knob: oklch(100% 0 0);
@@ -168,16 +168,16 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --window: oklch(16% 0 0);
-  --wall-1: oklch(16% 0 0 / 0);
-  --wall-2: oklch(16% 0 0 / 0);
-  --sidebar: oklch(16% 0 0 / 0.5);
-  --bg: oklch(19.5% 0 0);
-  --surface: oklch(22.5% 0 0);
+  --window: oklch(15.4% 0.006 268);
+  --wall-1: oklch(15.4% 0.006 268 / 0);
+  --wall-2: oklch(15.4% 0.006 268 / 0);
+  --sidebar: oklch(15.4% 0.006 268 / 0.5);
+  --bg: oklch(19% 0.008 268);
+  --surface: oklch(22.4% 0.009 268);
   --panel: oklch(100% 0 0 / 0.03);
   --hover: oklch(100% 0 0 / 0.05);
   --active: oklch(100% 0 0 / 0.085);
-  --popover: oklch(23% 0 0);
+  --popover: oklch(23% 0.009 268);
   --scrim: oklch(0% 0 0 / 0.5);
 
   --fg: oklch(96% 0 0);
@@ -190,7 +190,7 @@
   --resizer-hover: oklch(100% 0 0 / 0.12);
   --border-focus: oklch(66% 0.17 264 / 0.75);
   --field: oklch(100% 0 0 / 0.05);
-  --popover-glass: oklch(23% 0 0 / 0.9);
+  --popover-glass: oklch(23% 0.009 268 / 0.9);
   --scroll-thumb: oklch(100% 0 0 / 0.18);
   --scroll-thumb-hover: oklch(100% 0 0 / 0.3);
 
@@ -210,7 +210,7 @@
   --accent-soft-strong: oklch(63% 0.18 264 / 0.24);
   --accent-ring: oklch(63% 0.18 264 / 0.28);
   --accent-text: oklch(77% 0.12 264);
-  --surface-raised: oklch(24% 0 0);
+  --surface-raised: oklch(23.6% 0.009 268);
   --surface-sunken: oklch(0% 0 0 / 0.18);
 
   --ok: oklch(72% 0.15 155);
@@ -232,7 +232,7 @@
   --diff-remove-fg: var(--bad-text);
 
   --track: oklch(100% 0 0 / 0.09);
-  --avatar: oklch(29% 0 0);
+  --avatar: oklch(29% 0.008 268);
 
   /* 深色底上状态色本身就够亮：普通色取状态色，亮色取更亮的文字色 */
   --term-bg: #161616;
@@ -256,7 +256,6 @@
   --term-bright-magenta: #dab8ff;
   --term-bright-cyan: #7fdeec;
   --term-bright-white: #f4f4f8;
-  --code-bg: oklch(17% 0 0);
 
   --field-hl: oklch(100% 0 0 / 0);
   --knob: oklch(97% 0 0);
@@ -292,11 +291,11 @@
 
 /* macOS 浅色：侧栏接近系统侧栏材质的深度，内容区随之略暗 */
 :root[data-platform="darwin"]:not([data-theme="dark"]) {
-  --window: oklch(93.1% 0 0);
-  --wall-1: oklch(93.1% 0 0 / 0);
-  --wall-2: oklch(93.1% 0 0 / 0);
-  --sidebar: oklch(93.1% 0 0 / 0.6);
-  --bg: oklch(96.4% 0 0);
+  --window: oklch(94.2% 0.007 264);
+  --wall-1: oklch(94.2% 0.007 264 / 0);
+  --wall-2: oklch(94.2% 0.007 264 / 0);
+  --sidebar: oklch(94.2% 0.007 264 / 0.6);
+  --bg: oklch(99.2% 0.0015 264);
 }
 
 :root {

@@ -1,6 +1,11 @@
 /** 验证内置浏览器的地址限制：能打开的地址、补全规则，以及交给系统浏览器的地址。 */
 import { describe, expect, it } from "vitest"
-import { isAllowedBrowserUrl, normalizeBrowserUrl, readBrowserExternalUrl } from "./browser-policy"
+import {
+  isAllowedBrowserUrl,
+  normalizeBrowserUrl,
+  readBrowserExternalUrl,
+  readBrowserWebUrl,
+} from "./browser-policy"
 
 describe("browser policy", () => {
   it("allows http, https and about:blank only", () => {
@@ -17,12 +22,20 @@ describe("browser policy", () => {
     expect(normalizeBrowserUrl("javascript:alert(1)")).toBeNull()
   })
 
-  it("hands only plain http and https pages to the system browser", () => {
+  it("hands plain http and https pages and mailto links to the system", () => {
     expect(readBrowserExternalUrl("http://localhost:5173/app")).toBe("http://localhost:5173/app")
     expect(readBrowserExternalUrl("https://example.com/docs")).toBe("https://example.com/docs")
     expect(readBrowserExternalUrl("https://user:secret@example.com/")).toBeNull()
     expect(readBrowserExternalUrl("about:blank")).toBeNull()
     expect(readBrowserExternalUrl("file:///etc/passwd")).toBeNull()
+    expect(readBrowserExternalUrl("mailto:contact@example.com")).toBe("mailto:contact@example.com")
     expect(readBrowserExternalUrl(42)).toBeNull()
+  })
+
+  it("opens or saves only web URLs without credentials", () => {
+    expect(readBrowserWebUrl("https://example.com/docs")).toBe("https://example.com/docs")
+    expect(readBrowserWebUrl("https://user:secret@example.com/")).toBeNull()
+    expect(readBrowserWebUrl("mailto:contact@example.com")).toBeNull()
+    expect(readBrowserWebUrl("pigcode://app/index.html")).toBeNull()
   })
 })

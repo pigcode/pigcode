@@ -79,6 +79,7 @@ export interface RightPanelProps {
   activeId: string | null
   onActivate: (id: string) => void
   onClose: (id: string) => void
+  onFileTabMenu?: ((id: string, point: { x: number; y: number }) => void) | undefined
   /** 打开一个 Surface；参数是它在扩展点上的 id。 */
   onAdd: (kind: string) => void
   /** 标签栏右侧的布局按钮（最大化、底部终端、收起面板）。 */
@@ -345,6 +346,7 @@ export function RightPanel({
   activeId,
   onActivate,
   onClose,
+  onFileTabMenu,
   onAdd,
   controls,
   children,
@@ -376,7 +378,17 @@ export function RightPanel({
                 className="surface-tab"
                 data-active={active || undefined}
                 data-kind={surface.kind}
+                data-preview={surface.preview || undefined}
                 role="presentation"
+                onContextMenu={(event) => {
+                  if (
+                    !onFileTabMenu ||
+                    (surface.kind !== FILE_SURFACE_KIND && surface.kind !== "files")
+                  )
+                    return
+                  event.preventDefault()
+                  onFileTabMenu(surface.id, { x: event.clientX, y: event.clientY })
+                }}
                 onAuxClick={(event) => {
                   if (event.button !== 1) return
                   event.preventDefault()

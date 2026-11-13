@@ -1,4 +1,4 @@
-/** 标题栏菜单：校验渲染进程描述的菜单项，弹出原生菜单并返回被选中的命令。 */
+/** 校验渲染进程描述的菜单项，弹出原生菜单并返回被选中的命令。 */
 import type { BrowserWindow, MenuItemConstructorOptions } from "electron"
 
 /** 渲染进程可以使用的系统角色；编辑类角色作用在弹出菜单前聚焦的元素上。 */

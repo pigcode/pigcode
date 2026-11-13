@@ -1,3 +1,4 @@
+import { TEST_MODES } from "./permission-fixture"
 /** 验证输入框的 @ 文件引用与 / 命令：列表筛选、键盘选择，以及发送时写成 @路径。 */
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
@@ -19,7 +20,7 @@ const FILES = ["README.md", "src/index.ts", "src/components/button.tsx", "docs/g
 function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
   render(
     <LocaleProvider locale="zh-CN">
-      <Composer onSubmit={() => {}} onStop={() => {}} {...props} />
+      <Composer executionModes={TEST_MODES} onSubmit={() => {}} onStop={() => {}} {...props} />
     </LocaleProvider>,
   )
   return screen.getByRole("textbox")
@@ -84,13 +85,13 @@ describe("composer suggestions", () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it("switches the permission mode with a built-in command", async () => {
-    const onPermissionMode = vi.fn()
-    const editor = renderComposer({ onPermissionMode })
+  it("toggles planning independently with a built-in command", async () => {
+    const onPlanMode = vi.fn()
+    const editor = renderComposer({ onPlanMode })
     await userEvent.type(editor, "/plan")
     await screen.findByRole("listbox", { name: "命令" })
     await userEvent.keyboard("{Enter}")
-    expect(onPermissionMode).toHaveBeenCalledWith("plan")
+    expect(onPlanMode).toHaveBeenCalledWith(true)
   })
 
   it("sends the text as typed when @ has no matching file", async () => {

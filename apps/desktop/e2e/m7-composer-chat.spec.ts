@@ -86,8 +86,10 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
     await expect(fast).toBeDisabled()
     await expect(ultracode).toBeDisabled()
     await page.getByRole("button", { name: /^权限/ }).click()
+    await page.getByRole("menuitemradio", { name: /^监督审批/ }).click()
+    await page.getByRole("button", { name: /^权限/ }).click()
     await page.getByRole("menuitemradio", { name: /完全访问/ }).click()
-    await page.getByRole("button", { name: "开启完全访问" }).click()
+    await page.getByRole("button", { name: "启用完全访问" }).click()
     await expect(chip).toHaveAttribute("aria-label", /· 完全访问$/)
 
     // @ 引用文件，发送后用户气泡里是带图标的文件名，悬停看到完整路径。
@@ -110,9 +112,9 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
     // macOS 上 Control+A 只是移到行首，全选要用 ⌘A。
     await page.keyboard.press("ControlOrMeta+a")
     await page.keyboard.press("Backspace")
-    await page.keyboard.type("/readonly")
+    await page.keyboard.type("/ask")
     await page.keyboard.press("Enter")
-    await expect(chip).toHaveAttribute("aria-label", /· 只读$/)
+    await expect(chip).toHaveAttribute("aria-label", /· 监督审批$/)
     await expect(page.locator(".tiptap")).toHaveText("")
 
     // / 菜单里还有 Agent 自己的命令与 skill：skill 带标签，说明来自线程的工作目录。

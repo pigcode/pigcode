@@ -5,9 +5,11 @@
  */
 import { Button, formatShortcut, isMacPlatform, useLocale } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
+import type { ReactNode } from "react"
 
 /** 顶行按钮需要的状态与事件。 */
 export interface WindowControlsProps {
+  updates?: ReactNode
   sidebarOpen: boolean
   canGoBack: boolean
   canGoForward: boolean
@@ -19,6 +21,7 @@ export interface WindowControlsProps {
 
 /** 绘制侧栏顶行按钮。 */
 export function WindowControls({
+  updates,
   sidebarOpen,
   canGoBack,
   canGoForward,
@@ -45,7 +48,7 @@ export function WindowControls({
       >
         <Icon name="sidebar" />
       </Button>
-      <span className="window-controls-gap" />
+      <div className="window-controls-gap">{updates}</div>
       <Button
         variant="plain"
         className="icon-btn"

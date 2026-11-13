@@ -5,13 +5,21 @@
 import type {
   AgentEvent,
   AgentFeatures,
+  AgentExecutionModes,
   AgentSettingsValues,
   AgentStatus,
   ReasoningEffort,
 } from "@pigcode/contracts"
 import type { SessionMcp } from "./mcp"
 
-export type { AgentSettingsValues, AgentStatus } from "@pigcode/contracts"
+export type {
+  AgentExecutionModes,
+  AgentPermissionMode,
+  AgentModeSelection,
+  RuntimeMode,
+  AgentSettingsValues,
+  AgentStatus,
+} from "@pigcode/contracts"
 
 /** 审批决议；界面只提交这三种。 */
 export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny"
@@ -47,6 +55,7 @@ export interface AgentSessionHandle {
   cwd: string
   nativeSessionId: string | null
   permissionMode: string
+  planMode?: boolean
   model: string | null
 }
 
@@ -60,6 +69,7 @@ export interface CreateSessionInput {
   /** 原生 fork 的源会话；与 nativeSessionId 互斥，支持 fork 的 driver 会创建新会话。 */
   forkFromNativeSessionId?: string
   permissionMode?: string
+  planMode?: boolean
   model?: string | null
   /** 插件注册给模型的 MCP 工具；不支持 MCP 的 driver 可以忽略。 */
   mcp?: SessionMcp | undefined
@@ -86,6 +96,8 @@ export interface AgentRuntime {
   requestApproval(request: ApprovalRequest): Promise<ApprovalDecision>
   /** 向用户提问并等待回答；返回每个问题的答案，用户没答（run 结束）时为空数组。 */
   askQuestions?(request: QuestionRequest): Promise<string[]>
+  /** Agent 原生进入或退出计划流程后，同步会话里的独立计划开关。 */
+  setPlanMode?(enabled: boolean): void
 }
 
 /** Agent 暴露的模型条目；不同 CLI 的目录统一成这个形状。 */
@@ -123,8 +135,12 @@ export interface AgentDriver {
   readonly displayName: string
   /** Agent 功能：这个 Agent 支持哪些功能，界面据此隐藏不支持的控件。 */
   readonly features: AgentFeatures
+  /** 接入统一四档权限协议，并声明计划能力；旧插件由 Host 兼容原有权限参数。 */
+  readonly executionModes?: AgentExecutionModes
   /** 只读检测：是否安装、版本与登录状态；不能触发登录或创建会话。没实现时视为可用。 */
   detect?(settings: AgentSettingsValues): Promise<AgentStatus>
+  /** 插件负责识别安装来源并准备自己的 CLI 更新，Host 负责展示、去重和排队。 */
+  prepareCliUpdate?(settings: AgentSettingsValues): Promise<AgentCliUpdatePlan>
   /** 动态模型目录；没实现时目录为空，只列出用户添加的自定义模型。 */
   listModels?(settings: AgentSettingsValues): Promise<AgentModelInfo[]>
   /**
@@ -149,4 +165,22 @@ export interface AgentDriver {
    * 返回 null 或没实现时，只有同一个实例的原生会话能接（#82）。
    */
   continuationKey?(settings: AgentSettingsValues): string | null
+}
+
+export interface AgentCliUpdateRuntime {
+  signal: AbortSignal
+  onOutput: (text: string) => void
+}
+
+export interface AgentCliUpdatePlan {
+  /** 同一安装的所有实例共用同一个目标标识。 */
+  target: string
+  currentVersion: string | null
+  latestVersion: string | null
+  available: boolean
+  command: string | null
+  reason: import("@pigcode/contracts").AgentCliUpdateState["reason"]
+  run?: ((runtime: AgentCliUpdateRuntime) => Promise<void>) | undefined
+  /** 按原来的可执行文件复检，确保更新的是当前使用的 CLI。 */
+  verify: () => Promise<string | null>
 }
