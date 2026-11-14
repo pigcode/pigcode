@@ -120,7 +120,8 @@ export function createUpdates(options: UpdateOptions): Updates {
         if (canInstall) {
           const download =
             options.download ??
-            ((progress) => downloadWithUpdater(options.allowPrerelease?.() ?? false, progress))
+            ((progress) =>
+              downloadWithUpdater(selected.version, options.allowPrerelease?.() ?? false, progress))
           if (!(await download(onProgress))) throw new Error("Update download failed")
           ready = true
           publish({ phase: "ready", action: "restart", progress: 100 })
@@ -180,15 +181,17 @@ export function createUpdates(options: UpdateOptions): Updates {
 }
 
 async function installWithUpdater(): Promise<void> {
-  const { autoUpdater } = await import("electron-updater")
+  const { autoUpdater } = (await import("electron-updater")).default
   autoUpdater.quitAndInstall(false, true)
 }
 
 async function downloadWithUpdater(
+  version: string,
   allowPrerelease: boolean,
   onProgress: (percent: number) => void,
 ): Promise<boolean> {
-  const { autoUpdater } = await import("electron-updater")
+  // autoUpdater 是 CommonJS 的 getter，Node 只通过 default 暴露它。
+  const { autoUpdater } = (await import("electron-updater")).default
   const progress = (value: { percent: number }) => onProgress(value.percent)
   autoUpdater.on("download-progress", progress)
   try {
@@ -196,7 +199,7 @@ async function downloadWithUpdater(
     autoUpdater.allowPrerelease = allowPrerelease
     autoUpdater.autoInstallOnAppQuit = true
     const result = await autoUpdater.checkForUpdates()
-    if (!result) return false
+    if (!result?.isUpdateAvailable || result.updateInfo.version !== version) return false
     await autoUpdater.downloadUpdate()
     return true
   } finally {

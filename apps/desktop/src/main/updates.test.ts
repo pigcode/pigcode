@@ -7,7 +7,10 @@ const { autoUpdater } = vi.hoisted(() => ({
     autoDownload: true,
     autoInstallOnAppQuit: false,
     allowPrerelease: false,
-    checkForUpdates: vi.fn(async () => ({})),
+    checkForUpdates: vi.fn(async () => ({
+      isUpdateAvailable: true,
+      updateInfo: { version: "0.2.0" },
+    })),
     downloadUpdate: vi.fn(async () => undefined),
     quitAndInstall: vi.fn(),
     on: vi.fn(),
@@ -18,7 +21,8 @@ vi.mock("electron", () => ({
   app: { getVersion: () => "0.1.0", isPackaged: true, quit: vi.fn() },
   shell: { openExternal },
 }))
-vi.mock("electron-updater", () => ({ autoUpdater }))
+// Node exposes the package's CommonJS getter through default.
+vi.mock("electron-updater", () => ({ default: { autoUpdater } }))
 const { createUpdates } = await import("./updates")
 type Options = Partial<import("./updates").UpdateOptions>
 const release = { version: "0.2.0", url: "https://github.com/pigcode/pigcode/releases/tag/v0.2.0" }
@@ -185,6 +189,7 @@ describe("unified app updates", () => {
     const updates = setup({ mode: "install", isPackaged: true, allowPrerelease: () => allow })
     await updates.checkNow()
     await updates.perform()
+    expect(updates.getState()).toMatchObject({ phase: "ready", action: "restart" })
     expect(autoUpdater.allowPrerelease).toBe(allow)
     expect(autoUpdater.autoDownload).toBe(false)
     expect(autoUpdater.autoInstallOnAppQuit).toBe(true)
@@ -193,6 +198,24 @@ describe("unified app updates", () => {
       "download-progress",
       expect.any(Function),
     )
+    expect(updates.installIfReady()).toBe(true)
+    await vi.waitFor(() => expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(false, true))
+  })
+
+  it.each([
+    { isUpdateAvailable: false, updateInfo: { version: "0.2.0" } },
+    { isUpdateAvailable: true, updateInfo: { version: "0.3.0" } },
+  ])("keeps the chosen release when the installer reports $updateInfo.version", async (result) => {
+    autoUpdater.checkForUpdates.mockResolvedValueOnce(result)
+    const updates = setup({ mode: "install", isPackaged: true })
+    await updates.checkNow()
+    await updates.perform()
+    expect(updates.getState()).toMatchObject({
+      phase: "failed",
+      error: "download",
+      version: "0.2.0",
+    })
+    expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled()
   })
 
   it("clears an old result and reports a failed check", async () => {
