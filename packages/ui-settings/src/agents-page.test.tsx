@@ -94,12 +94,13 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
     onRemoveInstance: vi.fn(async () => undefined),
     ...overrides,
   }
-  render(
+  const page = (next: Partial<AgentsPageProps> = {}) => (
     <LocaleProvider locale="zh-CN">
-      <AgentsPage {...props} />
-    </LocaleProvider>,
+      <AgentsPage {...props} {...next} />
+    </LocaleProvider>
   )
-  return props
+  const { rerender } = render(page())
+  return { ...props, rerenderPage: (next: Partial<AgentsPageProps>) => rerender(page(next)) }
 }
 
 /** 展开一个实例：卡片头是一整块按钮。 */
@@ -231,17 +232,23 @@ describe("AgentsPage", () => {
     expect(screen.getByText("有未保存的修改")).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     await waitFor(() => expect(props.onSaveSettings).toHaveBeenCalledTimes(1))
+    const savedValues = {
+      binaryPath: "/opt/claude",
+      launchArgs: "--chrome",
+      environment: [{ name: "HTTPS_PROXY", value: "http://127.0.0.1:7890" }],
+      customModels: ["claude-sonnet-5"],
+    }
     expect(props.onSaveSettings).toHaveBeenCalledWith(
       expect.objectContaining({ agentId: "claude" }),
       expect.objectContaining({ instanceId: "claude" }),
-      {
-        binaryPath: "/opt/claude",
-        launchArgs: "--chrome",
-        environment: [{ name: "HTTPS_PROXY", value: "http://127.0.0.1:7890" }],
-        customModels: ["claude-sonnet-5"],
-      },
+      savedValues,
     )
-    expect(await screen.findByText("已保存，对之后新建的会话生效")).toBeTruthy()
+    const notice = "已保存，对之后新建的会话生效"
+    expect(await screen.findByText(notice)).toBeTruthy()
+    // Host 的列表刷新也可能在保存回调之后才送到组件。
+    props.rerenderPage({ agents: [agent({ values: savedValues })] })
+    expect(screen.getByText(notice)).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "保存" }).disabled).toBe(true)
   })
 
   it("explains a signed-out instance in the overview", async () => {

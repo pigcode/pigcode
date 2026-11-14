@@ -147,11 +147,10 @@ export function AgentEditor({
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
 
-  // Host 推来新的值（保存成功、别处修改、切换实例）时重置草稿。
+  // Host 刷新后同步草稿。保存提示由操作本身管理，列表刷新可能晚于保存回调。
   useEffect(() => {
     setDraft(instance.values)
     setLabel(instance.label)
-    setNotice(null)
     setConfirmRemove(false)
   }, [instance.instanceId, instance.label, instance.values])
 

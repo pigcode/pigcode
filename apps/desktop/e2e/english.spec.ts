@@ -37,10 +37,11 @@ function stringsIn(value: unknown): string[] {
 
 /** 中文界面文案里的汉字片段。 */
 const UI_RUNS = new Set(Object.values(zhCN).flatMap(hanRuns))
+const SHOWCASE = fakeShowcaseScript(0)
 
 /** 用户内容里出现的汉字片段：showcase 脚本产生的回答、思考、工具输入与输出，去掉和界面文案相同的片段。 */
 const USER_CONTENT = new Set([
-  ...stringsIn(fakeShowcaseScript(0))
+  ...stringsIn(SHOWCASE)
     .flatMap(hanRuns)
     .filter((run) => !UI_RUNS.has(run)),
   // 审批脚本是另一段模型输出，同样算用户内容。
@@ -54,8 +55,15 @@ function normalizeLine(line: string): string {
 
 /** 脚本里的每一行；页面上整行都等于其中一行时，行里的汉字都是用户内容。 */
 const SCRIPT_LINES = new Set(
-  stringsIn(fakeShowcaseScript(0))
-    .flatMap((text) => text.split("\n"))
+  [
+    ...stringsIn(SHOWCASE).flatMap((text) => text.split("\n")),
+    // 派生子代理标签的提示和关闭按钮包含 Agent 提供的完整标题。
+    ...SHOWCASE.flatMap((step) =>
+      "type" in step && step.type === "subagent.started" && step.description
+        ? [`${step.name} · ${step.description}`, `Close ${step.description}`]
+        : [],
+    ),
+  ]
     .map(normalizeLine)
     .filter((line) => HAN.test(line)),
 )

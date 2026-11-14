@@ -2,7 +2,7 @@
  * E2E 启动前构建 Electron 产物与 Host utilityProcess bundle，并清空上一次的用户 profile。
  *
  * `test:packaged` 之前一定刚跑过 `package:*`，那里已经构建过同样的产物，且比源码新。
- * 这时跳过重建，省掉 CI 上重复的一遍；尺寸判断放在这里而不是脚本里，是为了在三个平台的
+ * 这时跳过重建，省掉 CI 上重复的一遍；时间判断放在这里而不是脚本里，是为了在三个平台的
  * shell 里行为一致（Windows 的 cmd 没有 `VAR=x cmd` 前缀写法）。
  */
 import { execFileSync } from "node:child_process"
@@ -11,8 +11,13 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { buildExamples } from "../../../scripts/build-examples"
 
-/** 一次构建的产物；它比这些输入新就不用重建。 */
-const OUTPUTS = ["out/main/index.js", "out/host/index.mjs"]
+/** 所有入口都比源码新才可以跳过重建。主进程和 Host 更新时，界面产物仍可能过期。 */
+const OUTPUTS = [
+  "out/main/index.js",
+  "out/preload/index.cjs",
+  "out/renderer/index.html",
+  "out/host/index.mjs",
+]
 
 /** 这些目录下的任何文件比产物新，就要重建。 */
 const SOURCES = ["src", "../host/src", "../../packages"]

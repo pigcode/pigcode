@@ -180,7 +180,7 @@ export async function walkShell(walk: Walk): Promise<void> {
   )
   const fullAccess = contains(fullLabel)
   await page.getByRole("button", { name: startsWith(t("composer.permission.title")) }).click()
-  await page.getByRole("menuitemradio", { name: contains(supervisedLabel) }).click()
+  await page.getByRole("menuitemradio", { name: startsWith(supervisedLabel) }).click()
   await page.getByRole("button", { name: startsWith(t("composer.permission.title")) }).click()
   await expect(page.getByRole("menuitemradio", { name: fullAccess })).toBeVisible()
   await step("menu-permission")

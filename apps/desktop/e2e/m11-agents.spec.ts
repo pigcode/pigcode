@@ -13,7 +13,8 @@ async function openAgents(page: Page): Promise<void> {
 }
 
 test("agents are plugins with settings that reach the composer", async () => {
-  const { app, page } = await openThread("agents")
+  const profileDir = mkdtempSync(join(tmpdir(), "pigcode-e2e-agents-"))
+  const { app, page } = await openThread("agents", { PIGCODE_PROFILE_DIR: profileDir })
   try {
     await openAgents(page)
     const list = page.locator(".agents-list")
@@ -47,9 +48,10 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
     await page.screenshot({ path: "test-results/agents-codex-settings.png" })
 
-    const settings = JSON.parse(
-      readFileSync(join(process.env.PIGCODE_PROFILE_DIR ?? "", "settings.json"), "utf8"),
-    ) as Record<string, unknown>
+    const settings = JSON.parse(readFileSync(join(profileDir, "settings.json"), "utf8")) as Record<
+      string,
+      unknown
+    >
     expect(settings["agents.codex"]).toEqual({
       launchArgs: "-c model_reasoning_summary=detailed",
       environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
@@ -101,13 +103,14 @@ test("agents are plugins with settings that reach the composer", async () => {
     await openAgents(page)
     await expect(echoRow).toHaveCount(0)
 
-    // 清理：本测试改过的设置不能影响后面的用例。
+    // 恢复默认也要保存，并显示保存结果。
     await page.getByRole("button", { name: "打开 Codex 的设置" }).click()
     await page.getByRole("button", { name: "恢复默认" }).click()
     await page.getByRole("button", { name: "保存" }).click()
     await expect(page.getByText("已保存，对之后新建的会话生效")).toBeVisible()
   } finally {
     await app.close()
+    rmSync(profileDir, { recursive: true, force: true })
   }
 })
 
