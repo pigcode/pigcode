@@ -23,7 +23,7 @@ git push origin v0.2.0
 
 1. 检查 tag 和 `apps/desktop/package.json` 一致。
 2. 三个平台各自：lint、类型检查、单元测试 → 打包 → 跑打包后的应用的冒烟测试（`pnpm --dir apps/desktop run test:packaged`，见 #69）。
-   - macOS：arm64 和 x64 各一个 DMG，不签名、不公证。
+   - macOS 分别生成 arm64 和 x64 DMG。arm64 的 `.app` 在打包时做 ad-hoc 签名，发布流程挂载 DMG 并校验内含应用的签名。两个架构都不公证。
    - Windows：x64 的 NSIS 安装包。
    - Linux：AppImage 和 deb。
    - 安装包里带 LICENSE、`THIRD_PARTY_NOTICES.txt`、Electron 和 Chromium 的声明。
@@ -45,7 +45,7 @@ git push origin v0.2.0
 - [ ] 有任务在跑时退出，确认框出现，选「继续运行」任务继续。
 - [ ] 设置页「检查更新」能连上 GitHub（仓库公开后）；发现新版本时提示能打开下载页。
 - [ ] 第二个版本起：Windows 和 AppImage 能从上一个版本更新，用户数据还在（更新会在下载完成后、下次退出时安装，或点提示里的「重启并更新」）。这一条要在两个真实版本之间验证，所以最早在第二个版本发布时做（#71）。
-- [ ] macOS 第一次打开要右键 →「打开」；Windows 会弹 SmartScreen —— 这是未签名的预期行为（ADR 0005）。
+- [ ] 在 macOS 15 上首次打开带下载隔离标记的应用时，Gatekeeper 应提示 Apple 无法验证。进入「系统设置」→「隐私与安全性」，为 Pigcode 选择「仍要打开」后确认主窗口能启动。Windows 单独检查 SmartScreen 提示。见 ADR 0005 和 [Apple 的首次启动说明](https://support.apple.com/zh-cn/102445)。
 
 ## 4. 发布、撤回、更新指针
 
@@ -71,7 +71,7 @@ git commit -m "chore: bump frontend to 0.2.0"
 | macOS | 下载对应架构的 DMG，提示「打开安装包」；用户在挂载出来的窗口里把 Pigcode 拖进「应用程序」 |
 | deb 等其余 | 只提示，点开下载页 |
 
-macOS 走不了 electron-updater（包没签名，ADR 0005），但整条升级链路仍然在应用里走完：应用自己按 `process.arch` 从 Release 附件里挑 DMG、下载到 `userData/update-downloads/`，再交给系统打开。用户数据在 `~/Library/Application Support/Pigcode`，换掉 `.app` 不影响会话、设置和插件。下载过的包在下次启动时清掉。
+macOS 自动安装需要受信任的发行签名（ADR 0005）。应用按 `process.arch` 从 Release 附件里挑 DMG，下载到 `userData/update-downloads/`，再交给系统打开。用户数据在 `~/Library/Application Support/Pigcode`，换掉 `.app` 不影响会话、设置和插件。下载过的包在下次启动时清掉。
 
 下载或打开失败都会退回下载页，不会让用户卡在一条走不通的路上。这条链路由 `apps/desktop/e2e/packaged-update.spec.ts` 在打包产物上验证。
 
@@ -79,5 +79,4 @@ macOS 走不了 electron-updater（包没签名，ADR 0005），但整条升级�
 
 - 还没验证过真实两版本之间的自动更新：Windows 和 AppImage 需要一台能装安装包的机器（#71）。发现新版本的逻辑已经用真实 GitHub 数据验过，包括预发布通道。
 - 发布前的人工冒烟还没做（见上面的清单）。
-- macOS 的安装包没签名，electron-updater 不能更新它；改用「下载 DMG 让用户拖进应用程序」（ADR 0005）。
 - Linux 的 deb 不做自动更新（要输入系统密码、每次全量下载），只提示。

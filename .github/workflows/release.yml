@@ -67,6 +67,18 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --dir apps/desktop run ${{ matrix.package }}
+      - name: Verify app signature inside the macOS arm64 DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: apps/desktop/dist
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mount_dir=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount_dir" "Pigcode-${VERSION}-arm64.dmg"
+          trap 'hdiutil detach "$mount_dir" && rmdir "$mount_dir"' EXIT
+          codesign --verify --deep --strict --verbose=2 "$mount_dir/Pigcode.app"
+          test -s "$mount_dir/Pigcode.app/Contents/_CodeSignature/CodeResources"
       - name: Verify update manifests point to packaged files
         if: runner.os != 'macOS'
         shell: bash
