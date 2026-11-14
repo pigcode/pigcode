@@ -211,12 +211,20 @@ describe("AgentsPage", () => {
 
     // 改动跨标签页保留，最后一起保存。
     await openTab("运行")
-    await userEvent.type(screen.getByRole("textbox", { name: "可执行文件" }), "/opt/claude")
-    await userEvent.type(screen.getByRole("textbox", { name: "启动参数" }), "--chrome")
+    fireEvent.change(screen.getByRole("textbox", { name: "可执行文件" }), {
+      target: { value: "/opt/claude" },
+    })
+    fireEvent.change(screen.getByRole("textbox", { name: "启动参数" }), {
+      target: { value: "--chrome" },
+    })
     await openTab("环境变量")
     await userEvent.click(screen.getByRole("button", { name: "添加变量" }))
-    await userEvent.type(screen.getByRole("textbox", { name: "变量名 1" }), "HTTPS_PROXY")
-    await userEvent.type(screen.getByRole("textbox", { name: "值 1" }), "http://127.0.0.1:7890")
+    fireEvent.change(screen.getByRole("textbox", { name: "变量名 1" }), {
+      target: { value: "HTTPS_PROXY" },
+    })
+    fireEvent.change(screen.getByRole("textbox", { name: "值 1" }), {
+      target: { value: "http://127.0.0.1:7890" },
+    })
     // 没填名字的行保存时去掉。
     await userEvent.click(screen.getByRole("button", { name: "添加变量" }))
     await openTab("模型")
