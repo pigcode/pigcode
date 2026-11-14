@@ -69,15 +69,21 @@ export const agentModelSchema = z.object({
 })
 
 /**
- * Agent 在输入框 `/` 菜单里提供的一条命令：CLI 自己的命令，或用户、项目、插件装的 skill 与自定义命令。
+ * Agent 在输入框 `/`、`$` 菜单里提供的一条命令或 Skill。
  * 选中后把 text 插进输入框，作为消息的一部分发给 CLI，由 CLI 自己展开。
  */
 export const agentCommandSchema = z.object({
   /** 不带前缀的名字，例如 compact、codex:review。 */
   name: z.string().min(1),
-  /** 插进输入框的文字：Claude 是 `/名字`，Codex 的 skill 是 `$名字`。 */
+  /** 原生调用文字；`/名字` 进入命令菜单，`$名字` 进入 Skill 菜单。 */
   text: z.string().min(1),
   description: z.string().optional(),
+  /** Skill 的展示与来源信息；调用时始终使用 text 中的原生名称。 */
+  displayName: z.string().optional(),
+  shortDescription: z.string().optional(),
+  path: z.string().optional(),
+  scope: z.string().optional(),
+  pluginId: z.string().optional(),
   /** 参数提示，例如 `<file>`。 */
   argumentHint: z.string().optional(),
   /** builtin 是 CLI 自带的命令；skill 是 skill、插件命令与自定义命令。 */

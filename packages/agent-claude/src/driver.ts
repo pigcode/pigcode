@@ -32,8 +32,9 @@ import type {
 } from "@pigcode/plugin-sdk"
 import { spawnClaudeCli, withCliStderr, type ClaudeCliProcess } from "./cli-process"
 import { detectClaude, type ClaudeDetection } from "./detect"
-import { claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
+import { CLAUDE_SETTING_SOURCES, claudeLaunch, sdkExecutable, type ClaudeLaunch } from "./launch"
 import { listClaudeCommands } from "./commands"
+import { claudePrompt } from "./skill-prompt"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
 import { readContextUsage } from "./context-usage"
@@ -146,6 +147,7 @@ export class ClaudeDriver implements AgentDriver {
       queryFn: this.queryFn,
       executable: sdkExecutable(launch.executable),
       env: launch.env,
+      extraArgs: launch.extraArgs,
       detect: () => this.probe(launch),
       cwd,
     })
@@ -186,6 +188,8 @@ export class ClaudeDriver implements AgentDriver {
   /** 发起一次 query，并把 SDK 消息逐个归一化为 Agent 事件。 */
   async send(session: AgentSessionHandle, input: UserInput, runtime: AgentRuntime): Promise<void> {
     const state = this.stateFor(session.id)
+    const launch = claudeLaunch(state.settings, this.fixedExecutable)
+    const prompt = claudePrompt(input, { cwd: session.cwd, ...launch })
     // 同一会话只允许一个活跃 Query；旧 Query 先中断再替换。
     if (state.query) this.abortState(state)
     state.controller = new AbortController()
@@ -194,20 +198,18 @@ export class ClaudeDriver implements AgentDriver {
     delete state.cli
 
     const normalizeState = createNormalizeState()
-    // 切换 Agent 后，handoff 放在用户文本之前，保持上下文连续。
-    const prompt = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
     // 同一 Agent 切换优先原生 fork：resume 父会话并 forkSession，得到新的会话 id。
     const forkFromNativeSessionId = state.forkFromNativeSessionId
     const resumeId = forkFromNativeSessionId ?? session.nativeSessionId
     const model = claudeModelOption(session.model)
     // 模型不支持的档位由 CLI 自动降级；Claude 不认识的档位不传。
     const claudeEffort = input.effort ? toClaudeEffort(input.effort) : undefined
-    const launch = claudeLaunch(state.settings, this.fixedExecutable)
     const mcpServer = state.mcp ? claudeMcpServer(state.mcp) : null
     const queryStream = this.queryFn({
       prompt,
       options: {
         cwd: session.cwd,
+        settingSources: [...CLAUDE_SETTING_SOURCES],
         ...(model ? { model } : {}),
         ...(claudeEffort ? { effort: claudeEffort } : {}),
         // 快速模式与 Ultracode 都是会话级的设置覆盖层，每次 run 都是新的 query，所以只在选了时传；

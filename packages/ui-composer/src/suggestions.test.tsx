@@ -140,6 +140,95 @@ describe("composer suggestions", () => {
     expect(onSubmit).toHaveBeenCalledWith("/frontend-design a landing page", { effort: null })
   })
 
+  it("opens the skill picker with $ in a sentence and searches Matt skills", async () => {
+    const onSubmit = vi.fn()
+    const editor = renderComposer({
+      onSubmit,
+      agentId: "codex",
+      loadAgentCommands: async () => [
+        {
+          name: "mattpocock-skills:ask-matt",
+          text: "$mattpocock-skills:ask-matt",
+          kind: "skill",
+          description: "Choose the right workflow",
+        },
+      ],
+    })
+    await userEvent.type(editor, "帮我 $matt")
+    const list = await screen.findByRole("listbox")
+    await expect(within(list).findByRole("option", { name: /ask-matt/i })).resolves.toBeTruthy()
+    await userEvent.keyboard("{Enter}")
+    expect(editor.textContent).toContain("$mattpocock-skills:ask-matt")
+    await userEvent.keyboard("{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("帮我 $mattpocock-skills:ask-matt", { effort: null })
+  })
+
+  it("uses the display name for skills and preserves the qualified invocation when sending", async () => {
+    const onSubmit = vi.fn()
+    const loadAgentCommands = vi.fn(async () => [
+      {
+        name: "mattpocock-skills:ask-matt",
+        text: "$mattpocock-skills:ask-matt",
+        kind: "skill" as const,
+        displayName: "Ask Matt",
+        description: "Choose an engineering workflow",
+        scope: "user",
+        pluginId: "matt@market",
+      },
+      { name: "compact", text: "/compact", kind: "builtin" as const },
+    ])
+    const editor = renderComposer({ onSubmit, agentId: "codex", loadAgentCommands })
+    await userEvent.type(editor, "$engineering")
+    const list = await screen.findByRole("listbox", { name: "Skill" })
+    const option = await within(list).findByRole("option", { name: /Ask Matt/ })
+    expect(option.textContent).toContain("插件")
+    expect(loadAgentCommands.mock.calls.filter((args: unknown[]) => args[1] === true)).toHaveLength(
+      1,
+    )
+    await userEvent.keyboard("{Tab}")
+    await userEvent.keyboard("help{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("$mattpocock-skills:ask-matt help", { effort: null })
+  })
+
+  it("reloads skills after closing the menu and keeps slash commands separate", async () => {
+    let names = ["old"]
+    const loadAgentCommands = vi.fn(async () =>
+      names.map((name) => ({ name, text: `$${name}`, kind: "skill" as const })),
+    )
+    const editor = renderComposer({ agentId: "codex", loadAgentCommands })
+    await userEvent.type(editor, "$")
+    await screen.findByRole("option", { name: /old/ })
+    await userEvent.keyboard("{Escape}")
+    names = ["ask-matt"]
+    await userEvent.clear(editor)
+    await userEvent.type(editor, "$matt")
+    await screen.findByRole("option", { name: /ask-matt/ })
+    await userEvent.keyboard("{Escape}")
+    await userEvent.clear(editor)
+    await userEvent.type(editor, "/matt")
+    await screen.findByText("没有匹配的命令")
+  })
+
+  it("keeps Claude plugin skills callable through their native slash commands", async () => {
+    const onSubmit = vi.fn()
+    const editor = renderComposer({
+      onSubmit,
+      agentId: "claude",
+      loadAgentCommands: async () => [
+        {
+          name: "mattpocock-skills:ask-matt",
+          text: "/mattpocock-skills:ask-matt",
+          kind: "skill",
+          description: "Pick a workflow",
+        },
+      ],
+    })
+    await userEvent.type(editor, "/matt")
+    await screen.findByRole("option", { name: /ask-matt/ })
+    await userEvent.keyboard("{Enter}help{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("/mattpocock-skills:ask-matt help", { effort: null })
+  })
+
   it("lists only Pigcode's commands when the agent has none", async () => {
     const editor = renderComposer({
       agentId: "codex",

@@ -3,7 +3,7 @@ import { FakeAgentDriver } from "../agents/fake"
 import type { AgentModel } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { describe, expect, it, vi } from "vitest"
-import type { AgentDriver, UserInput } from "../agents/driver"
+import type { AgentCommandInfo, AgentDriver, UserInput } from "../agents/driver"
 import { apply as agentsPlugin } from "../agents/registry"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
@@ -194,7 +194,7 @@ describe("agent.* commands", () => {
 
   it("serves an instance's slash commands for the project's folder, cached per folder", async () => {
     const { ctx, project, call } = await setup()
-    const listCommands = vi.fn(async () => [
+    const listCommands = vi.fn(async (): Promise<AgentCommandInfo[]> => [
       { name: "compact", text: "/compact", description: " Summarize ", kind: "builtin" as const },
       { name: "compact", text: "/compact", kind: "builtin" as const },
       { name: "lint", text: "/lint", argumentHint: "", kind: "skill" as const },
@@ -209,6 +209,30 @@ describe("agent.* commands", () => {
     expect(listCommands).toHaveBeenCalledWith({}, project.rootPath)
     await call("agent.commands", params)
     expect(listCommands).toHaveBeenCalledTimes(1)
+    // 打开菜单时主动刷新，新增的条目与完整 Skill 元数据不能被十分钟缓存挡住。
+    listCommands.mockResolvedValueOnce([
+      {
+        name: "mattpocock-skills:ask-matt",
+        text: "$mattpocock-skills:ask-matt",
+        kind: "skill",
+        displayName: " Ask Matt ",
+        path: "/skills/ask-matt/SKILL.md",
+        scope: "user",
+        shortDescription: " Pick a workflow ",
+      },
+    ])
+    await expect(call("agent.commands", { ...params, refresh: true })).resolves.toEqual([
+      {
+        name: "mattpocock-skills:ask-matt",
+        text: "$mattpocock-skills:ask-matt",
+        kind: "skill",
+        displayName: "Ask Matt",
+        path: "/skills/ask-matt/SKILL.md",
+        scope: "user",
+        shortDescription: "Pick a workflow",
+      },
+    ])
+    expect(listCommands).toHaveBeenCalledTimes(2)
     // 没有线程也没有项目时只列用户级的命令，单独缓存。
     await call("agent.commands", { instanceId: "rec" })
     expect(listCommands).toHaveBeenLastCalledWith({}, null)

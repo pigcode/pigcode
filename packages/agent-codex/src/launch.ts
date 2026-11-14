@@ -11,6 +11,8 @@ import { expandHome, agentEnvironment, resolveExecutable } from "@pigcode/plugin
 export interface CodexLaunch {
   command: string
   args: string[]
+  /** 目录探测在项目中启动，让项目配置与实际会话一致。 */
+  cwd?: string | undefined
   /** 没有任何覆盖时为 undefined，子进程继承 Host 的 process.env。 */
   env: NodeJS.ProcessEnv | undefined
 }

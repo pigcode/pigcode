@@ -156,6 +156,16 @@ export class FakeAgentDriver implements AgentDriver {
         argumentHint: "<topic>",
         kind: "skill",
       },
+      {
+        name: "mattpocock-skills:ask-matt",
+        text: "$mattpocock-skills:ask-matt",
+        displayName: "Ask Matt",
+        description: "Choose an engineering workflow",
+        shortDescription: "Pick a workflow",
+        kind: "skill",
+        scope: "user",
+        pluginId: "mattpocock-skills@fixture",
+      },
     ]
   }
 

@@ -57,8 +57,13 @@ export interface AgentCatalog {
   instance(agentId: string, instanceId?: string | null): ResolvedInstance
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
   models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
-  /** 实例在 cwd 下的 `/` 命令；按实例与工作目录缓存。 */
-  commands(agentId: string, instanceId: string | null, cwd: string | null): Promise<AgentCommand[]>
+  /** 实例在 cwd 下的命令和 Skill，按实例与工作目录缓存。 */
+  commands(
+    agentId: string,
+    instanceId: string | null,
+    cwd: string | null,
+    refresh?: boolean,
+  ): Promise<AgentCommand[]>
   defaultAgent(): Promise<DefaultAgentChoice>
   configuredDefault(): string | null
   configuredDefaultInstance(): string | null
@@ -166,13 +171,15 @@ export function createAgentCatalog(
       )
       return applyModelPreferences(models, modelPreferences(settings))
     },
-    async commands(agentId, instanceId, cwd) {
+    async commands(agentId, instanceId, cwd, refresh) {
       const driver = drivers.get(agentId)
       const instance = instanceFor(agentId, instanceId)
       if (!driver?.listCommands) return []
       const list = driver.listCommands.bind(driver)
-      return commandCatalogs.get(`${instance.instanceId}\0${cwd ?? ""}`, async () =>
-        normalizeCommands(await list(instance.values, cwd).catch(() => [])),
+      return commandCatalogs.get(
+        `${instance.instanceId}\0${cwd ?? ""}`,
+        async () => normalizeCommands(await list(instance.values, cwd).catch(() => [])),
+        refresh,
       )
     },
     async defaultAgent() {

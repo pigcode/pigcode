@@ -113,7 +113,7 @@ export class CodexDriver implements AgentDriver {
   constructor(options: CodexDriverOptions = {}) {
     this.transportFactory =
       options.transportFactory ??
-      ((launch) => new StdioCodexTransport(launch.command, launch.args, launch.env))
+      ((launch) => new StdioCodexTransport(launch.command, launch.args, launch.env, launch.cwd))
     this.probe =
       options.detect ?? ((launch) => detectCodex({ command: launch.command, env: launch.env }))
   }
@@ -363,14 +363,16 @@ export class CodexDriver implements AgentDriver {
     )
   }
 
-  /** 输入框 `/` 菜单里的 skill（`skills/list`）；读不到时返回空列表。 */
+  /** 输入框 `$` 菜单里的 Skill；请求项目的完整目录，包括刚安装的条目。 */
   async listCommands(
     settings: AgentSettingsValues,
     cwd: string | null,
   ): Promise<AgentCommandInfo[]> {
-    const params = cwd ? { cwds: [cwd] } : {}
-    return this.ask(settings, async (client) =>
-      parseCodexSkills(await client.request("skills/list", params), cwd),
+    const params = { ...(cwd ? { cwds: [cwd] } : {}), forceReload: true }
+    return this.ask(
+      settings,
+      async (client) => parseCodexSkills(await client.request("skills/list", params), cwd),
+      cwd ?? undefined,
     )
   }
 
@@ -378,13 +380,15 @@ export class CodexDriver implements AgentDriver {
   private async ask<T>(
     settings: AgentSettingsValues,
     read: (client: CodexRpcClient) => Promise<T[]>,
+    cwd?: string,
   ): Promise<T[]> {
-    const client = this.openClient(codexLaunch(settings))
+    const client = this.openClient({ ...codexLaunch(settings), ...(cwd ? { cwd } : {}) })
     try {
       await client.request("initialize", {
         clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
         capabilities: { experimentalApi: true },
       })
+      client.notify("initialized", {})
       return await read(client)
     } catch {
       return []

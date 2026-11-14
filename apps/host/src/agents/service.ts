@@ -76,7 +76,12 @@ export interface AgentsService {
   /** 读取实例的模型目录（含用户添加的自定义模型）；Agent 自己的目录按实例缓存。 */
   models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
   /** 实例在工作目录 cwd 下的 `/` 命令；按实例与工作目录缓存。 */
-  commands(agentId: string, instanceId: string | null, cwd: string | null): Promise<AgentCommand[]>
+  commands(
+    agentId: string,
+    instanceId: string | null,
+    cwd: string | null,
+    refresh?: boolean,
+  ): Promise<AgentCommand[]>
   /** 新会话的默认 agent 与实例：强制指定 > 用户选择 > 第一个可用的。 */
   defaultAgent(): Promise<DefaultAgentChoice>
   /** 用户在设置页选择的默认 agent；没选时为 null。 */

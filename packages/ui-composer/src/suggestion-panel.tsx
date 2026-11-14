@@ -54,7 +54,9 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
       ? grouped
         ? t("composer.suggest.mentions")
         : t("composer.suggest.files")
-      : t("composer.suggest.commands")
+      : snapshot.kind === "skill"
+        ? t("composer.suggest.skills")
+        : t("composer.suggest.commands")
   return (
     <div className="popup menu-popup suggest-panel" role="listbox" aria-label={title} ref={listRef}>
       <div className="menu-label suggest-title">
@@ -67,7 +69,9 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
           title={
             snapshot.kind === "file"
               ? t("composer.suggest.noFiles")
-              : t("composer.suggest.noCommands")
+              : snapshot.kind === "skill"
+                ? t("composer.suggest.noSkills")
+                : t("composer.suggest.noCommands")
           }
         />
       ) : null}
@@ -75,8 +79,9 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
         const active = index === snapshot.index
         const path = item.kind === "file" ? splitPath(item.label) : null
         const Icon = itemIcon(item)
-        const tag =
-          item.source === "builtin" || item.source === "skill"
+        const tag = item.scope
+          ? t(`composer.suggest.scope.${item.scope}`)
+          : item.source === "builtin" || item.source === "skill"
             ? t(`composer.suggest.source.${item.source}`)
             : item.archived
               ? t("composer.suggest.archived")
@@ -96,6 +101,7 @@ export function SuggestionPanel({ store }: { store: SuggestionStore }) {
               aria-selected={active}
               data-highlighted={active ? "" : undefined}
               data-source={item.source}
+              title={item.title}
               className="menu-item"
               onMouseEnter={() => store.highlight(index)}
               onMouseDown={(event) => {

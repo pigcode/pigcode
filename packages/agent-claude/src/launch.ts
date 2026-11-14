@@ -1,6 +1,7 @@
 /** 把设置页里的值变成启动 Claude Code 的参数：可执行文件、环境变量与额外的 CLI 选项。 */
 import { homedir } from "node:os"
 import { join } from "node:path"
+import type { SettingSource } from "@anthropic-ai/claude-agent-sdk"
 import {
   parseCliArgs,
   settingEnvironment,
@@ -15,6 +16,13 @@ import {
   resolveExecutable,
   shimTarget,
 } from "@pigcode/plugin-sdk/node"
+
+/** 目录发现和实际会话读取同一组配置，包含用户安装的插件与项目 Skill。 */
+export const CLAUDE_SETTING_SOURCES = [
+  "user",
+  "project",
+  "local",
+] as const satisfies readonly SettingSource[]
 
 /**
  * 这些选项由 Pigcode 自己决定（权限模式、会话恢复、模型与输出格式），

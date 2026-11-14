@@ -361,7 +361,7 @@ describe("ChatView before the first message", () => {
     expect(project?.tagName).toBe("SPAN")
     expect(project?.textContent).toBe("会话所在的项目: Pigcode App")
     expect(project?.getAttribute("title")).toBe("/work/pigcode")
-    expect(placeholder()).toBe("描述要做的事，@ 引用文件，/ 使用命令")
+    expect(placeholder()).toBe("描述要做的事，@ 文件，$ Skill，/ 命令")
     await waitFor(() =>
       expect(document.activeElement?.closest(".new-thread .tiptap")).not.toBeNull(),
     )

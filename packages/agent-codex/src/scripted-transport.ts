@@ -19,6 +19,7 @@ export interface ReplayScript {
   forkedThreadId?: string
   /** model/list 的应答；未指定时返回单个默认模型。 */
   modelList?: unknown
+  skillList?: unknown
   /** account/read 的应答；未指定时不应答。 */
   account?: unknown
   /** 有没有 thread/inject_items（0.167 起有）；false 时像旧版一样回「方法不存在」。缺省为有。 */
@@ -66,6 +67,10 @@ export class ScriptedTransport extends ReplayCodexTransport {
     }
     if (message.method === "account/read" && this.script.account !== undefined) {
       this.push({ id: message.id, result: this.script.account })
+      return
+    }
+    if (message.method === "skills/list") {
+      this.push({ id: message.id, result: this.script.skillList ?? { data: [] } })
       return
     }
     if (message.method === "thread/inject_items") {

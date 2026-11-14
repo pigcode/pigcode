@@ -1,6 +1,6 @@
 /**
  * Codex 的 skill：app-server 的 `skills/list` 按工作目录列出用户级、项目级与插件带的 skill。
- * Codex 没有可以经 app-server 列出的斜杠命令，所以 `/` 菜单里只有 skill。选中后插入 `$名字`，
+ * Codex 没有可以经 app-server 列出的斜杠命令；Skill 在 `$` 菜单中选择，插入 `$名字`，
  * 和 Codex 自己的输入框一样，由 CLI 在消息里认出 skill。
  */
 import type { AgentCommandInfo } from "@pigcode/plugin-sdk"
@@ -31,8 +31,12 @@ export function parseCodexSkills(value: unknown, cwd: string | null): AgentComma
       result.push({
         name,
         text: `$${name}`,
-        description:
-          text(ui.shortDescription) ?? text(skill.shortDescription) ?? text(skill.description),
+        description: text(skill.description),
+        shortDescription: text(ui.shortDescription) ?? text(skill.shortDescription),
+        displayName: text(ui.displayName),
+        path: text(skill.path),
+        scope: text(skill.scope),
+        pluginId: text(skill.pluginId),
         kind: "skill",
       })
     }

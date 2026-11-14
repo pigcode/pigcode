@@ -1,9 +1,10 @@
 /**
  * 输入框的 TipTap 扩展：纯文本正文（不做加粗/斜体等格式，发出去的就是用户敲的字），
- * @ 引用项目文件（插入文件标记，发送时写成 @路径）或其他会话（发送时写成 @标题），/ 在行首调出命令：Pigcode 自己的命令，
- * 以及当前 Agent 的内置命令、skill 与自定义命令（插入它们的文字，发给 CLI 展开）。
+ * @ 引用文件或会话；/ 在行首调出 Pigcode 与 CLI 命令，$ 在正文中选择当前 Agent 的 Skill。
+ * 选中命令或 Skill 后插入原生调用文字，随消息交给 CLI。
  */
 import Mention from "@tiptap/extension-mention"
+import type { AgentCommand } from "@pigcode/contracts"
 import { Placeholder } from "@tiptap/extension-placeholder"
 import { PluginKey } from "@tiptap/pm/state"
 import type { EditorView } from "@tiptap/pm/view"
@@ -14,7 +15,8 @@ import {
   type SuggestionKeyDownProps,
   type SuggestionProps,
 } from "@tiptap/suggestion"
-import { matchByLabel, matchFiles } from "./fuzzy"
+import { matchFiles } from "./fuzzy"
+import { searchCommands, searchSkills, skillLabel, skillScope } from "./skill-search"
 import { createSmartPunctuation } from "./smart-punctuation"
 import { matchThreads, THREAD_MENTION_PREFIX, type ComposerThreadOption } from "./composer-threads"
 import type { SuggestionItem, SuggestionStore } from "./suggestion-store"
@@ -36,6 +38,7 @@ export interface ComposerCommand {
   source?: CommandSource | undefined
   /** 参数提示，例如 `<file>`。 */
   hint?: string | undefined
+  skill?: AgentCommand | undefined
 }
 
 /** `/` 菜单里命令的来源。 */
@@ -50,11 +53,12 @@ export interface ComposerEditorSources {
   threads: () => readonly ComposerThreadOption[] | undefined
   commands: () => readonly ComposerCommand[]
   /** 当前 Agent 的命令；读一次可能要启动 CLI，由调用方缓存。 */
-  agentCommands: () => (() => Promise<readonly ComposerCommand[]>) | undefined
+  agentCommands: () => ((refresh?: boolean) => Promise<readonly ComposerCommand[]>) | undefined
 }
 
 export const FILE_SUGGESTION_KEY = new PluginKey("composer-file-suggestion")
 export const COMMAND_SUGGESTION_KEY = new PluginKey("composer-command-suggestion")
+export const SKILL_SUGGESTION_KEY = new PluginKey("composer-skill-suggestion")
 
 /** 把 suggestion 插件的生命周期接到 store。 */
 function renderInto(store: SuggestionStore, kind: SuggestionItem["kind"], key: PluginKey) {
@@ -81,9 +85,24 @@ export function composerExtensions(
   let filesRequest: Promise<readonly string[]> | null = null
   /** 这次 `/` 建议里列出的 Agent 命令；选中时按 id 找回。 */
   let agentListed: readonly ComposerCommand[] = []
-  const loadAgentCommands = async (): Promise<readonly ComposerCommand[]> => {
+  let agentRequest: Promise<readonly ComposerCommand[]> | null = null
+  let agentSource: ReturnType<ComposerEditorSources["agentCommands"]>
+  const loadAgentCommands = (): Promise<readonly ComposerCommand[]> => {
     const source = sources.agentCommands()
-    return source ? source().catch(() => []) : []
+    if (source !== agentSource) agentRequest = null
+    agentSource = source
+    agentRequest ??= source ? source(true).catch(() => []) : Promise.resolve([])
+    return agentRequest
+  }
+  const renderCommands = (kind: "command" | "skill", key: PluginKey) => () => {
+    const handlers = renderInto(store, kind, key)()
+    return {
+      ...handlers,
+      onExit: () => {
+        agentRequest = null
+        handlers.onExit()
+      },
+    }
   }
   const loadFiles = (): Promise<readonly string[]> => {
     const source = sources.files()
@@ -179,8 +198,11 @@ export function composerExtensions(
             const own = sources.commands().filter((command) => command.available?.() ?? true)
             agentListed = await loadAgentCommands()
             // 同名时 Pigcode 自己的命令优先；没有查询时 skill 排在 Agent 内置命令前面。
-            const all = firstPerLabel([...own, ...ordered(agentListed)])
-            return matchByLabel(all, query).map((command): SuggestionItem => ({
+            const all = firstPerLabel([
+              ...own,
+              ...ordered(agentListed.filter((command) => !command.insert?.startsWith("$"))),
+            ])
+            return searchCommands(all, query).map((command): SuggestionItem => ({
               id: command.id,
               label: command.label,
               detail: command.description,
@@ -202,7 +224,32 @@ export function composerExtensions(
             editor.chain().focus().deleteRange(range).run()
             selected.run?.()
           },
-          render: renderInto(store, "command", COMMAND_SUGGESTION_KEY),
+          render: renderCommands("command", COMMAND_SUGGESTION_KEY),
+        },
+        {
+          char: "$",
+          pluginKey: SKILL_SUGGESTION_KEY,
+          allowedPrefixes: [" ", "\t", "\n"],
+          items: async ({ query }) => {
+            agentListed = await loadAgentCommands()
+            return searchSkills(agentListed, query).map((command): SuggestionItem => ({
+              id: command.id,
+              label: skillLabel(command),
+              detail: command.description,
+              title: [command.insert, command.skill?.path, command.skill?.description]
+                .filter(Boolean)
+                .join("\n"),
+              source: "skill",
+              scope: skillScope(command),
+              kind: "skill",
+            }))
+          },
+          command: ({ editor, range, props }) => {
+            const selected = agentListed.find((command) => command.id === props.id)
+            if (selected?.insert)
+              editor.chain().focus().insertContentAt(range, `${selected.insert} `).run()
+          },
+          render: renderCommands("skill", SKILL_SUGGESTION_KEY),
         },
       ],
     }),

@@ -273,7 +273,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     list: () => registeredAgents(drivers),
     detect: (options) => agents.detect(options),
     models: (agentId, instanceId) => agents.models(agentId, instanceId),
-    commands: (agentId, instanceId, cwd) => agents.commands(agentId, instanceId, cwd),
+    commands: (agentId, instanceId, cwd, refresh) =>
+      agents.commands(agentId, instanceId, cwd, refresh),
     defaultAgent: () => agents.defaultAgent(),
     configuredDefaultAgent: () => agents.configuredDefault(),
     configuredDefaultInstance: () => agents.configuredDefaultInstance(),

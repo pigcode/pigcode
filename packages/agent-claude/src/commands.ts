@@ -1,13 +1,14 @@
 /**
  * Claude Code 的 `/` 命令：内置命令、skill、插件命令与自定义命令。
  *
- * SDK 会话的 supportedCommands() 就是 CLI 在这个工作目录下认得的全部命令（项目级 skill 在
- * `<cwd>/.claude/skills`），内置命令带 builtin 标记。读一次要启动 CLI，一秒左右，会话不发送消息。
- * 选中后插入 `/名字`，CLI 收到以斜杠开头的消息时自己展开。
+ * SDK 提供斜杠命令，系统、用户、项目和插件的本地 Skill 另进入 `$` 目录。
+ * 目录查询不发送消息。
  */
 import type { SlashCommand } from "@anthropic-ai/claude-agent-sdk"
 import type { AgentCommandInfo } from "@pigcode/plugin-sdk"
 import { idleInput, withTimeout, type ClaudeModelSource } from "./models"
+import { CLAUDE_SETTING_SOURCES } from "./launch"
+import { discoverClaudeSkills } from "./skills"
 
 /** 读命令需要的依赖；和模型目录共用 query 与检测，另外带上工作目录。 */
 export type ClaudeCommandSource = Pick<
@@ -16,6 +17,7 @@ export type ClaudeCommandSource = Pick<
 > & {
   cwd: string | null
   timeoutMs?: number
+  extraArgs?: Record<string, string | null>
 }
 
 /** SDK 的命令转成目录条目；CLI 内部用的命令（名字以下划线开头）不列。 */
@@ -35,10 +37,11 @@ export function parseClaudeCommands(commands: readonly SlashCommand[]): AgentCom
   })
 }
 
-/** 读取 Claude Code 在 cwd 下的命令；CLI 没装、没登录或超时都返回空列表。 */
+/** 本地 Skill 不依赖登录；SDK 目录只做初始化，不发送消息，不连接 MCP。 */
 export async function listClaudeCommands(source: ClaudeCommandSource): Promise<AgentCommandInfo[]> {
+  const skills = await discoverClaudeSkills(source)
   const detection = await source.detect().catch(() => ({ installed: false, loggedIn: false }))
-  if (!detection.installed || !detection.loggedIn) return []
+  if (!detection.installed) return skills
   const input = idleInput()
   let stream: ReturnType<ClaudeCommandSource["queryFn"]> | undefined
   try {
@@ -47,14 +50,23 @@ export async function listClaudeCommands(source: ClaudeCommandSource): Promise<A
       options: {
         ...(source.executable ? { pathToClaudeCodeExecutable: source.executable } : {}),
         ...(source.cwd ? { cwd: source.cwd } : {}),
-        ...(source.env ? { env: source.env } : {}),
+        env: { ...(source.env ?? process.env), ENABLE_CLAUDEAI_MCP_SERVERS: "false" },
+        ...(source.extraArgs ? { extraArgs: source.extraArgs } : {}),
+        settingSources: [...CLAUDE_SETTING_SOURCES],
+        persistSession: false,
+        allowedTools: [],
+        mcpServers: {},
+        strictMcpConfig: true,
       },
     })
-    return parseClaudeCommands(
-      await withTimeout(stream.supportedCommands(), source.timeoutMs ?? 15_000),
-    )
+    return [
+      ...skills,
+      ...parseClaudeCommands(
+        await withTimeout(stream.supportedCommands(), source.timeoutMs ?? 15_000),
+      ),
+    ]
   } catch {
-    return []
+    return skills
   } finally {
     input.close()
     stream?.close()

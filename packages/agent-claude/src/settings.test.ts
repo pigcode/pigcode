@@ -63,6 +63,7 @@ describe("Claude launch settings", () => {
     expect(captured[0]).toMatchObject({
       pathToClaudeCodeExecutable: "/opt/claude/bin/claude",
       extraArgs: { chrome: null },
+      settingSources: ["user", "project", "local"],
     })
     expect(captured[0]?.env?.CLAUDE_CONFIG_DIR).toBe("/tmp/claude-config")
 

@@ -38,6 +38,7 @@ export class StdioCodexTransport implements CodexTransport {
     command = "codex",
     args = ["app-server", "--stdio"],
     env: NodeJS.ProcessEnv | undefined = undefined,
+    cwd: string | undefined = undefined,
   ) {
     // Windows 上 npm 装的 codex 是 .cmd；解析后直接启动它实际运行的 node 入口，
     // 用户给的启动参数就不会被 cmd 重新切分或展开。
@@ -47,6 +48,7 @@ export class StdioCodexTransport implements CodexTransport {
       ...(target.shell ? { shell: true } : {}),
       ...PROCESS_TREE_SPAWN_OPTIONS,
       ...(env ? { env } : {}),
+      ...(cwd ? { cwd } : {}),
     })
     this.tree = ownProcessTree(this.child)
     this.child.on("error", (error) =>

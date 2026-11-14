@@ -115,12 +115,17 @@ export interface AgentModelInfo {
   ultracode?: boolean | undefined
 }
 
-/** Agent 在输入框 `/` 菜单里提供的命令；形状见 contracts 的 agentCommandSchema。 */
+/** Agent 的命令与 Skill 目录；形状见 contracts 的 agentCommandSchema。 */
 export interface AgentCommandInfo {
   name: string
   /** 插进输入框的文字，例如 `/compact`、`$documents`。 */
   text: string
   description?: string | undefined
+  displayName?: string | undefined
+  shortDescription?: string | undefined
+  path?: string | undefined
+  scope?: string | undefined
+  pluginId?: string | undefined
   argumentHint?: string | undefined
   kind: "builtin" | "skill"
 }
@@ -144,8 +149,8 @@ export interface AgentDriver {
   /** 动态模型目录；没实现时目录为空，只列出用户添加的自定义模型。 */
   listModels?(settings: AgentSettingsValues): Promise<AgentModelInfo[]>
   /**
-   * 输入框 `/` 菜单里的命令：CLI 自带的命令、skill 与自定义命令。cwd 决定项目级的 skill；
-   * 为 null 时只列用户级的。没实现时菜单里只有 Pigcode 自己的命令。
+   * 输入框 `/`、`$` 菜单里的命令与 Skill。cwd 决定项目级条目；为 null 时只列用户级的。
+   * text 的前缀决定所属菜单，必须使用 CLI 可调用的名称。没实现时只列 Pigcode 自己的命令。
    */
   listCommands?(settings: AgentSettingsValues, cwd: string | null): Promise<AgentCommandInfo[]>
   createSession(input: CreateSessionInput): Promise<AgentSessionHandle>

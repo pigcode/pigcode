@@ -45,6 +45,11 @@ export function normalizeCommands(commands: readonly AgentCommandInfo[]): AgentC
       text,
       ...(description ? { description } : {}),
       ...(argumentHint ? { argumentHint } : {}),
+      ...Object.fromEntries(
+        (["displayName", "shortDescription", "path", "scope", "pluginId"] as const).flatMap(
+          (key) => (command[key]?.trim() ? [[key, command[key].trim()]] : []),
+        ),
+      ),
       kind: command.kind === "builtin" ? "builtin" : "skill",
     })
   }
@@ -108,7 +113,7 @@ export interface ModelCatalogCacheOptions {
  * invalidate 传实例 id 时丢掉这个实例的全部条目。
  */
 export interface ModelCatalogCache<T = AgentModel> {
-  get(key: string, load: () => Promise<T[]>): Promise<T[]>
+  get(key: string, load: () => Promise<T[]>, refresh?: boolean): Promise<T[]>
   invalidate(prefix?: string): void
 }
 
@@ -126,11 +131,12 @@ export function createModelCatalogCache<T = AgentModel>(
   /** key 是实例 id 本身，或「实例 id + \0 + 其余部分」。 */
   const owned = (key: string, prefix: string) => key === prefix || key.startsWith(`${prefix}\0`)
   return {
-    get(key, load) {
-      const cached = entries.get(key)
-      if (cached && cached.expiresAt > now()) return Promise.resolve(cached.models)
+    get(key, load, refresh = false) {
+      if (refresh) entries.delete(key)
       const pending = inflight.get(key)
       if (pending) return pending
+      const cached = entries.get(key)
+      if (cached && cached.expiresAt > now()) return Promise.resolve(cached.models)
       const request = load()
         .then((models) => {
           if (inflight.get(key) === request && models.length > 0) {

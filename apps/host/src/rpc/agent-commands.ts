@@ -93,7 +93,12 @@ export async function dispatchAgentCommand(
     case "agent.commands": {
       const instance = ctx.agents.findInstance(value.instanceId as string)
       if (!instance) return []
-      return ctx.agents.commands(instance.agentId, instance.instanceId, commandCwd(ctx, value))
+      return ctx.agents.commands(
+        instance.agentId,
+        instance.instanceId,
+        commandCwd(ctx, value),
+        value.refresh === true,
+      )
     }
     case "agent.list":
       return listAgents(ctx)

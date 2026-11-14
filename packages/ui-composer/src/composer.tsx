@@ -8,7 +8,6 @@ import { composerCommands } from "./composer-commands"
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
 import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import type { AgentCommand } from "@pigcode/contracts"
 import { Button, Menu, useLocale } from "@pigcode/ui-primitives"
 import {
   getComposerKeyAction,
@@ -37,7 +36,7 @@ import {
   setPlainText,
   type ComposerCommand,
 } from "./composer-editor"
-import { useAgentCommandSource } from "./agent-commands"
+import { useAgentCommandSource, type AgentCommandLoader } from "./agent-commands"
 import { ContextMeter, type ContextUsage } from "./context-meter"
 import { ComposerModelControls } from "./composer-model-controls"
 import { useRunPreferences } from "./model-preferences"
@@ -112,7 +111,7 @@ export interface ComposerProps {
   /** / 命令；内置的切换模型与权限之外的命令由调用方提供。 */
   commands?: readonly ComposerCommand[]
   /** 读一个 Agent 实例的 / 命令与 skill；输入框获得焦点时预取当前实例的，调用方负责缓存。 */
-  loadAgentCommands?: ((instanceId: string) => Promise<readonly AgentCommand[]>) | undefined
+  loadAgentCommands?: AgentCommandLoader | undefined
 }
 
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
