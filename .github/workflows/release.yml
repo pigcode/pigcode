@@ -67,6 +67,21 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm --dir apps/desktop run ${{ matrix.package }}
+      - name: Verify update manifests point to packaged files
+        if: runner.os != 'macOS'
+        shell: bash
+        working-directory: apps/desktop/dist
+        run: |
+          manifest=latest.yml
+          if [ "$RUNNER_OS" = Linux ]; then manifest=latest-linux.yml; fi
+          assets=$(awk '/^path: / {print $2} /^  - url: / {print $3}' "$manifest")
+          test -n "$assets"
+          while IFS= read -r asset; do
+            if [[ ! "$asset" =~ ^[a-zA-Z0-9._-]+$ ]] || [ ! -f "$asset" ]; then
+              echo "$manifest points to an invalid or missing release asset: $asset" >&2
+              exit 1
+            fi
+          done <<< "$assets"
       # 装好的应用能不能真的用起来，只有这一条会检查（#69）。
       - run: ${{ matrix.smoke }}
         env:

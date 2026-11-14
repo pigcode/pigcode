@@ -53,6 +53,9 @@ win:
   target:
     - target: nsis
       arch: [x64]
+nsis:
+  # GitHub Release 的附件名必须与 latest.yml 一致。默认空格会在上传时被 GitHub 改成点号。
+  artifactName: ${productName}-Setup-${version}.${ext}
 linux:
   icon: build/icon.png
   target: [AppImage, deb]
