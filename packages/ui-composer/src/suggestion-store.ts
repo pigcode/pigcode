@@ -59,7 +59,8 @@ export class SuggestionStore {
       props.loading &&
       props.items.length === 0 &&
       this.snapshot.active &&
-      this.snapshot.kind === kind
+      this.snapshot.kind === kind &&
+      this.snapshot.query === props.query
     const items = stale ? this.snapshot.items : props.items
     const sameQuery = this.snapshot.active && this.snapshot.query === props.query
     const index = sameQuery ? Math.min(this.snapshot.index, Math.max(0, items.length - 1)) : 0

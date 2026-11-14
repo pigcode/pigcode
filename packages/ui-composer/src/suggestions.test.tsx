@@ -94,6 +94,22 @@ describe("composer suggestions", () => {
     expect(onPlanMode).toHaveBeenCalledWith(true)
   })
 
+  it("executes a Pigcode command while the Agent directory is still loading", async () => {
+    const onPlanMode = vi.fn()
+    const onSubmit = vi.fn()
+    const editor = renderComposer({
+      agentId: "claude",
+      onPlanMode,
+      onSubmit,
+      loadAgentCommands: () => new Promise(() => {}),
+    })
+
+    await userEvent.type(editor, "/plan{Enter}")
+
+    expect(onPlanMode).toHaveBeenCalledWith(true)
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
   it("sends the text as typed when @ has no matching file", async () => {
     const onSubmit = vi.fn()
     const editor = renderComposer({ onSubmit, files: async () => FILES })

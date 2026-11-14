@@ -77,6 +77,17 @@ function renderInto(store: SuggestionStore, kind: SuggestionItem["kind"], key: P
   })
 }
 
+function commandItems(commands: ComposerCommand[], query: string): SuggestionItem[] {
+  return searchCommands(commands, query).map((command) => ({
+    id: command.id,
+    label: command.label,
+    detail: command.description,
+    hint: command.hint,
+    source: command.source ?? "pigcode",
+    kind: "command",
+  }))
+}
+
 /** 构造输入框的扩展列表。文件列表在一次建议期间只读取一次。 */
 export function composerExtensions(
   sources: ComposerEditorSources,
@@ -87,6 +98,8 @@ export function composerExtensions(
   let agentListed: readonly ComposerCommand[] = []
   let agentRequest: Promise<readonly ComposerCommand[]> | null = null
   let agentSource: ReturnType<ComposerEditorSources["agentCommands"]>
+  const availableCommands = () =>
+    sources.commands().filter((command) => command.available?.() ?? true)
   const loadAgentCommands = (): Promise<readonly ComposerCommand[]> => {
     const source = sources.agentCommands()
     if (source !== agentSource) agentRequest = null
@@ -96,10 +109,21 @@ export function composerExtensions(
   }
   const renderCommands = (kind: "command" | "skill", key: PluginKey) => () => {
     const handlers = renderInto(store, kind, key)()
+    const show = (props: SuggestionProps<SuggestionItem, SuggestionItem>) => {
+      // Agent 的目录需要异步读取，Pigcode 自己的命令可以立即筛选和执行。
+      const items =
+        props.loading && kind === "command"
+          ? commandItems(firstPerLabel(availableCommands()), props.query)
+          : props.items
+      store.show(kind, { ...props, items })
+    }
     return {
       ...handlers,
+      onStart: show,
+      onUpdate: show,
       onExit: () => {
         agentRequest = null
+        agentListed = []
         handlers.onExit()
       },
     }
@@ -195,25 +219,17 @@ export function composerExtensions(
           pluginKey: COMMAND_SUGGESTION_KEY,
           startOfLine: true,
           items: async ({ query }) => {
-            const own = sources.commands().filter((command) => command.available?.() ?? true)
             agentListed = await loadAgentCommands()
             // 同名时 Pigcode 自己的命令优先；没有查询时 skill 排在 Agent 内置命令前面。
             const all = firstPerLabel([
-              ...own,
+              ...availableCommands(),
               ...ordered(agentListed.filter((command) => !command.insert?.startsWith("$"))),
             ])
-            return searchCommands(all, query).map((command): SuggestionItem => ({
-              id: command.id,
-              label: command.label,
-              detail: command.description,
-              hint: command.hint,
-              source: command.source ?? "pigcode",
-              kind: "command",
-            }))
+            return commandItems(all, query)
           },
           command: ({ editor, range, props }) => {
             // 列表打开期间命令可能已经消失（例如它的插件被停用）：不删用户敲的字，也不执行。
-            const selected = [...sources.commands(), ...agentListed].find(
+            const selected = [...availableCommands(), ...agentListed].find(
               (command) => command.id === props.id,
             )
             if (!selected) return
