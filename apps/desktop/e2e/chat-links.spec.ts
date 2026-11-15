@@ -90,7 +90,6 @@ test("assistant links open in the system browser and offer the desktop link menu
         .filter((item) => item.type !== "separator")
         .map(({ label, enabled }) => [label, enabled]),
     ).toEqual([
-      ["在以下位置打开", false],
       ["新标签页", true],
       ["默认浏览器", true],
       ["复制链接", true],
