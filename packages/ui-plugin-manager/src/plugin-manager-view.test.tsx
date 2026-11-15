@@ -71,16 +71,23 @@ describe("PluginManagerView", () => {
     )
   })
 
-  it("uses the agent description written for the current language", () => {
+  it("uses the declared agent brand in the installed card and details", async () => {
     renderView([
       {
         ...DEMO,
+        id: "@pigcode/agent-codex",
+        name: "@pigcode/agent-codex",
+        displayName: "Codex",
         kind: "agent",
+        builtin: true,
         description: "Example agent",
-        contributes: { agent: { id: "demo", description: { "zh-CN": "示例 agent" } } },
+        contributes: { agent: { id: "codex", description: { "zh-CN": "示例 agent" } } },
       },
     ])
-    expect(tile("Demo").textContent).toContain("示例 agent")
+    expect(tile("Codex").textContent).toContain("示例 agent")
+    expect(tile("Codex").querySelector(".agent-brand")?.getAttribute("data-brand")).toBe("openai")
+    const dialog = await openDetails("Codex")
+    expect(dialog.querySelector(".agent-brand")?.getAttribute("data-brand")).toBe("openai")
   })
 
   it("shows permissions, provides and conflicts in the details", async () => {

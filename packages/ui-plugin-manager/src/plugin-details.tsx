@@ -4,11 +4,11 @@ import {
   Badge,
   Button,
   Dialog,
-  EntityAvatar,
   StatusDot,
   useLocale,
   type MessageKey,
 } from "@pigcode/ui-primitives"
+import { InstalledPluginIcon } from "./installed-plugin-icon"
 import {
   descriptionOf,
   fill,
@@ -109,7 +109,7 @@ function DetailsBody({
       closeLabel={t("common.close")}
       title={
         <>
-          <EntityAvatar id={plugin.id} name={name} className="market-icon" />
+          <InstalledPluginIcon plugin={plugin} />
           {name}
         </>
       }

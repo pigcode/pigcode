@@ -6,12 +6,12 @@ import {
   Badge,
   Button,
   EmptyState,
-  EntityAvatar,
   Menu,
   StatusDot,
   Switch,
   useLocale,
 } from "@pigcode/ui-primitives"
+import { InstalledPluginIcon } from "./installed-plugin-icon"
 import {
   KIND_ORDER,
   descriptionOf,
@@ -95,7 +95,7 @@ function PluginTile({
         aria-label={fill(t("plugins.expand"), { plugin: name })}
         onClick={() => onDetails(plugin.id)}
       >
-        <EntityAvatar id={plugin.id} name={name} className="market-icon" />
+        <InstalledPluginIcon plugin={plugin} />
         <span className="market-tile-text">
           <span className="market-tile-name">
             <span className="truncate">{name}</span>
