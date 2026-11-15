@@ -62,7 +62,7 @@ describe("terminalTheme", () => {
     expect(theme.foreground).toBe(parseCssColor(read("--term-fg")))
     expect(theme.cursorAccent).toBe(theme.background)
     expect(theme.cursor).toBe(parseCssColor(read("--primary")))
-    expect(theme.selectionBackground).toMatch(/^mix:color-mix\(in srgb, oklch/)
+    expect(theme.selectionBackground).toMatch(/^mix:color-mix\(in srgb, /)
   })
 
   it("colours the scrollbar with the same tokens as every other scrollbar", () => {
@@ -115,7 +115,7 @@ describe("terminalTheme", () => {
 
     // 终端底色跟着主题背景变；默认设置下不写，仍是 tokens.css 的值
     expect(theme.background).not.toBe(terminalTheme(before, resolve).background)
-    expect(terminalTheme(before, resolve).background).toBe("#161616")
+    expect(terminalTheme(before, resolve).background).toBe("#191519")
 
     // 标题栏底色跟着换了背景的窗口底色
     const bar = titleBarColors(after, parseCssColor)
@@ -141,6 +141,6 @@ describe("terminalTheme", () => {
       overrides: { pigcode: { dark: { fg } } },
     }
     expect(terminalTheme(pageTokens(settings, "dark"), resolve).foreground).toBe(fg)
-    expect(terminalTheme(pageTokens(defaultAppearance, "dark"), resolve).foreground).toBe("#E4E4E7")
+    expect(terminalTheme(pageTokens(defaultAppearance, "dark"), resolve).foreground).toBe("#F4EBF0")
   })
 })

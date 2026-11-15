@@ -46,11 +46,14 @@ export function ruleBlock(css: string, selector: string): Record<string, string>
 }
 
 /**
- * 取出 tokens.css 里某个明暗块声明的变量。只认选择器列表里直接含 `[data-theme="light"]`
- * 或 `[data-theme="dark"]` 的规则（`:root` 与浅色同一块），平台等附加条件的规则不算。
+ * 读 tokens.css 的默认主题：先取明暗基底，再叠上 Pigcode 配色。平台和磨砂的附加规则不算。
  */
 export function tokenBlock(css: string, tone: ResolvedTheme): Record<string, string> {
-  return ruleBlock(css, `[data-theme="${tone}"]`)
+  const selector = `[data-theme="${tone}"]`
+  return {
+    ...ruleBlock(css, selector),
+    ...ruleBlock(css, `${selector}:where(:not([data-theme-palette]))`),
+  }
 }
 
 /** 从一组变量值读 token，并展开其中的 `var(--name)`；缺失或循环引用读成空串。 */

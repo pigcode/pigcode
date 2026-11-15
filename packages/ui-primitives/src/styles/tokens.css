@@ -1,11 +1,8 @@
 /*
-  Pigcode 设计系统 · tokens（v6：与 Cursor 对齐的工作区）
-  所有颜色只在本文件定义。页面与组件只引用语义变量，不写死色值。
-  结构：窗口底色承载标题栏与侧栏；聊天与右侧面板平铺在略亮一层的内容区里，
-  用户消息与输入区是再亮一层的卡片。浅色下 macOS 的侧栏更深一些，接近系统侧栏材质。
-  底色带一点和强调色同一色相（264–268）的冷调：浅色是近白的内容区配浅蓝灰的侧栏，
-  深色是蓝黑；强调色是靛蓝，只出现在开关、链接与焦点上。
-  悬停、选中、细线一律用带透明度的墨色，叠在任何底色上都成立。
+  Pigcode 设计系统 · 语义变量
+  前两块是各主题共用的基底，Pigcode 自有的配色在其后覆盖。
+  窗口底色承载标题栏与侧栏，内容区亮一层，卡片及浮层再亮一层。
+  悬停、选中和细线用半透明叠色，随底色变化。
 */
 
 :root,
@@ -48,7 +45,7 @@
   --input-border-hover: oklch(21% 0.006 286 / 0.22);
   --input-border-focus: oklch(21% 0.006 286 / 0.4);
 
-  /* 操作：主按钮、开关、链接与焦点用靛蓝，其余界面保持中性 */
+  /* 操作：其他主题可以用各自的强调色覆盖 */
   --primary: oklch(48.8% 0.217 264);
   --primary-hover: oklch(44% 0.21 264);
   --on-primary: oklch(100% 0 0);
@@ -88,7 +85,7 @@
   /*
     终端与代码块：terminal-view 运行时读这些 token 生成 xterm 配色。光标与选区跟随强调色
     （外观设置把主题强调色写进 --primary）；红绿黄蓝取状态色，浅色底上普通色用对应的文字色、
-    亮色用状态色本身，保证在白底上可读；其余 ANSI 色是固定值。
+    亮色用状态色本身，保证在浅底上可读；其余 ANSI 色是固定值。
   */
   --term-bg: #ffffff;
   --term-fg: #27272a;
@@ -289,13 +286,70 @@
   --browser-page-bg: #fff;
 }
 
-/* macOS 浅色：侧栏接近系统侧栏材质的深度，内容区随之略暗 */
-:root[data-platform="darwin"]:not([data-theme="dark"]) {
-  --window: oklch(94.2% 0.007 264);
-  --wall-1: oklch(94.2% 0.007 264 / 0);
-  --wall-2: oklch(94.2% 0.007 264 / 0);
-  --sidebar: oklch(94.2% 0.007 264 / 0.6);
-  --bg: oklch(99.2% 0.0015 264);
+/* Pigcode 浅色：暖瓷白内容区、带一点梅灰的窗口、玫瑰色操作。 */
+:root:where(:not([data-theme-palette]):not([data-theme])),
+[data-theme="light"]:where(:not([data-theme-palette])) {
+  --window: #ede6ea;
+  --sidebar: oklch(93.15% 0.0092 341.8 / 0.6);
+  --bg: #faf7f5;
+  --surface: #fffcfa;
+  --surface-raised: var(--surface);
+  --popover: var(--surface);
+  --popover-glass: oklch(99.28% 0.0042 56.4 / 0.9);
+  --input-bg: var(--surface);
+  --input-bg-focus: var(--surface);
+  --avatar: #e3d8df;
+
+  --fg: #28222a;
+  --fg-2: #493c47;
+  --muted: #6a5865;
+  --faint: #746270;
+
+  --primary: #a14066;
+  --primary-hover: #883354;
+  --switch-on: var(--primary);
+  --link: var(--primary);
+  --border-focus: color-mix(in srgb, var(--accent) 75%, transparent);
+  --accent: var(--link);
+  --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
+  --accent-soft-strong: color-mix(in srgb, var(--accent) 15%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 24%, transparent);
+  --accent-text: #8d3558;
+
+  --term-bg: #fffcfa;
+  --term-fg: var(--fg);
+}
+
+/* Pigcode 深色：烟梅灰表面配浅玫瑰色，开关用深一些的玫瑰色衬出浅色滑块。 */
+[data-theme="dark"]:where(:not([data-theme-palette])) {
+  --window: #191519;
+  --sidebar: oklch(20.22% 0.01 325.9 / 0.5);
+  --bg: #211c21;
+  --surface: #2b242a;
+  --surface-raised: #302830;
+  --popover: #2c252b;
+  --popover-glass: oklch(27.47% 0.0149 330.7 / 0.9);
+  --avatar: #392f39;
+
+  --fg: #f4ebf0;
+  --fg-2: #dccbd6;
+  --muted: #b5a2ae;
+  --faint: #a895a2;
+
+  --primary: #e8a6be;
+  --primary-hover: #f0bcd0;
+  --on-primary: #291a24;
+  --switch-on: #ad5b80;
+  --link: #f0adc5;
+  --border-focus: color-mix(in srgb, var(--accent) 78%, transparent);
+  --accent: var(--link);
+  --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+  --accent-soft-strong: color-mix(in srgb, var(--accent) 21%, transparent);
+  --accent-ring: color-mix(in srgb, var(--accent) 28%, transparent);
+  --accent-text: #f4cada;
+
+  --term-bg: #191519;
+  --term-fg: var(--fg);
 }
 
 :root {

@@ -22,11 +22,11 @@ function pageTokens(settings: AppearanceSettings, tone: "light" | "dark") {
 }
 
 describe("tokenBlock", () => {
-  it("reads the light block from :root and the dark block separately", () => {
+  it("reads the Pigcode palette over the shared light and dark tokens", () => {
     const light = tokenBlock(css, "light")
     const dark = tokenBlock(css, "dark")
-    expect(light["--window"]).toBe("oklch(95.6% 0.006 264)")
-    expect(dark["--window"]).toBe("oklch(15.4% 0.006 268)")
+    expect(light["--window"]).toBe("#ede6ea")
+    expect(dark["--window"]).toBe("#191519")
     expect(light["--term-red"]).toBe("var(--bad-text)")
     expect(dark["--term-red"]).toBe("var(--bad)")
   })
@@ -75,8 +75,8 @@ describe("titleBarColors", () => {
   it("takes --window and --fg-2 from the default theme", () => {
     const { read } = pageTokens(defaultAppearance, "dark")
     expect(titleBarColors(read, parseCssColor)).toEqual({
-      color: parseCssColor("oklch(15.4% 0.006 268)"),
-      symbolColor: parseCssColor("oklch(84% 0.003 286)"),
+      color: "#191519",
+      symbolColor: "#DCCBD6",
     })
   })
 

@@ -45,7 +45,7 @@ asarUnpack:
 # 在生成 DMG 前为 Electron 的 arm64 应用封存资源（ADR 0005）。
 afterPack: ./build/sign-macos-arm64.ts
 # 应用图标：源文件是 build/icon.svg，三个平台格式都由它生成。
-# icns 里已经画好圆角深色底，所以 macOS 不再套用系统遮罩。
+# icns 的圆角底板自带透明留白，用于和 Dock 的系统图标对齐。
 mac:
   identity: null
   target: [dmg]

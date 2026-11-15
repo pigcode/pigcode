@@ -174,6 +174,7 @@ export function contrastFactor(contrast: number): number {
 
 /** 当前模式下实际要推导的颜色；null 表示沿用 tokens.css。 */
 type ResolvedColors = {
+  themeId: string
   bg: Hex | null
   fg: Hex | null
   accent: Hex | null
@@ -194,6 +195,7 @@ function resolveColors(
   const isCustom = slot.accentMode === "custom"
   const accent = isCustom ? (changed.accent ?? base?.accent ?? null) : (base?.accent ?? null)
   return {
+    themeId: theme.id,
     bg: changed.bg ?? base?.bg ?? null,
     fg: changed.fg ?? base?.fg ?? null,
     accent,
@@ -384,6 +386,7 @@ function attrsFor(
   env: AppearanceEnvironment,
 ): Vars {
   const attrs: Vars = {}
+  if (colors.themeId !== "pigcode") attrs["data-theme-palette"] = colors.themeId
   const reduce =
     settings.motion === "on" || (settings.motion === "system" && env.prefersReducedMotion)
   if (reduce) attrs["data-motion"] = "reduce"

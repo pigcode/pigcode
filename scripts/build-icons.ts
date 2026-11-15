@@ -57,16 +57,25 @@ function buildIco(pngs: Array<{ size: number; data: Buffer }>): Buffer {
 }
 
 function main(): void {
+  const macBase = join(work, "icon-mac.png")
+  rasterize(source, macBase)
+
+  // SVG 画布含 macOS 专用留白。Windows 和 Linux 只取底板范围，保持原来的图标占比。
+  const svg = readFileSync(source, "utf8")
+  const fullSize = svg.replace('viewBox="0 0 1024 1024"', 'viewBox="100 100 824 824"')
+  if (fullSize === svg) throw new Error("build/icon.svg 的画布与图标导出范围不匹配")
+  const fullSizeSource = join(work, "icon-full-size.svg")
+  writeFileSync(fullSizeSource, fullSize)
   const base = join(work, "icon.png")
-  rasterize(source, base)
+  rasterize(fullSizeSource, base)
   writeFileSync(join(buildDir, "icon.png"), readFileSync(base))
 
   // macOS：iconset 里每个尺寸都要有 1x 和 2x 两个文件，iconutil 才认。
   const iconset = join(work, "Pigcode.iconset")
   execFileSync("mkdir", ["-p", iconset])
   for (const size of [16, 32, 128, 256, 512]) {
-    resize(base, join(iconset, `icon_${String(size)}x${String(size)}.png`), size)
-    resize(base, join(iconset, `icon_${String(size)}x${String(size)}@2x.png`), size * 2)
+    resize(macBase, join(iconset, `icon_${String(size)}x${String(size)}.png`), size)
+    resize(macBase, join(iconset, `icon_${String(size)}x${String(size)}@2x.png`), size * 2)
   }
   execFileSync("iconutil", ["-c", "icns", iconset, "-o", join(buildDir, "icon.icns")])
 
