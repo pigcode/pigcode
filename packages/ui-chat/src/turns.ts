@@ -46,6 +46,8 @@ export interface Turn {
   key: string
   runId: string | null
   userText: string | null
+  /** 用户消息记下的发送时间，独立于 run 开始工作的时间。 */
+  userAt: string | null
   /** 用户这条消息 @ 引用的会话（#81）。 */
   userReferences: ReadonlyArray<{ threadId: string; title: string }>
   agentId: string | null
@@ -95,6 +97,7 @@ function emptyTurn(key: string, runId: string | null): Turn {
     key,
     runId,
     userText: null,
+    userAt: null,
     userReferences: [],
     agentId: null,
     status: "completed",
@@ -196,17 +199,22 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
       case "run.queued":
         turn.status = "queued"
         break
-      case "run.started":
+      case "run.started": {
         turn.status = "running"
         turn.startedAt = event.createdAt
         turn.agentId = asText(payload?.agentId) ?? turn.agentId
-        turn.userText = asText(payload?.text) ?? turn.userText
+        const text = asText(payload?.text)
+        turn.userText = text ?? turn.userText
+        // 旧记录可能只在 run.started 里保存过用户文本。
+        if (text) turn.userAt ??= event.createdAt
         break
+      }
       case "message.completed": {
         const text = asText(payload?.text)
         if (!text) break
         if (asText(payload?.role) === "user") {
           turn.userText = text
+          turn.userAt = event.createdAt
           turn.userReferences = referencesOf(payload?.references)
           break
         }

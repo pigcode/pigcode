@@ -1,13 +1,13 @@
 /**
- * 用户消息（参照 ZCode 的 ConversationUserInputBubble）：靠右的浅色气泡，细边框、右上角小圆角，
- * 最宽 576px。超过 120px 高时折叠并向下渐隐，底部一个圆形按钮展开或收起。@ 引用的文件显示成
- * 带图标的文件名，@ 引用的会话显示成带图标的会话标题，能打开时可以点击。悬停时气泡下方出现复制。
+ * 用户消息：靠右的圆角气泡，长消息折叠并向下渐隐。@ 引用使用可点开的带图标标签。
+ * 气泡下方显示发送时间，并在悬停或聚焦时显示复制按钮。
  */
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
-import { Check, ChevronDown, ChevronUp, Copy, MessagesSquare } from "lucide-react"
-import { FileIcon, copyText, useLocale } from "@pigcode/ui-primitives"
+import { ChevronDown, ChevronUp, MessagesSquare } from "lucide-react"
+import { FileIcon, useLocale } from "@pigcode/ui-primitives"
 import { splitPath } from "./tool-fields"
 import { relativePath, useConversationActions } from "./tools/common"
+import { TurnActions } from "./turn-actions"
 
 /** 折叠时的最大高度；内容超过它（容差 1px）才出现展开按钮。 */
 const COLLAPSED_HEIGHT = 120
@@ -133,38 +133,14 @@ function renderFileMentions(text: string): ReactNode[] {
   return nodes
 }
 
-function CopyAction({ text }: { text: string }) {
-  const { t } = useLocale()
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return undefined
-    const timer = setTimeout(() => setCopied(false), 1500)
-    return () => clearTimeout(timer)
-  }, [copied])
-  const label = copied ? t("chat.message.copied") : t("chat.message.copy")
-  return (
-    <button
-      type="button"
-      className="turn-action"
-      aria-label={label}
-      title={label}
-      onClick={() => void copyText(text).then(() => setCopied(true))}
-    >
-      {copied ? (
-        <Check className="ic ic-sm" aria-hidden="true" />
-      ) : (
-        <Copy className="ic ic-sm" aria-hidden="true" />
-      )}
-    </button>
-  )
-}
-
 /** 渲染一条用户消息。 */
 export const UserBubble = memo(function UserBubble({
   text,
+  at = null,
   references = [],
 }: {
   text: string
+  at?: string | null
   references?: ReadonlyArray<{ threadId: string; title: string }>
 }) {
   const { t } = useLocale()
@@ -222,9 +198,7 @@ export const UserBubble = memo(function UserBubble({
           </div>
         ) : null}
       </div>
-      <div className="turn-user-actions">
-        <CopyAction text={text} />
-      </div>
+      <TurnActions text={text} at={at} kind="user" />
     </div>
   )
 })

@@ -75,7 +75,7 @@
   padding-top: 0;
 }
 
-/* 用户气泡：靠右，浅底细边，右上角小圆角；超过 120px 折叠并渐隐 */
+/* 用户气泡靠右，长消息折叠并渐隐。 */
 .turn-user {
   display: flex;
   min-width: 0;
@@ -91,7 +91,7 @@
   flex-direction: column;
   gap: 8px;
   padding: var(--space-4) var(--space-6);
-  border-radius: var(--r-panel) var(--r-xs) var(--r-panel) var(--r-panel);
+  border-radius: var(--r-panel);
   background: var(--cv-user-fill);
   box-shadow: inset 0 0 0 var(--hair) var(--cv-border);
   color: var(--fg);
@@ -175,12 +175,20 @@
 }
 .turn-user-actions {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: var(--space-2);
+  padding-inline-end: var(--space-2);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+}
+.turn-user-actions .turn-action {
   opacity: 0;
   transition: opacity var(--t-fast);
 }
-.turn-user:hover .turn-user-actions,
-.turn-user-actions:focus-within {
+.turn-user:hover .turn-user-actions .turn-action,
+.turn-user-actions:focus-within .turn-action {
   opacity: 1;
 }
 

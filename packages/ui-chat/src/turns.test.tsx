@@ -203,6 +203,20 @@ describe("turn rendering", () => {
     )
   }
 
+  it("shows when the user sent the message even if the run started later", () => {
+    const sent = event(1, "message.completed", { role: "user", text: "Check this" }, "run_1", 0)
+    const { container } = renderList([
+      sent,
+      event(2, "run.queued", {}, "run_1", 1),
+      event(3, "run.started", { text: "Check this" }, "run_1", 120),
+      event(4, "message.completed", { role: "assistant", text: "Done" }, "run_1", 125),
+      event(5, "run.completed", {}, "run_1", 125),
+    ])
+    const timestamp = container.querySelector(".turn-user-actions time")
+    expect(timestamp?.getAttribute("datetime")).toBe(sent.createdAt)
+    expect(timestamp?.textContent).toBeTruthy()
+  })
+
   it("folds a finished turn's work under 'worked for' and shows the files it changed", async () => {
     const { container } = renderList(scriptedRun())
     expect(container.querySelector(".msg-user")?.textContent).toBe("fix the answer")

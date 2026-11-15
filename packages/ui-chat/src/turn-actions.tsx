@@ -1,10 +1,18 @@
-/** 一轮回复结束后显示在下方的一行（参照 ZCode 的消息操作栏）：复制整轮回复与回复时间，悬停时出现。 */
+/** 用户消息和助手回复下方共用的复制按钮与时间。 */
 import { useEffect, useState } from "react"
 import { Check, Copy } from "lucide-react"
 import { copyText, formatDateTime, formatReplyTime, useLocale } from "@pigcode/ui-primitives"
 
 /** 复制按钮与时间；复制成功后短暂显示对勾。 */
-export function TurnActions({ text, at }: { text: string; at: string | null }) {
+export function TurnActions({
+  text,
+  at,
+  kind = "reply",
+}: {
+  text: string
+  at: string | null
+  kind?: "user" | "reply"
+}) {
   const { t, locale } = useLocale()
   const [copied, setCopied] = useState(false)
 
@@ -16,7 +24,7 @@ export function TurnActions({ text, at }: { text: string; at: string | null }) {
 
   const label = copied ? t("chat.message.copied") : t("chat.message.copy")
   return (
-    <div className="turn-actions">
+    <div className={kind === "user" ? "turn-user-actions" : "turn-actions"}>
       <button
         type="button"
         className="turn-action"
