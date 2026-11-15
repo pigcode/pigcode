@@ -15,38 +15,47 @@
   flex-direction: column;
   min-height: 0;
 }
+.chat-view {
+  container: conversation / inline-size;
+}
+.thread-wrap,
+.composer-wrap {
+  --cv-gutter: var(--scrollbar-size);
+  --cv-width: min(var(--cv-col), calc(100cqi - 2 * var(--cv-gutter)));
+}
 .thread-wrap {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  container: conversation / inline-size;
 }
 .thread {
   flex: 1;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 0 0 32px;
-  scrollbar-gutter: stable;
+  padding-bottom: var(--space-8);
+  scrollbar-gutter: stable both-edges;
 }
 .msgs {
   display: flex;
-  width: 100%;
-  max-width: var(--cv-col);
+  width: var(--cv-width, var(--cv-col));
+  max-width: 100%;
   margin: 0 auto;
   flex-direction: column;
 }
-/* 会话足够宽时两边留白，左边的留白放会话导航（turn-nav.css） */
+/* 正文和输入区用同一列。会话够宽时加大留白，给左侧的会话导航留空间。 */
 @container conversation (min-width: 640px) {
-  .msgs {
-    width: calc(100% - 4rem);
+  .thread-wrap,
+  .composer-wrap {
+    --cv-gutter: 2rem;
   }
 }
 @container conversation (min-width: 864px) {
-  .msgs {
-    width: calc(100% - 6rem);
+  .thread-wrap,
+  .composer-wrap {
+    --cv-gutter: 3rem;
   }
 }
 
@@ -81,10 +90,10 @@
   min-width: 0;
   flex-direction: column;
   gap: 8px;
-  padding: 12px 16px;
-  border: 1px solid var(--cv-border);
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--r-panel) var(--r-xs) var(--r-panel) var(--r-panel);
-  background: var(--cv-surface);
+  background: var(--cv-user-fill);
+  box-shadow: inset 0 0 0 var(--hair) var(--cv-border);
   color: var(--fg);
   font-family: var(--font-content);
   font-size: var(--cv-fs);

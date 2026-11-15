@@ -8,7 +8,16 @@
 
 /* ─── 输入框卡片 ───────────────────────────────────────── */
 .composer-wrap {
-  padding: 0 32px var(--space-6);
+  flex: none;
+  padding: var(--space-3) 0 var(--space-9);
+}
+.composer-wrap > :is(.composer-shell, .subagent-readonly) {
+  width: calc(var(--cv-width, var(--cv-col)) - 2 * var(--cv-pad));
+}
+@container conversation (max-width: 639px) {
+  .composer-wrap {
+    padding-bottom: var(--space-7);
+  }
 }
 .composer-shell {
   max-width: var(--chat-col);
@@ -275,9 +284,6 @@
 }
 
 @media (max-width: 720px) {
-  .composer-wrap {
-    padding: 0 12px 12px;
-  }
   .composer .chip-btn .chip-label-optional {
     display: none;
   }

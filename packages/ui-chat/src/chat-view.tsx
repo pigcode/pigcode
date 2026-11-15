@@ -289,7 +289,7 @@ export function ChatView({
   const shownProject = projectName ?? folderName
 
   return (
-    <section className="view">
+    <section className="view chat-view">
       <div className="panel-top">
         {tabs ? (
           <ThreadTabs {...tabs} />
