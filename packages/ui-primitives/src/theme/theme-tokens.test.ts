@@ -25,8 +25,8 @@ describe("tokenBlock", () => {
   it("reads the Pigcode palette over the shared light and dark tokens", () => {
     const light = tokenBlock(css, "light")
     const dark = tokenBlock(css, "dark")
-    expect(light["--window"]).toBe("#ede6ea")
-    expect(dark["--window"]).toBe("#191519")
+    expect(light["--window"]).toBe("#ededed")
+    expect(dark["--window"]).toBe("#151515")
     expect(light["--term-red"]).toBe("var(--bad-text)")
     expect(dark["--term-red"]).toBe("var(--bad)")
   })
@@ -75,8 +75,8 @@ describe("titleBarColors", () => {
   it("takes --window and --fg-2 from the default theme", () => {
     const { read } = pageTokens(defaultAppearance, "dark")
     expect(titleBarColors(read, parseCssColor)).toEqual({
-      color: "#191519",
-      symbolColor: "#DCCBD6",
+      color: "#151515",
+      symbolColor: "#CECECE",
     })
   })
 

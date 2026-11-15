@@ -115,7 +115,7 @@ describe("terminalTheme", () => {
 
     // 终端底色跟着主题背景变；默认设置下不写，仍是 tokens.css 的值
     expect(theme.background).not.toBe(terminalTheme(before, resolve).background)
-    expect(terminalTheme(before, resolve).background).toBe("#191519")
+    expect(terminalTheme(before, resolve).background).toBe("#181818")
 
     // 标题栏底色跟着换了背景的窗口底色
     const bar = titleBarColors(after, parseCssColor)
@@ -141,6 +141,6 @@ describe("terminalTheme", () => {
       overrides: { pigcode: { dark: { fg } } },
     }
     expect(terminalTheme(pageTokens(settings, "dark"), resolve).foreground).toBe(fg)
-    expect(terminalTheme(pageTokens(defaultAppearance, "dark"), resolve).foreground).toBe("#F4EBF0")
+    expect(terminalTheme(pageTokens(defaultAppearance, "dark"), resolve).foreground).toBe("#F5F5F5")
   })
 })

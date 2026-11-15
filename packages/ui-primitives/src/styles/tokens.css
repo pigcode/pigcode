@@ -286,69 +286,62 @@
   --browser-page-bg: #fff;
 }
 
-/* Pigcode 浅色：暖瓷白内容区、带一点梅灰的窗口、玫瑰色操作。 */
+/* Pigcode 浅色：用灰阶区分窗口、内容区和操作。 */
 :root:where(:not([data-theme-palette]):not([data-theme])),
 [data-theme="light"]:where(:not([data-theme-palette])) {
-  --window: #ede6ea;
-  --sidebar: oklch(93.15% 0.0092 341.8 / 0.6);
-  --bg: #faf7f5;
-  --surface: #fffcfa;
-  --surface-raised: var(--surface);
-  --popover: var(--surface);
-  --popover-glass: oklch(99.28% 0.0042 56.4 / 0.9);
-  --input-bg: var(--surface);
-  --input-bg-focus: var(--surface);
-  --avatar: #e3d8df;
+  --window: #ededed;
+  --sidebar: oklch(94.61% 0 0 / 0.6);
+  --bg: #fafafa;
+  --avatar: #dedede;
 
-  --fg: #28222a;
-  --fg-2: #493c47;
-  --muted: #6a5865;
-  --faint: #746270;
+  --fg: #202020;
+  --fg-2: #424242;
+  --muted: #606060;
+  --faint: #6b6b6b;
 
-  --primary: #a14066;
-  --primary-hover: #883354;
+  --primary: #262626;
+  --primary-hover: #3d3d3d;
   --switch-on: var(--primary);
-  --link: var(--primary);
+  --link: var(--faint);
   --border-focus: color-mix(in srgb, var(--accent) 75%, transparent);
-  --accent: var(--link);
+  --accent: var(--primary);
   --accent-soft: color-mix(in srgb, var(--accent) 9%, transparent);
   --accent-soft-strong: color-mix(in srgb, var(--accent) 15%, transparent);
   --accent-ring: color-mix(in srgb, var(--accent) 24%, transparent);
-  --accent-text: #8d3558;
+  --accent-text: var(--fg-2);
 
-  --term-bg: #fffcfa;
   --term-fg: var(--fg);
 }
 
-/* Pigcode 深色：烟梅灰表面配浅玫瑰色，开关用深一些的玫瑰色衬出浅色滑块。 */
+/* Pigcode 深色：石墨灰表面配浅色主按钮，开关用中灰衬出白色滑块。 */
 [data-theme="dark"]:where(:not([data-theme-palette])) {
-  --window: #191519;
-  --sidebar: oklch(20.22% 0.01 325.9 / 0.5);
-  --bg: #211c21;
-  --surface: #2b242a;
-  --surface-raised: #302830;
-  --popover: #2c252b;
-  --popover-glass: oklch(27.47% 0.0149 330.7 / 0.9);
-  --avatar: #392f39;
+  --window: #151515;
+  --sidebar: oklch(19.57% 0 0 / 0.5);
+  --bg: #1d1d1d;
+  --surface: #262626;
+  --surface-raised: #2b2b2b;
+  --popover: #292929;
+  --popover-glass: oklch(28.09% 0 0 / 0.9);
+  --avatar: #373737;
 
-  --fg: #f4ebf0;
-  --fg-2: #dccbd6;
-  --muted: #b5a2ae;
-  --faint: #a895a2;
+  --fg: #f5f5f5;
+  --fg-2: #cecece;
+  --muted: #adadad;
+  --faint: #959595;
 
-  --primary: #e8a6be;
-  --primary-hover: #f0bcd0;
-  --on-primary: #291a24;
-  --switch-on: #ad5b80;
-  --link: #f0adc5;
+  --primary: #ededed;
+  --primary-hover: #dadada;
+  --on-primary: #1b1b1b;
+  --switch-on: #707070;
+  --link: #8c8c8c;
   --border-focus: color-mix(in srgb, var(--accent) 78%, transparent);
-  --accent: var(--link);
+  --accent: var(--primary);
   --accent-soft: color-mix(in srgb, var(--accent) 13%, transparent);
   --accent-soft-strong: color-mix(in srgb, var(--accent) 21%, transparent);
   --accent-ring: color-mix(in srgb, var(--accent) 28%, transparent);
-  --accent-text: #f4cada;
+  --accent-text: var(--fg);
 
-  --term-bg: #191519;
+  --term-bg: #181818;
   --term-fg: var(--fg);
 }
 

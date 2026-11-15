@@ -43,7 +43,7 @@ test("terminal colours follow the theme tokens", async () => {
   const accent = await page.evaluate(paintedColor, "--primary")
   expect(accent).toMatch(/^#[0-9A-F]{6}$/)
   await expect.poll(() => cursorColor(page)).toBe(accent)
-  await expect.poll(() => backgroundColor(page)).toBe("rgb(255, 252, 250)")
+  await expect.poll(() => backgroundColor(page)).toBe("rgb(255, 255, 255)")
 
   // 外观设置换强调色时就是把它写到 <html> 的 --primary 上
   await page.evaluate(() => document.documentElement.style.setProperty("--primary", "#D97757"))
@@ -52,7 +52,7 @@ test("terminal colours follow the theme tokens", async () => {
   await page.evaluate(() => {
     document.documentElement.dataset.theme = "dark"
   })
-  await expect.poll(() => backgroundColor(page)).toBe("rgb(25, 21, 25)")
+  await expect.poll(() => backgroundColor(page)).toBe("rgb(24, 24, 24)")
   await expect.poll(() => cursorColor(page)).toBe("#D97757")
 
   await app.close()
@@ -85,11 +85,11 @@ test("the native title bar follows the Appearance mode", async () => {
   await mode.getByRole("radio", { name: "浅色" }).click()
   await expect(mode.getByRole("radio", { name: "浅色" })).toBeChecked()
   await mode.getByRole("radio", { name: "深色" }).click()
-  await expect.poll(lastReport).toEqual({ color: "#191519", symbolColor: "#DCCBD6" })
-  await expect.poll(pageWindow).toBe("#191519")
+  await expect.poll(lastReport).toEqual({ color: "#151515", symbolColor: "#CECECE" })
+  await expect.poll(pageWindow).toBe("#151515")
   await mode.getByRole("radio", { name: "浅色" }).click()
-  await expect.poll(lastReport).toMatchObject({ symbolColor: "#493C47" })
-  expect(await lastReport()).toEqual({ color: await pageWindow(), symbolColor: "#493C47" })
+  await expect.poll(lastReport).toMatchObject({ symbolColor: "#424242" })
+  expect(await lastReport()).toEqual({ color: await pageWindow(), symbolColor: "#424242" })
 
   // 外观设置存在共用的 profile 里，改回默认，免得影响之后启动的用例
   await mode.getByRole("radio", { name: "跟随系统" }).click()

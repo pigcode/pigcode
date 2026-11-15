@@ -59,10 +59,10 @@ describe("useAppearance title bar", () => {
 
   it("reports the theme's window colour and follows theme changes", () => {
     const { result, rerender } = renderHook(() => useAppearance())
-    expect(setTitleBarColors).toHaveBeenLastCalledWith({ color: "#EDE6EA", symbolColor: "#493C47" })
+    expect(setTitleBarColors).toHaveBeenLastCalledWith({ color: "#EDEDED", symbolColor: "#424242" })
 
     act(() => result.current.update({ ...defaultAppearance, mode: "dark" }))
-    expect(setTitleBarColors).toHaveBeenLastCalledWith({ color: "#191519", symbolColor: "#DCCBD6" })
+    expect(setTitleBarColors).toHaveBeenLastCalledWith({ color: "#151515", symbolColor: "#CECECE" })
 
     act(() =>
       result.current.update({
