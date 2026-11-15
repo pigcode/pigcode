@@ -45,6 +45,7 @@ import {
 } from "./dev-mode"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { popupNativeMenu, readMenuPosition, readNativeMenu } from "./native-menu"
+import { installTextContextMenu } from "./text-context-menu"
 import { appIcon } from "./app-icons"
 import { appDefsFor, detectApps } from "./open-apps"
 import {
@@ -330,6 +331,7 @@ export async function createWindow(): Promise<BrowserWindow> {
       dark: nativeTheme.shouldUseDarkColors,
     }),
   )
+  installTextContextMenu(window)
   window.once("ready-to-show", () => window.show())
   // macOS 全屏时交通灯隐藏，页面据此收回为交通灯预留的空间。
   window.on("enter-full-screen", () => window.webContents.send("pigcode:full-screen", true))

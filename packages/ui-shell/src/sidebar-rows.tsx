@@ -33,7 +33,7 @@ function RowMenu({ actions, children }: { actions: RowAction[]; children: ReactN
     <ContextMenu.Root>
       <ContextMenu.Trigger className="row-menu-area">{children}</ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Positioner>
+        <ContextMenu.Positioner side="bottom" align="start" sideOffset={4} collisionPadding={8}>
           {/* 菜单关闭后不把焦点还给行，否则会抢走「重命名」刚聚焦的输入框 */}
           <ContextMenu.Popup finalFocus={false}>
             {actions.map((action) => (

@@ -3,8 +3,9 @@
  * 与 M5 的验收一致（内置浏览器的 http/https 地址规则不适用于预览窗口）。
  */
 import { randomUUID } from "node:crypto"
-import { BrowserWindow, type WebContents } from "electron"
+import { BrowserWindow } from "electron"
 import { BROWSER_PARTITION } from "./browser-policy"
+import { installTextContextMenu } from "./text-context-menu"
 
 /** 允许的 loopback 主机名；URL 会把 IPv6 主机规范化为带方括号的形式。 */
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"])
@@ -35,7 +36,9 @@ function remember(window: BrowserWindow, id = randomUUID()): string {
  * 给预览窗口装上地址限制，弹窗创建后递归应用同一套规则：
  * 主框架跳转、302、子框架导航和 window.open 都只能留在本机。
  */
-function guardPreview(contents: WebContents): void {
+function guardPreview(window: BrowserWindow): void {
+  const contents = window.webContents
+  installTextContextMenu(window)
   contents.on("will-navigate", (event, target) => {
     if (!isAllowedPreviewUrl(target)) event.preventDefault()
   })
@@ -56,7 +59,7 @@ function guardPreview(contents: WebContents): void {
   )
   contents.on("did-create-window", (window) => {
     remember(window)
-    guardPreview(window.webContents)
+    guardPreview(window)
   })
 }
 
@@ -74,7 +77,7 @@ export function openPreview(url: string): { id: string } {
       partition: BROWSER_PARTITION,
     },
   })
-  guardPreview(window.webContents)
+  guardPreview(window)
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => {
     callback(false)
   })

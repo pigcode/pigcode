@@ -174,7 +174,6 @@ export function ChatViewContainer({
       showMenu: (url, point) => {
         const web = /^https?:/i.test(url)
         const items = [
-          { id: "open-in", label: t("chat.link.openIn"), enabled: false },
           ...(web ? [{ id: "new-tab", label: t("chat.link.newTab") }] : []),
           {
             id: "open-external",

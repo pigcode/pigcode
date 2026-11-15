@@ -9,7 +9,13 @@ import {
   useContributions,
   type SurfaceContribution,
 } from "@pigcode/client-runtime"
-import { FileIcon, Menu, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import {
+  FileIcon,
+  Menu,
+  nativeContextMenu,
+  useLocale,
+  type MessageKey,
+} from "@pigcode/ui-primitives"
 import { FILE_SURFACE_KIND, type PanelSurface } from "./surface-state"
 
 export * from "./surface-state"
@@ -79,7 +85,7 @@ export interface RightPanelProps {
   activeId: string | null
   onActivate: (id: string) => void
   onClose: (id: string) => void
-  onFileTabMenu?: ((id: string, point: { x: number; y: number }) => void) | undefined
+  onTabMenu?: ((id: string, point: { x: number; y: number }) => void) | undefined
   /** 打开一个 Surface；参数是它在扩展点上的 id。 */
   onAdd: (kind: string) => void
   /** 标签栏右侧的布局按钮（最大化、底部终端、收起面板）。 */
@@ -346,7 +352,7 @@ export function RightPanel({
   activeId,
   onActivate,
   onClose,
-  onFileTabMenu,
+  onTabMenu,
   onAdd,
   controls,
   children,
@@ -380,15 +386,9 @@ export function RightPanel({
                 data-kind={surface.kind}
                 data-preview={surface.preview || undefined}
                 role="presentation"
-                onContextMenu={(event) => {
-                  if (
-                    !onFileTabMenu ||
-                    (surface.kind !== FILE_SURFACE_KIND && surface.kind !== "files")
-                  )
-                    return
-                  event.preventDefault()
-                  onFileTabMenu(surface.id, { x: event.clientX, y: event.clientY })
-                }}
+                onContextMenu={nativeContextMenu(
+                  onTabMenu && ((point) => onTabMenu(surface.id, point)),
+                )}
                 onAuxClick={(event) => {
                   if (event.button !== 1) return
                   event.preventDefault()

@@ -13,7 +13,7 @@ import {
   SearchX,
   TriangleAlert,
 } from "lucide-react"
-import { EmptyState, SearchField, useLocale } from "@pigcode/ui-primitives"
+import { EmptyState, SearchField, nativeContextMenu, useLocale } from "@pigcode/ui-primitives"
 import { ExplorerRow, rowId } from "./file-explorer-row"
 import {
   ancestorsOf,
@@ -392,7 +392,11 @@ export function FileExplorer({
         }}
       />
       <div className="fx-head">
-        <span className="fx-root truncate" title={rootName}>
+        <span
+          className="fx-root truncate"
+          title={rootName}
+          onContextMenu={nativeContextMenu(onRootMenu)}
+        >
           {rootName}
         </span>
         <span className="fx-actions">

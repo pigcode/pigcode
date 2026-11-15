@@ -237,7 +237,7 @@ export function WorkbenchPanel({
     requestClose(panel.surfaces.filter((item) => item.id === id))
   }
 
-  async function showFileTabMenu(id: string, point: { x: number; y: number }): Promise<void> {
+  async function showTabMenu(id: string, point: { x: number; y: number }): Promise<void> {
     const popup = window.pigcodeNative?.popupMenu
     if (!popup) return
     const choice = await popup(
@@ -342,8 +342,8 @@ export function WorkbenchPanel({
           activeId={panel.activeId}
           onActivate={(id) => onPanelChange((state) => ({ ...state, activeId: id }))}
           onClose={close}
-          onFileTabMenu={(id, point) =>
-            void showFileTabMenu(id, point).catch((error: unknown) => onError(messageOf(error)))
+          onTabMenu={(id, point) =>
+            void showTabMenu(id, point).catch((error: unknown) => onError(messageOf(error)))
           }
           onAdd={add}
           controls={controls}

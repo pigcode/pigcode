@@ -1,7 +1,7 @@
 /** 资源管理器的一行：缩进参考线、展开箭头、图标、名字（搜索时加粗匹配的字符）与 git 标记。 */
 import type { ReactNode } from "react"
 import { ChevronRight, RefreshCw } from "lucide-react"
-import { FileIcon, ListRow } from "@pigcode/ui-primitives"
+import { FileIcon, ListRow, nativeContextMenu } from "@pigcode/ui-primitives"
 import { fuzzyIndices, type GitDecoration, type VisibleRow } from "./file-tree-model"
 
 /** git 改动的字母标记。 */
@@ -93,11 +93,7 @@ export function ExplorerRow({
         if (onOpenTab && (event.metaKey || event.ctrlKey)) onOpenTab()
         else onActivate()
       }}
-      onContextMenu={(event) => {
-        if (!onContextMenu) return
-        event.preventDefault()
-        onContextMenu({ x: event.clientX, y: event.clientY })
-      }}
+      onContextMenu={nativeContextMenu(onContextMenu)}
       onDragStart={(event) => {
         event.dataTransfer.setData("text/plain", `@${row.path} `)
         event.dataTransfer.effectAllowed = "copy"
