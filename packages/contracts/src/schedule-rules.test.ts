@@ -115,9 +115,11 @@ describe("nextScheduleRun", () => {
 describe("schedule commands", () => {
   it("takes a title, a rule and an end date, with defaults for what's left out", () => {
     const create = commandSchemas["schedule.create"]
-    const base = { threadId: "th_1", prompt: "digest", rule: { kind: "daily", time: "09:00" } }
+    const base = { projectId: "pr_1", prompt: "digest", rule: { kind: "daily", time: "09:00" } }
     expect(create.parse(base)).toMatchObject({ title: "", endsAt: null, enabled: true })
     expect(create.parse({ ...base, title: "  Standup  " })).toMatchObject({ title: "Standup" })
+    expect(() => create.parse({ ...base, projectId: undefined, threadId: "th_1" })).toThrow()
+    expect(() => create.parse({ ...base, execution: { modelId: "model" } })).toThrow()
     expect(() => create.parse({ ...base, rule: { kind: "daily", time: "9:00" } })).toThrow()
     expect(() =>
       create.parse({

@@ -1,8 +1,8 @@
 /**
- * 定时任务表单的下拉：field 是输入框样子（会话选择），pill 是计划框里的小胶囊（频率、几点、几分）。
+ * 定时任务表单的下拉：field 是输入框样子，pill 是计划框和运行工具条里的小胶囊。
  * 多选的星期几是一个胶囊，点开是带勾选的列表。
  */
-import { Check, ChevronDown } from "lucide-react"
+import { Check, ChevronDown, type LucideIcon } from "lucide-react"
 import { Popover, Select, cn } from "@pigcode/ui-primitives"
 
 export function ChoiceSelect<T extends string>({
@@ -12,6 +12,7 @@ export function ChoiceSelect<T extends string>({
   variant = "field",
   disabled,
   className,
+  icon: Icon,
   onChange,
 }: {
   label: string
@@ -20,6 +21,7 @@ export function ChoiceSelect<T extends string>({
   variant?: "field" | "pill"
   disabled?: boolean | undefined
   className?: string | undefined
+  icon?: LucideIcon
   onChange: (value: T) => void
 }) {
   return (
@@ -34,7 +36,8 @@ export function ChoiceSelect<T extends string>({
         className={cn(variant === "pill" ? "pill-select" : "input select-trigger", className)}
         aria-label={label}
       >
-        <Select.Value className={variant === "pill" ? undefined : "grow truncate"}>
+        {Icon ? <Icon className="ic ic-sm" aria-hidden="true" /> : null}
+        <Select.Value className={variant === "pill" ? "truncate" : "grow truncate"}>
           {(current: string) =>
             options.find((option) => option.value === current)?.label ?? current
           }

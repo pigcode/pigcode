@@ -1,14 +1,20 @@
 /**
  * 定时任务的编辑页：新建与编辑都在这一页。上面是返回定时任务的面包屑、标题和一条操作栏（编辑时左边是
- * 「设置 / 历史」页签，右边是保存、立即运行和更多操作），下面是表单或运行历史。
+ * 「设置 / 历史」页签，右边是立即运行和更多操作），下面是表单或运行历史。
  * 有没保存的修改时离开要先确认；保存成功后回到列表。
  */
 import { useEffect, useId, useState, type FormEvent } from "react"
-import { ChevronLeft, Ellipsis, Pause, Play, Trash2 } from "lucide-react"
-import type { Schedule, ScheduleRule, ScheduleStatus } from "@pigcode/contracts"
+import { ChevronLeft, Ellipsis, MessageSquareText, Pause, Play, Trash2 } from "lucide-react"
+import {
+  DEFAULT_RUNTIME_MODE,
+  type Project,
+  type Schedule,
+  type ScheduleExecution,
+  type ScheduleRule,
+  type ScheduleStatus,
+} from "@pigcode/contracts"
 import {
   Button,
-  Dialog,
   Input,
   Menu,
   StatusDot,
@@ -17,13 +23,15 @@ import {
   useLocale,
   type StatusTone,
 } from "@pigcode/ui-primitives"
-import { ChoiceSelect } from "./choice-select"
+import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
+import { ScheduleExecutionFields } from "./schedule-execution-fields"
 import { ScheduleHistory, type ScheduleRunsPage } from "./schedule-history"
-import { STATUS_KEYS, fill, formatWhen } from "./schedule-format"
+import { STATUS_KEYS, fill, formatWhen, runReason } from "./schedule-format"
 import { ScheduleRuleField, type RuleValue } from "./schedule-rule-field"
 import type {
   CreateScheduleInput,
   RunNowResult,
+  ScheduleAgentOptions,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -40,6 +48,11 @@ export interface ScheduleEditorProps {
   schedule: Schedule | null
   draft: ScheduleDraft
   threads: ScheduleThreadOption[]
+  projects: readonly Project[]
+  preferredProjectId?: string | null | undefined
+  agentOptions: ScheduleAgentOptions
+  onAddProject?: (() => void) | undefined
+  historyRevision?: number | undefined
   onBack: () => void
   onCreate: (input: CreateScheduleInput) => Promise<unknown>
   onUpdate: (id: string, patch: UpdateScheduleInput) => Promise<unknown>
@@ -63,76 +76,35 @@ const RUN_NOW_KEYS = {
   failed: "schedules.runNow.failed",
 } as const
 
-/** 确认对话框：删除任务、放弃修改都用它。 */
-export function ConfirmDialog({
-  open,
-  title,
-  description,
-  confirmLabel,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean
-  title: string
-  description: string
-  confirmLabel: string
-  onClose: () => void
-  onConfirm: () => void
-}) {
-  const { t } = useLocale()
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) onClose()
-      }}
-    >
-      <Dialog.Content
-        className="schedule-confirm"
-        title={title}
-        description={description}
-        closeLabel={t("common.close")}
-      >
-        <Dialog.Footer>
-          <Dialog.Close render={<Button type="button" variant="ghost" />}>
-            {t("schedules.cancel")}
-          </Dialog.Close>
-          <Button
-            type="button"
-            variant="solidDanger"
-            onClick={() => {
-              onClose()
-              onConfirm()
-            }}
-          >
-            {confirmLabel}
-          </Button>
-        </Dialog.Footer>
-      </Dialog.Content>
-    </Dialog.Root>
-  )
-}
-
 /** 表单里可以比较的字段；和打开时不一样就是有没保存的修改。 */
 function signature(fields: {
   title: string
-  threadId: string
+  execution: ScheduleExecution
   prompt: string
   value: RuleValue
 }): string {
   return JSON.stringify([
     fields.title.trim(),
-    fields.threadId,
     fields.prompt.trim(),
     fields.value.rule,
     fields.value.endsAt,
+    executionSignature(fields.execution),
   ])
+}
+
+function executionSignature({ instanceId, modelId, effort, permissionMode }: ScheduleExecution) {
+  return JSON.stringify([instanceId, modelId, effort, permissionMode])
 }
 
 export function ScheduleEditor({
   schedule,
   draft,
   threads,
+  projects,
+  preferredProjectId,
+  agentOptions,
+  onAddProject,
+  historyRevision = 0,
   onBack,
   onCreate,
   onUpdate,
@@ -143,16 +115,19 @@ export function ScheduleEditor({
   onOpenThread,
 }: ScheduleEditorProps) {
   const { t, locale } = useLocale()
-  const formId = useId()
+  const promptId = useId()
+  const target = schedule?.target
   const [initial] = useState(() => ({
     title: schedule?.title ?? draft.title,
-    threadId: schedule?.threadId ?? threads[0]?.id ?? "",
+    execution:
+      target?.kind === "project" ? target.execution : { permissionMode: DEFAULT_RUNTIME_MODE },
     prompt: schedule?.prompt ?? draft.prompt,
     value: { rule: schedule?.rule ?? draft.rule, endsAt: schedule?.endsAt ?? null },
   }))
   const [tab, setTab] = useState<"settings" | "history">("settings")
   const [title, setTitle] = useState(initial.title)
-  const [threadId, setThreadId] = useState(initial.threadId)
+  const [pickedProjectId, setPickedProjectId] = useState<string | null>(null)
+  const [execution, setExecution] = useState<ScheduleExecution>(initial.execution)
   const [prompt, setPrompt] = useState(initial.prompt)
   const [value, setValue] = useState<RuleValue>(initial.value)
   const [ruleValid, setRuleValid] = useState(true)
@@ -161,13 +136,7 @@ export function ScheduleEditor({
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "warn" } | null>(null)
   const [confirm, setConfirm] = useState<"discard" | "delete" | null>(null)
-  const [historyVersion, setHistoryVersion] = useState(0)
-
-  // 会话列表晚于页面加载、或者选中的会话被删掉时，新建任务改选第一个会话。
-  useEffect(() => {
-    if (schedule || threads.some((thread) => thread.id === threadId)) return
-    setThreadId(threads[0]?.id ?? "")
-  }, [schedule, threadId, threads])
+  const [localRevision, setLocalRevision] = useState(0)
 
   // 立即运行的结果显示几秒后自己消失。
   useEffect(() => {
@@ -177,16 +146,24 @@ export function ScheduleEditor({
   }, [notice])
 
   const trimmed = prompt.trim()
-  const dirty = signature({ title, threadId, prompt, value }) !== signature(initial)
-  const canSave =
-    !saving && ruleValid && trimmed !== "" && threadId !== "" && (schedule === null || dirty)
+  const defaultProjectId =
+    projects.find((project) => project.id === preferredProjectId)?.id ?? projects[0]?.id ?? ""
+  const projectId =
+    target?.kind === "project"
+      ? target.projectId
+      : (projects.find((project) => project.id === pickedProjectId)?.id ?? defaultProjectId)
+  const dirty =
+    signature({ title, execution, prompt, value }) !== signature(initial) ||
+    (!schedule && projectId !== defaultProjectId)
+  const canSave = !saving && ruleValid && trimmed !== "" && (schedule ? dirty : projectId !== "")
   const ruleUnchanged =
     schedule !== null &&
     JSON.stringify([value.rule, value.endsAt]) === JSON.stringify([schedule.rule, schedule.endsAt])
   const pinned = ruleUnchanged && schedule?.status === "active" ? schedule.nextRunAt : undefined
 
   function requestBack(): void {
-    if (dirty && !saving) setConfirm("discard")
+    if (saving) return
+    if (dirty) setConfirm("discard")
     else onBack()
   }
 
@@ -205,10 +182,17 @@ export function ScheduleEditor({
           patch.rule = value.rule
           patch.endsAt = value.endsAt
         }
+        if (
+          target?.kind === "project" &&
+          executionSignature(execution) !== executionSignature(target.execution)
+        ) {
+          patch.execution = execution
+        }
         await onUpdate(schedule.id, patch)
       } else {
         await onCreate({
-          threadId,
+          projectId,
+          execution,
           title: title.trim(),
           prompt: trimmed,
           rule: value.rule,
@@ -218,7 +202,8 @@ export function ScheduleEditor({
       }
       onBack()
     } catch (cause) {
-      setFailure(fill(t("schedules.failed"), { reason: toHostError(cause).message }))
+      const message = toHostError(cause).message
+      setFailure(fill(t("schedules.failed"), { reason: runReason(message, t) ?? message }))
       setSaving(false)
     }
   }
@@ -231,32 +216,33 @@ export function ScheduleEditor({
           text: t(RUN_NOW_KEYS[result.status]),
           tone: result.status === "started" ? "ok" : "warn",
         })
-        setHistoryVersion((current) => current + 1)
+        setLocalRevision((current) => current + 1)
       },
       () => setNotice({ text: t("schedules.runNow.failed"), tone: "warn" }),
     )
   }
 
-  // 编辑的任务指向的会话被删掉时，选择器里仍然显示一项「会话已删除」。
-  const threadOptions = threads.map((thread) => ({ value: thread.id, label: thread.title }))
-  if (threadId !== "" && !threads.some((thread) => thread.id === threadId)) {
-    threadOptions.unshift({ value: threadId, label: t("schedules.threadMissing") })
-  }
+  const legacyThreadId = target?.kind === "thread" ? target.threadId : null
+  const legacyThread = threads.find((thread) => thread.id === legacyThreadId)
   const heading = schedule ? t("schedules.editor.editTitle") : t("schedules.editor.createTitle")
   const status = schedule?.status
   return (
-    <div className="page wide schedule-editor">
+    <div className="page schedule-editor">
       <nav className="schedule-crumbs" aria-label={t("schedules.editor.backLabel")}>
         <button type="button" className="schedule-back" onClick={requestBack}>
           <ChevronLeft className="ic ic-sm" aria-hidden="true" />
           {t("schedules.editor.back")}
         </button>
-        <span className="schedule-crumb-sep" aria-hidden="true">
-          /
-        </span>
-        <span className="schedule-crumb-current truncate" aria-current="page">
-          {schedule ? schedule.title || t("schedules.untitled") : t("schedules.editor.createTitle")}
-        </span>
+        {schedule ? (
+          <>
+            <span className="schedule-crumb-sep" aria-hidden="true">
+              /
+            </span>
+            <span className="schedule-crumb-current truncate" aria-current="page">
+              {schedule.title || t("schedules.untitled")}
+            </span>
+          </>
+        ) : null}
       </nav>
       <header className="page-head">
         <div>
@@ -321,17 +307,6 @@ export function ScheduleEditor({
               </Menu.Root>
             </>
           ) : null}
-          {tab === "settings" ? (
-            <Button type="submit" form={formId} size="sm" variant="primary" disabled={!canSave}>
-              {saving
-                ? schedule
-                  ? t("schedules.saving")
-                  : t("settings.schedules.creating")
-                : schedule
-                  ? t("schedules.save")
-                  : t("schedules.createAction")}
-            </Button>
-          ) : null}
         </div>
       </header>
       {schedule ? (
@@ -353,14 +328,14 @@ export function ScheduleEditor({
 
       {tab === "history" && schedule ? (
         <ScheduleHistory
-          key={historyVersion}
           scheduleId={schedule.id}
+          revision={historyRevision + localRevision}
           onLoadRuns={onLoadRuns}
           onDeleteRun={onDeleteRun}
           onOpenThread={onOpenThread}
         />
       ) : (
-        <form id={formId} className="schedule-form" onSubmit={(event) => void submit(event)}>
+        <form className="schedule-form" onSubmit={(event) => void submit(event)}>
           {schedule && status ? (
             <div className="field">
               <span className="label">{t("schedules.field.status")}</span>
@@ -391,21 +366,6 @@ export function ScheduleEditor({
             />
           </label>
           <div className="field">
-            <span className="label">{t("schedules.field.thread")}</span>
-            {threads.length === 0 && !schedule ? (
-              <p className="schedule-form-notice">{t("settings.schedules.noThreads")}</p>
-            ) : (
-              <ChoiceSelect
-                label={t("schedules.field.thread")}
-                value={threadId}
-                options={threadOptions}
-                disabled={schedule !== null || saving}
-                onChange={setThreadId}
-              />
-            )}
-            {schedule ? <span className="hint">{t("schedules.threadLocked")}</span> : null}
-          </div>
-          <div className="field">
             <span className="label">{t("schedules.field.schedule")}</span>
             <ScheduleRuleField
               value={value}
@@ -417,30 +377,72 @@ export function ScheduleEditor({
               }}
             />
           </div>
-          <label className="field">
-            <span className="label">{t("schedules.field.prompt")}</span>
-            <Textarea
-              value={prompt}
-              rows={7}
-              disabled={saving}
-              aria-invalid={promptTouched && trimmed === "" ? true : undefined}
-              placeholder={t("settings.schedules.promptPlaceholder")}
-              onChange={(event) => setPrompt(event.target.value)}
-              onBlur={() => setPromptTouched(true)}
-            />
+          <div className="field">
+            <label className="label" htmlFor={promptId}>
+              {t("schedules.field.prompt")}
+            </label>
+            <div className="schedule-instructions">
+              <Textarea
+                id={promptId}
+                value={prompt}
+                rows={5}
+                disabled={saving}
+                aria-invalid={promptTouched && trimmed === "" ? true : undefined}
+                placeholder={t("settings.schedules.promptPlaceholder")}
+                onChange={(event) => setPrompt(event.target.value)}
+                onBlur={() => setPromptTouched(true)}
+              />
+              {legacyThreadId ? (
+                <div className="schedule-execution">
+                  <span className="schedule-project-locked" title={t("schedules.threadLocked")}>
+                    <MessageSquareText className="ic ic-sm" aria-hidden="true" />
+                    <span className="truncate">
+                      {t("schedules.field.thread")} ·{" "}
+                      {legacyThread?.title ?? t("schedules.threadMissing")}
+                    </span>
+                  </span>
+                </div>
+              ) : (
+                <ScheduleExecutionFields
+                  projects={projects}
+                  projectId={projectId}
+                  projectLocked={target?.kind === "project"}
+                  onProjectChange={setPickedProjectId}
+                  onAddProject={onAddProject}
+                  value={execution}
+                  onChange={setExecution}
+                  agentOptions={agentOptions}
+                  disabled={saving}
+                />
+              )}
+            </div>
             {promptTouched && trimmed === "" ? (
               <span className="error-text">{t("schedules.promptRequired")}</span>
             ) : null}
-          </label>
+          </div>
           {failure ? (
             <p className="error-text" role="alert">
               {failure}
             </p>
           ) : null}
+          <div className="schedule-submit">
+            <Button type="button" variant="ghost" onClick={requestBack} disabled={saving}>
+              {t("schedules.cancel")}
+            </Button>
+            <Button type="submit" variant="primary" disabled={!canSave}>
+              {saving
+                ? schedule
+                  ? t("schedules.saving")
+                  : t("settings.schedules.creating")
+                : schedule
+                  ? t("schedules.save")
+                  : t("schedules.createAction")}
+            </Button>
+          </div>
         </form>
       )}
 
-      <ConfirmDialog
+      <ScheduleConfirmDialog
         open={confirm === "discard"}
         title={t("schedules.discardTitle")}
         description={t("schedules.discardHint")}
@@ -448,7 +450,7 @@ export function ScheduleEditor({
         onClose={() => setConfirm(null)}
         onConfirm={onBack}
       />
-      <ConfirmDialog
+      <ScheduleConfirmDialog
         open={confirm === "delete"}
         title={t("schedules.deleteTitle")}
         description={t("schedules.deleteHint")}

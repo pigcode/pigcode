@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import type { Context } from "cordis"
 import type { CommandParams, Thread } from "@pigcode/contracts"
 import { recordSubagentBrief } from "../agents/switching"
-import { scopeCwd } from "../services/worktrees"
+import { scopeCwd } from "./worktrees"
 
 export async function createThread(
   ctx: Context,

@@ -14,8 +14,8 @@ function columns(db: Database.Database, table: string): string[] {
 describe("openDatabase", () => {
   it("creates the whole schema in one step, with foreign keys on", () => {
     const db = openDatabase(":memory:")
-    expect(SCHEMA_VERSION).toBe(7)
-    expect(db.pragma("user_version", { simple: true })).toBe(7)
+    expect(SCHEMA_VERSION).toBe(8)
+    expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1)
     const tables = db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`)
@@ -48,8 +48,17 @@ describe("openDatabase", () => {
     expect(columns(db, "agent_sessions")).toEqual(expect.arrayContaining(["instance_id"]))
     expect(columns(db, "worktrees")).toContain("cwd")
     expect(columns(db, "schedules")).toEqual(
-      expect.arrayContaining(["title", "rule_json", "ends_at", "run_count", "updated_at"]),
+      expect.arrayContaining([
+        "project_id",
+        "execution_json",
+        "title",
+        "rule_json",
+        "ends_at",
+        "run_count",
+        "updated_at",
+      ]),
     )
+    expect(columns(db, "schedule_runs")).toContain("thread_id")
     db.close()
   })
 

@@ -1,5 +1,13 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
-import type { AgentEvent, ReasoningEffort, TerminalOutput, ThreadEvent } from "@pigcode/contracts"
+import {
+  scheduleRunChangeSchema,
+  type AgentEvent,
+  type ReasoningEffort,
+  type ScheduleRunChange,
+  type TerminalOutput,
+  type Thread,
+  type ThreadEvent,
+} from "@pigcode/contracts"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
 
@@ -13,6 +21,7 @@ export interface ConnectionHandlers {
   onEvents?(events: ThreadEvent[], threadId: string): void
   onDelta(event: { threadId: string; event: AgentEvent }): void
   onStatus(status: ConnectionStatus): void
+  onScheduledThread?(thread: Thread): void
 }
 
 /** `thread.subscribe` 的响应结构；Host 尚未返回事件时 events 为空。 */
@@ -27,6 +36,7 @@ export class Connection {
   /** 每次 attach 递增；中途被新的 attach 取代时，旧的一次不再改连接状态。 */
   private attempts = 0
   private readonly subscriptions = new Map<string, number>()
+  private readonly scheduleRunListeners = new Set<(change: ScheduleRunChange) => void>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
   private readonly terminalExitListeners = new Set<
     (exit: { terminalId: string; exitCode: number }) => void
@@ -115,6 +125,11 @@ export class Connection {
     return this.client.call(method, params)
   }
 
+  onScheduleRunChange(listener: (change: ScheduleRunChange) => void): () => void {
+    this.scheduleRunListeners.add(listener)
+    return () => this.scheduleRunListeners.delete(listener)
+  }
+
   /** 订阅终端输出通知；右栏关闭时调用返回的函数释放订阅。 */
   onTerminalOutput(listener: (output: TerminalOutput) => void): () => void {
     this.terminalListeners.add(listener)
@@ -161,6 +176,14 @@ export class Connection {
         data?: unknown
         exitCode?: unknown
       }
+    }
+    if (value.method === "schedule.runChanged") {
+      const change = scheduleRunChangeSchema.safeParse(value.params)
+      if (change.success) {
+        if (change.data.thread) this.handlers.onScheduledThread?.(change.data.thread)
+        for (const listener of this.scheduleRunListeners) listener(change.data)
+      }
+      return
     }
     if (value.method === "terminal.output" && value.params) {
       const { terminalId, data } = value.params

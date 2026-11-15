@@ -1,5 +1,6 @@
 /** 定义 Pigcode 的持久领域实体与 Agent 功能描述。 */
 import { z } from "zod"
+import { DEFAULT_RUNTIME_MODE, runtimeModeSchema } from "./runtime-modes"
 
 /**
  * Agent 功能：一个 Agent 支持哪些功能。
@@ -288,10 +289,30 @@ export const scheduleRuleSchema = z.discriminatedUnion("kind", [
 /** 定时任务的状态：运行中、已暂停，或者过了结束日期、不会再运行的已完成。 */
 export const scheduleStatusSchema = z.enum(["active", "paused", "completed"])
 
+/** 项目任务的执行配置；未选择实例时，在每次触发时使用当前默认 Agent。 */
+export const scheduleExecutionSchema = z
+  .object({
+    instanceId: z.string().min(1).optional(),
+    modelId: z.string().min(1).optional(),
+    effort: reasoningEffortSchema.optional(),
+    permissionMode: runtimeModeSchema.default(DEFAULT_RUNTIME_MODE),
+  })
+  .refine((value) => !value.modelId || value.instanceId, "model requires an Agent instance")
+  .refine((value) => !value.effort || value.modelId, "effort requires a model")
+
+export const scheduleTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("project"),
+    projectId: z.string().min(1),
+    execution: scheduleExecutionSchema,
+  }),
+  z.object({ kind: z.literal("thread"), threadId: z.string().min(1) }),
+])
+
 /** 定时任务；nextRunAt 在 Host 重启后继续生效，为 null 时任务已完成。 */
 export const scheduleSchema = z.object({
   id: z.string().min(1),
-  threadId: z.string().min(1),
+  target: scheduleTargetSchema,
   /** 可以留空，界面显示「未命名定时任务」。 */
   title: z.string().max(120),
   prompt: z.string().min(1),
@@ -324,13 +345,20 @@ export const scheduleRunSchema = z.object({
   scheduleId: z.string().min(1),
   source: z.enum(["schedule", "manual"]),
   status: scheduleRunStatusSchema,
-  threadId: z.string().min(1),
+  /** 当次运行的会话；没能创建或打开会话时为空。 */
+  threadId: z.string().min(1).nullable(),
   /** 启动了的 run；跳过或启动失败时为 null。 */
   runId: z.string().nullable(),
   /** 跳过或失败的原因：THREAD_BUSY、AGENT_UNAVAILABLE，或者启动时的错误信息。 */
   error: z.string().nullable(),
   triggeredAt: z.string().datetime(),
   finishedAt: z.string().datetime().nullable(),
+})
+
+/** Host 推送运行历史变化，创建会话时一并把它加入侧栏。 */
+export const scheduleRunChangeSchema = z.object({
+  scheduleId: z.string().min(1),
+  thread: threadSchema.optional(),
 })
 
 /** Agent 功能的类型。 */
@@ -364,6 +392,9 @@ export type PullRequestState = z.infer<typeof pullRequestStateSchema>
 export type PullRequestInfo = z.infer<typeof pullRequestInfoSchema>
 /** 定时任务的类型。 */
 export type Schedule = z.infer<typeof scheduleSchema>
+export type ScheduleExecution = z.infer<typeof scheduleExecutionSchema>
+export type ProjectScheduleTarget = Extract<Schedule["target"], { kind: "project" }>
+export type ScheduleRunChange = z.infer<typeof scheduleRunChangeSchema>
 /** 定时任务运行规则的类型。 */
 export type ScheduleRule = z.infer<typeof scheduleRuleSchema>
 /** 定时任务状态的类型。 */

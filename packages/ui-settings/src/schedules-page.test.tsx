@@ -6,7 +6,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { Schedule, ScheduleRule, ScheduleRun } from "@pigcode/contracts"
+import {
+  DEFAULT_RUNTIME_MODE,
+  type Schedule,
+  type ScheduleRule,
+  type ScheduleRun,
+} from "@pigcode/contracts"
 import { LocaleProvider, translate, type MessageKey } from "@pigcode/ui-primitives"
 import { formatRule, weekdayName } from "./schedule-format"
 import { SchedulesPage, type SchedulesPageProps } from "./schedules-page"
@@ -15,7 +20,7 @@ import { SchedulesPage, type SchedulesPageProps } from "./schedules-page"
 function scheduleFixture(overrides: Partial<Schedule> = {}): Schedule {
   return {
     id: "sch_1",
-    threadId: "th_1",
+    target: { kind: "thread", threadId: "th_1" },
     title: "每日汇总",
     prompt: "把今天的改动整理成清单",
     rule: { kind: "daily", time: "09:00" },
@@ -55,6 +60,11 @@ function renderPage(overrides: Partial<SchedulesPageProps> = {}) {
       { id: "th_1", title: "Sprint" },
       { id: "th_2", title: "Release" },
     ],
+    projects: [
+      { id: "pr_1", name: "Sprint", rootPath: "/sprint", createdAt: "2026-10-20T00:00:00.000Z" },
+      { id: "pr_2", name: "Release", rootPath: "/release", createdAt: "2026-10-20T00:00:00.000Z" },
+    ],
+    agentOptions: { agents: [], catalog: {} },
     onCreate: vi.fn().mockResolvedValue(undefined),
     onUpdate: vi.fn().mockResolvedValue(undefined),
     onDelete: vi.fn().mockResolvedValue(undefined),
@@ -90,7 +100,7 @@ async function openMenu(task = "每日汇总"): Promise<void> {
   await userEvent.click(screen.getByRole("button", { name: `${task} 的更多操作` }))
 }
 
-const saveButton = (name = "创建") => screen.getByRole("button", { name }) as HTMLButtonElement
+const saveButton = (name = "创建任务") => screen.getByRole("button", { name }) as HTMLButtonElement
 const longDay = (day: number) => weekdayName(day, "zh-CN", "long")
 
 /** 在今天所在的星期上依次切换几天，得到排好序的结果；每周默认选中今天。 */
@@ -147,10 +157,10 @@ describe("SchedulesPage list", () => {
     expect(screen.getByText("没有符合条件的任务")).toBeTruthy()
   })
 
-  it("shows an empty card and asks for a thread first when there are none", () => {
+  it("shows an empty card and explains that runs create threads", () => {
     renderPage({ schedules: [], threads: [] })
     expect(screen.getByText("还没有定时任务")).toBeTruthy()
-    expect(screen.getByText(/还没有会话/)).toBeTruthy()
+    expect(screen.getByText(/每次运行都会创建独立会话/)).toBeTruthy()
     expect(screen.queryByRole("group", { name: "按状态筛选" })).toBeNull()
   })
 
@@ -160,7 +170,7 @@ describe("SchedulesPage list", () => {
     await openMenu()
     await userEvent.click(await screen.findByRole("menuitem", { name: "立即运行" }))
     expect(onRunNow).toHaveBeenCalledWith("sch_1")
-    expect((await screen.findByRole("status")).textContent).toBe("会话正忙，这次没有发送")
+    expect((await screen.findByRole("status")).textContent).toBe("已有运行进行中，请稍后再试")
   })
 
   it("pauses and resumes from the menu, and offers neither for a completed task", async () => {
@@ -204,12 +214,13 @@ describe("SchedulesPage list", () => {
 
 describe("SchedulesPage editor", () => {
   it("creates a task that runs every day at nine by default and returns to the list", async () => {
-    const props = renderPage()
+    const props = renderPage({ threads: [] })
     await openCreate("发版检查")
     expect(screen.getByText(/^下次运行：/)).toBeTruthy()
     await userEvent.click(saveButton())
     expect(props.onCreate).toHaveBeenCalledWith({
-      threadId: "th_1",
+      projectId: "pr_1",
+      execution: { permissionMode: DEFAULT_RUNTIME_MODE },
       title: "",
       prompt: "发版检查",
       rule: { kind: "daily", time: "09:00" },
@@ -225,15 +236,24 @@ describe("SchedulesPage editor", () => {
     expect(saveButton().disabled).toBe(true)
   })
 
+  it("offers to add a project when there are none", async () => {
+    const onAddProject = vi.fn()
+    renderPage({ projects: [], onAddProject })
+    await openCreate()
+    expect(saveButton().disabled).toBe(true)
+    await userEvent.click(screen.getByRole("button", { name: "添加项目" }))
+    expect(onAddProject).toHaveBeenCalledTimes(1)
+  })
+
   // 要依次打开四个下拉（分钟有 60 项），整套测试并行跑时给它多留一点时间。
   it(
-    "creates a weekly task on the picked days and time, for the picked thread",
+    "creates a weekly task on the picked days and time, for the picked project",
     { timeout: 15_000 },
     async () => {
       const props = renderPage()
       await openCreate()
       fireEvent.change(screen.getByLabelText("标题"), { target: { value: "周会" } })
-      await choose("发送到", "Release")
+      await choose("项目", "Release")
       await choose("频率", "每周")
       await userEvent.click(screen.getByRole("button", { name: "星期" }))
       await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: longDay(1) }))
@@ -243,7 +263,7 @@ describe("SchedulesPage editor", () => {
       await userEvent.click(saveButton())
       expect(props.onCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          threadId: "th_2",
+          projectId: "pr_2",
           title: "周会",
           rule: { kind: "weekly", days: daysAfter([1, 5]), time: "16:30" },
         }),
@@ -294,7 +314,7 @@ describe("SchedulesPage editor", () => {
         endsAt: new Date(2026, 11, 31, 23, 59, 59, 999).toISOString(),
       }),
     )
-  })
+  }, 15_000)
 
   it("rejects a custom interval outside 1 to 200", async () => {
     renderPage()
@@ -306,7 +326,7 @@ describe("SchedulesPage editor", () => {
     expect(
       (within(dialog).getByRole("button", { name: "确定" }) as HTMLButtonElement).disabled,
     ).toBe(true)
-  })
+  }, 15_000)
 
   it("prefills the editor from a template", async () => {
     const props = renderPage()
@@ -326,7 +346,7 @@ describe("SchedulesPage editor", () => {
     const props = renderPage()
     await userEvent.click(screen.getByRole("button", { name: "每日汇总" }))
     await screen.findByRole("heading", { name: "编辑定时任务" })
-    expect(screen.getByText("已创建的任务不能换会话。")).toBeTruthy()
+    expect(screen.getByText("已绑定会话 · Sprint")).toBeTruthy()
     expect(saveButton("保存").disabled).toBe(true)
     await userEvent.clear(screen.getByLabelText("标题"))
     await userEvent.type(screen.getByLabelText("标题"), "晚间汇总")
@@ -352,6 +372,7 @@ describe("SchedulesPage editor", () => {
           id: "srun_2",
           source: "manual",
           status: "skipped",
+          threadId: null,
           runId: null,
           error: "THREAD_BUSY",
           finishedAt: null,

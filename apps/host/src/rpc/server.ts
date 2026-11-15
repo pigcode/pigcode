@@ -15,7 +15,7 @@ import type {
   PermissionMode,
   ReasoningEffort,
 } from "@pigcode/contracts"
-import { createThread } from "./thread-create"
+import { createThread } from "../services/thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { forwardTerminal } from "./terminal-notify"
@@ -58,6 +58,14 @@ export class RpcServer {
         void this.handle(message)
       }),
     )
+    const schedules = this.ctx.get("schedules")
+    if (schedules) {
+      this.disposers.push(
+        schedules.subscribe((change) =>
+          this.transport.send({ jsonrpc: "2.0", method: "schedule.runChanged", params: change }),
+        ),
+      )
+    }
   }
 
   /** 停止监听并释放所有订阅。 */
@@ -393,7 +401,7 @@ export class RpcServer {
       case "schedule.create":
         return this.ctx.schedules.create(parsed as CommandParams<"schedule.create">)
       case "schedule.update": {
-        const { id, title, prompt, rule, endsAt, enabled } =
+        const { id, title, prompt, rule, endsAt, enabled, execution } =
           parsed as CommandParams<"schedule.update">
         return this.ctx.schedules.update(id, {
           ...(title === undefined ? {} : { title }),
@@ -401,6 +409,7 @@ export class RpcServer {
           ...(rule === undefined ? {} : { rule }),
           ...(endsAt === undefined ? {} : { endsAt }),
           ...(enabled === undefined ? {} : { enabled }),
+          ...(execution === undefined ? {} : { execution }),
         })
       }
       case "schedule.runs": {

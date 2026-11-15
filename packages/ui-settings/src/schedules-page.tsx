@@ -21,10 +21,11 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react"
-import type { Schedule, ScheduleStatus } from "@pigcode/contracts"
+import type { Project, Schedule, ScheduleStatus } from "@pigcode/contracts"
 import { Button, Menu, Spinner, Switch, toHostError, useLocale } from "@pigcode/ui-primitives"
 import { usePreferences } from "./preferences"
-import { ConfirmDialog, ScheduleEditor, type ScheduleDraft } from "./schedule-editor"
+import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
+import { ScheduleEditor, type ScheduleDraft } from "./schedule-editor"
 import type { ScheduleRunsPage } from "./schedule-history"
 import {
   DEFAULT_RULE,
@@ -38,6 +39,7 @@ import {
 import type {
   CreateScheduleInput,
   RunNowResult,
+  ScheduleAgentOptions,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -45,6 +47,7 @@ import type {
 export type {
   CreateScheduleInput,
   RunNowResult,
+  ScheduleAgentOptions,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -54,6 +57,11 @@ export type { ScheduleRunsPage } from "./schedule-history"
 export interface SchedulesPageProps {
   schedules: Schedule[]
   threads: ScheduleThreadOption[]
+  projects: readonly Project[]
+  preferredProjectId?: string | null | undefined
+  agentOptions: ScheduleAgentOptions
+  onAddProject?: (() => void) | undefined
+  historyRevision?: number | undefined
   loading?: boolean | undefined
   error?: string | null | undefined
   onRefresh?: (() => void) | undefined
@@ -237,6 +245,11 @@ function KeepAwakeBar() {
 export function SchedulesPage({
   schedules,
   threads,
+  projects,
+  preferredProjectId,
+  agentOptions,
+  onAddProject,
+  historyRevision,
   loading = false,
   error = null,
   onRefresh,
@@ -307,6 +320,11 @@ export function SchedulesPage({
         schedule={editing ?? null}
         draft={view.mode === "create" ? view.draft : { title: "", prompt: "", rule: DEFAULT_RULE }}
         threads={threads}
+        projects={projects}
+        preferredProjectId={preferredProjectId}
+        agentOptions={agentOptions}
+        onAddProject={onAddProject}
+        historyRevision={historyRevision}
         onBack={() => setView({ mode: "list" })}
         onCreate={onCreate}
         onUpdate={onUpdate}
@@ -391,11 +409,7 @@ export function SchedulesPage({
         ) : schedules.length === 0 ? (
           <div className="schedules-empty">
             <p className="schedules-empty-title">{t("settings.schedules.empty")}</p>
-            <p className="schedules-empty-hint">
-              {threads.length === 0
-                ? t("settings.schedules.noThreads")
-                : t("settings.schedules.emptyHint")}
-            </p>
+            <p className="schedules-empty-hint">{t("settings.schedules.emptyHint")}</p>
             {createButton}
           </div>
         ) : (
@@ -467,7 +481,7 @@ export function SchedulesPage({
         </div>
       </section>
 
-      <ConfirmDialog
+      <ScheduleConfirmDialog
         open={deleting !== null}
         title={t("schedules.deleteTitle")}
         description={t("schedules.deleteHint")}

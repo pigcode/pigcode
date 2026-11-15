@@ -111,7 +111,6 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const [draftFocus, setDraftFocus] = useState(0)
   const [checkoutRevision, setCheckoutRevision] = useState(0)
   const onCheckoutChanged = useCallback(() => setCheckoutRevision((revision) => revision + 1), [])
-  const initialLoadDone = useRef(false)
   const registeredSurfaces = useRef<ReadonlySet<string>>(new Set())
 
   // Surface 注销（插件停用或卸载）时关掉每个线程里它已经打开的标签，当前标签改选邻居。
@@ -154,12 +153,10 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     if (location) setHistory((current) => pushLocation(current, location))
   }, [view, settingsPage, state.activeThreadId])
 
-  // 首次连上 Host 后拉取项目与线程；重连时保留当前界面状态。
+  // 连上 Host 时合并项目和会话，补上连接中断时创建的定时任务会话。
   useEffect(() => {
-    if (state.status !== "connected" || initialLoadDone.current) return
-    initialLoadDone.current = true
+    if (state.status !== "connected") return
     void loadWorkspace(connection, store).catch((error: unknown) => {
-      initialLoadDone.current = false
       store.update({ error: messageOf(error) })
     })
   }, [state.status, connection, store])

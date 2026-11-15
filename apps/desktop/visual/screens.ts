@@ -374,6 +374,15 @@ export async function walkSettings(walk: Walk): Promise<void> {
     page.getByRole("heading", { level: 1, name: t("settings.schedules.pageTitle") }),
   ).toBeVisible()
   await step("settings-schedules")
+  await page.clock.setFixedTime(new Date(2026, 10, 6, 8))
+  await page
+    .locator(".schedules .page-head")
+    .getByRole("button", { name: t("settings.schedules.new"), exact: true })
+    .click()
+  await expect(
+    page.getByRole("heading", { level: 1, name: t("schedules.editor.createTitle") }),
+  ).toBeVisible()
+  await step("schedule-create")
 
   await nav("settings.plugins")
   await expect(page.getByRole("heading", { name: t("plugins.pageTitle") })).toBeVisible()

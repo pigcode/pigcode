@@ -1,7 +1,13 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
 import { agentInstancePatchSchema, agentSettingsValuesSchema } from "./agents"
-import { permissionModeSchema, reasoningEffortSchema, scheduleRuleSchema } from "./domain"
+import {
+  permissionModeSchema,
+  reasoningEffortSchema,
+  scheduleExecutionSchema,
+  scheduleRuleSchema,
+} from "./domain"
+import { DEFAULT_RUNTIME_MODE } from "./runtime-modes"
 
 /** 分支选择器使用完整 ref，避免同名的本地分支、远端分支或 tag 混淆。 */
 const worktreeStart = z.object({
@@ -263,7 +269,8 @@ export const commandSchemas = {
   }),
   "schedule.list": z.object({}),
   "schedule.create": z.object({
-    threadId: z.string().min(1),
+    projectId: z.string().min(1),
+    execution: scheduleExecutionSchema.default({ permissionMode: DEFAULT_RUNTIME_MODE }),
     title: scheduleTitle.default(""),
     prompt: z.string().trim().min(1),
     rule: scheduleRuleSchema,
@@ -277,6 +284,7 @@ export const commandSchemas = {
     rule: scheduleRuleSchema.optional(),
     endsAt: scheduleEndsAt.optional(),
     enabled: z.boolean().optional(),
+    execution: scheduleExecutionSchema.optional(),
   }),
   "schedule.delete": z.object({ id: z.string().min(1) }),
   /** 立即运行一次，不改动原来排好的下一次；返回 `{ status: started | busy | unavailable | failed, runId }`。 */

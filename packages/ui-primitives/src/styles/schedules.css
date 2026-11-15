@@ -366,7 +366,19 @@
   font-size: var(--fs-sm);
 }
 .schedule-crumbs + .page-head {
-  margin-top: var(--space-5);
+  margin-top: var(--space-6);
+}
+.schedule-editor .page-head {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+.schedule-editor .page-head .actions {
+  flex-wrap: wrap;
+  align-items: center;
+  max-width: 100%;
+}
+.schedule-editor .page-head .actions:empty {
+  display: none;
 }
 .schedule-back {
   display: inline-flex;
@@ -389,8 +401,7 @@
 .schedule-crumb-current {
   color: var(--fg-2);
 }
-.schedules .page-head .actions,
-.schedule-editor .page-head .actions {
+.schedules .page-head .actions {
   align-items: center;
 }
 /* 编辑时标题下面是「设置 / 历史」两个页签，下边一条细线 */
@@ -408,7 +419,7 @@
 .schedule-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
+  gap: var(--space-7);
 }
 .schedule-tabs + .schedule-form {
   margin-top: var(--space-8);
@@ -432,13 +443,53 @@
 .schedule-status-chip > span:first-of-type {
   margin-left: calc(var(--space-3) * -1);
 }
-.schedule-form-notice {
+.schedule-instructions {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-panel);
+  background: var(--input-bg);
+  box-shadow: var(--shadow-field);
+}
+.schedule-instructions:focus-within {
+  box-shadow: var(--shadow-field-focus);
+}
+.schedule-instructions > .textarea {
+  min-height: var(--textarea-min-h);
+  padding: var(--space-6);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 1.55;
+}
+.schedule-execution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-radius: var(--r-md);
+  border-top: var(--hair) solid var(--divider);
   background: var(--surface-sunken);
+}
+.schedule-execution .pill-select,
+.schedule-project-locked {
+  min-width: 0;
+  max-width: 100%;
+}
+.schedule-project-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-sm);
+  padding-inline: var(--space-3);
   color: var(--muted);
   font-size: var(--fs-sm);
-  line-height: 1.5;
+}
+.schedule-submit {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
 }
 
 /*

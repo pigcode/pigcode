@@ -148,11 +148,13 @@ export const RUN_STATUS_KEYS: Record<ScheduleRunStatus, MessageKey> = {
 /** 跳过或失败的原因：Host 给的错误码换成文案，其他的错误信息原样显示。 */
 export function runReason(error: string | null, t: Translate): string | null {
   if (error === "THREAD_BUSY") return t("schedules.runs.reason.busy")
+  if (error === "SCHEDULE_BUSY") return t("schedules.runs.reason.taskBusy")
   if (error === "AGENT_UNAVAILABLE") return t("schedules.runs.reason.unavailable")
+  if (error === "PROJECT_UNAVAILABLE") return t("schedules.runs.reason.projectUnavailable")
   return error
 }
 
-/** 一个模板：标题、任务内容与规则；点开后预填到新建页里，用户再选会话。 */
+/** 一个模板：标题、任务内容与规则；点开后预填到新建页里，用户再选项目。 */
 export interface ScheduleTemplate {
   id: "standup" | "risk" | "release" | "docs"
   title: MessageKey

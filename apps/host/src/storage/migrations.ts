@@ -223,6 +223,61 @@ const MIGRATIONS: Migration[] = [
      SELECT id, COALESCE(last_instance_id, default_instance_id, last_agent_id, default_agent_id),
        permission_mode, plan_mode FROM threads;`,
   migrateRuntimeModes,
+  `
+  -- 新定时任务按项目建会话。保留旧任务绑定的会话，并把每次触发的会话记在历史里。
+  ALTER TABLE schedules RENAME TO legacy_schedules;
+  ALTER TABLE schedule_runs RENAME TO legacy_schedule_runs;
+
+  CREATE TABLE schedules (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT REFERENCES threads(id),
+    project_id TEXT REFERENCES projects(id),
+    execution_json TEXT,
+    title TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    rule_json TEXT NOT NULL,
+    ends_at TEXT,
+    enabled INTEGER NOT NULL,
+    next_run_at TEXT,
+    last_run_at TEXT,
+    last_run_id TEXT,
+    run_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (
+      (thread_id IS NOT NULL AND project_id IS NULL AND execution_json IS NULL)
+      OR (thread_id IS NULL AND project_id IS NOT NULL AND execution_json IS NOT NULL)
+    )
+  );
+
+  CREATE TABLE schedule_runs (
+    id TEXT PRIMARY KEY,
+    schedule_id TEXT NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
+    thread_id TEXT REFERENCES threads(id),
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    run_id TEXT,
+    error TEXT,
+    triggered_at TEXT NOT NULL
+  );
+
+  INSERT INTO schedules (id, thread_id, title, prompt, rule_json, ends_at, enabled,
+    next_run_at, last_run_at, last_run_id, run_count, created_at, updated_at)
+  SELECT id, thread_id, title, prompt, rule_json, ends_at, enabled,
+    next_run_at, last_run_at, last_run_id, run_count, created_at, updated_at
+  FROM legacy_schedules ORDER BY rowid;
+
+  INSERT INTO schedule_runs (id, schedule_id, thread_id, source, status, run_id, error, triggered_at)
+  SELECT sr.id, sr.schedule_id, CASE WHEN sr.run_id IS NOT NULL THEN s.thread_id END,
+    sr.source, sr.status, sr.run_id, sr.error, sr.triggered_at
+  FROM legacy_schedule_runs sr JOIN legacy_schedules s ON s.id = sr.schedule_id
+  ORDER BY sr.rowid;
+
+  DROP TABLE legacy_schedule_runs;
+  DROP TABLE legacy_schedules;
+  CREATE INDEX idx_schedules_next_run ON schedules(enabled, next_run_at);
+  CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, triggered_at);
+  `,
 ]
 
 /**

@@ -70,9 +70,16 @@ export interface PermissionMenuProps {
   modes: readonly AgentPermissionMode[]
   onChange?: ((mode: string) => void) | undefined
   side?: "top" | "bottom"
+  shortcutHint?: boolean
 }
 
-export function PermissionMenu({ value, modes, onChange, side = "top" }: PermissionMenuProps) {
+export function PermissionMenu({
+  value,
+  modes,
+  onChange,
+  side = "top",
+  shortcutHint = true,
+}: PermissionMenuProps) {
   const { t, locale } = useLocale()
   const { request, dialog } = usePermissionChange(value, modes, onChange)
   const selected = modes.find((mode) => mode.id === value)
@@ -86,7 +93,11 @@ export function PermissionMenu({ value, modes, onChange, side = "top" }: Permiss
           type="button"
           data-mode={value}
           data-elevated={(selected && permissionNeedsConfirmation(selected)) || undefined}
-          title={`${t("composer.permission.title")} ${formatShortcut("Shift+Tab")}`}
+          title={
+            shortcutHint
+              ? `${t("composer.permission.title")} ${formatShortcut("Shift+Tab")}`
+              : t("composer.permission.title")
+          }
           aria-label={`${t("composer.permission.title")}: ${permissionLabel(selected, locale)}`}
           disabled={!onChange}
         >

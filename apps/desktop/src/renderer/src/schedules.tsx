@@ -1,7 +1,7 @@
 /** 定时任务页容器：从 Host 拉取任务，并把页面操作转成 schedule.* RPC。 */
 import { useCallback, useEffect, useState } from "react"
 import type { Schedule } from "@pigcode/contracts"
-import { useAppStore } from "@pigcode/client-runtime"
+import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import {
   SchedulesPage,
   type RunNowResult,
@@ -9,6 +9,7 @@ import {
   type UpdateScheduleInput,
 } from "@pigcode/ui-settings"
 import type { CoreDeps } from "./app"
+import { useAgents, useModelCatalog } from "./agents"
 
 /** 把 unknown 错误转成可展示文本。 */
 function messageOf(error: unknown): string {
@@ -27,7 +28,12 @@ export function SchedulesContainer({
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [historyRevision, setHistoryRevision] = useState(0)
   const { connection } = deps
+  const connected = state.status === "connected"
+  const agents = useAgents(connection, state.agentRevision, connected)
+  const { catalog, load } = useModelCatalog(connection, state.agentRevision, connected)
+  const addProject = useContributions("command").find((command) => command.id === "add-project")
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -42,8 +48,17 @@ export function SchedulesContainer({
   }, [connection])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    if (connected) void refresh()
+  }, [connected, refresh])
+
+  useEffect(
+    () =>
+      connection.onScheduleRunChange(() => {
+        void refresh()
+        setHistoryRevision((current) => current + 1)
+      }),
+    [connection, refresh],
+  )
 
   // 运行历史在这个函数变化时重新读取；会话流式输出会频繁刷新 store，函数本身要保持不变。
   const loadRuns = useCallback(
@@ -62,6 +77,11 @@ export function SchedulesContainer({
   return (
     <SchedulesPage
       schedules={schedules}
+      projects={state.projects}
+      preferredProjectId={state.activeProjectId}
+      agentOptions={{ agents, catalog, onLoadModels: load }}
+      onAddProject={addProject ? () => void addProject.run() : undefined}
+      historyRevision={historyRevision}
       threads={state.threads
         .filter((thread) => !thread.parentThreadId)
         .map((thread) => ({ id: thread.id, title: thread.title }))}

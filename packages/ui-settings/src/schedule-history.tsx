@@ -70,11 +70,13 @@ function RowAction({
 
 export function ScheduleHistory({
   scheduleId,
+  revision,
   onLoadRuns,
   onDeleteRun,
   onOpenThread,
 }: {
   scheduleId: string
+  revision: number
   onLoadRuns: (id: string, offset: number, limit: number) => Promise<ScheduleRunsPage>
   onDeleteRun: (runId: string) => Promise<unknown>
   onOpenThread?: ((threadId: string) => void) | undefined
@@ -103,7 +105,7 @@ export function ScheduleHistory({
     return () => {
       live = false
     }
-  }, [scheduleId, page, version, onLoadRuns])
+  }, [scheduleId, page, version, revision, onLoadRuns])
 
   if (error) {
     return (
@@ -140,6 +142,7 @@ export function ScheduleHistory({
         <tbody>
           {data.runs.map((run) => {
             const reason = runReason(run.error, t)
+            const threadId = run.threadId
             return (
               <tr key={run.id} data-run={run.id}>
                 <td className="schedule-runs-time">{formatDateTime(run.triggeredAt, locale)}</td>
@@ -159,10 +162,10 @@ export function ScheduleHistory({
                   {formatRunDuration(run.triggeredAt, run.finishedAt, locale) ?? "—"}
                 </td>
                 <td className="schedule-runs-actions">
-                  {onOpenThread && run.runId ? (
+                  {onOpenThread && threadId ? (
                     <RowAction
                       label={t("schedules.runs.openThread")}
-                      onClick={() => onOpenThread(run.threadId)}
+                      onClick={() => onOpenThread(threadId)}
                     >
                       <MessageSquareText className="ic" aria-hidden="true" />
                     </RowAction>
