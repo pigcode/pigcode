@@ -53,10 +53,12 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
     await reply.click({ button: "right", position: { x: 12, y: 8 } })
     await expect.poll(async () => (await menus())[1]?.roles).toEqual(["copy"])
 
+    await page.locator(".proj-block .proj").first().click({ button: "right" })
+    await expect
+      .poll(async () => (await menus())[2]?.labels.filter(Boolean))
+      .toEqual(["重命名", expect.stringMatching(/^在.+中打开$/), "从侧栏移除"])
     await page.locator(".sess").first().click({ button: "right" })
-    await expect(page.getByRole("menuitem", { name: /归档/ })).toBeVisible()
-    expect(await menus()).toHaveLength(2)
-    await page.keyboard.press("Escape")
+    await expect.poll(async () => (await menus())[3]?.labels).toEqual(["重命名", "归档"])
 
     await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
     await page
@@ -69,9 +71,9 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
     expect(tab).not.toBeNull()
     await browser.click({ button: "right", position: { x: 12, y: 10 } })
     await expect
-      .poll(async () => (await menus())[2]?.labels)
+      .poll(async () => (await menus())[4]?.labels)
       .toEqual(["关闭标签", "关闭其他标签", "关闭所有标签"])
-    const menu = (await menus())[2]!
+    const menu = (await menus())[4]!
     expect(Math.abs(menu.x - tab!.x - 12)).toBeLessThanOrEqual(2)
     expect(Math.abs(menu.y - tab!.y - 10)).toBeLessThanOrEqual(2)
   } finally {

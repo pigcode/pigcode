@@ -1,12 +1,12 @@
 /** 侧栏里的项目行与会话行：右键菜单、就地改名，会话行还有状态点、时间与数字快捷键。 */
-import { Fragment, useRef, type ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import {
   Button,
-  ContextMenu,
   ListRow,
   StatusDot,
   formatRelativeTime,
+  nativeContextMenu,
   useLocale,
 } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
@@ -14,7 +14,7 @@ import { THREAD_STATUS_MESSAGE, THREAD_STATUS_TONE, type ThreadStatus } from "./
 
 /** 右键菜单里的一项；separated 时在它上方画分隔线。 */
 export interface RowAction {
-  icon: string
+  id: string
   label: string
   run: () => void
   separated?: boolean
@@ -26,29 +26,34 @@ export interface RenameHandlers {
   onCancel: () => void
 }
 
-/** 给一行加上右键菜单；没有动作时原样返回。 */
+/** 侧栏行复用桌面原生菜单，菜单打开时保持目标行高亮。 */
 function RowMenu({ actions, children }: { actions: RowAction[]; children: ReactNode }) {
-  if (actions.length === 0) return children
+  const [open, setOpen] = useState(false)
+  const popup = typeof window === "undefined" ? undefined : window.pigcodeNative?.popupMenu
+  if (!popup || actions.length === 0) return children
+
+  const onContextMenu = nativeContextMenu((point) => {
+    if (open) return
+    const items = actions.flatMap(({ id, label, separated }) =>
+      separated ? [{ type: "separator" as const }, { id, label }] : [{ id, label }],
+    )
+    setOpen(true)
+    void popup(items, point).then(
+      (id) => {
+        setOpen(false)
+        actions.find((action) => action.id === id)?.run()
+      },
+      () => setOpen(false),
+    )
+  })
   return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger className="row-menu-area">{children}</ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Positioner side="bottom" align="start" sideOffset={4} collisionPadding={8}>
-          {/* 菜单关闭后不把焦点还给行，否则会抢走「重命名」刚聚焦的输入框 */}
-          <ContextMenu.Popup finalFocus={false}>
-            {actions.map((action) => (
-              <Fragment key={action.label}>
-                {action.separated ? <ContextMenu.Separator /> : null}
-                <ContextMenu.Item onClick={action.run}>
-                  <Icon name={action.icon} small />
-                  <span className="grow">{action.label}</span>
-                </ContextMenu.Item>
-              </Fragment>
-            ))}
-          </ContextMenu.Popup>
-        </ContextMenu.Positioner>
-      </ContextMenu.Portal>
-    </ContextMenu.Root>
+    <div
+      className="row-menu-area"
+      data-popup-open={open ? "" : undefined}
+      onContextMenu={onContextMenu}
+    >
+      {children}
+    </div>
   )
 }
 

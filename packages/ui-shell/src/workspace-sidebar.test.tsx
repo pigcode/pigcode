@@ -58,6 +58,21 @@ function mockNative(value: Partial<NonNullable<Window["pigcodeNative"]>>): void 
   Object.defineProperty(window, "pigcodeNative", { configurable: true, value })
 }
 
+type PopupMenu = NonNullable<NonNullable<Window["pigcodeNative"]>["popupMenu"]>
+
+function mockMenu(overrides?: Partial<NonNullable<Window["pigcodeNative"]>>) {
+  const popupMenu = vi.fn<PopupMenu>().mockResolvedValue(null)
+  mockNative({ platform: "linux", ...overrides, popupMenu })
+  return popupMenu
+}
+
+async function chooseMenuItem(menu: ReturnType<typeof mockMenu>, target: HTMLElement, id: string) {
+  menu.mockResolvedValueOnce(id)
+  await act(async () => {
+    fireEvent.contextMenu(target)
+  })
+}
+
 afterEach(() => {
   Reflect.deleteProperty(window, "pigcodeNative")
 })
@@ -250,11 +265,11 @@ describe("WorkspaceSidebar", () => {
   })
 
   it("renames a thread in place from its context menu", async () => {
+    const menu = mockMenu()
     const onRenameThread = vi.fn()
     renderSidebar({ onRenameThread, onArchiveThread: vi.fn() })
 
-    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "重命名" }))
+    await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "rename")
     const input = await screen.findByRole("textbox", { name: "会话名称" })
     expect(document.activeElement).toBe(input)
     await userEvent.clear(input)
@@ -266,11 +281,11 @@ describe("WorkspaceSidebar", () => {
   })
 
   it("leaves the title alone on Escape, on an unchanged or empty name", async () => {
+    const menu = mockMenu()
     const onRenameThread = vi.fn()
     renderSidebar({ onRenameThread, onArchiveThread: vi.fn() })
     const startRename = async () => {
-      fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
-      await userEvent.click(await screen.findByRole("menuitem", { name: "重命名" }))
+      await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "rename")
       return screen.findByRole("textbox", { name: "会话名称" })
     }
 
@@ -285,21 +300,21 @@ describe("WorkspaceSidebar", () => {
   })
 
   it("archives a thread from its context menu", async () => {
+    const menu = mockMenu()
     const onArchiveThread = vi.fn()
     renderSidebar({ onRenameThread: vi.fn(), onArchiveThread })
 
-    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "归档" }))
+    await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "archive")
 
     expect(onArchiveThread).toHaveBeenCalledExactlyOnceWith("t1")
   })
 
   it("mentions a thread in the composer from its context menu, but not the open one", async () => {
+    const menu = mockMenu()
     const onReferenceThread = vi.fn()
     renderSidebar({ onRenameThread: vi.fn(), onArchiveThread: vi.fn(), onReferenceThread })
 
-    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "在输入框里引用" }))
+    await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "reference")
     expect(onReferenceThread).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ id: "t1", title: "First thread" }),
     )
@@ -311,54 +326,55 @@ describe("WorkspaceSidebar", () => {
       onReferenceThread,
       activeThreadId: "t1",
     })
-    fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
-    await screen.findByRole("menuitem", { name: "归档" })
-    expect(screen.queryByRole("menuitem", { name: "在输入框里引用" })).toBeNull()
+    await act(async () => {
+      fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
+    })
+    expect(menu).toHaveBeenCalledTimes(2)
+    expect(menu.mock.lastCall?.[0]).not.toContainEqual(expect.objectContaining({ id: "reference" }))
   })
 
   it("has no context menu when renaming and archiving are not wired", () => {
+    const menu = mockMenu()
     renderSidebar()
 
     fireEvent.contextMenu(screen.getByRole("button", { name: /First thread/ }))
     fireEvent.contextMenu(screen.getByRole("button", { name: "alpha" }))
-    expect(screen.queryByRole("menu")).toBeNull()
+    expect(menu).not.toHaveBeenCalled()
   })
 
   it("renames a project, opens its folder and removes it from the project's context menu", async () => {
     const openFolder = vi.fn().mockResolvedValue(undefined)
-    mockNative({ platform: "linux", openFolder })
+    const menu = mockMenu({ openFolder })
     const onRenameProject = vi.fn()
     const onRemoveProject = vi.fn()
     renderSidebar({ onRenameProject, onRemoveProject })
-    const openMenu = () => fireEvent.contextMenu(screen.getByRole("button", { name: "alpha" }))
+    const choose = (id: string) =>
+      chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), id)
 
-    openMenu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "在文件管理器中打开" }))
+    await choose("open-folder")
     expect(openFolder).toHaveBeenCalledExactlyOnceWith("/tmp/alpha")
 
-    openMenu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "重命名" }))
+    await choose("rename")
     const input = await screen.findByRole("textbox", { name: "项目名称" })
     expect(document.activeElement).toBe(input)
     await userEvent.clear(input)
     await userEvent.type(input, "客户门户{Enter}")
     expect(onRenameProject).toHaveBeenCalledExactlyOnceWith("p1", "客户门户")
 
-    openMenu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "从侧栏移除" }))
+    await choose("remove")
     expect(onRemoveProject).toHaveBeenCalledExactlyOnceWith("p1")
     expect(screen.getByText("已移除「alpha」，再次添加这个文件夹即可恢复")).toBeTruthy()
   })
 
   it("says so when the project folder can't be opened, naming it after the platform's file manager", async () => {
-    mockNative({
+    const menu = mockMenu({
       platform: "darwin",
       openFolder: vi.fn().mockRejectedValue(new Error("FOLDER_NOT_FOUND")),
     })
     renderSidebar({ onRenameProject: vi.fn(), onRemoveProject: vi.fn() })
 
-    fireEvent.contextMenu(screen.getByRole("button", { name: "alpha" }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "在访达中打开" }))
+    await chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), "open-folder")
+    expect(menu.mock.lastCall?.[0]).toContainEqual({ id: "open-folder", label: "在访达中打开" })
     expect(await screen.findByText("无法打开文件夹 /tmp/alpha")).toBeTruthy()
   })
 

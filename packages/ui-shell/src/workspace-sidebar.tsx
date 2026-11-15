@@ -177,32 +177,32 @@ export function WorkspaceSidebar({
   const threadActions = (thread: Thread): RowAction[] =>
     onRenameThread && onArchiveThread
       ? [
-          { icon: "pencil", label: t("sidebar.rename"), run: () => setRenamingId(thread.id) },
+          { id: "rename", label: t("sidebar.rename"), run: () => setRenamingId(thread.id) },
           // 当前会话引用自己没有意义。
           ...(onReferenceThread && thread.id !== activeThreadId
             ? [
                 {
-                  icon: "chat",
+                  id: "reference",
                   label: t("sidebar.reference"),
                   run: () => onReferenceThread(thread),
                 },
               ]
             : []),
-          { icon: "archive", label: t("sidebar.archive"), run: () => onArchiveThread(thread.id) },
+          { id: "archive", label: t("sidebar.archive"), run: () => onArchiveThread(thread.id) },
         ]
       : []
 
   const projectActions = (project: Project): RowAction[] =>
     onRenameProject && onRemoveProject
       ? [
-          { icon: "pencil", label: t("sidebar.rename"), run: () => setRenamingId(project.id) },
+          { id: "rename", label: t("sidebar.rename"), run: () => setRenamingId(project.id) },
           {
-            icon: "folder-open",
+            id: "open-folder",
             label: t(revealLabelKey()),
             run: () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath)),
           },
           {
-            icon: "x",
+            id: "remove",
             label: t("sidebar.removeProject"),
             separated: true,
             run: () => {

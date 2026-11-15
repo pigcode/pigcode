@@ -1,5 +1,6 @@
 /** 在输入框里 @ 引用另一个会话（pigcode/monorepo#81）：选中、发送、点气泡里的标签跳过去。 */
 import { expect, test, type Page } from "@playwright/test"
+import { chooseNativeMenuItem } from "./native-menu"
 import { openThread } from "./projects"
 
 const PROJECT = "pigcode-e2e-thread-reference"
@@ -47,8 +48,8 @@ test("mentions another thread with @ and opens it from the sent message", async 
 
     // 侧栏的右键菜单：在当前会话的输入框里插入另一个会话的引用。
     const other = block.locator(".sess").filter({ hasText: "接着做" })
+    await chooseNativeMenuItem(app, "reference")
     await other.click({ button: "right" })
-    await page.getByRole("menuitem", { name: "在输入框里引用" }).click()
     await expect(page.locator('.tiptap .mention-chip[data-kind="thread"]')).toContainText("@接着做")
   } finally {
     await app.close()

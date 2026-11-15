@@ -227,15 +227,6 @@ export async function walkShell(walk: Walk): Promise<void> {
   await expect(approval.getByRole("button")).toHaveCount(0)
   await expect(page.locator(".turn").last()).toHaveAttribute("data-status", "completed")
 
-  await page.locator(".proj-block .proj").first().click({ button: "right" })
-  await expect(page.getByRole("menuitem", { name: t("sidebar.removeProject") })).toBeVisible()
-  await step("menu-project")
-  await page.keyboard.press("Escape")
-  await page.locator(".sess").first().click({ button: "right" })
-  await expect(page.getByRole("menuitem", { name: t("sidebar.archive") })).toBeVisible()
-  await step("menu-thread")
-  await page.keyboard.press("Escape")
-
   // 窄窗口（宽度小于 960px）：侧栏收进抽屉。放在最后，前面的截图不受窗口尺寸影响。
   await page.setViewportSize({ width: 720, height: 800 })
   await expect(page.locator(".sidebar")).toBeHidden()

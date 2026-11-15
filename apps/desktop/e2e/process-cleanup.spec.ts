@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process"
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test, type Page } from "@playwright/test"
+import { chooseNativeMenuItem } from "./native-menu"
 import { installPlugin, openThread } from "./projects"
 
 function isAlive(pid: number): boolean {
@@ -53,8 +54,8 @@ test("archiving a thread ends what is running in its terminal", async () => {
   await page.keyboard.press("Enter")
   await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
   expect(isAlive(pid)).toBe(true)
+  await chooseNativeMenuItem(app, "archive")
   await page.locator(".sess").first().click({ button: "right" })
-  await page.getByRole("menuitem", { name: "归档" }).click()
   await expect.poll(() => isAlive(pid), { timeout: 5000 }).toBe(false)
   await app.close()
 })
