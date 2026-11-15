@@ -443,55 +443,6 @@
 .schedule-status-chip > span:first-of-type {
   margin-left: calc(var(--space-3) * -1);
 }
-.schedule-instructions {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: var(--r-panel);
-  background: var(--input-bg);
-  box-shadow: var(--shadow-field);
-}
-.schedule-instructions:focus-within {
-  box-shadow: var(--shadow-field-focus);
-}
-.schedule-instructions > .textarea {
-  min-height: var(--textarea-min-h);
-  padding: var(--space-6);
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  line-height: 1.55;
-}
-.schedule-execution {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-top: var(--hair) solid var(--divider);
-  background: var(--surface-sunken);
-}
-.schedule-execution .pill-select,
-.schedule-project-locked {
-  min-width: 0;
-  max-width: 100%;
-}
-.schedule-project-locked {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: var(--control-sm);
-  padding-inline: var(--space-3);
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.schedule-submit {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-4);
-  padding-top: var(--space-3);
-}
-
 /*
   计划框：输入框样子的一行，里面是频率、星期或几号、几点几分的小胶囊（.pill-select，在 controls.css），
   最右边是时区。

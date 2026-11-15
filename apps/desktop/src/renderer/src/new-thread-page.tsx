@@ -22,6 +22,7 @@ import { useDefaultInstanceId } from "./agents"
 import type { CoreDeps } from "./chat-container"
 import { DraftWorkspaceControls } from "./draft-workspace-controls"
 import { useDraftBranches } from "./use-draft-branches"
+import { projectFilePaths } from "./workspace-actions"
 import {
   NEW_THREAD_DRAFT_KEY,
   draftProjectId,
@@ -105,15 +106,7 @@ function ProjectDraft({
     projectId ? { projectId } : null,
   )
   const files = useMemo(
-    () =>
-      projectId
-        ? async () => {
-            const entries = (await deps.connection.call("project.files", {
-              projectId,
-            })) as Array<{ path: string }>
-            return entries.map((entry) => entry.path)
-          }
-        : undefined,
+    () => (projectId ? () => projectFilePaths(deps.connection, projectId) : undefined),
     [deps.connection, projectId],
   )
 

@@ -382,6 +382,9 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(
     page.getByRole("heading", { level: 1, name: t("schedules.editor.createTitle") }),
   ).toBeVisible()
+  const scheduleEditor = page.locator(".schedule-editor")
+  await expect(scheduleEditor.locator(".model-chip")).toContainText("Fake Sage")
+  await expect(scheduleEditor.getByRole("switch", { name: "worktree" })).toBeVisible()
   await step("schedule-create")
 
   await nav("settings.plugins")

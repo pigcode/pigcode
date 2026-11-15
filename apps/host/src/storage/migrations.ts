@@ -278,6 +278,7 @@ const MIGRATIONS: Migration[] = [
   CREATE INDEX idx_schedules_next_run ON schedules(enabled, next_run_at);
   CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, triggered_at);
   `,
+  `ALTER TABLE schedules ADD COLUMN draft_json TEXT`,
 ]
 
 /**

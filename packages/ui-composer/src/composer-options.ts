@@ -113,6 +113,19 @@ export function resolveEffort(
 /** 按模型开关的模式：快速模式与 Ultracode。 */
 export type ModelSwitch = "fast" | "ultracode"
 
+export interface ComposerRunPreferences {
+  effort: ReasoningEffort | null
+  fast: boolean
+  ultracode: boolean
+}
+
+/** 定时任务保存自己的运行选项；聊天使用全局的模型偏好。 */
+export interface ComposerRunOptions {
+  value: ComposerRunPreferences
+  onChange: (value: ComposerRunPreferences) => void
+  reset?: { label: string; onClick: () => void } | undefined
+}
+
 /** 发送时是否打开某个开关：模型支持、并且用户为它打开过。 */
 export function resolveSwitch(
   model: ComposerModel | null,

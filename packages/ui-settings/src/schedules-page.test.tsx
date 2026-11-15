@@ -23,6 +23,7 @@ function scheduleFixture(overrides: Partial<Schedule> = {}): Schedule {
     target: { kind: "thread", threadId: "th_1" },
     title: "每日汇总",
     prompt: "把今天的改动整理成清单",
+    draft: null,
     rule: { kind: "daily", time: "09:00" },
     endsAt: null,
     enabled: true,
@@ -223,6 +224,7 @@ describe("SchedulesPage editor", () => {
       execution: { permissionMode: DEFAULT_RUNTIME_MODE },
       title: "",
       prompt: "发版检查",
+      draft: { document: expect.any(String) },
       rule: { kind: "daily", time: "09:00" },
       endsAt: null,
       enabled: true,
@@ -253,7 +255,12 @@ describe("SchedulesPage editor", () => {
       const props = renderPage()
       await openCreate()
       fireEvent.change(screen.getByLabelText("标题"), { target: { value: "周会" } })
-      await choose("项目", "Release")
+      await userEvent.click(
+        within(screen.getByRole("group", { name: "运行设置" })).getByRole("button", {
+          name: /Sprint/,
+        }),
+      )
+      await userEvent.click(await screen.findByRole("menuitem", { name: /^Release/ }))
       await choose("频率", "每周")
       await userEvent.click(screen.getByRole("button", { name: "星期" }))
       await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: longDay(1) }))

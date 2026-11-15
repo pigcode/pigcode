@@ -6,20 +6,22 @@ import type { Context } from "cordis"
 import {
   DEFAULT_RUNTIME_MODE,
   nextScheduleRunBefore,
+  scheduleDraftSchema,
   scheduleExecutionSchema,
   scheduleRuleSchema,
   type ProjectScheduleTarget,
-  type ReasoningEffort,
   type Schedule,
   type ScheduleExecution,
+  type SchedulePromptDraft,
   type ScheduleRule,
   type ScheduleRun,
   type ScheduleRunChange,
-  type ScheduleRunStatus,
   type Thread,
 } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
+import type { StartRunOptions } from "../agents/service"
 import type { PigcodeDatabase } from "../storage/database"
+import { mapRun, mapSchedule, type ScheduleRow, type ScheduleRunRow } from "./schedule-rows"
 import { createScheduledThread } from "./schedule-thread"
 
 /** 创建定时任务的输入；enabled 省略时默认启用，endsAt 省略时永不结束。 */
@@ -28,6 +30,7 @@ export interface CreateScheduleInput {
   execution?: ScheduleExecution
   title?: string
   prompt: string
+  draft?: SchedulePromptDraft | undefined
   rule: ScheduleRule
   endsAt?: string | null
   enabled?: boolean
@@ -37,6 +40,7 @@ export interface CreateScheduleInput {
 export interface UpdateScheduleInput {
   title?: string
   prompt?: string
+  draft?: SchedulePromptDraft | null
   rule?: ScheduleRule
   endsAt?: string | null
   enabled?: boolean
@@ -55,7 +59,7 @@ export interface ScheduleRunner {
   startRun(
     threadId: string,
     text: string,
-    effort?: ReasoningEffort,
+    options: StartRunOptions,
   ): Promise<{ runId: string; done?: Promise<void> }>
   /** 运行中与排队中的 run，用于防止同一个任务重叠运行。 */
   listRuns(): Array<{ runId: string; threadId: string }>
@@ -68,15 +72,14 @@ declare module "cordis" {
 }
 
 /** schedules 插件依赖的存储与 agents 服务。 */
-export const inject = ["storage", "agents", "projects", "threads", "sessions"]
+export const inject = ["storage", "agents", "projects", "threads", "sessions", "worktrees"]
 
 /** 注册 schedules 服务；timer 的启停由 Host 入口显式控制。 */
 export function apply(ctx: Context): void {
   const schedules = new SchedulesService(ctx.storage.db, () => ({
     createThread: (target, title) => createScheduledThread(ctx, target, title),
     listRuns: () => ctx.agents.listRuns(),
-    startRun: (threadId, text, effort) =>
-      ctx.agents.startRun(threadId, text, undefined, effort ? { effort } : {}),
+    startRun: (threadId, text, options) => ctx.agents.startRun(threadId, text, undefined, options),
   }))
   ctx.provide("schedules", schedules)
   ctx.effect(() => () => schedules.stop())
@@ -85,90 +88,6 @@ apply.inject = inject
 
 /** setTimeout 能等的最长时间（32 位有符号整数毫秒，约 24.8 天）；更远的下一次分几段等。 */
 const MAX_TIMER_MS = 2 ** 31 - 1
-
-/** SQLite 中的任务行。 */
-interface ScheduleRow {
-  id: string
-  thread_id: string | null
-  project_id: string | null
-  execution_json: string | null
-  title: string
-  prompt: string
-  rule_json: string
-  ends_at: string | null
-  enabled: number
-  next_run_at: string | null
-  last_run_at: string | null
-  last_run_id: string | null
-  run_count: number
-  created_at: string
-  updated_at: string
-}
-
-/** 运行历史一行，连同它启动的 run 的状态。 */
-interface ScheduleRunRow {
-  id: string
-  schedule_id: string
-  source: "schedule" | "manual"
-  status: "started" | "skipped" | "failed"
-  run_id: string | null
-  error: string | null
-  triggered_at: string
-  thread_id: string | null
-  run_status: string | null
-  completed_at: string | null
-  error_message: string | null
-}
-
-/** 把数据库行映射为领域对象；没有下一次的任务已经过了结束日期。 */
-function mapSchedule(row: ScheduleRow): Schedule {
-  const enabled = row.enabled === 1
-  return {
-    id: row.id,
-    target:
-      row.thread_id !== null
-        ? { kind: "thread", threadId: row.thread_id }
-        : {
-            kind: "project",
-            projectId: row.project_id!,
-            execution: scheduleExecutionSchema.parse(JSON.parse(row.execution_json!)),
-          },
-    title: row.title,
-    prompt: row.prompt,
-    rule: scheduleRuleSchema.parse(JSON.parse(row.rule_json)),
-    endsAt: row.ends_at,
-    enabled,
-    status: row.next_run_at === null ? "completed" : enabled ? "active" : "paused",
-    nextRunAt: row.next_run_at,
-    lastRunAt: row.last_run_at,
-    lastRunId: row.last_run_id,
-    runCount: row.run_count,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
-}
-
-/** 运行历史的一行：跳过与启动失败直接给出，启动了的看 run 自己的状态。 */
-function mapRun(row: ScheduleRunRow): ScheduleRun {
-  let status: ScheduleRunStatus
-  if (row.status === "skipped") status = "skipped"
-  else if (row.status === "failed") status = "failed"
-  else if (row.run_status === "completed") status = "succeeded"
-  else if (row.run_status === "failed") status = "failed"
-  else if (row.run_status === "interrupted") status = "stopped"
-  else status = "running"
-  return {
-    id: row.id,
-    scheduleId: row.schedule_id,
-    source: row.source,
-    status,
-    threadId: row.thread_id,
-    runId: row.run_id,
-    error: row.error ?? (status === "failed" ? row.error_message : null),
-    triggeredAt: row.triggered_at,
-    finishedAt: row.status === "started" ? row.completed_at : row.triggered_at,
-  }
-}
 
 /** 校验规则并整理成存储的样子：星期几与几号去重排序。 */
 function normalizeRule(rule: ScheduleRule): ScheduleRule {
@@ -225,9 +144,9 @@ export class SchedulesService {
     const id = `sch_${randomUUID()}`
     this.db
       .prepare(
-        `INSERT INTO schedules (id, project_id, execution_json, title, prompt, rule_json, ends_at, enabled,
+        `INSERT INTO schedules (id, project_id, execution_json, title, prompt, draft_json, rule_json, ends_at, enabled,
           next_run_at, last_run_at, last_run_id, run_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, ?)`,
       )
       .run(
         id,
@@ -235,6 +154,7 @@ export class SchedulesService {
         JSON.stringify(execution),
         (input.title ?? "").trim(),
         input.prompt,
+        input.draft ? JSON.stringify(scheduleDraftSchema.parse(input.draft)) : null,
         JSON.stringify(rule),
         endsAt,
         (input.enabled ?? true) ? 1 : 0,
@@ -258,6 +178,13 @@ export class SchedulesService {
         ? existing.target.execution
         : null
     const rule = patch.rule ? normalizeRule(patch.rule) : existing.rule
+    const prompt = patch.prompt ?? existing.prompt
+    const draft =
+      patch.draft !== undefined
+        ? patch.draft && scheduleDraftSchema.parse(patch.draft)
+        : prompt === existing.prompt
+          ? existing.draft
+          : null
     const endsAt = patch.endsAt === undefined ? existing.endsAt : patch.endsAt
     const enabled = patch.enabled ?? existing.enabled
     // 改了规则或结束日期、或者重新启用时，从现在重新排下一次；只停用或改内容时保留原来的时间。
@@ -267,12 +194,13 @@ export class SchedulesService {
       (patch.enabled === true && !existing.enabled)
     this.db
       .prepare(
-        `UPDATE schedules SET title = ?, prompt = ?, rule_json = ?, ends_at = ?, enabled = ?,
+        `UPDATE schedules SET title = ?, prompt = ?, draft_json = ?, rule_json = ?, ends_at = ?, enabled = ?,
           next_run_at = ?, updated_at = ?, execution_json = ? WHERE id = ?`,
       )
       .run(
         (patch.title ?? existing.title).trim(),
-        patch.prompt ?? existing.prompt,
+        prompt,
+        draft ? JSON.stringify(draft) : null,
         JSON.stringify(rule),
         endsAt,
         enabled ? 1 : 0,
@@ -421,8 +349,14 @@ export class SchedulesService {
         threadId = thread.id
       }
       if (threadId === null) throw new Error("THREAD_UNAVAILABLE")
-      const effort = target.kind === "project" ? target.execution.effort : undefined
-      run = await runner.startRun(threadId, schedule.prompt, effort)
+      const execution = target.kind === "project" ? target.execution : null
+      const references = schedule.draft?.references
+      run = await runner.startRun(threadId, schedule.prompt, {
+        ...(execution?.effort ? { effort: execution.effort } : {}),
+        ...(execution?.fast ? { fast: true } : {}),
+        ...(execution?.ultracode ? { ultracode: true } : {}),
+        ...(references?.length ? { references } : {}),
+      })
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
       if (reason === "AGENT_UNAVAILABLE" && !thread) return skip("unavailable", reason)

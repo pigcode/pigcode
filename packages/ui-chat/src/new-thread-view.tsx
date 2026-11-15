@@ -4,22 +4,14 @@
  * 版式、问候、项目条与建议也给还没有消息的会话用（chat-view.tsx），两处长得一样。
  */
 import { useEffect, useState, type ReactNode } from "react"
-import {
-  BookOpen,
-  Bug,
-  Check,
-  ChevronDown,
-  FlaskConical,
-  Folder,
-  FolderPlus,
-  ScanSearch,
-  type LucideIcon,
-} from "lucide-react"
+import { BookOpen, Bug, FlaskConical, ScanSearch, type LucideIcon } from "lucide-react"
 import {
   type ComposerThreadOption,
   Composer,
+  ProjectMenu,
   prefillComposer,
   type ComposerAgent,
+  type ComposerProject,
   type ComposerCommand,
   type ComposerModelCatalog,
   type ComposerModelChoice,
@@ -27,14 +19,11 @@ import {
   type ComposerSubmitOptions,
   type PermissionMode,
 } from "@pigcode/ui-composer"
-import { Menu, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
+export { ProjectChip } from "@pigcode/ui-composer"
 
 /** 草稿可以落到的项目。 */
-export interface NewThreadProject {
-  id: string
-  name: string
-  rootPath: string
-}
+export type NewThreadProject = ComposerProject
 
 /** 草稿页的属性；agent、模型、权限与项目都由容器保管，发送时容器建会话。 */
 export interface NewThreadViewProps {
@@ -201,90 +190,6 @@ export function NewThreadSuggestions({
         </button>
       ))}
     </div>
-  )
-}
-
-/** 卡片上方的项目，已经建好的会话用：会话属于这个项目，只显示，不能换。 */
-export function ProjectChip({ name, rootPath }: { name: string; rootPath?: string | undefined }) {
-  const { t } = useLocale()
-  return (
-    <span className="chip-btn draft-project" data-static="" title={rootPath}>
-      <Folder className="ic" aria-hidden="true" />
-      <span className="sr-only">{`${t("newThread.project")}: `}</span>
-      <span className="truncate">{name}</span>
-    </span>
-  )
-}
-
-/** 卡片上方的项目选择；还没有项目时直接是「添加项目」。 */
-function ProjectMenu({
-  projects,
-  projectId,
-  onSelect,
-  onAdd,
-  disabled,
-}: {
-  projects: readonly NewThreadProject[]
-  projectId: string | null
-  onSelect: (projectId: string) => void
-  onAdd: () => void
-  disabled: boolean
-}) {
-  const { t } = useLocale()
-  const current = projects.find((project) => project.id === projectId)
-  if (projects.length === 0) {
-    return (
-      <button type="button" className="chip-btn draft-project" onClick={onAdd} disabled={disabled}>
-        <FolderPlus className="ic" aria-hidden="true" />
-        <span>{t("nav.addProject")}</span>
-      </button>
-    )
-  }
-  const label = current?.name ?? t("newThread.pickProject")
-  return (
-    <Menu.Root>
-      <Menu.Trigger
-        className="chip-btn draft-project"
-        type="button"
-        disabled={disabled}
-        aria-label={`${t("newThread.project")}: ${label}`}
-        title={current?.rootPath}
-      >
-        <Folder className="ic" aria-hidden="true" />
-        <span className="truncate">{label}</span>
-        <ChevronDown className="ic chip-caret" aria-hidden="true" />
-      </Menu.Trigger>
-      <Menu.Portal>
-        <Menu.Positioner side="bottom" align="start" sideOffset={6}>
-          <Menu.Popup className="draft-project-menu">
-            <Menu.Group>
-              <Menu.Label>{t("nav.projects")}</Menu.Label>
-              {projects.map((project) => (
-                <Menu.Item
-                  key={project.id}
-                  data-project={project.id}
-                  onClick={() => onSelect(project.id)}
-                >
-                  <Folder className="ic" aria-hidden="true" />
-                  <span className="grow">
-                    <span className="truncate">{project.name}</span>
-                    <span className="menu-item-desc truncate">{project.rootPath}</span>
-                  </span>
-                  {project.id === projectId ? (
-                    <Check className="ic check-mark" aria-hidden="true" />
-                  ) : null}
-                </Menu.Item>
-              ))}
-            </Menu.Group>
-            <Menu.Separator />
-            <Menu.Item onClick={onAdd}>
-              <FolderPlus className="ic" aria-hidden="true" />
-              <span className="grow">{t("newThread.addProject")}</span>
-            </Menu.Item>
-          </Menu.Popup>
-        </Menu.Positioner>
-      </Menu.Portal>
-    </Menu.Root>
   )
 }
 

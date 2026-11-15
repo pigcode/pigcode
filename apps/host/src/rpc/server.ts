@@ -401,11 +401,12 @@ export class RpcServer {
       case "schedule.create":
         return this.ctx.schedules.create(parsed as CommandParams<"schedule.create">)
       case "schedule.update": {
-        const { id, title, prompt, rule, endsAt, enabled, execution } =
+        const { id, title, prompt, draft, rule, endsAt, enabled, execution } =
           parsed as CommandParams<"schedule.update">
         return this.ctx.schedules.update(id, {
           ...(title === undefined ? {} : { title }),
           ...(prompt === undefined ? {} : { prompt }),
+          ...(draft === undefined ? {} : { draft }),
           ...(rule === undefined ? {} : { rule }),
           ...(endsAt === undefined ? {} : { endsAt }),
           ...(enabled === undefined ? {} : { enabled }),

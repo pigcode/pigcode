@@ -289,16 +289,43 @@ export const scheduleRuleSchema = z.discriminatedUnion("kind", [
 /** 定时任务的状态：运行中、已暂停，或者过了结束日期、不会再运行的已完成。 */
 export const scheduleStatusSchema = z.enum(["active", "paused", "completed"])
 
+/** 分支选择器使用完整 ref，以免混淆同名的本地和远端分支。 */
+export const worktreeStartSchema = z.object({
+  baseRef: z
+    .string()
+    .max(4096)
+    .regex(/^refs\/(heads|remotes)\/.+/)
+    .optional(),
+})
+export type WorktreeStart = z.infer<typeof worktreeStartSchema>
+
+export const threadReferencesSchema = z
+  .array(z.object({ kind: z.literal("thread"), threadId: z.string().min(1) }))
+  .max(10)
+
+/** 指令用纯文本执行；保存编辑器文档以便再次打开时保留引用标记。 */
+export const scheduleDraftSchema = z.object({
+  document: z.string().min(1),
+  references: threadReferencesSchema.optional(),
+})
+
 /** 项目任务的执行配置；未选择实例时，在每次触发时使用当前默认 Agent。 */
 export const scheduleExecutionSchema = z
   .object({
     instanceId: z.string().min(1).optional(),
     modelId: z.string().min(1).optional(),
     effort: reasoningEffortSchema.optional(),
+    fast: z.boolean().optional(),
+    ultracode: z.boolean().optional(),
+    planMode: z.boolean().optional(),
+    worktree: worktreeStartSchema.optional(),
     permissionMode: runtimeModeSchema.default(DEFAULT_RUNTIME_MODE),
   })
   .refine((value) => !value.modelId || value.instanceId, "model requires an Agent instance")
-  .refine((value) => !value.effort || value.modelId, "effort requires a model")
+  .refine(
+    (value) => !(value.effort || value.fast || value.ultracode) || value.modelId,
+    "effort, fast and Ultracode require a model",
+  )
 
 export const scheduleTargetSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -316,6 +343,7 @@ export const scheduleSchema = z.object({
   /** 可以留空，界面显示「未命名定时任务」。 */
   title: z.string().max(120),
   prompt: z.string().min(1),
+  draft: scheduleDraftSchema.nullable(),
   rule: scheduleRuleSchema,
   /** 结束日期：这一刻之后不再运行；null 表示永不结束。 */
   endsAt: z.string().datetime().nullable(),
@@ -392,6 +420,7 @@ export type PullRequestState = z.infer<typeof pullRequestStateSchema>
 export type PullRequestInfo = z.infer<typeof pullRequestInfoSchema>
 /** 定时任务的类型。 */
 export type Schedule = z.infer<typeof scheduleSchema>
+export type SchedulePromptDraft = z.infer<typeof scheduleDraftSchema>
 export type ScheduleExecution = z.infer<typeof scheduleExecutionSchema>
 export type ProjectScheduleTarget = Extract<Schedule["target"], { kind: "project" }>
 export type ScheduleRunChange = z.infer<typeof scheduleRunChangeSchema>

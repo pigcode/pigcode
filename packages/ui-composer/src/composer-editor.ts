@@ -298,15 +298,19 @@ export function isBlank(editor: Editor | null): boolean {
   return !editor || editor.isEmpty
 }
 
-/** 把一段纯文本放进编辑器，换行变成软换行。 */
-export function setPlainText(editor: Editor, text: string): void {
+/** 纯文本用软换行存进文档，内容不经过 HTML 解析。 */
+export function plainTextContent(text: string): JSONContent {
   const content = text
     .split("\n")
     .flatMap((line, index) => [
       ...(index > 0 ? [{ type: "hardBreak" }] : []),
       ...(line ? [{ type: "text", text: line }] : []),
     ])
-  editor.commands.setContent({ type: "doc", content: [{ type: "paragraph", content }] })
+  return { type: "doc", content: [{ type: "paragraph", content }] }
+}
+
+export function setPlainText(editor: Editor, text: string): void {
+  editor.commands.setContent(plainTextContent(text))
   editor.commands.focus("end")
 }
 

@@ -31,5 +31,7 @@ export async function createScheduledThread(
     instanceId: selected.instanceId,
     modelId,
     permissionMode,
+    planMode: execution.planMode,
+    worktree: execution.worktree,
   })
 }

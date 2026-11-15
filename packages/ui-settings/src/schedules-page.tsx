@@ -1,8 +1,4 @@
-/**
- * 定时任务页：列表与编辑页两种样子。列表上面是状态筛选和「保持电脑唤醒」，已创建的任务排成两列卡片，
- * 卡片上是标题、指令、计划与下一次运行、运行次数；整张卡片点开就是编辑页，更多操作在右上角的菜单里。
- * 下面隔一条线是模板，点开后预填到新建页里。
- */
+/** 定时任务列表、模板与编辑页之间的导航。 */
 import { useEffect, useId, useState } from "react"
 import {
   Activity,
@@ -40,6 +36,7 @@ import type {
   CreateScheduleInput,
   RunNowResult,
   ScheduleAgentOptions,
+  ScheduleComposerSources,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -48,6 +45,8 @@ export type {
   CreateScheduleInput,
   RunNowResult,
   ScheduleAgentOptions,
+  ScheduleComposerSources,
+  ScheduleWorkspaceControlsProps,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -60,6 +59,7 @@ export interface SchedulesPageProps {
   projects: readonly Project[]
   preferredProjectId?: string | null | undefined
   agentOptions: ScheduleAgentOptions
+  composerSources?: ScheduleComposerSources | undefined
   onAddProject?: (() => void) | undefined
   historyRevision?: number | undefined
   loading?: boolean | undefined
@@ -248,6 +248,7 @@ export function SchedulesPage({
   projects,
   preferredProjectId,
   agentOptions,
+  composerSources,
   onAddProject,
   historyRevision,
   loading = false,
@@ -323,6 +324,7 @@ export function SchedulesPage({
         projects={projects}
         preferredProjectId={preferredProjectId}
         agentOptions={agentOptions}
+        composerSources={composerSources}
         onAddProject={onAddProject}
         historyRevision={historyRevision}
         onBack={() => setView({ mode: "list" })}

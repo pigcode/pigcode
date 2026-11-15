@@ -2,6 +2,14 @@
 import type { Project, Thread } from "@pigcode/contracts"
 import type { AppStore, Connection } from "@pigcode/client-runtime"
 
+export async function projectFilePaths(
+  connection: Connection,
+  projectId: string,
+): Promise<string[]> {
+  const entries = (await connection.call("project.files", { projectId })) as Array<{ path: string }>
+  return entries.map((entry) => entry.path)
+}
+
 /** 用 Host 返回的记录替换 store 里的同一个会话。 */
 function replaceThread(store: AppStore, thread: Thread): void {
   store.update({

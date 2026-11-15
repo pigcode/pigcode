@@ -68,7 +68,13 @@ describe("SchedulesService", () => {
         instanceId: "fake",
         modelId: "fake-pro",
         effort: "high",
+        fast: true,
+        ultracode: true,
         permissionMode: "approval-required",
+      },
+      draft: {
+        document: '{"type":"doc"}',
+        references: [{ kind: "thread", threadId: "th_reference" }],
       },
     })
     expect(schedule).toMatchObject({
@@ -88,7 +94,12 @@ describe("SchedulesService", () => {
       lastModelId: "fake-pro",
       permissionMode: "approval-required",
     })
-    expect(startRun).toHaveBeenCalledExactlyOnceWith(firstThread.id, "summarize", "high")
+    expect(startRun).toHaveBeenCalledExactlyOnceWith(firstThread.id, "summarize", {
+      effort: "high",
+      fast: true,
+      ultracode: true,
+      references: [{ kind: "thread", threadId: "th_reference" }],
+    })
     expect(service.list()[0]).toMatchObject({
       lastRunAt: "2026-10-20T00:01:00.000Z",
       lastRunId: "run_1",
@@ -139,7 +150,7 @@ describe("SchedulesService", () => {
       expect(db.pragma("foreign_key_check")).toEqual([])
       expect(service.list()[0]?.target).toEqual({ kind: "thread", threadId: "th_old" })
       expect(await service.runNow("sch_old")).toEqual({ status: "started", runId: "run_next" })
-      expect(startRun).toHaveBeenCalledWith("th_old", "digest", undefined)
+      expect(startRun).toHaveBeenCalledWith("th_old", "digest", {})
       expect(createThread).not.toHaveBeenCalled()
       expect(service.runs("sch_old").runs).toMatchObject([
         { runId: "run_next", threadId: "th_old" },

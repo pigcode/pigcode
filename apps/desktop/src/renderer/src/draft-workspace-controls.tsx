@@ -17,9 +17,9 @@ interface Props {
   worktree: WorktreeStart | null
   disabled: boolean
   onOpenBranches: () => void
-  onSwitchBranch: (branch: string) => void
+  onSwitchBranch?: (branch: string) => void
   onWorktree: (worktree: WorktreeStart | null) => void
-  onCreateBranch: (branch: string) => Promise<unknown>
+  onCreateBranch?: (branch: string) => Promise<unknown>
 }
 
 export function DraftWorkspaceControls(props: Props) {
@@ -35,7 +35,13 @@ export function DraftWorkspaceControls(props: Props) {
   return (
     <>
       <span className="draft-workspace-divider" aria-hidden="true" />
-      <BranchPicker {...props} branches={branches} onCreate={() => setCreating(true)} />
+      {worktree || props.onSwitchBranch ? (
+        <BranchPicker
+          {...props}
+          branches={branches}
+          onCreate={props.onCreateBranch ? () => setCreating(true) : undefined}
+        />
+      ) : null}
       <label
         className="draft-worktree"
         data-checked={worktree !== null || undefined}
@@ -48,7 +54,7 @@ export function DraftWorkspaceControls(props: Props) {
           onCheckedChange={(checked) => props.onWorktree(checked ? {} : null)}
         />
       </label>
-      {creating ? (
+      {creating && props.onCreateBranch ? (
         <CreateBranchDialog onSave={props.onCreateBranch} onClose={() => setCreating(false)} />
       ) : null}
     </>
@@ -67,7 +73,7 @@ function BranchPicker({
   onCreate,
 }: Pick<Props, "worktree" | "disabled" | "onOpenBranches" | "onSwitchBranch" | "onWorktree"> & {
   branches: GitBranches
-  onCreate: () => void
+  onCreate?: (() => void) | undefined
 }) {
   const { t } = useLocale()
   const [open, setOpen] = useState(false)
@@ -117,7 +123,7 @@ function BranchPicker({
   function pick(ref: string) {
     setOpen(false)
     if (worktree) onWorktree(ref === CURRENT_HEAD ? {} : { baseRef: ref })
-    else if (ref !== selected) onSwitchBranch(labelOf(ref))
+    else if (ref !== selected) onSwitchBranch?.(labelOf(ref))
   }
 
   return (
@@ -198,7 +204,7 @@ function BranchPicker({
             ) : null}
             {worktree ? (
               <p className="draft-branch-note">{t("newThread.worktree.baseHint")}</p>
-            ) : (
+            ) : onCreate ? (
               <div className="draft-branch-footer">
                 <button
                   type="button"
@@ -212,7 +218,7 @@ function BranchPicker({
                   {t("newThread.branch.create")}
                 </button>
               </div>
-            )}
+            ) : null}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

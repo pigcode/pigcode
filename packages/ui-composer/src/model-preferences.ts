@@ -9,6 +9,7 @@ import {
   resolveModel,
   resolveSwitch,
   type ComposerModelCatalog,
+  type ComposerRunPreferences,
   type ModelSwitch,
 } from "./composer-options"
 
@@ -139,14 +140,19 @@ export function useRunPreferences(
   agentId: string | null,
   catalog: ComposerModelCatalog,
   modelId: string | null,
-): { effort: ReasoningEffort | null; fast: boolean; ultracode: boolean } {
+  options?: ComposerRunPreferences,
+): ComposerRunPreferences {
   const preferences = useModelPreferences()
   const model = resolveModel(agentId ? catalog[agentId] : undefined, modelId)
   const key = agentId && model ? modelKey(agentId, model.id) : null
   const on = (name: ModelSwitch) =>
-    resolveSwitch(model, name, key ? preferences.switches[name].includes(key) : false)
+    resolveSwitch(
+      model,
+      name,
+      options ? options[name] : key ? preferences.switches[name].includes(key) : false,
+    )
   return {
-    effort: resolveEffort(model, key ? preferences.efforts[key] : null),
+    effort: resolveEffort(model, options ? options.effort : key ? preferences.efforts[key] : null),
     fast: on("fast"),
     ultracode: on("ultracode"),
   }

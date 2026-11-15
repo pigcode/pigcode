@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { ChevronDown, Loader2, Star } from "lucide-react"
 import {
   AgentIcon,
+  Button,
   EmptyState,
   Popover,
   SearchField,
@@ -24,6 +25,7 @@ import {
   type ComposerAgent,
   type ComposerModelCatalog,
   type ComposerModelChoice,
+  type ComposerRunOptions,
   type ModelSwitch,
   type PermissionMode,
 } from "./composer-options"
@@ -51,6 +53,7 @@ export interface ModelPickerProps {
   agentId: string | null
   modelId: string | null
   catalog: ComposerModelCatalog
+  runOptions?: ComposerRunOptions | undefined
   onLoadModels?: ((instanceId: string) => void) | undefined
   onSelectModel?: ((choice: ComposerModelChoice) => void) | undefined
   /** 当前线程的权限；底栏切换，胶囊上在非默认时显示图标。 */
@@ -76,6 +79,7 @@ export function ModelPicker({
   agentId,
   modelId,
   catalog,
+  runOptions,
   onLoadModels,
   onSelectModel,
   permissionMode = DEFAULT_PERMISSION,
@@ -93,12 +97,19 @@ export function ModelPicker({
   const agent = agents.find((item) => item.id === agentId) ?? null
   const currentModel = resolveModel(agentId ? catalog[agentId] : undefined, modelId)
   const currentKey = agent && currentModel ? modelKey(agent.id, currentModel.id) : null
-  const effort = resolveEffort(currentModel, currentKey ? preferences.efforts[currentKey] : null)
+  const effort = resolveEffort(
+    currentModel,
+    runOptions ? runOptions.value.effort : currentKey ? preferences.efforts[currentKey] : null,
+  )
   const switchOn = (name: ModelSwitch) =>
     resolveSwitch(
       currentModel,
       name,
-      currentKey ? preferences.switches[name].includes(currentKey) : false,
+      runOptions
+        ? runOptions.value[name]
+        : currentKey
+          ? preferences.switches[name].includes(currentKey)
+          : false,
     )
   const switches = MODEL_SWITCHES.filter((name) => switchOn(name))
   const [tab, setTab] = useState<string>(agentId ?? FAVORITES)
@@ -383,6 +394,18 @@ export function ModelPicker({
                 </div>
               </div>
               {locked ? <div className="model-locked">{t("composer.model.locked")}</div> : null}
+              {runOptions?.reset ? (
+                <div className="model-reset">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={runOptions.reset.onClick}
+                    type="button"
+                  >
+                    {runOptions.reset.label}
+                  </Button>
+                </div>
+              ) : null}
               <div className="model-foot">
                 <div className="model-switches">
                   {MODEL_SWITCHES.map((name) => (
@@ -392,7 +415,10 @@ export function ModelPicker({
                       on={switchOn(name)}
                       supported={Boolean(currentModel?.[name]) && currentKey !== null}
                       onToggle={() => {
-                        if (currentKey) preferences.setSwitch(name, currentKey, !switchOn(name))
+                        if (runOptions) {
+                          runOptions.onChange({ ...runOptions.value, [name]: !switchOn(name) })
+                        } else if (currentKey)
+                          preferences.setSwitch(name, currentKey, !switchOn(name))
                       }}
                     />
                   ))}
@@ -403,7 +429,10 @@ export function ModelPicker({
                       efforts={currentModel.efforts}
                       value={effort}
                       modelLabel={currentModel.label}
-                      onChange={(next) => preferences.setEffort(currentKey, next)}
+                      onChange={(next) => {
+                        if (runOptions) runOptions.onChange({ ...runOptions.value, effort: next })
+                        else preferences.setEffort(currentKey, next)
+                      }}
                     />
                   ) : null}
                 </div>

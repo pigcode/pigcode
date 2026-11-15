@@ -3,28 +3,29 @@
  * 「设置 / 历史」页签，右边是立即运行和更多操作），下面是表单或运行历史。
  * 有没保存的修改时离开要先确认；保存成功后回到列表。
  */
-import { useEffect, useId, useState, type FormEvent } from "react"
-import { ChevronLeft, Ellipsis, MessageSquareText, Pause, Play, Trash2 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ChevronLeft, Ellipsis, Pause, Play, Trash2 } from "lucide-react"
 import {
   DEFAULT_RUNTIME_MODE,
   type Project,
   type Schedule,
   type ScheduleExecution,
+  type SchedulePromptDraft,
   type ScheduleRule,
   type ScheduleStatus,
 } from "@pigcode/contracts"
+import type { ComposerDraft, ComposerSubmitOptions } from "@pigcode/ui-composer"
 import {
   Button,
   Input,
   Menu,
   StatusDot,
-  Textarea,
   toHostError,
   useLocale,
   type StatusTone,
 } from "@pigcode/ui-primitives"
 import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
-import { ScheduleExecutionFields } from "./schedule-execution-fields"
+import { ScheduleComposer } from "./schedule-composer"
 import { ScheduleHistory, type ScheduleRunsPage } from "./schedule-history"
 import { STATUS_KEYS, fill, formatWhen, runReason } from "./schedule-format"
 import { ScheduleRuleField, type RuleValue } from "./schedule-rule-field"
@@ -32,6 +33,7 @@ import type {
   CreateScheduleInput,
   RunNowResult,
   ScheduleAgentOptions,
+  ScheduleComposerSources,
   ScheduleThreadOption,
   UpdateScheduleInput,
 } from "./schedule-types"
@@ -51,6 +53,7 @@ export interface ScheduleEditorProps {
   projects: readonly Project[]
   preferredProjectId?: string | null | undefined
   agentOptions: ScheduleAgentOptions
+  composerSources?: ScheduleComposerSources | undefined
   onAddProject?: (() => void) | undefined
   historyRevision?: number | undefined
   onBack: () => void
@@ -80,20 +83,30 @@ const RUN_NOW_KEYS = {
 function signature(fields: {
   title: string
   execution: ScheduleExecution
-  prompt: string
+  prompt: ComposerDraft
   value: RuleValue
 }): string {
   return JSON.stringify([
     fields.title.trim(),
-    fields.prompt.trim(),
+    fields.prompt.text.trim(),
+    fields.prompt.document,
     fields.value.rule,
     fields.value.endsAt,
     executionSignature(fields.execution),
   ])
 }
 
-function executionSignature({ instanceId, modelId, effort, permissionMode }: ScheduleExecution) {
-  return JSON.stringify([instanceId, modelId, effort, permissionMode])
+function executionSignature(value: ScheduleExecution) {
+  return JSON.stringify([
+    value.instanceId,
+    value.modelId,
+    value.effort,
+    value.fast,
+    value.ultracode,
+    value.permissionMode,
+    value.planMode,
+    value.worktree,
+  ])
 }
 
 export function ScheduleEditor({
@@ -103,6 +116,7 @@ export function ScheduleEditor({
   projects,
   preferredProjectId,
   agentOptions,
+  composerSources,
   onAddProject,
   historyRevision = 0,
   onBack,
@@ -115,23 +129,21 @@ export function ScheduleEditor({
   onOpenThread,
 }: ScheduleEditorProps) {
   const { t, locale } = useLocale()
-  const promptId = useId()
   const target = schedule?.target
   const [initial] = useState(() => ({
     title: schedule?.title ?? draft.title,
     execution:
       target?.kind === "project" ? target.execution : { permissionMode: DEFAULT_RUNTIME_MODE },
-    prompt: schedule?.prompt ?? draft.prompt,
+    prompt: { text: schedule?.prompt ?? draft.prompt, document: schedule?.draft?.document },
     value: { rule: schedule?.rule ?? draft.rule, endsAt: schedule?.endsAt ?? null },
   }))
   const [tab, setTab] = useState<"settings" | "history">("settings")
   const [title, setTitle] = useState(initial.title)
   const [pickedProjectId, setPickedProjectId] = useState<string | null>(null)
   const [execution, setExecution] = useState<ScheduleExecution>(initial.execution)
-  const [prompt, setPrompt] = useState(initial.prompt)
+  const [prompt, setPrompt] = useState<ComposerDraft>(initial.prompt)
   const [value, setValue] = useState<RuleValue>(initial.value)
   const [ruleValid, setRuleValid] = useState(true)
-  const [promptTouched, setPromptTouched] = useState(false)
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "warn" } | null>(null)
@@ -145,7 +157,6 @@ export function ScheduleEditor({
     return () => clearTimeout(timer)
   }, [notice])
 
-  const trimmed = prompt.trim()
   const defaultProjectId =
     projects.find((project) => project.id === preferredProjectId)?.id ?? projects[0]?.id ?? ""
   const projectId =
@@ -155,7 +166,7 @@ export function ScheduleEditor({
   const dirty =
     signature({ title, execution, prompt, value }) !== signature(initial) ||
     (!schedule && projectId !== defaultProjectId)
-  const canSave = !saving && ruleValid && trimmed !== "" && (schedule ? dirty : projectId !== "")
+  const canSave = !saving && ruleValid && (schedule ? dirty : projectId !== "")
   const ruleUnchanged =
     schedule !== null &&
     JSON.stringify([value.rule, value.endsAt]) === JSON.stringify([schedule.rule, schedule.endsAt])
@@ -167,17 +178,26 @@ export function ScheduleEditor({
     else onBack()
   }
 
-  async function submit(event?: FormEvent<HTMLFormElement>): Promise<void> {
-    event?.preventDefault()
-    setPromptTouched(true)
-    if (!canSave) return
+  async function submit(text: string, options: ComposerSubmitOptions): Promise<void> {
+    if (!canSave || !text.trim()) return
     setSaving(true)
     setFailure(null)
+    const savedDraft: SchedulePromptDraft | undefined = options.document
+      ? {
+          document: options.document,
+          ...(options.references
+            ? { references: options.references.map(({ kind, threadId }) => ({ kind, threadId })) }
+            : {}),
+        }
+      : undefined
     try {
       if (schedule) {
         const patch: UpdateScheduleInput = {}
         if (title.trim() !== schedule.title) patch.title = title.trim()
-        if (trimmed !== schedule.prompt) patch.prompt = trimmed
+        if (text !== schedule.prompt || prompt.document !== initial.prompt.document) {
+          patch.prompt = text
+          patch.draft = savedDraft ?? null
+        }
         if (!ruleUnchanged) {
           patch.rule = value.rule
           patch.endsAt = value.endsAt
@@ -194,7 +214,8 @@ export function ScheduleEditor({
           projectId,
           execution,
           title: title.trim(),
-          prompt: trimmed,
+          prompt: text,
+          ...(savedDraft ? { draft: savedDraft } : {}),
           rule: value.rule,
           endsAt: value.endsAt,
           enabled: true,
@@ -335,7 +356,7 @@ export function ScheduleEditor({
           onOpenThread={onOpenThread}
         />
       ) : (
-        <form className="schedule-form" onSubmit={(event) => void submit(event)}>
+        <div className="schedule-form">
           {schedule && status ? (
             <div className="field">
               <span className="label">{t("schedules.field.status")}</span>
@@ -378,68 +399,47 @@ export function ScheduleEditor({
             />
           </div>
           <div className="field">
-            <label className="label" htmlFor={promptId}>
-              {t("schedules.field.prompt")}
-            </label>
-            <div className="schedule-instructions">
-              <Textarea
-                id={promptId}
-                value={prompt}
-                rows={5}
-                disabled={saving}
-                aria-invalid={promptTouched && trimmed === "" ? true : undefined}
-                placeholder={t("settings.schedules.promptPlaceholder")}
-                onChange={(event) => setPrompt(event.target.value)}
-                onBlur={() => setPromptTouched(true)}
+            <span className="label">{t("schedules.field.prompt")}</span>
+            <div role="group" aria-label={t("schedules.execution.label")}>
+              <ScheduleComposer
+                form={{
+                  draft: prompt,
+                  onChange: setPrompt,
+                  inputLabel: t("schedules.field.prompt"),
+                  submitLabel: saving
+                    ? schedule
+                      ? t("schedules.saving")
+                      : t("settings.schedules.creating")
+                    : schedule
+                      ? t("schedules.save")
+                      : t("schedules.createAction"),
+                  submitDisabled: !canSave,
+                }}
+                projects={projects}
+                projectId={projectId || null}
+                projectLocked={target?.kind === "project"}
+                legacy={legacyThreadId ? { id: legacyThreadId, thread: legacyThread } : null}
+                onProjectChange={(id) => {
+                  setPickedProjectId(id)
+                  if (id !== projectId)
+                    setExecution((current) => ({ ...current, worktree: undefined }))
+                }}
+                onAddProject={onAddProject}
+                execution={execution}
+                onExecutionChange={setExecution}
+                agentOptions={agentOptions}
+                sources={composerSources}
+                saving={saving}
+                onSubmit={(text, options) => void submit(text, options)}
               />
-              {legacyThreadId ? (
-                <div className="schedule-execution">
-                  <span className="schedule-project-locked" title={t("schedules.threadLocked")}>
-                    <MessageSquareText className="ic ic-sm" aria-hidden="true" />
-                    <span className="truncate">
-                      {t("schedules.field.thread")} ·{" "}
-                      {legacyThread?.title ?? t("schedules.threadMissing")}
-                    </span>
-                  </span>
-                </div>
-              ) : (
-                <ScheduleExecutionFields
-                  projects={projects}
-                  projectId={projectId}
-                  projectLocked={target?.kind === "project"}
-                  onProjectChange={setPickedProjectId}
-                  onAddProject={onAddProject}
-                  value={execution}
-                  onChange={setExecution}
-                  agentOptions={agentOptions}
-                  disabled={saving}
-                />
-              )}
             </div>
-            {promptTouched && trimmed === "" ? (
-              <span className="error-text">{t("schedules.promptRequired")}</span>
-            ) : null}
           </div>
           {failure ? (
             <p className="error-text" role="alert">
               {failure}
             </p>
           ) : null}
-          <div className="schedule-submit">
-            <Button type="button" variant="ghost" onClick={requestBack} disabled={saving}>
-              {t("schedules.cancel")}
-            </Button>
-            <Button type="submit" variant="primary" disabled={!canSave}>
-              {saving
-                ? schedule
-                  ? t("schedules.saving")
-                  : t("settings.schedules.creating")
-                : schedule
-                  ? t("schedules.save")
-                  : t("schedules.createAction")}
-            </Button>
-          </div>
-        </form>
+        </div>
       )}
 
       <ScheduleConfirmDialog

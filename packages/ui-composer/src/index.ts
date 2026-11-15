@@ -1,6 +1,8 @@
 /** 会话输入区的公开入口。 */
 export * from "./composer"
 export * from "./composer-options"
+export type { ComposerDraft, ComposerForm } from "./composer-form"
+export { ProjectChip, ProjectMenu, type ComposerProject } from "./composer-project"
 export { requestComposerMention, requestComposerThreadMention } from "./composer-mention"
 export { requestComposerContext, type ComposerContext } from "./composer-context"
 export {

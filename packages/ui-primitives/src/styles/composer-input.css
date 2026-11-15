@@ -235,6 +235,12 @@
     background var(--t-fast),
     transform var(--t-fast);
 }
+.btn.send[data-form-action] {
+  width: auto;
+  padding-inline: var(--space-5);
+  border-radius: var(--r-md);
+  white-space: nowrap;
+}
 .send:hover {
   background: color-mix(in oklab, var(--fg) 86%, var(--bg));
 }

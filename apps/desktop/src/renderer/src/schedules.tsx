@@ -1,15 +1,41 @@
 /** 定时任务页容器：从 Host 拉取任务，并把页面操作转成 schedule.* RPC。 */
 import { useCallback, useEffect, useState } from "react"
 import type { Schedule } from "@pigcode/contracts"
-import { useAppStore, useContributions } from "@pigcode/client-runtime"
+import { useAppStore, useContributions, type Connection } from "@pigcode/client-runtime"
 import {
   SchedulesPage,
   type RunNowResult,
+  type ScheduleComposerSources,
   type ScheduleRunsPage,
+  type ScheduleWorkspaceControlsProps,
   type UpdateScheduleInput,
 } from "@pigcode/ui-settings"
 import type { CoreDeps } from "./app"
-import { useAgents, useModelCatalog } from "./agents"
+import { useAgents, useDefaultInstanceId, useModelCatalog } from "./agents"
+import { listAgentCommands } from "./agent-commands"
+import { DraftWorkspaceControls } from "./draft-workspace-controls"
+import { threadOptions } from "./thread-options"
+import { useDraftBranches } from "./use-draft-branches"
+import { projectFilePaths } from "./workspace-actions"
+
+function ScheduledWorkspace({
+  connection,
+  projectId,
+  worktree,
+  onWorktree,
+  disabled,
+}: ScheduleWorkspaceControlsProps & { connection: Connection }) {
+  const git = useDraftBranches(connection, projectId)
+  return (
+    <DraftWorkspaceControls
+      branches={git.branches}
+      worktree={worktree ?? null}
+      disabled={disabled}
+      onOpenBranches={() => void git.refresh()}
+      onWorktree={onWorktree}
+    />
+  )
+}
 
 /** 把 unknown 错误转成可展示文本。 */
 function messageOf(error: unknown): string {
@@ -32,8 +58,22 @@ export function SchedulesContainer({
   const { connection } = deps
   const connected = state.status === "connected"
   const agents = useAgents(connection, state.agentRevision, connected)
+  const defaultInstanceId = useDefaultInstanceId(connection, state.agentRevision, connected)
   const { catalog, load } = useModelCatalog(connection, state.agentRevision, connected)
   const addProject = useContributions("command").find((command) => command.id === "add-project")
+  const listFiles = useCallback(
+    (projectId: string) => projectFilePaths(connection, projectId),
+    [connection],
+  )
+  const mentions = useCallback(
+    (projectId: string | null, threadId: string | null) =>
+      threadOptions(state.threads, state.projects, threadId, projectId),
+    [state.threads, state.projects],
+  )
+  const loadCommands = useCallback<NonNullable<ScheduleComposerSources["loadCommands"]>>(
+    (id, scope, refresh) => listAgentCommands(connection, id, scope, refresh),
+    [connection],
+  )
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -79,12 +119,18 @@ export function SchedulesContainer({
       schedules={schedules}
       projects={state.projects}
       preferredProjectId={state.activeProjectId}
-      agentOptions={{ agents, catalog, onLoadModels: load }}
+      agentOptions={{ agents, catalog, onLoadModels: load, defaultInstanceId }}
+      composerSources={{
+        listFiles,
+        threadOptions: mentions,
+        loadCommands,
+        workspaceControls: (props) => (
+          <ScheduledWorkspace key={props.projectId} connection={connection} {...props} />
+        ),
+      }}
       onAddProject={addProject ? () => void addProject.run() : undefined}
       historyRevision={historyRevision}
-      threads={state.threads
-        .filter((thread) => !thread.parentThreadId)
-        .map((thread) => ({ id: thread.id, title: thread.title }))}
+      threads={state.threads}
       loading={loading}
       error={error}
       onRefresh={() => void refresh()}

@@ -14,7 +14,7 @@ function columns(db: Database.Database, table: string): string[] {
 describe("openDatabase", () => {
   it("creates the whole schema in one step, with foreign keys on", () => {
     const db = openDatabase(":memory:")
-    expect(SCHEMA_VERSION).toBe(8)
+    expect(SCHEMA_VERSION).toBe(9)
     expect(db.pragma("user_version", { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.pragma("foreign_keys", { simple: true })).toBe(1)
     const tables = db
@@ -51,6 +51,7 @@ describe("openDatabase", () => {
       expect.arrayContaining([
         "project_id",
         "execution_json",
+        "draft_json",
         "title",
         "rule_json",
         "ends_at",

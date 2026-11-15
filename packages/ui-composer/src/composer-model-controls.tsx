@@ -9,6 +9,7 @@ import type {
   ComposerAgent,
   ComposerModelCatalog,
   ComposerModelChoice,
+  ComposerRunOptions,
   PermissionMode,
 } from "./composer-options"
 import { ModelPicker } from "./model-picker"
@@ -19,6 +20,7 @@ export interface ComposerModelControlsProps {
   agentId: string | null
   modelId: string | null
   catalog: ComposerModelCatalog
+  runOptions?: ComposerRunOptions | undefined
   onLoadModels?: ((instanceId: string) => void) | undefined
   onSelectModel: (choice: ComposerModelChoice) => void
   /** 调用方允许切换模型。 */
@@ -40,6 +42,7 @@ export function ComposerModelControls({
   agentId,
   modelId,
   catalog,
+  runOptions,
   onLoadModels,
   onSelectModel,
   selectable,
@@ -74,6 +77,7 @@ export function ComposerModelControls({
         agentId={agentId}
         modelId={modelId}
         catalog={catalog}
+        runOptions={runOptions}
         onLoadModels={onLoadModels}
         onSelectModel={onSelectModel}
         permissionMode={permissionMode}

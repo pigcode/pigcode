@@ -24,6 +24,51 @@ export function resetAgentCommandsCache(): void {
 /** 命令的工作目录：已有会话按线程，新会话草稿按项目。 */
 export type AgentCommandScope = { threadId: string } | { projectId: string } | null
 
+export function listAgentCommands(
+  connection: Connection,
+  instanceId: string,
+  scope: AgentCommandScope,
+  refresh = false,
+): Promise<AgentCommand[]> {
+  const threadId = scope && "threadId" in scope ? scope.threadId : null
+  const projectId = scope && "projectId" in scope ? scope.projectId : null
+  let cache = caches.get(connection)
+  if (!cache) {
+    cache = new Map()
+    caches.set(connection, cache)
+  }
+  const key = JSON.stringify([instanceId, threadId, projectId])
+  const cached = cache.get(key)
+  if (
+    cached &&
+    ((cached.pending && (!refresh || cached.refresh)) ||
+      (!refresh && Date.now() - cached.at < TTL_MS))
+  )
+    return cached.request
+  const entries = cache
+  const request = (
+    connection.call("agent.commands", {
+      instanceId,
+      ...(threadId ? { threadId } : projectId ? { projectId } : {}),
+      ...(refresh ? { refresh: true } : {}),
+    }) as Promise<AgentCommand[]>
+  ).then(
+    (commands) => {
+      if (entries.get(key)?.request === request) {
+        if (commands.length === 0) entries.delete(key)
+        else entries.set(key, { request, at: Date.now(), pending: false, refresh })
+      }
+      return commands
+    },
+    (): AgentCommand[] => {
+      if (entries.get(key)?.request === request) entries.delete(key)
+      return []
+    },
+  )
+  cache.set(key, { request, at: Date.now(), pending: true, refresh })
+  return request
+}
+
 /** 返回按实例读命令的函数；scope 变了函数才变。 */
 export function useAgentCommandsLoader(
   connection: Connection,
@@ -32,43 +77,13 @@ export function useAgentCommandsLoader(
   const threadId = scope && "threadId" in scope ? scope.threadId : null
   const projectId = scope && "projectId" in scope ? scope.projectId : null
   return useCallback(
-    (instanceId: string, refresh = false) => {
-      let cache = caches.get(connection)
-      if (!cache) {
-        cache = new Map()
-        caches.set(connection, cache)
-      }
-      const key = JSON.stringify([instanceId, threadId, projectId])
-      const cached = cache.get(key)
-      if (
-        cached &&
-        ((cached.pending && (!refresh || cached.refresh)) ||
-          (!refresh && Date.now() - cached.at < TTL_MS))
-      )
-        return cached.request
-      const entries = cache
-      const request = (
-        connection.call("agent.commands", {
-          instanceId,
-          ...(threadId ? { threadId } : projectId ? { projectId } : {}),
-          ...(refresh ? { refresh: true } : {}),
-        }) as Promise<AgentCommand[]>
-      ).then(
-        (commands) => {
-          if (entries.get(key)?.request === request) {
-            if (commands.length === 0) entries.delete(key)
-            else entries.set(key, { request, at: Date.now(), pending: false, refresh })
-          }
-          return commands
-        },
-        (): AgentCommand[] => {
-          if (entries.get(key)?.request === request) entries.delete(key)
-          return []
-        },
-      )
-      cache.set(key, { request, at: Date.now(), pending: true, refresh })
-      return request
-    },
+    (id, refresh) =>
+      listAgentCommands(
+        connection,
+        id,
+        threadId ? { threadId } : projectId ? { projectId } : null,
+        refresh,
+      ),
     [connection, threadId, projectId],
   )
 }

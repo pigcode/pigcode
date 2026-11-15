@@ -4,21 +4,13 @@ import { agentInstancePatchSchema, agentSettingsValuesSchema } from "./agents"
 import {
   permissionModeSchema,
   reasoningEffortSchema,
+  scheduleDraftSchema,
   scheduleExecutionSchema,
   scheduleRuleSchema,
+  threadReferencesSchema,
+  worktreeStartSchema,
 } from "./domain"
 import { DEFAULT_RUNTIME_MODE } from "./runtime-modes"
-
-/** 分支选择器使用完整 ref，避免同名的本地分支、远端分支或 tag 混淆。 */
-const worktreeStart = z.object({
-  baseRef: z
-    .string()
-    .max(4096)
-    .regex(/^refs\/(heads|remotes)\/.+/)
-    .optional(),
-})
-
-export type WorktreeStart = z.infer<typeof worktreeStart>
 
 export interface GitBranches {
   currentBranch: string | null
@@ -106,7 +98,7 @@ export const commandSchemas = {
     permissionMode: permissionModeSchema.optional(),
     planMode: z.boolean().optional(),
     /** 新会话在独立 worktree 中启动；没有 baseRef 时使用项目当前 HEAD。 */
-    worktree: worktreeStart.optional(),
+    worktree: worktreeStartSchema.optional(),
   }),
   "thread.list": z.object({ projectId: z.string().min(1).optional() }),
   "thread.rename": z.object({
@@ -131,10 +123,7 @@ export const commandSchemas = {
     /** 本次 run 打开 Ultracode；只对目录里标了 ultracode 的模型生效，其余 driver 忽略。 */
     ultracode: z.boolean().optional(),
     /** 用户在输入框里 @ 引用的会话；Host 给 agent 附上它们的摘要和读取方法。 */
-    references: z
-      .array(z.object({ kind: z.literal("thread"), threadId: z.string().min(1) }))
-      .max(10)
-      .optional(),
+    references: threadReferencesSchema.optional(),
   }),
   "run.list": z.object({}),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),
@@ -273,6 +262,7 @@ export const commandSchemas = {
     execution: scheduleExecutionSchema.default({ permissionMode: DEFAULT_RUNTIME_MODE }),
     title: scheduleTitle.default(""),
     prompt: z.string().trim().min(1),
+    draft: scheduleDraftSchema.optional(),
     rule: scheduleRuleSchema,
     endsAt: scheduleEndsAt.default(null),
     enabled: z.boolean().default(true),
@@ -281,6 +271,7 @@ export const commandSchemas = {
     id: z.string().min(1),
     title: scheduleTitle.optional(),
     prompt: z.string().trim().min(1).optional(),
+    draft: scheduleDraftSchema.nullable().optional(),
     rule: scheduleRuleSchema.optional(),
     endsAt: scheduleEndsAt.optional(),
     enabled: z.boolean().optional(),
