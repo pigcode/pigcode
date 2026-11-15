@@ -182,13 +182,11 @@
   font-family: var(--font-ui);
   font-size: var(--fs-2xs);
   font-variant-numeric: tabular-nums;
-}
-.turn-user-actions .turn-action {
   opacity: 0;
   transition: opacity var(--t-fast);
 }
-.turn-user:hover .turn-user-actions .turn-action,
-.turn-user-actions:focus-within .turn-action {
+.turn-user:hover .turn-user-actions,
+.turn-user-actions:focus-within {
   opacity: 1;
 }
 
@@ -290,7 +288,7 @@
   background: var(--bad-soft);
   color: var(--bad-text);
 }
-/* ─── 回答下方的操作栏：悬停这一轮时出现 ─────────────────── */
+/* ─── 回答下方的操作栏：复制常驻，悬停时显示时间 ─────────── */
 .turn-actions {
   display: flex;
   align-items: center;
@@ -299,12 +297,6 @@
   color: var(--cv-subtlest);
   font-family: var(--font-ui);
   font-size: var(--cv-fs-sm);
-  opacity: 0;
-  transition: opacity var(--t-fast);
-}
-.turn:hover .turn-actions,
-.turn-actions:focus-within {
-  opacity: 1;
 }
 .turn-action {
   display: grid;
@@ -325,6 +317,12 @@
 .turn-actions time {
   padding-left: 4px;
   font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.turn:has(> .msg-ai:hover) > .turn-actions time,
+.turn-actions:is(:hover, :focus-within) time {
+  opacity: 1;
 }
 
 /* ─── 标记行：切换 agent、带上主会话近况 ─────────────────── */

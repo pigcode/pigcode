@@ -1,6 +1,6 @@
 /**
  * 用户消息：靠右的圆角气泡，长消息折叠并向下渐隐。@ 引用使用可点开的带图标标签。
- * 气泡下方显示发送时间，并在悬停或聚焦时显示复制按钮。
+ * 悬停或聚焦时，气泡下方同时显示复制按钮与发送时间。
  */
 import { Fragment, memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { ChevronDown, ChevronUp, MessagesSquare } from "lucide-react"
