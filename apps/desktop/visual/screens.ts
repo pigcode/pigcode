@@ -161,6 +161,7 @@ async function scrollThread(page: Page, fraction: number): Promise<void> {
 export async function walkShell(walk: Walk): Promise<void> {
   const { page, step, locale } = walk
   const t = translator(walk.locale)
+  await expect(page.locator(".new-thread .model-chip")).toContainText("Fake Sage")
   await step("shell-empty")
   await createProject(walk, () => step("dialog-add-project"))
   await step("thread-new")
@@ -224,6 +225,7 @@ export async function walkShell(walk: Walk): Promise<void> {
   await approval.getByRole("button").first().click()
   // 决议后卡片留着显示结果，按钮消失。
   await expect(approval.getByRole("button")).toHaveCount(0)
+  await expect(page.locator(".turn").last()).toHaveAttribute("data-status", "completed")
 
   await page.locator(".proj-block .proj").first().click({ button: "right" })
   await expect(page.getByRole("menuitem", { name: t("sidebar.removeProject") })).toBeVisible()
@@ -237,6 +239,7 @@ export async function walkShell(walk: Walk): Promise<void> {
   // 窄窗口（宽度小于 960px）：侧栏收进抽屉。放在最后，前面的截图不受窗口尺寸影响。
   await page.setViewportSize({ width: 720, height: 800 })
   await expect(page.locator(".sidebar")).toBeHidden()
+  await page.mouse.move(1, 1)
   await step("shell-narrow")
   await page
     .getByRole("button", { name: t("sidebar.expand") })
