@@ -74,20 +74,20 @@
   font-size: var(--fs-sm);
 }
 
-/* ─── 卡片上方的项目选择 ───────────────────────────────── */
-.composer-head .chip-btn.draft-project {
+/* ─── 输入框外壳上的项目选择 ───────────────────────────────── */
+.composer-frame-bar .chip-btn.draft-project {
   max-width: 260px;
   color: var(--fg-2);
 }
-.composer-head .chip-btn.draft-project:hover,
-.composer-head .chip-btn.draft-project[aria-expanded="true"] {
+.composer-frame-bar .chip-btn.draft-project:hover,
+.composer-frame-bar .chip-btn.draft-project[aria-expanded="true"] {
   background: var(--active);
   color: var(--fg);
 }
-.composer-head .chip-btn.draft-project[data-static] {
+.composer-frame-bar .chip-btn.draft-project[data-static] {
   cursor: default;
 }
-.composer-head .chip-btn.draft-project[data-static]:hover {
+.composer-frame-bar .chip-btn.draft-project[data-static]:hover {
   background: none;
   color: var(--fg-2);
 }
@@ -97,11 +97,11 @@
   overflow-y: auto;
 }
 
-.composer-head:has(.draft-branch) {
+.composer-frame-bar:has(.draft-branch) {
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
 }
-.composer-head:has(.draft-branch) .draft-project {
+.composer-frame-bar:has(.draft-branch) .draft-project {
   max-width: 35%;
 }
 .draft-workspace-divider {
@@ -111,19 +111,19 @@
   margin-inline: var(--space-2);
   background: var(--border);
 }
-.composer-head .draft-branch {
+.composer-frame-bar .draft-branch {
   max-width: min(230px, 42%);
   color: var(--muted);
 }
-.composer-head .draft-branch:hover,
-.composer-head .draft-branch[aria-expanded="true"] {
+.composer-frame-bar .draft-branch:hover,
+.composer-frame-bar .draft-branch[aria-expanded="true"] {
   color: var(--fg);
 }
-.composer-head .draft-project > .ic,
-.composer-head .draft-branch > .ic {
+.composer-frame-bar .draft-project > .ic,
+.composer-frame-bar .draft-branch > .ic {
   flex: none;
 }
-.composer-head .draft-worktree {
+.composer-frame-bar .draft-worktree {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -135,11 +135,11 @@
   cursor: pointer;
   transition: color var(--t-fast);
 }
-.composer-head .draft-worktree:hover,
-.composer-head .draft-worktree[data-checked] {
+.composer-frame-bar .draft-worktree:hover,
+.composer-frame-bar .draft-worktree[data-checked] {
   color: var(--fg-2);
 }
-.composer-head .draft-worktree:has([data-disabled]) {
+.composer-frame-bar .draft-worktree:has([data-disabled]) {
   cursor: default;
   color: var(--muted);
 }
@@ -256,24 +256,24 @@
   display: none;
 }
 @container new-thread (max-width: 380px) {
-  .composer-head:has(.draft-branch) {
+  .composer-frame-bar:has(.draft-branch) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     row-gap: var(--space-2);
   }
-  .composer-head:has(.draft-branch) .draft-project {
+  .composer-frame-bar:has(.draft-branch) .draft-project {
     max-width: 100%;
     justify-self: start;
   }
   .draft-workspace-divider {
     display: none;
   }
-  .composer-head .draft-worktree {
+  .composer-frame-bar .draft-worktree {
     grid-column: 2;
     grid-row: 1;
     margin-left: 0;
   }
-  .composer-head .draft-branch {
+  .composer-frame-bar .draft-branch {
     grid-column: 1 / -1;
     grid-row: 2;
     max-width: 100%;

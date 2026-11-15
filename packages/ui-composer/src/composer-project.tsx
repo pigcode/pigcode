@@ -1,4 +1,4 @@
-/** 项目选择条；放在 Composer 的 header，普通草稿与定时任务共用。 */
+/** Composer 的项目选择条，普通草稿与定时任务共用。 */
 import { Check, ChevronDown, Folder, FolderPlus } from "lucide-react"
 import { Menu, useLocale } from "@pigcode/ui-primitives"
 
@@ -8,7 +8,7 @@ export interface ComposerProject {
   rootPath: string
 }
 
-/** 卡片上方的项目，已经建好的会话用：会话属于这个项目，只显示，不能换。 */
+/** 已有会话或任务的固定项目。 */
 export function ProjectChip({ name, rootPath }: { name: string; rootPath?: string | undefined }) {
   const { t } = useLocale()
   return (
@@ -20,19 +20,21 @@ export function ProjectChip({ name, rootPath }: { name: string; rootPath?: strin
   )
 }
 
-/** 卡片上方的项目选择；还没有项目时直接是「添加项目」。 */
+/** 项目选择；还没有项目时直接是「添加项目」。 */
 export function ProjectMenu({
   projects,
   projectId,
   onSelect,
   onAdd,
   disabled,
+  side = "bottom",
 }: {
   projects: readonly ComposerProject[]
   projectId: string | null
   onSelect: (projectId: string) => void
   onAdd?: (() => void) | undefined
   disabled: boolean
+  side?: "top" | "bottom"
 }) {
   const { t } = useLocale()
   const current = projects.find((project) => project.id === projectId)
@@ -64,7 +66,7 @@ export function ProjectMenu({
         <ChevronDown className="ic chip-caret" aria-hidden="true" />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner side="bottom" align="start" sideOffset={6}>
+        <Menu.Positioner side={side} align="start" sideOffset={6}>
           <Menu.Popup className="draft-project-menu">
             <Menu.Group>
               <Menu.Label>{t("nav.projects")}</Menu.Label>

@@ -81,7 +81,7 @@ export function ScheduleComposer({
     <Composer
       tall
       form={form}
-      header={
+      footer={
         legacy ? (
           <span
             className="chip-btn draft-project"
@@ -107,6 +107,7 @@ export function ScheduleComposer({
                 onSelect={onProjectChange}
                 onAdd={onAddProject}
                 disabled={saving}
+                side="top"
               />
             )}
             {project

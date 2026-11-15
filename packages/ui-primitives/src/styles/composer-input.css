@@ -81,15 +81,14 @@
   grid-area: send;
 }
 /*
-  卡片上方带一条（新会话草稿的项目选择）：浅灰的外框包住这一条和卡片，圆角和卡片相同，
-  卡片的上沿两角露出底下的灰，看起来是一张卡片从这条下面伸出来。
+  浅灰外框包住卡片与工作区控件；控件可放在卡片上方或下方，圆角处露出底下的灰色。
 */
 .composer-frame {
   border-radius: var(--r-xl);
   background: var(--field);
   box-shadow: inset 0 0 0 var(--hair) var(--divider);
 }
-.composer-head {
+.composer-frame-bar {
   display: flex;
   align-items: center;
   gap: var(--space-1);

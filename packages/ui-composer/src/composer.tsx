@@ -106,6 +106,8 @@ export interface ComposerProps {
   focusKey?: number | undefined
   /** 输入框卡片上方的一条，和卡片连成一体，例如新会话草稿里的项目选择。 */
   header?: ReactNode
+  /** 输入框卡片下方的工作区控件，与卡片共用外框。 */
+  footer?: ReactNode
   /** 表单中提交后保留草稿，Enter 换行，Mod+Enter 提交。 */
   form?: ComposerForm
   /** 指定时让调用方保存这次运行的模型选项。 */
@@ -148,6 +150,7 @@ export function Composer({
   autoFocus = false,
   focusKey,
   header,
+  footer,
   form,
   runOptions,
   draftKey = null,
@@ -476,10 +479,11 @@ export function Composer({
 
   return (
     <div className="composer-shell">
-      {header ? (
+      {header || footer ? (
         <div className="composer-frame">
-          <div className="composer-head">{header}</div>
+          {header ? <div className="composer-frame-bar composer-head">{header}</div> : null}
           {card}
+          {footer ? <div className="composer-frame-bar composer-foot">{footer}</div> : null}
         </div>
       ) : (
         card
