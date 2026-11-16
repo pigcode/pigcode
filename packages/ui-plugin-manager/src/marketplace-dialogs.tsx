@@ -1,9 +1,67 @@
-// 「添加插件市场」对话框：必须先勾选风险确认，勾选只属于这一次打开；失败时保留输入和勾选、显示原因。
-// 市场源管理在 marketplace-sources.tsx。
+// 插件页的「添加」菜单和添加市场对话框。
 import { useEffect, useId, useState, type FormEvent } from "react"
-import { Check, FolderOpen, ShieldAlert } from "lucide-react"
-import { Button, Checkbox, Dialog, Input, useLocale } from "@pigcode/ui-primitives"
+import {
+  Check,
+  ChevronDown,
+  Download,
+  FolderOpen,
+  Plus,
+  ShieldAlert,
+  Sparkles,
+  Store,
+} from "lucide-react"
+import { Button, Checkbox, Dialog, Input, Menu, useLocale } from "@pigcode/ui-primitives"
 import { fill, pluginErrorText } from "./plugin-summary"
+
+export function PluginAddMenu({
+  onCreatePlugin,
+  onAddMarketplace,
+  onInstall,
+}: {
+  onCreatePlugin?: (() => void) | undefined
+  onAddMarketplace: () => void
+  onInstall: () => void
+}) {
+  const { t } = useLocale()
+  return (
+    <Menu.Root>
+      <Menu.Trigger className="btn btn-secondary btn-sm market-add">
+        <Plus className="ic ic-sm" aria-hidden="true" />
+        {t("plugins.add")}
+        <ChevronDown className="ic ic-sm" aria-hidden="true" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="bottom" align="end" sideOffset={4}>
+          <Menu.Popup className="market-add-menu">
+            {onCreatePlugin ? (
+              <Menu.Item onClick={onCreatePlugin}>
+                <Sparkles className="ic" aria-hidden="true" />
+                <span className="grow">
+                  {t("plugins.add.create")}
+                  <span className="menu-item-desc">{t("plugins.add.createHint")}</span>
+                </span>
+              </Menu.Item>
+            ) : null}
+            <Menu.Item onClick={onAddMarketplace}>
+              <Store className="ic" aria-hidden="true" />
+              <span className="grow">
+                {t("plugins.add.marketplace")}
+                <span className="menu-item-desc">{t("plugins.add.marketplaceHint")}</span>
+              </span>
+            </Menu.Item>
+            <Menu.Item onClick={onInstall}>
+              <Download className="ic" aria-hidden="true" />
+              <span className="grow">
+                {t("plugins.add.install")}
+                <span className="menu-item-desc">{t("plugins.add.installHint")}</span>
+              </span>
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  )
+}
 
 export interface AddMarketplaceDialogProps {
   open: boolean

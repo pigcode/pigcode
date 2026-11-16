@@ -10,8 +10,7 @@ import { openThread } from "./projects"
 
 const MARKET = "/tmp/pigcode-e2e-market/plugins"
 /**
- * 市场和装上的插件都记在 profile 里。其他用例共用同一个 profile，有市场时插件页默认打开市场分段，
- * 所以这里每个用例用自己的 profile。
+ * 市场和装上的插件都记在 profile 里，每个用例使用独立 profile。
  */
 let profileDir = ""
 
@@ -87,7 +86,7 @@ export function apply(ctx) {
 
 async function openPlugins(page: Page): Promise<void> {
   await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
-  await expect(page.getByRole("heading", { level: 1, name: "插件" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "插件市场" })).toBeVisible()
 }
 
 async function openAddMenu(page: Page): Promise<void> {
@@ -115,6 +114,7 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     await dialog.getByRole("checkbox", { name: /我已了解风险/ }).click()
     await submit.click()
     await expect(dialog).toBeHidden()
+    await expect(page.getByRole("radio", { name: "个人" })).toBeChecked()
 
     const section = page.getByRole("region", { name: "E2E 插件" })
     await expect(section).toContainText("本地文件夹")
@@ -124,16 +124,19 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     await expect(page.locator(".plugin-panel-head").filter({ hasText: "Word Count" })).toBeVisible()
     await expect(page.getByRole("button", { name: /字数统计 v0\.1\.0/ })).toBeVisible()
 
-    // 改了版本号：刷新市场后卡片上可以更新，更新后侧栏面板换成新版本。
+    // 管理页读取市场里的新版本并更新，侧栏面板也换成新版本。
     writeMarketplace("0.2.0")
-    await page.getByRole("button", { name: /^市场源/ }).click()
-    const sources = page.getByRole("dialog", { name: "市场源" })
-    await sources.getByRole("button", { name: "刷新 E2E 插件" }).click()
-    await sources.getByRole("button", { name: "关闭" }).last().click()
-    await expect(section.locator(".market-tile")).toContainText("可更新")
-    await section.getByRole("button", { name: "更新 字数统计" }).click()
-    await expect(section.locator(".market-tile")).toContainText("已安装")
+    await page.getByRole("button", { name: "插件管理", exact: true }).click()
+    const installed = page.getByRole("region", { name: "已安装" })
+    await expect(installed).toContainText("0.1.0")
+    await expect(installed).toContainText("E2E 插件")
+    await page.getByRole("button", { name: "检查更新" }).click()
+    await installed.getByRole("button", { name: "更新 字数统计" }).click()
+    await expect(installed).toContainText("0.2.0")
     await expect(page.getByRole("button", { name: /字数统计 v0\.2\.0/ })).toBeVisible()
+    await page.getByRole("button", { name: "返回插件市场" }).click()
+    await expect(page.getByRole("radio", { name: "个人" })).toBeChecked()
+    await expect(section.locator(".market-tile")).toContainText("已安装")
 
     // 停用市场源：插件市场里不再列出它，装好的插件照常在用；在市场源里重新启用后回来。
     await section.getByRole("button", { name: "E2E 插件 的操作" }).click()
@@ -142,12 +145,13 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     await expect(page.getByText("市场源都已停用")).toBeVisible()
     await expect(page.locator(".plugin-panel-head").filter({ hasText: "Word Count" })).toBeVisible()
     await page.getByRole("button", { name: "管理市场源…" }).click()
+    const sources = page.getByRole("dialog", { name: "市场源" })
     await sources.getByRole("switch", { name: "启用 E2E 插件" }).click()
     await expect(sources.getByRole("status")).toHaveText("1 个市场源")
     await sources.getByRole("button", { name: "关闭" }).last().click()
     await expect(section).toBeVisible()
 
-    await page.getByRole("radio", { name: /已安装/ }).click()
+    await page.getByRole("button", { name: "插件管理", exact: true }).click()
     await page.getByRole("button", { name: "字数统计 的详情" }).click()
     await expect(page.getByRole("dialog", { name: "字数统计" })).toContainText(
       "pigcode-word-count@dev-e2e",

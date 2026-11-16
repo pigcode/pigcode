@@ -384,7 +384,7 @@ export const enUS = {
   "chat.notice.fast.unavailable.cooldown":
     "Fast mode is cooling down after a rate limit, so this turn ran at standard speed.",
   "plugins.title": "Plugin manager",
-  "plugins.pageTitle": "Plugins",
+  "plugins.pageTitle": "Plugin marketplace",
   "plugins.install": "Install plugin",
   "plugins.installSpec": "GitHub repo, npm package or plugin folder",
   "plugins.installSpecPlaceholder": "owner/repo, package@1.0.0 or /path/to/plugin",

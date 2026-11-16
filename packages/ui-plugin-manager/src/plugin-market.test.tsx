@@ -1,5 +1,5 @@
 /**
- * 验证插件市场：有市场时默认看市场，卡片上的安装 / 已安装 / 更新，市场插件的详情，「添加」菜单里的创建插件、
+ * 验证插件市场的目录与独立管理页，卡片上的安装 / 已安装 / 更新，市场插件的详情，「添加」菜单里的创建插件、
  * 添加插件市场（必须勾选风险确认）与安装插件，插件市场来源（刷新、删除先确认），没有市场时的说明，
  * Host 错误换成说明文案，以及版本比较。
  */
@@ -97,15 +97,45 @@ function renderView(overrides: Partial<PluginManagerViewProps> = {}) {
 }
 
 async function openAddMenu(): Promise<void> {
-  await userEvent.click(screen.getByRole("button", { name: /^添加/ }))
+  await userEvent.click(screen.getByRole("button", { name: "添加" }))
+}
+
+async function openPersonal(): Promise<void> {
+  await userEvent.click(screen.getByRole("radio", { name: "个人" }))
 }
 
 describe("plugin marketplace", () => {
-  it("shows the marketplace first, with install, installed and update states on the cards", async () => {
+  it("opens the public catalog first and only lists user-added sources under Personal", async () => {
+    renderView({
+      plugins: [
+        CLOCK,
+        {
+          ...CLOCK,
+          id: "agent.codex",
+          name: "@pigcode/agent-codex",
+          displayName: "Codex",
+          kind: "agent",
+          builtin: true,
+          origin: null,
+          originLabel: null,
+        },
+      ],
+    })
+    expect(screen.getByRole("radio", { name: "公开" }).getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByRole("button", { name: "Codex 的详情" })).toBeTruthy()
+    expect(screen.queryByRole("switch")).toBeNull()
+    expect(screen.queryByRole("radio", { name: /已安装/ })).toBeNull()
+    expect(screen.queryByRole("region", { name: "开发工具" })).toBeNull()
+    await userEvent.click(screen.getByRole("radio", { name: "社区" }))
+    expect(screen.getByText("暂无社区插件")).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "前往个人市场" }))
+    expect(screen.getByRole("region", { name: "开发工具" })).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Codex 的详情" })).toBeNull()
+  })
+
+  it("shows install and update actions on personal marketplace cards", async () => {
     const props = renderView()
-    expect(screen.getByRole("radio", { name: "插件市场" }).getAttribute("aria-checked")).toBe(
-      "true",
-    )
+    await openPersonal()
     const section = screen.getByRole("region", { name: "开发工具" })
     expect(section.textContent).toContain("GitHub · acme/tools · 2 个插件")
     // 已经装了 0.1.0，市场里是 0.2.0：可以更新。
@@ -119,18 +149,29 @@ describe("plugin marketplace", () => {
     expect(props.onInstallFromMarketplace).toHaveBeenCalledWith("dev-tools", "pigcode-notes")
   })
 
-  it("marks plugins that are already up to date as installed and searches across marketplaces", async () => {
+  it("marks up-to-date plugins as installed and restores the marketplace search after management", async () => {
     renderView({ plugins: [{ ...CLOCK, version: "0.2.0" }] })
+    await openPersonal()
     const clock = screen.getByRole("button", { name: "时钟 的详情" }).closest(".market-tile")!
     expect(clock.textContent).toContain("已安装")
     expect(clock.textContent).not.toContain("可更新")
     await userEvent.type(screen.getByRole("searchbox"), "笔记")
     expect(screen.queryByRole("button", { name: "时钟 的详情" })).toBeNull()
     expect(screen.getByRole("button", { name: "笔记 的详情" })).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "插件管理" }))
+    expect(screen.getByRole("heading", { name: "插件管理" })).toBeTruthy()
+    expect(screen.queryByRole("radio", { name: "个人" })).toBeNull()
+    expect(screen.getByRole("button", { name: "Clock 的详情" })).toBeTruthy()
+    await userEvent.type(screen.getByRole("searchbox"), "Clock")
+    await userEvent.click(screen.getByRole("button", { name: "返回插件市场" }))
+    expect(screen.getByRole("radio", { name: "个人" }).getAttribute("aria-checked")).toBe("true")
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("笔记")
+    expect(screen.getByRole("button", { name: "笔记 的详情" })).toBeTruthy()
   })
 
   it("opens a marketplace plugin's details with its facts and homepage", async () => {
     const props = renderView()
+    await openPersonal()
     await userEvent.click(screen.getByRole("button", { name: "时钟 的详情" }))
     const dialog = await screen.findByRole("dialog", { name: "时钟" })
     expect(dialog.textContent).toContain("市场里有新版本 0.2.0")
@@ -175,6 +216,7 @@ describe("plugin marketplace", () => {
     await vi.waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "添加插件市场" })).toBeNull(),
     )
+    expect(screen.getByRole("radio", { name: "个人" }).getAttribute("aria-checked")).toBe("true")
   })
 
   it("refreshes and removes marketplaces in the sources dialog", async () => {
@@ -215,6 +257,7 @@ describe("plugin marketplace", () => {
   it("hides disabled sources from the marketplace and their updates from the plugin list", async () => {
     const onSetMarketplaceEnabled = vi.fn(async () => {})
     renderView({ onSetMarketplaceEnabled, marketplaces: [{ ...MARKET, enabled: false }] })
+    await openPersonal()
     expect(screen.queryByRole("region", { name: "开发工具" })).toBeNull()
     expect(screen.getByText("市场源都已停用")).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "管理市场源…" }))
@@ -226,13 +269,14 @@ describe("plugin marketplace", () => {
     await userEvent.keyboard("{Escape}")
 
     // 已安装的时钟在停用的市场里有新版本，但不提示更新。
-    await userEvent.click(screen.getByRole("radio", { name: "已安装 1" }))
+    await userEvent.click(screen.getByRole("button", { name: "插件管理" }))
     expect(screen.queryByRole("button", { name: /更新/ })).toBeNull()
   })
 
   it("acts on a source from the menu next to its marketplace heading", async () => {
     const onSetMarketplaceEnabled = vi.fn(async () => {})
     const props = renderView({ onSetMarketplaceEnabled })
+    await openPersonal()
     const menu = () => userEvent.click(screen.getByRole("button", { name: "开发工具 的操作" }))
     await menu()
     await userEvent.click(await screen.findByRole("menuitem", { name: "刷新这个市场源" }))
@@ -247,12 +291,8 @@ describe("plugin marketplace", () => {
 
   it("explains marketplaces when there are none, with ways to get plugins", async () => {
     const props = renderView({ marketplaces: [] })
-    // 没有市场时先看已安装的插件；切到插件市场是一段说明。
-    expect(screen.getByRole("radio", { name: "已安装 1" }).getAttribute("aria-checked")).toBe(
-      "true",
-    )
-    await userEvent.click(screen.getByRole("radio", { name: "插件市场" }))
-    expect(screen.getByRole("heading", { name: "还没有插件市场" })).toBeTruthy()
+    await openPersonal()
+    expect(screen.getByRole("heading", { name: "还没有个人市场源" })).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "从 GitHub 安装" }))
     expect(await screen.findByRole("dialog", { name: "安装插件" })).toBeTruthy()
     await userEvent.keyboard("{Escape}")
@@ -262,6 +302,7 @@ describe("plugin marketplace", () => {
 
   it("shows where an installed plugin came from and updates it from its details", async () => {
     const props = renderView({ marketplaces: [] })
+    await userEvent.click(screen.getByRole("button", { name: "插件管理" }))
     await userEvent.click(screen.getByRole("button", { name: "Clock 的详情" }))
     const dialog = await screen.findByRole("dialog", { name: "Clock" })
     expect(dialog.textContent).toContain("pigcode-clock@dev-tools")

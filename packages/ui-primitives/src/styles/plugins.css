@@ -44,17 +44,11 @@
   transform: rotate(90deg);
 }
 
-/*
-  插件页（ui-plugin-manager）：页头下面是搜索框，然后按类型分组，每组一条标题加细线，下面两列卡片。
-  卡片平时没有底色，悬停、键盘聚焦或菜单打开时才铺一层；更多菜单的按钮也只在这时出现。
-*/
+/* 插件市场用两列卡片。插件管理用单列列表，共用图标、状态和详情入口。 */
 .plugin-market,
 .plugin-dialog {
   --market-icon-size: var(--plugin-icon);
   --market-gap: var(--space-5);
-}
-.plugin-market .market-search {
-  margin-bottom: var(--space-2);
 }
 .plugin-market .market-error {
   margin-top: var(--space-4);
@@ -63,13 +57,12 @@
   margin-top: var(--space-8);
 }
 
-/* 分组：标题和卡片里的图标左对齐，标题下一条贯穿的细线 */
 .market-section {
-  margin-top: 26px;
+  margin-top: var(--space-9);
 }
 .market-section-title {
-  padding: 0 var(--market-gap) var(--space-5);
-  border-bottom: var(--hair) solid var(--border-strong);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--hair) solid var(--divider);
   color: var(--fg);
   font-size: var(--fs-xl);
   font-weight: 600;
@@ -78,24 +71,14 @@
 .market-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-7);
-  margin-top: var(--space-4);
+  gap: var(--space-4) var(--space-6);
+  margin-top: var(--space-5);
 }
 @container (max-width: 560px) {
   .market-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.market-more {
-  margin: var(--space-3) 0 0 var(--market-gap);
-  padding: var(--space-1) 0;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.market-more:hover {
-  color: var(--fg);
-}
-
 /* 卡片：主按钮的 ::after 盖住整张卡片，点空白处等于看详情；右边的操作叠在它上面 */
 .market-tile {
   position: relative;
@@ -103,16 +86,23 @@
   align-items: center;
   gap: var(--market-gap);
   min-width: 0;
-  min-height: calc(var(--market-icon-size) + var(--market-gap) * 2);
+  min-height: calc(var(--market-icon-size) + var(--space-9));
   padding: var(--market-gap);
   border-radius: var(--r-lg);
 }
+.market-grid .market-tile {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+}
 .market-tile:hover,
 .market-tile:has(:focus-visible),
-.market-tile[data-menu-open] {
+.market-tile[data-menu-open],
+.market-grid .market-tile:hover,
+.market-grid .market-tile:has(:focus-visible) {
   background: var(--hover);
 }
-.market-tile:has(> .market-tile-main:focus-visible) {
+.market-tile:has(> .market-tile-main:focus-visible),
+.market-grid .market-tile:has(> .market-tile-main:focus-visible) {
   box-shadow: inset 0 0 0 1px var(--border-focus);
 }
 .market-tile-main {
@@ -196,13 +186,10 @@
   min-width: 0;
 }
 .market-tile-name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
   min-width: 0;
   color: var(--fg);
   font-size: var(--fs-md);
-  font-weight: 550;
+  font-weight: 600;
   line-height: 1.35;
 }
 .market-tile[data-enabled="false"] .market-tile-name {
@@ -212,6 +199,13 @@
   color: var(--muted);
   font-size: var(--fs-sm);
   line-height: 1.4;
+}
+.market-grid .market-tile-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .market-tile-desc[data-tone] {
   display: flex;
@@ -226,7 +220,7 @@
   color: var(--warn-text);
 }
 
-/* 右边的操作：更多菜单悬停才出现，「打开」是浅灰的小按钮，最后是开关 */
+/* 管理行右侧放置更新、菜单、设置和状态开关。 */
 .market-tile-actions {
   position: relative;
   z-index: 1;
@@ -251,24 +245,71 @@
   width: var(--control-sm);
   height: var(--control-sm);
   border-radius: var(--r-sm);
-  opacity: 0;
-}
-.market-tile:hover .market-tile-menu,
-.market-tile:has(:focus-visible) .market-tile-menu,
-.market-tile[data-menu-open] .market-tile-menu {
-  opacity: 1;
 }
 .icon-btn.market-tile-menu:hover,
 .icon-btn.market-tile-menu[aria-expanded="true"] {
   background: var(--active);
 }
-@media (hover: none) {
-  .icon-btn.market-tile-menu {
-    opacity: 1;
-  }
-}
 .market-menu.menu-popup {
   min-width: 140px;
+}
+
+.installed-section-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.installed-section-heading h2 {
+  color: var(--fg);
+  font-size: var(--fs-xl);
+  font-weight: 600;
+}
+.installed-section-count {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.installed-plugin-rows {
+  margin: 0;
+  padding: 0;
+  border: var(--hair) solid var(--border-strong);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  list-style: none;
+  overflow: clip;
+}
+.installed-plugin-row {
+  border-radius: 0;
+}
+.installed-plugin-row + .installed-plugin-row::before {
+  position: absolute;
+  inset: 0 var(--market-gap) auto;
+  height: var(--hair);
+  background: var(--divider);
+  content: "";
+  pointer-events: none;
+}
+.installed-plugin-subtitle {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.installed-plugin-subtitle > * + *::before {
+  margin-inline: var(--space-2);
+  color: var(--muted);
+  content: "·";
+}
+.installed-plugin-version {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.installed-plugin-source {
+  flex: 0 1 auto;
+  max-width: 45%;
 }
 
 /* 详情对话框：图标在标题左边，名称与状态一行叠在它右边；包名、权限这些放在一块浅底里 */
@@ -351,42 +392,64 @@
   line-height: 1.5;
 }
 
-/*
-  插件市场（PluginMarket）：分段与搜索一行；每个市场一组，组头是名称、来源与更新时间，失败时多一行原因；
-  卡片右边是「安装」「更新」的胶囊按钮或「已安装」。还没有市场时是一块居中的说明卡。
-*/
+/* 标题栏放页面操作，目录或状态筛选与搜索放在单独一行。 */
+.market-page-head {
+  margin-bottom: var(--space-6);
+}
+.market-page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.market-page-head .actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.market-page-head .actions .btn {
+  height: var(--control-md);
+  border-radius: var(--r-md);
+}
 .market-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4) var(--space-6);
-  margin-bottom: var(--space-2);
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-7);
+}
+.market-tabs.seg {
+  gap: var(--space-2);
+  padding: 0;
+  background: none;
+}
+.market-tabs .seg-item {
+  height: var(--control-md);
+  padding: 0 var(--space-6);
+  border-radius: var(--r-full);
+}
+.market-tabs .seg-item[data-checked] {
+  background: var(--field);
+  box-shadow: none;
+  font-weight: 600;
 }
 .plugin-market .market-toolbar .market-search {
-  flex: 1;
-  min-width: 200px;
-  margin-bottom: 0;
+  flex: 1 0 170px;
+  max-width: 280px;
+}
+@container (max-width: 490px) {
+  .market-page-head {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+  .plugin-market .market-toolbar .market-search {
+    max-width: none;
+  }
 }
 .btn.market-add {
   gap: var(--space-2);
 }
 .market-add-menu.menu-popup {
   min-width: 280px;
-}
-/* 标题栏的「市场源」：文字按钮，后面一个小计数 */
-.btn.market-sources-btn {
-  gap: var(--space-3);
-}
-.market-sources-count {
-  min-width: var(--badge-h);
-  padding: 0 var(--space-2);
-  border-radius: var(--r-full);
-  background: var(--field);
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  line-height: var(--badge-h);
-  text-align: center;
 }
 .market-notice {
   color: var(--muted);
@@ -397,8 +460,8 @@
   flex-direction: column;
   gap: var(--space-1);
   min-width: 0;
-  padding: 0 var(--market-gap) var(--space-5);
-  border-bottom: var(--hair) solid var(--border-strong);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--hair) solid var(--divider);
 }
 /* 组标题与它右边的「⋯」：菜单平时淡一点，悬停在组头上时和标题一样清楚 */
 .market-section-titlebar {
@@ -458,7 +521,11 @@
   font-weight: 500;
 }
 .market-installed {
-  padding: 0 var(--space-3);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
   color: var(--muted);
   font-size: var(--fs-sm);
 }
@@ -479,16 +546,19 @@
   background: var(--surface);
   object-fit: cover;
 }
+.market-hero,
+.market-community-empty {
+  margin-top: var(--space-8);
+  padding: calc(var(--space-9) + var(--space-6)) var(--space-7);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
+}
 .market-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-4);
-  margin-top: var(--space-8);
-  padding: var(--space-9) var(--space-9) calc(var(--space-9) + var(--space-4));
-  border-radius: var(--r-2xl);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
   text-align: center;
 }
 .market-hero-icon {
@@ -497,9 +567,9 @@
   justify-content: center;
   width: var(--plugin-icon-lg);
   height: var(--plugin-icon-lg);
-  border-radius: var(--r-lg);
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--muted);
 }
 .market-hero h2 {
   color: var(--fg);

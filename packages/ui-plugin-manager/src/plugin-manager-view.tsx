@@ -1,25 +1,24 @@
-// 插件页：标题栏右边是刷新、市场源与「添加」（创建插件、添加插件市场、安装插件），下面是「插件市场 / 已安装」
-// 两个分段和搜索框。插件市场按市场分组列出启用的市场源里可以安装的插件；已安装按类型分组，可以启停、更新与卸载。
-import { useEffect, useState } from "react"
-import { ChevronDown, Download, Layers, Plus, RefreshCw, Sparkles, Store } from "lucide-react"
+// 插件市场用于浏览与安装。插件管理有独立的工具栏和列表，返回市场时保留来源与搜索词。
+import { useEffect, useRef, useState } from "react"
+import { ArrowLeft, Layers, Plus, RefreshCw, Users } from "lucide-react"
 import {
   Button,
+  EmptyState,
   InstallDialog,
-  Menu,
   SearchField,
   SegmentedControl,
   useLocale,
 } from "@pigcode/ui-primitives"
 import { MarketPluginDialog } from "./market-plugin-dialog"
-import { AddMarketplaceDialog } from "./marketplace-dialogs"
+import { AddMarketplaceDialog, PluginAddMenu } from "./marketplace-dialogs"
 import {
   MarketplaceSourcesDialog,
   REFRESH_ALL_SOURCES,
   type SourceActions,
 } from "./marketplace-sources"
 import { PluginDetailsDialog } from "./plugin-details"
-import { PluginList } from "./plugin-list"
-import { PluginMarket, marketKey } from "./plugin-market"
+import { PluginList, type PluginStatusFilter } from "./plugin-list"
+import { BuiltinMarket, PluginMarket, marketKey } from "./plugin-market"
 import {
   fill,
   isMarketEnabled,
@@ -61,7 +60,7 @@ export interface PluginManagerViewProps {
   onOpenExternal?: ((url: string) => void) | undefined
 }
 
-type Segment = "market" | "installed"
+type Catalog = "public" | "community" | "personal"
 
 /** 渲染插件页。 */
 export function PluginManagerView({
@@ -86,7 +85,21 @@ export function PluginManagerView({
 }: PluginManagerViewProps) {
   const { t } = useLocale()
   const marketEnabled = onAddMarketplace !== undefined
-  const [chosenSegment, setSegment] = useState<Segment | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
+  const managing = !marketEnabled || manageOpen
+  const [catalog, setCatalog] = useState<Catalog>("public")
+  const [marketQuery, setMarketQuery] = useState("")
+  const [installedQuery, setInstalledQuery] = useState("")
+  const [filter, setFilter] = useState<PluginStatusFilter>("all")
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const focusPageHeading = useRef(false)
+  useEffect(() => {
+    if (focusPageHeading.current) {
+      headingRef.current?.focus()
+      focusPageHeading.current = false
+    }
+  }, [managing])
+
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   // 一闪而过的提示，例如复制了来源地址。
@@ -99,16 +112,12 @@ export function PluginManagerView({
   const [installOpen, setInstallOpen] = useState(false)
   const [addMarketOpen, setAddMarketOpen] = useState(false)
   const [sourcesOpen, setSourcesOpen] = useState(false)
-  const [query, setQuery] = useState("")
   const [details, setDetails] = useState<{ id: string; confirmUninstall: boolean } | null>(null)
   const [marketDetails, setMarketDetails] = useState<{ market: string; plugin: string } | null>(
     null,
   )
   // 停用的市场源不在插件市场里列出，也不拿来检查更新。
   const enabledMarkets = marketplaces.filter(isMarketEnabled)
-  // 没选过分段时：有市场就看市场，没有就看已安装的插件。
-  const segment: Segment =
-    chosenSegment ?? (marketEnabled && marketplaces.length > 0 ? "market" : "installed")
   // 详情跟着列表走：插件卸载后从列表里消失，对话框随之关闭。
   const detailsPlugin = details
     ? (plugins.find((plugin) => plugin.id === details.id) ?? null)
@@ -130,6 +139,13 @@ export function PluginManagerView({
       }),
     ),
   )
+
+  function navigateToManagement(open: boolean): void {
+    focusPageHeading.current = true
+    setManageOpen(open)
+  }
+
+  const openDetails = (id: string, confirmUninstall = false) => setDetails({ id, confirmUninstall })
 
   async function run(id: string, action: () => Promise<void>): Promise<boolean> {
     setPendingId(id)
@@ -156,7 +172,16 @@ export function PluginManagerView({
   }
 
   const refreshing = pendingId === "refresh"
+  const checkUpdates = managing && onRefreshMarketplaces !== undefined && enabledMarkets.length > 0
+  const refreshLabel = t(checkUpdates ? "plugins.checkUpdates" : "plugins.refresh")
+  const title = t(managing ? "plugins.title" : "plugins.pageTitle")
+  const showSearch =
+    managing || catalog === "public" || (catalog === "personal" && enabledMarkets.length > 0)
+  const setQuery = managing ? setInstalledQuery : setMarketQuery
   const update = onUpdate ? (id: string) => void run(id, () => onUpdate(id)) : undefined
+  const installFromMarket = (market: string, plugin: string) =>
+    onInstallFromMarketplace &&
+    void run(marketKey(market, plugin), () => onInstallFromMarketplace(market, plugin))
   const refreshMarket = onRefreshMarketplaces
     ? (id: string) => void run(id, () => onRefreshMarketplaces(id))
     : undefined
@@ -173,27 +198,41 @@ export function PluginManagerView({
   }
 
   return (
-    <section className="view" aria-label={t("plugins.title")}>
+    <section className="view" aria-label={title}>
       <div className="panel-top">
         <span className="spacer" />
       </div>
       <div className="panel-scroll">
         <div className="page wide plugin-market">
-          <header className="page-head">
-            <div>
-              <h1>{t("plugins.pageTitle")}</h1>
-              <p className="sub">{t("plugins.sub")}</p>
+          <header className="page-head market-page-head">
+            <div className="market-page-title">
+              {marketEnabled && managing ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  type="button"
+                  aria-label={t("plugins.market.back")}
+                  title={t("plugins.market.back")}
+                  onClick={() => navigateToManagement(false)}
+                >
+                  <ArrowLeft className="ic" aria-hidden="true" />
+                </Button>
+              ) : null}
+              <h1 ref={headingRef} tabIndex={-1}>
+                {title}
+              </h1>
             </div>
             <div className="actions">
               <Button
-                size="sm"
-                variant="ghost"
+                size={managing ? "sm" : "icon"}
                 type="button"
+                aria-label={refreshLabel}
+                title={refreshLabel}
                 disabled={refreshing}
                 onClick={() =>
                   void run("refresh", async () => {
-                    if (segment === "market" && onRefreshMarketplaces) await onRefreshMarketplaces()
-                    await onRefresh()
+                    if (!managing || checkUpdates) await onRefreshMarketplaces?.()
+                    if (!checkUpdates) await onRefresh()
                   })
                 }
               >
@@ -201,64 +240,25 @@ export function PluginManagerView({
                   className={refreshing ? "ic ic-sm spin" : "ic ic-sm"}
                   aria-hidden="true"
                 />
-                {t("plugins.refresh")}
+                {managing ? refreshLabel : null}
               </Button>
-              {marketEnabled ? (
+              {!managing ? (
                 <Button
-                  size="sm"
-                  variant="ghost"
+                  size="icon"
                   type="button"
-                  className="market-sources-btn"
+                  aria-label={t("plugins.sources")}
+                  title={t("plugins.sources")}
                   onClick={() => setSourcesOpen(true)}
                 >
                   <Layers className="ic ic-sm" aria-hidden="true" />
-                  {t("plugins.sources")}
-                  {marketplaces.length > 0 ? (
-                    <span className="market-sources-count" aria-hidden="true">
-                      {marketplaces.length}
-                    </span>
-                  ) : null}
                 </Button>
               ) : null}
               {marketEnabled ? (
-                <Menu.Root>
-                  <Menu.Trigger className="btn btn-primary btn-sm market-add">
-                    <Plus className="ic ic-sm" aria-hidden="true" />
-                    {t("plugins.add")}
-                    <ChevronDown className="ic ic-sm" aria-hidden="true" />
-                  </Menu.Trigger>
-                  <Menu.Portal>
-                    <Menu.Positioner side="bottom" align="end" sideOffset={4}>
-                      <Menu.Popup className="market-add-menu">
-                        {onCreatePlugin ? (
-                          <Menu.Item onClick={() => void createPlugin()}>
-                            <Sparkles className="ic" aria-hidden="true" />
-                            <span className="grow">
-                              {t("plugins.add.create")}
-                              <span className="menu-item-desc">{t("plugins.add.createHint")}</span>
-                            </span>
-                          </Menu.Item>
-                        ) : null}
-                        <Menu.Item onClick={() => setAddMarketOpen(true)}>
-                          <Store className="ic" aria-hidden="true" />
-                          <span className="grow">
-                            {t("plugins.add.marketplace")}
-                            <span className="menu-item-desc">
-                              {t("plugins.add.marketplaceHint")}
-                            </span>
-                          </span>
-                        </Menu.Item>
-                        <Menu.Item onClick={() => setInstallOpen(true)}>
-                          <Download className="ic" aria-hidden="true" />
-                          <span className="grow">
-                            {t("plugins.add.install")}
-                            <span className="menu-item-desc">{t("plugins.add.installHint")}</span>
-                          </span>
-                        </Menu.Item>
-                      </Menu.Popup>
-                    </Menu.Positioner>
-                  </Menu.Portal>
-                </Menu.Root>
+                <PluginAddMenu
+                  onCreatePlugin={onCreatePlugin ? () => void createPlugin() : undefined}
+                  onAddMarketplace={() => setAddMarketOpen(true)}
+                  onInstall={() => setInstallOpen(true)}
+                />
               ) : (
                 <Button
                   size="sm"
@@ -270,38 +270,59 @@ export function PluginManagerView({
                   {t("plugins.install")}
                 </Button>
               )}
+              {!managing ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  type="button"
+                  onClick={() => navigateToManagement(true)}
+                >
+                  {t("plugins.title")}
+                </Button>
+              ) : null}
             </div>
           </header>
-          <div className="market-toolbar">
-            {marketEnabled ? (
-              <SegmentedControl<Segment>
-                aria-label={t("plugins.segment")}
-                value={segment}
-                onValueChange={setSegment}
-                options={[
-                  { value: "market", label: t("plugins.segment.market") },
-                  {
-                    value: "installed",
-                    label: fill(t("plugins.segment.installedCount"), {
-                      count: String(plugins.length),
-                    }),
-                  },
-                ]}
-              />
-            ) : null}
-            {plugins.length > 0 || marketplaces.length > 0 ? (
-              <SearchField
-                className="market-search"
-                value={query}
-                onValueChange={setQuery}
-                placeholder={t("plugins.search")}
-                clearLabel={t("settings.clear")}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") setQuery("")
-                }}
-              />
-            ) : null}
-          </div>
+          {!managing || plugins.length > 0 ? (
+            <div className="market-toolbar">
+              {managing ? (
+                <SegmentedControl<PluginStatusFilter>
+                  className="market-tabs"
+                  aria-label={t("plugins.filter.label")}
+                  value={filter}
+                  onValueChange={setFilter}
+                  options={[
+                    { value: "all", label: t("plugins.filter.all") },
+                    { value: "enabled", label: t("plugins.enabled") },
+                    { value: "disabled", label: t("plugins.disabled") },
+                  ]}
+                />
+              ) : (
+                <SegmentedControl<Catalog>
+                  className="market-tabs"
+                  aria-label={t("plugins.market.sections")}
+                  value={catalog}
+                  onValueChange={setCatalog}
+                  options={[
+                    { value: "public", label: t("plugins.market.public") },
+                    { value: "community", label: t("plugins.market.community") },
+                    { value: "personal", label: t("plugins.market.personal") },
+                  ]}
+                />
+              )}
+              {showSearch ? (
+                <SearchField
+                  className="market-search"
+                  value={managing ? installedQuery : marketQuery}
+                  onValueChange={setQuery}
+                  placeholder={t("plugins.search")}
+                  clearLabel={t("settings.clear")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") setQuery("")
+                  }}
+                />
+              ) : null}
+            </div>
+          ) : null}
           {error ? (
             <p className="error-text market-error" role="alert">
               {error}
@@ -311,37 +332,50 @@ export function PluginManagerView({
               {notice}
             </p>
           ) : null}
-          {segment === "market" ? (
+          {managing ? (
+            <PluginList
+              plugins={plugins}
+              marketplaces={marketplaces}
+              query={installedQuery}
+              filter={filter}
+              pendingId={pendingId}
+              onInstall={() => setInstallOpen(true)}
+              onEnable={(id) => void run(id, () => onEnable(id))}
+              onDisable={(id) => void run(id, () => onDisable(id))}
+              onDetails={openDetails}
+              canUninstall={onUninstall !== undefined}
+              onOpenSettings={onOpenSettings}
+              onUpdate={update}
+              updatable={updatable}
+            />
+          ) : catalog === "public" ? (
+            <BuiltinMarket plugins={plugins} query={marketQuery} onDetails={openDetails} />
+          ) : catalog === "community" ? (
+            <EmptyState
+              className="market-empty market-community-empty"
+              icon={<Users className="ic" />}
+              title={t("plugins.market.communityEmpty")}
+              description={t("plugins.market.communityHint")}
+              actions={
+                <Button size="sm" type="button" onClick={() => setCatalog("personal")}>
+                  {t("plugins.market.browsePersonal")}
+                </Button>
+              }
+            />
+          ) : (
             <PluginMarket
               marketplaces={enabledMarkets}
               disabledCount={marketplaces.length - enabledMarkets.length}
               sourceActions={sourceActions}
               plugins={plugins}
-              query={query}
+              query={marketQuery}
               pendingKey={pendingId}
-              onInstall={(market, plugin) =>
-                onInstallFromMarketplace &&
-                void run(marketKey(market, plugin), () => onInstallFromMarketplace(market, plugin))
-              }
+              onInstall={installFromMarket}
               onUpdate={(id) => update?.(id)}
               onDetails={(market, plugin) => setMarketDetails({ market, plugin })}
               onAddMarketplace={() => setAddMarketOpen(true)}
               onInstallFromGitHub={() => setInstallOpen(true)}
               onCreatePlugin={onCreatePlugin ? () => void createPlugin() : undefined}
-            />
-          ) : (
-            <PluginList
-              plugins={plugins}
-              query={query}
-              pendingId={pendingId}
-              onInstall={() => setInstallOpen(true)}
-              onEnable={(id) => void run(id, () => onEnable(id))}
-              onDisable={(id) => void run(id, () => onDisable(id))}
-              onDetails={(id, confirmUninstall = false) => setDetails({ id, confirmUninstall })}
-              canUninstall={onUninstall !== undefined}
-              onOpenSettings={onOpenSettings}
-              onUpdate={update}
-              updatable={updatable}
             />
           )}
         </div>
@@ -366,10 +400,7 @@ export function PluginManagerView({
             ))
         }
         onClose={() => setMarketDetails(null)}
-        onInstall={(market, plugin) =>
-          onInstallFromMarketplace &&
-          void run(marketKey(market, plugin), () => onInstallFromMarketplace(market, plugin))
-        }
+        onInstall={installFromMarket}
         onUpdate={(id) => update?.(id)}
         onOpenExternal={onOpenExternal}
       />
@@ -382,7 +413,9 @@ export function PluginManagerView({
           } catch (reason) {
             throw new Error(pluginErrorText(reason, t))
           }
-          setSegment("installed")
+          setInstalledQuery("")
+          setFilter("all")
+          setManageOpen(true)
         }}
         inputId="plugin-install-spec"
         labels={{
@@ -406,7 +439,9 @@ export function PluginManagerView({
           onOpenChange={setAddMarketOpen}
           onAdd={async (source) => {
             await onAddMarketplace(source)
-            setSegment("market")
+            setMarketQuery("")
+            setCatalog("personal")
+            setManageOpen(false)
           }}
           onPickFolder={onPickFolder}
         />

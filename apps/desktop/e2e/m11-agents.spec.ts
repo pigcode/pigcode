@@ -141,7 +141,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(page.getByRole("button", { name: "卸载", exact: true })).toHaveCount(0)
     await page.getByRole("button", { name: "返回应用" }).first().click()
     await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
-    await page.getByRole("radio", { name: /已安装/ }).click()
+    await page.getByRole("button", { name: "插件管理", exact: true }).click()
     await page.getByRole("button", { name: "Echo 的更多操作" }).click()
     await page.getByRole("menuitem", { name: "卸载" }).click()
     await page.getByRole("dialog").getByRole("button", { name: "确认卸载" }).click()

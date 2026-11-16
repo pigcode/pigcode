@@ -1,4 +1,4 @@
-/** 验证插件页：按类型分组的卡片、详情里的权限与冲突、启用开关、更多菜单、搜索、收起与安装对话框。 */
+/** 验证管理页的已安装与内置列表、详情、启停、更多菜单、筛选与安装。 */
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -53,17 +53,24 @@ async function openDetails(name: string): Promise<HTMLElement> {
 }
 
 describe("PluginManagerView", () => {
-  it("groups plugins by kind into sections of cards with a description and a switch", () => {
+  it("puts installed and built-in plugins in separate groups with version and source", () => {
     renderView([
-      { ...DEMO, description: "A demo panel" },
-      { ...DEMO, id: "agent.echo", name: "pigcode-agent-echo", displayName: "Echo", kind: "agent" },
+      { ...DEMO, description: "A demo panel", originLabel: "acme/demo" },
+      {
+        ...DEMO,
+        id: "agent.echo",
+        name: "pigcode-agent-echo",
+        displayName: "Echo",
+        kind: "agent",
+        builtin: true,
+      },
     ])
     const headings = screen.getAllByRole("heading", { level: 2 }).map((item) => item.textContent)
-    expect(headings).toEqual(["Agent", "界面"])
-    const ui = screen.getByRole("region", { name: "界面" })
-    expect(within(ui).getByRole("button", { name: "Demo 的详情" }).textContent).toContain(
-      "A demo panel",
-    )
+    expect(headings).toEqual(["已安装", "内置"])
+    const installed = screen.getByRole("region", { name: "已安装" })
+    expect(within(installed).getByText("0.1.0")).toBeTruthy()
+    expect(within(installed).getByText("acme/demo")).toBeTruthy()
+    expect(within(installed).getByText("A demo panel")).toBeTruthy()
     // 没有说明时用包名代替。
     expect(tile("Echo").textContent).toContain("pigcode-agent-echo")
     expect(screen.getByRole("switch", { name: "启用 Demo" }).getAttribute("aria-checked")).toBe(
@@ -258,21 +265,22 @@ describe("PluginManagerView", () => {
     expect(tile("Demo")).toBeTruthy()
   })
 
-  it("collapses a section past three rows and expands it on demand", async () => {
+  it("shows all installed plugins and filters them by enabled status", async () => {
     const many = Array.from({ length: 8 }, (_, index) => ({
       ...DEMO,
       id: `cap.${index}`,
       name: `pigcode-cap-${index}`,
       displayName: `Cap ${index}`,
       kind: "capability" as const,
+      enabled: index < 6,
     }))
     renderView(many)
-    const section = screen.getByRole("region", { name: "能力" })
-    expect(within(section).getAllByRole("switch")).toHaveLength(6)
-    await userEvent.click(within(section).getByRole("button", { name: "显示全部 8 个" }))
+    const section = screen.getByRole("region", { name: "已安装" })
     expect(within(section).getAllByRole("switch")).toHaveLength(8)
-    await userEvent.click(within(section).getByRole("button", { name: "收起" }))
+    await userEvent.click(screen.getByRole("radio", { name: "已启用" }))
     expect(within(section).getAllByRole("switch")).toHaveLength(6)
+    await userEvent.click(screen.getByRole("radio", { name: "已停用" }))
+    expect(within(section).getAllByRole("switch")).toHaveLength(2)
   })
 
   it("installs from a local directory or npm spec in a dialog", async () => {

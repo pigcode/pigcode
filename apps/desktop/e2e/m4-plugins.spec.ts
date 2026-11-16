@@ -11,8 +11,10 @@ import { addProject, installPlugin, launchEnv, launchArgs } from "./projects"
 const CREATE_PLUGIN = fileURLToPath(new URL("../../../scripts/create-plugin.ts", import.meta.url))
 
 /** 插件页是工作区里的顶层页面：从侧栏的「插件」进去，侧栏仍是工作区导航。 */
-const openPlugins = (page: Page) =>
-  page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+async function openPlugins(page: Page, manage = false): Promise<void> {
+  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  if (manage) await page.getByRole("button", { name: "插件管理", exact: true }).click()
+}
 /** 插件页上某个插件的卡片，按包名定位。 */
 const pluginTile = (page: Page, name: string) => page.locator(`.market-tile[data-plugin='${name}']`)
 /** 从插件页回到会话：点侧栏里的会话。 */
@@ -150,7 +152,8 @@ test("installs, enables, and disables plugins without restart", async () => {
   await page.keyboard.press("ControlOrMeta+k")
   await page.locator(".palette input").fill("插件")
   await page.keyboard.press("Enter")
-  await expect(page.getByRole("heading", { level: 1, name: "插件" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "插件市场" })).toBeVisible()
+  await page.getByRole("button", { name: "插件管理", exact: true }).click()
 
   // 停用后 Panel 和设置页消失（卡片上的「打开」也跟着没了），打开着的 Surface 标签关闭，
   // 当前标签改选终端，「+」菜单里也不再有它。
@@ -196,7 +199,7 @@ test("installs, enables, and disables plugins without restart", async () => {
 
   // 重新启用：Panel、设置页与 Surface 回来。
   await backToApp()
-  await openPlugins(page)
+  await openPlugins(page, true)
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).toBeChecked()
   await expect(debugPanel).toBeVisible()
@@ -291,7 +294,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await expect(clockRows.last()).toContainText("当前时间")
   await expect(mcpClock).toHaveCount(0)
   await expect(genericClock).toHaveCount(0)
-  await openPlugins(page)
+  await openPlugins(page, true)
   await expect(debugSettings).toBeVisible()
 
   // 停用：五处都消失，时间线回到内置的 MCP 行和通用行。
@@ -319,7 +322,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await page.keyboard.press("Escape")
 
   // 重新启用：渲染器回来，已经在时间线里的调用换回插件的显示。
-  await openPlugins(page)
+  await openPlugins(page, true)
   await debug.getByRole("switch").click()
   await expect(debug.getByRole("switch")).toBeChecked()
   await clock.getByRole("switch").click()
@@ -337,7 +340,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await page.keyboard.press("Escape")
 
   // 后面的用例不需要 clock 样例，只留一个停用的记录，和其余样例一样。
-  await openPlugins(page)
+  await openPlugins(page, true)
   await clock.getByRole("switch").click()
   await expect(clock.getByRole("switch")).not.toBeChecked()
 

@@ -403,7 +403,9 @@ export async function walkSettings(walk: Walk): Promise<void> {
     await dialog.getByRole("button", { name: t("plugins.install.submit"), exact: true }).click()
     await expect(dialog).toBeHidden({ timeout: 30_000 })
   }
+  await expect(page.getByRole("heading", { name: t("plugins.title"), level: 1 })).toBeVisible()
   await expect(page.locator(".market-tile")).toHaveCount(5)
+  await page.mouse.move(0, 0)
   await step("settings-plugins-installed")
 
   await page

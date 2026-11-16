@@ -1,29 +1,26 @@
-// 插件卡片区：按类型分组，每组两列卡片。卡片上是图标、名称与一行说明，右边是「打开」、更多菜单与启用开关；
-// 点卡片看详情。一组超过三行时先收起，组底下可以展开全部。
+// 插件管理按已安装与内置分组。每行显示版本和来源，可打开详情、设置或直接启停。
 import { useId, useState } from "react"
 import { Box, Ellipsis, Plus, Search } from "lucide-react"
 import {
-  Badge,
   Button,
   EmptyState,
   Menu,
   StatusDot,
   Switch,
   useLocale,
+  type MessageKey,
 } from "@pigcode/ui-primitives"
 import { InstalledPluginIcon } from "./installed-plugin-icon"
 import {
-  KIND_ORDER,
   descriptionOf,
   fill,
-  kindKeys,
+  matchesPlugin,
   statusOf,
-  type PluginKind,
+  type MarketplaceSummary,
   type PluginSummary,
 } from "./plugin-summary"
 
-/** 一组收起时显示的卡片数：两列三行。 */
-const COLLAPSED_COUNT = 6
+export type PluginStatusFilter = "all" | "enabled" | "disabled"
 
 /** 卡片上的操作。 */
 interface TileActions {
@@ -46,21 +43,17 @@ interface TileActions {
 /** 插件卡片区需要的状态与事件。 */
 export interface PluginListProps extends TileActions {
   plugins: PluginSummary[]
-  /** 搜索词；非空时只留名称、说明或包名里有它的插件，各组全部展开。 */
+  marketplaces?: readonly MarketplaceSummary[] | undefined
+  /** 搜索显示名、说明或包名。 */
   query?: string | undefined
+  filter?: PluginStatusFilter | undefined
   /** 打开安装对话框；给了它，没有插件时空状态里出现「安装插件」。 */
   onInstall?: (() => void) | undefined
 }
 
-/** 名称、说明或包名里有没有搜索词（已转小写）。 */
-function matches(plugin: PluginSummary, needle: string, description: string | null): boolean {
-  return [plugin.displayName ?? plugin.name, plugin.name, description ?? ""].some((text) =>
-    text.toLowerCase().includes(needle),
-  )
-}
-
 function PluginTile({
   plugin,
+  source,
   pendingId,
   onEnable,
   onDisable,
@@ -69,22 +62,19 @@ function PluginTile({
   onOpenSettings,
   onUpdate,
   updatable,
-}: TileActions & { plugin: PluginSummary }) {
+}: TileActions & { plugin: PluginSummary; source: string | null | undefined }) {
   const { t, locale } = useLocale()
   const [menuOpen, setMenuOpen] = useState(false)
   const name = plugin.displayName ?? plugin.name
   const status = statusOf(plugin)
   const pending = pendingId === plugin.id
   const problem = status.tone === "error" || status.tone === "warning"
+  const hasUpdate = !plugin.builtin && updatable?.has(plugin.id)
   const settingsPage = plugin.settingsPage
-  const description =
-    descriptionOf(plugin, locale) ??
-    (name !== plugin.name
-      ? plugin.name
-      : fill(t("plugins.versionLabel"), { version: plugin.version }))
+  const description = descriptionOf(plugin, locale) ?? (name !== plugin.name ? plugin.name : null)
   return (
-    <div
-      className="market-tile"
+    <li
+      className="market-tile installed-plugin-row"
       data-plugin={plugin.name}
       data-enabled={plugin.enabled ? "true" : "false"}
       data-menu-open={menuOpen ? "" : undefined}
@@ -99,24 +89,43 @@ function PluginTile({
         <span className="market-tile-text">
           <span className="market-tile-name">
             <span className="truncate">{name}</span>
-            {plugin.builtin ? <Badge>{t("plugins.builtin")}</Badge> : null}
-            {updatable?.has(plugin.id) ? (
-              <span className="market-badge">{t("plugins.market.updateAvailable")}</span>
+          </span>
+          <span className="installed-plugin-subtitle">
+            <span className="installed-plugin-version">{plugin.version}</span>
+            {source ? (
+              <span
+                className="installed-plugin-source truncate"
+                title={plugin.originLabel ?? source}
+              >
+                {source}
+              </span>
+            ) : null}
+            {problem ? (
+              <span className="market-tile-desc" data-tone={status.tone}>
+                <StatusDot tone={status.tone} />
+                <span className="truncate">{t(status.label)}</span>
+              </span>
+            ) : description ? (
+              <span className="market-tile-desc truncate" title={description}>
+                {description}
+              </span>
             ) : null}
           </span>
-          {problem ? (
-            <span className="market-tile-desc" data-tone={status.tone}>
-              <StatusDot tone={status.tone} />
-              <span className="truncate">{t(status.label)}</span>
-            </span>
-          ) : (
-            <span className="market-tile-desc truncate" title={description}>
-              {description}
-            </span>
-          )}
         </span>
       </button>
       <span className="market-tile-actions">
+        {hasUpdate && onUpdate ? (
+          <Button
+            size="sm"
+            type="button"
+            className="market-pill"
+            aria-label={fill(t("plugins.market.updateLabel"), { plugin: name })}
+            disabled={pending}
+            onClick={() => onUpdate(plugin.id)}
+          >
+            {pending ? t("plugins.updating") : t("plugins.update")}
+          </Button>
+        ) : null}
         <Menu.Root open={menuOpen} onOpenChange={setMenuOpen}>
           <Menu.Trigger
             className="icon-btn market-tile-menu"
@@ -129,7 +138,7 @@ function PluginTile({
             <Menu.Positioner side="bottom" align="end" sideOffset={4}>
               <Menu.Popup className="market-menu">
                 <Menu.Item onClick={() => onDetails(plugin.id)}>{t("plugins.details")}</Menu.Item>
-                {onUpdate && plugin.origin && !plugin.builtin ? (
+                {onUpdate && plugin.origin && !plugin.builtin && !hasUpdate ? (
                   <Menu.Item disabled={pending} onClick={() => onUpdate(plugin.id)}>
                     {t("plugins.update")}
                   </Menu.Item>
@@ -165,54 +174,60 @@ function PluginTile({
           onCheckedChange={(checked) => (checked ? onEnable(plugin.id) : onDisable(plugin.id))}
         />
       </span>
-    </div>
+    </li>
   )
 }
 
 function PluginSection({
-  kind,
+  label,
   plugins,
-  expandAll,
+  marketplaces,
   ...actions
-}: TileActions & { kind: PluginKind; plugins: readonly PluginSummary[]; expandAll: boolean }) {
+}: TileActions & {
+  label: MessageKey
+  plugins: readonly PluginSummary[]
+  marketplaces: readonly MarketplaceSummary[]
+}) {
   const { t } = useLocale()
   const headingId = useId()
-  const [expanded, setExpanded] = useState(false)
-  const collapsible = !expandAll && plugins.length > COLLAPSED_COUNT
-  const visible = collapsible && !expanded ? plugins.slice(0, COLLAPSED_COUNT) : plugins
+  if (plugins.length === 0) return null
   return (
     <section className="market-section" aria-labelledby={headingId}>
-      <h2 id={headingId} className="market-section-title">
-        {t(kindKeys[kind])}
-      </h2>
-      <div className="market-grid">
-        {visible.map((plugin) => (
-          <PluginTile key={plugin.id} plugin={plugin} {...actions} />
-        ))}
+      <div className="installed-section-heading">
+        <h2 id={headingId}>{t(label)}</h2>
+        <span className="installed-section-count">{plugins.length}</span>
       </div>
-      {collapsible ? (
-        <button
-          type="button"
-          className="market-more"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded
-            ? t("plugins.showLess")
-            : fill(t("plugins.showAll"), { count: String(plugins.length) })}
-        </button>
-      ) : null}
+      <ul className="installed-plugin-rows">
+        {plugins.map((plugin) => {
+          const marketId = plugin.origin?.kind === "marketplace" ? plugin.origin.marketplace : null
+          const market = marketplaces.find((item) => item.id === marketId)
+          const source =
+            plugin.origin?.kind === "local"
+              ? t("plugins.market.source.directory")
+              : (market?.displayName ?? plugin.originLabel ?? marketId)
+          return <PluginTile key={plugin.id} plugin={plugin} source={source} {...actions} />
+        })}
+      </ul>
     </section>
   )
 }
 
-/** 渲染按类型分组的插件卡片；没有插件或搜索没有结果时显示空状态。 */
-export function PluginList({ plugins, query = "", onInstall, ...actions }: PluginListProps) {
+/** 渲染已安装和内置插件组。 */
+export function PluginList({
+  plugins,
+  marketplaces = [],
+  query = "",
+  filter = "all",
+  onInstall,
+  ...actions
+}: PluginListProps) {
   const { t, locale } = useLocale()
   const needle = query.trim().toLowerCase()
-  const shown = needle
-    ? plugins.filter((plugin) => matches(plugin, needle, descriptionOf(plugin, locale)))
-    : plugins
+  const shown = plugins.filter(
+    (plugin) =>
+      (filter === "all" || plugin.enabled === (filter === "enabled")) &&
+      matchesPlugin(plugin, needle, locale),
+  )
 
   if (plugins.length === 0) {
     return (
@@ -243,18 +258,18 @@ export function PluginList({ plugins, query = "", onInstall, ...actions }: Plugi
   }
   return (
     <div className="market-sections">
-      {KIND_ORDER.map((kind) => {
-        const items = shown.filter((plugin) => plugin.kind === kind)
-        return items.length > 0 ? (
-          <PluginSection
-            key={kind}
-            kind={kind}
-            plugins={items}
-            expandAll={needle !== ""}
-            {...actions}
-          />
-        ) : null
-      })}
+      <PluginSection
+        label="plugins.market.installed"
+        plugins={shown.filter((plugin) => !plugin.builtin)}
+        marketplaces={marketplaces}
+        {...actions}
+      />
+      <PluginSection
+        label="plugins.builtin"
+        plugins={shown.filter((plugin) => plugin.builtin)}
+        marketplaces={marketplaces}
+        {...actions}
+      />
     </div>
   )
 }

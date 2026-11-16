@@ -374,7 +374,7 @@ export const zhCN = {
     "快速模式这一轮没有生效：这个模型不能用快速模式，按标准速度运行。",
   "chat.notice.fast.unavailable.cooldown": "快速模式触发了限流，正在冷却，这一轮按标准速度运行。",
   "plugins.title": "插件管理",
-  "plugins.pageTitle": "插件",
+  "plugins.pageTitle": "插件市场",
   "plugins.install": "安装插件",
   "plugins.installSpec": "GitHub 仓库、npm 包或插件目录",
   "plugins.installSpecPlaceholder": "owner/repo、package@1.0.0 或 /path/to/plugin",

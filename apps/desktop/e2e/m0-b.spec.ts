@@ -47,6 +47,7 @@ test("chat, plugin panel, and reconnect", async () => {
 
   // 核心 profile 条目也会出现在插件页里，按插件包名定位到示例插件的卡片。
   await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  await page.getByRole("button", { name: "插件管理", exact: true }).click()
   const row = page.locator(".market-tile[data-plugin='pigcode-ui-debug-panel']")
   await expect(row.getByRole("switch")).toBeChecked()
   await row.getByRole("switch").click()

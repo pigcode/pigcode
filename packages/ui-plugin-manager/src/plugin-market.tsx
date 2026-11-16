@@ -1,8 +1,16 @@
-// 插件市场：每个市场一组，组头是名称、来源与更新时间，标题旁「⋯」里是这个市场源的操作，下面两列卡片。
-// 卡片上是图标、名称与一句话说明，右边是「安装」、「更新」或「已安装」；点卡片看详情。
-// 还没有市场时是一块说明，带添加市场、从 GitHub 安装与创建插件。
+// 公开目录展示 Pigcode 随应用提供的插件。个人目录按市场源分组，卡片支持查看详情、安装和更新。
 import { useId, useState } from "react"
-import { Download, GitBranch, PowerOff, Search, Sparkles, Store, TriangleAlert } from "lucide-react"
+import {
+  Check,
+  Download,
+  GitBranch,
+  Package,
+  PowerOff,
+  Search,
+  Sparkles,
+  Store,
+  TriangleAlert,
+} from "lucide-react"
 import {
   Button,
   EmptyState,
@@ -11,14 +19,83 @@ import {
   useLocale,
 } from "@pigcode/ui-primitives"
 import {
+  KIND_ORDER,
+  descriptionOf,
   fill,
+  kindKeys,
+  matchesPlugin,
   sourceTypeKeys,
   updateFor,
   type MarketplacePlugin,
   type MarketplaceSummary,
   type PluginSummary,
 } from "./plugin-summary"
+import { InstalledPluginIcon } from "./installed-plugin-icon"
 import { SourceMenu, type SourceActions } from "./marketplace-sources"
+
+export function BuiltinMarket({
+  plugins,
+  query,
+  onDetails,
+}: {
+  plugins: readonly PluginSummary[]
+  query: string
+  onDetails: (id: string) => void
+}) {
+  const { t, locale } = useLocale()
+  const needle = query.trim().toLowerCase()
+  const shown = plugins.filter((plugin) => plugin.builtin && matchesPlugin(plugin, needle, locale))
+  if (shown.length === 0) {
+    return (
+      <EmptyState
+        className="market-empty"
+        icon={needle ? <Search className="ic" /> : <Package className="ic" />}
+        title={t(needle ? "plugins.noMatches" : "plugins.market.publicEmpty")}
+      />
+    )
+  }
+
+  return (
+    <div className="market-sections">
+      {KIND_ORDER.map((kind) => {
+        const group = shown.filter((plugin) => plugin.kind === kind)
+        const title = t(kindKeys[kind])
+        return group.length > 0 ? (
+          <section key={kind} className="market-section" aria-label={title}>
+            <h2 className="market-section-title">{title}</h2>
+            <div className="market-grid">
+              {group.map((plugin) => {
+                const name = plugin.displayName ?? plugin.name
+                const description = descriptionOf(plugin, locale)
+                return (
+                  <div key={plugin.id} className="market-tile">
+                    <button
+                      type="button"
+                      className="market-tile-main"
+                      aria-label={fill(t("plugins.expand"), { plugin: name })}
+                      onClick={() => onDetails(plugin.id)}
+                    >
+                      <InstalledPluginIcon plugin={plugin} />
+                      <span className="market-tile-text">
+                        <span className="market-tile-name truncate">{name}</span>
+                        {description ? (
+                          <span className="market-tile-desc truncate" title={description}>
+                            {description}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    <span className="market-installed">{t("plugins.builtin")}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        ) : null
+      })}
+    </div>
+  )
+}
 
 /** 插件图标：市场给了图片就用图片，读不到时退回按名字生成的头像。 */
 export function PluginIcon({
@@ -118,7 +195,10 @@ function MarketTile({
             {pending ? t("plugins.updating") : t("plugins.market.update")}
           </Button>
         ) : installed ? (
-          <span className="market-installed">{t("plugins.market.installed")}</span>
+          <span className="market-installed">
+            <Check className="ic ic-sm" aria-hidden="true" />
+            {t("plugins.market.installed")}
+          </span>
         ) : (
           <Button
             size="sm"

@@ -252,3 +252,10 @@ export function descriptionOf(plugin: PluginSummary, locale: Locale): string | n
   }
   return plugin.description || null
 }
+
+/** 搜索已安装与内置插件时，同时查显示名、包名和本地化说明。 */
+export function matchesPlugin(plugin: PluginSummary, needle: string, locale: Locale): boolean {
+  return [plugin.displayName ?? "", plugin.name, descriptionOf(plugin, locale) ?? ""].some((text) =>
+    text.toLowerCase().includes(needle),
+  )
+}
