@@ -1,0 +1,89 @@
+{
+  "name": "pigcode-official",
+  "displayName": "Pigcode",
+  "owner": "Pigcode",
+  "plugins": [
+    {
+      "name": "@pigcode/prettier-format",
+      "displayName": "Prettier Format",
+      "description": "Format JavaScript, TypeScript, JSON and CSS locally with Prettier. Pigcode workbench adapter.",
+      "version": "1.0.0",
+      "publisherType": "community",
+      "author": "Prettier contributors · Pigcode adapter",
+      "homepage": "https://github.com/prettier/prettier",
+      "category": "developer-tools",
+      "displayName_i18n": {
+        "zh-CN": "Prettier 格式化"
+      },
+      "description_i18n": {
+        "zh-CN": "在会话右侧用 Prettier 格式化 JavaScript、TypeScript、JSON 和 CSS。由 Pigcode 适配。"
+      },
+      "source": {
+        "source": "url",
+        "url": "https://raw.githubusercontent.com/pigcode/pigcode/refs/heads/plugin-catalog/packages/pigcode-prettier-format-1.0.0.tgz",
+        "sha256": "bb37bbab94a56b94223621c0841fcd931d4186d2fc4fc985048f60d272485fb9"
+      }
+    },
+    {
+      "name": "@pigcode/project-overview",
+      "displayName": "Project Overview",
+      "description": "See project folders, Git branches, and changed files in a workbench tab.",
+      "version": "1.0.0",
+      "publisherType": "official",
+      "author": "Pigcode",
+      "category": "developer-tools",
+      "displayName_i18n": {
+        "zh-CN": "项目概览"
+      },
+      "description_i18n": {
+        "zh-CN": "在会话右侧工作台查看项目目录、Git 分支和变更文件。"
+      },
+      "source": {
+        "source": "url",
+        "url": "https://raw.githubusercontent.com/pigcode/pigcode/refs/heads/plugin-catalog/packages/pigcode-project-overview-1.0.0.tgz",
+        "sha256": "ad395b9b734fa945de747fac5936dd18c356eaf7c2558adc4721a2af17519b98"
+      }
+    },
+    {
+      "name": "@pigcode/text-stats",
+      "displayName": "Text Stats",
+      "description": "Count words, Unicode code points, lines, and UTF-8 bytes in the workbench or from an Agent.",
+      "version": "1.0.0",
+      "publisherType": "official",
+      "author": "Pigcode",
+      "category": "productivity",
+      "displayName_i18n": {
+        "zh-CN": "文本统计"
+      },
+      "description_i18n": {
+        "zh-CN": "在右侧工作台统计词数、字符、行数和 UTF‑8 字节数，也可通过 MCP 调用。"
+      },
+      "source": {
+        "source": "url",
+        "url": "https://raw.githubusercontent.com/pigcode/pigcode/refs/heads/plugin-catalog/packages/pigcode-text-stats-1.0.0.tgz",
+        "sha256": "a979d4f17fe7ca0309598da7fa560cdc1d09a27c0891e1e8566ed26e08cf75ee"
+      }
+    },
+    {
+      "name": "@pigcode/yaml-json",
+      "displayName": "YAML ↔ JSON",
+      "description": "Convert YAML and JSON in either direction with eemeli/yaml. Pigcode workbench adapter.",
+      "version": "1.0.0",
+      "publisherType": "community",
+      "author": "Eemeli Aro and YAML contributors · Pigcode adapter",
+      "homepage": "https://github.com/eemeli/yaml",
+      "category": "developer-tools",
+      "displayName_i18n": {
+        "zh-CN": "YAML ↔ JSON 转换"
+      },
+      "description_i18n": {
+        "zh-CN": "在会话右侧双向转换 YAML 和 JSON，显示解析错误。基于 eemeli/yaml，由 Pigcode 适配。"
+      },
+      "source": {
+        "source": "url",
+        "url": "https://raw.githubusercontent.com/pigcode/pigcode/refs/heads/plugin-catalog/packages/pigcode-yaml-json-1.0.0.tgz",
+        "sha256": "49443fab844cc9f1231d422c0a78966f04e19f6b2128d8b17c918019ecd42d05"
+      }
+    }
+  ]
+}
