@@ -33,6 +33,9 @@ export interface MarketplaceEntry {
   icon: string | null
   homepage: string | null
   author: string | null
+  publisherType?: "official" | "community" | undefined
+  displayName_i18n?: Record<string, string> | undefined
+  description_i18n?: Record<string, string> | undefined
   source: EntrySource
   /** 来源的一句话说明。 */
   sourceLabel: string
@@ -76,6 +79,17 @@ function personName(value: unknown): string | null {
   if (typeof value === "string") return text(value, 120)
   if (value && typeof value === "object") return text((value as { name?: unknown }).name, 120)
   return null
+}
+
+function localizedText(value: unknown, max: number): Record<string, string> | undefined {
+  if (!value || typeof value !== "object") return undefined
+  const entries = Object.entries(value)
+    .slice(0, 20)
+    .flatMap(([locale, entry]) => {
+      const localized = text(entry, max)
+      return localized ? [[locale, localized]] : []
+    })
+  return entries.length ? Object.fromEntries(entries) : undefined
 }
 
 /** 相对路径：不能是绝对路径，不能有 `..`。 */
@@ -214,6 +228,12 @@ export async function parseManifest(
       icon: await iconOf(entry.icon, root),
       homepage: httpsUrl(entry.homepage),
       author: personName(entry.author),
+      publisherType:
+        entry.publisherType === "official" || entry.publisherType === "community"
+          ? entry.publisherType
+          : undefined,
+      displayName_i18n: localizedText(entry.displayName_i18n, 120),
+      description_i18n: localizedText(entry.description_i18n, 1000),
       source,
       sourceLabel: "",
     }

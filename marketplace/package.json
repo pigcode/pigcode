@@ -1,0 +1,15 @@
+{
+  "name": "@pigcode/marketplace-build",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*",
+    "@pigcode/ui-primitives": "workspace:*",
+    "@types/react": "19.2.2",
+    "prettier": "3.9.10",
+    "react": "19.2.3",
+    "yaml": "2.8.1"
+  }
+}

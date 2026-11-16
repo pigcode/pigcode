@@ -1,4 +1,4 @@
-// 公开目录展示 Pigcode 随应用提供的插件。个人目录按市场源分组，卡片支持查看详情、安装和更新。
+// 官方目录的公开与社区按用途分组。个人目录按市场源分组。
 import { useId, useState } from "react"
 import {
   Check,
@@ -10,6 +10,7 @@ import {
   Sparkles,
   Store,
   TriangleAlert,
+  Users,
 } from "lucide-react"
 import {
   Button,
@@ -17,6 +18,8 @@ import {
   EntityAvatar,
   formatRelativeTime,
   useLocale,
+  type Locale,
+  type MessageKey,
 } from "@pigcode/ui-primitives"
 import {
   KIND_ORDER,
@@ -24,6 +27,8 @@ import {
   fill,
   kindKeys,
   matchesPlugin,
+  marketplacePluginDescription,
+  marketplacePluginName,
   sourceTypeKeys,
   updateFor,
   type MarketplacePlugin,
@@ -33,32 +38,18 @@ import {
 import { InstalledPluginIcon } from "./installed-plugin-icon"
 import { SourceMenu, type SourceActions } from "./marketplace-sources"
 
-export function BuiltinMarket({
+function BuiltinMarket({
   plugins,
-  query,
   onDetails,
 }: {
   plugins: readonly PluginSummary[]
-  query: string
   onDetails: (id: string) => void
 }) {
   const { t, locale } = useLocale()
-  const needle = query.trim().toLowerCase()
-  const shown = plugins.filter((plugin) => plugin.builtin && matchesPlugin(plugin, needle, locale))
-  if (shown.length === 0) {
-    return (
-      <EmptyState
-        className="market-empty"
-        icon={needle ? <Search className="ic" /> : <Package className="ic" />}
-        title={t(needle ? "plugins.noMatches" : "plugins.market.publicEmpty")}
-      />
-    )
-  }
-
   return (
-    <div className="market-sections">
+    <>
       {KIND_ORDER.map((kind) => {
-        const group = shown.filter((plugin) => plugin.kind === kind)
+        const group = plugins.filter((plugin) => plugin.kind === kind)
         const title = t(kindKeys[kind])
         return group.length > 0 ? (
           <section key={kind} className="market-section" aria-label={title}>
@@ -93,7 +84,7 @@ export function BuiltinMarket({
           </section>
         ) : null
       })}
-    </div>
+    </>
   )
 }
 
@@ -151,12 +142,12 @@ function MarketTile({
   entry: MarketplacePlugin
   installed: PluginSummary | undefined
 }) {
-  const { t } = useLocale()
-  const name = entry.displayName ?? entry.name
+  const { t, locale } = useLocale()
+  const name = marketplacePluginName(entry, locale)
   const key = marketKey(market.id, entry.name)
   const pending = pendingKey === key || (installed !== undefined && pendingKey === installed.id)
   const update = updateFor(installed, market, entry)
-  const description = entry.description ?? entry.sourceLabel
+  const description = marketplacePluginDescription(entry, locale) ?? entry.sourceLabel
   return (
     <div
       className="market-tile"
@@ -217,9 +208,112 @@ function MarketTile({
   )
 }
 
-function matches(entry: MarketplacePlugin, needle: string): boolean {
-  return [entry.displayName ?? "", entry.name, entry.description ?? "", entry.category ?? ""].some(
-    (text) => text.toLowerCase().includes(needle),
+function matches(entry: MarketplacePlugin, needle: string, locale: Locale): boolean {
+  return [
+    marketplacePluginName(entry, locale),
+    marketplacePluginDescription(entry, locale) ?? "",
+    entry.displayName ?? "",
+    entry.name,
+    entry.author ?? "",
+    entry.category ?? "",
+  ].some((text) => text.toLowerCase().includes(needle))
+}
+
+const categories: Record<string, MessageKey> = {
+  "developer-tools": "plugins.market.category.developerTools",
+  productivity: "plugins.market.category.productivity",
+}
+
+export function OfficialCatalog({
+  market,
+  community,
+  plugins,
+  query,
+  onBuiltinDetails,
+  onBrowsePersonal,
+  ...actions
+}: MarketActions & {
+  market: MarketplaceSummary | undefined
+  community: boolean
+  plugins: readonly PluginSummary[]
+  query: string
+  onBuiltinDetails: (id: string) => void
+  onBrowsePersonal: () => void
+}) {
+  const { t, locale } = useLocale()
+  const needle = query.trim().toLowerCase()
+  const publisher = community ? "community" : "official"
+  const builtins = community
+    ? []
+    : plugins.filter((plugin) => plugin.builtin && matchesPlugin(plugin, needle, locale))
+  const groups = new Map<string, MarketplacePlugin[]>()
+  for (const entry of market?.plugins ?? []) {
+    if (entry.publisherType !== publisher || !matches(entry, needle, locale)) continue
+    const category = entry.category ?? ""
+    const group = groups.get(category) ?? []
+    if (group.length === 0) groups.set(category, group)
+    group.push(entry)
+  }
+  return (
+    <div className="market-sections">
+      {market?.error ? (
+        <p className="market-section-error market-catalog-error" role="status">
+          <TriangleAlert className="ic ic-sm" aria-hidden="true" />
+          {t("plugins.market.catalogCached")}
+        </p>
+      ) : null}
+      {market &&
+        [...groups].map(([category, entries]) => {
+          const key = Object.hasOwn(categories, category) ? categories[category] : undefined
+          const title = key ? t(key) : category || t("plugins.market.category.other")
+          return (
+            <section className="market-section" key={category} aria-label={title}>
+              <h2 className="market-section-title">{title}</h2>
+              <div className="market-grid">
+                {entries.map((entry) => (
+                  <MarketTile
+                    key={entry.name}
+                    market={market}
+                    entry={entry}
+                    installed={plugins.find((plugin) => plugin.name === entry.name)}
+                    {...actions}
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        })}
+      <BuiltinMarket plugins={builtins} onDetails={onBuiltinDetails} />
+      {builtins.length === 0 && groups.size === 0 ? (
+        <EmptyState
+          className={community && !needle ? "market-empty market-community-empty" : "market-empty"}
+          icon={
+            needle ? (
+              <Search className="ic" />
+            ) : community ? (
+              <Users className="ic" />
+            ) : (
+              <Package className="ic" />
+            )
+          }
+          title={t(
+            needle
+              ? "plugins.noMatches"
+              : community
+                ? "plugins.market.communityEmpty"
+                : "plugins.market.publicEmpty",
+          )}
+          description={community && !needle ? t("plugins.market.communityHint") : undefined}
+          actions={
+            community && !needle ? (
+              <Button size="sm" type="button" onClick={onBrowsePersonal}>
+                {t("plugins.market.browsePersonal")}
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
+    </div>
   )
 }
 
@@ -318,7 +412,7 @@ export function PluginMarket({
   onCreatePlugin,
   ...actions
 }: PluginMarketProps) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const needle = query.trim().toLowerCase()
   if (marketplaces.length === 0 && disabledCount > 0) {
     return (
@@ -365,7 +459,9 @@ export function PluginMarket({
   }
   const sections = marketplaces.map((market) => ({
     market,
-    entries: needle ? market.plugins.filter((entry) => matches(entry, needle)) : market.plugins,
+    entries: needle
+      ? market.plugins.filter((entry) => matches(entry, needle, locale))
+      : market.plugins,
   }))
   if (needle && sections.every((section) => section.entries.length === 0)) {
     return (

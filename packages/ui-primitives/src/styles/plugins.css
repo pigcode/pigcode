@@ -510,6 +510,9 @@
 .market-section-error .ic {
   flex: none;
 }
+.market-catalog-error {
+  margin-top: var(--space-5);
+}
 .market-section-empty {
   padding: var(--space-6) var(--market-gap);
   color: var(--muted);

@@ -11,6 +11,8 @@ import { prefillComposer } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
 import {
   PluginManagerView,
+  marketplacePluginDescription,
+  marketplacePluginName,
   pluginCreatorDraft,
   type MarketplaceSummary,
   type PluginSummary,
@@ -42,7 +44,21 @@ export function PluginManagerContainer({
   )
   const plugins = useMemo(() => {
     const agentsPage = settingsPages.some((page) => page.id === AGENTS_PAGE)
-    return hostPlugins.map((plugin) => {
+    const official = marketplaces.find((market) => market.official)
+    return hostPlugins.map((summary) => {
+      const origin = summary.origin
+      const listing =
+        origin?.kind === "marketplace" && origin.marketplace === official?.id
+          ? official.plugins.find((entry) => entry.name === origin.plugin)
+          : undefined
+      const plugin = listing
+        ? {
+            ...summary,
+            displayName: marketplacePluginName(listing, locale),
+            description:
+              marketplacePluginDescription(listing, locale) ?? summary.description ?? null,
+          }
+        : summary
       const own = conflicts.filter(
         (conflict) => conflict.rejected.kind === "plugin" && conflict.rejected.id === plugin.id,
       )
@@ -70,21 +86,44 @@ export function PluginManagerContainer({
         ...(settingsPage !== null ? { settingsPage } : {}),
       }
     })
-  }, [hostPlugins, conflicts, clientErrors, settingsPages])
+  }, [hostPlugins, conflicts, clientErrors, settingsPages, marketplaces, locale])
 
   const refresh = useCallback(async (): Promise<void> => {
     const list = (await deps.connection.call("plugin.list", {})) as PluginSummary[]
     setPlugins(list)
   }, [deps.connection])
 
-  const refreshMarketplaces = useCallback(async (): Promise<void> => {
-    setMarketplaces((await deps.connection.call("marketplace.list", {})) as MarketplaceSummary[])
+  const refreshMarketplaces = useCallback(async (): Promise<MarketplaceSummary[]> => {
+    const markets = (await deps.connection.call("marketplace.list", {})) as MarketplaceSummary[]
+    setMarketplaces(markets)
+    return markets
   }, [deps.connection])
 
   useEffect(() => {
     void refresh().catch(() => setPlugins([]))
-    void refreshMarketplaces().catch(() => setMarketplaces([]))
-  }, [refresh, refreshMarketplaces])
+    let active = true
+    void refreshMarketplaces()
+      .then(async (markets) => {
+        const official = markets.find((market) => market.official)
+        if (!active || !official) return
+        const [latest] = (await deps.connection.call("marketplace.refresh", {
+          id: official.id,
+          ifStale: true,
+        })) as MarketplaceSummary[]
+        if (!active || !latest?.official) return
+        setMarketplaces((current) =>
+          current.map((market) =>
+            market.id === latest.id && (market.lastUpdated ?? "") <= (latest.lastUpdated ?? "")
+              ? latest
+              : market,
+          ),
+        )
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [deps.connection, refresh, refreshMarketplaces])
 
   async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
     await action()

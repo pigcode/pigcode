@@ -323,8 +323,10 @@ export class RpcServer {
         return this.ctx.plugins.marketplaces()
       case "marketplace.add":
         return this.ctx.plugins.addMarketplace((parsed as { source: string }).source)
-      case "marketplace.refresh":
-        return this.ctx.plugins.refreshMarketplaces((parsed as { id?: string }).id)
+      case "marketplace.refresh": {
+        const { id, ifStale } = parsed as CommandParams<"marketplace.refresh">
+        return this.ctx.plugins.refreshMarketplaces(id, ifStale)
+      }
       case "marketplace.setEnabled": {
         const value = parsed as { id: string; enabled: boolean }
         return this.ctx.plugins.setMarketplaceEnabled(value.id, value.enabled)

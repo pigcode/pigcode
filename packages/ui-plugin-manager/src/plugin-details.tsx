@@ -55,6 +55,7 @@ export interface PluginDetailsDialogProps {
   /** 全部插件；扩展点冲突的另一方是插件时用它的显示名。 */
   plugins: readonly PluginSummary[]
   pending: boolean
+  actionError?: string | null | undefined
   /** 打开时直接停在「确认卸载」上：在卡片的更多菜单里选了卸载。 */
   confirmUninstall?: boolean | undefined
   onClose: () => void
@@ -68,6 +69,7 @@ function DetailsBody({
   plugin,
   plugins,
   pending,
+  actionError,
   confirmUninstall,
   onClose,
   onUninstall,
@@ -125,6 +127,11 @@ function DetailsBody({
     >
       <Dialog.Body className="plugin-dialog-body">
         {description ? <p className="agent-description">{description}</p> : null}
+        {actionError ? (
+          <p className="error-text" role="alert">
+            {actionError}
+          </p>
+        ) : null}
         <dl className="ext-facts">
           <dt>{t("plugins.facts.package")}</dt>
           <dd className="mono">{plugin.name}</dd>

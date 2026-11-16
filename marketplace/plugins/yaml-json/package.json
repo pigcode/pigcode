@@ -1,0 +1,28 @@
+{
+  "name": "@pigcode/yaml-json",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "Convert YAML and JSON in either direction with eemeli/yaml. Pigcode workbench adapter.",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "ui",
+    "displayName": "YAML ↔ JSON",
+    "client": "./dist/client.js"
+  },
+  "marketplace": {
+    "publisherType": "community",
+    "author": "Eemeli Aro and YAML contributors · Pigcode adapter",
+    "homepage": "https://github.com/eemeli/yaml",
+    "category": "developer-tools",
+    "licenses": [
+      "yaml"
+    ],
+    "displayName_i18n": {
+      "zh-CN": "YAML ↔ JSON 转换"
+    },
+    "description_i18n": {
+      "zh-CN": "在会话右侧双向转换 YAML 和 JSON，显示解析错误。基于 eemeli/yaml，由 Pigcode 适配。"
+    }
+  }
+}

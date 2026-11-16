@@ -215,7 +215,10 @@ export const commandSchemas = {
   /** 添加插件市场：GitHub 仓库、git 地址、https 上的 marketplace.json、本地目录或文件。 */
   "marketplace.add": z.object({ source: z.string().trim().min(1) }),
   /** 刷新一个市场；不给 id 时刷新全部。返回刷新后的 `MarketplaceSummary[]`。 */
-  "marketplace.refresh": z.object({ id: z.string().min(1).optional() }),
+  "marketplace.refresh": z.object({
+    id: z.string().min(1).optional(),
+    ifStale: z.boolean().optional(),
+  }),
   /** 启用或停用市场：停用的不在插件市场里列出、不随「全部刷新」刷新，从它装的插件保留。 */
   "marketplace.setEnabled": z.object({ id: z.string().min(1), enabled: z.boolean() }),
   /** 删除市场；从它装的插件保留。 */

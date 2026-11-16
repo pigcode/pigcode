@@ -1,0 +1,28 @@
+{
+  "name": "@pigcode/prettier-format",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "Format JavaScript, TypeScript, JSON and CSS locally with Prettier. Pigcode workbench adapter.",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "ui",
+    "displayName": "Prettier Format",
+    "client": "./dist/client.js"
+  },
+  "marketplace": {
+    "publisherType": "community",
+    "author": "Prettier contributors · Pigcode adapter",
+    "homepage": "https://github.com/prettier/prettier",
+    "category": "developer-tools",
+    "licenses": [
+      "prettier"
+    ],
+    "displayName_i18n": {
+      "zh-CN": "Prettier 格式化"
+    },
+    "description_i18n": {
+      "zh-CN": "在会话右侧用 Prettier 格式化 JavaScript、TypeScript、JSON 和 CSS。由 Pigcode 适配。"
+    }
+  }
+}

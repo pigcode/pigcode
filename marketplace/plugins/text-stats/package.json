@@ -1,0 +1,28 @@
+{
+  "name": "@pigcode/text-stats",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "Count words, Unicode code points, lines, and UTF-8 bytes in the workbench or from an Agent.",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "capability",
+    "displayName": "Text Stats",
+    "host": "./dist/index.js",
+    "client": "./dist/client.js",
+    "inject": [
+      "mcp"
+    ]
+  },
+  "marketplace": {
+    "publisherType": "official",
+    "author": "Pigcode",
+    "category": "productivity",
+    "displayName_i18n": {
+      "zh-CN": "文本统计"
+    },
+    "description_i18n": {
+      "zh-CN": "在右侧工作台统计词数、字符、行数和 UTF‑8 字节数，也可通过 MCP 调用。"
+    }
+  }
+}

@@ -6,6 +6,8 @@ import { Badge, Button, Dialog, useLocale } from "@pigcode/ui-primitives"
 import { PluginIcon } from "./plugin-market"
 import {
   fill,
+  marketplacePluginDescription,
+  marketplacePluginName,
   updateFor,
   type MarketplacePlugin,
   type MarketplaceSummary,
@@ -22,6 +24,7 @@ export interface MarketPluginDialogProps {
   selection: MarketSelection | null
   plugins: readonly PluginSummary[]
   pending: boolean
+  actionError?: string | null | undefined
   onClose: () => void
   onInstall: (market: string, plugin: string) => void
   onUpdate: (pluginId: string) => void
@@ -33,13 +36,15 @@ function Body({
   selection,
   plugins,
   pending,
+  actionError,
   onInstall,
   onUpdate,
   onOpenExternal,
 }: Omit<MarketPluginDialogProps, "selection" | "onClose"> & { selection: MarketSelection }) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const { market, entry } = selection
-  const name = entry.displayName ?? entry.name
+  const name = marketplacePluginName(entry, locale)
+  const description = marketplacePluginDescription(entry, locale)
   const installed = plugins.find((plugin) => plugin.name === entry.name)
   const update = updateFor(installed, market, entry)
   return (
@@ -55,6 +60,15 @@ function Body({
       description={
         <span className="plugin-dialog-meta">
           {entry.category ? <Badge>{entry.category}</Badge> : null}
+          {market.official && entry.publisherType ? (
+            <Badge>
+              {t(
+                entry.publisherType === "official"
+                  ? "plugins.market.public"
+                  : "plugins.market.community",
+              )}
+            </Badge>
+          ) : null}
           {installed ? (
             <Badge variant="ok">
               {fill(t("plugins.entry.installedVersion"), { version: installed.version })}
@@ -65,7 +79,12 @@ function Body({
       }
     >
       <Dialog.Body className="plugin-dialog-body">
-        {entry.description ? <p className="agent-description">{entry.description}</p> : null}
+        {description ? <p className="agent-description">{description}</p> : null}
+        {actionError ? (
+          <p className="error-text" role="alert">
+            {actionError}
+          </p>
+        ) : null}
         {update && entry.version ? (
           <p className="market-update-hint">
             {fill(t("plugins.entry.updateHint"), { version: entry.version })}

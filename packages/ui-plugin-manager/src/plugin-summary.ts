@@ -74,12 +74,16 @@ export interface MarketplacePlugin {
   icon: string | null
   homepage: string | null
   author: string | null
+  publisherType?: "official" | "community" | undefined
+  displayName_i18n?: Record<string, string> | undefined
+  description_i18n?: Record<string, string> | undefined
   sourceLabel: string
 }
 
 /** 一个插件市场；与 Host 的 MarketplaceSummary 一致。 */
 export interface MarketplaceSummary {
   id: string
+  official?: true | undefined
   displayName: string
   description: string | null
   owner: string | null
@@ -95,6 +99,17 @@ export interface MarketplaceSummary {
   lastUpdated: string | null
   error: string | null
   plugins: MarketplacePlugin[]
+}
+
+export function marketplacePluginName(entry: MarketplacePlugin, locale: Locale): string {
+  return entry.displayName_i18n?.[locale] ?? entry.displayName ?? entry.name
+}
+
+export function marketplacePluginDescription(
+  entry: MarketplacePlugin,
+  locale: Locale,
+): string | null {
+  return entry.description_i18n?.[locale] ?? entry.description
 }
 
 /** 市场是否启用。 */
@@ -174,6 +189,7 @@ const ERROR_CODES = new Set([
   "PLUGIN_SOURCE_PATH_MISSING",
   "PLUGIN_SOURCE_PATH_INVALID",
   "PLUGIN_NAME_MISMATCH",
+  "PLUGIN_VERSION_MISMATCH",
   "PLUGIN_MARKETPLACE_REMOVED",
   "PLUGIN_ORIGIN_UNKNOWN",
   "PLUGIN_TYPESCRIPT_NO_COMPILER",
@@ -188,6 +204,7 @@ const ERROR_CODES = new Set([
   "MARKETPLACE_ENTRY_UNSUPPORTED",
   "MARKETPLACE_RENAMED",
   "MARKETPLACE_DISABLED",
+  "MARKETPLACE_OFFICIAL",
 ])
 
 /** 把 Host 的错误换成界面语言的说明；不认识的错误原样显示。 */

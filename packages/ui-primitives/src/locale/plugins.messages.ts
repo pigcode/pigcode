@@ -58,6 +58,11 @@ export const pluginsZhCN = {
   "plugins.market.public": "公开",
   "plugins.market.community": "社区",
   "plugins.market.personal": "个人",
+  "plugins.market.officialSource": "官方市场",
+  "plugins.market.category.developerTools": "开发者工具",
+  "plugins.market.category.productivity": "生产力",
+  "plugins.market.category.other": "其他插件",
+  "plugins.market.catalogCached": "官方目录刷新失败，正在显示上次可用的目录。",
   "plugins.market.back": "返回插件市场",
   "plugins.market.publicEmpty": "暂无公开插件",
   "plugins.market.communityEmpty": "暂无社区插件",
@@ -166,6 +171,7 @@ export const pluginsZhCN = {
   "plugins.error.PLUGIN_SOURCE_PATH_MISSING": "仓库里没有这个目录：{detail}",
   "plugins.error.PLUGIN_SOURCE_PATH_INVALID": "目录路径不合法：{detail}",
   "plugins.error.PLUGIN_NAME_MISMATCH": "市场里写的包名和下载到的插件不一致：{detail}",
+  "plugins.error.PLUGIN_VERSION_MISMATCH": "市场版本和安装包版本不一致：{detail}",
   "plugins.error.PLUGIN_MARKETPLACE_REMOVED":
     "这个插件来自已经删除的插件市场 {detail}，重新添加这个市场后才能更新。",
   "plugins.error.PLUGIN_ORIGIN_UNKNOWN": "不知道这个插件是从哪里装的，没法更新。重新安装一次就好。",
@@ -186,6 +192,7 @@ export const pluginsZhCN = {
     "这个插件写的是相对路径，只有从 GitHub、git 或本地添加的市场才能安装它。",
   "plugins.error.MARKETPLACE_RENAMED": "插件市场改了名字：{detail}。删除后重新添加。",
   "plugins.error.MARKETPLACE_DISABLED": "这个市场源已停用：{detail}。先在市场源里启用它。",
+  "plugins.error.MARKETPLACE_OFFICIAL": "Pigcode 官方市场始终可用。",
 } as const
 
 export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
@@ -248,6 +255,12 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
   "plugins.market.public": "Public",
   "plugins.market.community": "Community",
   "plugins.market.personal": "Personal",
+  "plugins.market.officialSource": "Official marketplace",
+  "plugins.market.category.developerTools": "Developer tools",
+  "plugins.market.category.productivity": "Productivity",
+  "plugins.market.category.other": "Other plugins",
+  "plugins.market.catalogCached":
+    "The official catalog couldn’t refresh. Showing the last available catalog.",
   "plugins.market.back": "Back to the marketplace",
   "plugins.market.publicEmpty": "No public plugins",
   "plugins.market.communityEmpty": "No community plugins yet",
@@ -361,6 +374,8 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
   "plugins.error.PLUGIN_SOURCE_PATH_INVALID": "That folder path isn't valid: {detail}",
   "plugins.error.PLUGIN_NAME_MISMATCH":
     "The marketplace's package name doesn't match the downloaded plugin: {detail}",
+  "plugins.error.PLUGIN_VERSION_MISMATCH":
+    "The marketplace version differs from the downloaded package: {detail}",
   "plugins.error.PLUGIN_MARKETPLACE_REMOVED":
     "This plugin came from the removed marketplace {detail}. Add that marketplace again to update it.",
   "plugins.error.PLUGIN_ORIGIN_UNKNOWN":
@@ -385,4 +400,5 @@ export const pluginsEnUS: Record<keyof typeof pluginsZhCN, string> = {
     "The marketplace was renamed: {detail}. Remove it and add it again.",
   "plugins.error.MARKETPLACE_DISABLED":
     "This marketplace source is disabled: {detail}. Enable it in Marketplace sources first.",
+  "plugins.error.MARKETPLACE_OFFICIAL": "The Pigcode official marketplace is always available.",
 }

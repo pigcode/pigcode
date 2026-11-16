@@ -3,9 +3,13 @@
  * 远程来源先下载到临时目录，再和本地目录一样复制进 profile 的 `node_modules`；装好的条目连同来源写进 `plugins.yml`，
  * 更新时按来源重新安装。
  */
-import { cp, mkdir, readFile, rm } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rename, rm } from "node:fs/promises"
 import { dirname, join } from "node:path"
-import { parsePluginManifest, type PluginManifest } from "@pigcode/plugin-sdk"
+import {
+  checkPluginCompatibility,
+  parsePluginManifest,
+  type PluginManifest,
+} from "@pigcode/plugin-sdk"
 import { defaultFetcher } from "./plugin-download"
 import {
   pluginIdOf,
@@ -42,6 +46,7 @@ import {
   type SourceIo,
 } from "./plugin-sources"
 import { compileTypeScriptPlugin } from "./plugin-typescript"
+import { OFFICIAL_MARKETPLACE_ID, withMarketplaceFixture } from "./plugin-official-marketplace"
 
 /** 内置插件的包名不能再从外部安装一份。 */
 async function assertNotBuiltin(env: PluginEnv, name: string): Promise<void> {
@@ -110,6 +115,7 @@ async function readPluginDir(dir: string): Promise<PluginManifest> {
 /** 本地安装的选项：来源、要求的包名（市场条目），以及更新时保留停用状态。 */
 export interface LocalInstallOptions extends EntryOptions {
   expectedName?: string | undefined
+  expectedVersion?: string | undefined
 }
 
 /** 校验并复制本地插件目录到 profile，随后写入启用的条目。 */
@@ -125,24 +131,60 @@ export async function installLocalPlugin(
       `PLUGIN_NAME_MISMATCH: the marketplace lists ${options.expectedName} but the package is ${manifest.name}`,
     )
   }
+  if (options.expectedVersion) {
+    if (manifest.version !== options.expectedVersion) {
+      throw new Error(`PLUGIN_VERSION_MISMATCH: ${options.expectedVersion} / ${manifest.version}`)
+    }
+    const incompatible = checkPluginCompatibility(manifest)
+    if (incompatible) throw new Error(incompatible)
+  }
   await assertNotBuiltin(env, manifest.name)
   const target = join(env.profileDir, "node_modules", manifest.name)
-  await rm(target, { recursive: true, force: true })
   await mkdir(dirname(target), { recursive: true })
-  await cp(sourceDir, target, {
-    recursive: true,
-    filter: (path) => !/[\\/]\.git$/.test(path),
-  })
-  await compileTypeScriptPlugin(target)
-  return addPluginEntry(env, manifest, {
-    origin: options.origin ?? { kind: "local", path: sourceDir },
-    keepDisabled: options.keepDisabled,
-  })
+  const staging = await mkdtemp(join(dirname(target), ".pigcode-install-"))
+  const candidate = join(staging, "candidate")
+  const backup = join(staging, "previous")
+  let preserveBackup = false
+  try {
+    await cp(sourceDir, candidate, {
+      recursive: true,
+      filter: (path) => !/[\\/]\.git$/.test(path),
+    })
+    await compileTypeScriptPlugin(candidate)
+    const hadPrevious = await rename(target, backup).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return false
+        throw error
+      },
+    )
+    let installed = false
+    try {
+      await rename(candidate, target)
+      installed = true
+      return await addPluginEntry(env, manifest, {
+        origin: options.origin ?? { kind: "local", path: sourceDir },
+        keepDisabled: options.keepDisabled,
+      })
+    } catch (error) {
+      preserveBackup = hadPrevious
+      if (installed) await rm(target, { recursive: true, force: true })
+      if (hadPrevious) await rename(backup, target)
+      preserveBackup = false
+      throw error
+    }
+  } finally {
+    if (!preserveBackup) await rm(staging, { recursive: true, force: true }).catch(() => undefined)
+  }
 }
 
 /** 下载与克隆的默认实现：Electron 的 net、系统 git、环境变量里的 GitHub 令牌。 */
 export function defaultSourceIo(): SourceIo {
-  return { fetcher: defaultFetcher(), runGit: defaultGitRunner, githubToken: githubTokenFromEnv() }
+  return {
+    fetcher: withMarketplaceFixture(defaultFetcher()),
+    runGit: defaultGitRunner,
+    githubToken: githubTokenFromEnv(),
+  }
 }
 
 /** 从一个来源安装：npm 交给 pnpm，本地目录直接复制，远程来源先下载到临时目录。 */
@@ -194,6 +236,8 @@ export async function installFromMarketplace(
   return installFromSource(env, entryPluginSource(entry, root), runPnpm, io, {
     origin: { kind: "marketplace", marketplace, plugin },
     expectedName: entry.name,
+    expectedVersion:
+      marketplace === OFFICIAL_MARKETPLACE_ID ? (entry.version ?? undefined) : undefined,
     keepDisabled,
   })
 }

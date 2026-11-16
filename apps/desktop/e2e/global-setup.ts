@@ -20,7 +20,7 @@ const OUTPUTS = [
 ]
 
 /** 这些目录下的任何文件比产物新，就要重建。 */
-const SOURCES = ["src", "../host/src", "../../packages"]
+const SOURCES = ["src", "../host/src", "../../packages", "../../marketplace"]
 
 /** 文件的修改时间；不存在时返回 0。 */
 function mtime(path: string): number {
@@ -80,6 +80,15 @@ export default function globalSetup(): void {
   }
   // 样例插件是构建后安装的（adr/0006），用例装的是它们的 dist。
   buildExamples(repoRoot)
+  if (process.env.PIGCODE_REAL_MARKETPLACE !== "1") {
+    const catalogDir = join(desktopDir, "out-e2e", "marketplace")
+    rmSync(catalogDir, { recursive: true, force: true })
+    execFileSync(process.execPath, ["scripts/build-marketplace.ts", catalogDir], {
+      cwd: repoRoot,
+      stdio: "inherit",
+    })
+    process.env.PIGCODE_E2E_CATALOG_DIR = catalogDir
+  }
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (profileDir) rmSync(profileDir, { recursive: true, force: true })
 }

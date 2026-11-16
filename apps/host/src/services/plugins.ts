@@ -31,6 +31,11 @@ import {
   type MarketplaceSummary,
 } from "./plugin-marketplace"
 import { providesConflictOf } from "./plugin-conflicts"
+import {
+  OFFICIAL_MARKETPLACE_ID,
+  readOfficialMarketplace,
+  refreshOfficialMarketplace,
+} from "./plugin-official-marketplace"
 
 /** plugins 插件的配置：用户 profile 目录与内置插件包目录。 */
 export interface PluginsConfig {
@@ -55,7 +60,7 @@ export interface PluginsService {
   marketplaces(): Promise<MarketplaceSummary[]>
   addMarketplace(source: string): Promise<MarketplaceSummary>
   /** 刷新一个市场；不给 id 时刷新全部启用的市场。某个市场失败时原因在它的 error 里，其余照常。 */
-  refreshMarketplaces(id?: string): Promise<MarketplaceSummary[]>
+  refreshMarketplaces(id?: string, ifStale?: boolean): Promise<MarketplaceSummary[]>
   /** 启用或停用市场；停用的不列出、不刷新，从它装的插件保留。 */
   setMarketplaceEnabled(id: string, enabled: boolean): Promise<MarketplaceSummary>
   /** 删除市场；从它装的插件保留。 */
@@ -99,6 +104,16 @@ export const inject = ["loader"]
 /** 注册 plugins 服务；启停插件时同步更新 loader 与 boot graph。 */
 export const apply: PluginsPlugin = (ctx, config) => {
   const env: PluginEnv = { profileDir: config.profileDir, builtin: config.builtin ?? [] }
+  // 一次安装、更新或启停完成写盘和重新加载后，再开始下一个操作。
+  let pendingMutation = Promise.resolve()
+  function mutate<T>(action: () => Promise<T>): Promise<T> {
+    const next = pendingMutation.then(action)
+    pendingMutation = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
   // 加载失败只记录在内存里，供 list 合并展示；重启后重新尝试。
   const loadErrors = new Map<string, string>()
   // Host 入口 import 或 apply 失败的插件：它们的界面代码也不加载，错误显示在插件页。
@@ -255,50 +270,61 @@ export const apply: PluginsPlugin = (ctx, config) => {
     },
     records: () => readPluginRecords(env),
     record: recordOf,
-    install: async (spec) => afterInstall(await installPlugin(env, spec)),
-    installLocal: async (sourceDir) => afterInstall(await installLocalPlugin(env, sourceDir)),
-    installFromMarketplace: async (marketplace, plugin) =>
-      afterInstall(await installFromMarketplace(env, marketplace, plugin)),
-    update: async (id) => afterInstall(await updatePlugin(env, id)),
-    marketplaces: () => listMarketplaces(env.profileDir),
+    install: (spec) => mutate(async () => afterInstall(await installPlugin(env, spec))),
+    installLocal: (sourceDir) =>
+      mutate(async () => afterInstall(await installLocalPlugin(env, sourceDir))),
+    installFromMarketplace: (marketplace, plugin) =>
+      mutate(async () => afterInstall(await installFromMarketplace(env, marketplace, plugin))),
+    update: (id) => mutate(async () => afterInstall(await updatePlugin(env, id))),
+    marketplaces: async () => [
+      await readOfficialMarketplace(env.profileDir),
+      ...(await listMarketplaces(env.profileDir)),
+    ],
     addMarketplace: (source) => addMarketplace(env.profileDir, source, defaultSourceIo()),
-    refreshMarketplaces: async (id) => {
+    refreshMarketplaces: async (id, ifStale) => {
       const io = defaultSourceIo()
+      if (id === OFFICIAL_MARKETPLACE_ID)
+        return [await refreshOfficialMarketplace(env.profileDir, io, ifStale)]
       if (id) return [await refreshMarketplace(env.profileDir, id, io)]
+      const official = refreshOfficialMarketplace(env.profileDir, io)
       const results: MarketplaceSummary[] = []
       for (const summary of await listMarketplaces(env.profileDir)) {
         results.push(
           summary.enabled ? await refreshMarketplace(env.profileDir, summary.id, io) : summary,
         )
       }
-      return results
+      return [await official, ...results]
     },
     setMarketplaceEnabled: (id, enabled) => setMarketplaceEnabled(env.profileDir, id, enabled),
     removeMarketplace: (id) => removeMarketplace(env.profileDir, id),
-    uninstall: async (id) => {
-      const record = await recordOf(id)
-      if (record.builtin) throw new Error(`PLUGIN_BUILTIN: ${record.name} can only be disabled`)
-      // 先卸掉自己的入口（它的 effect 要能正常收尾），再删记录：它声明的服务空出来，
-      // 原来因冲突没加载的插件在 reconcile 里接上。
-      await unloadEntry(id)
-      await uninstallPlugin(env, id)
-      await reconcile()
-      await updateBootGraph()
-    },
-    enable: async (id) => {
-      await setPluginEnabled(env, id, true)
-      await reconcile()
-      await updateBootGraph()
-    },
-    disable: async (id) => {
-      await setPluginEnabled(env, id, false)
-      await reconcile()
-      await updateBootGraph()
-    },
-    reload: async () => {
-      await reconcile()
-      await updateBootGraph()
-    },
+    uninstall: (id) =>
+      mutate(async () => {
+        const record = await recordOf(id)
+        if (record.builtin) throw new Error(`PLUGIN_BUILTIN: ${record.name} can only be disabled`)
+        // 先卸掉自己的入口（它的 effect 要能正常收尾），再删记录：它声明的服务空出来，
+        // 原来因冲突没加载的插件在 reconcile 里接上。
+        await unloadEntry(id)
+        await uninstallPlugin(env, id)
+        await reconcile()
+        await updateBootGraph()
+      }),
+    enable: (id) =>
+      mutate(async () => {
+        await setPluginEnabled(env, id, true)
+        await reconcile()
+        await updateBootGraph()
+      }),
+    disable: (id) =>
+      mutate(async () => {
+        await setPluginEnabled(env, id, false)
+        await reconcile()
+        await updateBootGraph()
+      }),
+    reload: () =>
+      mutate(async () => {
+        await reconcile()
+        await updateBootGraph()
+      }),
     bootGraph: () => buildBootGraph(env, hostFailures),
     hostFailures: () => hostFailures,
     loadAll: reconcile,

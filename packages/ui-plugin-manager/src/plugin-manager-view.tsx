@@ -1,9 +1,8 @@
 // 插件市场用于浏览与安装。插件管理有独立的工具栏和列表，返回市场时保留来源与搜索词。
 import { useEffect, useRef, useState } from "react"
-import { ArrowLeft, Layers, Plus, RefreshCw, Users } from "lucide-react"
+import { ArrowLeft, Layers, Plus, RefreshCw } from "lucide-react"
 import {
   Button,
-  EmptyState,
   InstallDialog,
   SearchField,
   SegmentedControl,
@@ -18,7 +17,7 @@ import {
 } from "./marketplace-sources"
 import { PluginDetailsDialog } from "./plugin-details"
 import { PluginList, type PluginStatusFilter } from "./plugin-list"
-import { BuiltinMarket, PluginMarket, marketKey } from "./plugin-market"
+import { OfficialCatalog, PluginMarket, marketKey, type MarketActions } from "./plugin-market"
 import {
   fill,
   isMarketEnabled,
@@ -31,7 +30,7 @@ import {
 /** 插件页需要的状态与事件；操作失败时抛错，页面展示原因。 */
 export interface PluginManagerViewProps {
   plugins: PluginSummary[]
-  /** 已添加的插件市场；给了 onAddMarketplace 才有插件市场。 */
+  /** 官方市场和用户添加的市场。 */
   marketplaces?: MarketplaceSummary[] | undefined
   onInstall: (spec: string) => Promise<void>
   onEnable: (id: string) => Promise<void>
@@ -118,6 +117,8 @@ export function PluginManagerView({
   )
   // 停用的市场源不在插件市场里列出，也不拿来检查更新。
   const enabledMarkets = marketplaces.filter(isMarketEnabled)
+  const officialMarket = enabledMarkets.find((market) => market.official)
+  const personalMarkets = enabledMarkets.filter((market) => !market.official)
   // 详情跟着列表走：插件卸载后从列表里消失，对话框随之关闭。
   const detailsPlugin = details
     ? (plugins.find((plugin) => plugin.id === details.id) ?? null)
@@ -145,7 +146,10 @@ export function PluginManagerView({
     setManageOpen(open)
   }
 
-  const openDetails = (id: string, confirmUninstall = false) => setDetails({ id, confirmUninstall })
+  const openDetails = (id: string, confirmUninstall = false) => {
+    setError(null)
+    setDetails({ id, confirmUninstall })
+  }
 
   async function run(id: string, action: () => Promise<void>): Promise<boolean> {
     setPendingId(id)
@@ -176,12 +180,25 @@ export function PluginManagerView({
   const refreshLabel = t(checkUpdates ? "plugins.checkUpdates" : "plugins.refresh")
   const title = t(managing ? "plugins.title" : "plugins.pageTitle")
   const showSearch =
-    managing || catalog === "public" || (catalog === "personal" && enabledMarkets.length > 0)
+    managing ||
+    catalog === "public" ||
+    (catalog === "personal" && personalMarkets.length > 0) ||
+    (catalog === "community" &&
+      officialMarket?.plugins.some((entry) => entry.publisherType === "community"))
   const setQuery = managing ? setInstalledQuery : setMarketQuery
   const update = onUpdate ? (id: string) => void run(id, () => onUpdate(id)) : undefined
   const installFromMarket = (market: string, plugin: string) =>
     onInstallFromMarketplace &&
     void run(marketKey(market, plugin), () => onInstallFromMarketplace(market, plugin))
+  const marketActions: MarketActions = {
+    pendingKey: pendingId,
+    onInstall: installFromMarket,
+    onUpdate: (id) => update?.(id),
+    onDetails: (market, plugin) => {
+      setError(null)
+      setMarketDetails({ market, plugin })
+    },
+  }
   const refreshMarket = onRefreshMarketplaces
     ? (id: string) => void run(id, () => onRefreshMarketplaces(id))
     : undefined
@@ -323,7 +340,7 @@ export function PluginManagerView({
               ) : null}
             </div>
           ) : null}
-          {error ? (
+          {error && !detailsPlugin && !marketSelection ? (
             <p className="error-text market-error" role="alert">
               {error}
             </p>
@@ -348,34 +365,27 @@ export function PluginManagerView({
               onUpdate={update}
               updatable={updatable}
             />
-          ) : catalog === "public" ? (
-            <BuiltinMarket plugins={plugins} query={marketQuery} onDetails={openDetails} />
-          ) : catalog === "community" ? (
-            <EmptyState
-              className="market-empty market-community-empty"
-              icon={<Users className="ic" />}
-              title={t("plugins.market.communityEmpty")}
-              description={t("plugins.market.communityHint")}
-              actions={
-                <Button size="sm" type="button" onClick={() => setCatalog("personal")}>
-                  {t("plugins.market.browsePersonal")}
-                </Button>
-              }
+          ) : catalog !== "personal" ? (
+            <OfficialCatalog
+              market={officialMarket}
+              community={catalog === "community"}
+              plugins={plugins}
+              query={marketQuery}
+              onBuiltinDetails={openDetails}
+              onBrowsePersonal={() => setCatalog("personal")}
+              {...marketActions}
             />
           ) : (
             <PluginMarket
-              marketplaces={enabledMarkets}
+              marketplaces={personalMarkets}
               disabledCount={marketplaces.length - enabledMarkets.length}
               sourceActions={sourceActions}
               plugins={plugins}
               query={marketQuery}
-              pendingKey={pendingId}
-              onInstall={installFromMarket}
-              onUpdate={(id) => update?.(id)}
-              onDetails={(market, plugin) => setMarketDetails({ market, plugin })}
               onAddMarketplace={() => setAddMarketOpen(true)}
               onInstallFromGitHub={() => setInstallOpen(true)}
               onCreatePlugin={onCreatePlugin ? () => void createPlugin() : undefined}
+              {...marketActions}
             />
           )}
         </div>
@@ -384,6 +394,7 @@ export function PluginManagerView({
         plugin={detailsPlugin}
         plugins={plugins}
         pending={detailsPlugin !== null && pendingId === detailsPlugin.id}
+        actionError={error}
         confirmUninstall={details?.confirmUninstall}
         onClose={() => setDetails(null)}
         onUninstall={onUninstall ? (id: string) => void run(id, () => onUninstall(id)) : undefined}
@@ -391,6 +402,7 @@ export function PluginManagerView({
       />
       <MarketPluginDialog
         selection={marketSelection}
+        actionError={error}
         plugins={plugins}
         pending={
           marketSelection !== null &&

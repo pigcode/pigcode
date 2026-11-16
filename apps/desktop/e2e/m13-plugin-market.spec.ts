@@ -147,7 +147,7 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     await page.getByRole("button", { name: "管理市场源…" }).click()
     const sources = page.getByRole("dialog", { name: "市场源" })
     await sources.getByRole("switch", { name: "启用 E2E 插件" }).click()
-    await expect(sources.getByRole("status")).toHaveText("1 个市场源")
+    await expect(sources.getByRole("status")).toHaveText("2 个市场源")
     await sources.getByRole("button", { name: "关闭" }).last().click()
     await expect(section).toBeVisible()
 

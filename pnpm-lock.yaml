@@ -257,6 +257,30 @@ importers:
         specifier: 19.2.3
         version: 19.2.3
 
+  marketplace:
+    devDependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../packages/contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../packages/plugin-sdk
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../packages/ui-primitives
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      prettier:
+        specifier: 3.9.10
+        version: 3.9.10
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
+
   packages/agent-claude:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':

@@ -1,0 +1,24 @@
+{
+  "name": "@pigcode/project-overview",
+  "version": "1.0.0",
+  "license": "MIT",
+  "type": "module",
+  "description": "See project folders, Git branches, and changed files in a workbench tab.",
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "ui",
+    "displayName": "Project Overview",
+    "client": "./dist/client.js"
+  },
+  "marketplace": {
+    "publisherType": "official",
+    "author": "Pigcode",
+    "category": "developer-tools",
+    "displayName_i18n": {
+      "zh-CN": "项目概览"
+    },
+    "description_i18n": {
+      "zh-CN": "在会话右侧工作台查看项目目录、Git 分支和变更文件。"
+    }
+  }
+}

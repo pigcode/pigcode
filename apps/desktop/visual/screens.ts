@@ -383,8 +383,12 @@ export async function walkSettings(walk: Walk): Promise<void> {
 
   await nav("settings.plugins")
   await expect(page.getByRole("heading", { name: t("plugins.pageTitle") })).toBeVisible()
-  await expect(page.locator(".market-tile")).toHaveCount(2)
+  await expect(page.locator(".market-tile")).toHaveCount(4)
   await step("settings-plugins")
+  await page.getByRole("radio", { name: t("plugins.market.community"), exact: true }).click()
+  await expect(page.locator(".market-tile")).toHaveCount(2)
+  await step("settings-plugins-community")
+  await page.getByRole("radio", { name: t("plugins.market.public"), exact: true }).click()
 
   for (const name of ["ui-debug-panel", "agent-echo", "capability-clock"]) {
     await page

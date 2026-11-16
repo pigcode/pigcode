@@ -24,6 +24,11 @@ import {
   type GitLocation,
   type SourceIo,
 } from "./plugin-sources"
+import {
+  OFFICIAL_MARKETPLACE_ID,
+  readOfficialMarketplace,
+  refreshOfficialMarketplace,
+} from "./plugin-official-marketplace"
 
 export {
   entryPluginSource,
@@ -56,6 +61,8 @@ export interface MarketplaceRecord {
 /** 插件页看到的一个市场。 */
 export interface MarketplaceSummary {
   id: string
+  /** 由 Host 分发的官方市场，个人清单无法声明。 */
+  official?: true | undefined
   displayName: string
   description: string | null
   owner: string | null
@@ -353,6 +360,7 @@ export async function refreshMarketplace(
   id: string,
   io: SourceIo,
 ): Promise<MarketplaceSummary> {
+  if (id === OFFICIAL_MARKETPLACE_ID) return refreshOfficialMarketplace(profileDir, io)
   const records = await readRecords(profileDir)
   const record = records.find((item) => item.id === id)
   if (!record) throw new Error(`MARKETPLACE_UNKNOWN: ${id}`)
@@ -390,6 +398,7 @@ export async function setMarketplaceEnabled(
   id: string,
   enabled: boolean,
 ): Promise<MarketplaceSummary> {
+  if (id === OFFICIAL_MARKETPLACE_ID) throw new Error("MARKETPLACE_OFFICIAL: Pigcode")
   const records = await readRecords(profileDir)
   const record = records.find((item) => item.id === id)
   if (!record) throw new Error(`MARKETPLACE_UNKNOWN: ${id}`)
@@ -408,6 +417,7 @@ export async function setMarketplaceEnabled(
 
 /** 删除市场：只删记录和缓存，从它装的插件保留。 */
 export async function removeMarketplace(profileDir: string, id: string): Promise<void> {
+  if (id === OFFICIAL_MARKETPLACE_ID) throw new Error("MARKETPLACE_OFFICIAL: Pigcode")
   const records = await readRecords(profileDir)
   if (!records.some((record) => record.id === id)) throw new Error(`MARKETPLACE_UNKNOWN: ${id}`)
   await writeRecords(
@@ -439,6 +449,12 @@ export async function resolveMarketplaceEntry(
   id: string,
   name: string,
 ): Promise<{ entry: MarketplaceEntry; root: string | null }> {
+  if (id === OFFICIAL_MARKETPLACE_ID) {
+    const market = await readOfficialMarketplace(profileDir)
+    const entry = market.plugins.find((plugin) => plugin.name === name)
+    if (!entry) throw new Error(`MARKETPLACE_ENTRY_UNKNOWN: ${name} is not in ${id}`)
+    return { entry, root: null }
+  }
   const record = (await readRecords(profileDir)).find((item) => item.id === id)
   if (!record) throw new Error(`MARKETPLACE_UNKNOWN: ${id}`)
   if (record.enabled === false) throw new Error(`MARKETPLACE_DISABLED: ${id}`)
@@ -453,5 +469,6 @@ export async function marketplaceSourceType(
   profileDir: string,
   id: string,
 ): Promise<MarketplaceSource["type"] | null> {
+  if (id === OFFICIAL_MARKETPLACE_ID) return "url"
   return (await readRecords(profileDir)).find((record) => record.id === id)?.source.type ?? null
 }

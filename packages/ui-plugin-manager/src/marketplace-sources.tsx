@@ -298,7 +298,11 @@ export function MarketplaceSourcesDialog({
                       <span className="marketplace-source-name">
                         <span className="truncate">{market.displayName}</span>
                         <span className="marketplace-source-type">
-                          {t(sourceTypeKeys[market.sourceType])}
+                          {t(
+                            market.official
+                              ? "plugins.market.officialSource"
+                              : sourceTypeKeys[market.sourceType],
+                          )}
                         </span>
                         {enabled ? null : (
                           <span className="marketplace-source-type is-off">
@@ -354,7 +358,7 @@ export function MarketplaceSourcesDialog({
                       ) : null}
                     </div>
                     <span className="marketplace-source-actions">
-                      {onSetEnabled ? (
+                      {onSetEnabled && !market.official ? (
                         <Switch
                           aria-label={fill(t("plugins.sourcesDialog.toggle"), {
                             market: market.displayName,
@@ -389,7 +393,7 @@ export function MarketplaceSourcesDialog({
                         label={fill(t("plugins.sourcesDialog.more"), {
                           market: market.displayName,
                         })}
-                        onRemove={() => setConfirming(market.id)}
+                        onRemove={market.official ? undefined : () => setConfirming(market.id)}
                       />
                     </span>
                   </li>
