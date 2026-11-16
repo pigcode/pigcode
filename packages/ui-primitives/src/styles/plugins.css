@@ -282,6 +282,9 @@
 .installed-plugin-row {
   border-radius: 0;
 }
+.installed-plugin-row .market-tile-text {
+  flex: 1;
+}
 .installed-plugin-row + .installed-plugin-row::before {
   position: absolute;
   inset: 0 var(--market-gap) auto;
