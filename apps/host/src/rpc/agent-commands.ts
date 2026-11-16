@@ -3,6 +3,8 @@
  * 从 RpcServer 里分出来，让 server.ts 的分发只留一次调用。
  */
 import type { Context } from "cordis"
+import type { CommandParams } from "@pigcode/contracts"
+import { AgentInstanceIdTakenError } from "../agents/errors"
 import { listAgents, validateAgentSettings } from "./agents"
 
 /** 一个已解析的参数；各命令自己断言形状。 */
@@ -57,6 +59,28 @@ async function updateSettings(ctx: Context, value: Params): Promise<unknown> {
   return { values: ctx.agents.updateSettings(agentId, values, instanceId) }
 }
 
+/** 保存前校验配置，已停用插件的默认实例 ID 也保留。 */
+async function createInstance(
+  ctx: Context,
+  { agentId, label, ...options }: CommandParams<"agent.createInstance">,
+): Promise<unknown> {
+  if (options.instanceId !== undefined || options.values !== undefined) {
+    const { agents } = await listAgents(ctx)
+    if (options.instanceId && agents.some((agent) => agent.agentId === options.instanceId)) {
+      throw new AgentInstanceIdTakenError(options.instanceId)
+    }
+    if (options.values !== undefined) {
+      const agent = agents.find((item) => item.agentId === agentId)
+      if (!agent) throw new Error(`agent not found: ${agentId}`)
+      validateAgentSettings(agent, options.values)
+    }
+  }
+  if (!ctx.agents.list().some((driver) => driver.id === agentId)) {
+    throw new Error(`agent not found: ${agentId}`)
+  }
+  return ctx.agents.createInstance(agentId, label, options)
+}
+
 /** 处理一条 `agent.*` 命令。参数在 RpcServer 里已经过 schema 校验。 */
 export async function dispatchAgentCommand(
   ctx: Context,
@@ -104,17 +128,8 @@ export async function dispatchAgentCommand(
       return listAgents(ctx)
     case "agent.updateSettings":
       return updateSettings(ctx, value)
-    case "agent.createInstance": {
-      const agentId = value.agentId as string
-      if (!ctx.agents.list().some((driver) => driver.id === agentId)) {
-        throw new Error(`agent not found: ${agentId}`)
-      }
-      return ctx.agents.createInstance(
-        agentId,
-        value.label as string,
-        (value.copyFrom as string) ?? null,
-      )
-    }
+    case "agent.createInstance":
+      return createInstance(ctx, parsed as CommandParams<"agent.createInstance">)
     case "agent.updateInstance":
       return updateInstance(ctx, value)
     case "agent.removeInstance":

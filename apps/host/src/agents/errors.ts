@@ -1,4 +1,13 @@
-/** Agent run 生命周期错误；code 供 RPC 与 UI 稳定识别。 */
+/** Agent 服务错误；code 供 RPC 与 UI 稳定识别。 */
+
+export class AgentInstanceIdTakenError extends Error {
+  readonly code = "AGENT_INSTANCE_ID_TAKEN"
+
+  constructor(instanceId: string) {
+    super(`agent instance ID is already in use: ${instanceId}`)
+    this.name = "AgentInstanceIdTakenError"
+  }
+}
 
 /** 同一 thread 已有活跃 run 时抛出的错误。 */
 export class RunAlreadyActiveError extends Error {

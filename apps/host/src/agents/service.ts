@@ -14,6 +14,7 @@ import type {
   RunStatus,
 } from "@pigcode/contracts"
 import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
+import type { InstanceCreateOptions } from "./agent-settings"
 import type { ApprovalDecision, ApprovalRequest, AgentDriver, UserInput } from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
@@ -101,7 +102,7 @@ export interface AgentsService {
   listInstances(agentId: string): AgentInstance[]
   /** 按 instanceId 找实例；找不到时为 null。 */
   findInstance(instanceId: string): AgentInstance | null
-  createInstance(agentId: string, label: string, copyFrom?: string | null): AgentInstance
+  createInstance(agentId: string, label: string, options?: InstanceCreateOptions): AgentInstance
   updateInstance(
     instanceId: string,
     patch: {

@@ -181,6 +181,53 @@ describe("rpc server", () => {
     await ctx.fiber.dispose()
   })
 
+  it("validates the ID and initial settings before saving a configured instance", async () => {
+    const { ctx, transport } = await createServer()
+    const draft = { agentId: "fake", label: "公司 API", instanceId: "fake_work" }
+    let requestId = 0
+    const create = (params: Record<string, unknown>) => {
+      transport.client.send({
+        jsonrpc: "2.0",
+        id: String(++requestId),
+        method: "agent.createInstance",
+        params,
+      })
+      return transport.client.next()
+    }
+    try {
+      ctx.agents.updateSettings("fake", { customModels: ["default-model"] })
+      expect(await create({ ...draft, values: { unknownSetting: "value" } })).toMatchObject({
+        error: expect.anything(),
+      })
+      expect(ctx.agents.findInstance(draft.instanceId)).toBeNull()
+
+      for (const instanceId of ["fake", "constructor"]) {
+        expect(await create({ ...draft, instanceId, values: {} })).toMatchObject({
+          error: { code: "AGENT_INSTANCE_ID_TAKEN" },
+        })
+      }
+      expect(await create({ ...draft, instanceId: "work api", values: {} })).toMatchObject({
+        error: expect.anything(),
+      })
+
+      const values = { customModels: ["work-model"] }
+      expect(
+        await create({ ...draft, values: { customModels: [" work-model ", "work-model"] } }),
+      ).toMatchObject({ result: { ...draft, values } })
+      expect(await create({ ...draft, label: "重复实例", values: {} })).toMatchObject({
+        error: { code: "AGENT_INSTANCE_ID_TAKEN" },
+      })
+      expect(ctx.agents.findInstance(draft.instanceId)).toMatchObject({ ...draft, values })
+      expect(ctx.agents.getSettings("fake")).toEqual({ customModels: ["default-model"] })
+
+      expect(
+        await create({ agentId: "fake", label: "旧版客户端", copyFrom: draft.instanceId }),
+      ).toMatchObject({ result: { instanceId: expect.stringMatching(/^inst_/), values } })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it("creates, edits, defaults and removes agent instances over RPC", async () => {
     const { ctx, transport } = await createServer()
     const send = async (id: string, method: string, params: unknown) => {

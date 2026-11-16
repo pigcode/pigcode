@@ -9,7 +9,6 @@ import {
   localizeText,
   type AgentInstance,
   type AgentSummary,
-  type AgentSettingField,
   type AgentSettingsValues,
   type AgentStatus,
 } from "@pigcode/contracts"
@@ -22,9 +21,9 @@ import {
   useLocale,
 } from "@pigcode/ui-primitives"
 import {
+  AgentFields,
   EnvironmentEditor,
-  FieldControl,
-  finalEnvironment,
+  cleanAgentValues,
   readEnvironment,
   type PickPath,
 } from "./agent-fields"
@@ -58,21 +57,6 @@ export interface AgentEditorProps {
   onPickPath?: PickPath | undefined
   /** 打开外部链接（官网）；没有时不显示链接。 */
   onOpenExternal?: ((url: string) => void) | undefined
-}
-
-/**
- * 保存前整理：去掉没填名字的环境变量行，其余原样交给 Host 规范化。
- * 有不合法的变量名时返回 null，面板提示后不提交。
- */
-function cleanValues(agent: AgentSummary, values: AgentSettingsValues): AgentSettingsValues | null {
-  const next: AgentSettingsValues = { ...values }
-  for (const field of agent.fields) {
-    if (field.type !== "env" || values[field.key] === undefined) continue
-    const entries = finalEnvironment(values[field.key])
-    if (!entries) return null
-    next[field.key] = entries
-  }
-  return next
 }
 
 /** 留空的值：保存时 Host 会去掉，比较时当作没有。 */
@@ -156,9 +140,7 @@ export function AgentEditor({
 
   const dirty = useMemo(() => !sameValues(draft, instance.values), [draft, instance.values])
   const renamed = label.trim().length > 0 && label.trim() !== instance.label
-  const runtimeFields = agent.fields.filter(
-    (field): field is Exclude<AgentSettingField, { type: "env" }> => field.type !== "env",
-  )
+  const runtimeFields = agent.fields.filter((field) => field.type !== "env")
   const envFields = agent.fields.filter((field) => field.type === "env")
   const isDefault = instance.isDefault
   const isDefaultForSessions = defaultInstanceId === instance.instanceId
@@ -204,7 +186,7 @@ export function AgentEditor({
   }
 
   async function save(): Promise<void> {
-    const values = cleanValues(agent, draft)
+    const values = cleanAgentValues(agent.fields, draft)
     if (!values) {
       setNotice({ kind: "error", text: t("agents.env.invalid") })
       return
@@ -281,26 +263,12 @@ export function AgentEditor({
 
           <Tabs.Panel value="runtime">
             <Block>
-              <div className="agent-fields">
-                {runtimeFields.map((field) => (
-                  <div className="agent-field" key={field.key}>
-                    <div className="agent-field-label">
-                      <span>{localizeText(field.label, locale)}</span>
-                      {field.description ? (
-                        <span className="agent-muted">
-                          {localizeText(field.description, locale)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <FieldControl
-                      field={field}
-                      value={draft[field.key]}
-                      onChange={(value) => set(field.key, value)}
-                      onPickPath={onPickPath}
-                    />
-                  </div>
-                ))}
-              </div>
+              <AgentFields
+                fields={runtimeFields}
+                values={draft}
+                onChange={set}
+                onPickPath={onPickPath}
+              />
             </Block>
           </Tabs.Panel>
 

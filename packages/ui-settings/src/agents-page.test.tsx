@@ -362,14 +362,23 @@ describe("AgentsPage", () => {
     )
     await userEvent.click(screen.getByRole("button", { name: "下一步" }))
     await userEvent.type(screen.getByRole("textbox", { name: "实例名称" }), "公司 API")
+    const id = screen.getByRole("textbox", { name: "实例 ID" })
+    expect(id).toHaveProperty("value", "claude_api")
+    await userEvent.clear(id)
+    await userEvent.type(id, "claude")
+    expect(id.getAttribute("aria-invalid")).toBe("true")
+    await userEvent.clear(id)
+    await userEvent.type(id, "work-api")
     await userEvent.click(screen.getByRole("button", { name: "下一步" }))
+    await userEvent.type(screen.getByRole("textbox", { name: "启动参数" }), "--chrome")
     await userEvent.click(screen.getByRole("button", { name: "创建实例" }))
     await waitFor(() =>
-      expect(props.onCreateInstance).toHaveBeenCalledWith(
-        expect.objectContaining({ agentId: "claude" }),
-        "公司 API",
-        null,
-      ),
+      expect(props.onCreateInstance).toHaveBeenCalledWith({
+        agentId: "claude",
+        instanceId: "work-api",
+        label: "公司 API",
+        values: { launchArgs: "--chrome" },
+      }),
     )
   })
 

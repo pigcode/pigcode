@@ -32,6 +32,7 @@ export const workbenchZhCN = {
   "hostError.GIT_NO_REMOTE":
     "这个仓库没有指向 GitHub 的远程仓库。用 git remote add 添加一个后再试。",
   "hostError.AGENT_INSTANCE_IN_USE": "这个实例还有会话在用。先在那些会话里换用别的实例，再删除它。",
+  "hostError.AGENT_INSTANCE_ID_TAKEN": "这个实例 ID 已被占用，请换一个。",
   "hostError.details": "原始信息",
 } as const
 
@@ -70,5 +71,6 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
     "This repository has no GitHub remote. Add one with git remote add and try again.",
   "hostError.AGENT_INSTANCE_IN_USE":
     "Sessions still use this instance. Switch them to another instance before removing it.",
+  "hostError.AGENT_INSTANCE_ID_TAKEN": "This instance ID is already in use. Choose another ID.",
   "hostError.details": "Details",
 }

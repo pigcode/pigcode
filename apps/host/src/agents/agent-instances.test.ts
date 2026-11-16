@@ -82,7 +82,7 @@ describe("agent instances", () => {
     const store = ctx.settings
     store.set("agents.alpha", { binaryPath: "/opt/alpha" })
 
-    const created = createInstance(store, "alpha", "公司 API", null)
+    const created = createInstance(store, "alpha", "公司 API")
     expect(created.instanceId).toMatch(/^inst_/)
     expect(created.values).toEqual({ binaryPath: "/opt/alpha" })
     expect(created.isDefault).toBe(false)
@@ -113,7 +113,7 @@ describe("agent instances", () => {
     const ctx = await settingsOnly()
     const store = ctx.settings
     store.set("agents.alpha", { binaryPath: "/opt/alpha" })
-    const created = createInstance(store, "alpha", "公司 API", null)
+    const created = createInstance(store, "alpha", "公司 API")
     removeInstance(store, created.instanceId)
     expect(resolveInstance(store, "alpha", created.instanceId).instanceId).toBe("alpha")
     await ctx.fiber.dispose()

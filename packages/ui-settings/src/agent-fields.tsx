@@ -3,6 +3,7 @@ import { FolderOpen, Plus, X } from "lucide-react"
 import {
   environmentEntriesSchema,
   localizeText,
+  type AgentSettingsValues,
   type EnvironmentEntry,
   type AgentSettingField,
 } from "@pigcode/contracts"
@@ -28,13 +29,74 @@ export function readEnvironment(value: unknown): EnvironmentEntry[] {
 }
 
 /** 保存前的环境变量：去掉没填名字的行；名字不合法时返回 null，让调用方提示而不是提交。 */
-export function finalEnvironment(value: unknown): EnvironmentEntry[] | null {
+function finalEnvironment(value: unknown): EnvironmentEntry[] | null {
   const entries = readEnvironment(value).filter((entry) => entry.name !== "")
   return environmentEntriesSchema.safeParse(entries).success ? entries : null
 }
 
+/** 去掉没填名字的变量行，变量名不合法时请调用方留在表单里。 */
+export function cleanAgentValues(
+  fields: readonly AgentSettingField[],
+  values: AgentSettingsValues,
+): AgentSettingsValues | null {
+  const next = { ...values }
+  for (const field of fields) {
+    if (field.type !== "env" || values[field.key] === undefined) continue
+    const entries = finalEnvironment(values[field.key])
+    if (!entries) return null
+    next[field.key] = entries
+  }
+  return next
+}
+
+/** 运行设置与向导中的配置字段都由 Agent 的 manifest 决定。 */
+export function AgentFields({
+  fields,
+  values,
+  onChange,
+  onPickPath,
+}: {
+  fields: readonly AgentSettingField[]
+  values: AgentSettingsValues
+  onChange: (key: string, value: unknown) => void
+  onPickPath?: PickPath | undefined
+}) {
+  const { locale } = useLocale()
+  return (
+    <div className="agent-fields">
+      {fields.map((field) => {
+        const label = localizeText(field.label, locale)
+        return (
+          <div className="agent-field" key={field.key}>
+            <div className="agent-field-label">
+              <span>{label}</span>
+              {field.description ? (
+                <span className="agent-muted">{localizeText(field.description, locale)}</span>
+              ) : null}
+            </div>
+            {field.type === "env" ? (
+              <EnvironmentEditor
+                label={label}
+                entries={readEnvironment(values[field.key])}
+                onChange={(entries) => onChange(field.key, entries)}
+              />
+            ) : (
+              <FieldControl
+                field={field}
+                value={values[field.key]}
+                onChange={(value) => onChange(field.key, value)}
+                onPickPath={onPickPath}
+              />
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /** 一个字段的控件。env 字段由 EnvironmentEditor 单独渲染。 */
-export function FieldControl({
+function FieldControl({
   field,
   value,
   onChange,

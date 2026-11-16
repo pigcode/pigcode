@@ -1,5 +1,33 @@
 /** Agent 实例的选择辅助：列表、默认实例与设置页正在编辑的那一个。 */
-import type { AgentInstance, AgentSummary } from "@pigcode/contracts"
+import {
+  AGENT_INSTANCE_ID_MAX_LENGTH,
+  type AgentInstance,
+  type AgentSummary,
+} from "@pigcode/contracts"
+
+export function instanceIdTaken(id: string, used: ReadonlySet<string>): boolean {
+  return used.has(id) || Object.hasOwn(Object.prototype, id)
+}
+
+/** 用 Agent 与名称建议一个可用的 ID，名称不含拉丁字母时也能生成。 */
+export function suggestInstanceId(
+  agentId: string,
+  label: string,
+  used: ReadonlySet<string>,
+): string {
+  const prefix = agentId.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/^[^a-zA-Z]+/, "") || "agent"
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+  const base = (slug ? `${prefix}_${slug}` : prefix).slice(0, AGENT_INSTANCE_ID_MAX_LENGTH)
+  let candidate = base
+  for (let index = 2; instanceIdTaken(candidate, used); index += 1) {
+    const suffix = `_${index}`
+    candidate = base.slice(0, AGENT_INSTANCE_ID_MAX_LENGTH - suffix.length) + suffix
+  }
+  return candidate
+}
 
 /**
  * 一个 agent 的实例列表；Host 没给出实例信息时按默认实例补一份。

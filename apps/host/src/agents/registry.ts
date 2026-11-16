@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto"
 import type { ApprovalRequest, AgentRunConfig, AgentDriver } from "./driver"
 import { FakeAgentDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
-import { forcedAgentId } from "./agent-settings"
+import { assertNoStoredInstanceId, forcedAgentId, readStoredInstances } from "./agent-settings"
 import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from "./errors"
 import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
@@ -266,6 +266,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     updateCli: cliUpdates.update,
     register(driver) {
       modesOf(driver)
+      assertNoStoredInstanceId(readStoredInstances(ctx.get("settings")), driver.id)
       drivers.set(driver.id, driver)
       agents.invalidate(driver.id)
     },
@@ -283,7 +284,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     updateSettings: agents.updateSettings,
     listInstances: (agentId) => agents.instances(agentId),
     findInstance: (instanceId) => agents.findInstance(instanceId),
-    createInstance: (agentId, label, copyFrom) => agents.createInstance(agentId, label, copyFrom),
+    createInstance: agents.createInstance,
     updateInstance: (instanceId, patch) => agents.updateInstance(instanceId, patch),
     removeInstance(instanceId) {
       const instance = agents.findInstance(instanceId)

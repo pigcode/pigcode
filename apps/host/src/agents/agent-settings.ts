@@ -10,11 +10,14 @@ import {
   MODEL_ORDER_KEY,
   MODEL_PREFERENCE_KEYS,
   customModelsSchema,
+  customAgentInstanceIdSchema,
   type AgentInstance,
   type AgentSettingsValues,
   type AgentStatus,
+  type CommandParams,
 } from "@pigcode/contracts"
 import type { SettingsService } from "../services/settings"
+import { AgentInstanceIdTakenError } from "./errors"
 
 /** 环境变量 `PIGCODE_AGENT` 强制指定的 agent（E2E 与手动冒烟用）；空值视为没设。 */
 export function forcedAgentId(env: NodeJS.ProcessEnv = process.env): string | undefined {
@@ -202,22 +205,44 @@ export function isDefaultInstanceId(
   return readStoredInstances(settings)[instanceId] === undefined
 }
 
-/** 新建实例；复制来源的当前值作为初值，之后两份互不影响。 */
+export type InstanceCreateOptions = Pick<
+  CommandParams<"agent.createInstance">,
+  "instanceId" | "values" | "copyFrom"
+>
+
+/** 自定义实例和 Agent 自带的默认实例共用 ID。 */
+export function assertNoStoredInstanceId(
+  instances: Record<string, StoredInstance>,
+  instanceId: string,
+): void {
+  if (Object.hasOwn(instances, instanceId)) throw new AgentInstanceIdTakenError(instanceId)
+}
+
+/** 新实例及配置写入同一条设置；旧调用仍可从已有实例复制。 */
 export function createInstance(
   settings: SettingsService,
   agentId: string,
   label: string,
-  copyFrom?: string | null,
+  options: InstanceCreateOptions = {},
 ): ResolvedInstance {
   const instances = readStoredInstances(settings)
-  const instanceId = `inst_${randomUUID()}`
-  const source = resolveInstance(settings, agentId, copyFrom ?? agentId)
+  const instanceId =
+    options.instanceId === undefined
+      ? `inst_${randomUUID()}`
+      : customAgentInstanceIdSchema.parse(options.instanceId)
+  if (instanceId === agentId || Object.hasOwn(Object.prototype, instanceId)) {
+    throw new AgentInstanceIdTakenError(instanceId)
+  }
+  assertNoStoredInstanceId(instances, instanceId)
   const stored: StoredInstance = {
     agentId,
     label: label.trim(),
     enabled: true,
     createdAt: new Date().toISOString(),
-    values: { ...source.values },
+    values:
+      options.values === undefined
+        ? { ...resolveInstance(settings, agentId, options.copyFrom).values }
+        : normalizeAgentSettings(options.values),
   }
   instances[instanceId] = stored
   writeStoredInstances(settings, instances)

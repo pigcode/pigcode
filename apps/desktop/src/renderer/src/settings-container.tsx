@@ -86,15 +86,19 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     if (Object.keys(cliUpdates.states).length > 0) await cliUpdates.check()
   }
 
-  /** 改完一个实例：刷新列表、重新检测它，并让输入框重读模型目录（可执行文件或账号可能换了）。 */
-  async function afterInstanceChange(instanceId: string, agentId?: string): Promise<void> {
-    await refresh()
+  /** 重新检测实例，并让输入框重读模型目录（可执行文件或账号可能换了）。 */
+  async function refreshInstanceRuntime(instanceId: string, agentId?: string): Promise<void> {
     setModelRevision((value) => value + 1)
     await Promise.all([
       detect({ ...(agentId ? { agentId } : {}), instanceId, refresh: true }),
       refreshAgentViews(deps),
     ])
     if (cliUpdates.states[instanceId]) await cliUpdates.check(instanceId)
+  }
+
+  async function afterInstanceChange(instanceId: string, agentId?: string): Promise<void> {
+    await refresh()
+    await refreshInstanceRuntime(instanceId, agentId)
   }
 
   return (
@@ -136,13 +140,13 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         })
         await refresh()
       }}
-      onCreateInstance={async (agent, label, copyFrom) => {
-        const created = (await connection.call("agent.createInstance", {
-          agentId: agent.agentId,
-          label,
-          ...(copyFrom ? { copyFrom } : {}),
-        })) as AgentInstance
-        await afterInstanceChange(created.instanceId, agent.agentId)
+      onCreateInstance={async (draft) => {
+        const created = (await connection.call("agent.createInstance", draft)) as AgentInstance
+        // 保存已完成，CLI 的检测或目录刷新不应让创建向导继续等待。
+        await refresh().catch((error: unknown) =>
+          deps.store.update({ error: error instanceof Error ? error.message : String(error) }),
+        )
+        void refreshInstanceRuntime(created.instanceId, created.agentId).catch(() => undefined)
         return created.instanceId
       }}
       onUpdateInstance={async (agent, instanceId, patch) => {

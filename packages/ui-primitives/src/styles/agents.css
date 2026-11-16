@@ -643,6 +643,17 @@
 /* ─── 新建实例的向导 ─── */
 .dialog.instance-wizard {
   width: min(560px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.instance-wizard > .dialog-head,
+.instance-wizard > .dialog-foot {
+  flex: none;
+}
+.instance-wizard > .dialog-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 .wizard-steps {
   display: flex;
@@ -733,6 +744,22 @@
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
+.wizard-agent > .agent-icon {
+  width: var(--avatar-lg);
+  height: var(--avatar-lg);
+}
+.wizard-agent > .agent-icon:has(> .agent-brand) {
+  border-radius: var(--r-lg);
+  background: var(--field);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+}
+.wizard-agent .agent-brand {
+  width: var(--agent-icon-size);
+  height: var(--agent-icon-size);
+}
+.wizard-agent .entity-avatar {
+  --avatar-size: var(--avatar-lg);
+}
 .wizard-agent-text {
   display: flex;
   min-width: 0;
@@ -748,22 +775,18 @@
   color: var(--muted);
   font-size: var(--fs-sm);
 }
-/* 第三步：复制来源一列 */
-.wizard-sources {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+/* 第三步：字段随正文滚动，返回与创建始终可见。 */
+.wizard-config {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
-.list-row.wizard-source {
-  box-shadow: inset 0 0 0 1px transparent;
+.wizard-footer {
+  flex-wrap: wrap;
 }
-.list-row.wizard-source[aria-checked="true"] {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent-ring);
-}
-.wizard-source .mono {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+.wizard-error {
+  flex-basis: 100%;
 }
 
 /* ─── 插件安装对话框 ─── */

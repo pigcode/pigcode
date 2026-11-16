@@ -18,11 +18,59 @@ test("agents are plugins with settings that reach the composer", async () => {
   try {
     await openAgents(page)
     const list = page.locator(".agents-list")
+    const defaultCodex = list.locator(".agent-row").filter({
+      has: page.getByRole("button", { name: "打开 Codex 的设置", exact: true }),
+    })
     await expect(list.locator(".agent-row-name")).toContainText(["Claude Code", "Codex"])
     // 内置的两个 agent 画品牌标志。
-    await expect(
-      list.locator(".agent-row").filter({ hasText: "Codex" }).locator(".agent-brand"),
-    ).toHaveAttribute("data-brand", "openai")
+    await expect(defaultCodex.locator(".agent-brand")).toHaveAttribute("data-brand", "openai")
+
+    await page.getByRole("button", { name: "添加实例" }).click()
+    const wizard = page.getByRole("dialog", { name: "添加实例" })
+    const claude = wizard.getByRole("option", { name: /^Claude Code/ })
+    const codex = wizard.getByRole("option", { name: /^Codex/ })
+    await expect(claude.locator(".agent-brand")).toHaveAttribute("data-brand", "claude")
+    await expect(codex.locator(".agent-brand")).toHaveAttribute("data-brand", "openai")
+    await codex.click()
+    await wizard.getByRole("button", { name: "下一步" }).click()
+    await expect(wizard.locator(".wizard-picked .agent-brand")).toHaveAttribute(
+      "data-brand",
+      "openai",
+    )
+    await wizard.getByRole("textbox", { name: "实例名称" }).fill("公司 API")
+    await wizard.getByRole("textbox", { name: "实例 ID" }).fill("work_codex")
+    await wizard.getByRole("button", { name: "下一步" }).click()
+    const homePath = join(profileDir, "work-home")
+    await wizard.getByRole("textbox", { name: "CODEX_HOME" }).fill(homePath)
+    await wizard
+      .getByRole("textbox", { name: "启动参数" })
+      .fill("-c model_reasoning_summary=detailed")
+    await wizard.getByRole("button", { name: "添加变量" }).click()
+    await wizard.getByRole("textbox", { name: "变量名 1" }).fill("OPENAI_BASE_URL")
+    await wizard.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
+    const modelId = wizard.getByRole("textbox", { name: "模型 id，回车添加" })
+    await modelId.fill("gpt-work-e2e")
+    await modelId.press("Enter")
+    await wizard.getByRole("button", { name: "创建实例" }).click()
+    await expect(wizard).toBeHidden()
+    await expect(page.getByRole("button", { name: "打开 公司 API 的设置" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    )
+    expect(JSON.parse(readFileSync(join(profileDir, "settings.json"), "utf8"))).toMatchObject({
+      agentInstances: {
+        work_codex: {
+          agentId: "codex",
+          label: "公司 API",
+          values: {
+            homePath,
+            launchArgs: "-c model_reasoning_summary=detailed",
+            environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
+            customModels: ["gpt-work-e2e"],
+          },
+        },
+      },
+    })
 
     // 展开 Codex：manifest 声明的字段按标签页分开；改设置并保存。
     await page.getByRole("button", { name: "打开 Codex 的设置" }).click()
@@ -69,7 +117,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     // 停用 Codex：插件卸下，输入框里不再有它；再启用回来。
     await openAgents(page)
     await page.getByRole("switch", { name: "启用 Codex" }).click()
-    await expect(list.locator(".agent-row").filter({ hasText: "Codex" })).toContainText("已停用")
+    await expect(defaultCodex).toContainText("已停用")
     await page.getByRole("button", { name: "返回应用" }).first().click()
     await page.getByRole("button", { name: /Agent 与模型/ }).click()
     await expect(page.getByRole("tab", { name: "Claude Code" })).toBeVisible()
@@ -77,9 +125,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await page.keyboard.press("Escape")
     await openAgents(page)
     await page.getByRole("switch", { name: "启用 Codex" }).click()
-    await expect(list.locator(".agent-row").filter({ hasText: "Codex" })).not.toContainText(
-      "已停用",
-    )
+    await expect(defaultCodex).not.toContainText("已停用")
 
     // 在插件页安装和卸载 echo agent，Agent 设置只提供实例配置。
     await expect(page.getByRole("button", { name: "安装 agent" })).toHaveCount(0)
@@ -120,7 +166,9 @@ test("an agent can hold several instances, and threads bind to the one they used
     await openAgents(page)
     await page.getByRole("button", { name: "打开 Fake Agent 的设置" }).click()
     await page.getByRole("button", { name: "添加实例" }).click()
-    // 三步向导：Agent 已预选，下一步填名字，再下一步用默认的复制来源。
+    const fakeAgent = page.getByRole("option", { name: /^Fake Agent/ })
+    await expect(fakeAgent.locator(".entity-avatar")).toHaveText("FA")
+    // 三步向导：Agent 已预选，填写名称并用默认配置创建。
     await page.getByRole("button", { name: "下一步" }).click()
     await page.getByRole("textbox", { name: "实例名称" }).fill("公司 API")
     await page.getByRole("button", { name: "下一步" }).click()

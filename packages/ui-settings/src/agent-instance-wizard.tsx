@@ -1,20 +1,29 @@
 /**
- * 新建实例的向导：选择 Agent → 起名字 → 选复制来源。三步都在一个对话框里，
+ * 新建实例的向导：选择 Agent → 名称与 ID → 初始配置。三步都在一个对话框里，
  * 步骤条可以点回已经填过的步骤。
  */
 import { useEffect, useMemo, useState } from "react"
 import { Check } from "lucide-react"
-import type { AgentSummary } from "@pigcode/contracts"
 import {
+  AGENT_INSTANCE_ID_MAX_LENGTH,
+  customAgentInstanceIdSchema,
+  type AgentInstanceDraft,
+  type AgentSettingsValues,
+  type AgentSummary,
+} from "@pigcode/contracts"
+import {
+  AgentIcon,
   Button,
   Dialog,
-  EntityAvatar,
   Input,
-  ListRow,
   SearchField,
+  hostErrorMessageKey,
+  toHostError,
   useLocale,
 } from "@pigcode/ui-primitives"
-import { instanceLabel, instancesOf } from "./agent-instances"
+import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
+import { instanceIdTaken, instancesOf, suggestInstanceId } from "./agent-instances"
+import { ModelsEditor } from "./agent-models"
 
 /** 向导的三步；数组顺序就是步骤条的显示顺序。 */
 const STEPS = ["agent", "identity", "config"] as const
@@ -27,8 +36,13 @@ const STEP_LABEL = {
   config: "agents.instance.step.config",
 } as const
 
-/** 复制来源用「默认实例」表示 agent 的默认实例；实例 id 不会是这个值。 */
-const DEFAULT_SOURCE = ""
+interface WizardDraft {
+  label: string
+  idOverride: string | null
+  values: AgentSettingsValues
+}
+
+const EMPTY_DRAFT: WizardDraft = { label: "", idOverride: null, values: {} }
 
 export interface InstanceCreateWizardProps {
   open: boolean
@@ -37,10 +51,8 @@ export interface InstanceCreateWizardProps {
   agents: readonly AgentSummary[]
   /** 打开时预选的 Agent，通常是设置页里正在看的那个。 */
   agentId?: string | null
-  saving: boolean
-  /** 执行一次会写 Host 的操作：期间禁用按钮，失败时把原因写进提示。 */
-  run: (action: () => Promise<void>) => Promise<void>
-  onCreateInstance: (agent: AgentSummary, label: string, copyFrom: string | null) => Promise<void>
+  onPickPath?: PickPath | undefined
+  onCreateInstance: (draft: AgentInstanceDraft) => Promise<void>
 }
 
 /** 渲染新建实例的向导。 */
@@ -49,16 +61,17 @@ export function InstanceCreateWizard({
   onOpenChange,
   agents,
   agentId = null,
-  saving,
-  run,
+  onPickPath,
   onCreateInstance,
 }: InstanceCreateWizardProps) {
   const { t } = useLocale()
   const [step, setStep] = useState<Step>("agent")
   const [query, setQuery] = useState("")
   const [pickedId, setPickedId] = useState<string | null>(null)
-  const [label, setLabel] = useState("")
-  const [source, setSource] = useState(DEFAULT_SOURCE)
+  const [drafts, setDrafts] = useState(() => new Map<string, WizardDraft>())
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [rejectedId, setRejectedId] = useState<string | null>(null)
 
   // 每次打开都从第一步开始，沿用设置页里正在看的 Agent。
   useEffect(() => {
@@ -66,8 +79,9 @@ export function InstanceCreateWizard({
     setStep("agent")
     setQuery("")
     setPickedId(agentId)
-    setLabel("")
-    setSource(DEFAULT_SOURCE)
+    setDrafts(new Map())
+    setError(null)
+    setRejectedId(null)
   }, [open, agentId])
 
   const selectable = useMemo(
@@ -75,31 +89,87 @@ export function InstanceCreateWizard({
     [agents],
   )
   const picked = selectable.find((agent) => agent.agentId === pickedId) ?? null
+  const usedIds = useMemo(
+    () =>
+      new Set(
+        agents.flatMap((agent) => [
+          agent.agentId,
+          ...agent.instances.map((item) => item.instanceId),
+        ]),
+      ),
+    [agents],
+  )
   const matches = useMemo(() => {
     const keyword = query.trim().toLowerCase()
     if (!keyword) return selectable
     return selectable.filter((agent) => agent.displayName.toLowerCase().includes(keyword))
   }, [selectable, query])
-  const sources = picked ? instancesOf(picked) : []
-  const trimmed = label.trim()
+  const draft = picked ? (drafts.get(picked.agentId) ?? EMPTY_DRAFT) : EMPTY_DRAFT
+  const label = draft.label.trim()
+  const instanceId =
+    draft.idOverride ?? (picked ? suggestInstanceId(picked.agentId, label, usedIds) : "")
+  const idTaken = instanceId === rejectedId || instanceIdTaken(instanceId, usedIds)
+  const idValid = customAgentInstanceIdSchema.safeParse(instanceId).success
+  const idError = idTaken
+    ? t("hostError.AGENT_INSTANCE_ID_TAKEN")
+    : !idValid
+      ? t("agents.instance.idHint")
+      : null
 
-  /** 下一步可不可以走：第一步要有选中的 Agent，第二步要有名字。 */
-  function canAdvance(from: Step): boolean {
-    if (from === "agent") return picked !== null
-    if (from === "identity") return trimmed.length > 0
-    return true
+  function updateDraft(update: (current: WizardDraft) => WizardDraft): void {
+    if (!picked) return
+    const id = picked.agentId
+    setDrafts((current) => new Map(current).set(id, update(current.get(id) ?? EMPTY_DRAFT)))
+    setError(null)
   }
 
-  function create(): void {
-    if (!picked || !trimmed) return
-    void run(async () => {
-      await onCreateInstance(picked, trimmed, source === DEFAULT_SOURCE ? null : source)
+  function patchValues(changes: AgentSettingsValues): void {
+    updateDraft((current) => ({ ...current, values: { ...current.values, ...changes } }))
+  }
+
+  function goTo(next: Step): void {
+    setStep(next)
+    setError(null)
+  }
+
+  async function create(): Promise<void> {
+    if (!picked || saving) return
+    if (!label || idError) {
+      goTo("identity")
+      return
+    }
+    const values = cleanAgentValues(picked.fields, draft.values)
+    if (!values) {
+      setError(t("agents.env.invalid"))
+      return
+    }
+    setSaving(true)
+    setError(null)
+    try {
+      await onCreateInstance({ agentId: picked.agentId, instanceId, label, values })
       onOpenChange(false)
-    })
+    } catch (reason) {
+      const failure = toHostError(reason)
+      if (failure.code === "AGENT_INSTANCE_ID_TAKEN") {
+        setRejectedId(instanceId)
+        updateDraft((current) => ({ ...current, idOverride: instanceId }))
+        goTo("identity")
+      } else {
+        const key = hostErrorMessageKey(failure.code)
+        setError(key ? t(key) : t("agents.failed").replace("{reason}", failure.message))
+      }
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (!saving) onOpenChange(next)
+      }}
+    >
       <Dialog.Content
         className="instance-wizard"
         title={t("agents.instance.addTitle")}
@@ -119,7 +189,7 @@ export function InstanceCreateWizard({
                     className="wizard-step-btn"
                     aria-current={current ? "step" : undefined}
                     disabled={saving || (!done && !current)}
-                    onClick={() => setStep(item)}
+                    onClick={() => goTo(item)}
                   >
                     <span className="wizard-step-mark" data-done={done || undefined}>
                       {done ? <Check className="ic ic-sm" aria-hidden="true" /> : index + 1}
@@ -159,7 +229,7 @@ export function InstanceCreateWizard({
                         className="wizard-agent"
                         onClick={() => setPickedId(agent.agentId)}
                       >
-                        <EntityAvatar id={agent.agentId} name={agent.displayName} />
+                        <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
                         <span className="wizard-agent-text">
                           <span className="truncate">{agent.displayName}</span>
                           <span className="agent-muted truncate">
@@ -182,7 +252,7 @@ export function InstanceCreateWizard({
           {step === "identity" && picked ? (
             <div className="wizard-pane">
               <div className="wizard-picked">
-                <EntityAvatar id={picked.agentId} name={picked.displayName} size="sm" />
+                <AgentIcon agentId={picked.agentId} name={picked.displayName} />
                 <span>{picked.displayName}</span>
               </div>
               <div className="field">
@@ -191,47 +261,74 @@ export function InstanceCreateWizard({
                 </label>
                 <Input
                   id="instance-wizard-label"
-                  value={label}
+                  value={draft.label}
                   autoFocus
                   maxLength={120}
                   placeholder={t("agents.instance.namePlaceholder")}
-                  onChange={(event) => setLabel(event.target.value)}
+                  onChange={(event) => {
+                    const name = event.target.value
+                    updateDraft((current) => ({ ...current, label: name }))
+                  }}
                 />
-                <p className="agent-muted">{t("agents.instance.idHint")}</p>
+              </div>
+              <div className="field">
+                <label className="label" htmlFor="instance-wizard-id">
+                  {t("agents.instance.idLabel")}
+                </label>
+                <Input
+                  id="instance-wizard-id"
+                  className="agent-input mono"
+                  value={instanceId}
+                  maxLength={AGENT_INSTANCE_ID_MAX_LENGTH}
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-invalid={idError !== null}
+                  aria-describedby="instance-wizard-id-hint"
+                  onChange={(event) => {
+                    const id = event.target.value
+                    updateDraft((current) => ({ ...current, idOverride: id }))
+                  }}
+                />
+                <p id="instance-wizard-id-hint" className={idError ? "error-text" : "agent-muted"}>
+                  {idError ?? t("agents.instance.idHint")}
+                </p>
               </div>
             </div>
           ) : null}
 
           {step === "config" && picked ? (
-            <div className="wizard-pane">
-              <p className="agent-muted">{t("agents.instance.copyHint")}</p>
-              <div
-                className="wizard-sources"
-                role="radiogroup"
-                aria-label={t("agents.instance.copyFrom")}
-              >
-                {sources.map((instance) => (
-                  <ListRow
-                    key={instance.instanceId}
-                    render={<button type="button" role="radio" />}
-                    aria-checked={source === instance.instanceId}
-                    className="wizard-source"
-                    title={instanceLabel(picked, instance)}
-                    titleProps={{ className: "truncate" }}
-                    description={<span className="mono truncate">{instance.instanceId}</span>}
-                    meta={
-                      source === instance.instanceId ? (
-                        <Check className="ic ic-sm" aria-hidden="true" />
-                      ) : null
-                    }
-                    onClick={() => setSource(instance.instanceId)}
+            <fieldset className="wizard-pane wizard-config" disabled={saving}>
+              {picked.fields.length > 0 ? (
+                <AgentFields
+                  fields={picked.fields}
+                  values={draft.values}
+                  onChange={(key, value) => patchValues({ [key]: value })}
+                  onPickPath={onPickPath}
+                />
+              ) : null}
+              {picked.customModels ? (
+                <div className="agent-field">
+                  <h3 className="agent-field-label">{t("agents.instance.customModels")}</h3>
+                  <ModelsEditor
+                    catalog={null}
+                    values={draft.values}
+                    allowCustom
+                    onChange={patchValues}
                   />
-                ))}
-              </div>
-            </div>
+                </div>
+              ) : null}
+              {picked.fields.length === 0 && !picked.customModels ? (
+                <p className="agent-muted">{t("agents.instance.noConfig")}</p>
+              ) : null}
+            </fieldset>
           ) : null}
         </Dialog.Body>
-        <Dialog.Footer>
+        <Dialog.Footer className="wizard-footer">
+          {error ? (
+            <p className="error-text wizard-error" role="alert">
+              {error}
+            </p>
+          ) : null}
           {step === "agent" ? (
             <Dialog.Close render={<Button type="button" variant="ghost" />}>
               {t("agents.instance.cancel")}
@@ -241,7 +338,7 @@ export function InstanceCreateWizard({
               type="button"
               variant="ghost"
               disabled={saving}
-              onClick={() => setStep(STEPS[STEPS.indexOf(step) - 1] ?? "agent")}
+              onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1] ?? "agent")}
             >
               {t("agents.instance.back")}
             </Button>
@@ -250,17 +347,17 @@ export function InstanceCreateWizard({
             <Button
               type="button"
               variant="primary"
-              disabled={saving || !canAdvance("identity")}
-              onClick={create}
+              disabled={saving || !picked}
+              onClick={() => void create()}
             >
-              {t("agents.instance.create")}
+              {t(saving ? "agents.saving" : "agents.instance.create")}
             </Button>
           ) : (
             <Button
               type="button"
               variant="primary"
-              disabled={saving || !canAdvance(step)}
-              onClick={() => setStep(STEPS[STEPS.indexOf(step) + 1] ?? step)}
+              disabled={saving || !picked || (step === "identity" && (!label || idError !== null))}
+              onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1] ?? step)}
             >
               {t("agents.instance.next")}
             </Button>

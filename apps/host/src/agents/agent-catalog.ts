@@ -23,9 +23,11 @@ import {
   removeInstance as removeStoredInstance,
   resolveInstance,
   updateInstance as updateStoredInstance,
+  type InstanceCreateOptions,
   type ResolvedInstance,
 } from "./agent-settings"
 import type { AgentDriver, AgentSettingsValues } from "./driver"
+import { AgentInstanceIdTakenError } from "./errors"
 import {
   applyModelPreferences,
   createModelCatalogCache,
@@ -77,7 +79,7 @@ export interface AgentCatalog {
   instances(agentId: string): AgentInstance[]
   /** 某个实例；找不到时返回 null。 */
   findInstance(instanceId: string): AgentInstance | null
-  createInstance(agentId: string, label: string, copyFrom?: string | null): AgentInstance
+  createInstance(agentId: string, label: string, options?: InstanceCreateOptions): AgentInstance
   updateInstance(
     instanceId: string,
     patch: {
@@ -241,8 +243,11 @@ export function createAgentCatalog(
     findInstance(instanceId) {
       return findInstanceWith(instanceId)
     },
-    createInstance(agentId, label, copyFrom) {
-      const created = createStoredInstance(requireStore(), agentId, label, copyFrom)
+    createInstance(agentId, label, options) {
+      if (options?.instanceId && drivers.has(options.instanceId)) {
+        throw new AgentInstanceIdTakenError(options.instanceId)
+      }
+      const created = createStoredInstance(requireStore(), agentId, label, options)
       detections.invalidate(created.instanceId)
       catalogs.invalidate(created.instanceId)
       commandCatalogs.invalidate(created.instanceId)

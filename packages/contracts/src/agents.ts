@@ -134,6 +134,13 @@ export const agentContributionSchema = z
 /** agent 的设置值：键为字段 key，另加 Host 处理的模型偏好（customModels、hiddenModels、modelOrder）。 */
 export const agentSettingsValuesSchema = z.record(z.string(), z.unknown())
 
+/** 新建的自定义实例 ID。历史实例和 Agent 自带的默认实例继续使用原有 ID。 */
+export const AGENT_INSTANCE_ID_MAX_LENGTH = 64
+export const customAgentInstanceIdSchema = z
+  .string()
+  .max(AGENT_INSTANCE_ID_MAX_LENGTH)
+  .regex(/^[A-Za-z][A-Za-z0-9_-]*$/)
+
 /**
  * Agent 实例：同一个 Agent 的一套独立配置。用户可以为同一个 Agent 建多个实例，
  * 各自填不同的可执行文件、环境变量与自定义模型（例如个人号与公司 API）。
@@ -236,6 +243,7 @@ export type AgentSummary = z.infer<typeof agentSummarySchema>
 export type AgentList = z.infer<typeof agentListSchema>
 export type AgentInstance = z.infer<typeof agentInstanceSchema>
 export type AgentInstancePatch = z.infer<typeof agentInstancePatchSchema>
+export type AgentInstanceDraft = Pick<AgentInstance, "agentId" | "instanceId" | "label" | "values">
 
 /**
  * 按 locale 取文案：完整 locale → 语言前缀 → 英文 → 第一条。

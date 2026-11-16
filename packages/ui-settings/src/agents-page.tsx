@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
 import type {
   AgentInstance,
+  AgentInstanceDraft,
   AgentSettingsValues,
   AgentStatus,
   AgentSummary,
@@ -63,7 +64,7 @@ export interface AgentsPageProps {
   /** 新会话默认使用的实例；instanceId 为 null 表示自动。 */
   onSetDefault: (instanceId: string | null) => Promise<void>
   /** 新建实例；返回新实例的 id，页面据此展开它。 */
-  onCreateInstance: (agent: AgentSummary, label: string, copyFrom: string | null) => Promise<string>
+  onCreateInstance: (draft: AgentInstanceDraft) => Promise<string>
   onUpdateInstance: (
     agent: AgentSummary,
     instanceId: string,
@@ -291,7 +292,12 @@ export function AgentsPage({
               {t("agents.cli.updateAllShort")}
             </Button>
           ) : null}
-          <Button size="sm" type="button" onClick={() => setWizardOpen(true)}>
+          <Button
+            size="sm"
+            type="button"
+            disabled={pending !== null}
+            onClick={() => setWizardOpen(true)}
+          >
             <Plus className="ic ic-sm" aria-hidden="true" />
             {t("agents.instance.add")}
           </Button>
@@ -466,10 +472,9 @@ export function AgentsPage({
         onOpenChange={setWizardOpen}
         agents={agents}
         agentId={openEntry?.agent.agentId ?? null}
-        saving={pending !== null}
-        run={(action) => run("create", action)}
-        onCreateInstance={async (agent, label, copyFrom) => {
-          const created = await onCreateInstance(agent, label, copyFrom)
+        onPickPath={onPickPath}
+        onCreateInstance={async (draft) => {
+          const created = await onCreateInstance(draft)
           setOpenId(created)
         }}
       />

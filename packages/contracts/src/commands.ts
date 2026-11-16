@@ -1,6 +1,10 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
-import { agentInstancePatchSchema, agentSettingsValuesSchema } from "./agents"
+import {
+  agentInstancePatchSchema,
+  agentSettingsValuesSchema,
+  customAgentInstanceIdSchema,
+} from "./agents"
 import {
   permissionModeSchema,
   reasoningEffortSchema,
@@ -164,11 +168,13 @@ export const commandSchemas = {
     instanceId: z.string().min(1).optional(),
     values: agentSettingsValuesSchema,
   }),
-  /** 给一个 Agent 新建实例：从默认实例复制设置作为初值，返回新实例。 */
+  /** 给一个 Agent 新建实例，连同初始设置一起保存。 */
   "agent.createInstance": z.object({
     agentId: z.string().min(1),
     label: z.string().trim().min(1).max(120),
-    /** 复制哪个实例的设置；缺省时复制默认实例。 */
+    instanceId: customAgentInstanceIdSchema.optional(),
+    values: agentSettingsValuesSchema.optional(),
+    /** 兼容旧请求。未提供 values 时，从这里指定的实例或默认实例复制设置。 */
     copyFrom: z.string().min(1).optional(),
   }),
   /** 改实例的名称、启用状态或设置；没给的项不变。 */

@@ -30,6 +30,7 @@ export const HOST_ERROR_CODES = [
   "GIT_NO_REMOTE",
   /** 删除还有会话在用的 Agent 实例。 */
   "AGENT_INSTANCE_IN_USE",
+  "AGENT_INSTANCE_ID_TAKEN",
 ] as const
 
 /** 有专门说明的 Host 错误码。 */
