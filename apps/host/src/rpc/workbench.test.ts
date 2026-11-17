@@ -188,6 +188,16 @@ describe("workbench rpc", { timeout: 30_000 }, () => {
     await vi.waitFor(() =>
       expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ cwd })),
     )
+    // 检查点捕获在工作树内运行 Git。等本轮两个检查点落库后再删除目录。
+    await vi.waitFor(
+      () => {
+        expect(ctx.checkpoints.list(thread.id).map((item) => item.phase)).toEqual([
+          "baseline",
+          "final",
+        ])
+      },
+      { timeout: 5_000 },
+    )
 
     const branch = (await ctx.worktrees.list(thread.id)).worktrees[0]?.branch
     await ctx.worktrees.remove(thread.id)
