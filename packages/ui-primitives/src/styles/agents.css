@@ -386,7 +386,7 @@
 .agent-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .agent-field-label {
   display: flex;
@@ -400,15 +400,12 @@
 }
 .agent-input-row {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: var(--space-3);
 }
-.agent-input {
-  flex: 1;
+.agent-input-row > .input {
+  flex: 1 1 auto;
   min-width: 0;
-}
-.agent-input.mono {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
 }
 .agent-env {
   display: flex;
@@ -795,13 +792,9 @@
   align-items: center;
   gap: var(--space-3);
 }
-.install-dialog-input .input {
-  flex: 1;
+.install-dialog-input > .input {
+  flex: 1 1 auto;
   min-width: 0;
-}
-.install-dialog-input .mono {
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
 }
 .install-dialog-trust {
   display: flex;

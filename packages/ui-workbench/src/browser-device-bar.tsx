@@ -1,7 +1,7 @@
 /** 响应式视图的设备栏：设备预设、视口宽高、横竖切换，页面区放不下时显示缩放比例。 */
 import { useEffect, useState } from "react"
 import { Check, ChevronDown, RotateCcw } from "lucide-react"
-import { Button, Select, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { Button, Input, Select, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import {
   DEVICE_PRESETS,
   VIEWPORT_MAX,
@@ -38,7 +38,8 @@ function SizeInput({
     if (clamped !== value) onCommit(clamped)
   }
   return (
-    <input
+    <Input
+      size="sm"
       className="browser-device-input"
       type="number"
       inputMode="numeric"
@@ -123,7 +124,7 @@ export function BrowserDeviceBar({
       </span>
       <Button
         variant="plain"
-        size="icon"
+        size="icon-sm"
         type="button"
         aria-label={t("browser.responsive.rotate")}
         title={t("browser.responsive.rotate")}

@@ -4,7 +4,7 @@
  */
 import { useState } from "react"
 import { MessageCircleQuestion } from "lucide-react"
-import { Button, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, useLocale } from "@pigcode/ui-primitives"
 
 /** 一个问题。 */
 export interface QuestionView {
@@ -96,8 +96,8 @@ export function QuestionCard({
                 ) : null}
               </label>
             ))}
-            <input
-              type="text"
+            <Input
+              size="lg"
               className="question-other"
               placeholder={t("chat.question.other")}
               aria-label={`${question.question} ${t("chat.question.other")}`}

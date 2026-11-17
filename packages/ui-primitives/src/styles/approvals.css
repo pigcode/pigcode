@@ -120,23 +120,9 @@
   color: var(--cv-subtle);
   font-size: var(--cv-fs-sm);
 }
-.question-other {
-  height: var(--control-lg);
-  margin-top: 4px;
-  padding: 0 10px;
-  border: 1px solid var(--input-border);
-  border-radius: var(--r-block);
-  background: var(--input-bg);
-  color: var(--fg);
-  font: inherit;
-}
-.question-other:hover {
-  border-color: var(--input-border-hover);
-}
-.question-other:focus {
-  border-color: var(--input-border-focus);
-  background: var(--input-bg-focus);
-  outline: none;
+.input.question-other {
+  margin-top: var(--space-2);
+  font-size: inherit;
 }
 @media (prefers-reduced-motion: no-preference) {
   .perm {

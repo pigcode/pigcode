@@ -168,18 +168,6 @@
   padding: var(--space-3) var(--space-3);
   border-bottom: var(--hair) solid var(--divider);
 }
-.draft-branch-search .search-field {
-  gap: var(--space-4);
-}
-.draft-branch-search .draft-branch-input,
-.draft-branch-search .draft-branch-input:focus {
-  box-shadow: none;
-  background: none;
-}
-.draft-branch-search .ic {
-  flex: none;
-  color: var(--muted);
-}
 .draft-branch-list {
   min-height: 0;
   overflow-y: auto;

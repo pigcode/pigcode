@@ -361,6 +361,17 @@ export async function walkSettings(walk: Walk): Promise<void> {
     withoutEllipsis(t("agents.status.checking")),
   )
   await step("settings-agents")
+  await page.getByRole("button", { name: t("agents.instance.add"), exact: true }).click()
+  const instanceWizard = page.getByRole("dialog", { name: t("agents.instance.addTitle") })
+  await instanceWizard.getByRole("option", { name: /^Claude Code/ }).click()
+  await instanceWizard.getByRole("button", { name: t("agents.instance.next"), exact: true }).click()
+  await expect(
+    instanceWizard.getByRole("textbox", { name: t("agents.instance.name") }),
+  ).toBeFocused()
+  await step("dialog-agent-instance-identity")
+  await page.keyboard.press("Escape")
+  await expect(instanceWizard).toBeHidden()
+
   await page
     .getByRole("button", { name: t("agents.select").replace("{instance}", "Claude Code") })
     .click()

@@ -304,7 +304,6 @@ export function AgentEditor({
                     <Input
                       size="xl"
                       id="agent-instance-label"
-                      className="agent-input"
                       value={label}
                       maxLength={120}
                       disabled={saving}

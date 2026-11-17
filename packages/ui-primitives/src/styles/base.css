@@ -79,12 +79,12 @@ input[type="search"]::-webkit-search-cancel-button {
 ::selection {
   background: color-mix(in oklab, var(--link) 24%, transparent);
 }
-/* 键盘焦点环。html 前缀让它的优先级（一个伪类加一个元素）高于组件的基础规则（一个类），
-   低于组件自己的 :focus-visible 规则（一个类加一个伪类），和导入顺序无关。
-   区域里要保留自己的圆角或不画描边的元素，选择器至少要有两个类。 */
+/* 键盘焦点环。组件可替换描边，圆角只在元素没有自己的圆角时兜底。 */
 html :focus-visible {
   outline: 2px solid var(--border-focus);
   outline-offset: 1px;
+}
+:where(html :focus-visible) {
   border-radius: var(--r-md);
 }
 input:focus-visible,

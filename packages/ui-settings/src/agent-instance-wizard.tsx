@@ -280,7 +280,7 @@ export function InstanceCreateWizard({
                 <Input
                   size="xl"
                   id="instance-wizard-id"
-                  className="agent-input mono"
+                  className="mono"
                   value={instanceId}
                   maxLength={AGENT_INSTANCE_ID_MAX_LENGTH}
                   spellCheck={false}
@@ -292,7 +292,7 @@ export function InstanceCreateWizard({
                     updateDraft((current) => ({ ...current, idOverride: id }))
                   }}
                 />
-                <p id="instance-wizard-id-hint" className={idError ? "error-text" : "agent-muted"}>
+                <p id="instance-wizard-id-hint" className={idError ? "error-text" : "hint"}>
                   {idError ?? t("agents.instance.idHint")}
                 </p>
               </div>

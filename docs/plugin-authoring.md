@@ -492,6 +492,8 @@ export function apply(ctx: PluginHostContext): void {
 
 ### Panel、Surface 与设置页传组件
 
+插件与宿主共用同一套尺寸档位，见[基础控件尺寸标准](../DESIGN.md)。
+
 `ctx.panels.register`、`ctx.surfaces.register` 和 `ctx.settingsPages.register` 的内容都是 `Component`：
 一个 React 组件（不接收 props），宿主在自己的 React 树里渲染它。旧的 `render(container)` DOM 渲染函数
 已删除，传了会在 `register` 时抛错（见下）。

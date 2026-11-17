@@ -74,10 +74,18 @@
   height: 100%;
   padding: 0;
   border: 0;
+  border-radius: 0;
   outline: none;
   background: none;
   color: var(--fg);
   font: inherit;
+}
+/* Autocomplete 的输入也用外层搜索框绘制底色和聚焦描边。 */
+.search-field > input.input,
+.search-field > input.input:hover,
+.search-field > input.input:focus {
+  background: none;
+  box-shadow: none;
 }
 .search-field > input::placeholder {
   color: var(--muted);

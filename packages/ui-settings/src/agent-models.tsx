@@ -305,7 +305,7 @@ export function ModelsEditor({
       {allowCustom ? (
         <div className="agent-input-row">
           <Input
-            className="agent-input mono"
+            className="mono"
             aria-label={t("agents.models.placeholder")}
             placeholder={t("agents.models.placeholder")}
             value={draft}
@@ -318,7 +318,7 @@ export function ModelsEditor({
             }}
             onKeyDown={onKeyDown}
           />
-          <Button size="sm" type="button" disabled={!draft.trim()} onClick={add}>
+          <Button type="button" disabled={!draft.trim()} onClick={add}>
             <Plus className="ic ic-sm" aria-hidden="true" />
             {t("agents.models.add")}
           </Button>

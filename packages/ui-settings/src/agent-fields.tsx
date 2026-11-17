@@ -144,8 +144,8 @@ function FieldControl({
   return (
     <div className="agent-input-row">
       <Input
-        size={pathKind && onPickPath ? "lg" : "xl"}
-        className={field.type === "text" && field.monospace ? "agent-input mono" : "agent-input"}
+        size="xl"
+        className={field.type === "text" && field.monospace ? "mono" : undefined}
         aria-label={label}
         value={typeof value === "string" ? value : ""}
         placeholder={placeholder}
@@ -192,11 +192,7 @@ export function EnvironmentEditor({
       {entries.map((entry, index) => (
         <div className="agent-env-row" key={index}>
           <Input
-            className={
-              entry.name !== "" && !ENV_NAME.test(entry.name)
-                ? "agent-input mono is-error"
-                : "agent-input mono"
-            }
+            className={entry.name !== "" && !ENV_NAME.test(entry.name) ? "mono is-error" : "mono"}
             aria-label={`${t("agents.env.name")} ${index + 1}`}
             placeholder={t("agents.env.name")}
             value={entry.name}
@@ -205,7 +201,7 @@ export function EnvironmentEditor({
             onChange={(event) => update(index, { name: event.target.value.trim() })}
           />
           <Input
-            className="agent-input mono"
+            className="mono"
             aria-label={`${t("agents.env.value")} ${index + 1}`}
             placeholder={t("agents.env.value")}
             value={entry.value}

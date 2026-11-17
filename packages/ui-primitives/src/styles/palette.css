@@ -95,10 +95,6 @@
 .dialog.settings-search-dialog[data-ending-style] {
   transform: translateX(-50%) scale(0.98);
 }
-.settings-search-dialog .search-field .input {
-  box-shadow: none;
-  background: none;
-}
 .settings-search-dialog .palette-list {
   max-height: 55vh;
 }

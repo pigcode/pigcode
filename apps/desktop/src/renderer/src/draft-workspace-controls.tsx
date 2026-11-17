@@ -150,11 +150,14 @@ function BranchPicker({
             {open ? (
               <Autocomplete.Root inline open items={groups} itemToStringValue={labelOf}>
                 <div className="draft-branch-search">
-                  <Autocomplete.InputGroup className="search-field" data-variant="plain">
-                    <Search className="ic" aria-hidden="true" />
+                  <Autocomplete.InputGroup
+                    className="search-field"
+                    data-size="lg"
+                    data-variant="plain"
+                  >
+                    <Search className="ic search-field-icon" aria-hidden="true" />
                     <Autocomplete.Input
                       ref={input}
-                      className="draft-branch-input"
                       type="search"
                       aria-label={t("newThread.branch.search")}
                       placeholder={t("newThread.branch.search")}

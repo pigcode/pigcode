@@ -1,7 +1,7 @@
 /*
   基础控件：按钮、图标按钮、输入框、多行输入框、开关、复选框、分段切换与 Tabs。
-  尺寸、间距、圆角、字号只用 tokens.css 的刻度。各区域要用别的尺寸时在自己的样式里覆盖，
-  选择器要比这里更具体（带上区域的类，或写成 .icon-btn.proj-add 这样的组合），不靠导入顺序。
+  尺寸、间距、圆角、字号使用 tokens.css 的刻度。业务表单通过组件档位选尺寸，区域样式负责排列与宽度。
+  场景与档位见仓库根目录 DESIGN.md。
 */
 
 /* ─── 按钮 ─────────────────────────────────────────────── */
@@ -169,6 +169,9 @@
 }
 .input:where([data-size="xl"]) {
   height: var(--control-xl);
+}
+.input.mono {
+  font-size: var(--fs-xl);
 }
 .input::placeholder,
 .textarea::placeholder {

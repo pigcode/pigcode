@@ -37,18 +37,38 @@ test("agents are plugins with settings that reach the composer", async () => {
       "data-brand",
       "openai",
     )
-    await wizard.getByRole("textbox", { name: "实例名称" }).fill("公司 API")
-    await wizard.getByRole("textbox", { name: "实例 ID" }).fill("work_codex")
+    const instanceName = wizard.getByRole("textbox", { name: "实例名称" })
+    const instanceId = wizard.getByRole("textbox", { name: "实例 ID" })
+    await expect(instanceName).toBeFocused()
+    for (const input of [instanceName, instanceId]) {
+      await expect(input).toHaveCSS("height", "36px")
+      await expect(input).toHaveCSS("border-radius", "8px")
+      await expect(input).toHaveCSS("padding-inline-start", "12px")
+      await expect(input).toHaveCSS("font-size", "14px")
+    }
+    await instanceName.fill("公司 API")
+    await instanceId.fill("work_codex")
     await wizard.getByRole("button", { name: "下一步" }).click()
     const homePath = join(profileDir, "work-home")
-    await wizard.getByRole("textbox", { name: "CODEX_HOME" }).fill(homePath)
-    await wizard
-      .getByRole("textbox", { name: "启动参数" })
-      .fill("-c model_reasoning_summary=detailed")
+    const homeInput = wizard.getByRole("textbox", { name: "CODEX_HOME" })
+    const launchArgsInput = wizard.getByRole("textbox", { name: "启动参数" })
+    await expect(homeInput).toHaveCSS("height", "36px")
+    await expect(launchArgsInput).toHaveCSS("height", "36px")
+    await expect(wizard.getByRole("button", { name: "选择… CODEX_HOME" })).toHaveCSS(
+      "height",
+      "32px",
+    )
+    await homeInput.fill(homePath)
+    await launchArgsInput.fill("-c model_reasoning_summary=detailed")
     await wizard.getByRole("button", { name: "添加变量" }).click()
     await wizard.getByRole("textbox", { name: "变量名 1" }).fill("OPENAI_BASE_URL")
     await wizard.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
     const modelId = wizard.getByRole("textbox", { name: "模型 id，回车添加" })
+    await expect(modelId).toHaveCSS("height", "28px")
+    await expect(wizard.getByRole("button", { name: "添加", exact: true })).toHaveCSS(
+      "height",
+      "28px",
+    )
     await modelId.fill("gpt-work-e2e")
     await modelId.press("Enter")
     await wizard.getByRole("button", { name: "创建实例" }).click()
