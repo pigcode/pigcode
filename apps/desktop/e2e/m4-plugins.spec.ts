@@ -83,7 +83,8 @@ test("installs, enables, and disables plugins without restart", async () => {
       .locator("[data-plugin-content='debug-settings']")
       .getByRole("switch", { name: "详细日志" }),
   ).toBeVisible()
-  const search = page.getByPlaceholder("搜索设置")
+  const search = sidebar.getByPlaceholder("搜索设置")
+  await expect(search).toHaveCSS("height", "28px")
   await search.fill("debug")
   await expect(settingsNav).toHaveText(["Debug Settings"])
   await search.fill("")

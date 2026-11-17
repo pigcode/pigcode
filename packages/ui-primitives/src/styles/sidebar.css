@@ -156,6 +156,8 @@
   background: var(--active);
 }
 .search-field.side-search {
+  --search-icon-size: var(--icon-btn-lg);
+  gap: var(--space-4);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 .search-field.side-search:hover {
