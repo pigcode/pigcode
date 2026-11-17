@@ -302,7 +302,7 @@ export function AgentEditor({
                   </label>
                   <div className="agent-input-row">
                     <Input
-                      size="xl"
+                      size="lg"
                       id="agent-instance-label"
                       value={label}
                       maxLength={120}
@@ -310,7 +310,7 @@ export function AgentEditor({
                       onChange={(event) => setLabel(event.target.value)}
                     />
                     <Button
-                      size="sm"
+                      size="lg"
                       type="button"
                       disabled={saving || !renamed}
                       onClick={() =>

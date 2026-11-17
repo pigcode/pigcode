@@ -114,6 +114,7 @@ export function PrPanel({
             <label className="pr-field">
               <span>{t("pr.body")}</span>
               <Textarea
+                size="lg"
                 value={body}
                 placeholder={t("pr.bodyPlaceholder")}
                 disabled={creating}

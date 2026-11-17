@@ -228,7 +228,13 @@ test("file explorer: browse, open, edit, save, search and refresh", async () => 
     ).toBeVisible()
     await row(page, ".file-surface-aside", "file-tree.tsx").click({ modifiers: ["ControlOrMeta"] })
     await expect(tabs).toHaveText(["README.md", "index.ts", "file-tree.tsx"])
-    await search.fill("")
+    const clearSearch = page
+      .locator(".file-surface-aside")
+      .getByRole("button", { name: "清除搜索" })
+    await expect(clearSearch).toHaveCSS("width", "20px")
+    await expect(clearSearch).toHaveCSS("height", "20px")
+    await clearSearch.click()
+    await expect(search).toHaveValue("")
 
     // 面包屑：点目录在侧栏里定位到它。
     await page

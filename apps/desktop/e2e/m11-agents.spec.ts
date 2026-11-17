@@ -47,6 +47,19 @@ test("agents are plugins with settings that reach the composer", async () => {
       await expect(input).toHaveCSS("font-size", "14px")
     }
     await instanceName.fill("公司 API")
+    const invalidShadow = await instanceId.evaluate((input) => {
+      const sample = document.createElement("span")
+      sample.style.boxShadow = "inset 0 0 0 1px var(--bad)"
+      input.after(sample)
+      const shadow = getComputedStyle(sample).boxShadow
+      sample.remove()
+      return shadow
+    })
+    await instanceId.fill("2-invalid")
+    await instanceId.hover()
+    await expect(instanceId).toHaveAttribute("aria-invalid", "true")
+    await expect(instanceId).toHaveCSS("box-shadow", invalidShadow)
+    await expect(instanceId).toHaveCSS("height", "36px")
     await instanceId.fill("work_codex")
     await wizard.getByRole("button", { name: "下一步" }).click()
     const homePath = join(profileDir, "work-home")
@@ -61,7 +74,12 @@ test("agents are plugins with settings that reach the composer", async () => {
     await homeInput.fill(homePath)
     await launchArgsInput.fill("-c model_reasoning_summary=detailed")
     await wizard.getByRole("button", { name: "添加变量" }).click()
-    await wizard.getByRole("textbox", { name: "变量名 1" }).fill("OPENAI_BASE_URL")
+    const variableName = wizard.getByRole("textbox", { name: "变量名 1" })
+    await variableName.fill("1_BAD")
+    await expect(variableName).toHaveAttribute("aria-invalid", "true")
+    await expect(variableName).toHaveAccessibleDescription(/不能以数字开头/)
+    await variableName.fill("OPENAI_BASE_URL")
+    await expect(variableName).not.toHaveAttribute("aria-invalid", "true")
     await wizard.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
     const modelId = wizard.getByRole("textbox", { name: "模型 id，回车添加" })
     await expect(modelId).toHaveCSS("height", "28px")
@@ -219,6 +237,9 @@ test("an agent can hold several instances, and threads bind to the one they used
     await openAgents(page)
     await page.getByRole("button", { name: "打开 公司 API 的设置" }).click()
     await page.getByRole("tab", { name: "实例" }).click()
+    const instance = page.getByRole("tabpanel", { name: "实例" })
+    await expect(instance.getByRole("textbox", { name: "实例名称" })).toHaveCSS("height", "32px")
+    await expect(instance.getByRole("button", { name: "改名称" })).toHaveCSS("height", "32px")
     await page.getByRole("button", { name: "删除实例" }).click()
     await page.getByRole("button", { name: "确认删除" }).click()
     await expect(page.getByText(/先在那些会话里换用别的实例/)).toBeVisible()

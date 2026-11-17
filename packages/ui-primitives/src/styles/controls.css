@@ -73,10 +73,16 @@
   --button-icon-size: var(--icon-btn-xs);
   height: var(--control-xs);
   border-radius: var(--r-xs);
+  font-size: var(--fs-xs);
 }
 .btn-sm {
   --button-icon-size: var(--icon-btn-sm);
   height: var(--control-sm);
+  font-size: var(--fs-sm);
+}
+.btn-xs,
+.btn-sm {
+  line-height: 1.25;
 }
 .btn-lg {
   --button-icon-size: var(--icon-btn-lg);
@@ -164,7 +170,11 @@
 }
 .input:where([data-size="lg"], [data-size="xl"]) {
   height: var(--control-lg);
-  padding: var(--space-3) var(--space-6);
+  padding-block: var(--space-3);
+}
+.input:where([data-size="lg"], [data-size="xl"]),
+.textarea:where([data-size="lg"]) {
+  padding-inline: var(--space-6);
   border-radius: var(--r-block);
 }
 .input:where([data-size="xl"]) {
@@ -177,8 +187,8 @@
 .textarea::placeholder {
   color: var(--faint);
 }
-.input:hover:not(:disabled, [data-disabled]),
-.textarea:hover:not(:disabled) {
+.input:hover:where(:not(:disabled, [data-disabled])),
+.textarea:hover:where(:not(:disabled)) {
   box-shadow: var(--shadow-field-hover);
 }
 .input:focus,
@@ -193,7 +203,7 @@
 .textarea:disabled {
   opacity: 0.55;
 }
-.input.is-error {
+:is(.input, .textarea):is([aria-invalid="true"], .is-error) {
   box-shadow: inset 0 0 0 1px var(--bad);
 }
 /* Select 的触发器：外观是 .input，值靠左，后面跟一个箭头 */
@@ -201,7 +211,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-4);
-  min-width: 180px;
+  min-width: 0;
   text-align: left;
 }
 .select-trigger[data-disabled] {
@@ -210,7 +220,7 @@
 .textarea {
   height: auto;
   min-height: var(--textarea-min-h);
-  padding: var(--space-4);
+  padding-block: var(--space-4);
   line-height: 1.5;
   resize: vertical;
 }

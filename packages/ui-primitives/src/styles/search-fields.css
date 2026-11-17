@@ -35,6 +35,7 @@
 }
 .search-field[data-size="xl"] {
   --search-clear-size: var(--control-sm);
+  --search-clear-background-size: var(--control-sm);
   --search-clear-icon-size: var(--icon-btn);
   gap: var(--space-4);
   height: var(--control-xl);
@@ -95,22 +96,32 @@
   display: none;
   -webkit-appearance: none;
 }
-/* 清除按钮：小圆底上的叉 */
+/* 清除按钮的点击区和圆底分别取尺寸，密集搜索用小圆底。 */
 .search-field-clear {
   display: grid;
   flex: none;
   place-items: center;
-  width: var(--search-clear-size, var(--icon-md));
-  height: var(--search-clear-size, var(--icon-md));
+  width: var(--search-clear-size, var(--control-xs));
+  height: var(--search-clear-size, var(--control-xs));
   border-radius: var(--r-full);
-  background: var(--faint);
   color: var(--surface);
 }
-.search-field-clear:hover {
+.search-field-clear::before,
+.search-field-clear > .ic {
+  grid-area: 1 / 1;
+}
+.search-field-clear::before {
+  content: "";
+  width: var(--search-clear-background-size, var(--icon-md));
+  aspect-ratio: 1;
+  border-radius: var(--r-full);
+  background: var(--faint);
+}
+.search-field-clear:hover::before {
   background: var(--muted);
 }
 .search-field-clear > .ic {
-  width: var(--search-clear-icon-size, 60%);
-  height: var(--search-clear-icon-size, 60%);
+  width: var(--search-clear-icon-size, calc(var(--icon-md) * 0.6));
+  height: var(--search-clear-icon-size, calc(var(--icon-md) * 0.6));
   stroke-width: 2.4;
 }

@@ -350,7 +350,7 @@ export function AgentsPage({
                 className="input select-trigger"
                 aria-label={t("agents.default.title")}
               >
-                <Select.Value className="grow">
+                <Select.Value className="grow truncate">
                   {(value: string) => {
                     if (value === AUTO) return t("agents.default.auto")
                     const entry = defaultChoices.find((item) => item.instance.instanceId === value)

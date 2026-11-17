@@ -100,7 +100,7 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
                 <Select.Label className="label">{t("project.add.device")}</Select.Label>
                 <Select.Trigger className="input select-trigger" data-size="xl">
                   <Icon name="monitor" />
-                  <Select.Value className="grow" />
+                  <Select.Value className="grow truncate" />
                   <Select.Icon className="project-select-caret">
                     <Icon name="down" small />
                   </Select.Icon>

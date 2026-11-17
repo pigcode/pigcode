@@ -2,6 +2,13 @@
 import type { ComponentProps } from "react"
 import { cn } from "./cn"
 
-export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
-  return <textarea className={cn("textarea", className)} {...props} />
+export function Textarea({
+  className,
+  size,
+  ...props
+}: ComponentProps<"textarea"> & {
+  /** lg 与同组的 32 px、36 px 单行输入共用横向内边距与圆角。 */
+  size?: "md" | "lg" | undefined
+}) {
+  return <textarea className={cn("textarea", className)} data-size={size} {...props} />
 }

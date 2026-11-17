@@ -1,5 +1,6 @@
 // Agent 设置表单的控件：按 manifest 声明的字段类型渲染，另有环境变量编辑器。模型列表在 agent-models。
 import { FolderOpen, Plus, X } from "lucide-react"
+import { useId } from "react"
 import {
   environmentEntriesSchema,
   localizeText,
@@ -123,7 +124,7 @@ function FieldControl({
     return (
       <Select.Root value={current ?? null} onValueChange={(next) => onChange(next)}>
         <Select.Trigger className="input select-trigger" data-size="xl" aria-label={label}>
-          <Select.Value className="grow" />
+          <Select.Value className="grow truncate" />
         </Select.Trigger>
         <Select.Portal>
           <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
@@ -185,15 +186,18 @@ export function EnvironmentEditor({
   const { t } = useLocale()
   const update = (index: number, patch: Partial<EnvironmentEntry>) =>
     onChange(entries.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)))
-  const invalid = entries.some((entry) => entry.name !== "" && !ENV_NAME.test(entry.name))
+  const errorId = useId()
+  const invalidNames = entries.map(({ name }) => name !== "" && !ENV_NAME.test(name))
   return (
     <div className="agent-env" role="group" aria-label={label}>
       {entries.length === 0 ? <p className="agent-muted">{t("agents.env.empty")}</p> : null}
       {entries.map((entry, index) => (
         <div className="agent-env-row" key={index}>
           <Input
-            className={entry.name !== "" && !ENV_NAME.test(entry.name) ? "mono is-error" : "mono"}
+            className="mono"
             aria-label={`${t("agents.env.name")} ${index + 1}`}
+            aria-invalid={invalidNames[index] || undefined}
+            aria-describedby={invalidNames[index] ? errorId : undefined}
             placeholder={t("agents.env.name")}
             value={entry.name}
             spellCheck={false}
@@ -220,7 +224,11 @@ export function EnvironmentEditor({
           </Button>
         </div>
       ))}
-      {invalid ? <p className="error-text">{t("agents.env.invalid")}</p> : null}
+      {invalidNames.includes(true) ? (
+        <p id={errorId} className="error-text">
+          {t("agents.env.invalid")}
+        </p>
+      ) : null}
       <Button
         size="sm"
         variant="ghost"

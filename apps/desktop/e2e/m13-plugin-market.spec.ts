@@ -6,6 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test, type Page } from "@playwright/test"
+import { launch } from "../visual/screens"
 import { openThread } from "./projects"
 
 const MARKET = "/tmp/pigcode-e2e-market/plugins"
@@ -100,6 +101,46 @@ test.beforeEach(() => {
 })
 
 test.afterEach(() => rmSync(profileDir, { recursive: true, force: true }))
+
+test("the marketplace search fills its own row in a narrow window with large text", async () => {
+  const { app, page } = await launch("dark", "en-US")
+  try {
+    await page.getByRole("button", { name: "Settings", exact: true }).click()
+    await page.getByRole("button", { name: "Appearance", exact: true }).first().click()
+    await page.getByRole("slider", { name: "Interface size" }).press("End")
+    await expect(page.locator("body")).toHaveCSS("font-size", "18px")
+    await page.getByRole("button", { name: "Back to app", exact: true }).first().click()
+    await page
+      .locator(".side-actions")
+      .getByRole("button", { name: "Plugins", exact: true })
+      .click()
+
+    const search = page.locator(".market-search")
+    await expect(search).toHaveCSS("width", "320px")
+    const install = page.getByRole("button", { name: /^Install / }).first()
+    await expect(install).toHaveCSS("height", "24px")
+    const fontSize = await install.evaluate((button) =>
+      parseFloat(getComputedStyle(button).fontSize),
+    )
+    expect(fontSize).toBeCloseTo((12 * 18) / 13, 3)
+
+    await page.setViewportSize({ width: 560, height: 700 })
+    await expect(search).toHaveCSS("height", "36px")
+    await expect
+      .poll(() =>
+        search.evaluate((field) => {
+          const toolbar = field.parentElement!
+          const tabs = toolbar.querySelector(".market-tabs")!.getBoundingClientRect()
+          const row = toolbar.getBoundingClientRect()
+          const box = field.getBoundingClientRect()
+          return box.top >= tabs.bottom && box.left === row.left && box.width === row.width
+        }),
+      )
+      .toBe(true)
+  } finally {
+    await app.close()
+  }
+})
 
 test("adds a local marketplace, installs a plugin from it and updates it", async () => {
   const { app, page } = await openThread("plugin-market", { PIGCODE_PROFILE_DIR: profileDir })
