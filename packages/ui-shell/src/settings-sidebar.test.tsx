@@ -1,9 +1,10 @@
 /**
  * 验证设置导航与内容区都来自设置页扩展点：内置的页按顺序列在「设置」组，插件的页列在「插件设置」组，
- * 搜索按名称过滤两组；内容区画当前页，当前页被移除时退回通用页。
+ * 搜索在弹层中按名称查找这两组并跳转；内容区画当前页，当前页被移除时退回通用页。
  */
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   ExtensionRegistryScope,
@@ -69,12 +70,12 @@ describe("SettingsSidebar", () => {
     expect(screen.getAllByTestId("glyph")).toHaveLength(3)
   })
 
-  it("pins the back row and the search box above the scrolling page list", () => {
+  it("pins the back row and the search button above the scrolling page list", () => {
     renderSidebar(registryWithPages())
     const head = document.querySelector(".side-head") as HTMLElement
     const list = document.querySelector(".side-scroll") as HTMLElement
     expect(within(head).getByRole("button", { name: "返回应用" })).toBeTruthy()
-    expect(within(head).getByPlaceholderText("搜索设置")).toBeTruthy()
+    expect(within(head).getByRole("button", { name: "搜索设置" })).toBeTruthy()
     expect(within(list).queryByRole("button", { name: "返回应用" })).toBeNull()
     expect(within(list).getByText("设置")).toBeTruthy()
     expect(within(list).getByRole("button", { name: "Debug Settings" })).toBeTruthy()
@@ -86,26 +87,53 @@ describe("SettingsSidebar", () => {
     expect(onSelect).toHaveBeenCalledWith("debug")
   })
 
-  it("searches the names of built-in and plugin pages, and Enter opens the first match", () => {
+  it("searches plugin and built-in pages in a dialog and opens the selected result", async () => {
     const onSelect = renderSidebar(registryWithPages())
-    const search = screen.getByPlaceholderText("搜索设置")
-    fireEvent.change(search, { target: { value: "debug" } })
-    expect(navNames()).toEqual(["Debug Settings"])
-    // 没有匹配的内置页时不留空的「设置」组标题。
-    expect([...document.querySelectorAll(".side-group")].map((group) => group.textContent)).toEqual(
-      ["插件设置"],
-    )
-    fireEvent.keyDown(search, { key: "Enter" })
-    expect(onSelect).toHaveBeenCalledWith("debug")
+    const user = userEvent.setup()
+    const trigger = screen.getByRole("button", { name: "搜索设置" })
+    await user.click(trigger)
+    let dialog = await screen.findByRole("dialog", { name: "搜索设置" })
+    let search = within(dialog).getByRole<HTMLInputElement>("combobox", { name: "搜索设置" })
+    await user.type(search, "debug")
+    expect(
+      within(dialog)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["Debug Settings"])
+    await user.click(within(dialog).getByRole("option", { name: "Debug Settings" }))
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith("debug"))
+    expect(navNames()).toEqual(["通用", "外观", "Debug Settings"])
 
-    fireEvent.change(search, { target: { value: "外" } })
-    expect(navNames()).toEqual(["外观"])
-    expect(screen.queryByText("插件设置")).toBeNull()
+    await user.click(trigger)
+    dialog = await screen.findByRole("dialog", { name: "搜索设置" })
+    search = within(dialog).getByRole<HTMLInputElement>("combobox", { name: "搜索设置" })
+    expect(search.value).toBe("")
+    await user.type(search, "外")
+    expect(
+      within(dialog)
+        .getAllByRole("option")
+        .map((option) => option.textContent),
+    ).toEqual(["外观"])
+    await user.keyboard("{Enter}")
+    await waitFor(() => expect(onSelect).toHaveBeenLastCalledWith("appearance"))
+  })
 
-    fireEvent.change(search, { target: { value: "nothing" } })
-    expect(navNames()).toEqual([])
-    expect(screen.getByText("没有匹配的设置")).toBeTruthy()
-    expect(document.querySelectorAll(".side-group")).toHaveLength(0)
+  it("shows an empty result and clears a query before Escape closes the dialog", async () => {
+    const onSelect = renderSidebar(registryWithPages())
+    const user = userEvent.setup()
+    const trigger = screen.getByRole("button", { name: "搜索设置" })
+    await user.click(trigger)
+    const dialog = await screen.findByRole("dialog", { name: "搜索设置" })
+    const search = within(dialog).getByRole<HTMLInputElement>("combobox", { name: "搜索设置" })
+    await user.type(search, "nothing")
+    expect(within(dialog).getByText("没有匹配的设置")).toBeTruthy()
+    await user.keyboard("{Escape}")
+    expect(search.value).toBe("")
+    expect(within(dialog).getAllByRole("option")).toHaveLength(3)
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "搜索设置" })).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+    expect(onSelect).not.toHaveBeenCalled()
   })
 
   it("follows pages added and removed later", () => {

@@ -83,6 +83,28 @@
   color: var(--faint);
   font-size: var(--fs-2xs);
 }
+
+/* 设置搜索与命令面板共享搜索行和滚动结果区。 */
+.dialog.settings-search-dialog {
+  top: max(15vh, calc(var(--titlebar-h) + var(--space-4)));
+  width: min(var(--settings-search-dialog-w), calc(100vw - 2 * var(--space-7)));
+  overflow: hidden;
+  transform: translateX(-50%);
+}
+.dialog.settings-search-dialog[data-starting-style],
+.dialog.settings-search-dialog[data-ending-style] {
+  transform: translateX(-50%) scale(0.98);
+}
+.settings-search-dialog .search-field .input {
+  box-shadow: none;
+  background: none;
+}
+.settings-search-dialog .palette-list {
+  max-height: 55vh;
+}
+.settings-search-dialog .menu-item {
+  font-size: var(--fs-xl);
+}
 @media (prefers-reduced-motion: no-preference) {
   .palette {
     animation: palette-in 160ms var(--ease) both;

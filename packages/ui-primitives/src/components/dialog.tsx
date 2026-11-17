@@ -20,6 +20,8 @@ export interface DialogContentProps extends Omit<
   closeLabel: string
   /** 正在提交、不能关闭时禁用右上角的关闭按钮。 */
   closeDisabled?: boolean | undefined
+  /** 视觉隐藏标题行。标题与关闭操作仍可由读屏访问。 */
+  hideHeader?: boolean | undefined
   children?: ReactNode
 }
 
@@ -29,6 +31,7 @@ function Content({
   description,
   closeLabel,
   closeDisabled,
+  hideHeader,
   className,
   children,
   ...props
@@ -37,7 +40,7 @@ function Content({
     <BaseDialog.Portal>
       <BaseDialog.Backdrop className="scrim" />
       <BaseDialog.Popup className={withBaseClass("dialog", className)} {...props}>
-        <div className="dialog-head">
+        <div className={hideHeader ? "sr-only" : "dialog-head"}>
           <div className="dialog-heading">
             <BaseDialog.Title className="dialog-title">{title}</BaseDialog.Title>
             {description ? (
@@ -49,6 +52,7 @@ function Content({
             aria-label={closeLabel}
             title={closeLabel}
             disabled={closeDisabled}
+            tabIndex={hideHeader ? -1 : undefined}
           >
             <X className="ic" aria-hidden="true" />
           </BaseDialog.Close>

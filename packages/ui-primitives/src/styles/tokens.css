@@ -523,6 +523,7 @@
   --col-wide: 860px;
   --market-search-basis: 224px;
   --market-search-max-w: 320px;
+  --settings-search-dialog-w: 576px;
   /*
     会话列最大 780px，正文和底部输入框左右各内收 16px。新会话草稿的输入框也使用 780px 的上限。
   */

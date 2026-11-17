@@ -327,12 +327,26 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(page.getByRole("heading", { name: t("settings.general.pageTitle") })).toBeVisible()
   await step("settings-general")
 
+  await page.getByRole("button", { name: t("settings.search"), exact: true }).click()
+  const searchDialog = page.getByRole("dialog", { name: t("settings.search") })
+  const settingsSearch = searchDialog.getByRole("combobox", { name: t("settings.search") })
+  await expect(settingsSearch).toBeFocused()
+  await expect(
+    searchDialog.getByRole("option", { name: t("settings.general"), exact: true }),
+  ).toHaveAttribute("data-highlighted", "")
+  await step("dialog-settings-search")
+  await settingsSearch.press("ArrowDown")
+  await expect(
+    searchDialog.getByRole("option", { name: t("settings.appearance"), exact: true }),
+  ).toHaveAttribute("data-highlighted", "")
+  await settingsSearch.press("Enter")
+  await expect(searchDialog).toBeHidden()
+
   const section = (key: MessageKey) =>
     page
       .getByRole("button", { name: t(key), exact: true })
       .first()
       .click()
-  await section("settings.appearance")
   await expect(
     page.getByRole("heading", { name: t("settings.appearance.pageTitle") }),
   ).toBeVisible()

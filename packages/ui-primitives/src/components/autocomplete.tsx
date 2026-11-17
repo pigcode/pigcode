@@ -31,6 +31,7 @@ export const Autocomplete = {
   InputGroup: BaseAutocomplete.InputGroup,
   Input,
   Trigger: BaseAutocomplete.Trigger,
+  Clear: BaseAutocomplete.Clear,
   Portal: BaseAutocomplete.Portal,
   Positioner,
   Popup,
