@@ -118,6 +118,7 @@ function ColorChip({
         ) : null}
       </span>
       <Input
+        size="xs"
         className="color-chip-hex"
         aria-label={fill(t("settings.appearance.color.hex"), { color: label })}
         value={text}

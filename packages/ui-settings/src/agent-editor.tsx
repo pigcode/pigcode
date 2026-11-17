@@ -302,6 +302,7 @@ export function AgentEditor({
                   </label>
                   <div className="agent-input-row">
                     <Input
+                      size="xl"
                       id="agent-instance-label"
                       className="agent-input"
                       value={label}

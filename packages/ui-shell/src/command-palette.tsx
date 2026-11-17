@@ -150,6 +150,7 @@ export function CommandPalette(props: CommandPaletteProps) {
       >
         <div className="palette-search">
           <SearchField
+            size="lg"
             variant="plain"
             inputRef={inputRef}
             value={query}

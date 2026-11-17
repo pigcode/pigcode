@@ -84,6 +84,7 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
                 {t("project.add.name")}
               </label>
               <Input
+                size="xl"
                 id="project-name"
                 value={name}
                 autoFocus
@@ -97,7 +98,7 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
             <Select.Root items={devices} defaultValue="local">
               <div className="field">
                 <Select.Label className="label">{t("project.add.device")}</Select.Label>
-                <Select.Trigger className="input select-trigger">
+                <Select.Trigger className="input select-trigger" data-size="xl">
                   <Icon name="monitor" />
                   <Select.Value className="grow" />
                   <Select.Icon className="project-select-caret">

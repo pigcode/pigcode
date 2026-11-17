@@ -225,7 +225,7 @@ export function PluginManagerView({
             <div className="market-page-title">
               {marketEnabled && managing ? (
                 <Button
-                  size="icon"
+                  size="icon-lg"
                   variant="ghost"
                   type="button"
                   aria-label={t("plugins.market.back")}
@@ -241,7 +241,7 @@ export function PluginManagerView({
             </div>
             <div className="actions">
               <Button
-                size={managing ? "sm" : "icon"}
+                size={managing ? "lg" : "icon-lg"}
                 type="button"
                 aria-label={refreshLabel}
                 title={refreshLabel}
@@ -261,7 +261,7 @@ export function PluginManagerView({
               </Button>
               {!managing ? (
                 <Button
-                  size="icon"
+                  size="icon-lg"
                   type="button"
                   aria-label={t("plugins.sources")}
                   title={t("plugins.sources")}
@@ -278,7 +278,7 @@ export function PluginManagerView({
                 />
               ) : (
                 <Button
-                  size="sm"
+                  size="lg"
                   variant="primary"
                   type="button"
                   onClick={() => setInstallOpen(true)}
@@ -289,7 +289,7 @@ export function PluginManagerView({
               )}
               {!managing ? (
                 <Button
-                  size="sm"
+                  size="lg"
                   variant="primary"
                   type="button"
                   onClick={() => navigateToManagement(true)}
@@ -328,6 +328,7 @@ export function PluginManagerView({
               )}
               {showSearch ? (
                 <SearchField
+                  size="xl"
                   className="market-search"
                   value={managing ? installedQuery : marketQuery}
                   onValueChange={setQuery}

@@ -177,7 +177,7 @@
 /* 搜索区和命令面板的一样：不带底色的一行，下面一条细线隔开列表；左右和列表的行对齐 */
 .model-search {
   flex: none;
-  padding: var(--space-5) var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-bottom: var(--hair) solid var(--border-strong);
 }
 .model-list {

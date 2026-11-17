@@ -575,10 +575,7 @@
 .agent-icon-btn:disabled {
   opacity: 0.35;
 }
-/* 行里的开关小一号 */
 .switch.agent-model-switch {
-  --control-xs: var(--control-2xs);
-  --switch-w: calc(var(--control-2xs) * 1.6);
   margin-left: var(--space-2);
 }
 .agent-model-skeleton {

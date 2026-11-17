@@ -61,6 +61,7 @@ export function SettingsSidebar({ activePage, onSelect, onExit, children }: Sett
           title={t("settings.back")}
         />
         <SearchField
+          size="xl"
           className="side-search"
           value={query}
           onValueChange={setQuery}

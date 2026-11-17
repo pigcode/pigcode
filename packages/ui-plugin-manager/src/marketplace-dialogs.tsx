@@ -25,7 +25,7 @@ export function PluginAddMenu({
   const { t } = useLocale()
   return (
     <Menu.Root>
-      <Menu.Trigger className="btn btn-secondary btn-sm market-add">
+      <Menu.Trigger className="btn btn-secondary btn-lg">
         <Plus className="ic ic-sm" aria-hidden="true" />
         {t("plugins.add")}
         <ChevronDown className="ic ic-sm" aria-hidden="true" />
@@ -132,6 +132,7 @@ export function AddMarketplaceDialog({
               </label>
               <div className="install-dialog-input">
                 <Input
+                  size="lg"
                   id={inputId}
                   className="mono"
                   value={source}
@@ -143,7 +144,7 @@ export function AddMarketplaceDialog({
                 />
                 {onPickFolder ? (
                   <Button
-                    size="sm"
+                    size="lg"
                     type="button"
                     disabled={adding}
                     onClick={() => {
@@ -183,10 +184,17 @@ export function AddMarketplaceDialog({
             ) : null}
           </Dialog.Body>
           <Dialog.Footer>
-            <Dialog.Close render={<Button type="button" variant="ghost" disabled={adding} />}>
+            <Dialog.Close
+              render={<Button type="button" size="lg" variant="ghost" disabled={adding} />}
+            >
               {t("common.cancel")}
             </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={!value || !acknowledged || adding}>
+            <Button
+              type="submit"
+              size="lg"
+              variant="primary"
+              disabled={!value || !acknowledged || adding}
+            >
               {adding ? t("plugins.addMarket.adding") : t("plugins.addMarket.submit")}
             </Button>
           </Dialog.Footer>

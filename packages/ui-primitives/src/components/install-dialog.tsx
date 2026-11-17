@@ -88,6 +88,7 @@ export function InstallDialog({
               </label>
               <div className="install-dialog-input">
                 <Input
+                  size="lg"
                   id={inputId}
                   className="mono"
                   value={spec}
@@ -99,7 +100,7 @@ export function InstallDialog({
                 />
                 {onPickFolder ? (
                   <Button
-                    size="sm"
+                    size="lg"
                     type="button"
                     disabled={installing}
                     onClick={() => {
@@ -125,10 +126,12 @@ export function InstallDialog({
             ) : null}
           </Dialog.Body>
           <Dialog.Footer>
-            <Dialog.Close render={<Button type="button" variant="ghost" disabled={installing} />}>
+            <Dialog.Close
+              render={<Button type="button" size="lg" variant="ghost" disabled={installing} />}
+            >
               {labels.cancel}
             </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={installing || !spec.trim()}>
+            <Button type="submit" size="lg" variant="primary" disabled={installing || !spec.trim()}>
               {installing ? labels.installing : labels.submit}
             </Button>
           </Dialog.Footer>

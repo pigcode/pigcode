@@ -1,7 +1,6 @@
 /**
  * 搜索框：放大镜、输入框、有内容时可选的清除按钮，以及右侧的补充元素（比如命令面板的 esc）。
- * 命令面板、模型菜单与设置侧栏用 default，文件树用 compact。命令面板与模型菜单顶上那一行本身就是
- * 输入框，用 plain 外观，不画底色和描边。样式在 search-fields.css。
+ * 文件树用 compact，弹层用 lg，页面搜索用 xl。命令面板与模型菜单用 plain 外观。
  */
 import { Search, X } from "lucide-react"
 import type { ComponentProps, ReactNode, Ref } from "react"
@@ -13,7 +12,7 @@ export type SearchFieldProps = Omit<
 > & {
   value: string
   onValueChange: (value: string) => void
-  size?: "default" | "compact"
+  size?: "default" | "compact" | "lg" | "xl"
   variant?: "default" | "plain" | undefined
   /** 输入框本身的 ref，用来设置初始焦点。 */
   inputRef?: Ref<HTMLInputElement> | undefined
@@ -39,7 +38,7 @@ export function SearchField({
 }: SearchFieldProps) {
   return (
     <label className={cn("search-field", className)} data-size={size} data-variant={variant}>
-      <Search className="ic ic-sm" aria-hidden="true" />
+      <Search className="ic search-field-icon" aria-hidden="true" />
       <input
         type="search"
         autoComplete="off"

@@ -279,6 +279,7 @@ function CreateBranchDialog({
             <div className="field">
               <label htmlFor={id}>{t("newThread.branch.name")}</label>
               <Input
+                size="xl"
                 id={id}
                 ref={input}
                 value={name}

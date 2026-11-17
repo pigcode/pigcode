@@ -9,12 +9,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   height: var(--control-md);
-  padding: 0 var(--space-6);
+  padding: 0 var(--space-4);
   border: 0;
-  border-radius: var(--r-md);
-  font-size: var(--fs-md);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xl);
   font-weight: var(--font-weight-ui);
   white-space: nowrap;
   user-select: none;
@@ -23,8 +23,8 @@
     filter var(--t-fast);
 }
 .btn .ic {
-  width: var(--icon-btn);
-  height: var(--icon-btn);
+  width: var(--button-icon-size, var(--icon-btn));
+  height: var(--button-icon-size, var(--icon-btn));
 }
 .btn-primary {
   background: var(--primary);
@@ -69,16 +69,20 @@
 .btn-solid-danger:hover {
   filter: brightness(0.92);
 }
+.btn-xs {
+  --button-icon-size: var(--icon-btn-xs);
+  height: var(--control-xs);
+  border-radius: var(--r-xs);
+}
 .btn-sm {
+  --button-icon-size: var(--icon-btn-sm);
   height: var(--control-sm);
-  padding: 0 var(--space-4);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-sm);
 }
 .btn-lg {
+  --button-icon-size: var(--icon-btn-lg);
   height: var(--control-lg);
-  padding: 0 var(--space-7);
-  border-radius: var(--r-lg);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-block);
 }
 .btn-block {
   width: 100%;
@@ -89,18 +93,34 @@
   pointer-events: none;
 }
 
-/* 图标按钮：Button size="icon" 和只放一个图标的 .icon-btn 一样大；宽度固定，不要横向内边距 */
+/* 图标按钮保持正方形，图标跟随按钮档位。 */
 .btn.btn-icon,
 .icon-btn {
-  width: var(--control-md);
-  height: var(--control-md);
+  flex: none;
+  width: var(--icon-button-size, var(--control-md));
+  height: var(--icon-button-size, var(--control-md));
   padding: 0;
+}
+.btn-icon {
+  --button-icon-size: var(--icon-btn-lg);
+}
+.btn-icon-xs {
+  --icon-button-size: var(--control-xs);
+  --button-icon-size: var(--icon-btn-xs);
+  border-radius: var(--r-xs);
+}
+.btn-icon-sm {
+  --icon-button-size: var(--control-sm);
+  --button-icon-size: var(--icon-btn-sm);
+}
+.btn-icon-lg {
+  --icon-button-size: var(--control-lg);
+  border-radius: var(--r-block);
 }
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  flex: none;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   color: var(--muted);
   transition:
     background var(--t-fast),
@@ -124,16 +144,31 @@
 .textarea {
   width: 100%;
   height: var(--control-md);
-  padding: 0 var(--space-5);
+  padding: var(--space-1) var(--space-4);
   border: 0;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--input-bg);
   color: var(--fg);
-  font-size: var(--fs-md);
+  font-size: var(--fs-xl);
   box-shadow: var(--shadow-field);
   transition:
     box-shadow var(--t-fast),
     background var(--t-fast);
+}
+.input:where([data-size="xs"]) {
+  height: var(--control-xs);
+  border-radius: var(--r-xs);
+}
+.input:where([data-size="sm"]) {
+  height: var(--control-sm);
+}
+.input:where([data-size="lg"], [data-size="xl"]) {
+  height: var(--control-lg);
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--r-block);
+}
+.input:where([data-size="xl"]) {
+  height: var(--control-xl);
 }
 .input::placeholder,
 .textarea::placeholder {
@@ -172,7 +207,7 @@
 .textarea {
   height: auto;
   min-height: var(--textarea-min-h);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-4);
   line-height: 1.5;
   resize: vertical;
 }
@@ -183,12 +218,16 @@
   display: inline-block;
   flex: none;
   width: var(--switch-w);
-  height: var(--control-xs);
+  height: var(--switch-h);
   border-radius: var(--r-full);
   background: var(--track);
   box-shadow: inset 0 0 0 var(--hair) var(--border);
   vertical-align: middle;
   transition: background var(--t-med) var(--ease);
+}
+.switch[data-size="sm"] {
+  --switch-w: var(--control-md);
+  --switch-h: var(--switch-sm-h);
 }
 .switch[aria-checked="true"] {
   background: var(--switch-on);
@@ -201,17 +240,17 @@
 }
 .switch > .switch-thumb {
   position: absolute;
-  top: var(--space-1);
-  left: var(--space-1);
-  width: calc(var(--control-xs) - 2 * var(--space-1));
-  height: calc(var(--control-xs) - 2 * var(--space-1));
+  top: var(--switch-inset);
+  left: var(--switch-inset);
+  width: calc(var(--switch-h) - 2 * var(--switch-inset));
+  height: calc(var(--switch-h) - 2 * var(--switch-inset));
   border-radius: 50%;
   background: var(--knob);
   box-shadow: var(--shadow-knob);
   transition: transform var(--t-med) var(--ease);
 }
 .switch[aria-checked="true"] > .switch-thumb {
-  transform: translateX(calc(var(--switch-w) - var(--control-xs)));
+  transform: translateX(calc(var(--switch-w) - var(--switch-h)));
 }
 
 /* ─── 复选框 ───────────────────────────────────────────── */

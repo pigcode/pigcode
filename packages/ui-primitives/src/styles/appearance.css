@@ -421,7 +421,6 @@
 }
 /* 十六进制值平时像一行小字，点进去才显出输入框 */
 .input.color-chip-hex {
-  height: var(--control-xs);
   width: 100%;
   max-width: 10ch;
   margin-left: calc(-1 * var(--space-2));

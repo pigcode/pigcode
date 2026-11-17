@@ -122,7 +122,7 @@ function FieldControl({
     const current = typeof value === "string" ? value : (field.default ?? field.options[0]?.value)
     return (
       <Select.Root value={current ?? null} onValueChange={(next) => onChange(next)}>
-        <Select.Trigger className="input select-trigger" aria-label={label}>
+        <Select.Trigger className="input select-trigger" data-size="xl" aria-label={label}>
           <Select.Value className="grow" />
         </Select.Trigger>
         <Select.Portal>
@@ -144,6 +144,7 @@ function FieldControl({
   return (
     <div className="agent-input-row">
       <Input
+        size={pathKind && onPickPath ? "lg" : "xl"}
         className={field.type === "text" && field.monospace ? "agent-input mono" : "agent-input"}
         aria-label={label}
         value={typeof value === "string" ? value : ""}
@@ -154,7 +155,7 @@ function FieldControl({
       />
       {pathKind && onPickPath ? (
         <Button
-          size="sm"
+          size="lg"
           type="button"
           aria-label={`${t("agents.browse")} ${label}`}
           onClick={() => {

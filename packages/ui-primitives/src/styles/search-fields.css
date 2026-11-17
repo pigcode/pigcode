@@ -1,10 +1,10 @@
 /*
-  搜索框：SearchField 的外框、图标、输入框与清除按钮。命令面板、模型菜单与设置侧栏用 default（高 28），
-  文件树用 compact（高 24）。外框和普通输入框同一种样子：浅底加细描边，悬停与聚焦只把描边加深，
+  搜索框：紧凑列表用 24，默认用 28，弹层用 32，页面用 36。外框用浅底与细描边，悬停与聚焦时加深描边，
   输入框自己不画描边。命令面板与模型菜单顶上的一行用 plain：那一行本身就是输入框，没有底色和描边，
   和下面的列表之间由所在区域画一条细线。区域样式只补它所在位置的外边距，不再写搜索框的颜色、高度与圆角。
 */
 .search-field {
+  --search-icon-size: var(--icon-btn);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -12,10 +12,10 @@
   min-width: 0;
   height: var(--control-md);
   padding: 0 var(--space-4);
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--input-bg);
   color: var(--muted);
-  font-size: var(--fs-md);
+  font-size: var(--fs-xl);
   box-shadow: var(--shadow-field);
   cursor: text;
   transition:
@@ -23,10 +23,34 @@
     background var(--t-fast);
 }
 .search-field[data-size="compact"] {
+  --search-icon-size: var(--icon-btn-sm);
   gap: var(--space-2);
   height: var(--control-sm);
   padding: 0 var(--space-3);
   font-size: var(--fs-sm);
+}
+.search-field[data-size="lg"] {
+  height: var(--control-lg);
+  border-radius: var(--r-block);
+}
+.search-field[data-size="xl"] {
+  --search-clear-size: var(--control-sm);
+  --search-clear-icon-size: var(--icon-btn);
+  gap: var(--space-4);
+  height: var(--control-xl);
+  padding-inline: var(--space-6);
+  border-radius: var(--r-panel);
+}
+.search-field[data-size="xl"]:has(.search-field-clear) {
+  padding-inline-end: var(--space-2);
+}
+.search-field[data-size="lg"],
+.search-field[data-size="xl"] {
+  --search-icon-size: var(--icon-btn-lg);
+}
+.search-field > .search-field-icon {
+  width: var(--search-icon-size);
+  height: var(--search-icon-size);
 }
 .search-field:hover {
   box-shadow: var(--shadow-field-hover);
@@ -68,8 +92,8 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: var(--icon-md);
-  height: var(--icon-md);
+  width: var(--search-clear-size, var(--icon-md));
+  height: var(--search-clear-size, var(--icon-md));
   border-radius: var(--r-full);
   background: var(--faint);
   color: var(--surface);
@@ -78,7 +102,7 @@
   background: var(--muted);
 }
 .search-field-clear > .ic {
-  width: 60%;
-  height: 60%;
+  width: var(--search-clear-icon-size, 60%);
+  height: var(--search-clear-icon-size, 60%);
   stroke-width: 2.4;
 }

@@ -292,6 +292,7 @@ export function ModelsEditor({
                 ) : null}
               </span>
               <Switch
+                size="sm"
                 className="agent-model-switch"
                 aria-label={t("agents.models.show").replace("{model}", row.label)}
                 checked={!row.hidden}

@@ -104,6 +104,7 @@ export function PrPanel({
             <label className="pr-field">
               <span>{t("pr.title")}</span>
               <Input
+                size="lg"
                 value={title}
                 placeholder={t("pr.titlePlaceholder")}
                 disabled={creating}
@@ -123,6 +124,7 @@ export function PrPanel({
             <label className="pr-field">
               <span>{t("pr.base")}</span>
               <Input
+                size="lg"
                 value={base}
                 placeholder={t("pr.basePlaceholder")}
                 disabled={creating}

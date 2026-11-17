@@ -379,6 +379,7 @@ export function ScheduleEditor({
           <label className="field">
             <span className="label">{t("schedules.field.title")}</span>
             <Input
+              size="xl"
               value={title}
               maxLength={120}
               disabled={saving}

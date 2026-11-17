@@ -398,9 +398,9 @@
   --cv-fs-code: calc(var(--fs-code) + 1.5px);
 
   /*
-    圆角：2xs 2（细条）/ xs 4（复选框）/ kbd 5（键帽、路径片段、字母图标）/ sm 6（小按钮）/
-    md 7（按钮、输入框、列表行）/ block 8（对话卡片里的按钮、行与小块，浮起的工具条，滚动条滑块）/
-    lg 10（卡片里的块）/ panel 12（卡片、分组）/ xl 14（输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
+    圆角：2xs 2（细条）/ xs 4（复选框、特小控件）/ kbd 5（键帽、路径片段、字母图标）/ sm 6（普通控件）/
+    md 7（列表行）/ block 8（大号控件、小块、工具条与滚动条滑块）/
+    lg 10（卡片里的块）/ panel 12（页面搜索、卡片、分组）/ xl 14（对话输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
   */
   --r-2xs: 2px;
   --r-xs: 4px;
@@ -426,9 +426,9 @@
   --space-9: 24px;
 
   /*
-    控件高度：2xs 18（胶囊和标签里的关闭按钮、小键帽）/ xs 20（开关、键帽）/ sm 24（小按钮、分段里的项）/
+    控件高度：2xs 18（胶囊和标签里的关闭按钮、小键帽）/ xs 20（特小按钮、键帽）/ sm 24（小按钮、紧凑搜索）/
     bar 26（标签栏、标题栏与面板标题行里的标签和按钮，模型菜单行尾的收藏按钮）/
-    md 28（按钮、输入框、菜单行）/ lg 32
+    md 28（普通按钮、输入框、菜单行）/ lg 32（工具栏、紧凑表单）/ xl 36（常规表单、页面搜索）
   */
   --control-2xs: 18px;
   --control-xs: 20px;
@@ -436,6 +436,7 @@
   --control-bar: 26px;
   --control-md: 28px;
   --control-lg: 32px;
+  --control-xl: 36px;
   /* 列表行的最小高度：侧栏、设置分组、Agent 与插件、模型、命令面板的行 */
   --row-h: var(--control-md);
   /* 文件树的紧凑行高；file-explorer.tsx 的虚拟滚动行高与它相同 */
@@ -447,19 +448,22 @@
   --panel-head-h: 34px;
   /* 代码查看器的行高；code-editor.tsx 的虚拟滚动行高（LINE_HEIGHT）与它相同 */
   --code-line-h: 20px;
-  --switch-w: 34px;
-  --check-size: 14px;
+  --switch-w: var(--control-lg);
+  --switch-h: var(--control-2xs);
+  --switch-sm-h: 16px;
+  --switch-inset: 1px;
+  --check-size: 16px;
   /* 圆形小控件的直径：单选框、滑块的拇指（滑块与它同高）；滑块轨道的粗细；徽标的高度 */
   --knob-size: 16px;
   --slider-track-h: 4px;
   --badge-h: 19px;
-  --textarea-min-h: 80px;
+  --textarea-min-h: 64px;
   /* 滚动条的宽度；拖动分隔条（右栏、终端抽屉）的可拖范围 */
   --scrollbar-size: 11px;
   --resizer-size: 7px;
 
   /*
-    图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标统一 14，20px 小按钮与「展开输出」里的图标 12；
+    图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标随档位使用 10 / 12 / 14 / 16；
     对话区（消息、卡片、状态面板、输入区、文件图标）的图标 16，对话区分隔线标签里的小图标 14；
     标题栏的应用图标与顶行按钮的图标 16；复选框里的对勾 10
   */
@@ -467,8 +471,10 @@
   --icon-sm: 13px;
   --icon-md: 15px;
   --icon-lg: 18px;
+  --icon-btn-xs: 10px;
   --icon-btn: 14px;
   --icon-btn-sm: 12px;
+  --icon-btn-lg: 16px;
   --icon-cv: 16px;
   --icon-cv-sm: 14px;
   --icon-titlebar: 16px;
@@ -515,6 +521,8 @@
   --col-narrow: 640px;
   /* 两列卡片的页面：插件与定时任务 */
   --col-wide: 860px;
+  --market-search-basis: 224px;
+  --market-search-max-w: 320px;
   /*
     会话列最大 780px，正文和底部输入框左右各内收 16px。新会话草稿的输入框也使用 780px 的上限。
   */

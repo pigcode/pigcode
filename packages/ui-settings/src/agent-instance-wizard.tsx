@@ -204,6 +204,7 @@ export function InstanceCreateWizard({
           {step === "agent" ? (
             <div className="wizard-pane">
               <SearchField
+                size="lg"
                 value={query}
                 onValueChange={setQuery}
                 placeholder={t("agents.instance.search")}
@@ -260,6 +261,7 @@ export function InstanceCreateWizard({
                   {t("agents.instance.name")}
                 </label>
                 <Input
+                  size="xl"
                   id="instance-wizard-label"
                   value={draft.label}
                   autoFocus
@@ -276,6 +278,7 @@ export function InstanceCreateWizard({
                   {t("agents.instance.idLabel")}
                 </label>
                 <Input
+                  size="xl"
                   id="instance-wizard-id"
                   className="agent-input mono"
                   value={instanceId}

@@ -335,6 +335,7 @@ export function ModelPicker({
                 <div className="model-pane">
                   <div className="model-search">
                     <SearchField
+                      size="lg"
                       variant="plain"
                       inputRef={searchRef}
                       value={query}

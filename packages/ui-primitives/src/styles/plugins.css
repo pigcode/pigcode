@@ -405,13 +405,13 @@
   gap: var(--space-3);
   min-width: 0;
 }
-.market-page-head .actions {
+.plugin-market .market-page-head .actions {
+  gap: var(--space-4);
   flex-wrap: wrap;
   max-width: 100%;
 }
-.market-page-head .actions .btn {
-  height: var(--control-md);
-  border-radius: var(--r-md);
+.market-page-head .actions .btn-icon-lg {
+  --button-icon-size: var(--icon-btn);
 }
 .market-toolbar {
   display: flex;
@@ -421,7 +421,7 @@
   gap: var(--space-4) var(--space-7);
 }
 .market-tabs.seg {
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding: 0;
   background: none;
 }
@@ -429,6 +429,7 @@
   height: var(--control-md);
   padding: 0 var(--space-6);
   border-radius: var(--r-full);
+  font-size: var(--fs-xl);
 }
 .market-tabs .seg-item[data-checked] {
   background: var(--field);
@@ -436,8 +437,9 @@
   font-weight: 600;
 }
 .plugin-market .market-toolbar .market-search {
-  flex: 1 0 170px;
-  max-width: 280px;
+  flex: 1 1 var(--market-search-basis);
+  max-width: var(--market-search-max-w);
+  margin-inline-start: auto;
 }
 @container (max-width: 490px) {
   .market-page-head {
@@ -447,9 +449,6 @@
   .plugin-market .market-toolbar .market-search {
     max-width: none;
   }
-}
-.btn.market-add {
-  gap: var(--space-2);
 }
 .market-add-menu.menu-popup {
   min-width: 280px;
@@ -519,11 +518,7 @@
   font-size: var(--fs-sm);
 }
 .btn.market-pill {
-  gap: var(--space-2);
-  height: var(--control-sm);
-  padding: 0 var(--space-5);
   border-radius: var(--r-full);
-  font-size: var(--fs-sm);
   font-weight: 500;
 }
 .market-installed {
