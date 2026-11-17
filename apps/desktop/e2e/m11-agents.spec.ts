@@ -62,7 +62,10 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(instanceId).toHaveCSS("height", "36px")
     await instanceId.fill("work_codex")
     await wizard.getByRole("button", { name: "下一步" }).click()
-    const homePath = join(profileDir, "work-home")
+    const runtimeValues = {
+      homePath: join(profileDir, "work-home"),
+      launchArgs: "-c model_reasoning_summary=detailed",
+    }
     const homeInput = wizard.getByRole("textbox", { name: "CODEX_HOME" })
     const launchArgsInput = wizard.getByRole("textbox", { name: "启动参数" })
     await expect(homeInput).toHaveCSS("height", "36px")
@@ -71,85 +74,70 @@ test("agents are plugins with settings that reach the composer", async () => {
       "height",
       "32px",
     )
-    await homeInput.fill(homePath)
-    await launchArgsInput.fill("-c model_reasoning_summary=detailed")
-    await wizard.getByRole("button", { name: "添加变量" }).click()
-    const variableName = wizard.getByRole("textbox", { name: "变量名 1" })
-    await variableName.fill("1_BAD")
-    await expect(variableName).toHaveAttribute("aria-invalid", "true")
-    await expect(variableName).toHaveAccessibleDescription(/不能以数字开头/)
-    await variableName.fill("OPENAI_BASE_URL")
-    await expect(variableName).not.toHaveAttribute("aria-invalid", "true")
-    await wizard.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
-    const modelId = wizard.getByRole("textbox", { name: "模型 id，回车添加" })
-    await expect(modelId).toHaveCSS("height", "28px")
-    await expect(wizard.getByRole("button", { name: "添加", exact: true })).toHaveCSS(
-      "height",
-      "28px",
-    )
-    await modelId.fill("gpt-work-e2e")
-    await modelId.press("Enter")
+    await homeInput.fill(runtimeValues.homePath)
+    await launchArgsInput.fill(runtimeValues.launchArgs)
+    await expect(wizard.getByRole("button", { name: "添加变量" })).toHaveCount(0)
+    await expect(wizard.getByRole("textbox", { name: "模型 id，回车添加" })).toHaveCount(0)
     await wizard.getByRole("button", { name: "创建实例" }).click()
     await expect(wizard).toBeHidden()
     await expect(page.getByRole("button", { name: "打开 公司 API 的设置" })).toHaveAttribute(
       "aria-expanded",
       "true",
     )
-    expect(JSON.parse(readFileSync(join(profileDir, "settings.json"), "utf8"))).toMatchObject({
-      agentInstances: {
-        work_codex: {
-          agentId: "codex",
-          label: "公司 API",
-          values: {
-            homePath,
-            launchArgs: "-c model_reasoning_summary=detailed",
-            environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
-            customModels: ["gpt-work-e2e"],
-          },
-        },
-      },
-    })
+    const settingsPath = join(profileDir, "settings.json")
+    const created = JSON.parse(readFileSync(settingsPath, "utf8")).agentInstances.work_codex
+    expect(created).toMatchObject({ agentId: "codex", label: "公司 API" })
+    expect(created.values).toEqual(runtimeValues)
 
-    // 展开 Codex：manifest 声明的字段按标签页分开；改设置并保存。
-    await page.getByRole("button", { name: "打开 Codex 的设置" }).click()
+    // 在自动展开的新实例里配置环境变量和自定义模型。
     const editor = page.locator(".agent-editor")
     await editor.getByRole("tab", { name: "运行" }).click()
     await expect(editor.getByRole("textbox", { name: "可执行文件" })).toHaveAttribute(
       "placeholder",
       "codex",
     )
-    await expect(editor.getByRole("textbox", { name: "CODEX_HOME" })).toBeVisible()
-    await editor
-      .getByRole("textbox", { name: "启动参数" })
-      .fill("-c model_reasoning_summary=detailed")
+    await expect(editor.getByRole("textbox", { name: "CODEX_HOME" })).toHaveValue(
+      runtimeValues.homePath,
+    )
+    await expect(editor.getByRole("textbox", { name: "启动参数" })).toHaveValue(
+      runtimeValues.launchArgs,
+    )
     await editor.getByRole("tab", { name: "环境变量" }).click()
     await editor.getByRole("button", { name: "添加变量" }).click()
-    await editor.getByRole("textbox", { name: "变量名 1" }).fill("OPENAI_BASE_URL")
+    const variableName = editor.getByRole("textbox", { name: "变量名 1" })
+    await variableName.fill("1_BAD")
+    await expect(variableName).toHaveAttribute("aria-invalid", "true")
+    await expect(variableName).toHaveAccessibleDescription(/不能以数字开头/)
+    await variableName.fill("OPENAI_BASE_URL")
+    await expect(variableName).not.toHaveAttribute("aria-invalid", "true")
     await editor.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
     await editor.getByRole("tab", { name: /^模型/ }).click()
     const model = editor.getByRole("textbox", { name: "模型 id，回车添加" })
-    await model.fill("gpt-pigcode-e2e")
+    await expect(model).toHaveCSS("height", "28px")
+    await expect(editor.getByRole("button", { name: "添加", exact: true })).toHaveCSS(
+      "height",
+      "28px",
+    )
+    await model.fill("gpt-work-e2e")
     await model.press("Enter")
     await editor.getByRole("button", { name: "保存" }).click()
     await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
     await page.screenshot({ path: "test-results/agents-codex-settings.png" })
 
-    const settings = JSON.parse(readFileSync(join(profileDir, "settings.json"), "utf8")) as Record<
-      string,
-      unknown
-    >
-    expect(settings["agents.codex"]).toEqual({
-      launchArgs: "-c model_reasoning_summary=detailed",
+    const saved = JSON.parse(readFileSync(settingsPath, "utf8")).agentInstances.work_codex
+    expect(saved.values).toEqual({
+      ...runtimeValues,
       environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
-      customModels: ["gpt-pigcode-e2e"],
+      customModels: ["gpt-work-e2e"],
     })
 
     // 自定义模型出现在输入框的模型选择器里，标着「自定义」。
     await page.getByRole("button", { name: "返回应用" }).first().click()
     await page.getByRole("button", { name: /Agent 与模型/ }).click()
-    await page.getByRole("tab", { name: "Codex" }).click()
-    await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("gpt-pigcode-e2e")
-    await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("自定义")
+    await page.getByRole("tab", { name: "公司 API" }).click()
+    const models = page.getByRole("listbox", { name: "公司 API" })
+    await expect(models).toContainText("gpt-work-e2e")
+    await expect(models).toContainText("自定义")
     await page.keyboard.press("Escape")
 
     // 停用 Codex：插件卸下，输入框里不再有它；再启用回来。
@@ -160,6 +148,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await page.getByRole("button", { name: /Agent 与模型/ }).click()
     await expect(page.getByRole("tab", { name: "Claude Code" })).toBeVisible()
     await expect(page.getByRole("tab", { name: "Codex" })).toHaveCount(0)
+    await expect(page.getByRole("tab", { name: "公司 API" })).toHaveCount(0)
     await page.keyboard.press("Escape")
     await openAgents(page)
     await page.getByRole("switch", { name: "启用 Codex" }).click()
@@ -189,9 +178,13 @@ test("agents are plugins with settings that reach the composer", async () => {
 
     // 恢复默认也要保存，并显示保存结果。
     await page.getByRole("button", { name: "打开 Codex 的设置" }).click()
-    await page.getByRole("button", { name: "恢复默认" }).click()
-    await page.getByRole("button", { name: "保存" }).click()
-    await expect(page.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await editor.getByRole("tab", { name: "运行" }).click()
+    await editor.getByRole("textbox", { name: "启动参数" }).fill(runtimeValues.launchArgs)
+    await editor.getByRole("button", { name: "保存" }).click()
+    await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await editor.getByRole("button", { name: "恢复默认" }).click()
+    await editor.getByRole("button", { name: "保存" }).click()
+    await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
   } finally {
     await app.close()
     rmSync(profileDir, { recursive: true, force: true })
@@ -210,12 +203,20 @@ test("an agent can hold several instances, and threads bind to the one they used
     await page.getByRole("button", { name: "下一步" }).click()
     await page.getByRole("textbox", { name: "实例名称" }).fill("公司 API")
     await page.getByRole("button", { name: "下一步" }).click()
-    await page.getByRole("dialog").getByRole("button", { name: "创建实例" }).click()
-    // 新建后自动展开新实例，它从默认实例复制了设置。
+    const wizard = page.getByRole("dialog", { name: "添加实例" })
+    await expect(wizard.getByText("这个 Agent 可以直接创建实例。")).toBeVisible()
+    await wizard.getByRole("button", { name: "创建实例" }).click()
+    await expect(wizard).toBeHidden()
+    // 新建后自动展开新实例，并读取 Agent 返回的模型目录。
     await expect(page.getByRole("button", { name: "打开 公司 API 的设置" })).toHaveAttribute(
       "aria-expanded",
       "true",
     )
+    const editor = page.locator(".agent-editor")
+    await editor.getByRole("tab", { name: /^模型/ }).click()
+    const models = editor.getByRole("list", { name: "模型" })
+    await expect(models).toContainText("Fake Sage")
+    await expect(models).toContainText("Fake Swift")
 
     // 草稿的模型选择器按实例列出：选中新实例的模型再发消息。
     await page.getByRole("button", { name: "返回应用" }).first().click()

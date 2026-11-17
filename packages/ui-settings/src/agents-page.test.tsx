@@ -370,7 +370,10 @@ describe("AgentsPage", () => {
     await userEvent.clear(id)
     await userEvent.type(id, "work-api")
     await userEvent.click(screen.getByRole("button", { name: "下一步" }))
-    await userEvent.type(screen.getByRole("textbox", { name: "启动参数" }), "--chrome")
+    const wizard = within(screen.getByRole("dialog", { name: "添加实例" }))
+    expect(wizard.queryByRole("button", { name: "添加变量" })).toBeNull()
+    expect(wizard.queryByRole("textbox", { name: "模型 id，回车添加" })).toBeNull()
+    await userEvent.type(wizard.getByRole("textbox", { name: "启动参数" }), "--chrome")
     await userEvent.click(screen.getByRole("button", { name: "创建实例" }))
     await waitFor(() =>
       expect(props.onCreateInstance).toHaveBeenCalledWith({

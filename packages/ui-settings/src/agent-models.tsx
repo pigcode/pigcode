@@ -83,14 +83,14 @@ function moved(ids: readonly string[], from: number, to: number): string[] {
   return next
 }
 
-/** catalog 缺省表示目录正在读取，null 用于还没有模型目录的新实例草稿。 */
+/** catalog 缺省表示实例的模型目录正在读取。 */
 export function ModelsEditor({
   catalog,
   values,
   allowCustom,
   onChange,
 }: {
-  catalog: readonly AgentModelInfo[] | null | undefined
+  catalog: readonly AgentModelInfo[] | undefined
   values: AgentSettingsValues
   allowCustom: boolean
   onChange: (patch: ModelsPatch) => void
@@ -172,26 +172,24 @@ export function ModelsEditor({
 
   return (
     <div className="agent-models">
-      {catalog !== null ? (
-        <div className="agent-models-head">
-          <p className="agent-muted" aria-live="polite">
-            {catalog === undefined
-              ? t("agents.models.loading")
-              : t("agents.models.summary")
-                  .replace("{count}", String(rows.length))
-                  .replace("{shown}", String(shown))}
-          </p>
-          {hidden.length > 0 && rows.some((row) => row.hidden) ? (
-            <button
-              type="button"
-              className="agent-text-btn"
-              onClick={() => onChange({ [HIDDEN_MODELS_KEY]: [] })}
-            >
-              {t("agents.models.showAll")}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="agent-models-head">
+        <p className="agent-muted" aria-live="polite">
+          {catalog === undefined
+            ? t("agents.models.loading")
+            : t("agents.models.summary")
+                .replace("{count}", String(rows.length))
+                .replace("{shown}", String(shown))}
+        </p>
+        {hidden.length > 0 && rows.some((row) => row.hidden) ? (
+          <button
+            type="button"
+            className="agent-text-btn"
+            onClick={() => onChange({ [HIDDEN_MODELS_KEY]: [] })}
+          >
+            {t("agents.models.showAll")}
+          </button>
+        ) : null}
+      </div>
       {catalog === undefined ? (
         <div className="agent-model-list" aria-busy="true">
           {[0, 1, 2].map((index) => (

@@ -1,5 +1,5 @@
 /**
- * 新建实例的向导：选择 Agent → 名称与 ID → 初始配置。三步都在一个对话框里，
+ * 新建实例的向导：选择 Agent → 名称与 ID → 启动配置。三步都在一个对话框里，
  * 步骤条可以点回已经填过的步骤。
  */
 import { useEffect, useMemo, useState } from "react"
@@ -21,9 +21,8 @@ import {
   toHostError,
   useLocale,
 } from "@pigcode/ui-primitives"
-import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
+import { AgentFields, type PickPath } from "./agent-fields"
 import { instanceIdTaken, instancesOf, suggestInstanceId } from "./agent-instances"
-import { ModelsEditor } from "./agent-models"
 
 /** 向导的三步；数组顺序就是步骤条的显示顺序。 */
 const STEPS = ["agent", "identity", "config"] as const
@@ -89,6 +88,7 @@ export function InstanceCreateWizard({
     [agents],
   )
   const picked = selectable.find((agent) => agent.agentId === pickedId) ?? null
+  const runtimeFields = picked?.fields.filter((field) => field.type !== "env") ?? []
   const usedIds = useMemo(
     () =>
       new Set(
@@ -123,10 +123,6 @@ export function InstanceCreateWizard({
     setError(null)
   }
 
-  function patchValues(changes: AgentSettingsValues): void {
-    updateDraft((current) => ({ ...current, values: { ...current.values, ...changes } }))
-  }
-
   function goTo(next: Step): void {
     setStep(next)
     setError(null)
@@ -138,11 +134,11 @@ export function InstanceCreateWizard({
       goTo("identity")
       return
     }
-    const values = cleanAgentValues(picked.fields, draft.values)
-    if (!values) {
-      setError(t("agents.env.invalid"))
-      return
-    }
+    const values = Object.fromEntries(
+      runtimeFields
+        .filter(({ key }) => Object.hasOwn(draft.values, key))
+        .map(({ key }) => [key, draft.values[key]]),
+    )
     setSaving(true)
     setError(null)
     try {
@@ -301,28 +297,21 @@ export function InstanceCreateWizard({
 
           {step === "config" && picked ? (
             <fieldset className="wizard-pane wizard-config" disabled={saving}>
-              {picked.fields.length > 0 ? (
+              {runtimeFields.length > 0 ? (
                 <AgentFields
-                  fields={picked.fields}
+                  fields={runtimeFields}
                   values={draft.values}
-                  onChange={(key, value) => patchValues({ [key]: value })}
+                  onChange={(key, value) =>
+                    updateDraft((current) => ({
+                      ...current,
+                      values: { ...current.values, [key]: value },
+                    }))
+                  }
                   onPickPath={onPickPath}
                 />
-              ) : null}
-              {picked.customModels ? (
-                <div className="agent-field">
-                  <h3 className="agent-field-label">{t("agents.instance.customModels")}</h3>
-                  <ModelsEditor
-                    catalog={null}
-                    values={draft.values}
-                    allowCustom
-                    onChange={patchValues}
-                  />
-                </div>
-              ) : null}
-              {picked.fields.length === 0 && !picked.customModels ? (
+              ) : (
                 <p className="agent-muted">{t("agents.instance.noConfig")}</p>
-              ) : null}
+              )}
             </fieldset>
           ) : null}
         </Dialog.Body>
