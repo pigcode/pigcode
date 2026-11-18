@@ -7,6 +7,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog"
 import { X } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 import { withBaseClass } from "./base-class"
+import { Button } from "./button"
 import { cn } from "./cn"
 
 export interface DialogContentProps extends Omit<
@@ -48,7 +49,8 @@ function Content({
             ) : null}
           </div>
           <BaseDialog.Close
-            className="icon-btn dialog-close"
+            render={<Button size="icon-lg" variant="ghost" />}
+            className="dialog-close"
             aria-label={closeLabel}
             title={closeLabel}
             disabled={closeDisabled}

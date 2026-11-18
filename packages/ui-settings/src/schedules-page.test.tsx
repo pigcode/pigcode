@@ -91,7 +91,7 @@ async function choose(name: string, option: string): Promise<void> {
 
 /** 打开新建页，写好指令。 */
 async function openCreate(prompt = "巡检"): Promise<void> {
-  await userEvent.click(screen.getAllByRole("button", { name: "新建任务" })[0]!)
+  await userEvent.click(screen.getByRole("button", { name: "新建任务" }))
   await screen.findByRole("heading", { name: "新建定时任务" })
   if (prompt) await userEvent.type(screen.getByLabelText("指令"), prompt)
 }
@@ -158,10 +158,12 @@ describe("SchedulesPage list", () => {
     expect(screen.getByText("没有符合条件的任务")).toBeTruthy()
   })
 
-  it("shows an empty card and explains that runs create threads", () => {
+  it("offers one create action, templates and the wake preference on the empty page", () => {
     renderPage({ schedules: [], threads: [] })
     expect(screen.getByText("还没有定时任务")).toBeTruthy()
-    expect(screen.getByText(/每次运行都会创建独立会话/)).toBeTruthy()
+    expect(screen.getByRole("button", { name: "新建任务" })).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "定时任务模板" })).toBeTruthy()
+    expect(screen.getByRole("switch", { name: "保持电脑唤醒" })).toBeTruthy()
     expect(screen.queryByRole("group", { name: "按状态筛选" })).toBeNull()
   })
 

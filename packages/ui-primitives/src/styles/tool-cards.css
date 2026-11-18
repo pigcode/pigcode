@@ -248,7 +248,7 @@
   padding: 8px 12px;
   border-radius: var(--r-panel);
   background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
-  color: var(--cv-removed);
+  color: var(--bad-text);
 }
 .mcp-error pre {
   margin: 0;
@@ -540,7 +540,7 @@
   white-space: nowrap;
 }
 .workflow-agent-chev {
-  color: var(--cv-subtlest);
+  color: var(--cv-decoration);
   transition: transform var(--t-fast);
 }
 .workflow-agent[data-open] .workflow-agent-chev {

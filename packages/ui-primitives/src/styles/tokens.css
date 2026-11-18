@@ -133,11 +133,12 @@
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
 
   /*
-    对话区（timeline.css 及各块）：前景的 60% / 40% 透明度作为次要与最次要文字，细线、卡片从主题表面推出，
+    对话区的两级辅助文字跟随主题文字色。半透明前景用于装饰图标和分隔符，细线、卡片从主题表面推出，
     用户换主题时一起变化；改动的增删与成功色、@ 提到的文件与子 agent 类型的文字色是固定值。
   */
-  --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
-  --cv-subtlest: color-mix(in oklab, var(--fg) 40%, transparent);
+  --cv-subtle: var(--muted);
+  --cv-subtlest: var(--faint);
+  --cv-decoration: color-mix(in oklab, var(--fg) 40%, transparent);
   --cv-surface: var(--field);
   --cv-user-fill: color-mix(in srgb, var(--bg) 95%, var(--fg));
   --cv-panel: var(--surface);
@@ -152,7 +153,7 @@
   --cv-diff-removed: var(--cv-removed);
   --cv-success: #1e8a3e;
   --cv-shimmer-strong: var(--fg);
-  --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
+  --cv-shimmer-soft: var(--cv-subtle);
   --file-node-fg: #1a70b8;
   --subagent-node-fg: #6f7a2f;
 
@@ -271,7 +272,7 @@
   --composer-ring-focus: oklch(100% 0 0 / 0.11);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
 
-  --cv-subtlest: color-mix(in oklab, var(--fg) 30%, transparent);
+  --cv-decoration: color-mix(in oklab, var(--fg) 30%, transparent);
   --cv-added: #46bf72;
   --cv-removed: #ff5c5c;
   /* 对话里 diff 的标记色；外观设置的新增行、删除行改的是这两个，错误提示仍用上面两个 */

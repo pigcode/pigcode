@@ -4,6 +4,7 @@
  * 会改变界面。时间、耗时、终端输出这些每次都不同的内容在截图里遮住。走过的界面见 screens.ts。
  */
 import { expect, test, type Locator, type Page } from "@playwright/test"
+import { contrastRatio } from "../../../packages/ui-primitives/src/theme/color-math"
 import {
   launch,
   prepareProject,
@@ -22,8 +23,47 @@ function volatile(page: Page): Locator[] {
 /** 截图时额外加的样式：隐藏会变的文字（时间、耗时），见 hide-volatile.css。 */
 const HIDE_VOLATILE = new URL("./hide-volatile.css", import.meta.url).pathname
 
+/** 在会话底色上合成实际渲染的文字色，计入半透明文字和主题的 OKLCH 颜色。 */
+async function expectReadableToolText(page: Page): Promise<void> {
+  const { background, samples } = await page.locator(".msgs").evaluate((list) => {
+    const surface = getComputedStyle(list.closest(".workspace")!).backgroundColor
+    const ctx = document.createElement("canvas").getContext("2d")!
+    function paint(color: string): `#${string}` {
+      ctx.fillStyle = surface
+      ctx.fillRect(0, 0, 1, 1)
+      ctx.fillStyle = color
+      ctx.fillRect(0, 0, 1, 1)
+      const rgb = ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)
+      return `#${Array.from(rgb, (c) => c.toString(16).padStart(2, "0")).join("")}`
+    }
+    const selectors = [
+      ".tool-row-kind",
+      ".file-chip",
+      ".cmd-summary",
+      '.tool-row[data-status="failed"] .tool-row-status',
+    ]
+    return {
+      background: paint(surface),
+      samples: selectors.map((selector) => ({
+        selector,
+        color: paint(getComputedStyle(list.querySelector(selector)!).color),
+      })),
+    }
+  })
+  for (const { selector, color } of samples) {
+    expect(contrastRatio(color, background), selector).toBeGreaterThanOrEqual(4.5)
+  }
+}
+
 /** 截当前整个窗口；用 soft 断言，一张不一致时其余的照样比对。 */
 async function snap(page: Page, name: string, theme: Theme): Promise<void> {
+  if (name === "timeline-work-middle") await expectReadableToolText(page)
+  const actions = page.locator(
+    ".page-head button:visible, .dialog-foot button:visible, .dialog-close:visible",
+  )
+  for (const button of await actions.all()) {
+    await expect(button).toHaveCSS("height", "32px")
+  }
   await expect.soft(page).toHaveScreenshot(`${name}-${theme}.png`, {
     maxDiffPixels: 0,
     animations: "disabled",

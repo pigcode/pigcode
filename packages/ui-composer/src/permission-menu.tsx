@@ -45,8 +45,11 @@ export function usePermissionChange(
           closeLabel={t("common.close")}
         >
           <Dialog.Footer>
-            <Dialog.Close render={<Button variant="ghost" />}>{t("common.cancel")}</Dialog.Close>
+            <Dialog.Close render={<Button size="lg" variant="ghost" />}>
+              {t("common.cancel")}
+            </Dialog.Close>
             <Button
+              size="lg"
               variant="solidDanger"
               onClick={() => {
                 if (confirming) onChange?.(confirming.id)

@@ -24,7 +24,7 @@
   background: var(--hover);
 }
 .file-summary-chev {
-  color: var(--cv-subtlest);
+  color: var(--cv-decoration);
   transition: transform 200ms var(--ease);
 }
 .file-summary[data-open] .file-summary-chev {

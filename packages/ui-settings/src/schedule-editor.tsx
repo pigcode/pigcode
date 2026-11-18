@@ -280,13 +280,13 @@ export function ScheduleEditor({
           ) : null}
           {schedule ? (
             <>
-              <Button type="button" size="sm" onClick={runNow}>
+              <Button type="button" size="lg" onClick={runNow}>
                 <Play className="ic ic-sm" aria-hidden="true" />
                 {t("settings.schedules.runNow")}
               </Button>
               <Menu.Root>
                 <Menu.Trigger
-                  className="btn btn-secondary btn-sm btn-icon"
+                  render={<Button size="icon-lg" />}
                   aria-label={fill(t("schedules.more"), {
                     task: schedule.title || t("schedules.untitled"),
                   })}

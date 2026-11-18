@@ -29,10 +29,10 @@ export function DiscardDraftDialog({
         closeLabel={t("common.close")}
       >
         <Dialog.Footer>
-          <Button type="button" variant="ghost" onClick={onCancel}>
+          <Button size="lg" type="button" variant="ghost" onClick={onCancel}>
             {t("files.discard.cancel")}
           </Button>
-          <Button type="button" variant="solidDanger" onClick={onDiscard}>
+          <Button size="lg" type="button" variant="solidDanger" onClick={onDiscard}>
             {t("files.discard.confirm")}
           </Button>
         </Dialog.Footer>

@@ -1,17 +1,8 @@
 /*
-  创建项目对话框：设备选择与源文件夹选择框。对话框外框在 dialogs.css，这里只设宽度与里面的内容。
+  创建项目对话框和源文件夹选择框。对话框外框在 dialogs.css。
 */
 .dialog.project-dialog {
   width: min(520px, calc(100vw - 48px));
-}
-/* 设备选择是 Select 的触发器（.select-trigger） */
-.project-select-caret {
-  display: grid;
-  place-items: center;
-  color: var(--muted);
-}
-.project-select-popup {
-  width: var(--anchor-width);
 }
 /* 源文件夹：虚线框整体是一个按钮，点开系统的文件夹选择框；选好后显示文件夹名与完整路径 */
 /* 带 .dialog 前缀：圆角比全局焦点环（html :focus-visible）优先 */

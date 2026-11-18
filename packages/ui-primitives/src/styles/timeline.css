@@ -221,7 +221,7 @@
   font-variant-numeric: tabular-nums;
 }
 .work-chev {
-  color: var(--cv-subtlest);
+  color: var(--cv-decoration);
   opacity: 0.7;
   transition: transform 200ms var(--ease);
 }
@@ -252,7 +252,7 @@
   padding: 8px 12px;
   border-radius: var(--r-block);
   background: color-mix(in srgb, var(--cv-removed) 10%, transparent);
-  color: var(--cv-removed);
+  color: var(--bad-text);
   font-family: var(--font-ui);
   font-size: var(--cv-fs);
   line-height: 1.5;

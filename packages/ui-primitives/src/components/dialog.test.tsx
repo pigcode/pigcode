@@ -15,8 +15,16 @@ function Example() {
       <Dialog.Content title="标题" description="一行说明" closeLabel="关闭">
         <Dialog.Body>正文</Dialog.Body>
         <Dialog.Footer>
-          <Dialog.Close render={<Button variant="ghost">取消</Button>} />
-          <Button variant="primary">确定</Button>
+          <Dialog.Close
+            render={
+              <Button size="lg" variant="ghost">
+                取消
+              </Button>
+            }
+          />
+          <Button size="lg" variant="primary">
+            确定
+          </Button>
         </Dialog.Footer>
       </Dialog.Content>
     </Dialog.Root>

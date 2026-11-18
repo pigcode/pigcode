@@ -125,7 +125,7 @@ export function UpdateCenter(props: UpdateCenterProps) {
               <Popover.Title>{t("updates.title")}</Popover.Title>
               <Button
                 variant="plain"
-                size="icon"
+                size="icon-lg"
                 className="icon-btn"
                 type="button"
                 title={t("updates.check")}
@@ -242,7 +242,7 @@ export function UpdateCenter(props: UpdateCenterProps) {
               <div className="update-center-footer">
                 <Button
                   variant="ghost"
-                  size="sm"
+                  size="lg"
                   type="button"
                   disabled={Boolean(pending)}
                   onClick={() =>

@@ -133,7 +133,7 @@ function Body({
       <Dialog.Footer className="plugin-dialog-foot">
         {installed && update ? (
           <Button
-            size="sm"
+            size="lg"
             variant="primary"
             type="button"
             disabled={pending}
@@ -142,12 +142,12 @@ function Body({
             {pending ? t("plugins.updating") : t("plugins.market.update")}
           </Button>
         ) : installed ? (
-          <Button size="sm" type="button" disabled>
+          <Button size="lg" type="button" disabled>
             {t("plugins.market.installed")}
           </Button>
         ) : (
           <Button
-            size="sm"
+            size="lg"
             variant="primary"
             type="button"
             disabled={pending}

@@ -322,11 +322,12 @@ export function InstanceCreateWizard({
             </p>
           ) : null}
           {step === "agent" ? (
-            <Dialog.Close render={<Button type="button" variant="ghost" />}>
+            <Dialog.Close render={<Button size="lg" type="button" variant="ghost" />}>
               {t("agents.instance.cancel")}
             </Dialog.Close>
           ) : (
             <Button
+              size="lg"
               type="button"
               variant="ghost"
               disabled={saving}
@@ -337,6 +338,7 @@ export function InstanceCreateWizard({
           )}
           {step === "config" ? (
             <Button
+              size="lg"
               type="button"
               variant="primary"
               disabled={saving || !picked}
@@ -346,6 +348,7 @@ export function InstanceCreateWizard({
             </Button>
           ) : (
             <Button
+              size="lg"
               type="button"
               variant="primary"
               disabled={saving || !picked || (step === "identity" && (!label || idError !== null))}

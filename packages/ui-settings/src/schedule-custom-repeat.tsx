@@ -329,10 +329,10 @@ export function CustomRepeatDialog({
             )}
           </Dialog.Body>
           <Dialog.Footer>
-            <Dialog.Close render={<Button type="button" variant="ghost" />}>
+            <Dialog.Close render={<Button size="lg" type="button" variant="ghost" />}>
               {t("schedules.cancel")}
             </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={"problem" in built}>
+            <Button size="lg" type="submit" variant="primary" disabled={"problem" in built}>
               {t("schedules.custom.confirm")}
             </Button>
           </Dialog.Footer>

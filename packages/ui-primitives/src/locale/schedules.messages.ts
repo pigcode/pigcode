@@ -10,7 +10,6 @@ export const schedulesZhCN = {
   "settings.schedules.creating": "正在创建…",
   "settings.schedules.list": "已创建的任务",
   "settings.schedules.empty": "还没有定时任务",
-  "settings.schedules.emptyHint": "设定执行时间和指令，每次运行都会创建独立会话。",
   "settings.schedules.runNow": "立即运行",
   "settings.schedules.delete": "删除",
   "settings.schedules.loading": "正在加载…",
@@ -177,8 +176,6 @@ export const schedulesEnUS: Record<keyof typeof schedulesZhCN, string> = {
   "settings.schedules.creating": "Creating…",
   "settings.schedules.list": "Your tasks",
   "settings.schedules.empty": "No scheduled tasks yet",
-  "settings.schedules.emptyHint":
-    "Set the schedule and instructions. Each run opens its own thread.",
   "settings.schedules.runNow": "Run now",
   "settings.schedules.delete": "Delete",
   "settings.schedules.loading": "Loading…",

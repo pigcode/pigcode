@@ -165,8 +165,6 @@ export const zhCN = {
   "project.add.title": "创建项目",
   "project.add.name": "项目名称",
   "project.add.namePlaceholder": "新项目",
-  "project.add.device": "设备",
-  "project.add.thisComputer": "此电脑",
   "project.add.folder": "源文件夹",
   "project.add.choose": "选择文件夹",
   "project.add.chooseHint": "Pigcode 可读取和编辑这个文件夹",

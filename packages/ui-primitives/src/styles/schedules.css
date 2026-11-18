@@ -77,33 +77,8 @@
   min-height: var(--schedule-empty-h);
   color: var(--muted);
 }
-/* 空状态：细边的大圆角卡片，文案和按钮在中间 */
-.schedules-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  min-height: var(--schedule-empty-h);
-  padding: var(--space-9);
-  border-radius: var(--r-2xl);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 var(--hair) var(--border-strong);
-  text-align: center;
-}
-.schedules-empty-title {
-  color: var(--fg);
-  font-size: var(--fs-lg);
-  font-weight: 600;
-}
-.schedules-empty-hint {
-  max-width: 420px;
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.55;
-}
-.schedules-empty .btn {
-  margin-top: var(--space-5);
+.schedules-templates + .schedules-awake {
+  margin-top: var(--space-9);
 }
 
 .schedules-section-title {

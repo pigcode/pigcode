@@ -272,7 +272,7 @@ export function AgentsPage({
           {onUpdateCli &&
           Object.values(cliUpdates).some((update) => update.available && update.canUpdate) ? (
             <Button
-              size="sm"
+              size="lg"
               variant="ghost"
               type="button"
               aria-label={t("agents.cli.updateAll")}
@@ -293,7 +293,7 @@ export function AgentsPage({
             </Button>
           ) : null}
           <Button
-            size="sm"
+            size="lg"
             type="button"
             disabled={pending !== null}
             onClick={() => setWizardOpen(true)}
@@ -302,7 +302,7 @@ export function AgentsPage({
             {t("agents.instance.add")}
           </Button>
           <Button
-            size="icon"
+            size="icon-lg"
             variant="ghost"
             type="button"
             aria-label={t("agents.detect")}

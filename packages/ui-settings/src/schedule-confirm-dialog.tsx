@@ -31,10 +31,11 @@ export function ScheduleConfirmDialog({
         closeLabel={t("common.close")}
       >
         <Dialog.Footer>
-          <Dialog.Close render={<Button type="button" variant="ghost" />}>
+          <Dialog.Close render={<Button size="lg" type="button" variant="ghost" />}>
             {t("schedules.cancel")}
           </Dialog.Close>
           <Button
+            size="lg"
             type="button"
             variant="solidDanger"
             onClick={() => {

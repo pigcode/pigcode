@@ -14,7 +14,7 @@
   max-width: 100%;
   align-items: center;
   gap: 8px;
-  color: var(--cv-subtlest);
+  color: var(--cv-subtle);
   text-align: left;
   vertical-align: top;
 }
@@ -28,7 +28,7 @@
 }
 /* 图标带 .ic-sm；在对话的一轮里放大到 16，别处保持 .ic-sm 的尺寸 */
 .tool-row-icon {
-  color: var(--cv-subtlest);
+  color: var(--cv-decoration);
 }
 .turn .tool-row .ic.tool-row-icon {
   width: var(--icon-cv);
@@ -36,7 +36,6 @@
 }
 .tool-row-kind {
   flex: none;
-  color: var(--cv-subtlest);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -53,6 +52,7 @@
 }
 .tool-row-sep {
   flex: none;
+  color: var(--cv-decoration);
 }
 .tool-row-primary,
 .tool-row-secondary {
@@ -72,7 +72,7 @@
 }
 .tool-row-chev {
   flex: none;
-  color: var(--cv-subtlest);
+  color: var(--cv-decoration);
   opacity: 0;
   transition:
     opacity 200ms var(--ease),
@@ -95,7 +95,7 @@
   white-space: nowrap;
 }
 .tool-row[data-status="failed"] .tool-row-status {
-  color: var(--cv-subtle);
+  color: var(--bad-text);
 }
 .tool-row-status.has-tip {
   cursor: help;
@@ -171,7 +171,7 @@
   min-width: 0;
   align-items: center;
   gap: 6px;
-  color: var(--cv-subtle);
+  color: var(--fg-2);
   font: inherit;
 }
 .file-chip .file-icon {

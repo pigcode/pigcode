@@ -410,9 +410,6 @@
   flex-wrap: wrap;
   max-width: 100%;
 }
-.market-page-head .actions .btn-icon-lg {
-  --button-icon-size: var(--icon-btn);
-}
 .market-toolbar {
   display: flex;
   align-items: center;

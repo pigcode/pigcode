@@ -181,7 +181,7 @@ function DetailsBody({
         <Dialog.Footer className="plugin-dialog-foot">
           {canUpdate && !confirming ? (
             <Button
-              size="sm"
+              size="lg"
               type="button"
               disabled={pending}
               onClick={() => onUpdate?.(plugin.id)}
@@ -192,11 +192,11 @@ function DetailsBody({
           {!canUninstall ? null : confirming ? (
             <>
               <span className="plugin-dialog-hint">{t("plugins.uninstallHint")}</span>
-              <Button size="sm" variant="ghost" type="button" onClick={() => setConfirming(false)}>
+              <Button size="lg" variant="ghost" type="button" onClick={() => setConfirming(false)}>
                 {t("common.cancel")}
               </Button>
               <Button
-                size="sm"
+                size="lg"
                 variant="solidDanger"
                 type="button"
                 disabled={pending}
@@ -210,7 +210,7 @@ function DetailsBody({
             </>
           ) : (
             <Button
-              size="sm"
+              size="lg"
               variant="danger"
               type="button"
               disabled={pending}

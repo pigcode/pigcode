@@ -30,13 +30,13 @@ afterEach(() => {
 })
 
 describe("AddProjectDialog", () => {
-  it("shows name, device and source folder", () => {
+  it("offers the local folder and project name directly", () => {
     mockPicker(null)
     renderDialog()
 
     expect(screen.getByRole("heading", { name: "创建项目" })).toBeTruthy()
     expect(screen.getByLabelText("项目名称").getAttribute("placeholder")).toBe("新项目")
-    expect(screen.getByRole("combobox", { name: "设备" }).textContent).toContain("此电脑")
+    expect(screen.queryByRole("combobox")).toBeNull()
     expect(screen.getByRole("button", { name: "选择文件夹" })).toBeTruthy()
     expect(screen.getByRole("button", { name: "创建项目" }).hasAttribute("disabled")).toBe(false)
   })

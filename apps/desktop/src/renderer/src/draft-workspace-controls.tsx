@@ -300,10 +300,10 @@ function CreateBranchDialog({
             ) : null}
           </Dialog.Body>
           <Dialog.Footer>
-            <Button type="button" variant="ghost" onClick={onClose} disabled={saving}>
+            <Button size="lg" type="button" variant="ghost" onClick={onClose} disabled={saving}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" variant="primary" disabled={saving || !name.trim()}>
+            <Button size="lg" type="submit" variant="primary" disabled={saving || !name.trim()}>
               {action}
             </Button>
           </Dialog.Footer>

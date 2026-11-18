@@ -242,7 +242,7 @@ export function MarketplaceSourcesDialog({
             </span>
             {onRefreshAll && marketplaces.length > disabled ? (
               <Button
-                size="sm"
+                size="lg"
                 variant="ghost"
                 type="button"
                 disabled={refreshingAll}
@@ -255,7 +255,7 @@ export function MarketplaceSourcesDialog({
                 {t("plugins.sourcesDialog.refreshAll")}
               </Button>
             ) : null}
-            <Button size="sm" type="button" onClick={onAdd}>
+            <Button size="lg" type="button" onClick={onAdd}>
               <Plus className="ic ic-sm" aria-hidden="true" />
               {t("plugins.sourcesDialog.add")}
             </Button>
@@ -403,7 +403,7 @@ export function MarketplaceSourcesDialog({
           )}
         </Dialog.Body>
         <Dialog.Footer>
-          <Dialog.Close render={<Button size="sm" variant="primary" type="button" />}>
+          <Dialog.Close render={<Button size="lg" variant="primary" type="button" />}>
             {t("common.close")}
           </Dialog.Close>
         </Dialog.Footer>

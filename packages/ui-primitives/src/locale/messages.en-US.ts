@@ -167,8 +167,6 @@ export const enUS = {
   "project.add.title": "Create project",
   "project.add.name": "Project name",
   "project.add.namePlaceholder": "New project",
-  "project.add.device": "Device",
-  "project.add.thisComputer": "This computer",
   "project.add.folder": "Source folder",
   "project.add.choose": "Choose folder",
   "project.add.chooseHint": "Pigcode can read and edit this folder",

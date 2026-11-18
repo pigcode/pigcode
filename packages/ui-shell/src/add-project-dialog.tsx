@@ -1,9 +1,9 @@
 /**
- * 「创建项目」对话框：项目名称、设备与源文件夹。
+ * 「创建项目」对话框：项目名称与源文件夹。
  * 源文件夹通过系统自带的文件管理器选择；项目名称留空时用文件夹名。
  */
 import { useState } from "react"
-import { Button, Dialog, Input, Select, useLocale } from "@pigcode/ui-primitives"
+import { Button, Dialog, Input, useLocale } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 
 /** 取路径最后一段作为项目名；去掉结尾斜杠，空路径返回空字符串。 */
@@ -30,7 +30,6 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
   const [picking, setPicking] = useState(false)
   const folderName = folder ? projectNameFromPath(folder) : ""
   const canPick = typeof window !== "undefined" && Boolean(window.pigcodeNative?.pickFolder)
-  const devices = [{ value: "local", label: t("project.add.thisComputer") }]
 
   function close(next: boolean): void {
     if (!next) {
@@ -95,38 +94,6 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
                 onChange={(event) => setName(event.target.value)}
               />
             </div>
-            <Select.Root items={devices} defaultValue="local">
-              <div className="field">
-                <Select.Label className="label">{t("project.add.device")}</Select.Label>
-                <Select.Trigger className="input select-trigger" data-size="xl">
-                  <Icon name="monitor" />
-                  <Select.Value className="grow truncate" />
-                  <Select.Icon className="project-select-caret">
-                    <Icon name="down" small />
-                  </Select.Icon>
-                </Select.Trigger>
-              </div>
-              <Select.Portal>
-                <Select.Positioner
-                  side="bottom"
-                  align="start"
-                  sideOffset={6}
-                  alignItemWithTrigger={false}
-                >
-                  <Select.Popup className="project-select-popup">
-                    {devices.map((device) => (
-                      <Select.Item key={device.value} value={device.value}>
-                        <Icon name="monitor" />
-                        <Select.ItemText className="grow">{device.label}</Select.ItemText>
-                        <Select.ItemIndicator className="check-mark">
-                          <Icon name="check" small />
-                        </Select.ItemIndicator>
-                      </Select.Item>
-                    ))}
-                  </Select.Popup>
-                </Select.Positioner>
-              </Select.Portal>
-            </Select.Root>
             <div className="field" role="group" aria-labelledby="project-folder-label">
               <span id="project-folder-label" className="label">
                 {t("project.add.folder")}
@@ -155,10 +122,10 @@ export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialog
             </div>
           </Dialog.Body>
           <Dialog.Footer>
-            <Button type="button" variant="ghost" onClick={() => close(false)}>
+            <Button size="lg" type="button" variant="ghost" onClick={() => close(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="submit" variant="primary" disabled={!folder && !canPick}>
+            <Button size="lg" type="submit" variant="primary" disabled={!folder && !canPick}>
               {t("project.add.create")}
             </Button>
           </Dialog.Footer>

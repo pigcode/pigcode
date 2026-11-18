@@ -340,24 +340,20 @@ export function SchedulesPage({
   }
 
   const visible = filter === "all" ? schedules : schedules.filter((item) => item.status === filter)
-  const createButton = (
-    <Button
-      size="sm"
-      variant="primary"
-      type="button"
-      onClick={() => openCreate({ title: "", prompt: "", rule: DEFAULT_RULE })}
-    >
-      <Plus className="ic ic-sm" aria-hidden="true" />
-      {t("settings.schedules.new")}
-    </Button>
-  )
+  const hasSchedules = schedules.length > 0
 
   return (
     <div className="page wide schedules">
       <header className="page-head">
         <div>
           <h1>{t("settings.schedules.pageTitle")}</h1>
-          <p className="sub">{t("settings.schedules.subtitle")}</p>
+          <p className="sub">
+            {t(
+              hasSchedules || loading || error
+                ? "settings.schedules.subtitle"
+                : "settings.schedules.empty",
+            )}
+          </p>
         </div>
         <div className="actions">
           {notice ? (
@@ -368,7 +364,7 @@ export function SchedulesPage({
           {onRefresh ? (
             <Button
               type="button"
-              size="icon"
+              size="icon-lg"
               variant="ghost"
               aria-label={t("schedules.refresh")}
               title={t("schedules.refresh")}
@@ -377,7 +373,15 @@ export function SchedulesPage({
               <RotateCw className="ic ic-sm" aria-hidden="true" />
             </Button>
           ) : null}
-          {createButton}
+          <Button
+            size="lg"
+            variant="primary"
+            type="button"
+            onClick={() => openCreate({ title: "", prompt: "", rule: DEFAULT_RULE })}
+          >
+            <Plus className="ic" aria-hidden="true" />
+            {t("settings.schedules.new")}
+          </Button>
         </div>
       </header>
       {error ? (
@@ -386,60 +390,53 @@ export function SchedulesPage({
         </p>
       ) : null}
 
-      {schedules.length > 0 ? (
-        <div className="schedules-filter" role="group" aria-label={t("schedules.filter.label")}>
-          {FILTERS.map((key) => (
-            <button
-              key={key}
-              type="button"
-              className="schedules-filter-pill"
-              aria-pressed={filter === key}
-              onClick={() => setFilter(key)}
-            >
-              {key === "all" ? t("schedules.filter.all") : t(STATUS_KEYS[key])}
-            </button>
-          ))}
+      {hasSchedules ? (
+        <>
+          <div className="schedules-filter" role="group" aria-label={t("schedules.filter.label")}>
+            {FILTERS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="schedules-filter-pill"
+                aria-pressed={filter === key}
+                onClick={() => setFilter(key)}
+              >
+                {key === "all" ? t("schedules.filter.all") : t(STATUS_KEYS[key])}
+              </button>
+            ))}
+          </div>
+          <div className="schedules-stack">
+            <KeepAwakeBar />
+            <section className="schedules-mine" aria-label={t("settings.schedules.list")}>
+              <h2 className="schedules-section-title">{t("settings.schedules.list")}</h2>
+              {visible.length === 0 ? (
+                <p className="schedules-filter-empty">{t("schedules.filter.empty")}</p>
+              ) : (
+                <div className="schedules-grid">
+                  {visible.map((schedule) => (
+                    <ScheduleCard
+                      key={schedule.id}
+                      schedule={schedule}
+                      now={now}
+                      onEdit={() => openEdit(schedule)}
+                      onToggle={() =>
+                        quietly(onUpdate(schedule.id, { enabled: !schedule.enabled }))
+                      }
+                      onRunNow={() => runNow(schedule)}
+                      onDelete={() => setDeleting(schedule)}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+          <hr className="schedules-divider" />
+        </>
+      ) : loading ? (
+        <div className="schedules-loading">
+          <Spinner className="ic" aria-label={t("settings.schedules.loading")} />
         </div>
       ) : null}
-
-      <div className="schedules-stack">
-        {schedules.length > 0 ? <KeepAwakeBar /> : null}
-        {schedules.length === 0 && loading ? (
-          <div className="schedules-loading">
-            <Spinner className="ic" aria-label={t("settings.schedules.loading")} />
-          </div>
-        ) : schedules.length === 0 ? (
-          <div className="schedules-empty">
-            <p className="schedules-empty-title">{t("settings.schedules.empty")}</p>
-            <p className="schedules-empty-hint">{t("settings.schedules.emptyHint")}</p>
-            {createButton}
-          </div>
-        ) : (
-          <section className="schedules-mine" aria-label={t("settings.schedules.list")}>
-            <h2 className="schedules-section-title">{t("settings.schedules.list")}</h2>
-            {visible.length === 0 ? (
-              <p className="schedules-filter-empty">{t("schedules.filter.empty")}</p>
-            ) : (
-              <div className="schedules-grid">
-                {visible.map((schedule) => (
-                  <ScheduleCard
-                    key={schedule.id}
-                    schedule={schedule}
-                    now={now}
-                    onEdit={() => openEdit(schedule)}
-                    onToggle={() => quietly(onUpdate(schedule.id, { enabled: !schedule.enabled }))}
-                    onRunNow={() => runNow(schedule)}
-                    onDelete={() => setDeleting(schedule)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-        {schedules.length === 0 && !loading ? <KeepAwakeBar /> : null}
-      </div>
-
-      <hr className="schedules-divider" />
 
       <section className="schedules-templates" aria-labelledby={templatesId}>
         <h2 id={templatesId} className="schedules-section-title">
@@ -482,6 +479,7 @@ export function SchedulesPage({
           })}
         </div>
       </section>
+      {!hasSchedules && !loading ? <KeepAwakeBar /> : null}
 
       <ScheduleConfirmDialog
         open={deleting !== null}
