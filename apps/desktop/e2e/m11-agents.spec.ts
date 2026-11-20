@@ -1,7 +1,8 @@
 /** Agent 插件：内置 Claude Code 与 Codex、设置页的表单与保存、启停、安装与卸载第三方 agent、跨重启保留。 */
-import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { writeAgyFixture } from "../../host/src/agents/fixtures/executable"
 import { _electron as electron, expect, test, type Page } from "@playwright/test"
 import { addProject, installPlugin, launchEnv, openThread, launchArgs } from "./projects"
 
@@ -12,6 +13,37 @@ async function openAgents(page: Page): Promise<void> {
   await expect(page.getByRole("heading", { level: 1, name: "Agent", exact: true })).toBeVisible()
 }
 
+test("signs in to built-in Antigravity from Agent settings", async () => {
+  const profileDir = mkdtempSync(join(tmpdir(), "pigcode-e2e-agy-"))
+  const binaryPath = writeAgyFixture(profileDir)
+  writeFileSync(
+    join(profileDir, "settings.json"),
+    JSON.stringify({ "agents.antigravity": { binaryPath } }),
+  )
+  const { app, page } = await openThread("antigravity", { PIGCODE_PROFILE_DIR: profileDir })
+  try {
+    await openAgents(page)
+    const open = page.getByRole("button", { name: "打开 Antigravity 的设置" })
+    await open.click()
+    const signIn = page.getByRole("button", { name: "登录 Google", exact: true })
+    await expect(signIn).toBeEnabled()
+    await signIn.click()
+    await expect(page.getByRole("button", { name: "打开 Google 授权页面" })).toBeEnabled()
+    await open.click()
+    await open.click()
+    await page.getByLabel("授权码或回调页面地址").fill("work")
+    await page.getByRole("button", { name: "连接", exact: true }).click()
+    const signOut = page.getByRole("button", { name: "退出 Google 登录", exact: true })
+    await expect(signOut).toBeVisible()
+    await expect(page.getByRole("list", { name: "模型" })).toContainText("work model")
+    await signOut.click()
+    await expect(signIn).toBeEnabled()
+  } finally {
+    await app.close()
+    rmSync(profileDir, { recursive: true, force: true })
+  }
+})
+
 test("agents are plugins with settings that reach the composer", async () => {
   const profileDir = mkdtempSync(join(tmpdir(), "pigcode-e2e-agents-"))
   const { app, page } = await openThread("agents", { PIGCODE_PROFILE_DIR: profileDir })
@@ -21,7 +53,11 @@ test("agents are plugins with settings that reach the composer", async () => {
     const defaultCodex = list.locator(".agent-row").filter({
       has: page.getByRole("button", { name: "打开 Codex 的设置", exact: true }),
     })
-    await expect(list.locator(".agent-row-name")).toContainText(["Claude Code", "Codex"])
+    await expect(list.locator(".agent-row-name")).toContainText([
+      "Claude Code",
+      "Codex",
+      "Antigravity",
+    ])
     // 内置的两个 agent 画品牌标志。
     await expect(defaultCodex.locator(".agent-brand")).toHaveAttribute("data-brand", "openai")
 

@@ -79,6 +79,20 @@ const EXEMPT_SECTIONS: ReadonlyArray<{ file: string; start: string; end: string;
 /** 同一个词的其他含义。file 缺省表示所有文件；模式带 g，按命中范围判断。 */
 const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: string }> = [
   ...[
+    "packages/agent-antigravity/src/connection.ts",
+    "packages/agent-antigravity/src/driver.ts",
+    "apps/host/src/agents/fixtures/agy.ts",
+  ].map((file) => ({
+    file,
+    pattern: /\b(?:clientCapabilities|agentCapabilities|sessionCapabilities|mcpCapabilities)\b/g,
+    reason: "ACP 握手与会话的原生协议字段",
+  })),
+  {
+    file: "packages/agent-antigravity/src/mcp.ts",
+    pattern: /\bcapabilities: \{ tools\b/g,
+    reason: "MCP 初始化响应的原生协议字段",
+  },
+  ...[
     "packages/agent-codex/src/driver.ts",
     "packages/agent-codex/src/driver.test.ts",
     "packages/agent-codex/src/permissions.test.ts",

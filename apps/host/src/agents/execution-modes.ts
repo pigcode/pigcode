@@ -19,6 +19,8 @@ export function registeredAgents(drivers: ReadonlyMap<string, AgentDriver>) {
     displayName: driver.displayName,
     features: driver.features,
     executionModes: modesOf(driver),
+    ...(driver.accountSetup ? { accountSetup: true } : {}),
+    ...(driver.removeManagedCli ? { managedCli: true } : {}),
   }))
 }
 

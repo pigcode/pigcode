@@ -102,6 +102,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const ctx = await createHostAppFromProfile(profile, {
     "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
     "core.settings": { path: join(profileDir, "settings.json") },
+    "core.agents": { fake: false, dataDir: join(profileDir, "agents") },
   })
   hostApp = ctx
   // 数据库打不开（备份或迁移失败、数据库比应用新）时 storage 不会起来，其后的服务也都缺席；

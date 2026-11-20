@@ -168,6 +168,7 @@ export function questionFromEvent(event: ThreadEvent): QuestionRequestView | und
       question,
       header: asText(record.header),
       multiSelect: record.multiSelect === true,
+      ...(record.allowCustomAnswer === false ? { allowCustomAnswer: false } : {}),
       options: asArray(record.options).flatMap((option) => {
         const value = asRecord(option)
         const label = asText(value?.label)

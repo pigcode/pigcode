@@ -3,7 +3,13 @@
  * 这个模块在第一次打开设置页时才加载，登记信息在 builtin-settings-pages。
  */
 import { useCallback, useContext, useEffect, useState } from "react"
-import type { AgentInstance, AgentList, AgentStatus } from "@pigcode/contracts"
+import type {
+  AgentAuthAction,
+  AgentAuthState,
+  AgentInstance,
+  AgentList,
+  AgentStatus,
+} from "@pigcode/contracts"
 import { useAppStore } from "@pigcode/client-runtime"
 import {
   AgentsPage,
@@ -70,6 +76,19 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     [connection],
   )
 
+  const auth = useCallback(
+    async (instanceId: string, request: AgentAuthAction) =>
+      (await connection.call("agent.auth", { instanceId, request })) as AgentAuthState,
+    [connection],
+  )
+  const accountChanged = useCallback(
+    (instanceId: string) => {
+      void detect({ instanceId, refresh: true }).catch(() => undefined)
+      void refreshAgentViews(deps)
+    },
+    [detect, deps],
+  )
+
   useEffect(() => {
     void refresh().catch((error: unknown) =>
       deps.store.update({ error: error instanceof Error ? error.message : String(error) }),
@@ -107,6 +126,19 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       checkingCliUpdates={cliUpdates.checking}
       onCheckCliUpdates={cliUpdates.check}
       onUpdateCli={cliUpdates.update}
+      setupActions={{
+        auth,
+        accountChanged,
+        cancelInstall: async (instanceId) => {
+          await connection.call("agent.cancelCliUpdate", { instanceId })
+        },
+        removeInstall: async (instanceId) => {
+          await connection.call("agent.removeCli", { instanceId })
+          await cliUpdates.check()
+          await detect({ refresh: true })
+          await refreshAgentViews(deps)
+        },
+      }}
       onShowUpdates={updates.show}
       agents={list.agents}
       defaultAgentId={list.defaultAgentId}
@@ -159,7 +191,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         await refreshAgentViews(deps)
       }}
       onPickPath={(kind) => window.pigcodeNative?.pickPath?.(kind) ?? Promise.resolve(null)}
-      onOpenExternal={(url) => void window.pigcodeNative?.openExternal?.(url)}
+      onOpenExternal={(url) => window.pigcodeNative?.openExternal?.(url)}
     />
   )
 }

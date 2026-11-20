@@ -11,15 +11,22 @@ import {
   type HandoffSelection,
   type TargetContext,
 } from "./handoff-builder"
-import type { AgentDriver, AgentModelInfo, AgentSettingsValues } from "./driver"
+import type {
+  AgentDriver,
+  AgentInstanceContext,
+  AgentModelInfo,
+  AgentSettingsValues,
+} from "./driver"
 
 /** 取 driver 的模型目录；不支持动态目录的 Agent 返回空数组。 */
 export async function listAgentModels(
   driver: AgentDriver | undefined,
   settings: AgentSettingsValues = {},
+  instance?: AgentInstanceContext,
 ): Promise<AgentModelInfo[]> {
   if (!driver) throw new Error("agent not found")
-  return driver.listModels ? driver.listModels(settings) : []
+  if (!driver.listModels) return []
+  return instance ? driver.listModels(settings, instance) : driver.listModels(settings)
 }
 
 /** 切换前关闭旧 Agent 的 session，避免 app-server 子进程泄漏。 */
@@ -176,10 +183,12 @@ export function pendingForkFromNativeSessionId(ctx: Context, threadId: string): 
   for (const event of events) {
     if (event.type !== "thread.updated") continue
     if (typeof event.payload !== "object" || event.payload === null) continue
-    const value = (event.payload as { forkFromNativeSessionId?: unknown }).forkFromNativeSessionId
+    const { agentId, forkFromNativeSessionId: value } = event.payload as Record<string, unknown>
     if (typeof value === "string" && value.length > 0) {
       forkFrom = value
       forkSeq = event.seq
+    } else if (typeof agentId === "string") {
+      forkFrom = null
     }
   }
   if (forkFrom === null) return null
@@ -199,6 +208,7 @@ export async function switchAgent(
   /** 实例的原生会话放在哪里（driver.continuationKey）；值相同的实例能接着用彼此的原生会话（#82）。 */
   keyFor?: (instanceId: string) => string | null,
   modes?: AgentModeSelection,
+  resumeOnModelSwitch = false,
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const chosenInstance = instanceId ?? agentId
@@ -209,7 +219,9 @@ export async function switchAgent(
   // - 都没有：新会话，交接整个会话。
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
-  const forkFromNativeSessionId = activeSession?.nativeSessionId ?? null
+  const forkFromNativeSessionId = resumeOnModelSwitch
+    ? null
+    : (activeSession?.nativeSessionId ?? null)
   const parked =
     forkFromNativeSessionId === null
       ? sessions.findResumable(threadId, agentId, chosenInstance)

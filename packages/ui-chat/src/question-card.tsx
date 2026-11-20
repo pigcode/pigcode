@@ -12,6 +12,7 @@ export interface QuestionView {
   header?: string | undefined
   options: Array<{ label: string; description?: string | undefined }>
   multiSelect: boolean
+  allowCustomAnswer?: boolean
 }
 
 /** 一次提问。 */
@@ -96,20 +97,22 @@ export function QuestionCard({
                 ) : null}
               </label>
             ))}
-            <Input
-              size="lg"
-              className="question-other"
-              placeholder={t("chat.question.other")}
-              aria-label={`${question.question} ${t("chat.question.other")}`}
-              value={draft.other}
-              onChange={(event) => {
-                const other = event.target.value
-                update(index, (current) => ({
-                  selected: question.multiSelect || !other.trim() ? current.selected : [],
-                  other,
-                }))
-              }}
-            />
+            {question.allowCustomAnswer === false ? null : (
+              <Input
+                size="lg"
+                className="question-other"
+                placeholder={t("chat.question.other")}
+                aria-label={`${question.question} ${t("chat.question.other")}`}
+                value={draft.other}
+                onChange={(event) => {
+                  const other = event.target.value
+                  update(index, (current) => ({
+                    selected: question.multiSelect || !other.trim() ? current.selected : [],
+                    other,
+                  }))
+                }}
+              />
+            )}
           </fieldset>
         )
       })}

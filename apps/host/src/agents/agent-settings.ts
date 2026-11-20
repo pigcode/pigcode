@@ -38,6 +38,10 @@ export function agentSettingsKey(agentId: string): string {
   return `agents.${agentId}`
 }
 
+export function defaultInstanceEnabledKey(agentId: string): string {
+  return `agentDefaultEnabled.${agentId}`
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
@@ -106,6 +110,7 @@ export interface StoredInstance {
   label: string
   enabled: boolean
   createdAt: string
+  storageKey?: string
   values: AgentSettingsValues
 }
 
@@ -124,6 +129,7 @@ export function readStoredInstances(
       label: raw.label,
       enabled: raw.enabled !== false,
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+      ...(typeof raw.storageKey === "string" ? { storageKey: raw.storageKey } : {}),
       values: isRecord(raw.values) ? raw.values : {},
     }
   }
@@ -167,7 +173,7 @@ export function resolveInstance(
     instanceId: agentId,
     agentId,
     label: agentId,
-    enabled: true,
+    enabled: settings?.get(defaultInstanceEnabledKey(agentId)) !== false,
     values: readAgentSettings(settings, agentId),
     isDefault: true,
     createdAt: null,
@@ -239,6 +245,7 @@ export function createInstance(
     label: label.trim(),
     enabled: true,
     createdAt: new Date().toISOString(),
+    storageKey: randomUUID(),
     values:
       options.values === undefined
         ? { ...resolveInstance(settings, agentId, options.copyFrom).values }

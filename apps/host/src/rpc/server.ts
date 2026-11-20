@@ -286,6 +286,9 @@ export class RpcServer {
       }
       case "agent.detect":
       case "agent.cliUpdates":
+      case "agent.auth":
+      case "agent.cancelCliUpdate":
+      case "agent.removeCli":
       case "agent.checkCliUpdates":
       case "agent.updateCli":
       case "agent.registered":

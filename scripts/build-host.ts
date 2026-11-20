@@ -73,7 +73,7 @@ const coreConfig: Record<string, string[]> = {
 }
 
 /** 随应用内置的 agent 插件：包目录名即产物目录名。 */
-const builtinPlugins = ["agent-claude", "agent-codex"]
+const builtinPlugins = ["agent-claude", "agent-codex", "agent-antigravity"]
 
 /** 是否在构建后继续监听源码。 */
 const watching = process.argv.includes("--watch")

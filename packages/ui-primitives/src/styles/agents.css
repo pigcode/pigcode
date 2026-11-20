@@ -811,3 +811,18 @@
   flex: none;
   margin-top: var(--space-1);
 }
+.agent-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-setup {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-setup:empty {
+  display: none;
+}

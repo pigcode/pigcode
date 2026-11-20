@@ -1,5 +1,12 @@
 /** 审批请求的等待表；id 与持久化行一致。 */
-import type { ApprovalDecision } from "./driver"
+import { randomUUID } from "node:crypto"
+import type { ThreadEvent } from "@pigcode/contracts"
+import type { ApprovalDecision, ApprovalRequest } from "./driver"
+import type { ApprovalHandle } from "./service"
+import type { ActiveRun } from "./run-queue"
+import type { PigcodeDatabase } from "../storage/database"
+import type { PendingRequestStore } from "../storage/pending-request-store"
+import type { RunStore } from "../storage/run-store"
 
 /** 一个等待 UI 决议的审批请求；Host 关闭时可统一拒绝。 */
 export interface Waiter {
@@ -36,5 +43,49 @@ export class ApprovalBridge {
   rejectAll(error: Error): void {
     for (const waiter of this.waiters.values()) waiter.reject(error)
     this.waiters.clear()
+  }
+}
+
+export function createApprovalRequest(
+  db: PigcodeDatabase,
+  approvals: ApprovalBridge,
+  pendingRequests: PendingRequestStore,
+  runs: RunStore,
+  activeRuns: Map<string, ActiveRun>,
+  append: (threadId: string, runId: string, type: ThreadEvent["type"], payload: unknown) => void,
+) {
+  /** 发起审批：持久化 pending 行、写事件、置为 waiting-approval 并等待 UI 决议。 */
+  return function requestApproval(
+    threadId: string,
+    runId: string,
+    request: ApprovalRequest,
+  ): ApprovalHandle {
+    const runRow = db.prepare(`SELECT thread_id FROM runs WHERE id = ?`).get(runId) as
+      { thread_id: string } | undefined
+    if (!runRow || runRow.thread_id !== threadId) throw new Error(`run not found: ${runId}`)
+
+    const requestId = `req_${randomUUID()}`
+    pendingRequests.create({
+      id: requestId,
+      threadId,
+      runId,
+      kind: "approval",
+      agentRequestId: null,
+      payload: request,
+      createdAt: new Date().toISOString(),
+    })
+    append(threadId, runId, "approval.requested", {
+      requestId,
+      id: requestId,
+      ...request,
+    })
+    runs.setStatus(runId, "waiting-approval")
+    const active = activeRuns.get(runId)
+    if (active) {
+      active.status = "waiting-approval"
+      active.approvals.add(requestId)
+    }
+    const decision = approvals.wait(requestId, { threadId, runId })
+    return { requestId, decision }
   }
 }

@@ -6,12 +6,15 @@
  * 用户新建的实例存在 `agentInstances`；线程、会话与检测结果都按 instanceId 区分。
  */
 import type { Context } from "cordis"
+import { createHash } from "node:crypto"
+import { join } from "node:path"
 import type { AgentCommand, AgentInstance, AgentModel, AgentStatus } from "@pigcode/contracts"
 import {
   DEFAULT_AGENT_KEY,
   DEFAULT_INSTANCE_KEY,
   createDetectionCache,
   createInstance as createStoredInstance,
+  defaultInstanceEnabledKey,
   forcedAgentId,
   listInstances as listStoredInstances,
   modelPreferences,
@@ -26,7 +29,7 @@ import {
   type InstanceCreateOptions,
   type ResolvedInstance,
 } from "./agent-settings"
-import type { AgentDriver, AgentSettingsValues } from "./driver"
+import type { AgentDriver, AgentInstanceContext, AgentSettingsValues } from "./driver"
 import { AgentInstanceIdTakenError } from "./errors"
 import {
   applyModelPreferences,
@@ -57,6 +60,7 @@ export interface AgentCatalog {
   settingsForInstance(agentId: string, instanceId?: string | null): AgentSettingsValues
   /** 解析实例（含默认实例），供切换、run 启动与设置页使用。 */
   instance(agentId: string, instanceId?: string | null): ResolvedInstance
+  instanceContext(instance: AgentInstance): AgentInstanceContext | undefined
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
   models(agentId: string, instanceId?: string | null): Promise<AgentModel[]>
   /** 实例在 cwd 下的命令和 Skill，按实例与工作目录缓存。 */
@@ -110,10 +114,41 @@ function fallbackStatus(driver: AgentDriver | undefined, agentId: string): Agent
 export function createAgentCatalog(
   ctx: Context,
   drivers: ReadonlyMap<string, AgentDriver>,
+  dataDir?: string,
 ): AgentCatalog {
   const catalogs = createModelCatalogCache()
   const commandCatalogs = createModelCatalogCache<AgentCommand>()
   const detections = createDetectionCache()
+
+  function invalidate(instanceId?: string) {
+    catalogs.invalidate(instanceId)
+    commandCatalogs.invalidate(instanceId)
+    detections.invalidate(instanceId)
+  }
+
+  function instanceContext(instance: AgentInstance): AgentInstanceContext | undefined {
+    if (!dataDir) return undefined
+    const stored = instance.isDefault
+      ? undefined
+      : readStoredInstances(store())[instance.instanceId]
+    const key = createHash("sha256")
+      .update(
+        JSON.stringify([
+          instance.agentId,
+          instance.instanceId,
+          stored?.storageKey ?? instance.createdAt,
+        ]),
+      )
+      .digest("hex")
+    const agentKey = createHash("sha256").update(instance.agentId).digest("hex")
+    const sharedDir = join(dataDir, agentKey)
+    return {
+      instanceId: instance.instanceId,
+      sharedDir,
+      dataDir: join(sharedDir, "instances", key),
+      invalidate: () => invalidate(instance.instanceId),
+    }
+  }
 
   /** settings 服务是可选的：单元测试里没有它时所有 agent 都按默认值运行。 */
   const store = () => ctx.get("settings")
@@ -127,7 +162,14 @@ export function createAgentCatalog(
     if (!driver?.detect) return Promise.resolve(fallbackStatus(driver, agentId))
     const detect = driver.detect.bind(driver)
     const values = instanceFor(agentId, instanceId).values
-    return detections.get(instanceId, () => detect(values), refresh)
+    const execution = driver.accountSetup
+      ? instanceContext(instanceFor(agentId, instanceId))
+      : undefined
+    return detections.get(
+      instanceId,
+      () => (execution ? detect(values, execution) : detect(values)),
+      refresh,
+    )
   }
 
   function requireStore() {
@@ -142,6 +184,7 @@ export function createAgentCatalog(
       return instanceFor(agentId, instanceId).values
     },
     instance: instanceFor,
+    instanceContext,
     async detect(options = {}) {
       // 只检测一个实例、一个 agent 的全部实例，或全部 agent 的全部实例。
       const targets: Array<[string, string]> = []
@@ -169,7 +212,13 @@ export function createAgentCatalog(
       const settings = instance.values
       // 只缓存 agent 自己的目录；模型偏好每次现取，改完设置立刻反映到选择器里。
       const models = await catalogs.get(instance.instanceId, async () =>
-        normalizeModels(await listAgentModels(driver, settings)),
+        normalizeModels(
+          await listAgentModels(
+            driver,
+            settings,
+            driver?.accountSetup ? instanceContext(instance) : undefined,
+          ),
+        ),
       )
       return applyModelPreferences(models, modelPreferences(settings))
     },
@@ -180,29 +229,32 @@ export function createAgentCatalog(
       const list = driver.listCommands.bind(driver)
       return commandCatalogs.get(
         `${instance.instanceId}\0${cwd ?? ""}`,
-        async () => normalizeCommands(await list(instance.values, cwd).catch(() => [])),
+        async () => {
+          const execution = driver.accountSetup ? instanceContext(instance) : undefined
+          return normalizeCommands(
+            await (
+              execution ? list(instance.values, cwd, execution) : list(instance.values, cwd)
+            ).catch(() => []),
+          )
+        },
         refresh,
       )
     },
     async defaultAgent() {
       const configured = store()?.get(DEFAULT_AGENT_KEY)
+      const chooseInstance = (id: string) => {
+        const instances = listInstancesOf(id).filter((instance) => instance.enabled)
+        const chosen = readDefaultInstanceId(store())
+        return instances.find((instance) => instance.instanceId === chosen) ?? instances[0]
+      }
       const agentId = await pickDefaultAgent({
-        registered: [...drivers.keys()],
+        registered: [...drivers.keys()].filter((id) => chooseInstance(id) !== undefined),
         forced: forcedAgentId(),
         configured: typeof configured === "string" ? configured : undefined,
-        status: (id) => detectOne(id, id),
+        status: (id) => detectOne(id, chooseInstance(id)?.instanceId ?? id),
       })
       if (!agentId) return { agentId: null, instanceId: null }
-      const chosen = readDefaultInstanceId(store())
-      // 选好的默认实例必须属于这个 agent 且还在；否则用默认实例。
-      const instance = chosen ? findInstanceWith(chosen) : null
-      return {
-        agentId,
-        instanceId:
-          instance && instance.agentId === agentId && instance.enabled
-            ? instance.instanceId
-            : agentId,
-      }
+      return { agentId, instanceId: chooseInstance(agentId)?.instanceId ?? agentId }
     },
     configuredDefault() {
       const configured = store()?.get(DEFAULT_AGENT_KEY)
@@ -254,6 +306,16 @@ export function createAgentCatalog(
       return created
     },
     updateInstance(instanceId, patch) {
+      if (
+        drivers.get(instanceId)?.accountSetup &&
+        patch.enabled !== undefined &&
+        patch.label === undefined &&
+        patch.values === undefined
+      ) {
+        requireStore().set(defaultInstanceEnabledKey(instanceId), patch.enabled)
+        invalidate(instanceId)
+        return instanceFor(instanceId, instanceId)
+      }
       const updated = updateStoredInstance(requireStore(), instanceId, patch)
       detections.invalidate(instanceId)
       catalogs.invalidate(instanceId)
@@ -271,11 +333,7 @@ export function createAgentCatalog(
       commandCatalogs.invalidate(instanceId)
       return instance
     },
-    invalidate(instanceId) {
-      catalogs.invalidate(instanceId)
-      commandCatalogs.invalidate(instanceId)
-      detections.invalidate(instanceId)
-    },
+    invalidate,
   }
 
   /** 一个 agent 的实例；agent 不在已注册列表里时也按默认实例返回一份。 */

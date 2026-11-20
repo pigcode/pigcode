@@ -1,8 +1,7 @@
 /**
- * Agent 设置页（参照 t3code 的 Agent 设置页，外观和设置里其他页面一致）：
+ * Agent 设置页。
  * 上面是「新会话使用」，下面每个实例一张卡片（每个 Agent 的默认实例在前，其余实例跟在后面）。
  * 卡片头是品牌图标、名字、状态与登录的账号，右边是启用开关与展开箭头；点卡片头就地展开它的设置。
- * 从页头的「添加实例」打开三步向导。
  */
 import { useEffect, useMemo, useState } from "react"
 import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
@@ -33,6 +32,7 @@ import { allInstances, instancesOf, type AgentInstanceEntry } from "./agent-inst
 import { instanceHeadline } from "./agent-status"
 import { SensitiveText } from "./sensitive-text"
 import { AgentCliUpdate } from "./agent-cli-update"
+import { AgentSetup, type AgentSetupActions } from "./agent-setup"
 
 export type { AgentModelInfo } from "./agent-models"
 
@@ -42,6 +42,7 @@ export interface AgentsPageProps {
   checkingCliUpdates?: boolean | undefined
   onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
   onUpdateCli?: ((instanceId: string) => Promise<void>) | undefined
+  setupActions?: AgentSetupActions | undefined
   onShowUpdates?: ((instanceId: string) => void) | undefined
   agents: readonly AgentSummary[]
   /** 用户选择的默认 agent。 */
@@ -72,7 +73,7 @@ export interface AgentsPageProps {
   ) => Promise<void>
   onRemoveInstance: (agent: AgentSummary, instanceId: string) => Promise<void>
   onPickPath?: PickPath | undefined
-  onOpenExternal?: ((url: string) => void) | undefined
+  onOpenExternal?: ((url: string) => void | Promise<void>) | undefined
 }
 
 /** 「自动」在 Select 里的值；实例 id 不会以冒号开头。 */
@@ -189,6 +190,7 @@ export function AgentsPage({
   checkingCliUpdates = false,
   onCheckCliUpdates,
   onUpdateCli,
+  setupActions,
   onShowUpdates,
   agents,
   defaultAgentId,
@@ -416,7 +418,7 @@ export function AgentsPage({
                   onReveal={() => toggleReveal(id)}
                   onSetEnabled={(enabled) =>
                     void run(id, async () => {
-                      if (entry.instance.isDefault) {
+                      if (entry.instance.isDefault && !entry.agent.accountSetup) {
                         await onSetEnabled(entry.agent, enabled)
                       } else {
                         await onUpdateInstance(entry.agent, id, { enabled })
@@ -448,6 +450,21 @@ export function AgentsPage({
                     onSetDefaultInstance={(instanceId) => onSetDefault(instanceId)}
                     onPickPath={onPickPath}
                     onOpenExternal={onOpenExternal}
+                    setup={
+                      openEntry.agent.accountSetup && setupActions ? (
+                        <AgentSetup
+                          instanceId={id}
+                          enabled={openEntry.agent.enabled && openEntry.instance.enabled}
+                          status={statuses[id]}
+                          actions={setupActions}
+                          managed={openEntry.agent.managedCli === true}
+                          customBinary={Boolean(openEntry.instance.values.binaryPath)}
+                          update={cliUpdates[id]}
+                          onInstall={onUpdateCli ? () => onUpdateCli(id) : undefined}
+                          openExternal={onOpenExternal}
+                        />
+                      ) : null
+                    }
                     cliUpdate={
                       onCheckCliUpdates && onUpdateCli ? (
                         <AgentCliUpdate

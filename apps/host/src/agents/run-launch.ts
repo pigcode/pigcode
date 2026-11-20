@@ -4,7 +4,12 @@ import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { RunStore } from "../storage/run-store"
 import type { AgentSessionStore } from "./session-store"
-import type { AgentSessionHandle, AgentSettingsValues, UserInput } from "./driver"
+import type {
+  AgentInstanceContext,
+  AgentSessionHandle,
+  AgentSettingsValues,
+  UserInput,
+} from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
 import { handoffForRun } from "./handoff-delivery"
 import { freshSessionHandoff } from "./switching"
@@ -25,11 +30,13 @@ export interface LaunchDeps {
   execute: (run: ActiveRun, input: UserInput) => void
   /** 启动时读取实例的最新设置；排队期间改的设置同样生效。 */
   settingsFor: (agentId: string, instanceId: string) => AgentSettingsValues
+  instanceContext?: (agentId: string, instanceId: string) => AgentInstanceContext | undefined
 }
 
 /** 启动排队 run：此时才创建 Agent 会话，避免为未开始的 run 提前启动子进程。 */
 export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<void> {
   try {
+    entry.controller.signal.throwIfAborted()
     const resuming = Boolean(entry.nativeSessionId ?? entry.forkFromNativeSessionId)
     let session: AgentSessionHandle
     let lost = false
@@ -46,6 +53,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       threadId: entry.threadId,
       session,
       driver: entry.driver,
+      instanceId: entry.instanceId,
       controller: entry.controller,
       emitLive: entry.emitLive,
       status: "running",
@@ -77,8 +85,13 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })
   } catch (error) {
     const message = messageOf(error)
-    deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })
-    deps.append(entry.threadId, entry.runId, "run.failed", { message })
+    if (entry.controller.signal.aborted) {
+      deps.runs.setStatus(entry.runId, "interrupted")
+      deps.append(entry.threadId, entry.runId, "run.interrupted", {})
+    } else {
+      deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })
+      deps.append(entry.threadId, entry.runId, "run.failed", { message })
+    }
     deps.activeThreads.delete(entry.threadId)
     entry.resolveDone()
   }
@@ -91,6 +104,7 @@ async function openSession(
   resume: boolean,
 ): Promise<AgentSessionHandle> {
   const fork = resume ? entry.forkFromNativeSessionId : undefined
+  const instance = deps.instanceContext?.(entry.driver.id, entry.instanceId)
   const draft = await entry.driver.createSession({
     threadId: entry.threadId,
     cwd: entry.cwd,
@@ -104,7 +118,12 @@ async function openSession(
     ...(resume && entry.sessionId ? { sessionId: entry.sessionId } : {}),
     ...(entry.mcp ? { mcp: entry.mcp } : {}),
     settings: deps.settingsFor(entry.driver.id, entry.instanceId),
+    ...(instance ? { instance, signal: entry.controller.signal } : {}),
   })
+  if (entry.controller.signal.aborted) {
+    await entry.driver.dispose(draft).catch(() => undefined)
+    entry.controller.signal.throwIfAborted()
+  }
   const session = deps.agentSessions.reuseOrCreate({
     draft,
     agentId: entry.driver.id,

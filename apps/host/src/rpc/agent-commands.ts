@@ -38,7 +38,11 @@ async function updateInstance(ctx: Context, value: Params): Promise<unknown> {
   const patch = value.patch as InstancePatch
   const instance = ctx.agents.findInstance(instanceId)
   if (!instance) throw new Error(`instance not found: ${instanceId}`)
-  if (instance.isDefault) throw new Error(`default instance cannot be edited: ${instanceId}`)
+  if (
+    instance.isDefault &&
+    (patch.enabled === undefined || patch.label !== undefined || patch.values !== undefined)
+  )
+    throw new Error(`default instance cannot be edited: ${instanceId}`)
   if (patch.values !== undefined) {
     const agent = await requireAgent(ctx, instance.agentId)
     validateAgentSettings(agent, patch.values)
@@ -89,6 +93,16 @@ export async function dispatchAgentCommand(
 ): Promise<unknown> {
   const value = parsed as Params
   switch (command) {
+    case "agent.auth": {
+      const { instanceId, request } = parsed as CommandParams<"agent.auth">
+      return ctx.agents.auth(instanceId, request)
+    }
+    case "agent.cancelCliUpdate":
+      ctx.agents.cancelCliUpdate(value.instanceId as string)
+      return { ok: true }
+    case "agent.removeCli":
+      await ctx.agents.removeCli(value.instanceId as string)
+      return { ok: true }
     case "agent.cliUpdates":
       return ctx.agents.cliUpdates()
     case "agent.checkCliUpdates":
@@ -133,7 +147,7 @@ export async function dispatchAgentCommand(
     case "agent.updateInstance":
       return updateInstance(ctx, value)
     case "agent.removeInstance":
-      ctx.agents.removeInstance(value.instanceId as string)
+      await ctx.agents.removeInstance(value.instanceId as string)
       return { ok: true }
     case "agent.setDefault": {
       const agentId = value.agentId as string | null

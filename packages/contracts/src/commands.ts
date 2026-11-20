@@ -1,6 +1,7 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
 import {
+  agentAuthActionSchema,
   agentInstancePatchSchema,
   agentSettingsValuesSchema,
   customAgentInstanceIdSchema,
@@ -145,6 +146,9 @@ export const commandSchemas = {
   }),
   "agent.detect": agentDetectParams,
   "agent.cliUpdates": z.object({}),
+  "agent.auth": z.object({ instanceId: z.string().min(1), request: agentAuthActionSchema }),
+  "agent.cancelCliUpdate": z.object({ instanceId: z.string().min(1) }),
+  "agent.removeCli": z.object({ instanceId: z.string().min(1) }),
   "agent.checkCliUpdates": z.object({ instanceId: z.string().min(1).optional() }),
   "agent.updateCli": z.object({ instanceId: z.string().min(1) }),
   "agent.registered": agentRegisteredParams,

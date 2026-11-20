@@ -13,6 +13,7 @@ interface UpdateJob {
   state: AgentCliUpdateState
   instances: Set<string>
   controller: AbortController
+  concurrent: boolean
 }
 
 export function createCliUpdates(
@@ -58,7 +59,10 @@ export function createCliUpdates(
     const state = empty(instanceId, instance.agentId)
     if (!driver?.prepareCliUpdate)
       return { state: { ...state, phase: "checked", reason: "unsupported" }, plan: null }
-    const plan = await driver.prepareCliUpdate(instance.values)
+    const scope = driver.removeManagedCli ? catalog.instanceContext(instance) : undefined
+    const plan = scope
+      ? await driver.prepareCliUpdate(instance.values, scope)
+      : await driver.prepareCliUpdate(instance.values)
     return {
       plan,
       state: {
@@ -70,6 +74,7 @@ export function createCliUpdates(
         command: plan.command,
         reason: plan.reason,
         canUpdate: Boolean(plan.run),
+        ...(plan.canRemove === undefined ? {} : { canRemove: plan.canRemove }),
         available: plan.available,
       },
     }
@@ -124,6 +129,7 @@ export function createCliUpdates(
       state,
       instances: new Set([instanceId]),
       controller: new AbortController(),
+      concurrent: plan.concurrent === true,
     }
     for (const other of states.values()) {
       if (other.target === plan.target) job.instances.add(other.instanceId)
@@ -133,7 +139,7 @@ export function createCliUpdates(
     queue = queue.then(async () => {
       try {
         job.controller.signal.throwIfAborted()
-        while (isBusy(state.agentId)) {
+        while (!job.concurrent && isBusy(state.agentId)) {
           publish(job, { phase: "waiting" })
           await delay(500, undefined, { signal: job.controller.signal })
         }
@@ -144,6 +150,7 @@ export function createCliUpdates(
           signal: job.controller.signal,
           onOutput: (text) =>
             publish(job, { output: (job.state.output + text).slice(-OUTPUT_LIMIT) }),
+          onProgress: (progress) => publish(job, { progress }),
         })
         const version = await plan.verify()
         const unchanged =
@@ -154,6 +161,7 @@ export function createCliUpdates(
           phase: unchanged ? "unchanged" : "succeeded",
           currentVersion: version ?? plan.currentVersion,
           available: cliUpdateAvailable(version, plan.latestVersion),
+          ...(plan.canRemove !== undefined && version ? { canRemove: true } : {}),
         })
       } catch (cause) {
         publish(job, {
@@ -171,7 +179,7 @@ export function createCliUpdates(
   return {
     isUpdating: (agentId: string) =>
       [...jobs.values()].some(
-        (job) => job.state.agentId === agentId && job.state.phase === "running",
+        (job) => !job.concurrent && job.state.agentId === agentId && job.state.phase === "running",
       ),
     list: snapshot,
     async check(instanceId?: string): Promise<Record<string, AgentCliUpdateState>> {
@@ -189,6 +197,10 @@ export function createCliUpdates(
       const operation = start(instanceId).finally(() => preparing.delete(instanceId))
       preparing.set(instanceId, operation)
       return operation
+    },
+    cancel(instanceId: string): void {
+      const target = states.get(instanceId)?.target
+      if (target) jobs.get(target)?.controller.abort(new Error("CLI operation cancelled"))
     },
     dispose() {
       disposed = true

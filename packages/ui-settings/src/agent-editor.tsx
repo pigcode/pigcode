@@ -35,6 +35,7 @@ export type { AgentModelInfo } from "./agent-models"
 /** 详情面板需要的回调；保存失败时抛错，由面板展示原因。 */
 export interface AgentEditorProps {
   cliUpdate?: ReactNode
+  setup?: ReactNode
   agent: AgentSummary
   /** 正在编辑的实例。 */
   instance: AgentInstance
@@ -110,6 +111,7 @@ function Block({
 /** 渲染实例的详情面板；保存成功后以 Host 返回的值为准。 */
 export function AgentEditor({
   cliUpdate,
+  setup,
   agent,
   instance,
   status,
@@ -234,6 +236,7 @@ export function AgentEditor({
         onOpenExternal={onOpenExternal}
         versionControl={cliUpdate}
       />
+      {setup}
 
       {tabs.length > 0 ? (
         <Tabs.Root

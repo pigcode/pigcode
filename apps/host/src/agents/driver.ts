@@ -6,6 +6,7 @@ export type {
   CreateSessionInput,
   AgentCommandInfo,
   AgentDriver,
+  AgentInstanceContext,
   AgentModelInfo,
   AgentRuntime,
   AgentSessionHandle,
@@ -25,4 +26,6 @@ export interface AgentRunConfig {
    * 此时只有 `PIGCODE_AGENT=fake`（E2E 与手动冒烟）会重新打开。
    */
   fake?: boolean
+  /** 用户目录中供 Agent 安装运行时及保存每实例状态的位置。 */
+  dataDir?: string
 }

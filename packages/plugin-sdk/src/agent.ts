@@ -4,6 +4,9 @@
  */
 import type {
   AgentEvent,
+  AgentAuthAction,
+  AgentAuthState,
+  AgentCliProgress,
   AgentFeatures,
   AgentExecutionModes,
   AgentSettingsValues,
@@ -41,6 +44,7 @@ export interface AgentQuestion {
   header?: string
   options: Array<{ label: string; description?: string }>
   multiSelect: boolean
+  allowCustomAnswer?: boolean
 }
 
 /** 一次提问可以包含多个问题。 */
@@ -75,6 +79,8 @@ export interface CreateSessionInput {
   mcp?: SessionMcp | undefined
   /** 用户在设置页给这个 agent 填的值；字段由 manifest 的 `contributes.agent.settings` 声明。 */
   settings?: AgentSettingsValues
+  instance?: AgentInstanceContext
+  signal?: AbortSignal
 }
 
 /** 用户发送给 Agent 的一条输入；handoff 在切换 Agent 后注入一次。 */
@@ -130,6 +136,23 @@ export interface AgentCommandInfo {
   kind: "builtin" | "skill"
 }
 
+/** Host 分配的目录。sharedDir 归 Agent，dataDir 归这一个实例。 */
+export interface AgentInstanceContext {
+  instanceId: string
+  dataDir: string
+  sharedDir: string
+  invalidate(): void
+}
+
+export interface AgentAccountSetup {
+  auth(
+    request: AgentAuthAction,
+    settings: AgentSettingsValues,
+    instance: AgentInstanceContext,
+  ): Promise<AgentAuthState>
+  close(instance: AgentInstanceContext): Promise<void>
+}
+
 /**
  * Agent driver 需要实现的完整契约；方法均可异步。
  * settings 是用户在设置页填的值，每次调用都传最新的一份：改了设置不需要重新注册 driver，
@@ -142,17 +165,34 @@ export interface AgentDriver {
   readonly features: AgentFeatures
   /** 接入统一四档权限协议，并声明计划能力；旧插件由 Host 兼容原有权限参数。 */
   readonly executionModes?: AgentExecutionModes
+  readonly accountSetup?: AgentAccountSetup
+  /** 同一个实例换模型时，在现有原生会话内应用选项。 */
+  readonly modelSwitch?: "resume"
   /** 只读检测：是否安装、版本与登录状态；不能触发登录或创建会话。没实现时视为可用。 */
-  detect?(settings: AgentSettingsValues): Promise<AgentStatus>
+  detect?(settings: AgentSettingsValues, instance?: AgentInstanceContext): Promise<AgentStatus>
   /** 插件负责识别安装来源并准备自己的 CLI 更新，Host 负责展示、去重和排队。 */
-  prepareCliUpdate?(settings: AgentSettingsValues): Promise<AgentCliUpdatePlan>
+  prepareCliUpdate?(
+    settings: AgentSettingsValues,
+    instance?: AgentInstanceContext,
+  ): Promise<AgentCliUpdatePlan>
+  removeManagedCli?(
+    instance: AgentInstanceContext,
+    configured: readonly AgentSettingsValues[],
+  ): Promise<void>
   /** 动态模型目录；没实现时目录为空，只列出用户添加的自定义模型。 */
-  listModels?(settings: AgentSettingsValues): Promise<AgentModelInfo[]>
+  listModels?(
+    settings: AgentSettingsValues,
+    instance?: AgentInstanceContext,
+  ): Promise<AgentModelInfo[]>
   /**
    * 输入框 `/`、`$` 菜单里的命令与 Skill。cwd 决定项目级条目；为 null 时只列用户级的。
    * text 的前缀决定所属菜单，必须使用 CLI 可调用的名称。没实现时只列 Pigcode 自己的命令。
    */
-  listCommands?(settings: AgentSettingsValues, cwd: string | null): Promise<AgentCommandInfo[]>
+  listCommands?(
+    settings: AgentSettingsValues,
+    cwd: string | null,
+    instance?: AgentInstanceContext,
+  ): Promise<AgentCommandInfo[]>
   createSession(input: CreateSessionInput): Promise<AgentSessionHandle>
   /** 发送一条用户输入；事件通过 runtime.emit 推送。 */
   send(session: AgentSessionHandle, input: UserInput, runtime: AgentRuntime): Promise<void>
@@ -175,6 +215,7 @@ export interface AgentDriver {
 export interface AgentCliUpdateRuntime {
   signal: AbortSignal
   onOutput: (text: string) => void
+  onProgress?: (progress: AgentCliProgress) => void
 }
 
 export interface AgentCliUpdatePlan {
@@ -186,6 +227,9 @@ export interface AgentCliUpdatePlan {
   command: string | null
   reason: import("@pigcode/contracts").AgentCliUpdateState["reason"]
   run?: ((runtime: AgentCliUpdateRuntime) => Promise<void>) | undefined
+  /** 版本目录按引用保留，新版本验证后独立启用。 */
+  concurrent?: boolean
+  canRemove?: boolean
   /** 按原来的可执行文件复检，确保更新的是当前使用的 CLI。 */
   verify: () => Promise<string | null>
 }

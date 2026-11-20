@@ -179,6 +179,34 @@ export const agentStatusSchema = z.object({
   error: z.string().nullable().optional(),
 })
 
+const agentAuthFlowId = z.string().uuid()
+export const agentAuthActionSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("status") }),
+  z.object({ action: z.literal("start") }),
+  z.object({
+    action: z.literal("submit"),
+    flowId: agentAuthFlowId,
+    response: z.string().trim().min(1).max(16_384),
+  }),
+  z.object({ action: z.literal("cancel"), flowId: agentAuthFlowId }),
+  z.object({ action: z.literal("logout") }),
+])
+
+export type AgentAuthAction = z.infer<typeof agentAuthActionSchema>
+export interface AgentAuthState {
+  phase: "signed-out" | "starting" | "waiting" | "verifying" | "connected" | "failed" | "cancelled"
+  flowId: string | null
+  authorizationUrl: string | null
+  expiresAt: number | null
+  error: string | null
+}
+
+export interface AgentCliProgress {
+  stage: "downloading" | "extracting" | "verifying"
+  bytes?: number
+  total?: number
+}
+
 /** 设置页里的一个 agent：插件信息、Agent 功能、设置字段与当前值。 */
 export const agentSummarySchema = z.object({
   agentId: z.string().min(1),
@@ -194,6 +222,8 @@ export const agentSummarySchema = z.object({
   /** Agent 功能；driver 没注册时为 null。 */
   features: agentFeaturesSchema.nullable(),
   executionModes: agentExecutionModesSchema.nullish(),
+  accountSetup: z.boolean().optional(),
+  managedCli: z.boolean().optional(),
   description: localizedTextSchema.nullable(),
   homepage: z.string().nullable(),
   installHint: localizedTextSchema.nullable(),
@@ -228,6 +258,8 @@ export interface AgentCliUpdateState {
   latestVersion: string | null
   available: boolean
   canUpdate: boolean
+  canRemove?: boolean
+  progress?: AgentCliProgress
   command: string | null
   reason: "unsupported" | "not-installed" | "unknown-installation" | "manager-unavailable" | null
   error: string | null

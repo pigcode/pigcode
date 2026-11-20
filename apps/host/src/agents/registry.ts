@@ -3,7 +3,7 @@ import { modesOf, modesForSwitch, resolveModes, registeredAgents } from "./execu
 import type { Context } from "cordis"
 import type { RunStatus, ThreadEvent } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
-import type { ApprovalRequest, AgentRunConfig, AgentDriver } from "./driver"
+import type { AgentRunConfig, AgentDriver } from "./driver"
 import { FakeAgentDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
 import { assertNoStoredInstanceId, forcedAgentId, readStoredInstances } from "./agent-settings"
@@ -19,12 +19,13 @@ import { registerThreadReadTool } from "./thread-read-tool"
 import { recordThreadReferences } from "./thread-reference"
 import { threadCwd } from "../services/worktrees"
 import { createCliUpdates } from "./cli-updates"
-import { ApprovalBridge } from "./approval-bridge"
+import { ApprovalBridge, createApprovalRequest } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
-import { runInput, type ApprovalHandle, type AgentsService } from "./service"
+import { runInput, type AgentsService } from "./service"
 import { createQuestionFlow } from "./questions"
+import { createInstanceSetup } from "./instance-setup"
 
 export type { ApprovalHandle, AgentsService, StartRunOptions, StartRunResult } from "./service"
 
@@ -54,7 +55,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     })
     drivers.set(fake.id, fake)
   }
-  const agents = createAgentCatalog(ctx, drivers)
+  const agents = createAgentCatalog(ctx, drivers, config.dataDir)
   const runs = new RunStore(ctx.storage.db)
   const pendingRequests = new PendingRequestStore(ctx.storage.db)
   const agentSessions = new AgentSessionStore(ctx.storage.db)
@@ -64,6 +65,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   const queue = new RunQueue<QueuedRun>(maxQueuedRuns)
   /** 正在异步创建 Agent 会话的 run 数；用于避免并发空位被重复占用。 */
   let launching = 0
+  const starting = new Map<string, QueuedRun>()
   /** 追加一条线程事件并触发实时订阅者。 */
   function append(
     threadId: string,
@@ -138,40 +140,14 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     finish: finishRun,
   }
 
-  /** 发起审批：持久化 pending 行、写事件、置为 waiting-approval 并等待 UI 决议。 */
-  function requestApproval(
-    threadId: string,
-    runId: string,
-    request: ApprovalRequest,
-  ): ApprovalHandle {
-    const runRow = ctx.storage.db.prepare(`SELECT thread_id FROM runs WHERE id = ?`).get(runId) as
-      { thread_id: string } | undefined
-    if (!runRow || runRow.thread_id !== threadId) throw new Error(`run not found: ${runId}`)
-
-    const requestId = `req_${randomUUID()}`
-    pendingRequests.create({
-      id: requestId,
-      threadId,
-      runId,
-      kind: "approval",
-      agentRequestId: null,
-      payload: request,
-      createdAt: new Date().toISOString(),
-    })
-    append(threadId, runId, "approval.requested", {
-      requestId,
-      id: requestId,
-      ...request,
-    })
-    runs.setStatus(runId, "waiting-approval")
-    const active = activeRuns.get(runId)
-    if (active) {
-      active.status = "waiting-approval"
-      active.approvals.add(requestId)
-    }
-    const decision = approvals.wait(requestId, { threadId, runId })
-    return { requestId, decision }
-  }
+  const requestApproval = createApprovalRequest(
+    ctx.storage.db,
+    approvals,
+    pendingRequests,
+    runs,
+    activeRuns,
+    append,
+  )
 
   /** 在并发空位出现时按 FIFO 启动排队 run；launching 计入正在创建会话的 run。 */
   function pump(): void {
@@ -179,7 +155,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       const entry = queue.shift()
       if (!entry) return
       launching += 1
-      void launchRun(entry, launchDeps).finally(() => {
+      void launch(entry).finally(() => {
         launching -= 1
         pump()
       })
@@ -204,6 +180,19 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     append,
     execute,
     settingsFor: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
+    instanceContext: (agentId, instanceId) =>
+      drivers.get(agentId)?.accountSetup
+        ? agents.instanceContext(agents.instance(agentId, instanceId))
+        : undefined,
+  }
+
+  async function launch(entry: QueuedRun): Promise<void> {
+    starting.set(entry.runId, entry)
+    try {
+      await launchRun(entry, launchDeps)
+    } finally {
+      starting.delete(entry.runId)
+    }
   }
 
   /** 取消排队中的 run；此时尚未创建 Agent 会话，只需写终态并释放线程。 */
@@ -220,6 +209,11 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   /** 中断单个活跃或排队中的 run；未知 run 返回 false。 */
   function interruptRun(runId: string): boolean {
     if (cancelQueuedRun(runId)) return true
+    const launching = starting.get(runId)
+    if (launching && !activeRuns.has(runId)) {
+      launching.controller.abort()
+      return true
+    }
     const run = activeRuns.get(runId)
     if (!run) return false
     run.controller.abort()
@@ -228,10 +222,22 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     return true
   }
 
-  /** 中断所有排队与活跃 run；先复制 id，取消过程会修改集合。 */
   function interruptAll(): void {
     for (const entry of [...queue.values()]) cancelQueuedRun(entry.runId)
+    for (const runId of starting.keys()) interruptRun(runId)
     for (const runId of [...activeRuns.keys()]) interruptRun(runId)
+  }
+
+  async function stopInstanceRuns(instanceId: string): Promise<void> {
+    for (const entry of queue.values()) {
+      if (entry.instanceId === instanceId) cancelQueuedRun(entry.runId)
+    }
+    const pending = [...starting.values()].filter((entry) => entry.instanceId === instanceId)
+    for (const entry of pending) interruptRun(entry.runId)
+    for (const run of [...activeRuns.values()]) {
+      if (run.instanceId === instanceId) interruptRun(run.runId)
+    }
+    await Promise.all(pending.map((entry) => entry.done))
   }
 
   /** 注销 driver 时取消排队任务，中断活跃任务并释放会话进程。 */
@@ -240,6 +246,9 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     if (!driver) return
     for (const entry of queue.values()) {
       if (entry.driver === driver) cancelQueuedRun(entry.runId)
+    }
+    for (const entry of starting.values()) {
+      if (entry.driver === driver) interruptRun(entry.runId)
     }
     for (const run of [...activeRuns.values()]) {
       if (run.driver !== driver) continue
@@ -260,10 +269,14 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           activeThreads.has(thread.id) && (thread.lastAgentId ?? thread.defaultAgentId) === id,
       ),
   )
+  const setup = createInstanceSetup(ctx, agents, drivers, stopInstanceRuns, cliUpdates.check)
   const service: AgentsService = {
     cliUpdates: cliUpdates.list,
     checkCliUpdates: cliUpdates.check,
     updateCli: cliUpdates.update,
+    cancelCliUpdate: cliUpdates.cancel,
+    auth: setup.auth,
+    removeCli: setup.removeCli,
     register(driver) {
       modesOf(driver)
       assertNoStoredInstanceId(readStoredInstances(ctx.get("settings")), driver.id)
@@ -272,10 +285,9 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     },
     unregister: unregisterDriver,
     list: () => registeredAgents(drivers),
-    detect: (options) => agents.detect(options),
-    models: (agentId, instanceId) => agents.models(agentId, instanceId),
-    commands: (agentId, instanceId, cwd, refresh) =>
-      agents.commands(agentId, instanceId, cwd, refresh),
+    detect: agents.detect,
+    models: agents.models,
+    commands: agents.commands,
     defaultAgent: () => agents.defaultAgent(),
     configuredDefaultAgent: () => agents.configuredDefault(),
     configuredDefaultInstance: () => agents.configuredDefaultInstance(),
@@ -285,25 +297,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     listInstances: (agentId) => agents.instances(agentId),
     findInstance: (instanceId) => agents.findInstance(instanceId),
     createInstance: agents.createInstance,
-    updateInstance: (instanceId, patch) => agents.updateInstance(instanceId, patch),
-    removeInstance(instanceId) {
-      const instance = agents.findInstance(instanceId)
-      if (!instance) throw new Error(`instance not found: ${instanceId}`)
-      if (instance.isDefault) throw new Error(`default instance cannot be removed: ${instanceId}`)
-      // 还有线程记着这个实例时先拒绝：删掉后线程会静默退回默认实例，用户以为自己在用另一套配置。
-      const usage = ctx.storage.db
-        .prepare(
-          `SELECT COUNT(*) AS count FROM threads WHERE default_instance_id = ? OR last_instance_id = ?`,
-        )
-        .get(instanceId, instanceId) as { count: number }
-      if (usage.count > 0) {
-        throw Object.assign(
-          new Error(`instance is in use by ${usage.count} threads: ${instanceId}`),
-          { code: "AGENT_INSTANCE_IN_USE" },
-        )
-      }
-      agents.removeInstance(instanceId)
-    },
+    updateInstance: setup.updateInstance,
+    removeInstance: setup.removeInstance,
     async switchAgent(threadId, agentId, modelId, instanceId) {
       // 运行中或排队中的线程不能切换：否则旧会话被 dispose，正在跑的 run 会失去驱动。
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
@@ -321,6 +316,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         (id) =>
           drivers.get(agentId)?.continuationKey?.(agents.settingsForInstance(agentId, id)) ?? null,
         modesForSwitch(ctx, threadId, agentId),
+        drivers.get(agentId)?.modelSwitch === "resume",
       )
     },
     async startRun(threadId, text, emitLive, options = {}) {
@@ -338,6 +334,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         options.instanceId ?? thread.lastInstanceId ?? thread.defaultInstanceId,
       )
       if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
+      if (setup.isStopping(instance.instanceId)) throw new Error("Agent instance is stopping")
       const selectedModes = resolveModes(modesOf(driver), thread, driver.id)
       const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
       if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
@@ -406,13 +403,16 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           if (!queue.push(entry)) throw new RunQueueFullError(maxQueuedRuns)
           return { runId, done }
         }
-        await launchRun(entry, launchDeps)
+        await launch(entry)
         return { runId, done }
       } catch (error) {
         activeThreads.delete(threadId)
         throw error
       } finally {
-        if (reserved) launching -= 1
+        if (reserved) {
+          launching -= 1
+          pump()
+        }
       }
     },
     requestApproval(threadId, runId, request) {

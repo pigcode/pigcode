@@ -8,6 +8,7 @@ export interface ActiveRun {
   threadId: string
   session: AgentSessionHandle
   driver: AgentDriver
+  instanceId?: string
   controller: AbortController
   emitLive: ((event: AgentEvent) => void) | undefined
   status: RunStatus

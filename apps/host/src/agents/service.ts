@@ -1,5 +1,7 @@
 /** agents 服务对外的契约；实现见 registry.ts。 */
 import type {
+  AgentAuthAction,
+  AgentAuthState,
   PendingRequest,
   AgentCommand,
   AgentFeatures,
@@ -62,6 +64,9 @@ export interface AgentsService {
     instanceId?: string,
   ): Promise<Record<string, import("@pigcode/contracts").AgentCliUpdateState>>
   updateCli(instanceId: string): Promise<import("@pigcode/contracts").AgentCliUpdateState>
+  cancelCliUpdate(instanceId: string): void
+  removeCli(instanceId: string): Promise<void>
+  auth(instanceId: string, request: AgentAuthAction): Promise<AgentAuthState>
   register(driver: AgentDriver): void
   /** 移除插件注册的 driver；插件卸载时由其 effect 清理调用。 */
   unregister(driverId: string): void
@@ -71,6 +76,8 @@ export interface AgentsService {
     displayName: string
     features: AgentFeatures
     executionModes?: AgentExecutionModes | null
+    accountSetup?: boolean
+    managedCli?: boolean
   }>
   /** 只读检测：是否安装、版本与登录状态；结果短时缓存，refresh 时重新检测。 */
   detect(options?: DetectOptions): Promise<Record<string, AgentStatus>>
@@ -110,9 +117,9 @@ export interface AgentsService {
       enabled?: boolean | undefined
       values?: Record<string, unknown> | undefined
     },
-  ): AgentInstance
+  ): AgentInstance | Promise<AgentInstance>
   /** 删除实例；默认实例与正被线程使用的实例不能删。 */
-  removeInstance(instanceId: string): void
+  removeInstance(instanceId: string): void | Promise<void>
   /** 切换线程的 Agent/实例/model；同一个 Agent 写 fork 源，换 Agent 时写 handoff。 */
   switchAgent(
     threadId: string,
