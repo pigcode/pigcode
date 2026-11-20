@@ -1,7 +1,8 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { basename, isAbsolute, join, resolve } from "node:path"
+import { promisify } from "node:util"
 import {
   settingEnvironment,
   settingString,
@@ -18,6 +19,7 @@ import {
 
 const ACP_DATA_DIR = "antigravity-acp"
 const PROFILE_ID = "active-profile"
+const exec = promisify(execFile)
 const RESERVED_ENV = new Set([
   "GEMINI_HOME",
   "GEMINI_API_KEY",
@@ -98,6 +100,30 @@ export function pathBinary(settings: AgentSettingsValues): string | undefined {
   return findExecutable("agy", undefined, agentEnvironment(settingEnvironment(settings)).PATH)
 }
 
+function cliEnvironment(settings: AgentSettingsValues): NodeJS.ProcessEnv {
+  return agentEnvironment(settingEnvironment(settings), { AGY_CLI_DISABLE_AUTO_UPDATE: "1" })
+}
+
+/** agy models 可以验证 CLI 已有账号，无需发起登录或创建原生会话。 */
+export async function hasCliLogin(
+  command: string,
+  settings: AgentSettingsValues,
+): Promise<boolean> {
+  const target = launchTarget(command, ["models"])
+  if (target.shell) return false
+  try {
+    const { stdout } = await exec(target.command, target.args, {
+      env: cliEnvironment(settings),
+      timeout: 8_000,
+      maxBuffer: 64 * 1024,
+      windowsHide: true,
+    })
+    return stdout.split(/\r?\n/).some((line) => /^\S+\t\S/.test(line.trim()))
+  } catch {
+    return false
+  }
+}
+
 export interface AgyLaunch {
   command: string
   args: string[]
@@ -108,9 +134,12 @@ export interface AgyLaunch {
 export async function acpLaunch(
   command: string,
   settings: AgentSettingsValues,
-  profile: AgyProfile,
+  profile: AgyProfile | null,
   cwd: string,
 ): Promise<AgyLaunch> {
+  const env = cliEnvironment(settings)
+  // 沿用 CLI 的登录时也沿用它的原生存储位置，让钥匙串和文件凭据都由 agy 自己解析。
+  if (!profile) return { command, cwd, args: ["acp"], env }
   const data = join(profile.directory, ACP_DATA_DIR)
   await mkdir(data, { recursive: true, mode: 0o700 })
   // 原生 logout 读取这个字段来清理本次采用的登录方式。
@@ -124,7 +153,6 @@ export async function acpLaunch(
   ).catch((error: NodeJS.ErrnoException) => {
     if (error.code !== "EEXIST") throw error
   })
-  const env = agentEnvironment(settingEnvironment(settings))
   for (const key of Object.keys(env)) {
     if (
       RESERVED_ENV.has(key.toUpperCase()) ||
@@ -138,6 +166,8 @@ export async function acpLaunch(
     args: ["acp", "--gemini-dir", profile.directory, "--app-data-dir", ACP_DATA_DIR],
     env: {
       ...env,
+      // agy 1.5 的本地图形模式使用全局钥匙串；SSH 模式会按目录保存账号。
+      SSH_CONNECTION: env.SSH_CONNECTION || "127.0.0.1 0 127.0.0.1 0",
       GEMINI_HOME: profile.directory,
       AGY_ACP_FORCE_FILE_STORAGE: "1",
       AGY_CLI_DISABLE_AUTO_UPDATE: "1",

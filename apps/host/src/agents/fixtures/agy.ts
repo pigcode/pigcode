@@ -5,20 +5,31 @@ import { randomUUID } from "node:crypto"
 import { createInterface } from "node:readline"
 
 const args = process.argv.slice(2)
+const cliData = process.env.PIGCODE_AGY_FIXTURE_CLI_DATA
+const cliSignedIn = Boolean(cliData && !process.env.SSH_CONNECTION)
 if (args.includes("--version")) {
   console.log("1.5.13")
   process.exit(0)
+}
+if (args[0] === "models") {
+  if (cliSignedIn) console.log("cli-model\tCLI model")
+  process.exit(cliSignedIn ? 0 : 1)
 }
 function getArg(name: string): string {
   const value = args[args.indexOf(name) + 1]
   if (!value) throw new Error("Missing fixture option: " + name)
   return value
 }
-const directory = join(getArg("--gemini-dir"), getArg("--app-data-dir"))
+const directory = args.includes("--gemini-dir")
+  ? join(getArg("--gemini-dir"), getArg("--app-data-dir"))
+  : cliData
+if (!directory) throw new Error("Missing fixture profile")
 const token = join(directory, "acp_token.json")
 mkdirSync(directory, { recursive: true })
 const lines = createInterface({ input: process.stdin })
 if (args.includes("--login")) {
+  if (cliData && !process.env.SSH_CONNECTION)
+    throw new Error("Separate sign-in requires file storage")
   console.log(
     "https://accounts.google.com/o/oauth2/auth?state=fixture&response_type=code&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback",
   )
@@ -78,8 +89,11 @@ if (args.includes("--login")) {
     try {
       account = readFileSync(token, "utf8")
     } catch {
-      if (id !== undefined) error(-32000, "Authentication required")
-      return
+      if (!cliSignedIn) {
+        if (id !== undefined) error(-32000, "Authentication required")
+        return
+      }
+      account = "cli"
     }
     const configOptions = [
       {

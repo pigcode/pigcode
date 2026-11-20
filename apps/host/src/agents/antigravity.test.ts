@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rename, rm } from "node:fs/promises"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { delimiter, join } from "node:path"
 import { Context } from "cordis"
 import { expect, it } from "vitest"
 import { AntigravityDriver } from "../../../../packages/agent-antigravity/src/driver"
@@ -14,6 +14,89 @@ import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 import { apply as agents } from "./registry"
 import { writeAgyFixture } from "./fixtures/executable"
+
+it("uses the current signed-in CLI on PATH and keeps separate instances independent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pigcode-agy-path-test-"))
+  const cli = writeAgyFixture(root)
+  if (process.platform !== "win32") await rename(cli, join(root, "agy"))
+  const ctx = new Context()
+  const driver = new AntigravityDriver(async (input) => {
+    const { platform, arch } = process
+    const os = platform === "darwin" ? "mac" : platform === "win32" ? "windows" : platform
+    const family = platform === "win32" ? "windows" : platform
+    const musl = String(input).endsWith("_musl.json")
+    const folder = `${family}-${arch === "arm64" ? "arm" : "x64"}${musl ? "-musl" : ""}`
+    const name = `cli_${os}_${arch}${musl ? "_musl" : ""}.${platform === "win32" ? "exe" : "tar.gz"}`
+    return Response.json({
+      version: "1.5.13",
+      sha512: "a".repeat(128),
+      url: `https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.13-1/${folder}/${name}`,
+    })
+  })
+  try {
+    await ctx.plugin(storage, { path: ":memory:" })
+    await ctx.plugin(settings, {})
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
+    ctx.agents.register(driver)
+    ctx.agents.updateSettings("antigravity", {
+      environment: [
+        { name: "PATH", value: [root, process.env.PATH].join(delimiter) },
+        { name: "PIGCODE_AGY_FIXTURE_CLI_DATA", value: join(root, "cli-account") },
+        { name: "SSH_CONNECTION", value: "" },
+      ],
+    })
+    const work = ctx.agents.createInstance("antigravity", "Work")
+
+    const [status, models, updates] = await Promise.all([
+      ctx.agents.detect({ refresh: true }),
+      ctx.agents.models("antigravity"),
+      ctx.agents.checkCliUpdates("antigravity"),
+    ])
+    expect.soft(status).toMatchObject({
+      antigravity: { installed: true, version: "1.5.13", authenticated: true, usingCliLogin: true },
+      [work.instanceId]: { installed: true, authenticated: false },
+    })
+    expect.soft(models).toMatchObject([{ id: "cli-model" }])
+    expect.soft(updates.antigravity).toMatchObject({
+      currentVersion: "1.5.13",
+      latestVersion: "1.5.13",
+      available: false,
+    })
+    const thread = ctx.threads.create(ctx.projects.add(root).id, "CLI", "antigravity")
+    await (
+      await ctx.agents.startRun(thread.id, "hello")
+    ).done
+    expect(ctx.sessions.read(thread.id, 0)).toContainEqual(
+      expect.objectContaining({
+        type: "message.completed",
+        payload: { role: "assistant", text: "cli: hello" },
+      }),
+    )
+    const login = await ctx.agents.auth("antigravity", { action: "start" })
+    await expect
+      .poll(() => ctx.agents.auth("antigravity", { action: "status" }))
+      .toMatchObject({ phase: "waiting" })
+    await ctx.agents.auth("antigravity", {
+      action: "submit",
+      flowId: login.flowId!,
+      response: "personal",
+    })
+    await expect
+      .poll(() => ctx.agents.auth("antigravity", { action: "status" }))
+      .toMatchObject({ phase: "connected" })
+    await expect(ctx.agents.models("antigravity")).resolves.toMatchObject([
+      { id: "personal-model" },
+    ])
+    await expect(ctx.agents.models("antigravity", work.instanceId)).resolves.toEqual([])
+  } finally {
+    await driver.close()
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})
 
 it("signs in two Antigravity instances using the same CLI and keeps their accounts separate", async () => {
   const root = await mkdtemp(join(tmpdir(), "pigcode-agy-test-"))
@@ -166,6 +249,7 @@ it.skipIf(process.platform === "win32")(
     const root = await mkdtemp(join(tmpdir(), "pigcode-agy-install-test-"))
     const archive = join(root, "agy.tar.gz")
     writeAgyFixture(root, true)
+    await rename(writeAgyFixture(root, false, "1.5.12"), join(root, "agy"))
     execFileSync("tar", ["-czf", archive, "-C", root, "antigravity"])
     const bytes = await readFile(archive)
     const digest = createHash("sha512").update(bytes).digest("hex")
@@ -195,6 +279,9 @@ it.skipIf(process.platform === "win32")(
       await ctx.plugin(sessions)
       await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
       ctx.agents.register(driver)
+      ctx.agents.updateSettings("antigravity", {
+        environment: [{ name: "PATH", value: [root, process.env.PATH].join(delimiter) }],
+      })
       const work = ctx.agents.createInstance("antigravity", "Work")
       await Promise.all([
         ctx.agents.updateCli("antigravity"),

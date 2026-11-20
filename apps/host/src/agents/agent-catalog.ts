@@ -199,10 +199,13 @@ export function createAgentCatalog(
         }
       }
       const entries = await Promise.all(
-        targets.map(
-          async ([agentId, instanceId]) =>
-            [instanceId, await detectOne(agentId, instanceId, options.refresh)] as const,
-        ),
+        targets.map(async ([agentId, instanceId]) => {
+          if (options.refresh) {
+            catalogs.invalidate(instanceId)
+            commandCatalogs.invalidate(instanceId)
+          }
+          return [instanceId, await detectOne(agentId, instanceId, options.refresh)] as const
+        }),
       )
       return Object.fromEntries(entries)
     },

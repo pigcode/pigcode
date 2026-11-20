@@ -45,6 +45,7 @@ export function AgentSetup({
   const [error, setError] = useState<string | null>(null)
   const [confirmRemoval, setConfirmRemoval] = useState(false)
   const installed = status?.installed === true
+  const canInstall = status?.installed === false && onInstall !== undefined
   const authBusy = authPending(auth)
   const cliBusy =
     update?.phase === "queued" || update?.phase === "waiting" || update?.phase === "running"
@@ -122,7 +123,7 @@ export function AgentSetup({
           : "agents.setup.installing"
   return (
     <div className="agent-setup">
-      {managed && !customBinary && (onInstall || update?.canRemove) ? (
+      {managed && !customBinary && (cliBusy || canInstall || update?.canRemove) ? (
         <div className="agent-setup-actions">
           {cliBusy ? (
             <>
@@ -143,7 +144,7 @@ export function AgentSetup({
                 {t("agents.setup.cancel")}
               </Button>
             </>
-          ) : !update?.canRemove && onInstall ? (
+          ) : canInstall && onInstall ? (
             <Button
               size="sm"
               disabled={pending || !enabled}
@@ -209,7 +210,7 @@ export function AgentSetup({
                 {t("agents.setup.cancel")}
               </Button>
             </>
-          ) : linked ? (
+          ) : linked && !auth?.usingCliLogin ? (
             <Button
               size="sm"
               variant="ghost"
@@ -224,7 +225,7 @@ export function AgentSetup({
               disabled={pending || !enabled || !auth}
               onClick={() => authorize({ action: "start" })}
             >
-              {t("agents.setup.signIn")}
+              {t(auth?.usingCliLogin ? "agents.setup.signInSeparate" : "agents.setup.signIn")}
             </Button>
           )}
         </div>

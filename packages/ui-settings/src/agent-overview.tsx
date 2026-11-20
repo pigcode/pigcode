@@ -61,14 +61,19 @@ export function AgentOverview({
           title: t("agents.status.notInstalled"),
           detail: agent.installHint ? localizeText(agent.installHint, locale) : status.error,
         }
-      : signedOut
-        ? { title: t("agents.status.signedOut"), detail: t("agents.signedOutHint") }
-        : status?.error || (!agent.registered && agent.error)
-          ? { title: t("agents.error"), detail: status?.error ?? agent.error }
+      : status?.error || (!agent.registered && agent.error)
+        ? { title: t("agents.error"), detail: status?.error ?? agent.error }
+        : signedOut
+          ? {
+              title: t("agents.status.signedOut"),
+              detail: t(agent.accountSetup ? "agents.setup.signInHint" : "agents.signedOutHint"),
+            }
           : null
   const email = status?.authenticated ? (status.email ?? null) : null
   const account = email ? (
     <SensitiveText value={email} revealed={revealed} onToggle={() => onReveal?.()} />
+  ) : status?.usingCliLogin ? (
+    t("agents.setup.cliSignedIn")
   ) : status?.installed && status.authenticated === false ? (
     t("agents.status.signedOut")
   ) : null

@@ -275,6 +275,9 @@ export class AntigravityInstallation {
       }
     }
     const installed = await readInstallation(root)
+    const local = installed ? undefined : pathBinary(settings)
+    const currentVersion =
+      installed?.version ?? (local ? await executableVersion(local, settings) : null)
     const cached = this.releases.get(root)
     const promise =
       cached && cached.until > Date.now() ? cached.promise : latestRelease(this.fetchRelease)
@@ -286,18 +289,21 @@ export class AntigravityInstallation {
     const verify = async () => (await readInstallation(root))?.version ?? null
     return {
       target: root,
-      currentVersion: installed?.version ?? null,
+      currentVersion,
       latestVersion: release?.version ?? null,
       available: Boolean(
-        release && (!installed || cliUpdateAvailable(installed.version, release.version)),
+        release && (!currentVersion || cliUpdateAvailable(currentVersion, release.version)),
       ),
       command: null,
       reason: null,
       verify,
       concurrent: true,
       canRemove: installed !== null,
-      run: async (runtime) =>
-        this.install(root, release ?? (await latestRelease(this.fetchRelease)), runtime),
+      run:
+        release || !currentVersion
+          ? async (runtime) =>
+              this.install(root, release ?? (await latestRelease(this.fetchRelease)), runtime)
+          : undefined,
     }
   }
 

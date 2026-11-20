@@ -49,6 +49,7 @@ interface Session {
   prompting: boolean
   cancelled: boolean
   planMode: boolean
+  usingCliLogin: boolean
   windDown?: ReturnType<typeof setTimeout>
   done: Promise<void>
   resolveDone(): void
@@ -125,20 +126,22 @@ export class AntigravityDriver implements AgentDriver {
     const [major = 0, minor = 0] = version.split(".").map(Number)
     if (major < 1 || (major === 1 && minor < 5))
       return { installed: true, version, command, authenticated: false, error: unsupported }
-    const auth = await this.accounts.status(scope)
+    const auth = await this.accounts.status(scope, settings, command)
     return {
       installed: true,
       version,
       command,
       authenticated: auth.phase === "connected",
+      ...(auth.usingCliLogin ? { usingCliLogin: true } : {}),
       account: auth.phase === "connected" ? "Google" : null,
     }
   }
 
   async listModels(settings: AgentSettingsValues, instance?: AgentInstanceContext) {
     const scope = requireInstance(instance)
-    if (this.accounts.busy(scope) || (await this.accounts.status(scope)).phase !== "connected")
-      return []
+    if (this.accounts.busy(scope)) return []
+    const auth = await this.accounts.status(scope, settings)
+    if (auth.phase !== "connected") return []
     const executable = await this.installation.acquire(settings, scope)
     let cwd: string | undefined
     try {
@@ -146,14 +149,14 @@ export class AntigravityDriver implements AgentDriver {
       const launch = await acpLaunch(
         executable.command,
         settings,
-        await instanceProfile(scope),
+        auth.usingCliLogin ? null : await instanceProfile(scope),
         cwd,
       )
       if (this.accounts.busy(scope)) return []
       return await this.readCatalog(launch, scope)
     } catch (error) {
       if (!isAuthRequired(error)) throw error
-      this.accounts.requireSignIn(scope)
+      this.accounts.requireSignIn(scope, auth.usingCliLogin)
       return []
     } finally {
       executable.release()
@@ -167,7 +170,10 @@ export class AntigravityDriver implements AgentDriver {
     instance?: AgentInstanceContext,
   ) {
     const scope = requireInstance(instance)
-    if (this.accounts.busy(scope) || (await this.accounts.status(scope)).phase !== "connected")
+    if (
+      this.accounts.busy(scope) ||
+      (await this.accounts.status(scope, settings)).phase !== "connected"
+    )
       return []
     const list = this.commands.get(scope.dataDir)
     if (cwd && list?.has(cwd)) return list.get(cwd)!
@@ -239,8 +245,8 @@ export class AntigravityDriver implements AgentDriver {
     const instance = requireInstance(input.instance)
     if (this.accounts.busy(instance)) throw new Error("Antigravity account setup is in progress")
     const settings = input.settings ?? {}
-    if ((await this.accounts.status(instance)).phase !== "connected")
-      throw new Error(signInRequired)
+    const auth = await this.accounts.status(instance, settings)
+    if (auth.phase !== "connected") throw new Error(signInRequired)
     const id = input.sessionId ?? `antigravity_${randomUUID()}`
     const previous = this.sessions.get(id)
     if (previous) await previous.done
@@ -252,7 +258,7 @@ export class AntigravityDriver implements AgentDriver {
       const launch = await acpLaunch(
         executable.command,
         settings,
-        await instanceProfile(instance),
+        auth.usingCliLogin ? null : await instanceProfile(instance),
         input.cwd,
       )
       input.signal?.throwIfAborted()
@@ -337,6 +343,7 @@ export class AntigravityDriver implements AgentDriver {
         prompting: false,
         cancelled: false,
         planMode,
+        usingCliLogin: auth.usingCliLogin === true,
       })
       this.sessions.set(id, state)
       this.grants.set(id, approved)
@@ -354,7 +361,7 @@ export class AntigravityDriver implements AgentDriver {
       bridge?.close()
       executable.release()
       if (isAuthRequired(error)) {
-        this.accounts.requireSignIn(instance)
+        this.accounts.requireSignIn(instance, auth.usingCliLogin)
         throw new Error(signInRequired)
       }
       throw error
@@ -389,7 +396,7 @@ export class AntigravityDriver implements AgentDriver {
       state.events.finish()
       if (state.cancelled || runtime.signal.aborted) runtime.emit({ type: "run.interrupted" })
       else if (isAuthRequired(error)) {
-        this.accounts.requireSignIn(state.instance)
+        this.accounts.requireSignIn(state.instance, state.usingCliLogin)
         throw new Error(signInRequired)
       } else throw error
     } finally {

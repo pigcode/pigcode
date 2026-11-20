@@ -170,6 +170,7 @@ export const agentStatusSchema = z.object({
   installed: z.boolean(),
   version: z.string().nullable(),
   authenticated: z.boolean().nullable(),
+  usingCliLogin: z.boolean().optional(),
   /** 登录方式、订阅等补充说明，例如「Max · claude.ai」「ChatGPT Pro」。 */
   account: z.string().nullable().optional(),
   /** 登录账号的邮箱；CLI 不告诉或用 API Key 时为空。 */
@@ -199,6 +200,7 @@ export interface AgentAuthState {
   authorizationUrl: string | null
   expiresAt: number | null
   error: string | null
+  usingCliLogin?: boolean
 }
 
 export interface AgentCliProgress {

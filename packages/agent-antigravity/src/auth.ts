@@ -4,7 +4,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createInterface } from "node:readline"
 import type { AgentAuthAction, AgentAuthState } from "@pigcode/contracts"
-import type { AgentInstanceContext, AgentSettingsValues } from "@pigcode/plugin-sdk"
+import {
+  settingEnvironment,
+  type AgentInstanceContext,
+  type AgentSettingsValues,
+} from "@pigcode/plugin-sdk"
 import { ownProcessTree } from "@pigcode/plugin-sdk/node"
 import { openAcp, requestOptions } from "./connection"
 import type { AntigravityInstallation } from "./installation"
@@ -12,6 +16,7 @@ import {
   acpLaunch,
   activateProfile,
   hasCredential,
+  hasCliLogin,
   instanceProfile,
   newProfile,
   spawnAgy,
@@ -123,6 +128,10 @@ export class AntigravityAccounts {
   private readonly flows = new Map<string, Flow>()
   private readonly loggingOut = new Set<string>()
   private readonly expired = new Set<string>()
+  private readonly cliChecks = new Map<
+    string,
+    { key: string; until: number; result: Promise<boolean> }
+  >()
   private closed = false
 
   constructor(
@@ -135,14 +144,37 @@ export class AntigravityAccounts {
     private readonly stopSessions: (instance: AgentInstanceContext) => Promise<void>,
   ) {}
 
-  async status(instance: AgentInstanceContext): Promise<AgentAuthState> {
+  async status(
+    instance: AgentInstanceContext,
+    settings: AgentSettingsValues,
+    executable?: string,
+  ): Promise<AgentAuthState> {
     const state = this.flows.get(instance.dataDir)?.state
-    if (state && state.phase !== "connected") return state
-    return snapshot(
-      !this.expired.has(instance.dataDir) && (await hasCredential(await instanceProfile(instance)))
-        ? "connected"
-        : "signed-out",
-    )
+    if (state && inProgress(state)) return state
+    const profile = await instanceProfile(instance)
+    if (!this.expired.has(instance.dataDir) && (await hasCredential(profile)))
+      return snapshot("connected")
+    if (
+      instance.instanceId === "antigravity" &&
+      profile.directory === join(instance.dataDir, "initial") &&
+      !this.expired.has(instance.dataDir)
+    ) {
+      const command = executable ?? (await this.installation.resolve(settings, instance))
+      if (command && (await this.checkCli(instance, settings, command)))
+        return { ...snapshot("connected", state?.error), usingCliLogin: true }
+    }
+    return state?.phase === "failed" || state?.phase === "cancelled"
+      ? state
+      : snapshot("signed-out")
+  }
+
+  private checkCli(instance: AgentInstanceContext, settings: AgentSettingsValues, command: string) {
+    const key = JSON.stringify([command, settingEnvironment(settings)])
+    const cached = this.cliChecks.get(instance.dataDir)
+    if (cached?.key === key && Date.now() < cached.until) return cached.result
+    const result = hasCliLogin(command, settings)
+    this.cliChecks.set(instance.dataDir, { key, until: Date.now() + 10_000, result })
+    return result
   }
 
   busy(instance: AgentInstanceContext): boolean {
@@ -153,8 +185,14 @@ export class AntigravityAccounts {
     )
   }
 
-  requireSignIn(instance: AgentInstanceContext): void {
-    this.expired.add(instance.dataDir)
+  requireSignIn(instance: AgentInstanceContext, usingCliLogin = false): void {
+    if (usingCliLogin) {
+      const cached = this.cliChecks.get(instance.dataDir)
+      if (cached)
+        this.cliChecks.set(instance.dataDir, { ...cached, result: Promise.resolve(false) })
+    } else {
+      this.expired.add(instance.dataDir)
+    }
     if (!this.busy(instance)) this.flows.delete(instance.dataDir)
     instance.invalidate()
   }
@@ -165,10 +203,12 @@ export class AntigravityAccounts {
     instance: AgentInstanceContext,
   ): Promise<AgentAuthState> {
     const key = instance.dataDir
-    if (request.action === "status") return this.status(instance)
+    if (request.action === "status") return this.status(instance, settings)
     if (this.closed || this.loggingOut.has(key))
       throw new Error("Antigravity account operation in progress")
     if (request.action === "logout") {
+      if ((await this.status(instance, settings)).usingCliLogin)
+        throw new Error("This instance uses the login managed by Antigravity CLI")
       this.loggingOut.add(key)
       try {
         await this.close(instance)
@@ -183,7 +223,8 @@ export class AntigravityAccounts {
     const existing = this.flows.get(key)
     if (request.action === "start") {
       if (existing && inProgress(existing.state)) return existing.state
-      if ((await this.status(instance)).phase === "connected") return snapshot("connected")
+      const status = await this.status(instance, settings)
+      if (status.phase === "connected" && !status.usingCliLogin) return status
       if (this.closed || this.loggingOut.has(key))
         throw new Error("Antigravity account operation in progress")
       const current = this.flows.get(key)
@@ -301,6 +342,7 @@ export class AntigravityAccounts {
     flow?.controller.abort()
     await flow?.complete
     this.flows.delete(instance.dataDir)
+    this.cliChecks.delete(instance.dataDir)
     await this.stopSessions(instance)
   }
 
@@ -309,5 +351,6 @@ export class AntigravityAccounts {
     for (const flow of this.flows.values()) flow.controller.abort()
     await Promise.all([...this.flows.values()].map((flow) => flow.complete))
     this.flows.clear()
+    this.cliChecks.clear()
   }
 }

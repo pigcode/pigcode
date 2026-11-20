@@ -39,7 +39,7 @@ export function createInstanceSetup(
     if (request.action === "logout") return withStopped(instanceId, perform)
     if (request.action !== "start") return perform()
     const status = await setup.auth({ action: "status" }, instance.values, scope)
-    if (status.phase === "connected") return status
+    if (status.phase === "connected" && !status.usingCliLogin) return status
     return withStopped(instanceId, async () => {
       if (!agents.findInstance(instanceId)?.enabled) throw new Error("Agent instance is disabled")
       return perform()

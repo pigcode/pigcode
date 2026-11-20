@@ -90,11 +90,12 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
   )
 
   useEffect(() => {
+    if (!connected) return
     void refresh().catch((error: unknown) =>
       deps.store.update({ error: error instanceof Error ? error.message : String(error) }),
     )
     void detect().catch(() => undefined)
-  }, [refresh, detect, deps.store, appState.agentRevision])
+  }, [connected, refresh, detect, deps.store, appState.agentRevision])
 
   /** 插件集合变了：重读列表与检测，通知输入框与线程头，并重新加载 UI 插件。 */
   async function afterPluginChange(): Promise<void> {
@@ -147,7 +148,10 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       detecting={detecting}
       models={catalog}
       onLoadModels={load}
-      onDetect={() => detect({ refresh: true })}
+      onDetect={async () => {
+        await detect({ refresh: true })
+        await refreshAgentViews(deps)
+      }}
       onSetEnabled={async (agent, enabled) => {
         if (!agent.pluginId) return
         await connection.call(enabled ? "plugin.enable" : "plugin.disable", { id: agent.pluginId })
