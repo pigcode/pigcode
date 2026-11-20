@@ -11,6 +11,7 @@ describe("agentBrandOf", () => {
   it("maps the built-in drivers and nothing else", () => {
     expect(agentBrandOf("claude")).toBe("claude")
     expect(agentBrandOf("codex")).toBe("openai")
+    expect(agentBrandOf("antigravity")).toBe("antigravity")
     expect(agentBrandOf("echo")).toBeNull()
     expect(agentBrandOf(null)).toBeNull()
   })
@@ -31,6 +32,18 @@ describe("AgentIcon", () => {
       <AgentIcon agentId="claude" instanceId="inst_work" name="公司 API" />,
     )
     expect(container.querySelector(".agent-brand")?.getAttribute("data-brand")).toBe("claude")
+    expect(container.querySelector(".agent-icon-badge")?.textContent).toBe(
+      entityMark("inst_work", "公司 API").initials,
+    )
+  })
+
+  it("renders the Antigravity brand asset with the instance badge", () => {
+    const { container } = render(
+      <AgentIcon agentId="antigravity" instanceId="inst_work" name="公司 API" />,
+    )
+    const logo = container.querySelector("img.agent-brand[data-brand='antigravity']")
+    expect(logo?.getAttribute("src")).toBeTruthy()
+    expect(logo?.getAttribute("alt")).toBe("")
     expect(container.querySelector(".agent-icon-badge")?.textContent).toBe(
       entityMark("inst_work", "公司 API").initials,
     )

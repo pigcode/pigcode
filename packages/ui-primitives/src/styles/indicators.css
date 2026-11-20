@@ -309,6 +309,10 @@
 .agent-brand[data-brand="openai"] {
   color: var(--fg);
 }
+/* 官方图标自带透明留白，放大后与同一行的其他品牌标志接近。 */
+.agent-brand[data-brand="antigravity"] {
+  transform: scale(1.3);
+}
 .agent-icon-badge {
   position: absolute;
   right: -3px;
