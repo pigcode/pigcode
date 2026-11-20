@@ -35,6 +35,7 @@
     "contributes": {
       "agent": {
         "id": "claude",
+        "featured": true,
         "acpRegistryAgentIds": [
           "claude-acp"
         ],

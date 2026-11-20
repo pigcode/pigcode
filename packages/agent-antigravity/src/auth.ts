@@ -204,6 +204,7 @@ export class AntigravityAccounts {
   ): Promise<AgentAuthState> {
     const key = instance.dataDir
     if (request.action === "status") return this.status(instance, settings)
+    if (request.action === "terminal") throw new Error("Antigravity uses the Google sign-in flow")
     if (this.closed || this.loggingOut.has(key))
       throw new Error("Antigravity account operation in progress")
     if (request.action === "logout") {

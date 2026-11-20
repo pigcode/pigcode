@@ -1,480 +1,490 @@
-/**
- * 新建实例的向导：选择 Agent → 名称与 ID → 启动配置。三步都在一个对话框里，
- * 步骤条可以点回已经填过的步骤。
- */
-import { useEffect, useMemo, useState } from "react"
-import { Check } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Check, ChevronDown } from "lucide-react"
 import {
-  AGENT_INSTANCE_ID_MAX_LENGTH,
+  acpRegistryAgentIdSchema,
   customAgentInstanceIdSchema,
   type AcpRegistryEntry,
+  type AgentAuthState,
   type AgentInstanceDraft,
   type AgentSettingsValues,
   type AgentSummary,
 } from "@pigcode/contracts"
-import {
-  AgentIcon,
-  Button,
-  Dialog,
-  Input,
-  SearchField,
-  hostErrorMessageKey,
-  toHostError,
-  useLocale,
-} from "@pigcode/ui-primitives"
+import { Button, Dialog, hostErrorMessageKey, toHostError, useLocale } from "@pigcode/ui-primitives"
 import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
-import { AcpRegistryPicker } from "./acp-registry-picker"
+import { AcpRegistryPicker, RegistryIcon, type RegistryActions } from "./acp-registry-picker"
+import { AcpAccount, acpAuthPending } from "./acp-account"
+import { AgentChoices, InstanceIdentity } from "./agent-instance-choice"
 import { instanceIdTaken, suggestInstanceId } from "./agent-instances"
+import type { AgentSetupActions } from "./agent-setup"
 
-/** 向导的三步；数组顺序就是步骤条的显示顺序。 */
-const STEPS = ["agent", "identity", "config"] as const
-type Step = (typeof STEPS)[number]
-
-/** 每一步在步骤条上的名字。 */
-const STEP_LABEL = {
+type Source = "plugin" | "registry" | "manual" | "local"
+type Choice = { agentId: string; source: Source; entry?: AcpRegistryEntry }
+type Step = "agent" | "identity" | "config" | "signIn"
+const stepLabels = {
   agent: "agents.instance.step.agent",
   identity: "agents.instance.step.identity",
   config: "agents.instance.step.config",
+  signIn: "agents.acp.account",
 } as const
 
-interface WizardDraft {
+interface Draft {
   label: string
   idOverride: string | null
   values: AgentSettingsValues
 }
-
-const EMPTY_DRAFT: WizardDraft = { label: "", idOverride: null, values: {} }
-
-function AgentOptions({
-  agents,
-  label,
-  selectedId,
-  onSelect,
-}: {
-  agents: readonly AgentSummary[]
-  label: string
-  selectedId: string | null
-  onSelect: (agentId: string) => void
-}) {
-  if (agents.length === 0) return null
-  return (
-    <div className="wizard-agents" role="listbox" aria-label={label}>
-      {agents.map((agent) => (
-        <button
-          key={agent.agentId}
-          type="button"
-          role="option"
-          aria-selected={selectedId === agent.agentId}
-          className="wizard-agent"
-          onClick={() => onSelect(agent.agentId)}
-        >
-          <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
-          <span className="truncate">{agent.displayName}</span>
-          {selectedId === agent.agentId ? <Check className="ic ic-sm" aria-hidden="true" /> : null}
-        </button>
-      ))}
-    </div>
-  )
-}
+const empty: Draft = { label: "", idOverride: null, values: {} }
+const draftKey = (choice: Choice) =>
+  [choice.agentId, choice.source, choice.source === "registry" ? choice.entry?.id : ""].join("/")
+const isFeatured = (agent: AgentSummary) => agent.featured ?? agent.builtin
 
 export interface InstanceCreateWizardProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  /** 可选的 Agent；停用或没注册的不会列出来。 */
+  onClose: (createdId?: string) => void
   agents: readonly AgentSummary[]
-  /** 打开时预选的 Agent，通常是设置页里正在看的那个。 */
   agentId?: string | null
   onPickPath?: PickPath | undefined
-  loadAcpRegistry?: (() => Promise<AcpRegistryEntry[]>) | undefined
-  onCreateInstance: (draft: AgentInstanceDraft, installRuntime: boolean) => Promise<void>
+  registry?: RegistryActions | undefined
+  setupActions?: AgentSetupActions | undefined
+  openExternal?: ((url: string) => void | Promise<void>) | undefined
+  onCreateInstance: (draft: AgentInstanceDraft) => Promise<string>
 }
 
-/** 渲染新建实例的向导。 */
 export function InstanceCreateWizard({
-  open,
-  onOpenChange,
+  onClose,
   agents,
-  agentId = null,
+  agentId,
   onPickPath,
-  loadAcpRegistry,
+  registry,
+  setupActions,
+  openExternal,
   onCreateInstance,
 }: InstanceCreateWizardProps) {
   const { t } = useLocale()
+  const available = agents.filter((agent) => agent.enabled && agent.registered)
+  const dedicated = available.filter((agent) => !agent.acpRegistry)
+  const featured = dedicated.filter(isFeatured)
+  const more = dedicated.filter((agent) => !isFeatured(agent))
+  const acp = available.find((agent) => agent.acpRegistry)
+  const initial = dedicated.find((agent) => agent.agentId === agentId) ?? featured[0]
+  const [choice, setChoice] = useState<Choice | null>(() =>
+    initial ? { agentId: initial.agentId, source: "plugin" } : null,
+  )
+  const [expanded, setExpanded] = useState(
+    () => !featured.length || agentId === acp?.agentId || Boolean(initial && !isFeatured(initial)),
+  )
   const [step, setStep] = useState<Step>("agent")
-  const [query, setQuery] = useState("")
-  const [pickedId, setPickedId] = useState<string | null>(null)
-  const [useLocalAcp, setUseLocalAcp] = useState(false)
-  const [showMore, setShowMore] = useState(false)
-  const [drafts, setDrafts] = useState(() => new Map<string, WizardDraft>())
+  const [drafts, setDrafts] = useState(() => new Map<string, Draft>())
+  const [created, setCreated] = useState<string>()
+  const [authPhase, setAuthPhase] = useState<AgentAuthState["phase"]>()
+  const [preparing, setPreparing] = useState<string | null>(null)
+  const [failure, setFailure] = useState<{ id: string; message: string } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [rejectedId, setRejectedId] = useState<string | null>(null)
-
-  const selectable = useMemo(
-    () => agents.filter((agent) => agent.enabled && agent.registered),
-    [agents],
-  )
-  const featured = selectable.filter((agent) => agent.builtin && !agent.acpRegistry)
-  const additional = selectable.filter((agent) => !agent.builtin && !agent.acpRegistry)
-  const acp = selectable.find((agent) => agent.acpRegistry)
-  const hasMore = acp !== undefined || additional.length > 0
-  const showMoreInitially =
-    hasMore &&
-    (featured.length === 0 ||
-      (agentId !== null && !featured.some((agent) => agent.agentId === agentId)))
-
-  // 每次打开都从第一步开始，沿用设置页里正在看的 Agent。
+  const [rejected, setRejected] = useState<string>()
+  const busy = useRef(false)
+  const mounted = useRef(true)
   useEffect(() => {
-    if (!open) return
-    setStep("agent")
-    setQuery("")
-    setPickedId(agentId)
-    setUseLocalAcp(false)
-    setShowMore(showMoreInitially)
-    setDrafts(new Map())
-    setError(null)
-    setRejectedId(null)
-  }, [open, agentId, showMoreInitially])
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
-  const picked = selectable.find((agent) => agent.agentId === pickedId) ?? null
-  const registryMode = Boolean(picked?.acpRegistry && loadAcpRegistry && !useLocalAcp)
-  const runtimeFields =
-    picked?.fields.filter((field) =>
-      picked.acpRegistry ? field.key !== "registryId" : field.type !== "env",
-    ) ?? []
-  const usedIds = useMemo(
-    () =>
-      new Set(
-        agents.flatMap((agent) => [
-          agent.agentId,
-          ...agent.instances.map((item) => item.instanceId),
-        ]),
-      ),
-    [agents],
+  const agent = available.find((item) => item.agentId === choice?.agentId)
+  const source = choice?.source
+  const registryChoice = source === "registry" || source === "manual"
+  const form = source === "manual" || source === "local"
+  const key = choice ? draftKey(choice) : ""
+  const draft = drafts.get(key) ?? empty
+  const used = new Set(agents.flatMap((a) => [a.agentId, ...a.instances.map((i) => i.instanceId)]))
+  const added = new Set(
+    acp?.instances.flatMap(({ values }) =>
+      typeof values.registryId === "string" ? [values.registryId] : [],
+    ),
   )
-  const keyword = query.trim().toLowerCase()
-  const matches = (agent: AgentSummary) => agent.displayName.toLowerCase().includes(keyword)
-  const featuredMatches = featured.filter(matches)
-  const moreMatches = additional.filter(matches)
-  const draftKey = picked ? picked.agentId + (registryMode ? "/registry" : "") : null
-  const draft = draftKey ? (drafts.get(draftKey) ?? EMPTY_DRAFT) : EMPTY_DRAFT
-  const registrySelection = registryMode && typeof draft.values.registryId === "string"
-  const hasCommand =
-    typeof draft.values.binaryPath === "string" && draft.values.binaryPath.trim().length > 0
-  const missingCommand = picked?.acpRegistry && !registrySelection && !hasCommand
-  const installRuntime = registrySelection && !hasCommand
   const label = draft.label.trim()
   const instanceId =
-    draft.idOverride ?? (picked ? suggestInstanceId(picked.agentId, label, usedIds) : "")
-  const idTaken = instanceId === rejectedId || instanceIdTaken(instanceId, usedIds)
-  const idValid = customAgentInstanceIdSchema.safeParse(instanceId).success
-  const idError = idTaken
+    draft.idOverride ?? (agent ? suggestInstanceId(agent.agentId, label, used) : "")
+  const taken = instanceId === rejected || instanceIdTaken(instanceId, used)
+  const idError = taken
     ? t("hostError.AGENT_INSTANCE_ID_TAKEN")
-    : !idValid
-      ? t("agents.instance.idHint")
-      : null
+    : customAgentInstanceIdSchema.safeParse(instanceId).success
+      ? null
+      : t("agents.instance.idHint")
+  const command = typeof draft.values.binaryPath === "string" ? draft.values.binaryPath.trim() : ""
+  const registryId =
+    typeof draft.values.registryId === "string" ? draft.values.registryId.trim() : ""
+  const fields = (agent?.fields ?? []).filter((field) => {
+    if (source === "local") return field.key !== "registryId" && field.key !== "authMethodId"
+    if (source === "manual") return true
+    return field.type !== "env" && field.key !== "registryId"
+  })
+  const steps: Step[] =
+    source === "local"
+      ? ["agent", "identity"]
+      : ["agent", "identity", registryChoice ? "signIn" : "config"]
+  const index = steps.indexOf(step)
+  const locked = saving || acpAuthPending(authPhase)
 
-  function updateDraft(update: (current: WizardDraft) => WizardDraft, key = draftKey): void {
-    if (!key) return
-    setDrafts((current) => new Map(current).set(key, update(current.get(key) ?? EMPTY_DRAFT)))
+  function update(patch: Partial<Draft>) {
+    setDrafts((all) => new Map(all).set(key, { ...(all.get(key) ?? empty), ...patch }))
+    setRejected(undefined)
     setError(null)
   }
-
-  function pickAgent(id: string): void {
-    setPickedId(id)
-    setUseLocalAcp(false)
+  function pick(next: Choice) {
+    setChoice(next)
     setError(null)
+    setFailure(null)
+    setRejected(undefined)
   }
-
-  function pickRegistryEntry(entry: AcpRegistryEntry): void {
-    if (!acp) return
-    pickAgent(acp.agentId)
-    updateDraft(
-      () => ({ label: entry.name, idOverride: null, values: { registryId: entry.id } }),
-      `${acp.agentId}/registry`,
-    )
-  }
-
-  function pickLocalAcp(): void {
-    if (!acp) return
-    setPickedId(acp.agentId)
-    setUseLocalAcp(true)
-    setError(null)
-  }
-
-  function goTo(next: Step): void {
+  function go(next: Step) {
     setStep(next)
     setError(null)
   }
-
-  async function create(): Promise<void> {
-    if (!picked || saving) return
-    if (!label || idError) {
-      goTo("identity")
+  async function prepare(id: string, manual = false) {
+    if (!registry || !acp || busy.current) return
+    busy.current = true
+    setPreparing(id)
+    setError(null)
+    setFailure(null)
+    try {
+      const entry = await registry.prepare(id)
+      if (!mounted.current) return
+      const next: Choice = { agentId: acp.agentId, source: manual ? "manual" : "registry", entry }
+      const nextKey = draftKey(next)
+      setDrafts((all) => {
+        const previous = all.get(nextKey) ?? empty
+        return new Map(all).set(nextKey, {
+          ...previous,
+          label: previous.label || entry.name,
+          values: { ...previous.values, registryId: entry.id },
+        })
+      })
+      pick(next)
+      go("identity")
+    } catch (cause) {
+      if (mounted.current) {
+        const message = cause instanceof Error ? cause.message : String(cause)
+        if (manual) setError(message)
+        else setFailure({ id, message })
+      }
+    } finally {
+      busy.current = false
+      if (mounted.current) setPreparing(null)
+    }
+  }
+  function fromSource() {
+    if (!choice || !agent || busy.current) return
+    if (!cleanAgentValues(fields, draft.values)) {
+      setError(t("agents.env.invalid"))
       return
     }
-    const configured = Object.fromEntries(
-      runtimeFields
-        .filter(({ key }) => Object.hasOwn(draft.values, key))
-        .map(({ key }) => [key, draft.values[key]]),
-    )
-    if (registrySelection) configured.registryId = draft.values.registryId
-    const values = cleanAgentValues(runtimeFields, configured)
+    if (source === "manual" && !command) {
+      void prepare(registryId, true)
+      return
+    }
+    if (source === "manual") {
+      pick({ agentId: agent.agentId, source })
+      if (!label) update({ label: registryId })
+    }
+    go("identity")
+  }
+  async function save() {
+    if (!agent || !choice || busy.current || created) return
+    if (!label || idError) {
+      go("identity")
+      return
+    }
+    const values = cleanAgentValues(fields, draft.values)
     if (!values) {
       setError(t("agents.env.invalid"))
       return
     }
+    if (registryChoice) values.registryId = registryId
+    busy.current = true
     setSaving(true)
     setError(null)
     try {
-      await onCreateInstance({ agentId: picked.agentId, instanceId, label, values }, installRuntime)
-      onOpenChange(false)
-    } catch (reason) {
-      const failure = toHostError(reason)
+      const id = await onCreateInstance({
+        agentId: agent.agentId,
+        instanceId,
+        label,
+        values,
+        ...(registryChoice && choice.entry && !command
+          ? { preparedVersion: choice.entry.version }
+          : {}),
+      })
+      if (!mounted.current) return
+      if (registryChoice && setupActions) {
+        setCreated(id)
+        go("signIn")
+      } else onClose(id)
+    } catch (cause) {
+      if (!mounted.current) return
+      const failure = toHostError(cause)
       if (failure.code === "AGENT_INSTANCE_ID_TAKEN") {
-        setRejectedId(instanceId)
-        updateDraft((current) => ({ ...current, idOverride: instanceId }))
-        goTo("identity")
+        setRejected(instanceId)
+        go("identity")
       } else {
         const key = hostErrorMessageKey(failure.code)
         setError(key ? t(key) : t("agents.failed").replace("{reason}", failure.message))
       }
     } finally {
-      setSaving(false)
+      busy.current = false
+      if (mounted.current) setSaving(false)
     }
   }
+  const editFields = (
+    <AgentFields
+      fields={fields}
+      values={draft.values}
+      onPickPath={onPickPath}
+      onChange={(name, value) => update({ values: { ...draft.values, [name]: value } })}
+    />
+  )
+  const nextDisabled =
+    !agent ||
+    preparing !== null ||
+    (source === "local" && !command) ||
+    (source === "manual" && !acpRegistryAgentIdSchema.safeParse(registryId).success)
+  const finish = step === "config" || (step === "identity" && source !== "plugin")
 
   return (
     <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!saving) onOpenChange(next)
+      open
+      onOpenChange={(open) => {
+        if (!open && !locked) onClose(created)
       }}
     >
       <Dialog.Content
         className="instance-wizard"
         title={t("agents.instance.addTitle")}
-        description={t("agents.instance.addDescription")}
         closeLabel={t("common.close")}
-        closeDisabled={saving}
+        closeDisabled={locked}
       >
         <Dialog.Body>
           <ol className="wizard-steps" aria-label={t("agents.instance.steps")}>
-            {STEPS.map((item, index) => {
-              const current = item === step
-              const done = STEPS.indexOf(step) > index
-              return (
-                <li key={item} className="wizard-step" data-current={current || undefined}>
-                  <button
-                    type="button"
-                    className="wizard-step-btn"
-                    aria-current={current ? "step" : undefined}
-                    disabled={saving || (!done && !current)}
-                    onClick={() => goTo(item)}
-                  >
-                    <span className="wizard-step-mark" data-done={done || undefined}>
-                      {done ? <Check className="ic ic-sm" aria-hidden="true" /> : index + 1}
-                    </span>
-                    {t(STEP_LABEL[item])}
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
-
-          {step === "agent" ? (
-            <div className="wizard-pane">
-              {featured.length + additional.length > 0 ? (
-                <SearchField
-                  size="lg"
-                  value={query}
-                  onValueChange={setQuery}
-                  placeholder={t("agents.instance.search")}
-                />
-              ) : null}
-              {selectable.length === 0 ||
-              (keyword &&
-                featuredMatches.length === 0 &&
-                (!showMore || moreMatches.length === 0)) ? (
-                <p className="agent-muted">
-                  {t(
-                    selectable.length === 0
-                      ? "agents.instance.noAgents"
-                      : "agents.instance.noMatches",
-                  )}
-                </p>
-              ) : null}
-              <AgentOptions
-                agents={featuredMatches}
-                label={t("agents.list")}
-                selectedId={pickedId}
-                onSelect={pickAgent}
-              />
-              {hasMore ? (
-                <Button
-                  size="sm"
+            {steps.map((item, i) => (
+              <li key={item} className="wizard-step" data-current={i === index || undefined}>
+                <button
                   type="button"
-                  variant="secondary"
-                  className="self-start"
-                  aria-expanded={showMore}
-                  onClick={() => setShowMore(!showMore)}
+                  className="wizard-step-btn"
+                  aria-current={i === index ? "step" : undefined}
+                  disabled={Boolean(created) || saving || preparing !== null || i > index}
+                  onClick={() => go(item)}
                 >
-                  {t(showMore ? "agents.instance.showLess" : "agents.instance.showMore")}
-                </Button>
-              ) : null}
-              {showMore ? (
+                  <span className="wizard-step-mark" data-done={i < index || undefined}>
+                    {i < index ? <Check className="ic ic-sm" aria-hidden="true" /> : i + 1}
+                  </span>
+                  {t(stepLabels[item])}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {step === "agent" && (
+            <div className="wizard-pane wizard-sources">
+              {available.length === 0 && (
+                <p className="agent-muted">{t("agents.instance.noAgents")}</p>
+              )}
+              <AgentChoices
+                agents={featured}
+                label={t("agents.list")}
+                selectedId={choice?.agentId}
+                disabled={preparing !== null}
+                onSelect={(a) => pick({ agentId: a.agentId, source: "plugin" })}
+              />
+              {(acp || more.length > 0) && (
+                <button
+                  type="button"
+                  className="wizard-disclosure"
+                  disabled={preparing !== null}
+                  aria-expanded={expanded}
+                  onClick={() => {
+                    if (expanded && agent && (!isFeatured(agent) || agent.acpRegistry)) {
+                      const first = featured[0]
+                      setChoice(first ? { agentId: first.agentId, source: "plugin" } : null)
+                      setError(null)
+                    }
+                    setExpanded(!expanded)
+                  }}
+                >
+                  {t(expanded ? "agents.instance.showLess" : "agents.instance.showMore")}
+                  <ChevronDown className="ic ic-xs" aria-hidden="true" />
+                </button>
+              )}
+              {expanded && (
                 <>
-                  <AgentOptions
-                    agents={moreMatches}
+                  <AgentChoices
+                    agents={more}
                     label={t("agents.instance.showMore")}
-                    selectedId={pickedId}
-                    onSelect={pickAgent}
+                    selectedId={choice?.agentId}
+                    disabled={preparing !== null}
+                    onSelect={(a) => pick({ agentId: a.agentId, source: "plugin" })}
                   />
-                  {acp && loadAcpRegistry ? (
-                    <AcpRegistryPicker
-                      load={loadAcpRegistry}
-                      selected={registrySelection ? draft.values.registryId : undefined}
-                      localSelected={picked?.agentId === acp.agentId && useLocalAcp}
-                      onUseLocal={pickLocalAcp}
-                      onSelect={pickRegistryEntry}
-                    />
-                  ) : acp ? (
-                    <Button
-                      size="sm"
-                      type="button"
-                      className="self-start"
-                      aria-pressed={picked?.agentId === acp.agentId}
-                      onClick={pickLocalAcp}
-                    >
-                      {t("agents.acp.useLocal")}
-                    </Button>
-                  ) : null}
+                  {acp &&
+                    (form ? (
+                      <section className="acp-registry">
+                        <div className="acp-manual-heading">
+                          <span>
+                            {t(source === "manual" ? "agents.acp.manual" : "agents.acp.useLocal")}
+                          </span>
+                          {registry && (
+                            <Button
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                              disabled={preparing !== null}
+                              onClick={() => {
+                                setChoice(null)
+                                setError(null)
+                              }}
+                            >
+                              {t("agents.acp.backToList")}
+                            </Button>
+                          )}
+                        </div>
+                        <fieldset className="wizard-config" disabled={preparing !== null}>
+                          {editFields}
+                        </fieldset>
+                      </section>
+                    ) : registry ? (
+                      <AcpRegistryPicker
+                        load={registry.list}
+                        added={added}
+                        preparing={preparing}
+                        failure={failure}
+                        openExternal={openExternal}
+                        onAdd={(e) => void prepare(e.id)}
+                        onManual={() => pick({ agentId: acp.agentId, source: "manual" })}
+                        onLocal={() => pick({ agentId: acp.agentId, source: "local" })}
+                      />
+                    ) : (
+                      <Button
+                        size="sm"
+                        type="button"
+                        onClick={() => pick({ agentId: acp.agentId, source: "local" })}
+                      >
+                        {t("agents.acp.useLocal")}
+                      </Button>
+                    ))}
                 </>
-              ) : null}
+              )}
             </div>
-          ) : null}
-
-          {step === "identity" && picked ? (
-            <div className="wizard-pane">
-              <div className="wizard-picked">
-                <AgentIcon agentId={picked.agentId} name={picked.displayName} />
-                <span>{picked.displayName}</span>
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="instance-wizard-label">
-                  {t("agents.instance.name")}
-                </label>
-                <Input
-                  size="xl"
-                  id="instance-wizard-label"
-                  value={draft.label}
-                  autoFocus
-                  maxLength={120}
-                  placeholder={t("agents.instance.namePlaceholder")}
-                  onChange={(event) => {
-                    const name = event.target.value
-                    updateDraft((current) => ({ ...current, label: name }))
-                  }}
-                />
-              </div>
-              <div className="field">
-                <label className="label" htmlFor="instance-wizard-id">
-                  {t("agents.instance.idLabel")}
-                </label>
-                <Input
-                  size="xl"
-                  id="instance-wizard-id"
-                  className="mono"
-                  value={instanceId}
-                  maxLength={AGENT_INSTANCE_ID_MAX_LENGTH}
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-invalid={idError !== null}
-                  aria-describedby="instance-wizard-id-hint"
-                  onChange={(event) => {
-                    const id = event.target.value
-                    updateDraft((current) => ({ ...current, idOverride: id }))
-                  }}
-                />
-                <p id="instance-wizard-id-hint" className={idError ? "error-text" : "hint"}>
-                  {idError ?? t("agents.instance.idHint")}
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {step === "config" && picked ? (
+          )}
+          {step === "identity" && agent && (
+            <InstanceIdentity
+              agent={agent}
+              entry={choice?.entry}
+              label={draft.label}
+              instanceId={instanceId}
+              idError={idError}
+              onLabel={(name) => update({ label: name })}
+              onId={(id) => update({ idOverride: id })}
+              openExternal={openExternal}
+            />
+          )}
+          {step === "config" && (
             <fieldset className="wizard-pane wizard-config" disabled={saving}>
-              {runtimeFields.length > 0 ? (
-                <AgentFields
-                  fields={runtimeFields}
-                  values={draft.values}
-                  onChange={(key, value) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      values: { ...current.values, [key]: value },
-                    }))
-                  }
-                  onPickPath={onPickPath}
-                />
+              {fields.length ? (
+                editFields
               ) : (
                 <p className="agent-muted">{t("agents.instance.noConfig")}</p>
               )}
             </fieldset>
-          ) : null}
+          )}
+          {step === "signIn" && created && setupActions && (
+            <div className="wizard-pane acp-sign-in">
+              <div className="acp-identity">
+                {choice?.entry ? (
+                  <RegistryIcon entry={choice.entry} />
+                ) : (
+                  <span className="acp-registry-icon">
+                    <Check className="ic" aria-hidden="true" />
+                  </span>
+                )}
+                <div className="acp-registry-copy">
+                  <span className="acp-registry-name">{label}</span>
+                  <span className="acp-registry-description mono">{created}</span>
+                </div>
+                {openExternal && (choice?.entry?.website || choice?.entry?.repository) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      void openExternal(choice?.entry?.website || choice?.entry?.repository || "")
+                    }
+                  >
+                    {t("agents.homepage")}
+                  </Button>
+                )}
+              </div>
+              <AcpAccount
+                key={created}
+                actions={setupActions}
+                instanceId={created}
+                onPhase={setAuthPhase}
+                methodId={
+                  typeof draft.values.authMethodId === "string"
+                    ? draft.values.authMethodId
+                    : undefined
+                }
+              />
+            </div>
+          )}
         </Dialog.Body>
         <Dialog.Footer className="wizard-footer">
-          {error ? (
+          {error && (
             <p className="error-text wizard-error" role="alert">
               {error}
             </p>
-          ) : null}
-          {step === "agent" ? (
-            <Dialog.Close render={<Button size="lg" type="button" variant="ghost" />}>
-              {t("agents.instance.cancel")}
-            </Dialog.Close>
-          ) : (
-            <Button
-              size="lg"
-              type="button"
-              variant="ghost"
-              disabled={saving}
-              onClick={() => goTo(STEPS[STEPS.indexOf(step) - 1] ?? "agent")}
-            >
-              {t("agents.instance.back")}
-            </Button>
           )}
-          {step === "config" ? (
+          {created ? (
             <Button
               size="lg"
               type="button"
-              variant="primary"
-              disabled={saving || !picked || missingCommand}
-              onClick={() => void create()}
+              variant={authPhase === "connected" ? "primary" : "secondary"}
+              disabled={locked}
+              onClick={() => onClose(created)}
             >
-              {t(
-                saving
-                  ? "agents.saving"
-                  : installRuntime
-                    ? "agents.acp.createAndInstall"
-                    : "agents.instance.create",
-              )}
+              {t(authPhase === "connected" ? "agents.acp.done" : "agents.acp.skip")}
             </Button>
           ) : (
-            <Button
-              size="lg"
-              type="button"
-              variant="primary"
-              disabled={
-                saving ||
-                !picked ||
-                (registryMode && !registrySelection) ||
-                (step === "identity" && (!label || idError !== null))
-              }
-              onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1] ?? step)}
-            >
-              {t("agents.instance.next")}
-            </Button>
+            <>
+              <Button
+                size="lg"
+                type="button"
+                variant="ghost"
+                disabled={saving}
+                onClick={() => (step === "agent" ? onClose() : go(steps[index - 1] ?? "agent"))}
+              >
+                {t(step === "agent" ? "agents.instance.cancel" : "agents.instance.back")}
+              </Button>
+              <Button
+                size="lg"
+                type="button"
+                variant="primary"
+                disabled={
+                  saving || nextDisabled || (step === "identity" && (!label || idError !== null))
+                }
+                onClick={() => {
+                  if (finish) void save()
+                  else if (step === "agent") fromSource()
+                  else go("config")
+                }}
+              >
+                {t(
+                  saving
+                    ? "agents.saving"
+                    : preparing && source === "manual"
+                      ? "agents.acp.preparing"
+                      : finish
+                        ? registryChoice
+                          ? "agents.acp.continueSignIn"
+                          : "agents.instance.create"
+                        : "agents.instance.next",
+                )}
+              </Button>
+            </>
           )}
         </Dialog.Footer>
       </Dialog.Content>

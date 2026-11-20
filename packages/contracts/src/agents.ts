@@ -114,6 +114,9 @@ export interface AcpRegistryEntry {
   version: string
   description: string
   license?: string
+  icon?: string
+  website?: string
+  repository?: string
   distribution: "binary" | "npx" | "uvx"
 }
 
@@ -130,6 +133,7 @@ export const agentContributionSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
     acpRegistry: z.boolean().optional(),
+    featured: z.boolean().optional(),
     /** 已由这个专用插件接入的 ACP Registry 条目。 */
     acpRegistryAgentIds: z.array(acpRegistryAgentIdSchema).optional(),
     description: localizedTextSchema.optional(),
@@ -207,7 +211,7 @@ export const agentStatusSchema = z.object({
 
 const agentAuthFlowId = z.string().uuid()
 export const agentAuthActionSchema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("status") }),
+  z.object({ action: z.literal("status"), refresh: z.boolean().optional() }),
   z.object({ action: z.literal("start"), methodId: z.string().min(1).max(256).optional() }),
   z.object({
     action: z.literal("submit"),
@@ -215,6 +219,14 @@ export const agentAuthActionSchema = z.discriminatedUnion("action", [
     response: z.string().trim().min(1).max(16_384),
   }),
   z.object({ action: z.literal("cancel"), flowId: agentAuthFlowId }),
+  z.object({
+    action: z.literal("terminal"),
+    flowId: agentAuthFlowId,
+    data: z.string().max(65_536).optional(),
+    size: z
+      .object({ cols: z.number().int().min(1).max(1000), rows: z.number().int().min(1).max(500) })
+      .optional(),
+  }),
   z.object({ action: z.literal("logout") }),
 ])
 
@@ -228,6 +240,8 @@ export interface AgentAuthState {
   usingCliLogin?: boolean
   methods?: readonly { id: string; name: string }[]
   canLogout?: boolean
+  /** 当前登录 PTY 的有限回放，offset 是输出末尾的字符位置。 */
+  terminal?: { output: string; offset: number }
 }
 
 export interface AgentCliProgress {
@@ -252,6 +266,7 @@ export const agentSummarySchema = z.object({
   features: agentFeaturesSchema.nullable(),
   executionModes: agentExecutionModesSchema.nullish(),
   accountSetup: z.boolean().optional(),
+  featured: z.boolean().optional(),
   acpRegistry: z.boolean().optional(),
   managedCli: z.boolean().optional(),
   description: localizedTextSchema.nullable(),
@@ -305,7 +320,13 @@ export type AgentSummary = z.infer<typeof agentSummarySchema>
 export type AgentList = z.infer<typeof agentListSchema>
 export type AgentInstance = z.infer<typeof agentInstanceSchema>
 export type AgentInstancePatch = z.infer<typeof agentInstancePatchSchema>
-export type AgentInstanceDraft = Pick<AgentInstance, "agentId" | "instanceId" | "label" | "values">
+export type AgentInstanceDraft = Pick<
+  AgentInstance,
+  "agentId" | "instanceId" | "label" | "values"
+> & {
+  /** 确认创建时启用已经准备好的版本。 */
+  preparedVersion?: string
+}
 
 /**
  * 按 locale 取文案：完整 locale → 语言前缀 → 英文 → 第一条。

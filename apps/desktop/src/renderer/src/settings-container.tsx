@@ -86,6 +86,11 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     () => connection.call("agent.acpRegistry", {}) as Promise<AcpRegistryEntry[]>,
     [connection],
   )
+  const prepareAcpRegistry = useCallback(
+    (registryId: string) =>
+      connection.call("agent.prepareAcpRegistry", { registryId }) as Promise<AcpRegistryEntry>,
+    [connection],
+  )
   const accountChanged = useCallback(
     (instanceId: string) => {
       void detect({ instanceId, refresh: true }).catch(() => undefined)
@@ -132,7 +137,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       checkingCliUpdates={cliUpdates.checking}
       onCheckCliUpdates={cliUpdates.check}
       onUpdateCli={cliUpdates.update}
-      loadAcpRegistry={loadAcpRegistry}
+      registry={{ list: loadAcpRegistry, prepare: prepareAcpRegistry }}
       setupActions={{
         auth,
         accountChanged,

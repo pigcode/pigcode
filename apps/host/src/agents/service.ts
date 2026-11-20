@@ -62,6 +62,8 @@ export interface ApprovalHandle {
 export interface AgentsService {
   cliUpdates(): Record<string, import("@pigcode/contracts").AgentCliUpdateState>
   acpRegistry(): Promise<AcpRegistryEntry[]>
+  prepareAcpRegistry(registryId: string): Promise<AcpRegistryEntry>
+  activateAcpRegistry(registryId: string, version: string): Promise<void>
   checkCliUpdates(
     instanceId?: string,
   ): Promise<Record<string, import("@pigcode/contracts").AgentCliUpdateState>>

@@ -62,6 +62,8 @@ export interface DefaultAgentChoice {
 /** agent 目录对 agents 服务暴露的方法。 */
 export interface AgentCatalog {
   acpRegistry(): Promise<AcpRegistryEntry[]>
+  prepareAcpRegistry(registryId: string): Promise<AcpRegistryEntry>
+  activateAcpRegistry(registryId: string, version: string): Promise<void>
   /** 默认实例的设置；旧的调用方式，等价于 settingsForInstance(agentId, agentId)。 */
   settingsFor(agentId: string): AgentSettingsValues
   /** 指定实例的设置；实例不存在或不属于这个 agent 时退回默认实例。 */
@@ -134,8 +136,13 @@ export function createAgentCatalog(
     detections.invalidate(instanceId)
   }
 
+  function agentDirectory(agentId: string) {
+    return dataDir && join(dataDir, createHash("sha256").update(agentId).digest("hex"))
+  }
+
   function instanceContext(instance: AgentInstance): AgentInstanceContext | undefined {
-    if (!dataDir) return undefined
+    const sharedDir = agentDirectory(instance.agentId)
+    if (!sharedDir) return undefined
     const stored = instance.isDefault
       ? undefined
       : readStoredInstances(store())[instance.instanceId]
@@ -148,13 +155,13 @@ export function createAgentCatalog(
         ]),
       )
       .digest("hex")
-    const agentKey = createHash("sha256").update(instance.agentId).digest("hex")
-    const sharedDir = join(dataDir, agentKey)
+    const terminal = ctx.get("terminal")
     return {
       instanceId: instance.instanceId,
       sharedDir,
       dataDir: join(sharedDir, "instances", key),
       invalidate: () => invalidate(instance.instanceId),
+      ...(terminal ? { openLoginTerminal: terminal.openLoginTerminal } : {}),
     }
   }
 
@@ -187,6 +194,19 @@ export function createAgentCatalog(
   }
 
   return {
+    async prepareAcpRegistry(registryId) {
+      const driver = drivers.get("acp")
+      const dir = agentDirectory("acp")
+      if (!driver?.prepareAcpRegistry || !dir) throw new Error("ACP Registry is unavailable")
+      return driver.prepareAcpRegistry(registryId, dir)
+    },
+    async activateAcpRegistry(registryId, version) {
+      const driver = drivers.get("acp")
+      const dir = agentDirectory("acp")
+      if (!driver?.activateAcpRegistry || !dir) throw new Error("ACP Registry is unavailable")
+      await driver.activateAcpRegistry(registryId, version, dir)
+      invalidate()
+    },
     async acpRegistry() {
       const entries = await drivers.get("acp")?.acpRegistry?.()
       if (!entries?.length) return []

@@ -2,7 +2,13 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, expect, it, vi } from "vitest"
-import type { AgentSummary } from "@pigcode/contracts"
+import type {
+  AcpRegistryEntry,
+  AgentAuthState,
+  AgentInstance,
+  AgentInstanceDraft,
+  AgentSummary,
+} from "@pigcode/contracts"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { AgentsPage } from "./agents-page"
 
@@ -12,7 +18,7 @@ const acp: AgentSummary = {
   agentId: "acp",
   displayName: "ACP",
   pluginId: "agent.@pigcode/agent-acp",
-  version: "0.1.0",
+  version: "0.99.7",
   builtin: true,
   enabled: true,
   registered: true,
@@ -21,33 +27,66 @@ const acp: AgentSummary = {
   description: null,
   homepage: null,
   installHint: null,
-  fields: [
-    { key: "binaryPath", type: "path", pathKind: "file", label: "可执行文件" },
-    { key: "arguments", type: "arguments", label: "启动参数" },
-    { key: "registryId", type: "text", label: "ACP Registry ID" },
-  ],
   customModels: false,
   values: {},
   error: null,
   instances: [],
+  fields: [
+    { key: "binaryPath", type: "path", pathKind: "file", label: "可执行文件" },
+    { key: "arguments", type: "arguments", label: "启动参数" },
+    { key: "registryId", type: "text", label: "ACP Registry ID" },
+    { key: "authMethodId", type: "text", label: "认证方式 ID" },
+  ],
 }
 
-async function openAcpWizard() {
-  const onCreateInstance = vi.fn(async () => "acp-new")
-  const onUpdateCli = vi.fn(async () => undefined)
-  const noop = async () => undefined
+const item: AcpRegistryEntry = {
+  id: "amp-acp",
+  name: "Amp",
+  version: "0.13.0",
+  description: "Amp ACP adapter",
+  distribution: "binary",
+  website: "https://example.org/amp",
+}
+const noop = async () => undefined
+const account: AgentAuthState = {
+  phase: "signed-out",
+  flowId: null,
+  error: null,
+  authorizationUrl: null,
+  expiresAt: null,
+  methods: [{ id: "terminal", name: "Terminal" }],
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+async function openWizard(
+  options: {
+    prepare?: (id: string) => Promise<AcpRegistryEntry>
+    create?: (draft: AgentInstanceDraft) => Promise<string>
+    instances?: AgentInstance[]
+  } = {},
+) {
+  const prepare = vi.fn(options.prepare ?? (async () => item))
+  const create = vi.fn(options.create ?? (async (draft: AgentInstanceDraft) => draft.instanceId))
+  const auth = vi.fn(async () => account)
+  const openExternal = vi.fn(noop)
   const dedicated = {
     ...acp,
+    acpRegistry: false,
     agentId: "claude",
     displayName: "Claude Code",
-    version: "0.99.7",
-    acpRegistry: false,
+    featured: true,
   }
-  const external = { ...dedicated, agentId: "echo", displayName: "Echo", builtin: false }
+  const secondary = { ...dedicated, agentId: "other", displayName: "Other", featured: false }
   render(
     <LocaleProvider locale="zh-CN">
       <AgentsPage
-        agents={[dedicated, acp, external]}
+        agents={[dedicated, secondary, { ...acp, instances: options.instances ?? [] }]}
         defaultAgentId={null}
         statuses={{}}
         onDetect={noop}
@@ -56,85 +95,122 @@ async function openAcpWizard() {
         onSetDefault={noop}
         onUpdateInstance={noop}
         onRemoveInstance={noop}
-        onCreateInstance={onCreateInstance}
-        onUpdateCli={onUpdateCli}
-        loadAcpRegistry={async () => [
-          {
-            id: "fixture",
-            name: "Registry fixture",
-            description: "Fixture",
-            version: "1.0.0",
-            distribution: "binary",
-          },
-        ]}
+        onCreateInstance={create}
+        onOpenExternal={openExternal}
+        setupActions={{ auth, accountChanged: vi.fn(), cancelInstall: noop, removeInstall: noop }}
+        registry={{ list: async () => [item], prepare }}
       />
     </LocaleProvider>,
   )
   await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
   const wizard = within(screen.getByRole("dialog"))
   expect(wizard.getByRole("option", { name: "Claude Code" })).toBeTruthy()
+  expect(wizard.queryByRole("option", { name: "Other" })).toBeNull()
   expect(wizard.queryByText("0.99.7")).toBeNull()
-  expect(wizard.queryByRole("option", { name: "Echo" })).toBeNull()
-  expect(wizard.queryByPlaceholderText("搜索 ACP Registry")).toBeNull()
   await userEvent.click(wizard.getByRole("button", { name: "更多 Agent" }))
-  expect(wizard.getByRole("option", { name: "Echo" })).toBeTruthy()
-  return { onCreateInstance, onUpdateCli }
+  expect(wizard.getByRole("option", { name: "Other" })).toBeTruthy()
+  return { wizard, prepare, create, auth, openExternal }
 }
+const button = (name: string) => screen.getByRole("button", { name })
+const field = (name: string) => screen.getByRole("textbox", { name })
 
-const next = () => userEvent.click(screen.getByRole("button", { name: "下一步" }))
-const create = () => userEvent.click(screen.getByRole("button", { name: "创建实例" }))
-
-it("preserves spaces in the local ACP executable and literal arguments", async () => {
-  const { onCreateInstance, onUpdateCli } = await openAcpWizard()
-  await userEvent.click(screen.getByRole("button", { name: "使用已有命令" }))
-  await next()
-  await userEvent.type(screen.getByRole("textbox", { name: "实例名称" }), "Local")
-  await next()
-  await userEvent.type(screen.getByRole("textbox", { name: "可执行文件" }), "/path/to/acp command")
-  fireEvent.change(screen.getByRole("textbox", { name: "启动参数" }), {
-    target: { value: "acp\nwith spaces" },
+it("prepares from the row before identity, saves once, and offers account setup after the save", async () => {
+  const installing = deferred<AcpRegistryEntry>()
+  const saving = deferred<string>()
+  const { prepare, create, auth, openExternal, wizard } = await openWizard({
+    prepare: () => installing.promise,
+    create: () => saving.promise,
   })
-  await create()
-  expect(onCreateInstance).toHaveBeenCalledWith(
-    expect.objectContaining({
+  await userEvent.click(await wizard.findByRole("button", { name: "了解 Amp" }))
+  expect(openExternal).toHaveBeenCalledWith(item.website)
+  expect(prepare).not.toHaveBeenCalled()
+  expect(wizard.queryByText(item.version)).toBeNull()
+  await userEvent.click(button("添加 Amp"))
+  expect(prepare).toHaveBeenCalledExactlyOnceWith(item.id)
+  expect(button("下载中… Amp")).toHaveProperty("disabled", true)
+  expect(create).not.toHaveBeenCalled()
+  installing.resolve(item)
+  expect(await wizard.findByRole("textbox", { name: "实例名称" })).toHaveProperty("value", "Amp")
+  expect(wizard.getByText("0.13.0 · binary")).toBeTruthy()
+  await userEvent.click(button("继续登录"))
+  expect(create).toHaveBeenCalledExactlyOnceWith({
+    agentId: "acp",
+    label: "Amp",
+    preparedVersion: item.version,
+    instanceId: "acp_amp",
+    values: { registryId: "amp-acp" },
+  })
+  expect(auth).not.toHaveBeenCalled()
+  saving.resolve("acp_amp")
+  await wizard.findByRole("button", { name: "登录 · Terminal" })
+  expect(auth).toHaveBeenCalledWith("acp_amp", { action: "status", refresh: true })
+  await userEvent.click(button("稍后登录"))
+  expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+it("retries a failed preparation in place and can leave the prepared draft without creating an instance", async () => {
+  const attempt = vi
+    .fn<(id: string) => Promise<AcpRegistryEntry>>()
+    .mockRejectedValueOnce(new Error("Download failed"))
+    .mockResolvedValue(item)
+  const { wizard, create } = await openWizard({ prepare: attempt })
+  await userEvent.click(await wizard.findByRole("button", { name: "添加 Amp" }))
+  expect((await wizard.findByRole("alert")).textContent).toContain("Download failed")
+  await userEvent.click(button("重试 Amp"))
+  await wizard.findByRole("textbox", { name: "实例名称" })
+  await userEvent.click(wizard.getByRole("button", { name: "关闭" }))
+  expect(attempt).toHaveBeenCalledTimes(2)
+  expect(create).not.toHaveBeenCalled()
+})
+
+it("uses the manual registry ID and executable override for a second configuration", async () => {
+  const instances: AgentInstance[] = [
+    {
       agentId: "acp",
+      instanceId: "acp_amp",
+      label: "Amp",
+      isDefault: false,
+      enabled: true,
+      createdAt: null,
+      values: { registryId: item.id },
+    },
+  ]
+  const { wizard, prepare, create } = await openWizard({ instances })
+  expect(await wizard.findByRole("button", { name: "已添加 Amp" })).toHaveProperty("disabled", true)
+  await userEvent.click(button("手动填写"))
+  await userEvent.type(field("ACP Registry ID"), item.id)
+  await userEvent.type(field("可执行文件"), "my-amp-acp")
+  await userEvent.type(field("认证方式 ID"), "terminal")
+  await userEvent.click(button("下一步"))
+  await userEvent.clear(field("实例名称"))
+  await userEvent.type(field("实例名称"), "Amp")
+  expect(field("实例 ID")).not.toHaveProperty("value", "acp_amp")
+  await userEvent.click(button("继续登录"))
+  expect(prepare).not.toHaveBeenCalled()
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      label: "Amp",
+      values: { registryId: item.id, binaryPath: "my-amp-acp", authMethodId: "terminal" },
+    }),
+  )
+})
+
+it("takes the literal local command before identity and finishes without an install or login step", async () => {
+  const { wizard, prepare, create, auth } = await openWizard()
+  await userEvent.click(button("本地 ACP 命令"))
+  expect(button("下一步")).toHaveProperty("disabled", true)
+  await userEvent.type(field("可执行文件"), "/path/to/acp command")
+  fireEvent.change(field("启动参数"), { target: { value: "acp\nwith spaces" } })
+  await userEvent.click(button("下一步"))
+  await userEvent.type(wizard.getByRole("textbox", { name: "实例名称" }), "Local")
+  await userEvent.click(button("创建实例"))
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
       label: "Local",
       values: { binaryPath: "/path/to/acp command", arguments: ["acp", "with spaces"] },
     }),
   )
-  expect(onUpdateCli).not.toHaveBeenCalled()
-})
-
-async function chooseRegistryAgent() {
-  await userEvent.click(await screen.findByRole("option", { name: /Registry fixture.*1\.0\.0/ }))
-  await next()
-  await next()
-}
-
-it("starts managed installation when adding a Registry instance", async () => {
-  const { onCreateInstance, onUpdateCli } = await openAcpWizard()
-  await chooseRegistryAgent()
-  expect(onUpdateCli).not.toHaveBeenCalled()
-  await userEvent.click(screen.getByRole("button", { name: "添加并安装" }))
-  expect(onCreateInstance).toHaveBeenCalledWith(
-    expect.objectContaining({
-      agentId: "acp",
-      label: "Registry fixture",
-      values: { registryId: "fixture" },
-    }),
-  )
-  expect(onUpdateCli).toHaveBeenCalledExactlyOnceWith("acp-new")
-})
-
-it("keeps the Registry entry when an existing executable supplies its runtime", async () => {
-  const { onCreateInstance, onUpdateCli } = await openAcpWizard()
-  await chooseRegistryAgent()
-  await userEvent.type(screen.getByRole("textbox", { name: "可执行文件" }), "fixture-acp")
-  await create()
-  expect(onCreateInstance).toHaveBeenCalledWith(
-    expect.objectContaining({
-      values: { registryId: "fixture", binaryPath: "fixture-acp" },
-    }),
-  )
-  expect(onUpdateCli).not.toHaveBeenCalled()
+  expect(prepare).not.toHaveBeenCalled()
+  expect(auth).not.toHaveBeenCalled()
+  expect(screen.queryByRole("dialog")).toBeNull()
 })

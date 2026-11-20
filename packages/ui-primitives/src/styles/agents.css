@@ -636,7 +636,7 @@
 
 /* ─── 新建实例的向导 ─── */
 .dialog.instance-wizard {
-  width: min(560px, calc(100vw - 48px));
+  width: min(680px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -644,6 +644,11 @@
 .instance-wizard > .dialog-head,
 .instance-wizard > .dialog-foot {
   flex: none;
+}
+.instance-wizard > .dialog-head,
+.instance-wizard > .dialog-body,
+.instance-wizard > .dialog-foot {
+  padding-inline: var(--space-9);
 }
 .instance-wizard > .dialog-body {
   min-height: 0;
@@ -706,23 +711,22 @@
 .wizard-pane {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-7);
   min-height: var(--wizard-pane-min-h);
 }
-/* 第一步：agent 卡片两列，窄窗口一列 */
+/* 专用 Agent 是选择项，目录里的添加操作在单列清单内。 */
 .wizard-agents {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: var(--space-3);
-  max-height: 300px;
-  overflow-y: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
 }
 .wizard-agent {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   min-width: 0;
-  padding: var(--space-4);
+  min-height: var(--row-h-lg);
+  padding: var(--space-4) var(--space-6);
   border-radius: var(--r-lg);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border);
@@ -739,13 +743,8 @@
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
 .wizard-agent > .agent-icon {
-  width: var(--avatar-lg);
-  height: var(--avatar-lg);
-}
-.wizard-agent > .agent-icon:has(> .agent-brand) {
-  border-radius: var(--r-lg);
-  background: var(--field);
-  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  width: var(--control-sm);
+  height: var(--control-sm);
 }
 .wizard-agent .agent-brand {
   width: var(--agent-icon-size);
@@ -754,13 +753,143 @@
 .wizard-agent .entity-avatar {
   --avatar-size: var(--avatar-lg);
 }
-.wizard-agent-text {
+.wizard-agent > .ic:last-child {
+  margin-inline-start: auto;
+}
+.wizard-sources {
+  min-height: 0;
+}
+.wizard-disclosure {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-sm);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.wizard-disclosure:hover {
+  color: var(--fg);
+}
+.wizard-disclosure[aria-expanded="true"] .ic {
+  transform: rotate(180deg);
+}
+.acp-registry,
+.acp-account {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+.acp-registry-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.acp-registry-heading::after {
+  content: "";
+  flex: 1;
+  border-top: var(--hair) solid var(--divider);
+}
+.acp-registry-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+.acp-registry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: min(280px, 36vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.acp-registry-row,
+.acp-identity {
+  display: grid;
+  grid-template-columns: var(--control-sm) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-6);
+  min-height: var(--acp-directory-row-height);
+  padding-inline: var(--space-2);
+}
+.acp-registry-item + .acp-registry-item {
+  border-top: var(--hair) solid var(--divider);
+}
+.acp-registry-icon {
+  display: grid;
+  place-items: center;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  color: var(--muted);
+}
+.acp-registry-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+[data-theme="dark"] .acp-registry-icon img {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+.acp-registry-copy {
   display: flex;
   min-width: 0;
-  flex: 1;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--space-1);
+}
+.acp-registry-name {
+  font-size: var(--fs-xl);
+  font-weight: 500;
+}
+.acp-registry-description,
+.acp-registry-notice {
+  color: var(--muted);
   font-size: var(--fs-sm);
+}
+.acp-registry-actions,
+.acp-manual-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+.acp-registry-add {
+  min-width: 76px;
+}
+.acp-registry-error {
+  margin: 0 0 var(--space-4) calc(var(--control-sm) + var(--space-6));
+}
+.acp-manual-heading {
+  justify-content: space-between;
+}
+.acp-identity {
+  border-bottom: var(--hair) solid var(--divider);
+}
+.acp-account > .btn {
+  justify-self: start;
+}
+.acp-login-terminal {
+  display: flex;
+  height: min(var(--acp-login-terminal-height), 32vh);
+  min-height: var(--acp-login-terminal-min-height);
+  overflow: hidden;
+  border-radius: var(--r-block);
+  background: var(--term-bg);
+}
+@media (max-width: 520px) {
+  .wizard-agents {
+    grid-template-columns: 1fr;
+  }
+  .acp-registry-tools {
+    grid-template-columns: auto 1fr;
+    justify-items: start;
+  }
+  .acp-registry-tools > :first-child {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
 }
 .wizard-picked {
   display: flex;

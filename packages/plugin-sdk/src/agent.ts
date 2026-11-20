@@ -143,6 +143,23 @@ export interface AgentInstanceContext {
   dataDir: string
   sharedDir: string
   invalidate(): void
+  openLoginTerminal?(launch: AgentLoginCommand): AgentLoginPty
+}
+
+/** 由实例配置和 Agent 公告的认证方法决定启动命令。 */
+export interface AgentLoginCommand {
+  command: string
+  args: string[]
+  cwd: string
+  env?: Record<string, string | undefined>
+}
+
+export interface AgentLoginPty {
+  onData(listener: (data: string) => void): void
+  onExit(listener: (event: { exitCode: number; signal?: number }) => void): void
+  write(data: string): void
+  resize(cols: number, rows: number): void
+  kill(): void | Promise<void>
 }
 
 export interface AgentAccountSetup {
@@ -168,6 +185,8 @@ export interface AgentDriver {
   readonly executionModes?: AgentExecutionModes
   readonly accountSetup?: AgentAccountSetup
   acpRegistry?(): Promise<AcpRegistryEntry[]>
+  prepareAcpRegistry?(registryId: string, sharedDir: string): Promise<AcpRegistryEntry>
+  activateAcpRegistry?(registryId: string, version: string, sharedDir: string): Promise<void>
   /** 由可执行文件探测得出的实例选项。缺省沿用 Agent 级声明。 */
   modesForInstance?(instance: AgentInstanceContext): AgentExecutionModes | undefined
   /** 同一个实例换模型时，在现有原生会话内应用选项。 */

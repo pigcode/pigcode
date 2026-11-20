@@ -47,6 +47,18 @@
         },
         "settings": [
           {
+            "key": "registryId",
+            "type": "text",
+            "label": {
+              "zh-CN": "ACP Registry ID",
+              "en-US": "ACP Registry ID"
+            },
+            "description": {
+              "zh-CN": "目录实例的标识。本地命令留空。",
+              "en-US": "Registry identifier. Leave blank for a local command."
+            }
+          },
+          {
             "key": "binaryPath",
             "type": "path",
             "pathKind": "file",
@@ -60,6 +72,14 @@
             }
           },
           {
+            "key": "authMethodId",
+            "type": "text",
+            "label": {
+              "zh-CN": "认证方式 ID（可选）",
+              "en-US": "Authentication method ID (optional)"
+            }
+          },
+          {
             "key": "arguments",
             "type": "arguments",
             "label": {
@@ -69,18 +89,6 @@
             "description": {
               "zh-CN": "每行一个参数，保留参数中的空格。",
               "en-US": "Enter one literal argument per line. Spaces within an argument are preserved."
-            }
-          },
-          {
-            "key": "registryId",
-            "type": "text",
-            "label": {
-              "zh-CN": "ACP Registry ID",
-              "en-US": "ACP Registry ID"
-            },
-            "description": {
-              "zh-CN": "目录实例的标识。本地命令留空。",
-              "en-US": "Registry identifier. Leave blank for a local command."
             }
           },
           {

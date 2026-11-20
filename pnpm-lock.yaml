@@ -631,6 +631,9 @@ importers:
       '@pigcode/ui-primitives':
         specifier: workspace:*
         version: link:../ui-primitives
+      '@pigcode/ui-workbench':
+        specifier: workspace:*
+        version: link:../ui-workbench
       lucide-react:
         specifier: 1.0.1
         version: 1.0.1(react@19.2.3)

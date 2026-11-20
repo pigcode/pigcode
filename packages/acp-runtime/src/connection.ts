@@ -18,6 +18,7 @@ export interface AcpLaunch {
   args: string[]
   env?: NodeJS.ProcessEnv
   cwd: string
+  terminalAuth?: boolean
 }
 
 export interface AcpConnectionOptions {
@@ -90,6 +91,7 @@ export function openAcp(
           protocolVersion: PROTOCOL_VERSION,
           clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
           clientCapabilities: {
+            ...(launch.terminalAuth ? { auth: { terminal: true } } : {}),
             fs: { readTextFile: false, writeTextFile: false },
             terminal: false,
           },

@@ -40,6 +40,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       pluginId: record.id,
       version: manifest.version,
       builtin: record.builtin,
+      featured: contribution.featured ?? false,
       enabled: !record.disabled,
       registered: driver !== undefined,
       features: driver?.features ?? null,

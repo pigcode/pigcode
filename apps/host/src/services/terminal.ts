@@ -4,18 +4,12 @@ import { randomUUID } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { basename } from "node:path"
 import { createRequire } from "node:module"
-import { terminateProcessGroup } from "@pigcode/plugin-sdk/node"
+import type { AgentLoginCommand, AgentLoginPty } from "@pigcode/plugin-sdk"
+import { launchTarget, terminateProcessGroup } from "@pigcode/plugin-sdk/node"
 import { threadCwd } from "./worktrees"
 
 /** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
-export interface PtyLike {
-  onData(listener: (data: string) => void): void
-  onExit(listener: (event: { exitCode: number }) => void): void
-  write(data: string): void
-  resize(cols: number, rows: number): void
-  /** 结束 shell 和它的作业；返回的 Promise 在 shell 所在的组结束后完成。 */
-  kill(): void | Promise<void>
-}
+export type PtyLike = AgentLoginPty
 
 /** spawn 所需的参数；cwd 由服务解析和校验，不接受调用方传入。 */
 export interface PtySpawnInput {
@@ -23,6 +17,8 @@ export interface PtySpawnInput {
   cols: number
   rows: number
   shell: string
+  args?: string[]
+  env?: Record<string, string | undefined>
 }
 
 /** PTY 工厂；单测注入 fake，生产使用 realPtyFactory。 */
@@ -53,6 +49,8 @@ export interface TerminalSession {
 
 /** 终端服务入口；同一线程可以同时开多个终端（底部终端的多个标签、右栏的终端标签）。 */
 export interface TerminalService {
+  /** 仅供 Host 内的 Agent 登录流程使用，输入参数来自已配置的 ACP 命令。 */
+  openLoginTerminal(launch: AgentLoginCommand): AgentLoginPty
   open(owner: TerminalOwner, cols: number, rows: number): Promise<TerminalSession>
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
@@ -101,6 +99,7 @@ interface TerminalEntry {
 export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
   const terminals = new Map<string, TerminalEntry>()
+  const loginPtys = new Set<PtyLike>()
   /** 正在结束的 PTY；Host 退出前要等它们。 */
   const ending = new Set<Promise<void>>()
 
@@ -135,6 +134,21 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   }
 
   const service: TerminalService = {
+    openLoginTerminal(launch) {
+      const target = launchTarget(launch.command, launch.args)
+      if (target.shell) throw new Error("Select an executable for ACP terminal sign-in")
+      const pty = factory.spawn({
+        shell: target.command,
+        args: target.args,
+        cwd: launch.cwd,
+        cols: 80,
+        rows: 16,
+        ...(launch.env ? { env: launch.env } : {}),
+      })
+      loginPtys.add(pty)
+      pty.onExit(() => loginPtys.delete(pty))
+      return pty
+    },
     async open(owner, cols, rows) {
       validateSize(cols, rows)
       const { threadId, projectId, cwd } = await resolveTerminalCwd(ctx, owner)
@@ -200,6 +214,8 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
   ctx.provide("terminal", service)
   ctx.effect(() => async () => {
     for (const found of terminals.values()) endPty(found.pty)
+    for (const pty of loginPtys) endPty(pty)
+    loginPtys.clear()
     terminals.clear()
     await Promise.all(ending)
   })
@@ -267,14 +283,29 @@ export function realPtyFactory(): PtyFactory {
       const require = createRequire(import.meta.url)
       const pty = require("node-pty") as typeof import("node-pty")
       const name = "xterm-256color"
-      const child = pty.spawn(input.shell, [], {
+      const child = pty.spawn(input.shell, input.args ?? [], {
         name,
         cwd: input.cwd,
         cols: input.cols,
         rows: input.rows,
         // Shell 应按内置 xterm 的能力输出，启动 Pigcode 的外层终端可能是 TERM=dumb。
-        env: { ...process.env, TERM: name, COLORTERM: "truecolor" },
+        env: { ...(input.env ?? process.env), TERM: name, COLORTERM: "truecolor" },
       })
+      let exited = false
+      let closing: Promise<void> | undefined
+      child.onExit(() => {
+        exited = true
+      })
+      async function terminate() {
+        await terminateProcessGroup(child.pid, { signal: "SIGHUP" })
+        if (process.platform === "win32" && !exited) {
+          try {
+            child.kill()
+          } catch {
+            /* 控制台可能已随进程退出。 */
+          }
+        }
+      }
       return {
         onData: (listener) => void child.onData(listener),
         onExit: (listener) => void child.onExit(listener),
@@ -283,14 +314,9 @@ export function realPtyFactory(): PtyFactory {
         // 和关掉终端窗口一样：交互式 shell 忽略 SIGTERM，收到 SIGHUP 才退出，并把它转发给自己的作业。
         // 用户 nohup 或 disown 的进程不受影响，这是他们有意留下的。
         // Windows 上 node-pty 的 kill 要异步查询控制台里的进程，Host 退出太快就来不及了，所以先结束整棵树。
-        kill: async () => {
-          await terminateProcessGroup(child.pid, { signal: "SIGHUP" })
-          if (process.platform !== "win32") return
-          try {
-            child.kill()
-          } catch {
-            // 控制台已经随进程一起关闭。
-          }
+        kill: () => {
+          if (!exited) closing ??= terminate()
+          return closing
         },
       }
     },

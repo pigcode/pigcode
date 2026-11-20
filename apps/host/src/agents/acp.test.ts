@@ -226,3 +226,78 @@ it.skipIf(process.platform === "win32")(
   },
   20_000,
 )
+
+it("prepares a shared registry runtime without launching it or allocating an instance, and retries failed downloads", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pigcode-acp-prepare-"))
+  const program = Buffer.from("A runtime fixture that cannot perform an ACP handshake")
+  const platform =
+    (process.platform === "win32" ? "windows" : process.platform) +
+    "-" +
+    (process.arch === "arm64" ? "aarch64" : process.arch === "x64" ? "x86_64" : process.arch)
+  const digest = createHash("sha256").update(program).digest("hex")
+  let downloads = 0
+  const driver = new AcpDriver(async (input) => {
+    if (String(input).endsWith("/registry.json"))
+      return Response.json({
+        agents: [
+          {
+            id: "amp-acp",
+            name: "Amp",
+            description: "A fixture",
+            version: "1.2.3",
+            icon: "https://cdn.agentclientprotocol.com/registry/v1/latest/amp-acp.svg",
+            website: "https://example.org",
+            distribution: {
+              binary: {
+                [platform]: {
+                  archive: "https://example.org/amp",
+                  cmd: "./amp-acp",
+                  sha256: digest,
+                },
+              },
+            },
+          },
+        ],
+      })
+    downloads++
+    return new Response(downloads === 1 ? "broken" : Uint8Array.from(program))
+  })
+  const ctx = new Context()
+  try {
+    await ctx.plugin(storage, { path: ":memory:" })
+    await ctx.plugin(settings, {})
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(agents, { fake: false, dataDir: join(root, "data") })
+    ctx.agents.register(driver)
+    const prepare = () => ctx.agents.prepareAcpRegistry("amp-acp")
+    await expect(prepare()).rejects.toThrow(/checksum/i)
+    expect(ctx.agents.listInstances("acp")).toEqual([])
+    const [first, second] = await Promise.all([prepare(), prepare()])
+    expect(first).toEqual(second)
+    expect(first).toMatchObject({
+      id: "amp-acp",
+      version: "1.2.3",
+      distribution: "binary",
+      website: "https://example.org",
+    })
+    await prepare()
+    expect(downloads).toBe(2)
+    expect(ctx.agents.listInstances("acp")).toEqual([])
+    const instance = ctx.agents.createInstance("acp", "Manual configuration", {
+      values: { registryId: "amp-acp" },
+    })
+    const version = async () =>
+      (await ctx.agents.checkCliUpdates(instance.instanceId))[instance.instanceId]?.currentVersion
+    expect(await version()).toBeNull()
+    await expect(ctx.agents.activateAcpRegistry("amp-acp", "unknown")).rejects.toThrow()
+    await ctx.agents.activateAcpRegistry("amp-acp", first.version)
+    expect(await version()).toBe(first.version)
+    expect(downloads).toBe(2)
+  } finally {
+    await driver.close()
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+})

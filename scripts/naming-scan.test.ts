@@ -84,6 +84,7 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
     "packages/acp-runtime/src/runtime.ts",
     "packages/agent-acp/src/driver.ts",
     "apps/host/src/agents/acp.test.ts",
+    "apps/host/src/agents/acp-auth.test.ts",
     "apps/host/src/agents/fixtures/agy.ts",
   ].map((file) => ({
     file,

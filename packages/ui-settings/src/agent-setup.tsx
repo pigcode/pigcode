@@ -7,6 +7,7 @@ import type {
 } from "@pigcode/contracts"
 import { Button, Input, useLocale } from "@pigcode/ui-primitives"
 import type { AgentInstanceEntry } from "./agent-instances"
+import { AcpAccount } from "./acp-account"
 
 export interface AgentSetupActions {
   auth(instanceId: string, request: AgentAuthAction): Promise<AgentAuthState>
@@ -56,6 +57,7 @@ export function AgentSetup({
   const accountChanged = actions.accountChanged
 
   useEffect(() => {
+    if (acp) return
     let disposed = false
     function refresh() {
       const revision = authRevision.current
@@ -71,7 +73,7 @@ export function AgentSetup({
       disposed = true
       if (timer !== undefined) window.clearInterval(timer)
     }
-  }, [requestAuth, authBusy, instanceId, status?.authenticated, status?.version])
+  }, [acp, requestAuth, authBusy, instanceId, status?.authenticated, status?.version])
 
   useEffect(() => {
     const before = previous.current
@@ -189,16 +191,25 @@ export function AgentSetup({
           )}
         </div>
       ) : null}
-      {installed && !status?.error ? (
+      {installed && acp ? (
+        <AcpAccount
+          instanceId={instanceId}
+          enabled={enabled}
+          actions={actions}
+          methodId={
+            typeof instance.values.authMethodId === "string"
+              ? instance.values.authMethodId
+              : undefined
+          }
+        />
+      ) : installed && !status?.error ? (
         <div className="agent-setup-actions">
           {authBusy && flow ? (
             <>
               <span role="status">
                 {t(
                   auth?.phase === "starting"
-                    ? acp
-                      ? "agents.acp.signingIn"
-                      : "agents.setup.starting"
+                    ? "agents.setup.starting"
                     : auth?.phase === "waiting"
                       ? "agents.setup.awaitingCode"
                       : "agents.setup.verifying",
@@ -220,21 +231,8 @@ export function AgentSetup({
               disabled={pending}
               onClick={() => authorize({ action: "logout" })}
             >
-              {t(acp ? "agents.acp.signOut" : "agents.setup.signOut")}
+              {t("agents.setup.signOut")}
             </Button>
-          ) : acp ? (
-            linked ? null : (
-              auth?.methods?.map((method) => (
-                <Button
-                  key={method.id}
-                  size="sm"
-                  disabled={pending || !enabled}
-                  onClick={() => authorize({ action: "start", methodId: method.id })}
-                >
-                  {t("agents.acp.signIn").replace("{method}", method.name)}
-                </Button>
-              ))
-            )
           ) : (
             <Button
               size="sm"

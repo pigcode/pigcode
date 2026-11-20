@@ -1,6 +1,7 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
 import { z } from "zod"
 import {
+  acpRegistryAgentIdSchema,
   agentAuthActionSchema,
   agentInstancePatchSchema,
   agentSettingsValuesSchema,
@@ -148,6 +149,7 @@ export const commandSchemas = {
   "agent.detect": agentDetectParams,
   "agent.cliUpdates": z.object({}),
   "agent.acpRegistry": z.object({}),
+  "agent.prepareAcpRegistry": z.object({ registryId: acpRegistryAgentIdSchema }),
   "agent.auth": z.object({ instanceId: z.string().min(1), request: agentAuthActionSchema }),
   "agent.cancelCliUpdate": z.object({ instanceId: z.string().min(1) }),
   "agent.removeCli": z.object({ instanceId: z.string().min(1) }),
@@ -177,6 +179,7 @@ export const commandSchemas = {
   /** 给一个 Agent 新建实例，连同初始设置一起保存。 */
   "agent.createInstance": z.object({
     agentId: z.string().min(1),
+    preparedVersion: z.string().min(1).max(128).optional(),
     label: z.string().trim().min(1).max(120),
     instanceId: customAgentInstanceIdSchema.optional(),
     values: agentSettingsValuesSchema.optional(),

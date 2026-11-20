@@ -28,7 +28,6 @@ import { createQuestionFlow } from "./questions"
 import { createInstanceSetup } from "./instance-setup"
 
 export type { ApprovalHandle, AgentsService, StartRunOptions, StartRunResult } from "./service"
-
 declare module "cordis" {
   interface Context {
     agents: AgentsService
@@ -82,7 +81,6 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     })
   }
 
-  /** 结束 run：写终态事件、处理未决审批并释放内存状态。 */
   function finishRun(
     run: ActiveRun,
     status: "completed" | "failed" | "interrupted",
@@ -270,6 +268,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   )
   const setup = createInstanceSetup(ctx, agents, drivers, stopInstanceRuns, cliUpdates.check)
   const service: AgentsService = {
+    activateAcpRegistry: agents.activateAcpRegistry,
+    prepareAcpRegistry: agents.prepareAcpRegistry,
     cliUpdates: cliUpdates.list,
     acpRegistry: agents.acpRegistry,
     checkCliUpdates: cliUpdates.check,
@@ -295,7 +295,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     getSettings: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
     updateSettings: agents.updateSettings,
     listInstances: agents.instances,
-    findInstance: (instanceId) => agents.findInstance(instanceId),
+    findInstance: agents.findInstance,
     createInstance: agents.createInstance,
     updateInstance: setup.updateInstance,
     removeInstance: setup.removeInstance,

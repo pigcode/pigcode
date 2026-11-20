@@ -34,6 +34,7 @@
     "contributes": {
       "agent": {
         "id": "antigravity",
+        "featured": true,
         "acpRegistryAgentIds": [
           "antigravity-acp"
         ],

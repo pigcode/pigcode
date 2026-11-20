@@ -1,12 +1,7 @@
-/**
- * Agent 设置页。
- * 上面是「新会话使用」，下面每个实例一张卡片（每个 Agent 的默认实例在前，其余实例跟在后面）。
- * 卡片头是品牌图标、名字、状态与登录的账号，右边是启用开关与展开箭头；点卡片头就地展开它的设置。
- */
+/** Agent 设置页与实例的就地编辑。 */
 import { useEffect, useMemo, useState } from "react"
 import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
 import type {
-  AcpRegistryEntry,
   AgentInstance,
   AgentInstanceDraft,
   AgentSettingsValues,
@@ -29,6 +24,7 @@ import { AgentEditor } from "./agent-editor"
 import type { AgentModelInfo } from "./agent-models"
 import type { PickPath } from "./agent-fields"
 import { InstanceCreateWizard } from "./agent-instance-wizard"
+import type { RegistryActions } from "./acp-registry-picker"
 import { allInstances, instancesOf, type AgentInstanceEntry } from "./agent-instances"
 import { instanceHeadline } from "./agent-status"
 import { SensitiveText } from "./sensitive-text"
@@ -44,7 +40,7 @@ export interface AgentsPageProps {
   onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
   onUpdateCli?: ((instanceId: string) => Promise<void>) | undefined
   setupActions?: AgentSetupActions | undefined
-  loadAcpRegistry?: (() => Promise<AcpRegistryEntry[]>) | undefined
+  registry?: RegistryActions | undefined
   onShowUpdates?: ((instanceId: string) => void) | undefined
   agents: readonly AgentSummary[]
   /** 用户选择的默认 agent。 */
@@ -192,7 +188,7 @@ export function AgentsPage({
   onCheckCliUpdates,
   onUpdateCli,
   setupActions,
-  loadAcpRegistry,
+  registry,
   onShowUpdates,
   agents,
   defaultAgentId,
@@ -482,19 +478,21 @@ export function AgentsPage({
         </div>
       </section>
 
-      <InstanceCreateWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        agents={agents}
-        agentId={openEntry?.agent.agentId ?? null}
-        onPickPath={onPickPath}
-        loadAcpRegistry={onUpdateCli ? loadAcpRegistry : undefined}
-        onCreateInstance={async (draft, installRuntime) => {
-          const created = await onCreateInstance(draft)
-          setOpenId(created)
-          if (installRuntime && onUpdateCli) void run(created, () => onUpdateCli(created))
-        }}
-      />
+      {wizardOpen && (
+        <InstanceCreateWizard
+          onClose={(created) => {
+            setWizardOpen(false)
+            if (created) setOpenId(created)
+          }}
+          agents={agents}
+          agentId={openEntry?.agent.agentId ?? null}
+          onPickPath={onPickPath}
+          registry={registry}
+          setupActions={setupActions}
+          openExternal={onOpenExternal}
+          onCreateInstance={onCreateInstance}
+        />
+      )}
     </div>
   )
 }

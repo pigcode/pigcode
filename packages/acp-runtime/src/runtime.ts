@@ -66,6 +66,7 @@ interface Options extends AcpConnectionOptions {
   retainLiveOnly?: boolean
   probeModelEfforts?: boolean
   normalMode?(setup: SessionSetup, policy: RuntimeMode): string | undefined
+  onInitialize?(scope: string, info: InitializeResponse): void
   onSession?(scope: string, setup: SessionSetup, info: InitializeResponse): void
 }
 
@@ -118,6 +119,7 @@ export class AcpRuntime {
     })
     try {
       const info = await rpc.initialize(probeSignal)
+      this.options.onInitialize?.(scope, info)
       const setup = await rpc.agent.request(
         "session/new",
         {
@@ -201,6 +203,7 @@ export class AcpRuntime {
         },
       })
       const info = await rpc.initialize(input.signal)
+      this.options.onInitialize?.(scope, info)
       const native = info.agentCapabilities?.sessionCapabilities
       bridge = await sessionBridge(
         input.mcp,

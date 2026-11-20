@@ -66,11 +66,17 @@ async function updateSettings(ctx: Context, value: Params): Promise<unknown> {
 /** 保存前校验配置，已停用插件的默认实例 ID 也保留。 */
 async function createInstance(
   ctx: Context,
-  { agentId, label, ...options }: CommandParams<"agent.createInstance">,
+  { agentId, label, preparedVersion, ...options }: CommandParams<"agent.createInstance">,
 ): Promise<unknown> {
+  if (preparedVersion && agentId !== "acp")
+    throw new Error("Only ACP instances use prepared Registry runtimes")
   if (options.instanceId !== undefined || options.values !== undefined) {
     const { agents } = await listAgents(ctx)
-    if (options.instanceId && agents.some((agent) => agent.agentId === options.instanceId)) {
+    if (
+      options.instanceId &&
+      (ctx.agents.findInstance(options.instanceId) ||
+        agents.some((agent) => agent.agentId === options.instanceId))
+    ) {
       throw new AgentInstanceIdTakenError(options.instanceId)
     }
     if (options.values !== undefined) {
@@ -91,6 +97,14 @@ async function createInstance(
       )
     )
       throw new Error("Choose a local ACP command or an ACP Registry agent")
+    if (preparedVersion) {
+      if (
+        typeof values.registryId !== "string" ||
+        (typeof values.binaryPath === "string" && values.binaryPath.trim())
+      )
+        throw new Error("A prepared version requires a managed ACP Registry runtime")
+      await ctx.agents.activateAcpRegistry(values.registryId, preparedVersion)
+    }
   }
   return ctx.agents.createInstance(agentId, label, options)
 }
@@ -105,6 +119,8 @@ export async function dispatchAgentCommand(
   switch (command) {
     case "agent.acpRegistry":
       return ctx.agents.acpRegistry()
+    case "agent.prepareAcpRegistry":
+      return ctx.agents.prepareAcpRegistry(value.registryId as string)
     case "agent.auth": {
       const { instanceId, request } = parsed as CommandParams<"agent.auth">
       return ctx.agents.auth(instanceId, request)

@@ -26,7 +26,9 @@ import type {
   CreateSessionInput,
   UserInput,
 } from "@pigcode/plugin-sdk"
+import { settingString } from "@pigcode/plugin-sdk"
 import { RegistryRuntimes } from "./registry"
+import { runTerminalLogin, signingIn, type Login } from "./terminal-login"
 
 interface AgentInfo {
   info?: InitializeResponse
@@ -34,10 +36,9 @@ interface AgentInfo {
   plan?: boolean
 }
 
-interface Login {
-  state: AgentAuthState
-  controller: AbortController
-  done: Promise<void>
+type AuthMethod = NonNullable<InitializeResponse["authMethods"]>[number]
+function isTerminalMethod(method: AuthMethod): method is Extract<AuthMethod, { type: "terminal" }> {
+  return "type" in method && method.type === "terminal"
 }
 
 function requireInstance(scope: AgentInstanceContext | undefined) {
@@ -78,6 +79,7 @@ export class AcpDriver implements AgentDriver {
     id: this.id,
     name: "ACP Agent",
     retainLiveOnly: true,
+    onInitialize: (scope, info) => this.observed.set(scope, { ...this.observed.get(scope), info }),
     onSession: (scope, setup, info) =>
       this.observed.set(scope, {
         ...this.observed.get(scope),
@@ -92,7 +94,15 @@ export class AcpDriver implements AgentDriver {
   }
 
   acpRegistry() {
-    return this.registry.list()
+    return this.registry.catalog.list()
+  }
+
+  prepareAcpRegistry(registryId: string, sharedDir: string) {
+    return this.registry.prepareAgent(registryId, sharedDir)
+  }
+
+  activateAcpRegistry(registryId: string, version: string, sharedDir: string) {
+    return this.registry.activate(sharedDir, registryId, version)
   }
 
   modesForInstance(instance: AgentInstanceContext) {
@@ -123,7 +133,7 @@ export class AcpDriver implements AgentDriver {
       if (!program) return null
       const release = this.registry.lease(program.directory)
       try {
-        return await action(program.launch)
+        return await action({ ...program.launch, terminalAuth: Boolean(scope.openLoginTerminal) })
       } finally {
         release()
       }
@@ -170,7 +180,7 @@ export class AcpDriver implements AgentDriver {
 
   async listModels(settings: AgentSettingsValues, instance?: AgentInstanceContext) {
     const scope = requireInstance(instance)
-    if (this.logins.get(scope.dataDir)?.state.phase === "starting") return []
+    if (signingIn(this.logins.get(scope.dataDir))) return []
     try {
       return (
         (await this.temporary(settings, scope, (launch) =>
@@ -198,19 +208,23 @@ export class AcpDriver implements AgentDriver {
 
   async createSession(input: CreateSessionInput): Promise<AgentSessionHandle> {
     const scope = requireInstance(input.instance)
-    if (this.logins.get(scope.dataDir)?.state.phase === "starting")
-      throw new Error("ACP sign-in is in progress")
+    if (signingIn(this.logins.get(scope.dataDir))) throw new Error("ACP sign-in is in progress")
     const program = await this.registry.launch(input.settings ?? {}, scope, input.cwd)
     if (!program)
       throw new Error("Set a local ACP command or install its Registry runtime in Agent settings")
-    return this.runtime.createSession(input, program.launch, scope.dataDir, {
-      release: this.registry.lease(program.directory),
-      translateError: (error) => {
-        if (!isAuthRequired(error)) return error
-        this.requireLogin(scope)
-        return new Error("Sign in to this ACP Agent before starting a session")
+    return this.runtime.createSession(
+      input,
+      { ...program.launch, terminalAuth: Boolean(scope.openLoginTerminal) },
+      scope.dataDir,
+      {
+        release: this.registry.lease(program.directory),
+        translateError: (error) => {
+          if (!isAuthRequired(error)) return error
+          this.requireLogin(scope)
+          return new Error("Sign in to this ACP Agent before starting a session")
+        },
       },
-    })
+    )
   }
 
   send(session: AgentSessionHandle, input: UserInput, runtime: AgentRuntime) {
@@ -247,11 +261,40 @@ export class AcpDriver implements AgentDriver {
     const key = scope.dataDir
     const existing = this.logins.get(key)
     if (request.action === "status") {
-      if (existing?.state.phase === "starting") return this.withMethods(scope, existing.state)
+      if (existing && signingIn(existing)) return this.withMethods(scope, existing.state)
+      if (request.refresh) {
+        try {
+          const result = await this.temporary(settings, scope, (launch) =>
+            this.runtime.readCatalog(launch, key),
+          )
+          if (result === null) throw new Error("Install or configure this ACP runtime first")
+        } catch (error) {
+          this.requireLogin(scope)
+          if (!isAuthRequired(error))
+            return this.withMethods(
+              scope,
+              authState(
+                "failed",
+                error instanceof Error ? error.message : "ACP session setup failed",
+              ),
+            )
+        }
+        return this.withMethods(
+          scope,
+          authState(this.observed.get(key)?.authenticated ? "connected" : "signed-out"),
+        )
+      }
       const state = this.observed.get(key)?.authenticated
         ? authState("connected")
         : (existing?.state ?? authState("signed-out"))
       return this.withMethods(scope, state)
+    }
+    if (request.action === "terminal") {
+      if (!existing?.pty || existing.state.flowId !== request.flowId)
+        throw new Error("ACP sign-in terminal is no longer active")
+      if (request.size) existing.pty.resize(request.size.cols, request.size.rows)
+      if (request.data) existing.pty.write(request.data)
+      return this.withMethods(scope, existing.state)
     }
     if (request.action === "cancel") {
       if (existing?.state.flowId !== request.flowId)
@@ -279,7 +322,7 @@ export class AcpDriver implements AgentDriver {
       scope.invalidate()
       return this.withMethods(scope, authState("signed-out"))
     }
-    if (existing?.state.phase === "starting") return this.withMethods(scope, existing.state)
+    if (existing && signingIn(existing)) return this.withMethods(scope, existing.state)
     const controller = new AbortController()
     const state = {
       ...authState("starting"),
@@ -287,21 +330,63 @@ export class AcpDriver implements AgentDriver {
       expiresAt: Date.now() + 180_000,
     }
     const login: Login = { state, controller, done: Promise.resolve() }
+    this.observed.set(key, { ...this.observed.get(key), authenticated: false })
     this.logins.set(key, login)
-    login.done = this.signIn(login, request.methodId, settings, scope)
+    login.done = this.signIn(
+      login,
+      request.methodId ?? settingString(settings, "authMethodId"),
+      settings,
+      scope,
+    )
     return this.withMethods(scope, state)
   }
 
   private withMethods(scope: AgentInstanceContext, state: AgentAuthState): AgentAuthState {
     const info = this.observed.get(scope.dataDir)?.info
     const methods = (info?.authMethods ?? []).filter(
-      (method) => !("type" in method) || method.type !== "terminal",
+      (method) => !isTerminalMethod(method) || Boolean(scope.openLoginTerminal),
     )
     return {
       ...state,
       methods: methods.map(({ id, name }) => ({ id, name })),
       canLogout: Boolean(info?.agentCapabilities?.auth?.logout),
     }
+  }
+
+  private async authenticate(
+    launch: AcpLaunch,
+    login: Login,
+    scope: AgentInstanceContext,
+    methodId: string | undefined,
+    signal: AbortSignal,
+  ) {
+    const rpc = this.runtime.open(launch, scope.dataDir)
+    let method: AuthMethod | undefined
+    try {
+      const info = await rpc.initialize(signal)
+      const methods = info.authMethods ?? []
+      method = methodId ? methods.find(({ id }) => id === methodId) : methods[0]
+      if (!method) throw new Error("The ACP Agent did not advertise this sign-in method")
+      if (!isTerminalMethod(method)) {
+        await rpc.agent.request(
+          "authenticate",
+          { methodId: method.id },
+          requestOptions(signal, 180_000),
+        )
+        return
+      }
+    } finally {
+      await this.runtime.closeProcess(rpc)
+    }
+    signal.throwIfAborted()
+    if (!scope.openLoginTerminal) throw new Error("Interactive ACP sign-in is unavailable")
+    const pty = scope.openLoginTerminal({
+      command: launch.command,
+      args: [...launch.args, ...(method.args ?? [])],
+      cwd: launch.cwd,
+      env: { ...launch.env, ...method.env },
+    })
+    await runTerminalLogin(login, pty, signal)
   }
 
   private async signIn(
@@ -314,28 +399,15 @@ export class AcpDriver implements AgentDriver {
     try {
       await this.runtime.closeScope(scope.dataDir)
       const confirmed = await this.temporary(settings, scope, async (launch) => {
-        const rpc = this.runtime.open(launch, scope.dataDir)
-        try {
-          const info = await rpc.initialize(signal)
-          const methods = (info.authMethods ?? []).filter(
-            (method) => !("type" in method) || method.type !== "terminal",
-          )
-          const method = methodId ? methods.find(({ id }) => id === methodId) : methods[0]
-          if (!method) throw new Error("Sign in using the Agent's own CLI, then refresh its models")
-          await rpc.agent.request(
-            "authenticate",
-            { methodId: method.id },
-            requestOptions(signal, 180_000),
-          )
-          return true
-        } finally {
-          await this.runtime.closeProcess(rpc)
-        }
+        await this.authenticate(launch, login, scope, methodId, signal)
+        return true
       })
       if (!confirmed) throw new Error("Configure or install the ACP command first")
-      await this.temporary(settings, scope, (launch) =>
+      login.state = { ...login.state, phase: "verifying" }
+      const verified = await this.temporary(settings, scope, (launch) =>
         this.runtime.readCatalog(launch, scope.dataDir, signal),
       )
+      if (verified === null) throw new Error("The ACP runtime is unavailable after sign-in")
       login.state = authState("connected")
     } catch (error) {
       login.state = login.controller.signal.aborted
@@ -361,5 +433,6 @@ export class AcpDriver implements AgentDriver {
     this.logins.clear()
     this.observed.clear()
     await this.runtime.close()
+    await this.registry.close()
   }
 }
