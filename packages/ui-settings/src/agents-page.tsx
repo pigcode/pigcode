@@ -66,7 +66,6 @@ export interface AgentsPageProps {
   ) => Promise<void>
   /** 新会话默认使用的实例；instanceId 为 null 表示自动。 */
   onSetDefault: (instanceId: string | null) => Promise<void>
-  /** 新建实例；返回新实例的 id，页面据此展开它。 */
   onCreateInstance: (draft: AgentInstanceDraft) => Promise<string>
   onUpdateInstance: (
     agent: AgentSummary,
@@ -489,10 +488,11 @@ export function AgentsPage({
         agents={agents}
         agentId={openEntry?.agent.agentId ?? null}
         onPickPath={onPickPath}
-        loadAcpRegistry={loadAcpRegistry}
-        onCreateInstance={async (draft) => {
+        loadAcpRegistry={onUpdateCli ? loadAcpRegistry : undefined}
+        onCreateInstance={async (draft, installRuntime) => {
           const created = await onCreateInstance(draft)
           setOpenId(created)
+          if (installRuntime && onUpdateCli) void run(created, () => onUpdateCli(created))
         }}
       />
     </div>

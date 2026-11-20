@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react"
 import type { AcpRegistryEntry } from "@pigcode/contracts"
-import { SearchField, useLocale } from "@pigcode/ui-primitives"
+import { Button, SearchField, useLocale } from "@pigcode/ui-primitives"
 
 export function AcpRegistryPicker({
   load,
   selected,
+  onUseLocal,
   onSelect,
 }: {
   load: () => Promise<AcpRegistryEntry[]>
   selected: unknown
+  onUseLocal: () => void
   onSelect: (entry: AcpRegistryEntry) => void
 }) {
   const { t } = useLocale()
@@ -35,12 +37,19 @@ export function AcpRegistryPicker({
   )
   return (
     <>
-      <SearchField
-        size="lg"
-        value={query}
-        onValueChange={setQuery}
-        placeholder={t("agents.acp.search")}
-      />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="grow">
+          <SearchField
+            size="lg"
+            value={query}
+            onValueChange={setQuery}
+            placeholder={t("agents.acp.search")}
+          />
+        </div>
+        <Button size="sm" type="button" variant="secondary" onClick={onUseLocal}>
+          {t("agents.acp.useLocal")}
+        </Button>
+      </div>
       {error ? (
         <p className="error-text" role="alert">
           {t("agents.acp.failed")}
