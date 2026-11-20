@@ -29,7 +29,8 @@ export interface NormalizeState {
   /** 后台任务与工作流。 */
   tasks: TaskState
   /** 主 agent 最近一次请求的上下文：输入（含缓存）加输出，以及用的是哪个模型。 */
-  mainContext?: { usedTokens: number; model: string }
+  mainContext?: { usedTokens: number; model: string; promptCacheExpiresAt?: string }
+  mainRequest?: { id: string; started: number; ttl: number }
   /** 会话开始时向 CLI 问到的窗口和自动压缩线；driver 在 init 后写入。 */
   contextLimit?: { maxTokens: number | null; autoCompactTokens: number | null }
   /** 这一轮结束时的占用已经报过；之后才到的开局占用不能再盖掉它。 */
@@ -76,6 +77,14 @@ export function normalizeSdkMessage(message: SDKMessage, state: NormalizeState):
   if (message.type === "stream_event") {
     const parentToolUseId = message.parent_tool_use_id ?? null
     const event = message.event
+    if (!parentToolUseId && event.type === "message_start") {
+      if (state.mainContext) delete state.mainContext.promptCacheExpiresAt
+      state.mainRequest = {
+        id: event.message.id,
+        started: Date.now(),
+        ttl: promptCacheLifetime(event.message.usage),
+      }
+    }
     if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
       state.streamedText += event.delta.text
       events.push({
@@ -272,8 +281,23 @@ function toolResultText(content: unknown): string | undefined {
 }
 
 /** 记下主 agent 这次请求占了多少上下文；子 agent 的请求在它们自己的上下文里，不算。 */
+function promptCacheLifetime(usage: unknown): number {
+  const creation = asRecord(asRecord(usage)?.cache_creation)
+  if (
+    typeof creation?.ephemeral_1h_input_tokens === "number" &&
+    creation.ephemeral_1h_input_tokens > 0
+  )
+    return 60 * 60_000
+  if (
+    typeof creation?.ephemeral_5m_input_tokens === "number" &&
+    creation.ephemeral_5m_input_tokens > 0
+  )
+    return 5 * 60_000
+  return 0
+}
+
 function rememberMainContext(
-  message: { model?: unknown; usage?: unknown },
+  message: { id?: unknown; model?: unknown; usage?: unknown },
   state: NormalizeState,
 ): void {
   const usage = message.usage as Record<string, unknown> | undefined
@@ -287,7 +311,16 @@ function rememberMainContext(
     count("cache_creation_input_tokens") +
     count("cache_read_input_tokens") +
     count("output_tokens")
-  if (usedTokens > 0) state.mainContext = { usedTokens, model: message.model }
+  const request = state.mainRequest
+  const ttl = promptCacheLifetime(usage) || request?.ttl
+  if (usedTokens > 0)
+    state.mainContext = {
+      usedTokens,
+      model: message.model,
+      ...(request && request.id === message.id && ttl
+        ? { promptCacheExpiresAt: new Date(request.started + ttl).toISOString() }
+        : {}),
+    }
 }
 
 /**
@@ -307,5 +340,6 @@ export function contextEvent(
       state.contextLimit?.maxTokens ??
       (typeof window === "number" && window > 0 ? Math.round(window) : null),
     autoCompactTokens: state.contextLimit?.autoCompactTokens ?? null,
+    ...(main.promptCacheExpiresAt ? { promptCacheExpiresAt: main.promptCacheExpiresAt } : {}),
   }
 }

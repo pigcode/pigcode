@@ -222,7 +222,7 @@ describe("AgentsPage", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "变量名 1" }), {
       target: { value: "HTTPS_PROXY" },
     })
-    fireEvent.change(screen.getByRole("textbox", { name: "值 1" }), {
+    fireEvent.change(screen.getByLabelText("值 1"), {
       target: { value: "http://127.0.0.1:7890" },
     })
     // 没填名字的行保存时去掉。
@@ -243,7 +243,9 @@ describe("AgentsPage", () => {
     const savedValues = {
       binaryPath: "/opt/claude",
       launchArgs: "--chrome",
-      environment: [{ name: "HTTPS_PROXY", value: "http://127.0.0.1:7890" }],
+      environment: [
+        { name: "HTTPS_PROXY", value: { secret: "http://127.0.0.1:7890" }, sensitive: true },
+      ],
       customModels: ["claude-sonnet-5"],
     }
     expect(props.onSaveSettings).toHaveBeenCalledWith(
@@ -356,7 +358,6 @@ describe("AgentsPage", () => {
     expect(screen.getByRole("button", { name: "设为新会话默认" })).toBeTruthy()
 
     await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
-    // 第一步预选当前 agent，直接下一步。
     expect(screen.getByRole("option", { name: /Claude Code/ }).getAttribute("aria-selected")).toBe(
       "true",
     )

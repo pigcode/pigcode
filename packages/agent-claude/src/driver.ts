@@ -37,6 +37,7 @@ import { listClaudeCommands } from "./commands"
 import { claudePrompt } from "./skill-prompt"
 import { claudeMcpServer } from "./mcp"
 import { claudeModelOption, listClaudeModels, toClaudeEffort } from "./models"
+import { claudeQueryPreferences } from "./compaction"
 import { readContextUsage } from "./context-usage"
 import { createNormalizeState, fastModeNotice, normalizeSdkMessage } from "./normalize"
 import { readUltracode } from "./ultracode"
@@ -212,17 +213,7 @@ export class ClaudeDriver implements AgentDriver {
         settingSources: [...CLAUDE_SETTING_SOURCES],
         ...(model ? { model } : {}),
         ...(claudeEffort ? { effort: claudeEffort } : {}),
-        // 快速模式与 Ultracode 都是会话级的设置覆盖层，每次 run 都是新的 query，所以只在选了时传；
-        // 不传 false，免得盖掉用户在 CLI 里打开的设置。
-        ...(input.fast || input.ultracode
-          ? {
-              settings: {
-                ...(input.fast ? { fastMode: true } : {}),
-                // Ultracode 靠 Workflow 工具干活；有的账号默认没开 Workflows，只传 ultracode 会没有效果。
-                ...(input.ultracode ? { ultracode: true, enableWorkflows: true } : {}),
-              },
-            }
-          : {}),
+        ...claudeQueryPreferences(state.settings, input, runtime),
         ...(resumeId ? { resume: resumeId } : {}),
         ...(forkFromNativeSessionId ? { forkSession: true } : {}),
         includePartialMessages: true,

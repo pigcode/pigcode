@@ -1,19 +1,19 @@
 // Agent 设置表单的控件：按 manifest 声明的字段类型渲染，另有环境变量编辑器。模型列表在 agent-models。
-import { FolderOpen, Plus, X } from "lucide-react"
-import { useId } from "react"
+import { FolderOpen } from "lucide-react"
+import { CredentialField, LiteralArguments, EnvironmentEditor } from "./agent-credential-fields"
+export { EnvironmentEditor } from "./agent-credential-fields"
 import {
   environmentEntriesSchema,
   localizeText,
+  secretInputSchema,
   type AgentSettingsValues,
   type EnvironmentEntry,
   type AgentSettingField,
 } from "@pigcode/contracts"
-import { Button, Input, Select, Switch, Textarea, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, Select, Switch, useLocale } from "@pigcode/ui-primitives"
 
 /** 选择文件或文件夹；返回选中的路径，取消时为 null。 */
 export type PickPath = (kind: "file" | "directory") => Promise<string | null>
-
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 /**
  * 把草稿里的值读成环境变量行：编辑中的行可能还没有名字或名字不合法，照样保留，
@@ -22,10 +22,13 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 export function readEnvironment(value: unknown): EnvironmentEntry[] {
   if (!Array.isArray(value)) return []
   return value.flatMap((entry: unknown) => {
-    const record = entry as { name?: unknown; value?: unknown } | null
-    return typeof record?.name === "string" && typeof record.value === "string"
-      ? [{ name: record.name, value: record.value }]
-      : []
+    const record = entry as EnvironmentEntry | null
+    if (
+      typeof record?.name !== "string" ||
+      (typeof record.value !== "string" && (!record.value || typeof record.value !== "object"))
+    )
+      return []
+    return [record]
   })
 }
 
@@ -42,6 +45,24 @@ export function cleanAgentValues(
 ): AgentSettingsValues | null {
   const next = { ...values }
   for (const field of fields) {
+    const value = values[field.key]
+    if (
+      field.type === "secret" &&
+      value &&
+      typeof value !== "string" &&
+      !secretInputSchema.safeParse(value).success
+    )
+      return null
+    if (
+      field.type === "text" &&
+      field.integerRange &&
+      typeof value === "string" &&
+      value &&
+      (!/^\d+$/.test(value) ||
+        Number(value) < field.integerRange.min ||
+        Number(value) > field.integerRange.max)
+    )
+      return null
     if (field.type !== "env" || values[field.key] === undefined) continue
     const entries = finalEnvironment(values[field.key])
     if (!entries) return null
@@ -55,43 +76,49 @@ export function AgentFields({
   fields,
   values,
   onChange,
+  references,
   onPickPath,
 }: {
   fields: readonly AgentSettingField[]
   values: AgentSettingsValues
   onChange: (key: string, value: unknown) => void
+  references?: boolean | undefined
   onPickPath?: PickPath | undefined
 }) {
   const { locale } = useLocale()
   return (
     <div className="agent-fields">
-      {fields.map((field) => {
-        const label = localizeText(field.label, locale)
-        return (
-          <div className="agent-field" key={field.key}>
-            <div className="agent-field-label">
-              <span>{label}</span>
-              {field.description ? (
-                <span className="agent-muted">{localizeText(field.description, locale)}</span>
-              ) : null}
+      {fields
+        .filter((f) => f.visibility !== "hidden")
+        .map((field) => {
+          const label = localizeText(field.label, locale)
+          return (
+            <div className="agent-field" key={field.key}>
+              <div className="agent-field-label">
+                <span>{label}</span>
+                {field.description ? (
+                  <span className="agent-muted">{localizeText(field.description, locale)}</span>
+                ) : null}
+              </div>
+              {field.type === "env" ? (
+                <EnvironmentEditor
+                  label={label}
+                  references={references}
+                  entries={readEnvironment(values[field.key])}
+                  onChange={(entries) => onChange(field.key, entries)}
+                />
+              ) : (
+                <FieldControl
+                  references={references}
+                  field={field}
+                  value={values[field.key]}
+                  onChange={(value) => onChange(field.key, value)}
+                  onPickPath={onPickPath}
+                />
+              )}
             </div>
-            {field.type === "env" ? (
-              <EnvironmentEditor
-                label={label}
-                entries={readEnvironment(values[field.key])}
-                onChange={(entries) => onChange(field.key, entries)}
-              />
-            ) : (
-              <FieldControl
-                field={field}
-                value={values[field.key]}
-                onChange={(value) => onChange(field.key, value)}
-                onPickPath={onPickPath}
-              />
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
     </div>
   )
 }
@@ -101,11 +128,13 @@ function FieldControl({
   field,
   value,
   onChange,
+  references,
   onPickPath,
 }: {
   field: Exclude<AgentSettingField, { type: "env" }>
   value: unknown
   onChange: (value: unknown) => void
+  references?: boolean | undefined
   onPickPath?: PickPath | undefined
 }) {
   const { locale, t } = useLocale()
@@ -140,20 +169,12 @@ function FieldControl({
       </Select.Root>
     )
   }
-  if (field.type === "arguments") {
+  if (field.type === "arguments")
+    return <LiteralArguments label={label} value={value} onChange={onChange} />
+  if (field.type === "secret")
     return (
-      <Textarea
-        className="mono"
-        rows={3}
-        aria-label={label}
-        spellCheck={false}
-        value={Array.isArray(value) ? value.join("\n") : ""}
-        onChange={(event) =>
-          onChange(event.target.value === "" ? [] : event.target.value.split(/\r?\n/))
-        }
-      />
+      <CredentialField label={label} value={value} references={references} onChange={onChange} />
     )
-  }
   const placeholder = field.placeholder ? localizeText(field.placeholder, locale) : undefined
   const pathKind = field.type === "path" ? field.pathKind : null
   return (
@@ -164,6 +185,13 @@ function FieldControl({
         aria-label={label}
         value={typeof value === "string" ? value : ""}
         placeholder={placeholder}
+        aria-invalid={
+          field.type === "text" && field.integerRange && typeof value === "string" && value !== ""
+            ? !/^\d+$/.test(value) ||
+              Number(value) < field.integerRange.min ||
+              Number(value) > field.integerRange.max
+            : undefined
+        }
         spellCheck={false}
         autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
@@ -183,76 +211,6 @@ function FieldControl({
           {t("agents.browse")}
         </Button>
       ) : null}
-    </div>
-  )
-}
-
-/** 环境变量编辑器：每行一个变量名与值；变量名不合法时标红提示，保存时由 Host 再校验。 */
-export function EnvironmentEditor({
-  label,
-  entries,
-  onChange,
-}: {
-  label: string
-  entries: readonly EnvironmentEntry[]
-  onChange: (entries: EnvironmentEntry[]) => void
-}) {
-  const { t } = useLocale()
-  const update = (index: number, patch: Partial<EnvironmentEntry>) =>
-    onChange(entries.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)))
-  const errorId = useId()
-  const invalidNames = entries.map(({ name }) => name !== "" && !ENV_NAME.test(name))
-  return (
-    <div className="agent-env" role="group" aria-label={label}>
-      {entries.length === 0 ? <p className="agent-muted">{t("agents.env.empty")}</p> : null}
-      {entries.map((entry, index) => (
-        <div className="agent-env-row" key={index}>
-          <Input
-            className="mono"
-            aria-label={`${t("agents.env.name")} ${index + 1}`}
-            aria-invalid={invalidNames[index] || undefined}
-            aria-describedby={invalidNames[index] ? errorId : undefined}
-            placeholder={t("agents.env.name")}
-            value={entry.name}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => update(index, { name: event.target.value.trim() })}
-          />
-          <Input
-            className="mono"
-            aria-label={`${t("agents.env.value")} ${index + 1}`}
-            placeholder={t("agents.env.value")}
-            value={entry.value}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => update(index, { value: event.target.value })}
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            type="button"
-            aria-label={`${t("agents.env.remove")} ${entry.name || index + 1}`}
-            onClick={() => onChange(entries.filter((_entry, at) => at !== index))}
-          >
-            <X className="ic ic-sm" aria-hidden="true" />
-          </Button>
-        </div>
-      ))}
-      {invalidNames.includes(true) ? (
-        <p id={errorId} className="error-text">
-          {t("agents.env.invalid")}
-        </p>
-      ) : null}
-      <Button
-        size="sm"
-        variant="ghost"
-        type="button"
-        className="agent-add"
-        onClick={() => onChange([...entries, { name: "", value: "" }])}
-      >
-        <Plus className="ic ic-sm" aria-hidden="true" />
-        {t("agents.env.add")}
-      </Button>
     </div>
   )
 }

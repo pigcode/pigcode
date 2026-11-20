@@ -15,6 +15,7 @@ import {
   descriptionOf,
   fill,
   matchesPlugin,
+  showsPackageVersion,
   statusOf,
   type MarketplaceSummary,
   type PluginSummary,
@@ -91,7 +92,9 @@ function PluginTile({
             <span className="truncate">{name}</span>
           </span>
           <span className="installed-plugin-subtitle">
-            <span className="installed-plugin-version">{plugin.version}</span>
+            {showsPackageVersion(plugin) && (
+              <span className="installed-plugin-version">{plugin.version}</span>
+            )}
             {source ? (
               <span
                 className="installed-plugin-source truncate"

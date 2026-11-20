@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import { ExternalLink, Terminal } from "lucide-react"
 import type { AcpRegistryEntry } from "@pigcode/contracts"
 import { Button, SearchField, useLocale } from "@pigcode/ui-primitives"
@@ -176,6 +176,48 @@ export function AcpRegistryPicker({
           })}
         </ul>
       )}
+    </section>
+  )
+}
+
+export function ManualAcpSource({
+  local,
+  busy,
+  onBack,
+  onSource,
+  children,
+}: {
+  local: boolean
+  busy: boolean
+  onBack?: (() => void) | undefined
+  onSource: (kind: "local" | "manual") => void
+  children: ReactNode
+}) {
+  const { t } = useLocale()
+  return (
+    <section className="acp-registry">
+      <div className="acp-manual-heading">
+        <label className="acp-source-select">
+          {t("agents.acp.source")}
+          <select
+            className="input"
+            value={local ? "local" : "manual"}
+            disabled={busy}
+            onChange={(e) => onSource(e.target.value === "local" ? "local" : "manual")}
+          >
+            <option value="manual">{t("agents.acp.registry")}</option>
+            <option value="local">{t("agents.acp.useLocal")}</option>
+          </select>
+        </label>
+        {onBack && (
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onBack}>
+            {t("agents.acp.backToList")}
+          </Button>
+        )}
+      </div>
+      <fieldset className="wizard-config" disabled={busy}>
+        {children}
+      </fieldset>
     </section>
   )
 }

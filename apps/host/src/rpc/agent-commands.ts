@@ -12,6 +12,7 @@ type Params = Record<string, unknown>
 
 /** `agent.updateInstance` 允许改的字段。 */
 interface InstancePatch {
+  accentColor?: string | null
   label?: string
   enabled?: boolean
   values?: Record<string, unknown>
@@ -40,12 +41,15 @@ async function updateInstance(ctx: Context, value: Params): Promise<unknown> {
   if (!instance) throw new Error(`instance not found: ${instanceId}`)
   if (
     instance.isDefault &&
-    (patch.enabled === undefined || patch.label !== undefined || patch.values !== undefined)
+    (patch.enabled === undefined ||
+      patch.label !== undefined ||
+      patch.accentColor !== undefined ||
+      patch.values !== undefined)
   )
     throw new Error(`default instance cannot be edited: ${instanceId}`)
   if (patch.values !== undefined) {
     const agent = await requireAgent(ctx, instance.agentId)
-    validateAgentSettings(agent, patch.values)
+    patch.values = validateAgentSettings(agent, patch.values)
   }
   return ctx.agents.updateInstance(instanceId, patch)
 }
@@ -59,8 +63,9 @@ async function updateSettings(ctx: Context, value: Params): Promise<unknown> {
     throw new Error(`instance not found: ${instanceId}`)
   }
   const values = value.values as Record<string, unknown>
-  validateAgentSettings(agent, values)
-  return { values: ctx.agents.updateSettings(agentId, values, instanceId) }
+  return {
+    values: ctx.agents.updateSettings(agentId, validateAgentSettings(agent, values), instanceId),
+  }
 }
 
 /** 保存前校验配置，已停用插件的默认实例 ID 也保留。 */
@@ -75,14 +80,18 @@ async function createInstance(
     if (
       options.instanceId &&
       (ctx.agents.findInstance(options.instanceId) ||
-        agents.some((agent) => agent.agentId === options.instanceId))
+        agents.some(
+          (agent) =>
+            agent.agentId === options.instanceId &&
+            !(agentId === agent.agentId && agent.requiresInstance),
+        ))
     ) {
       throw new AgentInstanceIdTakenError(options.instanceId)
     }
     if (options.values !== undefined) {
       const agent = agents.find((item) => item.agentId === agentId)
       if (!agent) throw new Error(`agent not found: ${agentId}`)
-      validateAgentSettings(agent, options.values)
+      options.values = validateAgentSettings(agent, options.values)
     }
   }
   if (!ctx.agents.list().some((driver) => driver.id === agentId)) {
@@ -117,6 +126,9 @@ export async function dispatchAgentCommand(
 ): Promise<unknown> {
   const value = parsed as Params
   switch (command) {
+    case "agent.setClaudeIdleCompaction":
+      ctx.settings.set("claude.idleCompaction", value.mode)
+      return { mode: value.mode }
     case "agent.acpRegistry":
       return ctx.agents.acpRegistry()
     case "agent.prepareAcpRegistry":

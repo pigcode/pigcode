@@ -45,6 +45,79 @@
         "homepage": "https://antigravity.google/docs/cli/acp",
         "settings": [
           {
+            "key": "authMethod",
+            "type": "select",
+            "default": "oauth-personal",
+            "label": {
+              "zh-CN": "登录方式",
+              "en-US": "Sign-in method"
+            },
+            "options": [
+              {
+                "value": "oauth-personal",
+                "label": {
+                  "zh-CN": "个人 Google 账号",
+                  "en-US": "Google account"
+                }
+              },
+              {
+                "value": "oauth-business",
+                "label": {
+                  "zh-CN": "Gemini Enterprise",
+                  "en-US": "Gemini Enterprise"
+                }
+              },
+              {
+                "value": "gemini-api-key",
+                "label": {
+                  "zh-CN": "Gemini API key",
+                  "en-US": "Gemini API key"
+                }
+              },
+              {
+                "value": "agent-platform",
+                "label": {
+                  "zh-CN": "Agent Platform（Vertex AI）",
+                  "en-US": "Agent Platform (Vertex AI)"
+                }
+              }
+            ]
+          },
+          {
+            "key": "apiKey",
+            "type": "secret",
+            "label": {
+              "zh-CN": "API 密钥",
+              "en-US": "API key"
+            },
+            "description": {
+              "zh-CN": "用于 Gemini API 或 Vertex AI Express，由 Host 单独保存。",
+              "en-US": "Gemini or Vertex AI express key. Stored separately on the host."
+            }
+          },
+          {
+            "key": "gcpProject",
+            "type": "text",
+            "label": {
+              "zh-CN": "GCP 项目",
+              "en-US": "GCP project"
+            },
+            "placeholder": "my-project-id",
+            "description": {
+              "zh-CN": "Gemini Enterprise 需要项目和区域。Vertex AI 也可使用 API 密钥。",
+              "en-US": "Gemini Enterprise needs a project and location. Vertex AI can also use an API key."
+            }
+          },
+          {
+            "key": "gcpLocation",
+            "type": "text",
+            "label": {
+              "zh-CN": "GCP 区域",
+              "en-US": "GCP location"
+            },
+            "placeholder": "us-central1"
+          },
+          {
             "key": "binaryPath",
             "type": "path",
             "pathKind": "file",

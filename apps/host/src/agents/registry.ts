@@ -23,8 +23,9 @@ import { ApprovalBridge, createApprovalRequest } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
-import { runInput, type AgentsService } from "./service"
+import { runInput, catalogOperations, type AgentsService } from "./service"
 import { createQuestionFlow } from "./questions"
+import { watchClaudeIdleCompaction } from "./idle-compaction"
 import { createInstanceSetup } from "./instance-setup"
 
 export type { ApprovalHandle, AgentsService, StartRunOptions, StartRunResult } from "./service"
@@ -164,7 +165,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     activeRuns,
     hooks: runEventHooks,
     requestApproval: (run, request) => requestApproval(run.threadId, run.runId, request).decision,
-    askQuestions: (run, request) => questions.ask(run, request),
+    askQuestions: questions.ask,
   })
 
   /** launchRun 所需的 Host 闭包；放在 execute 之后以便引用。 */
@@ -176,9 +177,9 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     activeThreads,
     append,
     execute,
-    settingsFor: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
+    settingsFor: agents.runtimeSettings,
     instanceContext: (agentId, instanceId) =>
-      drivers.get(agentId)?.accountSetup
+      drivers.get(agentId)?.accountSetup || drivers.get(agentId)?.requiresInstance
         ? agents.instanceContext(agents.instance(agentId, instanceId))
         : undefined,
   }
@@ -268,10 +269,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   )
   const setup = createInstanceSetup(ctx, agents, drivers, stopInstanceRuns, cliUpdates.check)
   const service: AgentsService = {
-    activateAcpRegistry: agents.activateAcpRegistry,
-    prepareAcpRegistry: agents.prepareAcpRegistry,
+    ...catalogOperations(agents),
     cliUpdates: cliUpdates.list,
-    acpRegistry: agents.acpRegistry,
     checkCliUpdates: cliUpdates.check,
     updateCli: cliUpdates.update,
     cancelCliUpdate: cliUpdates.cancel,
@@ -279,24 +278,16 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     removeCli: setup.removeCli,
     register(driver) {
       modesOf(driver)
-      assertNoStoredInstanceId(readStoredInstances(ctx.get("settings")), driver.id)
+      const stored = readStoredInstances(ctx.get("settings"))
+      if (!driver.requiresInstance || stored[driver.id]?.agentId !== driver.id)
+        assertNoStoredInstanceId(stored, driver.id)
       drivers.set(driver.id, driver)
       agents.invalidate(driver.id)
     },
     unregister: unregisterDriver,
     list: () => registeredAgents(drivers),
-    detect: agents.detect,
-    models: agents.models,
-    commands: agents.commands,
     defaultAgent: () => agents.defaultAgent(),
-    configuredDefaultAgent: () => agents.configuredDefault(),
-    configuredDefaultInstance: () => agents.configuredDefaultInstance(),
     setDefaultAgent: (agentId, instanceId) => agents.setDefaultAgent(agentId, instanceId ?? null),
-    getSettings: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
-    updateSettings: agents.updateSettings,
-    listInstances: agents.instances,
-    findInstance: agents.findInstance,
-    createInstance: agents.createInstance,
     updateInstance: setup.updateInstance,
     removeInstance: setup.removeInstance,
     async switchAgent(threadId, agentId, modelId, instanceId) {
@@ -313,8 +304,9 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         modelId ?? null,
         (session) => disposeSession(drivers, session),
         instance.instanceId,
-        (id) =>
-          drivers.get(agentId)?.continuationKey?.(agents.settingsForInstance(agentId, id)) ?? null,
+        async (id) =>
+          drivers.get(agentId)?.continuationKey?.(await agents.runtimeSettings(agentId, id)) ??
+          null,
         modesForSwitch(ctx, threadId, agentId, instance.instanceId),
         drivers.get(agentId)?.modelSwitch,
       )
@@ -480,6 +472,12 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   }
 
   ctx.provide("agents", service)
+  ctx.effect(() =>
+    watchClaudeIdleCompaction(
+      ctx,
+      () => activeRuns.size + launching < maxConcurrentRuns && !queue.size,
+    ),
+  )
   ctx.effect(() => () => {
     cliUpdates.dispose()
     // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。

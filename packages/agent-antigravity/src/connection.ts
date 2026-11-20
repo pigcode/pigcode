@@ -17,6 +17,13 @@ export const antigravityConnection: AcpConnectionOptions = {
   },
 }
 
-export function openAcp(launch: AcpLaunch) {
-  return openConnection(launch, {}, antigravityConnection)
+export function openAcp(launch: AcpLaunch, onOutputLine?: (line: string) => void) {
+  return openConnection(
+    launch,
+    {},
+    {
+      ...antigravityConnection,
+      ...(onOutputLine ? { onOutputLine } : {}),
+    },
+  )
 }

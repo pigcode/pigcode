@@ -4,6 +4,9 @@ import type { Locale, MessageKey, StatusTone } from "@pigcode/ui-primitives"
 /** 插件类型，与 Host 的 boot graph 保持一致。 */
 export type PluginKind = "agent" | "capability" | "ui" | "bundle"
 
+export const showsPackageVersion = (plugin: PluginSummary) =>
+  !plugin.builtin || plugin.kind !== "agent"
+
 /** 扩展点名称，与 client-runtime 的 ExtensionPoint 一致。 */
 export type PluginExtensionPoint = "panel" | "surface" | "settingsPage" | "command" | "toolRenderer"
 

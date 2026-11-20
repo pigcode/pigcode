@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process"
+import { randomUUID } from "node:crypto"
+import { createInterface } from "node:readline"
 import { Readable, Writable } from "node:stream"
 import {
   client,
@@ -19,10 +21,21 @@ export interface AcpLaunch {
   env?: NodeJS.ProcessEnv
   cwd: string
   terminalAuth?: boolean
+  authenticateMethod?: string
+  legacyProtocolVersion?: 2
 }
 
 export interface AcpConnectionOptions {
   name?: string
+  initializeMeta?: Record<string, unknown>
+  onOutputLine?(line: string): void
+  /** 部分 Agent 将长请求的完成通知与 JSON-RPC 回复分开传送。 */
+  promptCompletion?(
+    method: string,
+    params: unknown,
+    sessionId: string,
+    promptId: string,
+  ): string | undefined
   validate?(reply: InitializeResponse): void
 }
 
@@ -58,6 +71,11 @@ export function openAcp(
     stdio: ["pipe", "pipe", "pipe"],
   })
   child.stderr.resume()
+  if (options.onOutputLine) {
+    const output = createInterface({ input: child.stderr })
+    output.on("line", options.onOutputLine)
+    child.once("close", () => output.close())
+  }
   const tree = ownProcessTree(child)
   const app = client({ name: "Pigcode" })
     .onNotification("session/update", ({ params }) => handlers.update?.(params))
@@ -66,6 +84,9 @@ export function openAcp(
       ({ params }): Promise<RequestPermissionResponse> | RequestPermissionResponse =>
         handlers.approval?.(params) ?? { outcome: { outcome: "cancelled" } },
     )
+  let complete: ((method: string, params: unknown) => void) | undefined
+  if (options.promptCompletion)
+    app.onNotification("*", ({ method, params }) => complete?.(method, params))
   const connection = app.connect(
     ndJsonStream(
       Writable.toWeb(child.stdin),
@@ -89,6 +110,7 @@ export function openAcp(
         "initialize",
         {
           protocolVersion: PROTOCOL_VERSION,
+          ...(options.initializeMeta ? { _meta: options.initializeMeta } : {}),
           clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
           clientCapabilities: {
             ...(launch.terminalAuth ? { auth: { terminal: true } } : {}),
@@ -98,10 +120,44 @@ export function openAcp(
         },
         requestOptions(signal),
       )
-      if (reply.protocolVersion !== PROTOCOL_VERSION)
+      if (
+        reply.protocolVersion !== PROTOCOL_VERSION &&
+        !(launch.legacyProtocolVersion && reply.protocolVersion === launch.legacyProtocolVersion)
+      )
         throw new Error(`${label} did not negotiate ACP v1`)
       options.validate?.(reply)
       return reply
+    },
+    async prompt(sessionId: string, text: string): Promise<{ stopReason: string }> {
+      const prompt = [{ type: "text" as const, text }]
+      const fromNotification = options.promptCompletion
+      if (!fromNotification)
+        return connection.agent.request("session/prompt", { sessionId, prompt })
+      const promptId = randomUUID()
+      const controller = new AbortController()
+      const notification = new Promise<{ stopReason: string }>((resolve) => {
+        complete = (method, params) => {
+          const reason = fromNotification(method, params, sessionId, promptId)
+          if (reason) resolve({ stopReason: reason })
+        }
+      })
+      try {
+        return await Promise.race([
+          notification,
+          connection.agent.request<{ stopReason: string }>(
+            "session/prompt",
+            {
+              sessionId,
+              prompt,
+              _meta: { promptId, requestId: promptId },
+            },
+            { cancellationSignal: controller.signal, stopWaitingOnCancel: true },
+          ),
+        ])
+      } finally {
+        complete = undefined
+        controller.abort()
+      }
     },
     async close() {
       connection.close()
@@ -120,4 +176,30 @@ export function isMissingAcpSession(error: unknown): boolean {
         error.message,
       ))
   )
+}
+
+/** 只用已配置的非交互身份重试一次需要授权的原生会话。 */
+export async function setupAcpSession<T>(
+  rpc: AcpProcess,
+  methodId: string | undefined,
+  request: () => Promise<T>,
+  signal?: AbortSignal,
+) {
+  try {
+    return await request()
+  } catch (error) {
+    if (!methodId || !isAuthRequired(error)) throw error
+    await rpc.agent.request("authenticate", { methodId }, requestOptions(signal))
+    return request()
+  }
+}
+
+/** 非交互账户设置需要在读取模型或创建会话前声明认证方式。 */
+export async function authenticateAcp(rpc: AcpProcess, launch: AcpLaunch, signal?: AbortSignal) {
+  if (launch.authenticateMethod)
+    await rpc.agent.request(
+      "authenticate",
+      { methodId: launch.authenticateMethod },
+      requestOptions(signal),
+    )
 }

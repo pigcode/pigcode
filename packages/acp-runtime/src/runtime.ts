@@ -13,7 +13,9 @@ import type {
   UserInput,
 } from "@pigcode/plugin-sdk"
 import {
+  authenticateAcp,
   isMissingAcpSession,
+  setupAcpSession,
   openAcp,
   requestOptions,
   type AcpConnectionOptions,
@@ -61,7 +63,15 @@ type Session = {
   ending?: Promise<void>
 }
 
-interface Options extends AcpConnectionOptions {
+export interface AcpRuntimeOptions extends AcpConnectionOptions {
+  sessionMeta?: Record<string, unknown>
+  cancelMeta?: Record<string, unknown>
+  authMethod?(launch: AcpLaunch): string | undefined
+  approvalMode?(policy: RuntimeMode): RuntimeMode
+  sessionPolicy?(setup: SessionSetup, mode: RuntimeMode): { id: string; value: string }
+  effortId?: string
+  deferredEffort?: boolean
+  legacyModelEffort?: boolean
   id: string
   retainLiveOnly?: boolean
   probeModelEfforts?: boolean
@@ -82,7 +92,7 @@ export class AcpRuntime {
   private readonly commands = new Map<string, Map<string, AgentCommandInfo[]>>()
   private closed = false
 
-  constructor(private readonly options: Options) {}
+  constructor(private readonly options: AcpRuntimeOptions) {}
 
   open(launch: AcpLaunch, scope: string, handlers?: Parameters<typeof openAcp>[1]) {
     if (this.closed) throw new Error("ACP runtime is closing")
@@ -119,14 +129,22 @@ export class AcpRuntime {
     })
     try {
       const info = await rpc.initialize(probeSignal)
+      await authenticateAcp(rpc, launch, probeSignal)
       this.options.onInitialize?.(scope, info)
-      const setup = await rpc.agent.request(
-        "session/new",
-        {
-          cwd: launch.cwd,
-          mcpServers: [],
-        },
-        requestOptions(probeSignal),
+      const setup = await setupAcpSession(
+        rpc,
+        this.options.authMethod?.(launch),
+        () =>
+          rpc.agent.request(
+            "session/new",
+            {
+              cwd: launch.cwd,
+              mcpServers: [],
+              ...(this.options.sessionMeta ? { _meta: this.options.sessionMeta } : {}),
+            },
+            requestOptions(probeSignal),
+          ),
+        probeSignal,
       )
       this.options.onSession?.(scope, setup, info)
       const models = await readSessionModels(
@@ -134,6 +152,7 @@ export class AcpRuntime {
         setup,
         probeSignal,
         this.options.probeModelEfforts,
+        this.options.effortId,
       )
       await this.closeNative(
         rpc,
@@ -196,36 +215,54 @@ export class AcpRuntime {
           return answerPermission(
             request,
             state.turn.runtime,
-            state.policy,
+            this.options.approvalMode?.(state.policy) ?? state.policy,
             state.planMode,
             grants.approvals,
           )
         },
       })
       const info = await rpc.initialize(input.signal)
+      await authenticateAcp(rpc, launch, input.signal)
       this.options.onInitialize?.(scope, info)
       const native = info.agentCapabilities?.sessionCapabilities
       bridge = await sessionBridge(
         input.mcp,
         Boolean(info.agentCapabilities?.mcpCapabilities?.http),
       )
-      const args = { cwd: input.cwd, mcpServers: bridge.servers }
+      const args = {
+        cwd: input.cwd,
+        mcpServers: bridge.servers,
+        ...(this.options.sessionMeta ? { _meta: this.options.sessionMeta } : {}),
+      }
+      const agent = rpc.agent
       const original = input.nativeSessionId
       let setup: SessionSetup
       let nativeId: string
       if (original) {
         const request = { ...args, sessionId: original }
         if (native?.resume)
-          setup = await rpc.agent.request("session/resume", request, requestOptions(input.signal))
+          setup = await setupAcpSession(
+            rpc,
+            this.options.authMethod?.(launch),
+            () => agent.request("session/resume", request, requestOptions(input.signal)),
+            input.signal,
+          )
         else if (info.agentCapabilities?.loadSession)
-          setup = await rpc.agent.request("session/load", request, requestOptions(input.signal))
+          setup = await setupAcpSession(
+            rpc,
+            this.options.authMethod?.(launch),
+            () => agent.request("session/load", request, requestOptions(input.signal)),
+            input.signal,
+          )
         else throw new Error(missingSession)
         nativeId = original
       } else {
-        const started = await rpc.agent.request<NewSessionResponse>(
-          "session/new",
-          args,
-          requestOptions(input.signal),
+        const started = await setupAcpSession(
+          rpc,
+          this.options.authMethod?.(launch),
+          () =>
+            agent.request<NewSessionResponse>("session/new", args, requestOptions(input.signal)),
+          input.signal,
         )
         setup = started
         nativeId = started.sessionId
@@ -330,15 +367,37 @@ export class AcpRuntime {
         runtime.emit({ type: "session.started", nativeSessionId: state.nativeId })
         state.fresh = false
       }
-      const normal = this.options.normalMode?.(state.setup, state.policy) ?? state.normalMode
-      await configureSession(state, session, input, runtime.signal, normal)
+      const policyOption = this.options.sessionPolicy?.(state.setup, state.policy)
+      if (policyOption) {
+        const reply = await state.rpc.agent.request(
+          "session/set_config_option",
+          {
+            sessionId: state.nativeId,
+            configId: policyOption.id,
+            value: policyOption.value,
+          },
+          requestOptions(runtime.signal),
+        )
+        state.setup.configOptions = reply.configOptions
+      }
+      const normal =
+        policyOption?.id === "mode"
+          ? policyOption.value
+          : (this.options.normalMode?.(state.setup, state.policy) ?? state.normalMode)
+      await configureSession(
+        state,
+        session,
+        input,
+        runtime.signal,
+        normal,
+        this.options.effortId,
+        this.options.legacyModelEffort,
+        this.options.deferredEffort,
+      )
       runtime.signal.throwIfAborted()
       turn.prompting = true
       const text = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
-      const result = await state.rpc.agent.request("session/prompt", {
-        sessionId: state.nativeId,
-        prompt: [{ type: "text", text }],
-      })
+      const result = await state.rpc.prompt(state.nativeId, text)
       turn.events.finish()
       if (turn.cancelled || result.stopReason === "cancelled")
         runtime.emit({ type: "run.interrupted" })
@@ -370,7 +429,10 @@ export class AcpRuntime {
       return
     }
     void state.rpc.agent
-      .notify("session/cancel", { sessionId: state.nativeId })
+      .notify("session/cancel", {
+        sessionId: state.nativeId,
+        ...(this.options.cancelMeta ? { _meta: this.options.cancelMeta } : {}),
+      })
       .catch(() => undefined)
     turn.timer = setTimeout(() => void this.closeProcess(state.rpc), 5_000)
     turn.timer.unref()

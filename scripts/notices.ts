@@ -95,11 +95,24 @@ function repositoryOf(manifest: Record<string, unknown>): string | undefined {
  * 一个包的声明条目。找不到许可证文本、也没有可信的许可证声明时抛错：
  * 构建要停下来，不能悄悄漏掉一个依赖的版权声明。
  */
-export function noticeEntry(pkg: InventoryPackage): NoticeEntry {
+export function noticeEntry(pkg: InventoryPackage, cursorSdk?: InventoryPackage): NoticeEntry {
   const dir = pkg.paths[0] ?? ""
   const manifest = readManifest(dir)
   const texts = licenseTexts(dir)
   const declared = typeof manifest.license === "string" ? manifest.license : pkg.license
+  // 官方平台包指向 LICENSE.md，但这份文件只随同版本的 @cursor/sdk 主包分发。
+  if (!texts.length && declared === "SEE LICENSE IN LICENSE.md" && cursorSdk) {
+    const sdkDir = cursorSdk.paths[0] ?? ""
+    const binaries = readManifest(sdkDir).optionalDependencies
+    if (
+      typeof binaries === "object" &&
+      binaries !== null &&
+      Object.hasOwn(binaries, pkg.name) &&
+      pkg.versions.every((version) => (binaries as Record<string, unknown>)[pkg.name] === version)
+    ) {
+      texts.push(...licenseTexts(sdkDir, ["LICENSE.md"]))
+    }
+  }
   if (texts.length === 0 && UNKNOWN.test(declared ?? "")) {
     throw new Error(`no license text or declaration for ${pkg.name}@${pkg.versions[0] ?? "?"}`)
   }
@@ -118,9 +131,19 @@ export function noticeEntry(pkg: InventoryPackage): NoticeEntry {
 /** 清单里的每个包（每个版本算一条）都转成声明条目，按名称排序。 */
 export function noticeEntries(inventory: LicenseInventory): NoticeEntry[] {
   // 同一个包可能装在多个路径下；名称和版本相同，声明只用一份。
-  return Object.values(inventory)
-    .flat()
-    .map(noticeEntry)
+  const packages = Object.values(inventory).flat()
+  return packages
+    .map((pkg) =>
+      noticeEntry(
+        pkg,
+        pkg.name.startsWith("@cursor/sdk-")
+          ? packages.find(
+              (sdk) =>
+                sdk.name === "@cursor/sdk" && pkg.versions.every((v) => sdk.versions.includes(v)),
+            )
+          : undefined,
+      ),
+    )
     .sort((left, right) =>
       left.name === right.name
         ? left.version.localeCompare(right.version)

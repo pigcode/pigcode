@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./runtime-archive": "./src/runtime-archive.ts",
+    "./acp-registry": "./src/acp-registry.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -16,11 +18,14 @@
     "@pigcode/contracts": "workspace:*",
     "cordis": "4.0.0-rc.11",
     "semver": "7.7.2",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "tar": "7.5.22",
+    "yauzl": "3.4.0"
   },
   "devDependencies": {
     "@types/react": "19.2.2",
     "@types/semver": "7.7.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@types/yauzl": "3.4.0"
   }
 }

@@ -9,12 +9,20 @@ export interface CliUpdateSource {
   versionFormat: "npm" | "brew-cask" | "brew-formula" | "text"
 }
 
+export interface NativeCliUpdate {
+  matches: (path: string) => boolean
+  args: string[]
+  versionUrl: string
+  versionFormat?: "npm" | "text"
+  env?: NodeJS.ProcessEnv
+}
+
 export function resolveCliUpdateSource(input: {
   executable: string
   realExecutable: string
   packageName: string
   brewFormula?: string | undefined
-  native?: { matches: (path: string) => boolean; args: string[]; versionUrl: string } | undefined
+  native?: NativeCliUpdate | undefined
 }): CliUpdateSource | null {
   const real = input.realExecutable.replaceAll("\\", "/")
   const original = input.executable.replaceAll("\\", "/")
@@ -40,7 +48,7 @@ export function resolveCliUpdateSource(input: {
       directory: dirname(input.executable),
       args: input.native.args,
       versionUrl: input.native.versionUrl,
-      versionFormat: "text",
+      versionFormat: input.native.versionFormat ?? "text",
     }
   }
   const packageMarker = `/node_modules/${input.packageName}/`

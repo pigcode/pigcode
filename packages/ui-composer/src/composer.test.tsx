@@ -40,6 +40,24 @@ function renderComposer(props: Partial<ComponentProps<typeof Composer>> = {}) {
 }
 
 describe("Composer", () => {
+  it("preserves text and asks for an explicit choice when the selected instance cannot enforce the old permission", async () => {
+    const onSubmit = vi.fn()
+    const onPermissionMode = vi.fn()
+    const { editor, rerenderWith } = renderComposer({
+      executionModes: { plan: true, permissions: ["full-access"] },
+      permissionMode: "approval-required",
+      onSubmit,
+      onPermissionMode,
+    })
+    await userEvent.type(editor, "keep this")
+    await userEvent.keyboard("{Enter}")
+    expect(onSubmit).not.toHaveBeenCalled()
+    expect(onPermissionMode).not.toHaveBeenCalled()
+    expect(screen.getByText(/请选择可用权限/)).toBeTruthy()
+    rerenderWith({ permissionMode: "full-access" })
+    await userEvent.keyboard("{Enter}")
+    expect(onSubmit).toHaveBeenCalledWith("keep this", { effort: null })
+  })
   it("submits non-empty text with the effort of the current model", async () => {
     const onSubmit = vi.fn()
     const { editor } = renderComposer({ onSubmit })

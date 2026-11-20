@@ -206,7 +206,7 @@ export async function switchAgent(
   disposeActive?: (session: AgentSession) => Promise<void>,
   instanceId?: string | null,
   /** 实例的原生会话放在哪里（driver.continuationKey）；值相同的实例能接着用彼此的原生会话（#82）。 */
-  keyFor?: (instanceId: string) => string | null,
+  keyFor?: (instanceId: string) => string | null | Promise<string | null>,
   modes?: AgentModeSelection,
   modelSwitch?: AgentDriver["modelSwitch"],
 ): Promise<Switch> {
@@ -226,7 +226,7 @@ export async function switchAgent(
       : undefined
   const shared =
     forkFromNativeSessionId === null && !parked && keyFor
-      ? findShared(sessions.listByThread(threadId), agentId, chosenInstance, keyFor)
+      ? await findShared(sessions.listByThread(threadId), agentId, chosenInstance, keyFor)
       : undefined
   const source = parked ?? shared
   const since = source
@@ -301,22 +301,30 @@ export async function switchAgent(
 /**
  * 同一个 Agent 的其他实例在这个会话里留下的、原生会话和目标实例放在同一处的最近一个会话。
  */
-function findShared(
+async function findShared(
   rows: readonly AgentSession[],
   agentId: string,
   instanceId: string,
-  keyFor: (instanceId: string) => string | null,
-): AgentSession | undefined {
-  const target = keyFor(instanceId)
-  if (!target) return undefined
-  return [...rows]
+  keyFor: (instanceId: string) => string | null | Promise<string | null>,
+): Promise<AgentSession | undefined> {
+  const candidates = [...rows]
     .reverse()
-    .find(
+    .filter(
       (row) =>
         row.agentId === agentId &&
         (row.instanceId ?? row.agentId) !== instanceId &&
         row.nativeSessionId !== null &&
-        row.status !== "stopped" &&
-        keyFor(row.instanceId ?? row.agentId) === target,
+        row.status !== "stopped",
     )
+  if (!candidates.length) return undefined
+  const target = await keyFor(instanceId)
+  if (!target) return undefined
+  const checked = new Set<string>()
+  for (const row of candidates) {
+    const id = row.instanceId ?? row.agentId
+    if (checked.has(id)) continue
+    checked.add(id)
+    if ((await keyFor(id)) === target) return row
+  }
+  return undefined
 }

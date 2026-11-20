@@ -10,12 +10,18 @@ export const acpAuthPending = (phase?: AgentAuthState["phase"]) =>
 /** 设置卡片和创建后的登录步骤共用同一个实例认证流程。 */
 export function AcpAccount({
   instanceId,
+  agentId,
+  openExternal,
+  autoStartMethod,
   actions,
   enabled = true,
   onPhase,
   methodId,
 }: {
   instanceId: string
+  agentId?: string | undefined
+  openExternal?: ((url: string) => void | Promise<void>) | undefined
+  autoStartMethod?: string | undefined
   actions: AgentSetupActions
   enabled?: boolean
   methodId?: string | undefined
@@ -94,6 +100,20 @@ export function AcpAccount({
     }
   }, [active, terminal, instanceId, request, accountChanged])
 
+  const started = useRef(false)
+  useEffect(() => {
+    if (
+      !started.current &&
+      autoStartMethod &&
+      enabled &&
+      !loading &&
+      state?.phase === "signed-out" &&
+      state.methods?.some((m) => m.id === autoStartMethod)
+    ) {
+      started.current = true
+      void send({ action: "start", methodId: autoStartMethod })
+    }
+  }, [state, autoStartMethod, enabled, loading, send])
   const flowId = state?.flowId
   function interact(input: { data?: string; size?: { cols: number; rows: number } }) {
     if (flowId)
@@ -113,9 +133,11 @@ export function AcpAccount({
               {t(
                 state?.phase === "verifying"
                   ? "agents.acp.verifying"
-                  : terminal
-                    ? "agents.acp.terminalPrompt"
-                    : "agents.acp.signingIn",
+                  : agentId === "codex" && state?.phase === "starting"
+                    ? "agents.codex.starting"
+                    : terminal
+                      ? "agents.acp.terminalPrompt"
+                      : "agents.acp.signingIn",
               )}
             </span>
             {flowId && (
@@ -132,7 +154,15 @@ export function AcpAccount({
           </>
         ) : state?.phase === "connected" ? (
           <>
-            <span role="status">{t("agents.acp.connected")}</span>
+            <span role="status">
+              {t(
+                state.credentialsConfigured
+                  ? "agents.setup.credentialsConfigured"
+                  : agentId === "antigravity" && state.canLogout === false
+                    ? "agents.setup.credentialsAccepted"
+                    : "agents.acp.connected",
+              )}
+            </span>
             {!onPhase && state.canLogout && (
               <Button
                 size="sm"
@@ -155,13 +185,31 @@ export function AcpAccount({
               disabled={!enabled || loading}
               onClick={() => void send({ action: "start", methodId: method.id })}
             >
-              {t("agents.acp.signIn").replace("{method}", method.name)}
+              {method.id === "verify"
+                ? t("agents.setup.verify")
+                : t("agents.acp.signIn").replace("{method}", method.name)}
             </Button>
           ))
         ) : (
           <span className="agent-muted">{t("agents.acp.externalSignIn")}</span>
         )}
       </div>
+      {active && state?.authorizationUrl && openExternal && (
+        <div className="agent-setup-actions">
+          <Button
+            size="sm"
+            type="button"
+            onClick={() => void openExternal(state.authorizationUrl!)}
+          >
+            {t("agents.setup.openAuth")}
+          </Button>
+          {state.userCode && (
+            <span>
+              {t("agents.codex.deviceCode")} <code>{state.userCode}</code>
+            </span>
+          )}
+        </div>
+      )}
       {state?.terminal && flowId ? (
         <Suspense fallback={<span role="status">{t("agents.acp.terminalPrompt")}</span>}>
           <AuthTerminal

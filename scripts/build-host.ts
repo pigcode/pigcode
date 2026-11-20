@@ -18,6 +18,7 @@ import {
   type BuildOptions,
   type BuildResult,
 } from "esbuild"
+import { copyCursorRuntime } from "../apps/desktop/build/cursor-runtime.ts"
 
 /** 仓库根目录。 */
 const root = fileURLToPath(new URL("..", import.meta.url))
@@ -37,7 +38,8 @@ const shared: BuildOptions = {
   // node-pty 含原生二进制，交给打包阶段处理，不能打进 bundle。
   // esbuild 自带平台二进制，并且会检查自己是否被打包（打包后找不到同目录的 bin），必须保持 external；
   // 它在 apps/desktop 的 dependencies 里，随应用一起发布。
-  external: ["better-sqlite3", "node-pty", "esbuild"],
+  // Cursor SDK 的 CJS 分块由运行时按路径加载，SDK 及其 JS 依赖由 Electron Builder 解包。
+  external: ["better-sqlite3", "node-pty", "esbuild", "@cursor/sdk", "@cursor/sdk/*"],
   sourcemap: true,
   // 产品版本在代码里只写一次：构建时替换成 package.json 里的值。
   define: { __PIGCODE_VERSION__: JSON.stringify(appVersion) },
@@ -73,7 +75,19 @@ const coreConfig: Record<string, string[]> = {
 }
 
 /** 随应用内置的 agent 插件：包目录名即产物目录名。 */
-const builtinPlugins = ["agent-claude", "agent-codex", "agent-antigravity", "agent-acp"]
+const builtinPlugins = [
+  "agent-claude",
+  "agent-codex",
+  "agent-cursor",
+  "agent-grok",
+  "agent-fx",
+  "agent-opencode",
+  "agent-antigravity",
+  "agent-kiro",
+  "agent-muse",
+  "agent-pi",
+  "agent-acp",
+]
 
 /** 是否在构建后继续监听源码。 */
 const watching = process.argv.includes("--watch")
@@ -151,6 +165,7 @@ function watchSources(): void {
 }
 
 await rm(outDir, { recursive: true, force: true })
+if (watching) await copyCursorRuntime(outDir, process.platform, process.arch)
 
 await bundle({
   entryPoints: [join(root, "apps/host/src/entry.ts")],

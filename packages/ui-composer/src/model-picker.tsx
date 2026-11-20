@@ -262,7 +262,12 @@ export function ModelPicker({
         aria-label={`${t("composer.modelMenu")}: ${chipParts.filter(Boolean).join(" · ")}`}
       >
         {agent ? (
-          <AgentIcon agentId={agent.agentId} instanceId={agent.id} name={agent.label} />
+          <AgentIcon
+            accentColor={agent.accentColor}
+            agentId={agent.agentId}
+            instanceId={agent.id}
+            name={agent.label}
+          />
         ) : null}
         <span className="model-name truncate">{chipLabel}</span>
         {effort ? <span className="model-depth">{effortLabel(effort, t)}</span> : null}
@@ -325,6 +330,7 @@ export function ModelPicker({
                     >
                       <AgentIcon
                         agentId={item.agentId}
+                        accentColor={item.accentColor}
                         instanceId={item.id}
                         name={item.label}
                         size="lg"

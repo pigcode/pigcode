@@ -39,8 +39,16 @@ export function AgentSetup({
   const instanceId = instance.instanceId
   const enabled = agent.enabled && instance.enabled
   const acp = agent.acpRegistry
+  const genericAccount =
+    agent.agentId !== "antigravity" ||
+    ["gemini-api-key", "agent-platform"].includes(String(instance.values.authMethod))
   const managed = agent.managedCli && (!acp || Boolean(instance.values.registryId))
   const customBinary = Boolean(instance.values.binaryPath)
+  const canPrepareStandalone =
+    agent.agentId === "antigravity" &&
+    !customBinary &&
+    (instance.values.authMethod === "oauth-business" ||
+      (instance.values.authMethod === "agent-platform" && Boolean(instance.values.apiKey)))
   const [auth, setAuth] = useState<AgentAuthState>()
   const [code, setCode] = useState("")
   const [pending, setPending] = useState(false)
@@ -57,7 +65,7 @@ export function AgentSetup({
   const accountChanged = actions.accountChanged
 
   useEffect(() => {
-    if (acp) return
+    if (genericAccount) return
     let disposed = false
     function refresh() {
       const revision = authRevision.current
@@ -73,14 +81,24 @@ export function AgentSetup({
       disposed = true
       if (timer !== undefined) window.clearInterval(timer)
     }
-  }, [acp, requestAuth, authBusy, instanceId, status?.authenticated, status?.version])
+  }, [
+    genericAccount,
+    requestAuth,
+    authBusy,
+    instanceId,
+    status?.authenticated,
+    status?.credentialsConfigured,
+    status?.version,
+  ])
 
   useEffect(() => {
     const before = previous.current
     previous.current = auth
     const different =
       auth?.phase === "connected"
-        ? status?.authenticated === false
+        ? auth.credentialsConfigured
+          ? !status?.credentialsConfigured
+          : status?.authenticated === false || status?.credentialsConfigured
         : auth?.phase === "signed-out" && status?.authenticated === true
     if (
       auth &&
@@ -89,7 +107,7 @@ export function AgentSetup({
     ) {
       accountChanged(instanceId)
     }
-  }, [auth, instanceId, accountChanged, status?.authenticated])
+  }, [auth, instanceId, accountChanged, status?.authenticated, status?.credentialsConfigured])
 
   async function perform(action: () => Promise<unknown>) {
     setPending(true)
@@ -191,9 +209,14 @@ export function AgentSetup({
           )}
         </div>
       ) : null}
-      {installed && acp ? (
+      {(installed ||
+        canPrepareStandalone ||
+        (agent.agentId === "codex" && instance.values.setupMode === "managed")) &&
+      genericAccount ? (
         <AcpAccount
           instanceId={instanceId}
+          agentId={agent.agentId}
+          openExternal={openExternal}
           enabled={enabled}
           actions={actions}
           methodId={
@@ -202,7 +225,7 @@ export function AgentSetup({
               : undefined
           }
         />
-      ) : installed && !status?.error ? (
+      ) : (installed || canPrepareStandalone) && !status?.error ? (
         <div className="agent-setup-actions">
           {authBusy && flow ? (
             <>
@@ -224,7 +247,15 @@ export function AgentSetup({
                 {t("agents.setup.cancel")}
               </Button>
             </>
-          ) : linked && !auth?.usingCliLogin && auth?.canLogout !== false ? (
+          ) : linked && auth?.canLogout === false ? (
+            <span role="status">
+              {t(
+                auth.credentialsConfigured
+                  ? "agents.setup.credentialsConfigured"
+                  : "agents.setup.credentialsAccepted",
+              )}
+            </span>
+          ) : linked && !auth?.usingCliLogin ? (
             <Button
               size="sm"
               variant="ghost"
@@ -239,7 +270,13 @@ export function AgentSetup({
               disabled={pending || !enabled || !auth}
               onClick={() => authorize({ action: "start" })}
             >
-              {t(auth?.usingCliLogin ? "agents.setup.signInSeparate" : "agents.setup.signIn")}
+              {t(
+                auth?.methods?.some(({ id }) => id === "verify")
+                  ? "agents.setup.connect"
+                  : auth?.usingCliLogin
+                    ? "agents.setup.signInSeparate"
+                    : "agents.setup.signIn",
+              )}
             </Button>
           )}
         </div>

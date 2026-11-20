@@ -35,6 +35,7 @@ function Stat({
 /** 渲染概览；action 放在介绍那一行的右边（例如「设为新会话默认」）。 */
 export function AgentOverview({
   agent,
+  hasAccountSetup = agent.accountSetup,
   status,
   revealed = false,
   onReveal,
@@ -43,6 +44,7 @@ export function AgentOverview({
   versionControl,
 }: {
   agent: AgentSummary
+  hasAccountSetup?: boolean
   status: AgentStatus | undefined
   revealed?: boolean | undefined
   onReveal?: (() => void) | undefined
@@ -67,9 +69,9 @@ export function AgentOverview({
           ? {
               title: t("agents.status.signedOut"),
               detail: t(
-                agent.acpRegistry
+                agent.acpRegistry || (hasAccountSetup && agent.agentId !== "antigravity")
                   ? "agents.acp.signInHint"
-                  : agent.accountSetup
+                  : hasAccountSetup
                     ? "agents.setup.signInHint"
                     : "agents.signedOutHint",
               ),
@@ -80,6 +82,8 @@ export function AgentOverview({
     <SensitiveText value={email} revealed={revealed} onToggle={() => onReveal?.()} />
   ) : status?.usingCliLogin ? (
     t("agents.setup.cliSignedIn")
+  ) : status?.credentialsConfigured ? (
+    t("agents.status.credentialsConfigured")
   ) : status?.installed && status.authenticated === false ? (
     t("agents.status.signedOut")
   ) : null
@@ -113,7 +117,9 @@ export function AgentOverview({
               <span className="agent-stat-empty">{t("agents.status.checking")}</span>
             )}
           </Stat>
-          <Stat label={t("agents.plan")}>{status?.authenticated ? status.account : null}</Stat>
+          <Stat label={t("agents.plan")}>
+            {status?.authenticated || status?.credentialsConfigured ? status.account : null}
+          </Stat>
           <Stat label={t("agents.version")} mono>
             {versionControl ?? (status?.installed ? status.version : null)}
           </Stat>

@@ -67,6 +67,7 @@ function deferred<T>() {
 async function openWizard(
   options: {
     prepare?: (id: string) => Promise<AcpRegistryEntry>
+    extras?: AgentSummary[]
     create?: (draft: AgentInstanceDraft) => Promise<string>
     instances?: AgentInstance[]
   } = {},
@@ -86,7 +87,12 @@ async function openWizard(
   render(
     <LocaleProvider locale="zh-CN">
       <AgentsPage
-        agents={[dedicated, secondary, { ...acp, instances: options.instances ?? [] }]}
+        agents={[
+          dedicated,
+          secondary,
+          ...(options.extras ?? []),
+          { ...acp, instances: options.instances ?? [] },
+        ]}
         defaultAgentId={null}
         statuses={{}}
         onDetect={noop}
@@ -200,7 +206,10 @@ it("takes the literal local command before identity and finishes without an inst
   await userEvent.click(button("本地 ACP 命令"))
   expect(button("下一步")).toHaveProperty("disabled", true)
   await userEvent.type(field("可执行文件"), "/path/to/acp command")
-  fireEvent.change(field("启动参数"), { target: { value: "acp\nwith spaces" } })
+  await userEvent.click(button("添加参数"))
+  fireEvent.change(field("参数 1"), { target: { value: "acp" } })
+  await userEvent.click(button("添加参数"))
+  fireEvent.change(field("参数 2"), { target: { value: "with spaces" } })
   await userEvent.click(button("下一步"))
   await userEvent.type(wizard.getByRole("textbox", { name: "实例名称" }), "Local")
   await userEvent.click(button("创建实例"))
@@ -213,4 +222,53 @@ it("takes the literal local command before identity and finishes without an inst
   expect(prepare).not.toHaveBeenCalled()
   expect(auth).not.toHaveBeenCalled()
   expect(screen.queryByRole("dialog")).toBeNull()
+})
+
+it("saves an optional accent and uses a recognizable default label for an unnamed instance", async () => {
+  const { wizard, create } = await openWizard()
+  await userEvent.click(wizard.getByRole("option", { name: "Claude Code" }))
+  await userEvent.click(wizard.getByRole("button", { name: "下一步" }))
+  fireEvent.change(wizard.getByLabelText("实例强调色"), { target: { value: "#a0522d" } })
+  await userEvent.click(wizard.getByRole("button", { name: "下一步" }))
+  await userEvent.click(wizard.getByRole("button", { name: "创建实例" }))
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({ label: "Claude Code", accentColor: "#a0522d" }),
+  )
+})
+it("creates a named, private Codex account from the ChatGPT branch before starting sign-in", async () => {
+  const codex: AgentSummary = {
+    ...acp,
+    acpRegistry: false,
+    agentId: "codex",
+    displayName: "Codex",
+    featured: true,
+    accountSetup: true,
+    fields: [
+      {
+        key: "setupMode",
+        type: "select",
+        visibility: "hidden",
+        default: "existing",
+        label: "Mode",
+        options: [
+          { value: "existing", label: "existing" },
+          { value: "managed", label: "managed" },
+        ],
+      },
+    ],
+  }
+  const { wizard, create } = await openWizard({ extras: [codex] })
+  expect(wizard.getByRole("option", { name: "Codex" }).getAttribute("aria-selected")).toBe("true")
+  await userEvent.click(wizard.getByRole("button", { name: "使用 ChatGPT 账号" }))
+  const name = wizard.getByRole("textbox", { name: "账号名称" })
+  await userEvent.clear(name)
+  await userEvent.type(name, "Work")
+  await userEvent.click(wizard.getByRole("button", { name: "继续登录" }))
+  expect(create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agentId: "codex",
+      label: "ChatGPT - Work",
+      values: { setupMode: "managed" },
+    }),
+  )
 })

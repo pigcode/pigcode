@@ -1,5 +1,5 @@
 /** Agent 插件：内置 Claude Code 与 Codex、设置页的表单与保存、启停、安装与卸载第三方 agent、跨重启保留。 */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { writeAgyFixture } from "../../host/src/agents/fixtures/executable"
@@ -68,7 +68,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(claude.locator(".agent-brand")).toHaveAttribute("data-brand", "claude")
     await expect(codex.locator(".agent-brand")).toHaveAttribute("data-brand", "openai")
     await codex.click()
-    await wizard.getByRole("button", { name: "下一步" }).click()
+    await wizard.getByRole("button", { name: "手动配置" }).click()
     await expect(wizard.locator(".wizard-picked .agent-brand")).toHaveAttribute(
       "data-brand",
       "openai",
@@ -103,6 +103,7 @@ test("agents are plugins with settings that reach the composer", async () => {
       launchArgs: "-c model_reasoning_summary=detailed",
     }
     const homeInput = wizard.getByRole("textbox", { name: "CODEX_HOME" })
+    mkdirSync(runtimeValues.homePath)
     const launchArgsInput = wizard.getByRole("textbox", { name: "启动参数" })
     await expect(homeInput).toHaveCSS("height", "36px")
     await expect(launchArgsInput).toHaveCSS("height", "36px")
@@ -123,7 +124,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     const settingsPath = join(profileDir, "settings.json")
     const created = JSON.parse(readFileSync(settingsPath, "utf8")).agentInstances.work_codex
     expect(created).toMatchObject({ agentId: "codex", label: "公司 API" })
-    expect(created.values).toEqual(runtimeValues)
+    expect(created.values).toEqual({ ...runtimeValues, setupMode: "existing" })
 
     // 在自动展开的新实例里配置环境变量和自定义模型。
     const editor = page.locator(".agent-editor")
@@ -146,7 +147,9 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(variableName).toHaveAccessibleDescription(/不能以数字开头/)
     await variableName.fill("OPENAI_BASE_URL")
     await expect(variableName).not.toHaveAttribute("aria-invalid", "true")
-    await editor.getByRole("textbox", { name: "值 1" }).fill("http://127.0.0.1:9/v1")
+    const secret = editor.getByLabel("值 1", { exact: true })
+    await expect(secret).toHaveAttribute("type", "password")
+    await secret.fill("http://127.0.0.1:9/v1")
     await editor.getByRole("tab", { name: /^模型/ }).click()
     const model = editor.getByRole("textbox", { name: "模型 id，回车添加" })
     await expect(model).toHaveCSS("height", "28px")
@@ -160,10 +163,15 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
     await page.screenshot({ path: "test-results/agents-codex-settings.png" })
 
-    const saved = JSON.parse(readFileSync(settingsPath, "utf8")).agentInstances.work_codex
+    const persisted = readFileSync(settingsPath, "utf8")
+    expect(persisted).not.toContain("http://127.0.0.1:9/v1")
+    const saved = JSON.parse(persisted).agentInstances.work_codex
     expect(saved.values).toEqual({
       ...runtimeValues,
-      environment: [{ name: "OPENAI_BASE_URL", value: "http://127.0.0.1:9/v1" }],
+      setupMode: "existing",
+      environment: [
+        { name: "OPENAI_BASE_URL", value: { privateSlot: expect.any(String) }, sensitive: true },
+      ],
       customModels: ["gpt-work-e2e"],
     })
 
@@ -176,7 +184,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(models).toContainText("自定义")
     await page.keyboard.press("Escape")
 
-    // 停用 Codex：插件卸下，输入框里不再有它；再启用回来。
+    // 默认 Codex 和自定义账号分别启停。停用默认实例后，自定义实例仍出现在输入框里。
     await openAgents(page)
     await page.getByRole("switch", { name: "启用 Codex" }).click()
     await expect(defaultCodex).toContainText("已停用")
@@ -184,7 +192,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await page.getByRole("button", { name: /Agent 与模型/ }).click()
     await expect(page.getByRole("tab", { name: "Claude Code" })).toBeVisible()
     await expect(page.getByRole("tab", { name: "Codex" })).toHaveCount(0)
-    await expect(page.getByRole("tab", { name: "公司 API" })).toHaveCount(0)
+    await expect(page.getByRole("tab", { name: "公司 API" })).toBeVisible()
     await page.keyboard.press("Escape")
     await openAgents(page)
     await page.getByRole("switch", { name: "启用 Codex" }).click()

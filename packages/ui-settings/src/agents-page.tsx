@@ -1,6 +1,6 @@
 /** Agent 设置页与实例的就地编辑。 */
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
+import { ChevronDown, Plus, RefreshCw } from "lucide-react"
 import type {
   AgentInstance,
   AgentInstanceDraft,
@@ -8,26 +8,17 @@ import type {
   AgentStatus,
   AgentSummary,
   AgentCliUpdateState,
+  ClaudeIdlePolicy,
 } from "@pigcode/contracts"
-import {
-  AgentIcon,
-  Badge,
-  agentBrandOf,
-  Button,
-  EmptyState,
-  Select,
-  StatusDot,
-  Switch,
-  useLocale,
-} from "@pigcode/ui-primitives"
+import { AgentIcon, Button, EmptyState, Select, useLocale } from "@pigcode/ui-primitives"
+import { ClaudeIdleDefault } from "./instance-accent"
 import { AgentEditor } from "./agent-editor"
 import type { AgentModelInfo } from "./agent-models"
 import type { PickPath } from "./agent-fields"
 import { InstanceCreateWizard } from "./agent-instance-wizard"
 import type { RegistryActions } from "./acp-registry-picker"
-import { allInstances, instancesOf, type AgentInstanceEntry } from "./agent-instances"
-import { instanceHeadline } from "./agent-status"
-import { SensitiveText } from "./sensitive-text"
+import { allInstances, hasInstanceSignIn, instancesOf } from "./agent-instances"
+import { InstanceHead } from "./agent-instance-head"
 import { AgentCliUpdate } from "./agent-cli-update"
 import { AgentSetup, type AgentSetupActions } from "./agent-setup"
 
@@ -35,6 +26,8 @@ export type { AgentModelInfo } from "./agent-models"
 
 /** Agent 页的数据与操作；操作失败时抛错，页面展示原因。 */
 export interface AgentsPageProps {
+  idleDefaults?:
+    { value: ClaudeIdlePolicy; set: (mode: ClaudeIdlePolicy) => Promise<void> } | undefined
   cliUpdates?: Readonly<Record<string, AgentCliUpdateState>> | undefined
   checkingCliUpdates?: boolean | undefined
   onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
@@ -66,7 +59,7 @@ export interface AgentsPageProps {
   onUpdateInstance: (
     agent: AgentSummary,
     instanceId: string,
-    patch: { label?: string; enabled?: boolean },
+    patch: { label?: string; enabled?: boolean; accentColor?: string | null },
   ) => Promise<void>
   onRemoveInstance: (agent: AgentSummary, instanceId: string) => Promise<void>
   onPickPath?: PickPath | undefined
@@ -76,113 +69,9 @@ export interface AgentsPageProps {
 /** 「自动」在 Select 里的值；实例 id 不会以冒号开头。 */
 const AUTO = ":auto"
 
-/** 实例卡片的头部：整块是展开按钮，右边是启用开关（开关不跟着展开）。 */
-function InstanceHead({
-  entry,
-  status,
-  open,
-  sessionDefault,
-  pending,
-  revealed,
-  onToggle,
-  onReveal,
-  onSetEnabled,
-  update,
-  onShowUpdate,
-}: {
-  entry: AgentInstanceEntry
-  status: AgentStatus | undefined
-  open: boolean
-  sessionDefault: boolean
-  pending: boolean
-  /** 账号邮箱是否显示原文；默认遮住。 */
-  revealed: boolean
-  onToggle: () => void
-  onReveal: () => void
-  onSetEnabled: (enabled: boolean) => void
-  update: AgentCliUpdateState | undefined
-  onShowUpdate: () => void
-}) {
-  const { t } = useLocale()
-  const { agent, instance, label } = entry
-  const headline = instanceHeadline(agent, instance, status)
-  const custom = !instance.isDefault
-  const signedIn = headline.tone === "ready" && status?.authenticated === true
-  const updating = Boolean(update && ["queued", "waiting", "running"].includes(update.phase))
-  return (
-    <div className="agent-row" data-open={open || undefined}>
-      {/* 整块卡片头可点：展开按钮铺满这一块，邮箱的显示按钮浮在它上面，不嵌套按钮。 */}
-      <div className="agent-row-main">
-        <button
-          type="button"
-          className="agent-row-hit"
-          aria-expanded={open}
-          aria-label={t("agents.select").replace("{instance}", label)}
-          onClick={onToggle}
-        />
-        <span className="agent-tile" data-brand={agentBrandOf(agent.agentId) ?? undefined}>
-          <AgentIcon
-            agentId={agent.agentId}
-            instanceId={instance.instanceId}
-            name={label}
-            size="lg"
-          />
-        </span>
-        <span className="agent-row-text">
-          <span className="agent-row-title">
-            <span className="agent-row-name truncate">{label}</span>
-            {custom ? <code className="agent-row-id">{instance.instanceId}</code> : null}
-            {sessionDefault ? <Badge>{t("agents.instance.isSessionDefault")}</Badge> : null}
-          </span>
-          <span className="agent-row-status" data-tone={headline.tone}>
-            <StatusDot tone={headline.tone} />
-            <span className="agent-row-state">{t(headline.label)}</span>
-            {signedIn && status?.email ? (
-              <SensitiveText
-                className="agent-row-email"
-                value={status.email}
-                revealed={revealed}
-                onToggle={onReveal}
-              />
-            ) : null}
-            {signedIn && status?.account ? (
-              <span className="agent-plan truncate">{status.account}</span>
-            ) : null}
-          </span>
-        </span>
-        {update && (update.available || updating) ? (
-          <button
-            className="icon-btn agent-row-update"
-            type="button"
-            aria-label={t("updates.agent").replace("{agent}", label)}
-            title={
-              updating
-                ? t("updates.inProgress")
-                : t("agents.cli.available").replace("{version}", update.latestVersion ?? "")
-            }
-            onClick={onShowUpdate}
-          >
-            {updating ? (
-              <LoaderCircle className="ic ic-sm spin" aria-hidden="true" />
-            ) : (
-              <CircleArrowUp className="ic ic-sm" aria-hidden="true" />
-            )}
-          </button>
-        ) : null}
-        <ChevronDown className="ic ic-sm agent-row-caret" aria-hidden="true" />
-      </div>
-      <Switch
-        aria-label={t("agents.enable").replace("{agent}", label)}
-        checked={agent.enabled && instance.enabled}
-        disabled={pending}
-        onCheckedChange={(checked) => onSetEnabled(checked)}
-      />
-    </div>
-  )
-}
-
 /** 渲染 Agent 设置页。 */
 export function AgentsPage({
+  idleDefaults,
   cliUpdates = {},
   checkingCliUpdates = false,
   onCheckCliUpdates,
@@ -372,6 +261,7 @@ export function AgentsPage({
                         <AgentIcon
                           agentId={entry.agent.agentId}
                           instanceId={entry.instance.instanceId}
+                          accentColor={entry.instance.accentColor}
                           name={entry.label}
                         />
                         <Select.ItemText>{entry.label}</Select.ItemText>
@@ -448,7 +338,7 @@ export function AgentsPage({
                     onPickPath={onPickPath}
                     onOpenExternal={onOpenExternal}
                     setup={
-                      openEntry.agent.accountSetup && setupActions ? (
+                      hasInstanceSignIn(openEntry) && setupActions ? (
                         <AgentSetup
                           entry={openEntry}
                           status={statuses[id]}
@@ -478,6 +368,9 @@ export function AgentsPage({
         </div>
       </section>
 
+      {idleDefaults && agents.some((a) => a.agentId === "claude") && (
+        <ClaudeIdleDefault value={idleDefaults.value} onChange={idleDefaults.set} />
+      )}
       {wizardOpen && (
         <InstanceCreateWizard
           onClose={(created) => {

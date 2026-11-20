@@ -212,11 +212,25 @@ describe("PluginManagerView", () => {
 
   it("starts uninstalling from the card's menu, and built-in plugins have no uninstall", async () => {
     const onUninstall = vi.fn(async () => {})
-    renderView([DEMO, { ...DEMO, id: "agent.claude", displayName: "Claude Code", builtin: true }], {
-      onUninstall,
-    })
+    renderView(
+      [
+        DEMO,
+        {
+          ...DEMO,
+          id: "agent.claude",
+          displayName: "Claude Code",
+          kind: "agent",
+          version: "1.2.3-internal",
+          builtin: true,
+        },
+      ],
+      {
+        onUninstall,
+      },
+    )
     const user = userEvent.setup()
     await user.click(screen.getByRole("button", { name: "Claude Code 的更多操作" }))
+    expect(screen.queryByText("1.2.3-internal")).toBeNull()
     expect(await screen.findByRole("menuitem", { name: "详情" })).toBeTruthy()
     expect(screen.queryByRole("menuitem", { name: "卸载" })).toBeNull()
     await user.keyboard("{Escape}")

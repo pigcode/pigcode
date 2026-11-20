@@ -49,11 +49,7 @@ export function AgentCliUpdate({
   )
   const value = state?.currentVersion ?? version
   const canUpdate =
-    state?.canUpdate &&
-    (state.available ||
-      !state.latestVersion ||
-      state.phase === "failed" ||
-      state.phase === "unchanged")
+    state?.canUpdate && (state.available || state.phase === "failed" || state.phase === "unchanged")
   const failed = Boolean(failure || state?.phase === "failed" || state?.phase === "unchanged")
   const upToDate = state?.phase === "succeeded" || Boolean(state?.latestVersion && !state.available)
 

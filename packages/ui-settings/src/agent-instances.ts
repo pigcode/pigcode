@@ -34,7 +34,8 @@ export function suggestInstanceId(
  * 默认实例的 id 就是 agent id，值是 `agent.values`。
  */
 export function instancesOf(agent: AgentSummary): AgentInstance[] {
-  if (agent.acpRegistry || agent.instances.length > 0) return agent.instances
+  if (agent.acpRegistry || agent.requiresInstance || agent.instances.length > 0)
+    return agent.instances
   return [
     {
       instanceId: agent.agentId,
@@ -83,6 +84,15 @@ export interface AgentInstanceEntry {
   instance: AgentInstance
   /** 实例的显示名，见 instanceLabel。 */
   label: string
+}
+
+export function hasInstanceSignIn({ agent, instance }: AgentInstanceEntry) {
+  return (
+    agent.accountSetup &&
+    (agent.agentId !== "codex" ||
+      instance.values.setupMode === "managed" ||
+      Boolean(instance.values.shadowHomePath))
+  )
 }
 
 /** 全部 agent 的实例摊平成一张表，默认实例在前，同一 agent 的其余实例按创建顺序。 */

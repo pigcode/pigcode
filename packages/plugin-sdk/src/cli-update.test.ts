@@ -74,6 +74,7 @@ describe("CLI update installation source", () => {
 
 describe("CLI update version checks", () => {
   it("preserves prerelease versions and does not propose a downgrade", () => {
+    expect(cliVersion("opencode v2.3.2")).toBe("2.3.2")
     expect(cliVersion("codex-cli 0.167.0-alpha.3")).toBe("0.167.0-alpha.3")
     expect(cliVersion("2.1.304 (Claude Code)")).toBe("2.1.304")
     expect(cliUpdateAvailable("0.168.0-alpha.1", "0.167.1")).toBe(false)

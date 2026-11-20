@@ -53,6 +53,9 @@ importers:
       '@base-ui/react':
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.2.2)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@cursor/sdk':
+        specifier: 1.3.1
+        version: 1.3.1(zod@4.4.3)
       '@pigcode/client-runtime':
         specifier: workspace:*
         version: link:../../packages/client-runtime
@@ -138,6 +141,9 @@ importers:
       electron-vite:
         specifier: 6.0.0
         version: 6.0.0(vite@7.1.12(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.30.1)(yaml@2.8.1))
+      tar:
+        specifier: 7.5.22
+        version: 7.5.22
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -147,6 +153,9 @@ importers:
       vitest:
         specifier: 4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.1)(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
+      yaml:
+        specifier: 2.8.1
+        version: 2.8.1
 
   apps/host:
     dependencies:
@@ -311,12 +320,6 @@ importers:
       '@pigcode/plugin-sdk':
         specifier: workspace:*
         version: link:../plugin-sdk
-      tar:
-        specifier: 7.5.22
-        version: 7.5.22
-      yauzl:
-        specifier: 3.4.0
-        version: 3.4.0
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -324,9 +327,6 @@ importers:
       '@types/node':
         specifier: 24.10.1
         version: 24.10.1
-      '@types/yauzl':
-        specifier: 3.4.0
-        version: 3.4.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -400,6 +400,142 @@ importers:
         specifier: 4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.1)(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
 
+  packages/agent-cursor:
+    dependencies:
+      '@cursor/sdk':
+        specifier: 1.3.1
+        version: 1.3.1(zod@4.4.3)
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/native-agent-runtime':
+        specifier: workspace:*
+        version: link:../native-agent-runtime
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-fx:
+    dependencies:
+      '@pigcode/acp-runtime':
+        specifier: workspace:*
+        version: link:../acp-runtime
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-grok:
+    dependencies:
+      '@pigcode/acp-runtime':
+        specifier: workspace:*
+        version: link:../acp-runtime
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-kiro:
+    dependencies:
+      '@pigcode/acp-runtime':
+        specifier: workspace:*
+        version: link:../acp-runtime
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-muse:
+    dependencies:
+      '@muse-code/sdk':
+        specifier: 1.4.6
+        version: 1.4.6(@types/node@24.10.1)
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/native-agent-runtime':
+        specifier: workspace:*
+        version: link:../native-agent-runtime
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-opencode:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/native-agent-runtime':
+        specifier: workspace:*
+        version: link:../native-agent-runtime
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
+  packages/agent-pi:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/client-runtime:
     dependencies:
       '@pigcode/contracts':
@@ -438,6 +574,22 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  packages/native-agent-runtime:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@pigcode/plugin-sdk':
+        specifier: workspace:*
+        version: link:../plugin-sdk
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.1
+        version: 24.10.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
   packages/plugin-sdk:
     dependencies:
       '@pigcode/contracts':
@@ -449,6 +601,12 @@ importers:
       semver:
         specifier: 7.7.2
         version: 7.7.2
+      tar:
+        specifier: 7.5.22
+        version: 7.5.22
+      yauzl:
+        specifier: 3.4.0
+        version: 3.4.0
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -459,6 +617,9 @@ importers:
       '@types/semver':
         specifier: 7.7.1
         version: 7.7.1
+      '@types/yauzl':
+        specifier: 3.4.0
+        version: 3.4.0
       typescript:
         specifier: 5.9.3
         version: 5.9.3
@@ -938,6 +1099,20 @@ packages:
       '@types/react':
         optional: true
 
+  '@bufbuild/protobuf@1.10.0':
+    resolution: {integrity: sha512-QDdVFLoN93Zjg36NoQPZfsVH9tZew7wKDKyV5qRdj8ntT4wQCOradQjRaTdwMhWUYsgKsvCINKKm87FdEk96Ag==}
+
+  '@connectrpc/connect-web@1.7.0':
+    resolution: {integrity: sha512-qyP0YOnUPRWwCc/VfsoydMJvkb7EyUPr2q9sHgBuJzbADjiqck1gKH5V5ZPzPhTLBvmz5UvG+wiZ5sMRQHU1MQ==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.10.0
+      '@connectrpc/connect': 1.7.0
+
+  '@connectrpc/connect@1.7.0':
+    resolution: {integrity: sha512-iNKdJRi69YP3mq6AePRT8F/HrxWCewrhxnLMNm0vpqXAR8biwzRtO6Hjx80C6UvtKJ5sFmffQT7I4Baecz389w==}
+    peerDependencies:
+      '@bufbuild/protobuf': ^1.10.0
+
   '@cordisjs/plugin-loader@1.0.0-rc.8':
     resolution: {integrity: sha512-KK/tN3OjkK0VJjL1aEQCVK2e2+pqW1F3KHtU5XPZbzZ99HN/kz3yHNTTxSjOGn33WjnL9wdMPHHXQfuHzVeG/A==}
     peerDependencies:
@@ -974,6 +1149,42 @@ packages:
   '@csstools/css-tokenizer@3.0.4':
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
+
+  '@cursor/sdk-darwin-arm64@1.3.1':
+    resolution: {integrity: sha512-5JXgVJYeFPxXjDqnu1ha/rAmH+ATFh4abdx199x8E/RcYYM++9b55oJXO3GYv1/9/4Qa9RsE5JkHRY6FYc5vQw==}
+    cpu: [arm64]
+    os: [darwin]
+    hasBin: true
+
+  '@cursor/sdk-darwin-x64@1.3.1':
+    resolution: {integrity: sha512-yHzIRER8IpOpIH/CUigquuwqvcjCEe62xV6OiJHzRfgApdnzxCjC8JMhLZP2M08/dofyZu9xeo7yr43H6oSRTA==}
+    cpu: [x64]
+    os: [darwin]
+    hasBin: true
+
+  '@cursor/sdk-linux-arm64@1.3.1':
+    resolution: {integrity: sha512-8wI7DUSQtJ7Rkyj5AhNONeR0M+5bjhR0qo8GJEEmRs6isi072sNPsFXwfhlzX7bhbtsX/FCtvsTG/vpam48ObA==}
+    cpu: [arm64]
+    os: [linux]
+    hasBin: true
+
+  '@cursor/sdk-linux-x64@1.3.1':
+    resolution: {integrity: sha512-jIwzTr3KhMtU4aJc8x0i1RlcBKttqcVYhor9FI/h1qJQm03yTgSwhyZjsMvfBHPQ5KoYDFVdu47S1dIhwaSWZA==}
+    cpu: [x64]
+    os: [linux]
+    hasBin: true
+
+  '@cursor/sdk-win32-x64@1.3.1':
+    resolution: {integrity: sha512-hqYllGgY27eaq+w035PebKdoc/JswcrvOSNCniqq/nicLXgWdK5zdKiAs5MyWUr73HGGL1sK0aiE7WdxbIKKVw==}
+    cpu: [x64]
+    os: [win32]
+    hasBin: true
+
+  '@cursor/sdk@1.3.1':
+    resolution: {integrity: sha512-Mn0gK8V+5BkOqm22J2ocU+1BrqnNH8QcK9kmA7SkRuawDOeq2ABC2BIZq9gRnF3z68x/I7J/ZU8jl6DcshCVUA==}
+    engines: {node: '>=22.13'}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@develar/schema-utils@2.6.5':
     resolution: {integrity: sha512-0cp4PsWQ/9avqTVMCtZ+GirikIA36ikvjtHweU4/j8yLtgObI0+JUPhYFScgwlteveGB1rt3Cm8UhN04XayDig==}
@@ -1471,6 +1682,15 @@ packages:
       '@cfworker/json-schema':
         optional: true
 
+  '@muse-code/sdk@1.4.6':
+    resolution: {integrity: sha512-pUENCnmn9q4e2xMXicdRbzbSMdH1fiyTIh5fVBXuxNdNP2ZKA0kwQz5fWMxIB8wzxS2ZyH0v27dvfbZuGuoUjg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@types/node': '>=20'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     resolution: {integrity: sha512-oTXEIha4SsuXdTA4Iyskj0kpdx2yVXdhd75c2v3xGrHFfVMsbhTPZU/nMPL4sWKo4pBHm3aucLaqGlF696dTyQ==}
     engines: {node: ^22.20 || ^24.12 || >=25}
@@ -1773,6 +1993,12 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@statsig/client-core@3.31.0':
+    resolution: {integrity: sha512-SuxQD6TmVszPG7FoMKwTk/uyBuVFk7XnxI3T/E0uyb7PL7GNjONtfsoh+NqBBVUJVse0CUeSFfgJPoZy1ZOslQ==}
+
+  '@statsig/js-client@3.31.0':
+    resolution: {integrity: sha512-LFa5E0LjT6sTfZv3sNGoyRLSZ1078+agdgOA+Vm1ecjG+KbSOfBLTW7hMwimrJ29slRwbYDzbtKaPJo/R37N2g==}
 
   '@szmarczak/http-timer@4.0.6':
     resolution: {integrity: sha512-4BAffykYOgO+5nzBWYwE3W90sBgLJoUPRWWcL8wlyiM8IB8ipJz3UMJ9KXQd1RKQXpKp8Tutn80HZtWsu2u76w==}
@@ -4663,6 +4889,17 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.2
 
+  '@bufbuild/protobuf@1.10.0': {}
+
+  '@connectrpc/connect-web@1.7.0(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.7.0(@bufbuild/protobuf@1.10.0))':
+    dependencies:
+      '@bufbuild/protobuf': 1.10.0
+      '@connectrpc/connect': 1.7.0(@bufbuild/protobuf@1.10.0)
+
+  '@connectrpc/connect@1.7.0(@bufbuild/protobuf@1.10.0)':
+    dependencies:
+      '@bufbuild/protobuf': 1.10.0
+
   '@cordisjs/plugin-loader@1.0.0-rc.8(cordis@4.0.0-rc.11)':
     dependencies:
       cordis: 4.0.0-rc.11(@cordisjs/plugin-loader@1.0.0-rc.8)
@@ -4687,6 +4924,35 @@ snapshots:
       '@csstools/css-tokenizer': 3.0.4
 
   '@csstools/css-tokenizer@3.0.4': {}
+
+  '@cursor/sdk-darwin-arm64@1.3.1':
+    optional: true
+
+  '@cursor/sdk-darwin-x64@1.3.1':
+    optional: true
+
+  '@cursor/sdk-linux-arm64@1.3.1':
+    optional: true
+
+  '@cursor/sdk-linux-x64@1.3.1':
+    optional: true
+
+  '@cursor/sdk-win32-x64@1.3.1':
+    optional: true
+
+  '@cursor/sdk@1.3.1(zod@4.4.3)':
+    dependencies:
+      '@bufbuild/protobuf': 1.10.0
+      '@connectrpc/connect': 1.7.0(@bufbuild/protobuf@1.10.0)
+      '@connectrpc/connect-web': 1.7.0(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.7.0(@bufbuild/protobuf@1.10.0))
+      '@statsig/js-client': 3.31.0
+      zod: 4.4.3
+    optionalDependencies:
+      '@cursor/sdk-darwin-arm64': 1.3.1
+      '@cursor/sdk-darwin-x64': 1.3.1
+      '@cursor/sdk-linux-arm64': 1.3.1
+      '@cursor/sdk-linux-x64': 1.3.1
+      '@cursor/sdk-win32-x64': 1.3.1
 
   '@develar/schema-utils@2.6.5':
     dependencies:
@@ -5123,6 +5389,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@muse-code/sdk@1.4.6(@types/node@24.10.1)':
+    optionalDependencies:
+      '@types/node': 24.10.1
+
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
 
@@ -5309,6 +5579,12 @@ snapshots:
   '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@statsig/client-core@3.31.0': {}
+
+  '@statsig/js-client@3.31.0':
+    dependencies:
+      '@statsig/client-core': 3.31.0
 
   '@szmarczak/http-timer@4.0.6':
     dependencies:

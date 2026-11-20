@@ -29,6 +29,8 @@ export function agentHeadline(
   // 找不到可执行文件的细节（试过的路径、安装方式）放在展开的编辑区里，列表只说结论。
   if (!status.installed) return { tone: "error", label: "agents.status.notInstalled", detail: null }
   const detail = [status.version, status.account].filter(Boolean).join(" · ") || null
+  if (status.credentialsConfigured)
+    return { tone: "warning", label: "agents.status.credentialsConfigured", detail }
   if (status.authenticated === false) {
     return { tone: "warning", label: "agents.status.signedOut", detail }
   }

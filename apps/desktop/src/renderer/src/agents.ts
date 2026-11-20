@@ -36,6 +36,7 @@ export function toComposerAgents(list: AgentList): ComposerAgent[] {
         .map((instance) => ({
           id: instance.instanceId,
           agentId: agent.agentId,
+          ...(instance.accentColor ? { accentColor: instance.accentColor } : {}),
           label: instance.isDefault ? agent.displayName : instance.label,
           executionModes:
             instance.executionModes ??

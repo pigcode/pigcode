@@ -81,6 +81,7 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
   ...[
     "packages/agent-antigravity/src/connection.ts",
     "packages/acp-runtime/src/connection.ts",
+    "packages/acp-runtime/test/native-cli.test.ts",
     "packages/acp-runtime/src/runtime.ts",
     "packages/agent-acp/src/driver.ts",
     "apps/host/src/agents/acp.test.ts",
@@ -90,6 +91,43 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
     file,
     pattern: /\b(?:clientCapabilities|agentCapabilities|sessionCapabilities|mcpCapabilities)\b/g,
     reason: "ACP 握手与会话的原生协议字段",
+  })),
+  {
+    file: "packages/agent-codex/src/launch.ts",
+    pattern: /\bmodel_provider\b/g,
+    reason: "Codex CLI 指定 OpenAI 后端的原生配置键",
+  },
+  ...[
+    "packages/agent-pi/src/driver.ts",
+    "packages/agent-pi/src/launch.ts",
+    "packages/agent-pi/test/driver.test.ts",
+  ].map((file) => ({
+    file,
+    pattern: /\bprovider\b/g,
+    reason: "Pi 模型 RPC 字段与命令行参数",
+  })),
+  ...[
+    "packages/agent-opencode/src/driver.ts",
+    "packages/agent-opencode/src/turn.ts",
+    "packages/agent-opencode/src/driver.test.ts",
+  ].map((file) => ({
+    file,
+    pattern: /\b(?:provider|providerID)\b/g,
+    reason: "OpenCode 的 HTTP 路由与模型标识字段",
+  })),
+  {
+    file: "packages/agent-opencode/src/local.test.ts",
+    pattern: /\bproviders\b/g,
+    reason: "OpenCode 本地推理测试使用原生配置键和官方模块路径",
+  },
+  ...[
+    "packages/agent-muse/src/driver.ts",
+    "packages/agent-muse/src/driver.test.ts",
+    "packages/agent-muse/test-fixtures/muse.ts",
+  ].map((file) => ({
+    file,
+    pattern: /\b(?:capabilities|requestedCapabilities|grantedCapabilities|providerId)\b/g,
+    reason: "Muse MSP 握手及模型协议字段",
   })),
   {
     file: "packages/acp-runtime/src/mcp.ts",

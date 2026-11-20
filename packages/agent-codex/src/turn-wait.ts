@@ -50,3 +50,24 @@ function completedTurnId(params: unknown): string | undefined {
   }
   return typeof record.turnId === "string" ? record.turnId : undefined
 }
+
+export interface CodexTurnState {
+  client: CodexRpcClient
+  nativeThreadId: string | null
+  turnId: string | null
+  interruptRequested: boolean
+}
+
+/** 发送一次 turn/interrupt；同一 turn 只发送一次。 */
+export async function interruptTurn(state: CodexTurnState): Promise<void> {
+  if (state.interruptRequested || !state.nativeThreadId || !state.turnId) return
+  state.interruptRequested = true
+  try {
+    await state.client.request("turn/interrupt", {
+      threadId: state.nativeThreadId,
+      turnId: state.turnId,
+    })
+  } catch {
+    // 服务端可能已结束该 turn；中断失败不阻塞 run 的终态处理。
+  }
+}

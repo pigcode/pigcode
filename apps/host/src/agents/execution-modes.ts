@@ -23,6 +23,7 @@ export function registeredAgents(drivers: ReadonlyMap<string, AgentDriver>) {
     displayName: driver.displayName,
     features: driver.features,
     executionModes: modesOf(driver),
+    ...(driver.requiresInstance ? { requiresInstance: true } : {}),
     ...(driver.accountSetup ? { accountSetup: true } : {}),
     ...(driver.acpRegistry ? { acpRegistry: true } : {}),
     ...(driver.removeManagedCli ? { managedCli: true } : {}),
@@ -37,7 +38,8 @@ export function resolveModes(
 ): AgentModeSelection {
   const value = input.permissionMode ?? DEFAULT_RUNTIME_MODE
   const permissionMode = normalizeRuntimeMode(value, agentId)
-  if (!permissionMode) throw new Error(`Unsupported runtime permission mode: ${value}`)
+  if (!permissionMode || (modes?.permissions && !modes.permissions.includes(permissionMode)))
+    throw new Error(`Unsupported runtime permission mode: ${value}`)
   const planMode = input.permissionMode === "plan" || (input.planMode ?? false)
   if (planMode && !modes?.plan) throw new Error("Agent does not support plan mode")
   return { permissionMode, planMode }
@@ -92,8 +94,10 @@ export function modesForSwitch(
 ): AgentModeSelection {
   const thread = ctx.threads.get(threadId)
   if (!thread) throw new Error(`thread not found: ${threadId}`)
+  const modes = modesForAgent(ctx, agentId, instanceId)
+  // 允许先切换实例。若原权限不可用，保留用户选择，直到用户明确换档才允许运行。
   return resolveModes(
-    modesForAgent(ctx, agentId, instanceId),
+    modes && { plan: modes.plan },
     thread,
     thread.lastAgentId ?? thread.defaultAgentId,
   )

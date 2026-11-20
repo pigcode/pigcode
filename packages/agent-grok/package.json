@@ -1,0 +1,83 @@
+{
+  "name": "@pigcode/agent-grok",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  },
+  "description": "Grok CLI integration for Pigcode",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "pigcode": ">=0.1.0-0"
+  },
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "agent",
+    "displayName": "Grok",
+    "host": "./src/index.ts",
+    "inject": [
+      "agents"
+    ],
+    "provides": [
+      "agent:grok"
+    ],
+    "permissions": [
+      "process:spawn",
+      "fs:workspace",
+      "network"
+    ],
+    "contributes": {
+      "agent": {
+        "id": "grok",
+        "requiresInstance": true,
+        "featured": true,
+        "homepage": "https://grok.com/build",
+        "description": {
+          "zh-CN": "通过本机 Grok 接入会话。",
+          "en-US": "Connect sessions through the local Grok CLI."
+        },
+        "installHint": {
+          "zh-CN": "安装 grok 并在其终端中登录。",
+          "en-US": "Install grok and sign in using its CLI."
+        },
+        "settings": [
+          {
+            "key": "binaryPath",
+            "type": "path",
+            "pathKind": "file",
+            "label": {
+              "zh-CN": "可执行文件",
+              "en-US": "Binary path"
+            },
+            "placeholder": "grok"
+          },
+          {
+            "key": "environment",
+            "type": "env",
+            "label": {
+              "zh-CN": "环境变量",
+              "en-US": "Environment variables"
+            }
+          }
+        ],
+        "acpRegistryAgentIds": [
+          "grok-build"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*",
+    "@pigcode/acp-runtime": "workspace:*"
+  }
+}

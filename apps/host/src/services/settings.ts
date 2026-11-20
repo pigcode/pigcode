@@ -2,12 +2,14 @@
  * Host 设置：以 JSON 文件持久化的键值表，例如每个 agent 的设置与默认 agent。
  * 没有配置路径时只存在内存里（单元测试）。文件写坏或被手改坏时备份后从空表开始，不阻止 Host 启动。
  */
+import { dirname } from "node:path"
 import type { Context } from "cordis"
 import { readFileSync, renameSync } from "node:fs"
 import { writeFileAtomicSync } from "./atomic-write"
 
 /** 设置读写入口；值必须可 JSON 序列化。 */
 export interface SettingsService {
+  directory?: string
   get(key: string): unknown
   /** 写入并立即落盘；value 为 undefined 时删除该键。 */
   set(key: string, value: unknown): void
@@ -60,6 +62,7 @@ export function apply(ctx: Context, config: SettingsConfig = {}): void {
   const listeners = new Set<(key: string, value: unknown) => void>()
 
   const service: SettingsService = {
+    ...(path ? { directory: dirname(path) } : {}),
     get: (key) => values[key],
     set(key, value) {
       const next = { ...values }

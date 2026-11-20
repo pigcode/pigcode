@@ -25,7 +25,11 @@ export interface ExecuteDeps {
     run: ActiveRun,
     request: Parameters<AgentRuntime["requestApproval"]>[0],
   ) => Promise<ApprovalDecision>
-  askQuestions: (run: ActiveRun, request: QuestionRequest) => Promise<string[]>
+  askQuestions: (
+    run: ActiveRun,
+    request: QuestionRequest,
+    signal?: AbortSignal,
+  ) => Promise<string[]>
 }
 
 /** 生成 execute；异常统一转成 run.failed。 */
@@ -95,10 +99,10 @@ export function createExecute(
         if (!isCurrent(run) || deps.ctx.threads.get(run.threadId)?.planMode === planMode) return
         updateThreadModes(deps.ctx, run.threadId, { planMode })
       },
-      askQuestions: (request) => {
+      askQuestions: (request, signal) => {
         if (!isCurrent(run)) return Promise.resolve([])
         clearStall()
-        return deps.askQuestions(run, request).finally(armStall)
+        return deps.askQuestions(run, request, signal).finally(armStall)
       },
     }
     armStall()

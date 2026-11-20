@@ -1,5 +1,10 @@
 import { Ban, Eye, Hand, Pencil, ShieldAlert, Sparkles, type LucideIcon } from "lucide-react"
-import { localizeText, type AgentPermissionMode } from "@pigcode/contracts"
+import {
+  localizeText,
+  RUNTIME_MODE_OPTIONS,
+  type AgentExecutionModes,
+  type AgentPermissionMode,
+} from "@pigcode/contracts"
 
 export const PERMISSION_ICONS: Record<AgentPermissionMode["kind"], LucideIcon> = {
   ask: Hand,
@@ -22,4 +27,16 @@ export function nextPermissionMode(current: string, modes: readonly AgentPermiss
   const cycle = modes.filter((mode) => !mode.hidden && !permissionNeedsConfirmation(mode))
   const index = cycle.findIndex((mode) => mode.id === current)
   return cycle[(index + 1) % cycle.length]?.id ?? current
+}
+
+export function instancePermissionOptions(
+  modes: AgentExecutionModes | null | undefined,
+  current: string,
+) {
+  const supported = modes?.permissions
+  if (!supported) return { availableModes: RUNTIME_MODE_OPTIONS, invalidPermission: false }
+  return {
+    availableModes: RUNTIME_MODE_OPTIONS.filter((mode) => supported.some((id) => id === mode.id)),
+    invalidPermission: !supported.some((id) => id === current),
+  }
 }

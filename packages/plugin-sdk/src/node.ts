@@ -5,7 +5,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path"
-import type { EnvironmentEntry } from "@pigcode/contracts"
 
 export * from "./process-records"
 export * from "./process-tree"
@@ -24,7 +23,7 @@ export function expandHome(path: string, home: string = homedir()): string {
  * （例如 CODEX_HOME）。覆盖项为 undefined 时不写入，保留继承来的值。
  */
 export function agentEnvironment(
-  entries: readonly EnvironmentEntry[],
+  entries: readonly { name: string; value: string }[],
   overrides: Readonly<Record<string, string | undefined>> = {},
   base: NodeJS.ProcessEnv = process.env,
 ): NodeJS.ProcessEnv {

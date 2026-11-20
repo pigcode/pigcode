@@ -34,5 +34,12 @@ plugins:
 builtinPlugins:
   - ../../../packages/agent-claude
   - ../../../packages/agent-codex
+  - ../../../packages/agent-cursor
+  - ../../../packages/agent-grok
+  - ../../../packages/agent-fx
+  - ../../../packages/agent-opencode
   - ../../../packages/agent-antigravity
+  - ../../../packages/agent-kiro
+  - ../../../packages/agent-muse
+  - ../../../packages/agent-pi
   - ../../../packages/agent-acp

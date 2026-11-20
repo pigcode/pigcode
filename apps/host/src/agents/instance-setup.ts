@@ -35,10 +35,11 @@ export function createInstanceSetup(
       throw new Error("Agent instance is stopping")
     if (!instance.enabled && request.action === "start")
       throw new Error("Agent instance is disabled")
-    const perform = () => setup.auth(request, instance.values, scope)
+    const values = await agents.runtimeSettings(instance.agentId, instanceId)
+    const perform = () => setup.auth(request, values, scope)
     if (request.action === "logout") return withStopped(instanceId, perform)
     if (request.action !== "start") return perform()
-    const status = await setup.auth({ action: "status" }, instance.values, scope)
+    const status = await setup.auth({ action: "status" }, values, scope)
     if (status.phase === "connected" && !status.usingCliLogin) return status
     return withStopped(instanceId, async () => {
       if (!agents.findInstance(instanceId)?.enabled) throw new Error("Agent instance is disabled")
@@ -52,8 +53,14 @@ export function createInstanceSetup(
     const scope = instance && agents.instanceContext(instance)
     if (!instance || !driver?.removeManagedCli || !scope)
       throw new Error("Managed CLI removal is unavailable")
-    const configured = agents.instances(driver.id).map((item) => item.values)
-    await driver.removeManagedCli(scope, configured, instance.values)
+    const configured = await Promise.all(
+      agents.instances(driver.id).map((item) => agents.runtimeSettings(driver.id, item.instanceId)),
+    )
+    await driver.removeManagedCli(
+      scope,
+      configured,
+      await agents.runtimeSettings(driver.id, instanceId),
+    )
     agents.invalidate()
     await refreshCli()
   }
@@ -88,13 +95,14 @@ export function createInstanceSetup(
       )
     }
     const scope = agents.instanceContext(instance)
-    const setup = drivers.get(instance.agentId)?.accountSetup
-    if (!scope || !setup) {
+    const driver = drivers.get(instance.agentId)
+    const setup = driver?.accountSetup
+    if (!scope || (!setup && !driver?.requiresInstance)) {
       agents.removeInstance(instanceId)
       return
     }
     return withStopped(instanceId, async () => {
-      await setup.close(scope)
+      await setup?.close(scope)
       await rm(scope.dataDir, { recursive: true, force: true })
       agents.removeInstance(instanceId)
     })

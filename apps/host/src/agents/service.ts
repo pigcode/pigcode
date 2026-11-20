@@ -1,3 +1,4 @@
+import type { AgentCatalog } from "./agent-catalog"
 /** agents 服务对外的契约；实现见 registry.ts。 */
 import type {
   AcpRegistryEntry,
@@ -81,6 +82,7 @@ export interface AgentsService {
     features: AgentFeatures
     executionModes?: AgentExecutionModes | null
     accountSetup?: boolean
+    requiresInstance?: boolean
     acpRegistry?: boolean
     managedCli?: boolean
   }>
@@ -118,6 +120,7 @@ export interface AgentsService {
   updateInstance(
     instanceId: string,
     patch: {
+      accentColor?: string | null | undefined
       label?: string | undefined
       enabled?: boolean | undefined
       values?: Record<string, unknown> | undefined
@@ -159,4 +162,23 @@ export interface AgentsService {
   listPendingRequests(threadId: string): PendingRequest[]
   /** Host 启动后清理上一个进程遗留的 run、session 与 pending 请求。 */
   recoverAfterRestart(): RestartRecovery
+}
+
+/** 对外暴露目录操作。解密后的运行配置仅供 Host 在启动时读取。 */
+export function catalogOperations(agents: AgentCatalog) {
+  return {
+    activateAcpRegistry: agents.activateAcpRegistry,
+    prepareAcpRegistry: agents.prepareAcpRegistry,
+    acpRegistry: agents.acpRegistry,
+    detect: agents.detect,
+    models: agents.models,
+    commands: agents.commands,
+    configuredDefaultAgent: agents.configuredDefault,
+    configuredDefaultInstance: agents.configuredDefaultInstance,
+    updateSettings: agents.updateSettings,
+    listInstances: agents.instances,
+    findInstance: agents.findInstance,
+    createInstance: agents.createInstance,
+    getSettings: agents.settingsForInstance,
+  }
 }

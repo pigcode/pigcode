@@ -153,3 +153,30 @@ it("rejects invalid platform modes and unsupported planning before starting a ru
     await ctx.fiber.dispose()
   }
 })
+
+it("keeps a supervised thread supervised when switching to a driver that cannot enforce it", async () => {
+  const { ctx, project, call } = await setup()
+  try {
+    ctx.agents.register(plugin("first").driver)
+    const restricted = plugin("restricted")
+    ctx.agents.register({
+      ...restricted.driver,
+      executionModes: { plan: true, permissions: ["full-access"] },
+    })
+    const thread = (await call("thread.create", {
+      projectId: project.id,
+      agentId: "first",
+      permissionMode: "approval-required",
+    })) as Thread
+    await ctx.agents.switchAgent(thread.id, "restricted")
+    expect(ctx.threads.get(thread.id)?.permissionMode).toBe("approval-required")
+    await expect(ctx.agents.startRun(thread.id, "test", () => {})).rejects.toThrow(
+      /permission mode/,
+    )
+    expect(restricted.received).toHaveLength(0)
+    await call("thread.setPermissionMode", { threadId: thread.id, permissionMode: "full-access" })
+    expect(ctx.threads.get(thread.id)?.permissionMode).toBe("full-access")
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})

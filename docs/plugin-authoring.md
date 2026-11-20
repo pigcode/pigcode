@@ -150,14 +150,16 @@ agent 的介绍和设置字段写在 `package.json` 的 `contributes.agent` 里�
 }
 ```
 
-| 字段           | 必填 | 说明                                                                          |
-| -------------- | ---- | ----------------------------------------------------------------------------- |
-| `id`           | 是   | agent id，小写字母开头，可含数字、`.`、`_`、`-`；必须和 driver 的 `id` 一致。 |
-| `description`  | 否   | 设置页里的介绍。                                                              |
-| `homepage`     | 否   | 官网，设置页显示为“官网”链接；只接受 https 地址。                             |
-| `installHint`  | 否   | 检测到 agent 没安装时给用户的提示，例如安装命令。                             |
-| `settings`     | 否   | 设置字段，默认 `[]`；`key` 不能重复。                                         |
-| `customModels` | 否   | 是否允许用户添加自定义模型 id，默认 `true`。                                  |
+| 字段               | 必填 | 说明                                                                           |
+| ------------------ | ---- | ------------------------------------------------------------------------------ |
+| `id`               | 是   | agent id，小写字母开头，可含数字、`.`、`_`、`-`；必须和 driver 的 `id` 一致。  |
+| `description`      | 否   | 设置页里的介绍。                                                               |
+| `homepage`         | 否   | 官网，设置页显示为“官网”链接；只接受 https 地址。                              |
+| `installHint`      | 否   | 检测到 agent 没安装时给用户的提示，例如安装命令。                              |
+| `settings`         | 否   | 设置字段，默认 `[]`；`key` 不能重复。                                          |
+| `customModels`     | 否   | 是否允许用户添加自定义模型 id，默认 `true`。                                   |
+| `featured`         | 否   | 控制 Agent 卡片在添加实例向导中是否优先展示。                                  |
+| `requiresInstance` | 否   | 仅在用户创建实例后探测运行时和模型。驱动可以通过实例上下文访问自己的数据目录。 |
 
 没写 `contributes.agent` 时，Host 从 `provides` 里的 `agent:<id>` 推断 agent id，
 设置页只显示自定义模型。`description`、`label`、`placeholder` 等文案可以是一段文字，
@@ -165,20 +167,19 @@ agent 的介绍和设置字段写在 `package.json` 的 `contributes.agent` 里�
 
 每个设置字段有 `key`、`label`、可选的 `description`，以及下面某一种 `type`：
 
-| `type`    | 值                     | 界面                | 额外属性                                                  |
-| --------- | ---------------------- | ------------------- | --------------------------------------------------------- |
-| `text`    | 字符串                 | 输入框              | `placeholder`；`monospace: true` 用等宽字体，适合启动参数 |
-| `path`    | 字符串                 | 输入框加“选择…”按钮 | `placeholder`；`pathKind` 为 `file`（默认）或 `directory` |
-| `boolean` | 布尔                   | 开关                | `default`                                                 |
-| `select`  | 字符串                 | 下拉框              | `options: [{ value, label }]`（至少一项）、`default`      |
-| `env`     | `{ name, value }` 数组 | 环境变量表格        | 变量名须符合 `[A-Za-z_][A-Za-z0-9_]*`                     |
+| `type`      | 值                     | 界面                | 额外属性                                                  |
+| ----------- | ---------------------- | ------------------- | --------------------------------------------------------- |
+| `text`      | 字符串                 | 输入框              | `placeholder`；`monospace: true` 用等宽字体，适合启动参数 |
+| `path`      | 字符串                 | 输入框加“选择…”按钮 | `placeholder`；`pathKind` 为 `file`（默认）或 `directory` |
+| `boolean`   | 布尔                   | 开关                | `default`                                                 |
+| `select`    | 字符串                 | 下拉框              | `options: [{ value, label }]`（至少一项）、`default`      |
+| `env`       | `{ name, value }` 数组 | 环境变量表格        | 变量名须符合 `[A-Za-z_][A-Za-z0-9_]*`                     |
+| `arguments` | 字符串数组             | 每行一个启动参数    | 保留空参数和参数内空格，直接传给子进程                    |
+| `secret`    | 凭据                   | 密码输入框          | 可保存于本机，装有 1Password CLI 时也可填写 `op://` 引用  |
 
-字段都可以留空，留空表示用 agent 自己的默认值；保存时 Host 丢掉空字符串和空列表，
-值存在用户 profile 的 `settings.json` 里。`customModels` 是保留键：用户添加的模型 id
-由 Host 追加到这个 agent 的模型目录（选择器里标为“自定义”），插件不需要处理。
+字段可以留空以采用 Agent 默认值。`visibility: "settings"` 只在已有实例的编辑器中显示，`"hidden"` 用于由向导或驱动维护的配置。`text` 可通过 `integerRange: { min, max }` 限定整数范围。
 
-内置 agent 的字段可以当作参考：Claude Code 有可执行文件、`CLAUDE_CONFIG_DIR`、
-启动参数和环境变量；Codex 有可执行文件、`CODEX_HOME`、启动参数和环境变量。
+普通配置保存在用户 profile 的 `settings.json` 中。`secret` 字段和标为 `sensitive: true` 的环境变量将本机凭据保存在 Host 的私有目录。设置页只读到该值是否已配置，驱动调用时才收到实际值。旧版本保存的普通环境变量保留原有形式，可在编辑器中改为敏感变量。`customModels` 是保留键，Host 会将这些模型追加到实例的模型目录。
 
 ### driver 契约
 
@@ -304,6 +305,8 @@ Codex 每轮显式发送审批策略、审批者和沙箱；原生计划通过 `
 Claude 计划期间使用原生 `plan`，退出后恢复当前统一档位的原生权限。
 计划内需要提问时用 `runtime.askQuestions`；原生计划成功进入或退出时用 `runtime.setPlanMode` 同步会话状态。
 `features.plan` 只表示能输出计划进度事件，不控制计划开关。
+
+原生 SDK 只支持部分统一权限时，可以声明 `executionModes.permissions`。例如 Cursor 的无头 SDK 声明 `permissions: ["full-access"]`。已有会话切换到该实例后，Host 会保留原权限，等待用户显式选择可用权限才开始运行。
 
 菜单、Shift+Tab 和 `/` 命令共用平台定义。完全访问不会进入直接切换档位的快捷轮换；
 用户显式从其他档位切到完全访问时仍显示现有确认框。新会话使用平台默认值，子会话继承主会话的权限与计划选择。

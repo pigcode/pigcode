@@ -1,0 +1,95 @@
+{
+  "name": "@pigcode/agent-pi",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  },
+  "description": "Pi CLI integration for Pigcode",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "engines": {
+    "pigcode": ">=0.1.0-0"
+  },
+  "pigcode": {
+    "apiVersion": 1,
+    "kind": "agent",
+    "displayName": "Pi",
+    "host": "./src/index.ts",
+    "inject": [
+      "agents"
+    ],
+    "provides": [
+      "agent:pi"
+    ],
+    "permissions": [
+      "process:spawn",
+      "fs:workspace",
+      "network"
+    ],
+    "contributes": {
+      "agent": {
+        "id": "pi",
+        "requiresInstance": true,
+        "featured": true,
+        "homepage": "https://pi.dev/",
+        "description": {
+          "zh-CN": "通过本机 Pi 接入会话。",
+          "en-US": "Connect sessions through the local Pi CLI."
+        },
+        "installHint": {
+          "zh-CN": "安装 pi 并在其终端中登录。",
+          "en-US": "Install pi and sign in using its CLI."
+        },
+        "settings": [
+          {
+            "key": "binaryPath",
+            "type": "path",
+            "pathKind": "file",
+            "label": {
+              "zh-CN": "可执行文件",
+              "en-US": "Binary path"
+            },
+            "placeholder": "pi"
+          },
+          {
+            "key": "launchArgs",
+            "type": "text",
+            "label": {
+              "zh-CN": "启动参数",
+              "en-US": "Launch arguments"
+            },
+            "monospace": true,
+            "description": {
+              "zh-CN": "追加到 Pi RPC 进程的参数。",
+              "en-US": "Additional arguments for the Pi RPC process."
+            }
+          },
+          {
+            "key": "environment",
+            "type": "env",
+            "label": {
+              "zh-CN": "环境变量",
+              "en-US": "Environment variables"
+            }
+          }
+        ],
+        "acpRegistryAgentIds": [
+          "pi-acp"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*"
+  }
+}

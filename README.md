@@ -144,17 +144,11 @@ limits, and prerequisites.
 Plugins are ordinary npm packages with a `pigcode` manifest field. Agent, Capability,
 and UI plugins load and unload without restarting the app.
 
-Every agent is a plugin. Claude Code and Codex ship with the app as built-in plugins:
-they can be disabled but not uninstalled. Install and uninstall third-party Agent plugins
-from the Plugins page in the sidebar.
+在「设置 → Agent → 添加实例」中可选 Codex、Claude Code、Cursor、Grok、OpenCode、Antigravity、Muse Code、Pi、fx 和 Kiro。其他 ACP Agent 可以从 ACP Registry 搜索添加，也可以直接填写本地已安装的 ACP 命令。专用驱动和通用 ACP 驱动随桌面应用提供。
 
-Settings → Agent shows each agent's status (installed, version, signed in), the Agent
-features it supports, and the settings its plugin declares. The built-in agents have the same
-settings as t3code: binary path, `CLAUDE_CONFIG_DIR` / `CODEX_HOME`, launch arguments,
-and environment variables, plus custom model ids that appear in the composer's picker.
-Changes apply to the next run; running sessions are not interrupted. The page also picks
-the default agent for new sessions; Automatic uses the first agent that is installed and
-signed in.
+每个实例单独保存运行配置、自定义模型和标识色。默认 Antigravity 实例可沿用本机 CLI 的登录。在 Pigcode 里连接的 ChatGPT 和 Google 账号分别保存在相应实例下。Antigravity 支持个人 Google 账号、Gemini Enterprise、Gemini API 密钥和 Vertex AI。使用企业登录或 Vertex API 密钥时，Pigcode 会按需准备 Google 官方的独立 ACP 运行时。依赖本机 CLI 登录的 Agent 沿用各自 CLI 的凭据。
+
+实例页显示实际运行时版本和登录状态，模型出现在会话输入框的模型选择器里。环境变量可设为敏感值，也可引用 1Password CLI 中的凭据。
 
 The Plugins page sits next to New chat in the sidebar and keeps the workspace sidebar. It
 groups plugins by kind into two columns of cards: a switch per plugin, Open for plugins

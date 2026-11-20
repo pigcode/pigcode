@@ -137,6 +137,13 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       checkingCliUpdates={cliUpdates.checking}
       onCheckCliUpdates={cliUpdates.check}
       onUpdateCli={cliUpdates.update}
+      idleDefaults={{
+        value: list.claudeIdleCompaction ?? "onReturn",
+        set: async (mode) => {
+          await connection.call("agent.setClaudeIdleCompaction", { mode })
+          await refresh()
+        },
+      }}
       registry={{ list: loadAcpRegistry, prepare: prepareAcpRegistry }}
       setupActions={{
         auth,

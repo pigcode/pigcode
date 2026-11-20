@@ -59,10 +59,14 @@ export function createCliUpdates(
     const state = empty(instanceId, instance.agentId)
     if (!driver?.prepareCliUpdate)
       return { state: { ...state, phase: "checked", reason: "unsupported" }, plan: null }
-    const scope = driver.removeManagedCli ? catalog.instanceContext(instance) : undefined
+    const values = await catalog.runtimeSettings(instance.agentId, instanceId)
+    const scope =
+      driver.removeManagedCli || values.setupMode === "managed"
+        ? catalog.instanceContext(instance)
+        : undefined
     const plan = scope
-      ? await driver.prepareCliUpdate(instance.values, scope)
-      : await driver.prepareCliUpdate(instance.values)
+      ? await driver.prepareCliUpdate(values, scope)
+      : await driver.prepareCliUpdate(values)
     return {
       plan,
       state: {
@@ -153,14 +157,16 @@ export function createCliUpdates(
           onProgress: (progress) => publish(job, { progress }),
         })
         const version = await plan.verify()
+        const available = (plan.isUpdateAvailable ?? cliUpdateAvailable)(
+          version,
+          plan.latestVersion,
+        )
         const unchanged =
-          !version ||
-          cliUpdateAvailable(version, plan.latestVersion) ||
-          (!plan.latestVersion && version === plan.currentVersion)
+          !version || available || (!plan.latestVersion && version === plan.currentVersion)
         publish(job, {
           phase: unchanged ? "unchanged" : "succeeded",
           currentVersion: version ?? plan.currentVersion,
-          available: cliUpdateAvailable(version, plan.latestVersion),
+          available,
           ...(plan.canRemove !== undefined && version ? { canRemove: true } : {}),
         })
       } catch (cause) {

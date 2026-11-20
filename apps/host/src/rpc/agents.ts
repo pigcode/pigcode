@@ -9,14 +9,18 @@ import {
   cliArgumentsSchema,
   customModelsSchema,
   environmentEntriesSchema,
+  secretInputSchema,
+  readIdlePolicy,
   type AgentList,
   type AgentSummary,
   type AgentSettingField,
 } from "@pigcode/contracts"
+import { hasOnePassword } from "../agents/agent-secrets"
 import { isAgentPlugin, readAgentContribution } from "@pigcode/plugin-sdk"
 
 /** 列出全部 agent；插件服务不在时只列已注册的 driver。 */
 export async function listAgents(ctx: Context): Promise<AgentList> {
+  const secretReferences = hasOnePassword()
   const registered = new Map(ctx.agents.list().map((driver) => [driver.id, driver]))
   const plugins = ctx.get("plugins")
   const [records, summaries] = plugins
@@ -40,9 +44,11 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       pluginId: record.id,
       version: manifest.version,
       builtin: record.builtin,
+      requiresInstance: contribution.requiresInstance ?? driver?.requiresInstance ?? false,
       featured: contribution.featured ?? false,
       enabled: !record.disabled,
       registered: driver !== undefined,
+      secretReferences,
       features: driver?.features ?? null,
       executionModes: driver?.executionModes ?? null,
       ...(driver?.accountSetup ? { accountSetup: true } : {}),
@@ -57,7 +63,10 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       error: errors.get(record.id) ?? null,
       instances: ctx.agents
         .listInstances(contribution.id)
-        .filter((instance) => !contribution.acpRegistry || !instance.isDefault),
+        .filter(
+          (instance) =>
+            (!contribution.acpRegistry && !contribution.requiresInstance) || !instance.isDefault,
+        ),
     })
   }
   for (const driver of registered.values()) {
@@ -71,6 +80,8 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       builtin: true,
       enabled: true,
       registered: true,
+      secretReferences,
+      requiresInstance: driver.requiresInstance ?? false,
       features: driver.features,
       executionModes: driver.executionModes ?? null,
       ...(driver.accountSetup ? { accountSetup: true } : {}),
@@ -88,6 +99,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
   }
   return {
     agents,
+    claudeIdleCompaction: readIdlePolicy(ctx.get("settings")?.get("claude.idleCompaction")),
     defaultAgentId: ctx.agents.configuredDefaultAgent(),
     defaultInstanceId: ctx.agents.configuredDefaultInstance(),
   }
@@ -113,6 +125,16 @@ export async function uninstallPluginAndClearDefault(ctx: Context, id: string): 
 function matchesField(field: AgentSettingField, value: unknown): boolean {
   if (value === null || value === "") return true
   switch (field.type) {
+    case "secret":
+      return typeof value === "string" || secretInputSchema.safeParse(value).success
+    case "text":
+      return (
+        typeof value === "string" &&
+        (!field.integerRange ||
+          (/^\d+$/.test(value) &&
+            Number(value) >= field.integerRange.min &&
+            Number(value) <= field.integerRange.max))
+      )
     case "boolean":
       return typeof value === "boolean"
     case "env":
@@ -133,7 +155,8 @@ function matchesField(field: AgentSettingField, value: unknown): boolean {
 export function validateAgentSettings(
   agent: Pick<AgentSummary, "agentId" | "fields" | "customModels">,
   values: Record<string, unknown>,
-): void {
+): Record<string, unknown> {
+  const prepared = { ...values }
   const fields = new Map(agent.fields.map((field) => [field.key, field]))
   for (const [key, value] of Object.entries(values)) {
     if (MODEL_PREFERENCE_KEYS.includes(key)) {
@@ -153,5 +176,8 @@ export function validateAgentSettings(
     const field = fields.get(key)
     if (!field) throw new Error(`unknown setting for ${agent.agentId}: ${key}`)
     if (!matchesField(field, value)) throw new Error(`invalid value for ${agent.agentId}.${key}`)
+    if (field.type === "secret" && typeof value === "string" && value)
+      prepared[key] = { secret: value }
   }
+  return prepared
 }

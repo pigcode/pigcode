@@ -6,6 +6,7 @@
  * macOS 会把 .app 复制到临时目录再启动：在仓库里运行打包后的应用时，Node 会顺着目录往上找到
  * 工作区的依赖，测试就变成假通过。
  */
+import { execFileSync } from "node:child_process"
 import {
   cpSync,
   existsSync,
@@ -16,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
 import { addProject, installPlugin, launchEnv, openInstallDialog } from "./projects"
@@ -65,6 +66,74 @@ function resourcesDirOf(executable: string): string {
   // Windows 和 Linux 的 unpacked 目录里，extraResources 就在可执行文件旁边。
   return join(dirname(executable), "resources")
 }
+
+test("the packaged Cursor SDK finds its worker dependencies and native executable", () => {
+  const executable = packagedExecutable()
+  if (!executable) {
+    test.skip(true, "build the app first or set PIGCODE_PACKAGED_APP")
+    return
+  }
+  test.setTimeout(90_000)
+  const dir = mkdtempSync(join(tmpdir(), "pigcode-packaged-cursor-"))
+  try {
+    let copied = copyOutsideRepo(executable, dir)
+    // 在所有平台隔离工作区的 node_modules，避免缺包时意外从 pnpm 源码树加载。
+    if (copied === executable) {
+      const isolated = join(dir, "app")
+      cpSync(dirname(executable), isolated, { recursive: true, verbatimSymlinks: true })
+      copied = join(isolated, basename(executable))
+    }
+    execFileSync(
+      copied,
+      [
+        "-e",
+        `
+          const { deepStrictEqual, match } = require("node:assert/strict")
+          const { execFileSync } = require("node:child_process")
+          const { join } = require("node:path")
+          const { pathToFileURL } = require("node:url")
+          const [resources, dataDir] = process.argv.slice(1)
+          async function smoke() {
+            const native = join(resources, "node_modules", "@cursor", "sdk-" + process.platform + "-" + process.arch)
+            const manifest = require(join(native, "package.json"))
+            deepStrictEqual(manifest.os, [process.platform])
+            deepStrictEqual(manifest.cpu, [process.arch])
+            const rg = join(native, "bin", process.platform === "win32" ? "rg.exe" : "rg")
+            match(execFileSync(rg, ["--version"], { encoding: "utf8", timeout: 8000 }), /^ripgrep /)
+            for (const archive of ["app.asar", "app.asar.unpacked"]) {
+              const entry = join(resources, archive, "out/host/plugins/agent-cursor/index.mjs")
+              const { apply } = await import(pathToFileURL(entry).href)
+              let driver, close
+              apply({
+                agents: { register(value) { driver = value }, unregister() {} },
+                effect(setup) { close = setup() },
+              })
+              try {
+                const status = await driver.detect({}, {
+                  instanceId: "cursor-packaged-test", dataDir, sharedDir: dataDir, invalidate() {},
+                })
+                deepStrictEqual(status, { installed: true, version: null, authenticated: false })
+              } finally {
+                await close()
+              }
+            }
+          }
+          smoke().catch(error => { console.error(error); process.exitCode = 1 })
+        `,
+        resourcesDirOf(copied),
+        join(dir, "cursor-instance"),
+      ],
+      {
+        cwd: dir,
+        env: launchEnv({ ELECTRON_RUN_AS_NODE: "1", CURSOR_API_KEY: "" }),
+        timeout: 45_000,
+        windowsHide: true,
+      },
+    )
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 /**
  * 一个指向源码的插件：manifest 的 `main` 是 .ts。

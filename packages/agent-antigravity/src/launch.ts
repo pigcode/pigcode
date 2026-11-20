@@ -1,7 +1,8 @@
+import { authConfig } from "./auth-config"
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
-import { basename, isAbsolute, join, resolve } from "node:path"
+import { access, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, isAbsolute, join, resolve } from "node:path"
 import { promisify } from "node:util"
 import {
   settingEnvironment,
@@ -51,15 +52,23 @@ export function newProfile(instance: AgentInstanceContext): AgyProfile {
   return profilePath(instance, randomUUID())
 }
 
-export async function instanceProfile(instance: AgentInstanceContext): Promise<AgyProfile> {
-  const id = await readFile(join(instance.dataDir, PROFILE_ID), "utf8").catch(
+function pointer(instance: AgentInstanceContext, settings: AgentSettingsValues) {
+  const key = authConfig(settings).profileKey
+  return join(instance.dataDir, key ? PROFILE_ID + "-" + key : PROFILE_ID)
+}
+export async function instanceProfile(
+  instance: AgentInstanceContext,
+  settings: AgentSettingsValues = {},
+): Promise<AgyProfile> {
+  const id = await readFile(pointer(instance, settings), "utf8").catch(
     (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return "initial"
       throw error
     },
   )
   if (!/^(?:initial|[a-f0-9-]{36})$/.test(id)) throw new Error("Invalid Antigravity instance data")
-  return profilePath(instance, id)
+  const key = authConfig(settings).profileKey
+  return profilePath(instance, id === "initial" && key ? "initial-" + key : id)
 }
 
 /** 只在完成 ACP 验证后切换目录。 */
@@ -67,13 +76,14 @@ export async function activateProfile(
   instance: AgentInstanceContext,
   profile: AgyProfile,
   signal: AbortSignal,
+  settings: AgentSettingsValues = {},
 ): Promise<void> {
   const id = basename(profile.directory)
   const temporary = join(instance.dataDir, `.${id}`)
   try {
     await writeFile(temporary, id, { flag: "wx", mode: 0o600, signal })
     signal.throwIfAborted()
-    await rename(temporary, join(instance.dataDir, PROFILE_ID))
+    await rename(temporary, pointer(instance, settings))
   } finally {
     await rm(temporary, { force: true }).catch(() => undefined)
   }
@@ -98,6 +108,22 @@ export function configuredBinary(settings: AgentSettingsValues): string | undefi
 
 export function pathBinary(settings: AgentSettingsValues): string | undefined {
   return findExecutable("agy", undefined, agentEnvironment(settingEnvironment(settings)).PATH)
+}
+
+/** 官方独立 ACP 发行包由入口和同目录 harness 组成。 */
+export async function standaloneHarness(command: string): Promise<string | undefined> {
+  const windows = process.platform === "win32"
+  if (basename(command).toLowerCase() !== (windows ? "agy_acp_server.exe" : "agy_acp_server.par"))
+    return undefined
+  const harness = join(
+    dirname(command),
+    windows ? "localharness_external.exe" : "localharness_external",
+  )
+  if (!(await stat(harness).catch(() => undefined))?.isFile())
+    throw new Error(
+      "The standalone Antigravity ACP executable needs its matching localharness_external file",
+    )
+  return harness
 }
 
 function cliEnvironment(settings: AgentSettingsValues): NodeJS.ProcessEnv {
@@ -129,6 +155,8 @@ export interface AgyLaunch {
   args: string[]
   env: NodeJS.ProcessEnv
   cwd: string
+  authenticateMethod?: string
+  legacyProtocolVersion?: 2
 }
 
 export async function acpLaunch(
@@ -138,14 +166,30 @@ export async function acpLaunch(
   cwd: string,
 ): Promise<AgyLaunch> {
   const env = cliEnvironment(settings)
+  const auth = authConfig(settings)
+  if (auth.error) throw new Error(auth.error)
   // 沿用 CLI 的登录时也沿用它的原生存储位置，让钥匙串和文件凭据都由 agy 自己解析。
   if (!profile) return { command, cwd, args: ["acp"], env }
+  const harness = await standaloneHarness(command)
+  const usesAdc = auth.method === "agent-platform" && !auth.key
+  if (auth.method === "agent-platform" && auth.key && !harness)
+    throw new Error(
+      "This agy ACP runtime uses Application Default Credentials for Vertex AI. Clear the API key and set a GCP project and location, or select an official standalone ACP runtime that supports the key.",
+    )
+  const adcPath = usesAdc
+    ? Object.entries(env).find(
+        ([key]) => key.toUpperCase() === "GOOGLE_APPLICATION_CREDENTIALS",
+      )?.[1]
+    : undefined
   const data = join(profile.directory, ACP_DATA_DIR)
   await mkdir(data, { recursive: true, mode: 0o700 })
   // 原生 logout 读取这个字段来清理本次采用的登录方式。
   await writeFile(
     join(data, "settings.json"),
-    JSON.stringify({ auth: { type: "oauth-personal" } }),
+    JSON.stringify({
+      auth: { type: auth.method },
+      ...(Object.keys(auth.gcp).length ? { gcp: auth.gcp } : {}),
+    }),
     {
       flag: "wx",
       mode: 0o600,
@@ -163,11 +207,31 @@ export async function acpLaunch(
   return {
     command,
     cwd,
-    args: ["acp", "--gemini-dir", profile.directory, "--app-data-dir", ACP_DATA_DIR],
+    args: harness
+      ? process.platform === "linux"
+        ? ["--uid="]
+        : []
+      : ["acp", "--gemini-dir", profile.directory, "--app-data-dir", ACP_DATA_DIR],
+    ...(harness ? { legacyProtocolVersion: 2 } : {}),
+    ...(!auth.browser ? { authenticateMethod: auth.method } : {}),
     env: {
       ...env,
       // agy 1.5 的本地图形模式使用全局钥匙串；SSH 模式会按目录保存账号。
-      SSH_CONNECTION: env.SSH_CONNECTION || "127.0.0.1 0 127.0.0.1 0",
+      ...(harness
+        ? { ANTIGRAVITY_HARNESS_PATH: harness }
+        : {
+            SSH_CONNECTION: env.SSH_CONNECTION || "127.0.0.1 0 127.0.0.1 0",
+          }),
+      ...(auth.method === "gemini-api-key" && auth.key ? { GEMINI_API_KEY: auth.key } : {}),
+      ...(auth.method === "agent-platform" && auth.key ? { GOOGLE_API_KEY: auth.key } : {}),
+      ...(usesAdc
+        ? {
+            ...(adcPath ? { GOOGLE_APPLICATION_CREDENTIALS: adcPath } : {}),
+            AGY_ADC_AUTH: "true",
+            GOOGLE_CLOUD_PROJECT: auth.gcp.project,
+            GOOGLE_CLOUD_LOCATION: auth.gcp.location,
+          }
+        : {}),
       GEMINI_HOME: profile.directory,
       AGY_ACP_FORCE_FILE_STORAGE: "1",
       AGY_CLI_DISABLE_AUTO_UPDATE: "1",

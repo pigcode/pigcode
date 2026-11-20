@@ -63,6 +63,23 @@ describe("notice entries", () => {
     const entries = noticeEntries({ MIT: [one, two] })
     expect(entries.map((entry) => entry.name)).toEqual(["a", "b"])
   })
+
+  it("retains the matching Cursor SDK notice for its explicitly declared platform binary", () => {
+    const name = "@cursor/sdk-darwin-arm64"
+    const license = "SEE LICENSE IN LICENSE.md"
+    const sdk = {
+      ...pkg({
+        "package.json": JSON.stringify({ license, optionalDependencies: { [name]: "1.0.0" } }),
+        "LICENSE.md": "Cursor SDK License",
+      }),
+      name: "@cursor/sdk",
+    }
+    const binary = { ...pkg({ "package.json": JSON.stringify({ license }) }), name }
+    expect(noticeEntries({ sdk: [sdk, binary] })[1]?.texts).toEqual(["Cursor SDK License"])
+    expect(() => noticeEntries({ sdk: [sdk, { ...binary, versions: ["2.0.0"] }] })).toThrow(
+      /no license text/,
+    )
+  })
 })
 
 describe("notice file", () => {

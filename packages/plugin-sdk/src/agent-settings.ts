@@ -6,7 +6,6 @@ import {
   environmentEntriesSchema,
   knownReasoningEfforts,
   reasoningEffortSchema,
-  type EnvironmentEntry,
   type AgentSettingsValues,
   type KnownReasoningEffort,
   type ReasoningEffort,
@@ -36,13 +35,14 @@ export function settingBoolean(
 export function settingEnvironment(
   settings: AgentSettingsValues | undefined,
   key = "environment",
-): EnvironmentEntry[] {
+): { name: string; value: string }[] {
   const value = settings?.[key]
   if (!Array.isArray(value)) return []
   const byName = new Map<string, string>()
   for (const entry of value) {
     const parsed = environmentEntriesSchema.element.safeParse(entry)
-    if (parsed.success) byName.set(parsed.data.name, parsed.data.value)
+    if (parsed.success && typeof parsed.data.value === "string")
+      byName.set(parsed.data.name, parsed.data.value)
   }
   return [...byName].map(([name, entryValue]) => ({ name, value: entryValue }))
 }

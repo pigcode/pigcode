@@ -2,9 +2,7 @@ import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
 /** Codex adapter：每 session 一个 app-server 子进程，经 NDJSON JSON-RPC 通信。 */
 import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
-import { homedir } from "node:os"
-import { join, resolve } from "node:path"
-import { expandHome } from "@pigcode/plugin-sdk/node"
+import { sharedCodexHome } from "./shadow-home"
 import { prepareCodexCliUpdate } from "./cli-update"
 import {
   codexExecutionModes,
@@ -20,15 +18,19 @@ import type {
   AgentModelInfo,
   AgentRuntime,
   AgentSessionHandle,
+  AgentInstanceContext,
   AgentSettingsValues,
   AgentStatus,
   UserInput,
 } from "@pigcode/plugin-sdk"
-import { parseCodexAccount, type CodexAccount } from "./account"
+import { ManagedCodexRuntime } from "./managed-runtime"
+import { CodexAccounts } from "./login"
 import { CodexRpcClient } from "./client"
-import { waitForTurn } from "./turn-wait"
-import { detectCodex, type CodexDetection } from "./detect"
-import { codexLaunch, launchKey, type CodexLaunch } from "./launch"
+import { injectHandoff } from "./protocol"
+export { injectHandoff } from "./protocol"
+import { interruptTurn, waitForTurn, type CodexTurnState } from "./turn-wait"
+import { codexStatus, detectCodex, type CodexDetection } from "./detect"
+import { prepareCodexLaunch, launchKey, type CodexLaunch, type PrepareCodexLaunch } from "./launch"
 import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
 import { parseCodexSkills } from "./skills"
 import { mcpToolApproval, toApprovalResponse, toElicitationResponse } from "./approvals"
@@ -44,11 +46,7 @@ import {
 import { StdioCodexTransport, type CodexTransport } from "./transport"
 
 /** 单个 session 的 app-server 状态；权限与模型在 thread/start 或 thread/resume 时生效。 */
-interface CodexSessionState {
-  client: CodexRpcClient
-  nativeThreadId: string | null
-  turnId: string | null
-  interruptRequested: boolean
+interface CodexSessionState extends CodexTurnState {
   /** 本轮是否已经报过终态，用来忽略重复的 turn/completed。 */
   finished: boolean
   permissionMode: string
@@ -56,6 +54,7 @@ interface CodexSessionState {
   effectiveModel: string | null
   /** 启动这个 app-server 的命令指纹；设置改了就不再复用。 */
   launchKey: string
+  scope?: string | undefined
   /** 会话提示：MCP 桥起不来时攒下来，下一次 send 时补发。 */
   notice: NoticeState
   /** 上一轮用了快速模式；turn/start 的服务档会沿用到之后的轮次，关掉时要显式清回默认。 */
@@ -64,20 +63,34 @@ interface CodexSessionState {
 
 /** driver 的可选依赖；测试替换传输与检测。 */
 export interface CodexDriverOptions {
+  managedRuntime?: ManagedCodexRuntime
   transportFactory?: (launch: CodexLaunch) => CodexTransport
   detect?: (launch: CodexLaunch) => Promise<CodexDetection>
 }
 
-/** 读账号最多等这么久；app-server 起不来时检测不能一直卡着。 */
-const ACCOUNT_TIMEOUT_MS = 8000
+async function initializeCodex(client: CodexRpcClient) {
+  await client.request("initialize", {
+    clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
+    capabilities: { experimentalApi: true },
+  })
+  client.notify("initialized", {})
+}
 
 /** 基于 `codex app-server --stdio` 的 Codex driver。 */
 export class CodexDriver implements AgentDriver {
   private cliRevision = 0
-  prepareCliUpdate(settings: AgentSettingsValues) {
-    return prepareCodexCliUpdate(settings, () => {
-      this.cliRevision += 1
-    })
+  private readonly managed: ManagedCodexRuntime
+  private readonly launch: PrepareCodexLaunch = (settings, scope, signal) =>
+    prepareCodexLaunch(this.managed, settings, scope, signal)
+  prepareCliUpdate(settings: AgentSettingsValues, instance?: AgentInstanceContext) {
+    return prepareCodexCliUpdate(
+      settings,
+      () => {
+        this.cliRevision += 1
+      },
+      this.managed,
+      instance,
+    )
   }
   readonly executionModes = codexExecutionModes
   readonly id = "codex"
@@ -110,54 +123,54 @@ export class CodexDriver implements AgentDriver {
   private readonly transportFactory: (launch: CodexLaunch) => CodexTransport
   private readonly probe: (launch: CodexLaunch) => Promise<CodexDetection>
 
+  readonly accountSetup = new CodexAccounts(
+    this.launch,
+    (launch) => this.openClient(launch),
+    (client) => this.closeClient(client),
+    initializeCodex,
+    async (scope) => {
+      const closing: Promise<void>[] = []
+      for (const [id, session] of this.sessions) {
+        if (session.scope !== scope.dataDir) continue
+        this.sessions.delete(id)
+        closing.push(this.closeClient(session.client))
+      }
+      await Promise.all(closing)
+    },
+  )
+
   constructor(options: CodexDriverOptions = {}) {
+    this.managed = options.managedRuntime ?? new ManagedCodexRuntime()
     this.transportFactory =
       options.transportFactory ??
       ((launch) => new StdioCodexTransport(launch.command, launch.args, launch.env, launch.cwd))
     this.probe =
-      options.detect ?? ((launch) => detectCodex({ command: launch.command, env: launch.env }))
+      options.detect ??
+      ((launch) =>
+        detectCodex({
+          command: launch.command,
+          env: launch.env,
+          versionOnly: launch.isolatedAccount,
+        }))
   }
 
   /**
    * 只读检测：版本与登录状态，用设置页里的可执行文件与 CODEX_HOME。
    * 装着时再问 app-server 的 `account/read` 要登录方式、订阅与邮箱；问不到就用 `login status` 的结论。
    */
-  async detect(settings: AgentSettingsValues): Promise<AgentStatus> {
-    const launch = codexLaunch(settings)
-    const detection = await this.probe(launch)
-    const account = detection.installed ? await this.readAccount(launch) : null
-    const known = account?.loggedIn ?? null
-    const authenticated = detection.installed ? (known ?? detection.loggedIn) : null
-    return {
-      installed: detection.installed,
-      version: detection.version,
-      authenticated,
-      account: authenticated ? (account?.label ?? detection.account) : null,
-      email: authenticated ? (account?.email ?? detection.email ?? null) : null,
-      command: detection.command,
-      // 账号读到了已登录，login status 的报错就不用再提。
-      error: known ? null : detection.error,
-    }
-  }
-
-  /** 临时启动 app-server 读一次账号；超时或出错时返回 null。 */
-  private async readAccount(launch: CodexLaunch): Promise<CodexAccount | null> {
-    const client = this.openClient(launch)
-    const timeout = new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), ACCOUNT_TIMEOUT_MS).unref?.()
-    })
-    const read = (async () => {
-      await client.request("initialize", {
-        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
-        capabilities: { experimentalApi: true },
-      })
-      return parseCodexAccount(await client.request("account/read", {}))
-    })().catch(() => null)
-    try {
-      return await Promise.race([read, timeout])
-    } finally {
-      void this.closeClient(client)
-    }
+  async detect(
+    settings: AgentSettingsValues,
+    instance?: AgentInstanceContext,
+  ): Promise<AgentStatus> {
+    const launch = await this.launch(settings, instance)
+    const detection = launch ? await this.probe(launch) : null
+    const account = launch && detection?.installed ? await this.accountSetup.read(launch) : null
+    return codexStatus(
+      detection,
+      settings.setupMode === "managed",
+      Boolean(launch?.isolatedAccount),
+      account,
+    )
   }
 
   /** 启动 app-server 并创建或恢复原生 thread。 */
@@ -166,15 +179,22 @@ export class CodexDriver implements AgentDriver {
     // 权限模式或模型变了就不复用，下面用 thread/resume 带上新的 sandbox 与审批策略。
     const permissionMode = input.permissionMode ?? DEFAULT_RUNTIME_MODE
     const model = input.model ?? null
-    const launch = codexLaunch(input.settings)
+    input.signal?.throwIfAborted()
+    const launch = await this.launch(input.settings, input.instance)
+    if (!launch) throw new Error("Set up the Codex runtime by signing in to this instance")
+    input.signal?.throwIfAborted()
+    if (input.instance && this.accountSetup.busy(input.instance))
+      throw new Error("Codex account setup is in progress")
     const key = `${launchKey(launch)}:${this.cliRevision}`
     const reusable = input.forkFromNativeSessionId
       ? undefined
       : input.nativeSessionId
-        ? this.sessions.get(input.nativeSessionId)
+        ? this.sessions.get(input.threadId)
         : undefined
     if (
       reusable?.nativeThreadId &&
+      reusable.nativeThreadId === input.nativeSessionId &&
+      reusable.scope === input.instance?.dataDir &&
       reusable.permissionMode === permissionMode &&
       reusable.model === model &&
       reusable.launchKey === key
@@ -199,10 +219,7 @@ export class CodexDriver implements AgentDriver {
       if (found) rememberNotice(notice, found)
     })
     try {
-      await client.request("initialize", {
-        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
-        capabilities: { experimentalApi: true },
-      })
+      await initializeCodex(client)
       const params = createThreadParams(input)
       // 同一 Agent 切换优先原生 fork；fork 返回的新 thread id 用于后续 turn。
       const forkFrom = input.forkFromNativeSessionId
@@ -222,8 +239,8 @@ export class CodexDriver implements AgentDriver {
             })
       const nativeThreadId =
         response.thread?.id ?? (forkFrom ? null : (input.nativeSessionId ?? null))
-      const stateKey = nativeThreadId ?? input.threadId
-      // 同一 key 的旧 state 必须先关闭，否则会遗留一个 app-server 子进程。
+      // 不同 Pigcode 线程可从同一共享 rollout 续聊，各自持有自己账号的进程。
+      const stateKey = input.threadId
       const previous = this.sessions.get(stateKey)
       if (previous) {
         void this.closeClient(previous.client)
@@ -239,6 +256,7 @@ export class CodexDriver implements AgentDriver {
         model,
         effectiveModel: model ?? response.model ?? null,
         launchKey: key,
+        scope: input.instance?.dataDir,
         notice,
       })
       return {
@@ -357,8 +375,11 @@ export class CodexDriver implements AgentDriver {
   }
 
   /** 模型目录；读不到时返回空目录，不影响设置页。 */
-  async listModels(settings: AgentSettingsValues = {}): Promise<AgentModelInfo[]> {
-    return this.ask(settings, async (client) =>
+  async listModels(
+    settings: AgentSettingsValues = {},
+    instance?: AgentInstanceContext,
+  ): Promise<AgentModelInfo[]> {
+    return this.ask(settings, instance, async (client) =>
       parseCodexModels(await client.request("model/list", {})),
     )
   }
@@ -367,10 +388,12 @@ export class CodexDriver implements AgentDriver {
   async listCommands(
     settings: AgentSettingsValues,
     cwd: string | null,
+    instance?: AgentInstanceContext,
   ): Promise<AgentCommandInfo[]> {
     const params = { ...(cwd ? { cwds: [cwd] } : {}), forceReload: true }
     return this.ask(
       settings,
+      instance,
       async (client) => parseCodexSkills(await client.request("skills/list", params), cwd),
       cwd ?? undefined,
     )
@@ -379,16 +402,15 @@ export class CodexDriver implements AgentDriver {
   /** 临时启动一个 app-server 做一次只读请求；失败时返回空数组。 */
   private async ask<T>(
     settings: AgentSettingsValues,
+    instance: AgentInstanceContext | undefined,
     read: (client: CodexRpcClient) => Promise<T[]>,
     cwd?: string,
   ): Promise<T[]> {
-    const client = this.openClient({ ...codexLaunch(settings), ...(cwd ? { cwd } : {}) })
+    const launch = await this.launch(settings, instance)
+    if (!launch) return []
+    const client = this.openClient({ ...launch, ...(cwd ? { cwd } : {}) })
     try {
-      await client.request("initialize", {
-        clientInfo: { name: "pigcode", title: "Pigcode", version: HOST_VERSION },
-        capabilities: { experimentalApi: true },
-      })
-      client.notify("initialized", {})
+      await initializeCodex(client)
       return await read(client)
     } catch {
       return []
@@ -406,22 +428,15 @@ export class CodexDriver implements AgentDriver {
 
   /** 关闭 app-server 并释放 session 状态。 */
   async dispose(session: AgentSessionHandle): Promise<void> {
-    const keys = [session.nativeSessionId, session.threadId].filter((value): value is string =>
-      Boolean(value),
-    )
-    for (const key of keys) {
-      const state = this.sessions.get(key)
-      if (!state) continue
-      this.sessions.delete(key)
-      await this.closeClient(state.client)
-    }
+    const state = this.stateFor(session)
+    if (!state) return
+    this.sessions.delete(session.threadId)
+    await this.closeClient(state.client)
   }
 
   /** rollout 放在 CODEX_HOME（缺省 ~/.codex）下：目录相同的实例能接着用彼此的 thread。 */
   continuationKey(settings: AgentSettingsValues): string {
-    const dir =
-      codexLaunch(settings).env?.CODEX_HOME ?? process.env.CODEX_HOME ?? join(homedir(), ".codex")
-    return `codex:${resolve(expandHome(dir))}`
+    return `codex:${sharedCodexHome(settings)}`
   }
 
   /** `thread/resume` 找不到原生 thread 时，app-server 0.167 回 `no rollout found for thread id <id>`。 */
@@ -431,6 +446,7 @@ export class CodexDriver implements AgentDriver {
 
   /** 插件停用时关闭所有 app-server，包括空闲等待复用的。 */
   async close(): Promise<void> {
+    await this.accountSetup.dispose()
     this.sessions.clear()
     for (const client of [...this.clients]) void this.closeClient(client)
     await Promise.all(this.ending)
@@ -453,47 +469,14 @@ export class CodexDriver implements AgentDriver {
     return done
   }
 
-  /** 按原生 thread id 或本地 thread id 查找 session 状态。 */
+  /** 由 Pigcode 线程持有进程；原生 ID 相同的其它线程可能使用另一个账号。 */
   private stateFor(session: AgentSessionHandle): CodexSessionState | undefined {
-    return this.sessions.get(session.nativeSessionId ?? session.threadId)
-  }
-}
-
-/**
- * 把交接作为一条历史消息注入原生 thread（app-server 0.167 起有 thread/inject_items）。
- * 方法不存在（-32601）或请求被拒时返回 false，由调用方拼在用户消息前；这两种情况下都没有注入任何东西。
- */
-export async function injectHandoff(
-  client: Pick<CodexRpcClient, "request">,
-  threadId: string,
-  handoff: string,
-): Promise<boolean> {
-  try {
-    await client.request("thread/inject_items", {
-      threadId,
-      items: [{ type: "message", role: "user", content: [{ type: "input_text", text: handoff }] }],
-    })
-    return true
-  } catch {
-    return false
+    const state = this.sessions.get(session.threadId)
+    return state?.nativeThreadId === session.nativeSessionId ? state : undefined
   }
 }
 
 /** 把通知映射后逐条交给 run 的实时事件出口。 */
 function emit(runtime: AgentRuntime, method: string, params: unknown): void {
   for (const event of normalizeCodexNotification(method, params)) runtime.emit(event)
-}
-
-/** 发送一次 turn/interrupt；同一 turn 只发送一次。 */
-async function interruptTurn(state: CodexSessionState): Promise<void> {
-  if (state.interruptRequested || !state.nativeThreadId || !state.turnId) return
-  state.interruptRequested = true
-  try {
-    await state.client.request("turn/interrupt", {
-      threadId: state.nativeThreadId,
-      turnId: state.turnId,
-    })
-  } catch {
-    // 服务端可能已结束该 turn；中断失败不阻塞 run 的终态处理。
-  }
 }

@@ -126,6 +126,7 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
         usedTokens: event.usedTokens,
         maxTokens: event.maxTokens,
         autoCompactTokens: event.autoCompactTokens,
+        ...(event.promptCacheExpiresAt ? { promptCacheExpiresAt: event.promptCacheExpiresAt } : {}),
       })
       return
     case "plan.updated":

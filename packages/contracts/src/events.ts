@@ -174,6 +174,8 @@ export const agentEventSchema = z.discriminatedUnion("type", [
     usedTokens: z.number().int().nonnegative(),
     maxTokens: z.number().int().positive().nullable(),
     autoCompactTokens: z.number().int().positive().nullable(),
+    /** 本次主请求写入提示缓存的过期时间，由 Agent 报告。 */
+    promptCacheExpiresAt: z.string().datetime().optional(),
   }),
   z.object({
     type: z.literal("plan.updated"),

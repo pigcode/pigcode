@@ -3,9 +3,11 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { createInterface } from "node:readline"
+import { createServer } from "node:http"
 
 const args = process.argv.slice(2)
 const cliData = process.env.PIGCODE_AGY_FIXTURE_CLI_DATA
+const standalone = Boolean(process.env.ANTIGRAVITY_HARNESS_PATH)
 const cliSignedIn = Boolean(cliData && !process.env.SSH_CONNECTION)
 if (args.includes("--version")) {
   console.log("1.5.13")
@@ -22,7 +24,9 @@ function getArg(name: string): string {
 }
 const directory = args.includes("--gemini-dir")
   ? join(getArg("--gemini-dir"), getArg("--app-data-dir"))
-  : cliData
+  : standalone && process.env.GEMINI_HOME
+    ? join(process.env.GEMINI_HOME, "antigravity-acp")
+    : cliData
 if (!directory) throw new Error("Missing fixture profile")
 const token = join(directory, "acp_token.json")
 mkdirSync(directory, { recursive: true })
@@ -47,6 +51,7 @@ if (args.includes("--login")) {
       sessionId?: string
       prompt?: Array<{ text: string }>
       mcpServers?: Array<{ type?: string; url?: string }>
+      methodId?: string
     }
     result?: { outcome?: { optionId?: string } }
   }
@@ -56,6 +61,13 @@ if (args.includes("--login")) {
   const sessions = new Set<string>()
   const httpMcp = new Map<string, string>()
   const replies = new Map<Id, (optionId?: string) => void>()
+  let activeCredential: string | undefined
+  const profile = cliSignedIn
+    ? {}
+    : (JSON.parse(readFileSync(join(directory, "settings.json"), "utf8")) as {
+        auth?: { type?: string }
+        gcp?: { project?: string; location?: string }
+      })
   lines.on("line", (line) => {
     const { id, method, params = {}, result: response } = JSON.parse(line) as Message
     if (!method) {
@@ -76,7 +88,10 @@ if (args.includes("--login")) {
           auth: { logout: {} },
           ...(args.includes("--process-per-session") ? { mcpCapabilities: { http: true } } : {}),
         },
-        authMethods: [],
+        authMethods: (standalone
+          ? ["oauth-business", "oauth-personal", "gemini-api-key", "agent-platform"]
+          : ["gemini-api-key", "agent-platform"]
+        ).map((id) => ({ id, name: id })),
       })
       return
     }
@@ -85,15 +100,70 @@ if (args.includes("--login")) {
       result({})
       return
     }
+    if (method === "authenticate") {
+      if (params.methodId !== profile.auth?.type)
+        return error(-32602, "Unexpected ACP authentication method")
+      if (params.methodId === "gemini-api-key" && process.env.GEMINI_API_KEY) {
+        activeCredential = params.methodId
+        return result({})
+      }
+      if (params.methodId === "agent-platform") {
+        if (
+          standalone
+            ? process.env.GOOGLE_API_KEY === "fixture-key"
+            : process.env.AGY_ADC_AUTH === "true" &&
+              process.env.GOOGLE_APPLICATION_CREDENTIALS === "fixture-adc.json" &&
+              process.env.GOOGLE_CLOUD_PROJECT === profile.gcp?.project &&
+              process.env.GOOGLE_CLOUD_LOCATION === profile.gcp?.location
+        ) {
+          activeCredential = params.methodId
+          return result({})
+        }
+        return error(-32603, "Could not load Application Default Credentials")
+      }
+      if (
+        standalone &&
+        (params.methodId === "oauth-business" || params.methodId === "oauth-personal")
+      ) {
+        const listener = createServer((request, reply) => {
+          const url = new URL(request.url ?? "/", "http://127.0.0.1")
+          if (
+            url.pathname !== "/" ||
+            url.searchParams.get("state") !== "fixture-enterprise" ||
+            url.searchParams.get("code") !== "confirmed"
+          ) {
+            reply.writeHead(400).end()
+            return
+          }
+          writeFileSync(token, params.methodId!, { mode: 0o600 })
+          reply.end("ok")
+          listener.close()
+          result({})
+        })
+        listener.listen(0, "127.0.0.1", () => {
+          const address = listener.address()
+          if (!address || typeof address === "string") return
+          const link = new URL("https://accounts.google.com/o/oauth2/v2/auth")
+          link.search = new URLSearchParams({
+            state: "fixture-enterprise",
+            response_type: "code",
+            redirect_uri: "http://127.0.0.1:" + address.port + "/",
+          }).toString()
+          console.error("__PIGCODE_ANTIGRAVITY_AUTH__" + JSON.stringify(link.href))
+        })
+        return
+      }
+      return error(-32000, "Authentication required")
+    }
     let account
     try {
       account = readFileSync(token, "utf8")
     } catch {
-      if (!cliSignedIn) {
+      if (!cliSignedIn && !activeCredential) {
         if (id !== undefined) error(-32000, "Authentication required")
         return
       }
-      account = "cli"
+      account = activeCredential ?? "cli"
     }
     const configOptions = [
       {
@@ -164,7 +234,11 @@ if (args.includes("--login")) {
           params: { sessionId: params.sessionId, toolCall, options },
         })
       }
-      if (prompt === "read fixture through MCP") {
+      if (account === "gemini-api-key" && process.env.GEMINI_API_KEY !== "fixture-key")
+        complete(
+          "\n⚠ agent executor error: generating and executing: Error 400, Message: API key not valid. Please pass a valid API key., Status: INVALID_ARGUMENT",
+        )
+      else if (prompt === "read fixture through MCP") {
         const bridge = httpMcp.get(sessionId)
         if (!bridge) return complete("No HTTP MCP")
         void fetch(bridge, {

@@ -18,6 +18,8 @@ function setup(prepare: (id: string) => Promise<AgentCliUpdatePlan>, isBusy = ()
   const catalog = {
     findInstance: (id: string) => instances.find((instance) => instance.instanceId === id) ?? null,
     instances: () => instances,
+    runtimeSettings: async (_agentId: string, id: string) =>
+      instances.find((item) => item.instanceId === id)?.values ?? {},
     invalidate,
   } as unknown as AgentCatalog
   const driver = {

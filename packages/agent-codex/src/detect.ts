@@ -1,6 +1,8 @@
 /** 只读检测 Codex CLI：版本与登录状态，不触发登录。 */
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
+import type { AgentStatus } from "@pigcode/plugin-sdk"
+import type { CodexAccount } from "./account"
 import { launchTarget } from "@pigcode/plugin-sdk/node"
 
 const exec = promisify(execFile)
@@ -22,6 +24,8 @@ export interface CodexDetection {
 export interface DetectCodexOptions {
   command?: string | undefined
   env?: NodeJS.ProcessEnv | undefined
+  /** 私有账号由 app-server 核实，避免普通 login status 读取其它凭据存储。 */
+  versionOnly?: boolean | undefined
 }
 
 /** 运行两个只读命令；超时或非零退出都归为未安装/未登录。 */
@@ -57,6 +61,7 @@ export async function detectCodex(options: DetectCodexOptions = {}): Promise<Cod
   }
   try {
     // 新版 CLI 把「Logged in using ChatGPT」写在 stderr，两个都要看。
+    if (options.versionOnly) return base
     const status = await run(["login", "status"])
     const output = `${status.stdout}\n${status.stderr}`
     base.loggedIn = parseLoginStatus(output)
@@ -101,4 +106,29 @@ function isMissing(error: unknown): boolean {
   return (
     typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT"
   )
+}
+
+export function codexStatus(
+  detection: CodexDetection | null,
+  managed: boolean,
+  isolated: boolean,
+  account: CodexAccount | null,
+): AgentStatus {
+  const known = account?.loggedIn ?? null
+  const authenticated = !detection?.installed
+    ? null
+    : managed
+      ? known === null
+        ? null
+        : Boolean(known && account?.label?.startsWith("ChatGPT"))
+      : (known ?? (isolated ? null : detection.loggedIn))
+  return {
+    installed: detection?.installed ?? false,
+    version: detection?.version ?? null,
+    authenticated,
+    account: authenticated ? (account?.label ?? detection?.account ?? null) : null,
+    email: authenticated ? (account?.email ?? detection?.email ?? null) : null,
+    command: detection?.command ?? "codex",
+    error: known ? null : (detection?.error ?? null),
+  }
 }

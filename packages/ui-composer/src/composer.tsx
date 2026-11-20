@@ -1,8 +1,5 @@
-import {
-  DEFAULT_RUNTIME_MODE,
-  RUNTIME_MODE_OPTIONS,
-  type AgentExecutionModes,
-} from "@pigcode/contracts"
+import { DEFAULT_RUNTIME_MODE, type AgentExecutionModes } from "@pigcode/contracts"
+import { instancePermissionOptions } from "./permission-options"
 import { composerCommands } from "./composer-commands"
 // 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、agent/模型/思考深度/速度/权限选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
@@ -172,7 +169,10 @@ export function Composer({
   const acceptsExternalContext = form === undefined
   const executionModes =
     explicitModes ?? agents.find((agent) => agent.id === agentId)?.executionModes
-  const availableModes = RUNTIME_MODE_OPTIONS
+  const { availableModes, invalidPermission } = instancePermissionOptions(
+    executionModes,
+    permissionMode,
+  )
 
   const builtinCommands = composerCommands({
     locale,
@@ -193,7 +193,7 @@ export function Composer({
   const live = {
     onSubmit,
     running,
-    disabled,
+    disabled: disabled || invalidPermission,
     form,
     effort,
     fast,
@@ -470,7 +470,7 @@ export function Composer({
         running={running}
         canInterrupt={canInterrupt}
         formLabel={form?.submitLabel}
-        disabled={empty || disabled || Boolean(form?.submitDisabled)}
+        disabled={empty || disabled || invalidPermission || Boolean(form?.submitDisabled)}
         onSubmit={() => sendRef.current()}
         onStop={onStop}
       />
@@ -479,6 +479,11 @@ export function Composer({
 
   return (
     <div className="composer-shell">
+      {invalidPermission && (
+        <p className="agent-muted" role="status">
+          {t("composer.permission.selectSupported")}
+        </p>
+      )}
       {header || footer ? (
         <div className="composer-frame">
           {header ? <div className="composer-frame-bar composer-head">{header}</div> : null}

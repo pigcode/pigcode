@@ -3,6 +3,8 @@ import { z } from "zod"
 import {
   acpRegistryAgentIdSchema,
   agentAuthActionSchema,
+  claudeIdlePolicySchema,
+  agentAccentColorSchema,
   agentInstancePatchSchema,
   agentSettingsValuesSchema,
   customAgentInstanceIdSchema,
@@ -148,6 +150,7 @@ export const commandSchemas = {
   }),
   "agent.detect": agentDetectParams,
   "agent.cliUpdates": z.object({}),
+  "agent.setClaudeIdleCompaction": z.object({ mode: claudeIdlePolicySchema }),
   "agent.acpRegistry": z.object({}),
   "agent.prepareAcpRegistry": z.object({ registryId: acpRegistryAgentIdSchema }),
   "agent.auth": z.object({ instanceId: z.string().min(1), request: agentAuthActionSchema }),
@@ -180,7 +183,8 @@ export const commandSchemas = {
   "agent.createInstance": z.object({
     agentId: z.string().min(1),
     preparedVersion: z.string().min(1).max(128).optional(),
-    label: z.string().trim().min(1).max(120),
+    label: z.string().trim().max(120).default(""),
+    accentColor: agentAccentColorSchema.optional(),
     instanceId: customAgentInstanceIdSchema.optional(),
     values: agentSettingsValuesSchema.optional(),
     /** 兼容旧请求。未提供 values 时，从这里指定的实例或默认实例复制设置。 */

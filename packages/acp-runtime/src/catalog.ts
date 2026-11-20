@@ -1,3 +1,4 @@
+import { setTimeout as delay } from "node:timers/promises"
 import type {
   AvailableCommand,
   NewSessionResponse,
@@ -23,9 +24,13 @@ export type SessionSetup = (NewSessionResponse | ResumeSessionResponse) & {
 }
 
 export function selectConfig(config: readonly SessionConfigOption[], category: string) {
-  return config.find(
+  const choices = config.filter(
     (option): option is Extract<SessionConfigOption, { type: "select" }> =>
-      option.type === "select" && (option.category === category || option.id === category),
+      option.type === "select",
+  )
+  return (
+    choices.find((option) => option.id === category) ??
+    choices.find((option) => option.category === category)
   )
 }
 
@@ -56,8 +61,9 @@ export function nativeModels(setup: SessionSetup): AgentModelInfo[] {
 export function withModelEffort(
   model: AgentModelInfo,
   options: SessionConfigOption[],
+  effortId = "thought_level",
 ): AgentModelInfo {
-  const config = selectConfig(options, "thought_level")
+  const config = selectConfig(options, effortId)
   if (!config) return model
   const efforts = configChoices(config).flatMap(({ value }) => asReasoningEffort(value) ?? [])
   return { ...model, efforts, defaultEffort: asReasoningEffort(config.currentValue) }
@@ -86,13 +92,14 @@ export async function readSessionModels(
   setup: NewSessionResponse,
   signal: AbortSignal,
   probeModelEfforts = false,
+  effortId = "thought_level",
 ) {
   const models = nativeModels(setup)
   const modelConfig = selectConfig(setup.configOptions ?? [], "model")
   if (modelConfig) {
     for (const [index, model] of models.entries()) {
       if (model.id === modelConfig.currentValue) {
-        models[index] = withModelEffort(model, setup.configOptions ?? [])
+        models[index] = withModelEffort(model, setup.configOptions ?? [], effortId)
         continue
       }
       if (!probeModelEfforts) continue
@@ -110,7 +117,7 @@ export async function readSessionModels(
           if (isAuthRequired(error) || signal?.aborted) throw error
           return null
         })
-      if (result) models[index] = withModelEffort(model, result.configOptions)
+      if (result) models[index] = withModelEffort(model, result.configOptions, effortId)
     }
   }
   return models
@@ -122,10 +129,14 @@ export async function configureSession(
   input: UserInput,
   signal: AbortSignal,
   normalMode?: string,
+  effortId = "thought_level",
+  legacyModelEffort = false,
+  deferredEffort = false,
 ) {
   const args = { sessionId: state.nativeId }
   const options = requestOptions(signal)
-  let config = state.setup.configOptions ?? []
+  const previous = state.setup.configOptions
+  let config = previous ?? []
   const runnerMode = selectConfig(config, "mode")
   const modes = runnerMode
     ? configChoices(runnerMode).map(({ value }) => value)
@@ -152,9 +163,12 @@ export async function configureSession(
     }
   }
   const model = selectConfig(config, "model")
+  const legacyEffort = legacyModelEffort && !model && state.setup.models && input.effort
+  const selectedModel =
+    session.model ?? (legacyEffort ? state.setup.models?.currentModelId : undefined)
   if (
-    session.model &&
-    session.model !== (model?.currentValue ?? state.setup.models?.currentModelId)
+    selectedModel &&
+    (selectedModel !== (model?.currentValue ?? state.setup.models?.currentModelId) || legacyEffort)
   ) {
     if (model || !state.setup.models) {
       const reply = await state.rpc.agent.request(
@@ -162,7 +176,7 @@ export async function configureSession(
         {
           ...args,
           configId: model?.id ?? "model",
-          value: session.model,
+          value: selectedModel,
         },
         options,
       )
@@ -170,13 +184,31 @@ export async function configureSession(
     } else {
       await state.rpc.agent.request(
         "session/set_model",
-        { ...args, modelId: session.model },
+        {
+          ...args,
+          modelId: selectedModel,
+          ...(legacyEffort ? { _meta: { reasoningEffort: legacyEffort } } : {}),
+        },
         options,
       )
-      state.setup.models.currentModelId = session.model
+      state.setup.models.currentModelId = selectedModel
     }
   }
-  const thought = selectConfig(config, "thought_level")
+  // Kiro 在模型写入返回后另发 config_option_update，才接受该模型的 effortLevel。
+  if (deferredEffort && input.effort && selectedModel) {
+    const deadline = Date.now() + 2000
+    if (state.setup.configOptions !== previous) config = state.setup.configOptions ?? config
+    while (
+      (selectConfig(config, "model")?.currentValue !== selectedModel ||
+        !selectConfig(config, effortId)) &&
+      Date.now() < deadline
+    ) {
+      await delay(25, undefined, { signal })
+      if (state.setup.configOptions !== previous) config = state.setup.configOptions ?? config
+    }
+    if (selectConfig(config, "model")?.currentValue !== selectedModel) return
+  }
+  const thought = selectConfig(config, effortId)
   if (
     input.effort &&
     thought &&

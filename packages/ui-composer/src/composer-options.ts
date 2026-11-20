@@ -43,6 +43,7 @@ export { nextPermissionMode } from "./permission-options"
 
 /** 输入框里可选的一项：一个 Agent 实例（默认实例就是 Agent 自己）。 */
 export interface ComposerAgent {
+  accentColor?: string | undefined
   /** 选择用的键：Agent 实例 id；默认实例等于 agent id。 */
   id: string
   /** 提供实现的 Agent（driver id）。 */

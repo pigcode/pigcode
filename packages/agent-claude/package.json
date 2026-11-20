@@ -75,6 +75,66 @@
             }
           },
           {
+            "key": "autoCompactWindow",
+            "type": "text",
+            "label": {
+              "zh-CN": "自动压缩阈值",
+              "en-US": "Auto-compact after"
+            },
+            "description": {
+              "zh-CN": "输入 100,000 至 1,000,000 个 token，留空使用 Claude 的默认值。",
+              "en-US": "Enter 100,000 to 1,000,000 tokens, or leave blank to use Claude’s default."
+            },
+            "integerRange": {
+              "min": 100000,
+              "max": 1000000
+            },
+            "placeholder": "300000"
+          },
+          {
+            "key": "idleCompaction",
+            "type": "select",
+            "label": {
+              "zh-CN": "空闲会话压缩",
+              "en-US": "Compact idle threads"
+            },
+            "description": {
+              "zh-CN": "上下文达 200,000 个 token 后的空闲压缩策略。",
+              "en-US": "When to compact an idle conversation with at least 200,000 tokens."
+            },
+            "options": [
+              {
+                "value": "default",
+                "label": {
+                  "zh-CN": "使用默认设置",
+                  "en-US": "Use default"
+                }
+              },
+              {
+                "value": "onReturn",
+                "label": {
+                  "zh-CN": "返回会话时",
+                  "en-US": "When you return"
+                }
+              },
+              {
+                "value": "beforeCacheExpires",
+                "label": {
+                  "zh-CN": "在缓存过期前（Beta）",
+                  "en-US": "Before the cache expires (beta)"
+                }
+              },
+              {
+                "value": "off",
+                "label": {
+                  "zh-CN": "从不",
+                  "en-US": "Never"
+                }
+              }
+            ],
+            "default": "default"
+          },
+          {
             "key": "launchArgs",
             "type": "text",
             "monospace": true,

@@ -9,8 +9,7 @@
   },
   "devDependencies": {
     "@types/node": "24.10.1",
-    "typescript": "5.9.3",
-    "@types/yauzl": "3.4.0"
+    "typescript": "5.9.3"
   },
   "description": "Configurable Agent Client Protocol connections for Pigcode",
   "main": "./src/index.ts",
@@ -107,8 +106,6 @@
     "@pigcode/acp-runtime": "workspace:*",
     "@pigcode/contracts": "workspace:*",
     "@pigcode/plugin-sdk": "workspace:*",
-    "tar": "7.5.22",
-    "yauzl": "3.4.0",
     "zod": "4.4.3"
   }
 }

@@ -32,9 +32,26 @@ export function createQuestionFlow(deps: QuestionDeps) {
     }
   }
 
+  function cancel(run: ActiveRun, requestId: string, withdrawn = false): boolean {
+    const waiter = waiters.get(requestId)
+    if (!waiter) return false
+    waiters.delete(requestId)
+    if (withdrawn) finish(run, run.runId, requestId)
+    else deps.pendingRequests.resolve(requestId)
+    deps.append(run.threadId, run.runId, "question.answered", {
+      requestId,
+      id: requestId,
+      answers: [],
+      reason: withdrawn ? "agent-cancelled" : "run-ended",
+    })
+    waiter.resolve([])
+    return true
+  }
+
   return {
     /** 发起提问，返回每个问题的答案（与问题顺序一致）。 */
-    ask(run: ActiveRun, request: QuestionRequest): Promise<string[]> {
+    ask(run: ActiveRun, request: QuestionRequest, signal?: AbortSignal): Promise<string[]> {
+      if (signal?.aborted) return Promise.resolve([])
       const requestId = `q_${randomUUID()}`
       deps.pendingRequests.create({
         id: requestId,
@@ -45,15 +62,20 @@ export function createQuestionFlow(deps: QuestionDeps) {
         payload: request,
         createdAt: new Date().toISOString(),
       })
+      deps.runs.setStatus(run.runId, "waiting-input")
+      run.status = "waiting-input"
+      run.approvals.add(requestId)
+      const done = new Promise<string[]>((resolve) =>
+        waiters.set(requestId, { runId: run.runId, resolve }),
+      )
+      const abort = () => cancel(run, requestId, true)
+      signal?.addEventListener("abort", abort, { once: true })
       deps.append(run.threadId, run.runId, "question.requested", {
         requestId,
         id: requestId,
         questions: request.questions,
       })
-      deps.runs.setStatus(run.runId, "waiting-input")
-      run.status = "waiting-input"
-      run.approvals.add(requestId)
-      return new Promise((resolve) => waiters.set(requestId, { runId: run.runId, resolve }))
+      return done.finally(() => signal?.removeEventListener("abort", abort))
     },
     /** 用户作答；请求不属于这个 run 或已经结束时抛错。 */
     answer(threadId: string, runId: string, requestId: string, answers: string[]): void {
@@ -68,20 +90,8 @@ export function createQuestionFlow(deps: QuestionDeps) {
       waiter.resolve(answers)
     },
     /** run 结束时取消它还没回答的问题；返回是否取消了一个问题。 */
-    cancel(run: ActiveRun, requestId: string): boolean {
-      const waiter = waiters.get(requestId)
-      if (!waiter) return false
-      waiters.delete(requestId)
-      deps.pendingRequests.resolve(requestId)
-      deps.append(run.threadId, run.runId, "question.answered", {
-        requestId,
-        id: requestId,
-        answers: [],
-        reason: "run-ended",
-      })
-      waiter.resolve([])
-      return true
-    },
+    cancel,
+
     /** Host 关闭：所有问题以空答案结束。 */
     dispose(): void {
       for (const waiter of waiters.values()) waiter.resolve([])

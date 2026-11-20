@@ -248,3 +248,31 @@ describe("agent instances", () => {
     await ctx.fiber.dispose()
   })
 })
+
+it("opens only configured instances and lets the first dedicated instance use the driver's ID", async () => {
+  const ctx = await setup()
+  try {
+    const { driver, calls } = recordingDriver("newcli")
+    const dedicated = { ...driver, requiresInstance: true }
+    ctx.agents.register(dedicated)
+    expect(ctx.agents.listInstances("newcli")).toEqual([])
+    await expect(ctx.agents.models("newcli")).rejects.toThrow(/configured instance/)
+    expect(calls.models).toHaveLength(0)
+    const other = ctx.agents.createInstance("newcli", "Other", { instanceId: "newcli_other" })
+    const initial = ctx.agents.createInstance("newcli", "", { instanceId: "newcli" })
+    expect(initial).toMatchObject({ instanceId: "newcli", isDefault: false, label: "Alpha" })
+    ctx.agents.updateSettings("newcli", { binaryPath: "/work/cli" }, "newcli")
+    ctx.agents.setDefaultAgent("newcli", "newcli")
+    await ctx.agents.models("newcli")
+    expect(calls.models).toEqual([{ binaryPath: "/work/cli" }])
+    ctx.agents.unregister("newcli")
+    ctx.agents.register(dedicated)
+    expect(ctx.agents.configuredDefaultInstance()).toBe("newcli")
+    expect(ctx.agents.findInstance(other.instanceId)?.values).toEqual({})
+    expect(ctx.agents.findInstance("newcli")?.values).toEqual({ binaryPath: "/work/cli" })
+    await ctx.agents.removeInstance("newcli")
+    expect(ctx.agents.findInstance("newcli")).toBeNull()
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})

@@ -27,6 +27,7 @@ import {
   readEnvironment,
   type PickPath,
 } from "./agent-fields"
+import { AccentField } from "./instance-accent"
 import { ModelsEditor, arrangeModels, type AgentModelInfo } from "./agent-models"
 import { AgentOverview } from "./agent-overview"
 
@@ -51,7 +52,7 @@ export interface AgentEditorProps {
   onSave: (values: AgentSettingsValues) => Promise<void>
   onUpdateInstance: (
     instanceId: string,
-    patch: { label?: string; enabled?: boolean },
+    patch: { label?: string; enabled?: boolean; accentColor?: string | null },
   ) => Promise<void>
   onRemoveInstance: (instanceId: string) => Promise<void>
   onSetDefaultInstance: (instanceId: string) => Promise<void>
@@ -129,6 +130,7 @@ export function AgentEditor({
   const { locale, t } = useLocale()
   const [draft, setDraft] = useState<AgentSettingsValues>(instance.values)
   const [label, setLabel] = useState(instance.label)
+  const [color, setColor] = useState(instance.accentColor)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -137,13 +139,22 @@ export function AgentEditor({
   useEffect(() => {
     setDraft(instance.values)
     setLabel(instance.label)
+    setColor(instance.accentColor)
     setConfirmRemove(false)
-  }, [instance.instanceId, instance.label, instance.values])
+  }, [instance.instanceId, instance.label, instance.accentColor, instance.values])
 
   const dirty = useMemo(() => !sameValues(draft, instance.values), [draft, instance.values])
-  const renamed = label.trim().length > 0 && label.trim() !== instance.label
+  const renamed = label.trim() !== instance.label || color !== instance.accentColor
   const runtimeFields = agent.fields.filter(
-    (field) => field.type !== "env" && (!agent.acpRegistry || field.key !== "registryId"),
+    (field) =>
+      field.visibility !== "hidden" &&
+      !(
+        agent.agentId === "codex" &&
+        draft.setupMode === "managed" &&
+        field.key === "shadowHomePath"
+      ) &&
+      field.type !== "env" &&
+      (!agent.acpRegistry || field.key !== "registryId"),
   )
   const envFields = agent.fields.filter((field) => field.type === "env")
   const isDefault = instance.isDefault
@@ -231,6 +242,7 @@ export function AgentEditor({
     <div className="agent-editor">
       <AgentOverview
         agent={agent}
+        hasAccountSetup={Boolean(setup)}
         status={status}
         revealed={revealed}
         onReveal={onReveal}
@@ -269,6 +281,7 @@ export function AgentEditor({
           <Tabs.Panel value="runtime">
             <Block>
               <AgentFields
+                references={agent.secretReferences}
                 fields={runtimeFields}
                 values={draft}
                 onChange={set}
@@ -289,6 +302,7 @@ export function AgentEditor({
                     : {})}
                 >
                   <EnvironmentEditor
+                    references={agent.secretReferences}
                     label={fieldLabel}
                     entries={readEnvironment(draft[field.key])}
                     onChange={(entries) => set(field.key, entries)}
@@ -320,7 +334,12 @@ export function AgentEditor({
                       disabled={saving || !renamed}
                       onClick={() =>
                         void run(async () => {
-                          await onUpdateInstance(instance.instanceId, { label: label.trim() })
+                          await onUpdateInstance(instance.instanceId, {
+                            label: label.trim(),
+                            ...(color !== instance.accentColor
+                              ? { accentColor: color ?? null }
+                              : {}),
+                          })
                           setNotice({ kind: "ok", text: t("agents.saved") })
                         })
                       }
@@ -332,6 +351,7 @@ export function AgentEditor({
                     {t("agents.instance.idLabel")} <code>{instance.instanceId}</code>
                   </p>
                 </div>
+                <AccentField color={color} onChange={setColor} />
                 <div className="agent-identity-actions">
                   {setDefaultButton}
                   {confirmRemove ? (

@@ -110,6 +110,7 @@ export interface StoredInstance {
   label: string
   enabled: boolean
   createdAt: string
+  accentColor?: string | undefined
   storageKey?: string
   values: AgentSettingsValues
 }
@@ -129,6 +130,9 @@ export function readStoredInstances(
       label: raw.label,
       enabled: raw.enabled !== false,
       createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+      ...(typeof raw.accentColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.accentColor)
+        ? { accentColor: raw.accentColor }
+        : {}),
       ...(typeof raw.storageKey === "string" ? { storageKey: raw.storageKey } : {}),
       values: isRecord(raw.values) ? raw.values : {},
     }
@@ -163,6 +167,7 @@ export function resolveInstance(
       instanceId,
       agentId,
       label: stored.label,
+      ...(stored.accentColor ? { accentColor: stored.accentColor } : {}),
       enabled: stored.enabled,
       values: stored.values,
       isDefault: false,
@@ -195,6 +200,7 @@ export function listInstances(
       instanceId,
       agentId,
       label: instance.label,
+      ...(instance.accentColor ? { accentColor: instance.accentColor } : {}),
       enabled: instance.enabled,
       values: instance.values,
       isDefault: false,
@@ -213,7 +219,7 @@ export function isDefaultInstanceId(
 
 export type InstanceCreateOptions = Pick<
   CommandParams<"agent.createInstance">,
-  "instanceId" | "values" | "copyFrom"
+  "instanceId" | "values" | "copyFrom" | "accentColor"
 >
 
 /** 自定义实例和 Agent 自带的默认实例共用 ID。 */
@@ -230,19 +236,24 @@ export function createInstance(
   agentId: string,
   label: string,
   options: InstanceCreateOptions = {},
+  explicitInstancesOnly = false,
 ): ResolvedInstance {
   const instances = readStoredInstances(settings)
   const instanceId =
     options.instanceId === undefined
       ? `inst_${randomUUID()}`
       : customAgentInstanceIdSchema.parse(options.instanceId)
-  if (instanceId === agentId || Object.hasOwn(Object.prototype, instanceId)) {
+  if (
+    (!explicitInstancesOnly && instanceId === agentId) ||
+    Object.hasOwn(Object.prototype, instanceId)
+  ) {
     throw new AgentInstanceIdTakenError(instanceId)
   }
   assertNoStoredInstanceId(instances, instanceId)
   const stored: StoredInstance = {
     agentId,
-    label: label.trim(),
+    label: label.trim() || agentId,
+    ...(options.accentColor ? { accentColor: options.accentColor } : {}),
     enabled: true,
     createdAt: new Date().toISOString(),
     storageKey: randomUUID(),
@@ -257,6 +268,7 @@ export function createInstance(
     instanceId,
     agentId,
     label: stored.label,
+    ...(stored.accentColor ? { accentColor: stored.accentColor } : {}),
     enabled: true,
     values: stored.values,
     isDefault: false,
@@ -269,6 +281,7 @@ export function updateInstance(
   settings: SettingsService,
   instanceId: string,
   patch: {
+    accentColor?: string | null | undefined
     label?: string | undefined
     enabled?: boolean | undefined
     values?: Record<string, unknown> | undefined
@@ -279,7 +292,8 @@ export function updateInstance(
   if (!stored) throw new Error(`default instance cannot be edited as an instance: ${instanceId}`)
   const next: StoredInstance = {
     ...stored,
-    ...(patch.label !== undefined ? { label: patch.label.trim() } : {}),
+    ...(patch.label !== undefined ? { label: patch.label.trim() || stored.agentId } : {}),
+    ...(patch.accentColor !== undefined ? { accentColor: patch.accentColor ?? undefined } : {}),
     ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
     ...(patch.values !== undefined ? { values: normalizeAgentSettings(patch.values) } : {}),
   }
@@ -289,6 +303,7 @@ export function updateInstance(
     instanceId,
     agentId: next.agentId,
     label: next.label,
+    ...(next.accentColor ? { accentColor: next.accentColor } : {}),
     enabled: next.enabled,
     values: next.values,
     isDefault: false,

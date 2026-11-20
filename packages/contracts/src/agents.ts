@@ -5,6 +5,7 @@
  */
 import { z } from "zod"
 import { agentFeaturesSchema } from "./domain"
+import { runtimeModeSchema } from "./runtime-modes"
 
 /** 自定义模型的键：Host 把这里的模型 id 追加到 agent 的模型目录。 */
 export const CUSTOM_MODELS_KEY = "customModels"
@@ -44,7 +45,11 @@ export const agentPermissionModeSchema = z.object({
 })
 
 /** 声明已接入统一四档权限协议，以及是否支持独立计划模式。 */
-export const agentExecutionModesSchema = z.object({ plan: z.boolean() })
+export const agentExecutionModesSchema = z.object({
+  plan: z.boolean(),
+  /** 平台或原生协议只能落实部分权限时，驱动列出它实际支持的档位。 */
+  permissions: z.array(runtimeModeSchema).min(1).max(4).optional(),
+})
 
 export type AgentPermissionMode = z.infer<typeof agentPermissionModeSchema>
 export type AgentExecutionModes = z.infer<typeof agentExecutionModesSchema>
@@ -65,6 +70,7 @@ const fieldBase = {
   key: settingKeySchema,
   label: localizedTextSchema,
   description: localizedTextSchema.optional(),
+  visibility: z.enum(["settings", "hidden"]).optional(),
 }
 
 /**
@@ -78,6 +84,7 @@ export const agentSettingFieldSchema = z.discriminatedUnion("type", [
     placeholder: localizedTextSchema.optional(),
     /** 等宽字体显示，适合启动参数这类命令行内容。 */
     monospace: z.boolean().optional(),
+    integerRange: z.object({ min: z.number().int(), max: z.number().int() }).optional(),
   }),
   z.object({
     ...fieldBase,
@@ -95,6 +102,7 @@ export const agentSettingFieldSchema = z.discriminatedUnion("type", [
   }),
   z.object({ ...fieldBase, type: z.literal("env") }),
   z.object({ ...fieldBase, type: z.literal("arguments") }),
+  z.object({ ...fieldBase, type: z.literal("secret") }),
 ])
 
 export const cliArgumentsSchema = z
@@ -121,9 +129,33 @@ export interface AcpRegistryEntry {
 }
 
 /** 一组环境变量；名称遵循 POSIX 规则，值原样传给子进程。 */
+export const secretReferenceSchema = z
+  .object({
+    reference: z
+      .string()
+      .max(2048)
+      .regex(/^op:\/\/[^/]+\/[^/]+\/.+$/)
+      .refine((value) => !value.includes("\0") && !value.includes("\r") && !value.includes("\n")),
+  })
+  .strict()
+export const secretInputSchema = z.union([
+  z.object({ secret: z.string().max(131072) }).strict(),
+  z.object({ configured: z.literal(true) }).strict(),
+  secretReferenceSchema,
+])
+export type AgentSecretInput = z.infer<typeof secretInputSchema>
 export const environmentEntriesSchema = z.array(
-  z.object({ name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), value: z.string() }),
+  z.object({
+    name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+    value: z.union([z.string(), secretInputSchema]),
+    sensitive: z.boolean().optional(),
+  }),
 )
+
+export const agentAccentColorSchema = z
+  .string()
+  .regex(/^#[\da-f]{6}$/i)
+  .transform((value) => value.toLowerCase())
 
 /** 模型 id 列表（自定义模型、隐藏的模型、排序）：去掉首尾空白后的非空 id，最长 256 个字符。 */
 export const customModelsSchema = z.array(z.string().trim().min(1).max(256))
@@ -133,6 +165,7 @@ export const agentContributionSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
     acpRegistry: z.boolean().optional(),
+    requiresInstance: z.boolean().optional(),
     featured: z.boolean().optional(),
     /** 已由这个专用插件接入的 ACP Registry 条目。 */
     acpRegistryAgentIds: z.array(acpRegistryAgentIdSchema).optional(),
@@ -179,6 +212,7 @@ export const agentInstanceSchema = z.object({
   /** 提供实现的 Agent（driver id）。 */
   agentId: z.string().min(1),
   label: z.string().min(1),
+  accentColor: agentAccentColorSchema.optional(),
   enabled: z.boolean(),
   values: agentSettingsValuesSchema,
   /** 默认实例：随 Agent 存在，不能删除。 */
@@ -189,7 +223,8 @@ export const agentInstanceSchema = z.object({
 
 /** 要保存的实例改动；没给的项保持不变。 */
 export const agentInstancePatchSchema = z.object({
-  label: z.string().trim().min(1).max(120).optional(),
+  label: z.string().trim().max(120).optional(),
+  accentColor: agentAccentColorSchema.nullish(),
   enabled: z.boolean().optional(),
   values: agentSettingsValuesSchema.optional(),
 })
@@ -200,6 +235,7 @@ export const agentStatusSchema = z.object({
   version: z.string().nullable(),
   authenticated: z.boolean().nullable(),
   usingCliLogin: z.boolean().optional(),
+  credentialsConfigured: z.boolean().optional(),
   /** 登录方式、订阅等补充说明，例如「Max · claude.ai」「ChatGPT Pro」。 */
   account: z.string().nullable().optional(),
   /** 登录账号的邮箱；CLI 不告诉或用 API Key 时为空。 */
@@ -235,9 +271,11 @@ export interface AgentAuthState {
   phase: "signed-out" | "starting" | "waiting" | "verifying" | "connected" | "failed" | "cancelled"
   flowId: string | null
   authorizationUrl: string | null
+  userCode?: string
   expiresAt: number | null
   error: string | null
   usingCliLogin?: boolean
+  credentialsConfigured?: boolean
   methods?: readonly { id: string; name: string }[]
   canLogout?: boolean
   /** 当前登录 PTY 的有限回放，offset 是输出末尾的字符位置。 */
@@ -266,7 +304,9 @@ export const agentSummarySchema = z.object({
   features: agentFeaturesSchema.nullable(),
   executionModes: agentExecutionModesSchema.nullish(),
   accountSetup: z.boolean().optional(),
+  requiresInstance: z.boolean().optional(),
   featured: z.boolean().optional(),
+  secretReferences: z.boolean().optional(),
   acpRegistry: z.boolean().optional(),
   managedCli: z.boolean().optional(),
   description: localizedTextSchema.nullable(),
@@ -282,7 +322,13 @@ export const agentSummarySchema = z.object({
 })
 
 /** `agent.list` 的返回：全部 agent 与新会话默认使用的 agent 和实例。 */
+export const claudeIdlePolicySchema = z.enum(["onReturn", "beforeCacheExpires", "off"])
+export type ClaudeIdlePolicy = z.infer<typeof claudeIdlePolicySchema>
+export function readIdlePolicy(value: unknown): ClaudeIdlePolicy {
+  return claudeIdlePolicySchema.safeParse(value).data ?? "onReturn"
+}
 export const agentListSchema = z.object({
+  claudeIdleCompaction: claudeIdlePolicySchema.optional(),
   agents: z.array(agentSummarySchema),
   /** 用户选择的默认 agent；为 null 时 Host 自动挑选第一个可用的。 */
   defaultAgentId: z.string().nullable(),
@@ -322,7 +368,7 @@ export type AgentInstance = z.infer<typeof agentInstanceSchema>
 export type AgentInstancePatch = z.infer<typeof agentInstancePatchSchema>
 export type AgentInstanceDraft = Pick<
   AgentInstance,
-  "agentId" | "instanceId" | "label" | "values"
+  "agentId" | "instanceId" | "label" | "values" | "accentColor"
 > & {
   /** 确认创建时启用已经准备好的版本。 */
   preparedVersion?: string

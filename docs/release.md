@@ -27,6 +27,7 @@ git push origin v0.2.0
    - Windows：x64 的 NSIS 安装包。
    - Linux：AppImage 和 deb。
    - 安装包里带 LICENSE、`THIRD_PARTY_NOTICES.txt`、Electron 和 Chromium 的声明。
+   - Cursor SDK 随目标平台和架构分发。交叉打包时按 pnpm 锁文件的 SHA-512 校验原生包，再放入签名前的应用目录。安装包冒烟测试会从应用内启动 SDK worker 和随包的 `rg`。
 3. 全部成功才建 **草稿** Release，附上安装包和 `latest*.yml`。草稿不对外可见，也不会被自动更新看到。
 
 手动运行（`.github/workflows/release.yml` → Run workflow）同样打包、跑冒烟，但只留 Actions artifact，不建 Release，用来出内部测试包。
@@ -65,11 +66,11 @@ git commit -m "chore: bump frontend to 0.2.0"
 
 三种处理方式，判断逻辑在 `apps/desktop/src/main/update-mode.ts`：
 
-| 平台 | 做法 |
-|---|---|
-| Windows、AppImage | electron-updater 后台下载，提示「重启并更新」，不点的话下次退出时安装 |
-| macOS | 下载对应架构的 DMG，提示「打开安装包」；用户在挂载出来的窗口里把 Pigcode 拖进「应用程序」 |
-| deb 等其余 | 只提示，点开下载页 |
+| 平台              | 做法                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------- |
+| Windows、AppImage | electron-updater 后台下载，提示「重启并更新」，不点的话下次退出时安装                     |
+| macOS             | 下载对应架构的 DMG，提示「打开安装包」；用户在挂载出来的窗口里把 Pigcode 拖进「应用程序」 |
+| deb 等其余        | 只提示，点开下载页                                                                        |
 
 macOS 自动安装需要受信任的发行签名（ADR 0005）。应用按 `process.arch` 从 Release 附件里挑 DMG，下载到 `userData/update-downloads/`，再交给系统打开。用户数据在 `~/Library/Application Support/Pigcode`，换掉 `.app` 不影响会话、设置和插件。下载过的包在下次启动时清掉。
 

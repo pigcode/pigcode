@@ -9,10 +9,20 @@ import { cn } from "./cn"
 import { EntityAvatar, entityMark } from "./entity-avatar"
 
 /** 有品牌标志的 Agent。 */
-export type AgentBrand = "claude" | "openai" | "antigravity"
+const packageMarks = {
+  cursor: new URL("../assets/agents/cursor.svg", import.meta.url).href,
+  grok: new URL("../assets/agents/grok.svg", import.meta.url).href,
+  opencode: new URL("../assets/agents/opencode.svg", import.meta.url).href,
+  muse: new URL("../assets/agents/muse.svg", import.meta.url).href,
+  pi: new URL("../assets/agents/pi.svg", import.meta.url).href,
+  fx: new URL("../assets/agents/fx.svg", import.meta.url).href,
+  kiro: new URL("../assets/agents/kiro.svg", import.meta.url).href,
+} as const
+export type AgentBrand = "claude" | "openai" | "antigravity" | keyof typeof packageMarks
 
 /** driver id 到品牌标志；不在表里（第三方 Agent、开发用的 fake）返回 null。 */
 export function agentBrandOf(agentId: string | null | undefined): AgentBrand | null {
+  if (agentId && Object.hasOwn(packageMarks, agentId)) return agentId as keyof typeof packageMarks
   if (agentId === "claude") return "claude"
   if (agentId === "codex") return "openai"
   if (agentId === "antigravity") return "antigravity"
@@ -28,7 +38,7 @@ export function AgentBrandMark({
   className?: string | undefined
 }) {
   const markClassName = cn("agent-brand", className)
-  if (brand === "antigravity") {
+  if (brand !== "claude" && brand !== "openai") {
     return (
       <img
         alt=""
@@ -36,7 +46,7 @@ export function AgentBrandMark({
         className={markClassName}
         data-brand={brand}
         draggable={false}
-        src={ANTIGRAVITY_LOGO}
+        src={brand === "antigravity" ? ANTIGRAVITY_LOGO : packageMarks[brand]}
       />
     )
   }
@@ -64,6 +74,7 @@ export type AgentIconProps = Omit<ComponentProps<"span">, "children"> & {
   /** driver id，决定用哪个品牌标志。 */
   agentId: string
   /** 实例 id；和 agentId 不同时是非默认实例，加角标。缺省按默认实例处理。 */
+  accentColor?: string | undefined
   instanceId?: string | undefined
   /** 实例名：缩写头像与角标都取它。 */
   name: string
@@ -74,6 +85,7 @@ export type AgentIconProps = Omit<ComponentProps<"span">, "children"> & {
 export function AgentIcon({
   agentId,
   instanceId,
+  accentColor,
   name,
   size = "md",
   className,
@@ -89,7 +101,11 @@ export function AgentIcon({
       ) : (
         <EntityAvatar id={instance} name={name} size="fill" />
       )}
-      {badge && brand ? <span className="agent-icon-badge">{badge}</span> : null}
+      {accentColor ? (
+        <span className="agent-accent-dot" style={{ backgroundColor: accentColor }} />
+      ) : badge && brand ? (
+        <span className="agent-icon-badge">{badge}</span>
+      ) : null}
     </span>
   )
 }

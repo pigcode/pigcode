@@ -15,6 +15,7 @@ import type {
   AgentModel,
   AgentStatus,
 } from "@pigcode/contracts"
+import { readIdlePolicy } from "@pigcode/contracts"
 import { isAgentPlugin, readAgentContribution } from "@pigcode/plugin-sdk"
 import {
   DEFAULT_AGENT_KEY,
@@ -44,6 +45,7 @@ import {
   normalizeCommands,
   normalizeModels,
 } from "./model-catalog"
+import { AgentSecrets, publicValues } from "./agent-secrets"
 import { listAgentModels } from "./switching"
 
 /** detect 的选项：只检测一个 agent 或实例，或跳过缓存重新检测。 */
@@ -64,6 +66,7 @@ export interface AgentCatalog {
   acpRegistry(): Promise<AcpRegistryEntry[]>
   prepareAcpRegistry(registryId: string): Promise<AcpRegistryEntry>
   activateAcpRegistry(registryId: string, version: string): Promise<void>
+  runtimeSettings(agentId: string, instanceId?: string | null): Promise<AgentSettingsValues>
   /** 默认实例的设置；旧的调用方式，等价于 settingsForInstance(agentId, agentId)。 */
   settingsFor(agentId: string): AgentSettingsValues
   /** 指定实例的设置；实例不存在或不属于这个 agent 时退回默认实例。 */
@@ -97,6 +100,7 @@ export interface AgentCatalog {
   updateInstance(
     instanceId: string,
     patch: {
+      accentColor?: string | null | undefined
       label?: string | undefined
       enabled?: boolean | undefined
       values?: Record<string, unknown> | undefined
@@ -169,20 +173,61 @@ export function createAgentCatalog(
   const store = () => ctx.get("settings")
   const instanceFor = (agentId: string, instanceId?: string | null): ResolvedInstance =>
     resolveInstance(store(), agentId, instanceId)
-  const settingsFor = (agentId: string) => instanceFor(agentId).values
+  const settingsDir = store()?.directory
+  const secrets = new AgentSecrets(
+    dataDir ?? (settingsDir ? join(settingsDir, "agents") : undefined),
+    () => store()?.snapshot(),
+  )
+  const exposed = (instance: ResolvedInstance): ResolvedInstance => ({
+    ...instance,
+    values: publicValues(instance.values),
+  })
+  function runtimeInstance(agentId: string, instanceId?: string | null): ResolvedInstance {
+    const instance = instanceFor(agentId, instanceId)
+    const driver = drivers.get(agentId)
+    if (!instance.isDefault || (!driver?.requiresInstance && !driver?.acpRegistry)) return instance
+    if (!instanceId || instanceId === agentId) {
+      const choices = listStoredInstances(store(), agentId, driver.displayName).filter(
+        (item) => !item.isDefault && item.enabled,
+      )
+      const selected =
+        choices.find((item) => item.instanceId === readDefaultInstanceId(store())) ?? choices[0]
+      if (selected) return selected
+    }
+    throw new Error(`Choose a configured instance of ${driver.displayName}`)
+  }
+  async function runtimeSettings(agentId: string, instanceId?: string | null) {
+    const values = await secrets.resolve(runtimeInstance(agentId, instanceId).values)
+    if (agentId === "claude" && (!values.idleCompaction || values.idleCompaction === "default"))
+      return { ...values, idleCompaction: readIdlePolicy(store()?.get("claude.idleCompaction")) }
+    return values
+  }
+  const settingsFor = (agentId: string) => publicValues(instanceFor(agentId).values)
 
   /** 检测一个实例：把它的设置交给 driver，结果按实例缓存。 */
   function detectOne(agentId: string, instanceId: string, refresh = false): Promise<AgentStatus> {
     const driver = drivers.get(agentId)
     if (!driver?.detect) return Promise.resolve(fallbackStatus(driver, agentId))
     const detect = driver.detect.bind(driver)
-    const values = instanceFor(agentId, instanceId).values
-    const execution = driver.accountSetup
-      ? instanceContext(instanceFor(agentId, instanceId))
-      : undefined
+    const execution =
+      driver.accountSetup || driver.requiresInstance
+        ? instanceContext(instanceFor(agentId, instanceId))
+        : undefined
     return detections.get(
       instanceId,
-      () => (execution ? detect(values, execution) : detect(values)),
+      async () => {
+        try {
+          const values = await runtimeSettings(agentId, instanceId)
+          return await (execution ? detect(values, execution) : detect(values))
+        } catch (cause) {
+          return {
+            installed: false,
+            version: null,
+            authenticated: null,
+            error: cause instanceof Error ? cause.message : String(cause),
+          }
+        }
+      },
       refresh,
     )
   }
@@ -221,11 +266,12 @@ export function createAgentCatalog(
       )
       return entries.filter(({ id }) => !dedicated.has(id))
     },
+    runtimeSettings,
     settingsFor,
     settingsForInstance(agentId, instanceId) {
-      return instanceFor(agentId, instanceId).values
+      return publicValues(instanceFor(agentId, instanceId).values)
     },
-    instance: instanceFor,
+    instance: runtimeInstance,
     instanceContext,
     async detect(options = {}) {
       // 只检测一个实例、一个 agent 的全部实例，或全部 agent 的全部实例。
@@ -253,15 +299,17 @@ export function createAgentCatalog(
     },
     async models(agentId, instanceId) {
       const driver = drivers.get(agentId)
-      const instance = instanceFor(agentId, instanceId)
+      const instance = runtimeInstance(agentId, instanceId)
       const settings = instance.values
       // 只缓存 agent 自己的目录；模型偏好每次现取，改完设置立刻反映到选择器里。
       const models = await catalogs.get(instance.instanceId, async () =>
         normalizeModels(
           await listAgentModels(
             driver,
-            settings,
-            driver?.accountSetup ? instanceContext(instance) : undefined,
+            await runtimeSettings(agentId, instanceId),
+            driver?.accountSetup || driver?.requiresInstance
+              ? instanceContext(instance)
+              : undefined,
           ),
         ),
       )
@@ -269,17 +317,17 @@ export function createAgentCatalog(
     },
     async commands(agentId, instanceId, cwd, refresh) {
       const driver = drivers.get(agentId)
-      const instance = instanceFor(agentId, instanceId)
       if (!driver?.listCommands) return []
+      const instance = runtimeInstance(agentId, instanceId)
       const list = driver.listCommands.bind(driver)
       return commandCatalogs.get(
         `${instance.instanceId}\0${cwd ?? ""}`,
         async () => {
-          const execution = driver.accountSetup ? instanceContext(instance) : undefined
+          const execution =
+            driver.accountSetup || driver.requiresInstance ? instanceContext(instance) : undefined
+          const values = await runtimeSettings(agentId, instanceId)
           return normalizeCommands(
-            await (
-              execution ? list(instance.values, cwd, execution) : list(instance.values, cwd)
-            ).catch(() => []),
+            await (execution ? list(values, cwd, execution) : list(values, cwd)).catch(() => []),
           )
         },
         refresh,
@@ -314,55 +362,86 @@ export function createAgentCatalog(
       // 默认实例不用单独记：没有 defaultInstance 就是 agent 自己的默认配置。
       settings.set(
         DEFAULT_INSTANCE_KEY,
-        agentId && instanceId && instanceId !== agentId ? instanceId : undefined,
+        agentId && instanceId && !instanceFor(agentId, instanceId).isDefault
+          ? instanceId
+          : undefined,
       )
     },
     updateSettings(agentId, values, instanceId) {
-      const normalized = normalizeAgentSettings(values)
       const settings = requireStore()
-      if (instanceId && instanceId !== agentId) {
-        updateStoredInstance(settings, instanceId, { values: normalized })
-      } else {
-        settings.set(
-          agentSettingsKey(agentId),
-          Object.keys(normalized).length > 0 ? normalized : undefined,
-        )
-      }
-      catalogs.invalidate(instanceId ?? agentId)
-      commandCatalogs.invalidate(instanceId ?? agentId)
-      detections.invalidate(instanceId ?? agentId)
-      return normalized
+      const previous = instanceFor(agentId, instanceId).values
+      return secrets.write(normalizeAgentSettings(values), previous, (sealed) => {
+        if (instanceId && !instanceFor(agentId, instanceId).isDefault)
+          updateStoredInstance(settings, instanceId, { values: sealed })
+        else
+          settings.set(agentSettingsKey(agentId), Object.keys(sealed).length ? sealed : undefined)
+        invalidate(instanceId ?? agentId)
+        return publicValues(sealed)
+      })
     },
     instances: listInstancesOf,
     findInstance(instanceId) {
-      return findInstanceWith(instanceId)
+      const item = findInstanceWith(instanceId)
+      return item ? exposed(item) : null
     },
     createInstance(agentId, label, options) {
-      if (options?.instanceId && drivers.has(options.instanceId)) {
+      const explicitOnly = Boolean(drivers.get(agentId)?.requiresInstance)
+      if (
+        options?.instanceId &&
+        drivers.has(options.instanceId) &&
+        !(explicitOnly && options.instanceId === agentId)
+      ) {
         throw new AgentInstanceIdTakenError(options.instanceId)
       }
-      const created = createStoredInstance(requireStore(), agentId, label, options)
-      detections.invalidate(created.instanceId)
-      catalogs.invalidate(created.instanceId)
-      commandCatalogs.invalidate(created.instanceId)
-      return created
+      const create = (values?: AgentSettingsValues) => {
+        const created = createStoredInstance(
+          requireStore(),
+          agentId,
+          label.trim() || drivers.get(agentId)?.displayName || agentId,
+          values ? { ...options, values } : options,
+          explicitOnly,
+        )
+        invalidate(created.instanceId)
+        return exposed(created)
+      }
+      return options?.values
+        ? secrets.write(
+            options.values,
+            options.copyFrom ? instanceFor(agentId, options.copyFrom).values : {},
+            create,
+          )
+        : create()
     },
     updateInstance(instanceId, patch) {
+      const previous = findInstanceWith(instanceId)
       if (
+        previous?.isDefault &&
         drivers.get(instanceId)?.accountSetup &&
         patch.enabled !== undefined &&
         patch.label === undefined &&
+        patch.accentColor === undefined &&
         patch.values === undefined
       ) {
         requireStore().set(defaultInstanceEnabledKey(instanceId), patch.enabled)
         invalidate(instanceId)
-        return instanceFor(instanceId, instanceId)
+        return exposed(instanceFor(instanceId, instanceId))
       }
-      const updated = updateStoredInstance(requireStore(), instanceId, patch)
-      detections.invalidate(instanceId)
-      catalogs.invalidate(instanceId)
-      commandCatalogs.invalidate(instanceId)
-      return updated
+      const update = (values?: AgentSettingsValues) => {
+        const label =
+          patch.label === undefined
+            ? undefined
+            : patch.label.trim() ||
+              drivers.get(previous?.agentId ?? "")?.displayName ||
+              previous?.agentId
+        const updated = updateStoredInstance(requireStore(), instanceId, {
+          ...patch,
+          ...(label !== undefined ? { label } : {}),
+          ...(values ? { values } : {}),
+        })
+        invalidate(instanceId)
+        return exposed(updated)
+      }
+      return patch.values ? secrets.write(patch.values, previous?.values ?? {}, update) : update()
     },
     removeInstance(instanceId) {
       const settings = requireStore()
@@ -373,7 +452,8 @@ export function createAgentCatalog(
       detections.invalidate(instanceId)
       catalogs.invalidate(instanceId)
       commandCatalogs.invalidate(instanceId)
-      return instance
+      if (instance) secrets.remove(instance.values)
+      return instance ? exposed(instance) : null
     },
     invalidate,
   }
@@ -383,11 +463,13 @@ export function createAgentCatalog(
     const driver = drivers.get(agentId)
     const instances = listStoredInstances(store(), agentId, driver?.displayName ?? agentId)
     return (
-      driver?.acpRegistry ? instances.filter((instance) => !instance.isDefault) : instances
+      driver?.acpRegistry || driver?.requiresInstance
+        ? instances.filter((instance) => !instance.isDefault)
+        : instances
     ).map((instance) => {
       const scope = instanceContext(instance)
       const modes = scope && driver?.modesForInstance?.(scope)
-      return modes ? { ...instance, executionModes: modes } : instance
+      return { ...exposed(instance), ...(modes ? { executionModes: modes } : {}) }
     })
   }
 
@@ -395,7 +477,11 @@ export function createAgentCatalog(
   function findInstanceWith(instanceId: string): ResolvedInstance | null {
     const stored = readStoredInstances(store())[instanceId]
     if (stored) return instanceFor(stored.agentId, instanceId)
-    if (drivers.has(instanceId) && !drivers.get(instanceId)?.acpRegistry)
+    if (
+      drivers.has(instanceId) &&
+      !drivers.get(instanceId)?.requiresInstance &&
+      !drivers.get(instanceId)?.acpRegistry
+    )
       return instanceFor(instanceId)
     return null
   }

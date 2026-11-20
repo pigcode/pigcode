@@ -35,7 +35,9 @@ import {
   PROCESS_TREE_SPAWN_OPTIONS,
 } from "@pigcode/plugin-sdk/node"
 import { openAcp } from "./connection"
-import { acpLaunch, configuredBinary, pathBinary } from "./launch"
+import { authConfig } from "./auth-config"
+import { StandaloneRuntime, standaloneRoot } from "./standalone-runtime"
+import { acpLaunch, configuredBinary, pathBinary, standaloneHarness } from "./launch"
 
 const exec = promisify(execFile)
 const manifestBase =
@@ -62,6 +64,14 @@ interface Installed {
 export interface Executable {
   command: string
   release(): void
+}
+
+function usesStandalone(settings: AgentSettingsValues) {
+  const config = authConfig(settings)
+  return (
+    config.method === "oauth-business" ||
+    (config.method === "agent-platform" && Boolean(config.key))
+  )
 }
 
 function rootOf(instance: AgentInstanceContext) {
@@ -95,6 +105,24 @@ export async function executableVersion(
   settings: AgentSettingsValues,
 ): Promise<string | null> {
   try {
+    if (await standaloneHarness(command)) {
+      const workspace = await mkdtemp(join(tmpdir(), "pigcode-agy-probe-"))
+      try {
+        const profile = {
+          directory: join(workspace, "profile"),
+          tokenPath: join(workspace, "unused"),
+        }
+        const rpc = openAcp(await acpLaunch(command, {}, profile, workspace))
+        try {
+          const info = await rpc.initialize(AbortSignal.timeout(15_000))
+          return cliVersion(info.agentInfo?.version ?? "")
+        } finally {
+          await rpc.close()
+        }
+      } finally {
+        await rm(workspace, { recursive: true, force: true })
+      }
+    }
     const target = launchTarget(command, ["--version"])
     if (target.shell) return null
     const { stdout, stderr } = await exec(target.command, target.args, {
@@ -218,40 +246,71 @@ export class AntigravityInstallation {
   private readonly leases = new Map<string, number>()
   private readonly releases = new Map<string, { until: number; promise: Promise<Release> }>()
 
-  constructor(private readonly fetchRelease: typeof fetch = fetch) {}
+  private readonly standalone: StandaloneRuntime
+
+  constructor(private readonly fetchRelease: typeof fetch = fetch) {
+    this.standalone = new StandaloneRuntime(fetchRelease)
+  }
 
   async resolve(
     settings: AgentSettingsValues,
     instance: AgentInstanceContext,
   ): Promise<string | undefined> {
-    return (
-      configuredBinary(settings) ??
-      (await readInstallation(rootOf(instance)))?.command ??
-      pathBinary(settings)
-    )
+    const override = configuredBinary(settings)
+    if (override) return override
+    if (usesStandalone(settings)) {
+      const standalone = await this.standalone.selected(instance)
+      if (standalone !== undefined) return standalone?.command
+    }
+    return (await readInstallation(rootOf(instance)))?.command ?? pathBinary(settings)
   }
 
   async acquire(
     settings: AgentSettingsValues,
     instance: AgentInstanceContext,
   ): Promise<Executable> {
-    const root = rootOf(instance)
     const command = await this.resolve(settings, instance)
     if (!command) throw new Error("Install Antigravity CLI in Agent settings")
     const resolved = await realpath(command).catch(() => command)
-    if (!inside(root, resolved) && !inside(root, command)) return { command, release() {} }
+    const root = [rootOf(instance), standaloneRoot(instance)].find(
+      (path) => inside(path, resolved) || inside(path, command),
+    )
+    return { command, release: root ? this.lease(root) : () => {} }
+  }
+
+  private lease(root: string): () => void {
     if (this.removing.has(root)) throw new Error("Antigravity CLI is being removed")
     this.leases.set(root, (this.leases.get(root) ?? 0) + 1)
     let released = false
-    return {
-      command,
-      release: () => {
-        if (released) return
-        released = true
-        const remaining = (this.leases.get(root) ?? 1) - 1
-        if (remaining > 0) this.leases.set(root, remaining)
-        else this.leases.delete(root)
-      },
+    return () => {
+      if (released) return
+      released = true
+      const remaining = (this.leases.get(root) ?? 1) - 1
+      if (remaining > 0) this.leases.set(root, remaining)
+      else this.leases.delete(root)
+    }
+  }
+
+  async prepareEnterprise(
+    settings: AgentSettingsValues,
+    instance: AgentInstanceContext,
+    signal: AbortSignal,
+  ): Promise<Executable> {
+    signal.throwIfAborted()
+    if (configuredBinary(settings)) return this.acquire(settings, instance)
+    const config = authConfig(settings)
+    if (!usesStandalone(settings) || config.error)
+      throw new Error(config.error ?? "Choose Gemini Enterprise or Vertex AI with an API key")
+    const release = this.lease(standaloneRoot(instance))
+    try {
+      const ready =
+        (await this.standalone.selected(instance)) ??
+        (await this.standalone.install(instance, await this.standalone.latest(), { signal }))
+      signal.throwIfAborted()
+      return { command: ready.command, release }
+    } catch (error) {
+      release()
+      throw error
     }
   }
 
@@ -273,6 +332,10 @@ export class AntigravityInstallation {
         reason: version ? "unknown-installation" : "not-installed",
         verify,
       }
+    }
+    if (usesStandalone(settings)) {
+      const plan = await this.standalone.updatePlan(instance, (target) => this.lease(target))
+      if (plan) return plan
     }
     const installed = await readInstallation(root)
     const local = installed ? undefined : pathBinary(settings)
@@ -310,8 +373,13 @@ export class AntigravityInstallation {
   async remove(
     instance: AgentInstanceContext,
     configured: readonly AgentSettingsValues[],
+    settings: AgentSettingsValues = {},
   ): Promise<void> {
-    const root = rootOf(instance)
+    const managedEnterprise =
+      !configuredBinary(settings) &&
+      usesStandalone(settings) &&
+      (await this.standalone.selected(instance))
+    const root = managedEnterprise ? standaloneRoot(instance) : rootOf(instance)
     if (this.modifying.has(root) || this.leases.has(root))
       throw new Error(
         "Antigravity CLI is in use. Stop the sessions or installation before removing it.",

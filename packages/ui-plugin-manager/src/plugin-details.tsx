@@ -13,6 +13,7 @@ import {
   descriptionOf,
   fill,
   kindKeys,
+  showsPackageVersion,
   statusOf,
   type PluginClientError,
   type PluginContributionConflict,
@@ -121,7 +122,9 @@ function DetailsBody({
           <span>{t(status.label)}</span>
           <Badge>{t(kindKeys[plugin.kind])}</Badge>
           {plugin.builtin ? <Badge>{t("plugins.builtin")}</Badge> : null}
-          <span className="plugin-dialog-version">{plugin.version}</span>
+          {showsPackageVersion(plugin) && (
+            <span className="plugin-dialog-version">{plugin.version}</span>
+          )}
         </span>
       }
     >

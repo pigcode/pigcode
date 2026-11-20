@@ -4,6 +4,7 @@ import type { CodexTransport } from "./transport"
 interface Pending {
   resolve(value: unknown): void
   reject(error: Error): void
+  timer: ReturnType<typeof setTimeout>
 }
 
 /** 在 NDJSON 传输之上关联请求与响应，并分发通知和 server request。 */
@@ -16,6 +17,7 @@ export class CodexRpcClient {
   private readonly disposeLine: () => void
   private readonly disposeClose: () => void
   private closedReason: Error | null = null
+  private closing?: Promise<void>
 
   constructor(private readonly transport: CodexTransport) {
     this.disposeLine = transport.onLine((line) => this.handleLine(line))
@@ -38,13 +40,18 @@ export class CodexRpcClient {
     if (this.closedReason) return Promise.reject(this.closedReason)
     const id = this.nextId++
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
-      this.transport.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }))
-      setTimeout(() => {
-        if (!this.pending.has(id)) return
+      const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error(`codex request timeout: ${method}`))
       }, 30000)
+      this.pending.set(id, { resolve, reject, timer })
+      try {
+        this.transport.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }))
+      } catch (error) {
+        clearTimeout(timer)
+        this.pending.delete(id)
+        reject(error)
+      }
     })
   }
 
@@ -78,16 +85,22 @@ export class CodexRpcClient {
 
   /** 停止监听并关闭底层传输。 */
   close(): Promise<void> {
+    if (this.closing) return this.closing
+    this.closing = Promise.resolve().then(() => this.transport.close())
     this.disposeLine()
     this.disposeClose()
-    return Promise.resolve(this.transport.close())
+    this.handleClose(new Error("Codex app-server closed"))
+    return this.closing
   }
 
   /** 进程不在了：等待中的请求立即失败，而不是等到超时。 */
   private handleClose(reason: Error): void {
     if (this.closedReason) return
     this.closedReason = reason
-    for (const entry of this.pending.values()) entry.reject(reason)
+    for (const entry of this.pending.values()) {
+      clearTimeout(entry.timer)
+      entry.reject(reason)
+    }
     this.pending.clear()
     for (const handler of [...this.closeHandlers]) handler(reason)
     this.closeHandlers.clear()
@@ -132,6 +145,7 @@ export class CodexRpcClient {
     if ("id" in record) {
       const entry = this.pending.get(record.id as number)
       if (!entry) return
+      clearTimeout(entry.timer)
       this.pending.delete(record.id as number)
       if (record.error) entry.reject(new Error(JSON.stringify(record.error)))
       else entry.resolve(record.result)

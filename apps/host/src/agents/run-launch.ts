@@ -29,7 +29,10 @@ export interface LaunchDeps {
   ) => void
   execute: (run: ActiveRun, input: UserInput) => void
   /** 启动时读取实例的最新设置；排队期间改的设置同样生效。 */
-  settingsFor: (agentId: string, instanceId: string) => AgentSettingsValues
+  settingsFor: (
+    agentId: string,
+    instanceId: string,
+  ) => AgentSettingsValues | Promise<AgentSettingsValues>
   instanceContext?: (agentId: string, instanceId: string) => AgentInstanceContext | undefined
 }
 
@@ -105,6 +108,8 @@ async function openSession(
 ): Promise<AgentSessionHandle> {
   const fork = resume ? entry.forkFromNativeSessionId : undefined
   const instance = deps.instanceContext?.(entry.driver.id, entry.instanceId)
+  const settings = await deps.settingsFor(entry.driver.id, entry.instanceId)
+  entry.controller.signal.throwIfAborted()
   const draft = await entry.driver.createSession({
     threadId: entry.threadId,
     cwd: entry.cwd,
@@ -117,7 +122,7 @@ async function openSession(
     model: entry.model,
     ...(resume && entry.sessionId ? { sessionId: entry.sessionId } : {}),
     ...(entry.mcp ? { mcp: entry.mcp } : {}),
-    settings: deps.settingsFor(entry.driver.id, entry.instanceId),
+    settings,
     ...(instance ? { instance, signal: entry.controller.signal } : {}),
   })
   if (entry.controller.signal.aborted) {

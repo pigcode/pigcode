@@ -102,7 +102,7 @@ export interface AgentRuntime {
   emit(event: AgentEvent): void
   requestApproval(request: ApprovalRequest): Promise<ApprovalDecision>
   /** 向用户提问并等待回答；返回每个问题的答案，用户没答（run 结束）时为空数组。 */
-  askQuestions?(request: QuestionRequest): Promise<string[]>
+  askQuestions?(request: QuestionRequest, signal?: AbortSignal): Promise<string[]>
   /** Agent 原生进入或退出计划流程后，同步会话里的独立计划开关。 */
   setPlanMode?(enabled: boolean): void
 }
@@ -183,6 +183,7 @@ export interface AgentDriver {
   readonly features: AgentFeatures
   /** 接入统一四档权限协议，并声明计划能力；旧插件由 Host 兼容原有权限参数。 */
   readonly executionModes?: AgentExecutionModes
+  readonly requiresInstance?: boolean
   readonly accountSetup?: AgentAccountSetup
   acpRegistry?(): Promise<AcpRegistryEntry[]>
   prepareAcpRegistry?(registryId: string, sharedDir: string): Promise<AcpRegistryEntry>
@@ -254,6 +255,8 @@ export interface AgentCliUpdatePlan {
   /** 版本目录按引用保留，新版本验证后独立启用。 */
   concurrent?: boolean
   canRemove?: boolean
+  /** 非标准版本号的比较规则，也供 Host 在实际更新后复核。 */
+  isUpdateAvailable?(current: string | null, latest: string | null): boolean
   /** 按原来的可执行文件复检，确保更新的是当前使用的 CLI。 */
   verify: () => Promise<string | null>
 }
