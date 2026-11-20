@@ -1,7 +1,7 @@
 /**
- * 实例的模型列表（参照 t3code 设置页的模型列表）：agent 目录里的模型和用户加的自定义模型排成一张表，
- * 每一行可以用开关决定在输入框的模型选择器里显不显示，用上下按钮或拖动排顺序；自定义模型可以移除。
- * 改动都写进设置草稿（hiddenModels、modelOrder、customModels），和其他设置一起保存。
+ * 实例的模型分组：agent 目录里的模型和用户加的自定义模型排成一列，
+ * 支持快速筛选、开关显隐、拖动或上下按钮排序，以及添加/移除自定义模型。
+ * 改动写进统一设置草稿（hiddenModels、modelOrder、customModels），和其他设置一起保存。
  */
 import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react"
 import { ArrowDown, ArrowUp, GripVertical, Plus, X, Zap } from "lucide-react"
@@ -11,7 +11,8 @@ import {
   MODEL_ORDER_KEY,
   type AgentSettingsValues,
 } from "@pigcode/contracts"
-import { Button, Input, Skeleton, Switch, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, SearchField, Skeleton, Switch, useLocale } from "@pigcode/ui-primitives"
+import { AgentSection } from "./agent-section"
 
 /** 模型目录里的一个模型：设置页用到名字、id、是否默认与自定义，以及快速模式。 */
 export interface AgentModelInfo {
@@ -97,6 +98,7 @@ export function ModelsEditor({
 }) {
   const { t } = useLocale()
   const [draft, setDraft] = useState("")
+  const [filter, setFilter] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const [dropAt, setDropAt] = useState<number | null>(null)
@@ -106,6 +108,13 @@ export function ModelsEditor({
   const custom = modelList(values, CUSTOM_MODELS_KEY)
   const hidden = modelList(values, HIDDEN_MODELS_KEY)
   const shown = rows.filter((row) => !row.hidden).length
+  const query = filter.trim().toLowerCase()
+  const filtering = query.length > 0
+  const visibleRows = filtering
+    ? rows.filter(
+        (row) => row.label.toLowerCase().includes(query) || row.id.toLowerCase().includes(query),
+      )
+    : rows
 
   const reorder = (from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || to >= ids.length) return
@@ -139,10 +148,10 @@ export function ModelsEditor({
     }
     onChange({ [CUSTOM_MODELS_KEY]: [...custom, id] })
     setDraft("")
+    setFilter("")
     setError(null)
     requestAnimationFrame(() => {
-      const list = listRef.current
-      list?.scrollTo?.({ top: list.scrollHeight, behavior: "smooth" })
+      listRef.current?.lastElementChild?.scrollIntoView?.({ block: "nearest", behavior: "smooth" })
     })
   }
 
@@ -154,7 +163,7 @@ export function ModelsEditor({
 
   /** 拖到某一行上：鼠标在这一行的上半就插到它前面，下半插到它后面。 */
   function onDragOver(event: DragEvent<HTMLLIElement>, index: number): void {
-    if (dragging === null) return
+    if (dragging === null || filtering) return
     event.preventDefault()
     const box = event.currentTarget.getBoundingClientRect()
     setDropAt(event.clientY < box.top + box.height / 2 ? index : index + 1)
@@ -162,7 +171,7 @@ export function ModelsEditor({
 
   function onDrop(event: DragEvent): void {
     event.preventDefault()
-    if (dragging !== null && dropAt !== null) {
+    if (dragging !== null && dropAt !== null && !filtering) {
       const from = ids.indexOf(dragging)
       reorder(from, dropAt > from ? dropAt - 1 : dropAt)
     }
@@ -170,159 +179,201 @@ export function ModelsEditor({
     setDropAt(null)
   }
 
+  const showAll = hidden.length > 0 && rows.some((row) => row.hidden)
+  const searchable = catalog !== undefined && rows.length >= 6
   return (
-    <div className="agent-models">
-      <div className="agent-models-head">
-        <p className="agent-muted" aria-live="polite">
-          {catalog === undefined
-            ? t("agents.models.loading")
-            : t("agents.models.summary")
-                .replace("{count}", String(rows.length))
-                .replace("{shown}", String(shown))}
-        </p>
-        {hidden.length > 0 && rows.some((row) => row.hidden) ? (
-          <button
-            type="button"
-            className="agent-text-btn"
-            onClick={() => onChange({ [HIDDEN_MODELS_KEY]: [] })}
+    <AgentSection
+      className="agent-models"
+      title={t("agents.section.models")}
+      meta={
+        catalog === undefined
+          ? t("agents.models.loading")
+          : t("agents.models.summary")
+              .replace("{count}", String(rows.length))
+              .replace("{shown}", String(shown))
+      }
+      actions={
+        showAll || searchable ? (
+          <>
+            {showAll ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                type="button"
+                onClick={() => onChange({ [HIDDEN_MODELS_KEY]: [] })}
+              >
+                {t("agents.models.showAll")}
+              </Button>
+            ) : null}
+            {searchable ? (
+              <SearchField
+                size="compact"
+                className="agent-models-search"
+                value={filter}
+                onValueChange={setFilter}
+                placeholder={t("agents.models.filter")}
+                clearLabel={t("agents.directory.clear")}
+              />
+            ) : null}
+          </>
+        ) : undefined
+      }
+    >
+      <div className="agent-models-body">
+        {catalog === undefined ? (
+          <div className="agent-model-list" aria-busy="true">
+            {[0, 1, 2, 3].map((index) => (
+              <Skeleton key={index} className="agent-model-skeleton" />
+            ))}
+          </div>
+        ) : visibleRows.length > 0 ? (
+          <ul
+            ref={listRef}
+            className="agent-model-list"
+            aria-label={t("agents.section.models")}
+            data-dragging={dragging !== null || undefined}
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropAt(null)
+            }}
           >
-            {t("agents.models.showAll")}
-          </button>
+            {visibleRows.map((row, index) => (
+              <li
+                key={row.id}
+                className="agent-model"
+                data-hidden={row.hidden || undefined}
+                data-dragging={dragging === row.id || undefined}
+                data-drop={
+                  !filtering && dropAt === index
+                    ? "before"
+                    : !filtering && dropAt === rows.length && index === rows.length - 1
+                      ? "after"
+                      : undefined
+                }
+                draggable={!filtering}
+                onDragStart={(event) => {
+                  if (filtering) return
+                  event.dataTransfer.effectAllowed = "move"
+                  event.dataTransfer.setData("text/plain", row.id)
+                  setDragging(row.id)
+                }}
+                onDragEnd={() => {
+                  setDragging(null)
+                  setDropAt(null)
+                }}
+                onDragOver={(event) => onDragOver(event, index)}
+                onDrop={onDrop}
+              >
+                {!filtering ? (
+                  <span
+                    className="agent-model-grip"
+                    aria-hidden="true"
+                    title={t("agents.models.drag")}
+                  >
+                    <GripVertical className="ic ic-sm" />
+                  </span>
+                ) : null}
+                <span className="agent-model-text">
+                  <span className="agent-model-name truncate">{row.label}</span>
+                  {row.label !== row.id ? (
+                    <code className="agent-model-id truncate">{row.id}</code>
+                  ) : null}
+                </span>
+                <span className="agent-model-meta">
+                  {row.fast ? (
+                    <span className="agent-model-cap" title={t("agents.models.fast")}>
+                      <Zap className="ic ic-xs" aria-hidden="true" />
+                      <span className="sr-only">{t("agents.models.fast")}</span>
+                    </span>
+                  ) : null}
+                  {row.isDefault ? (
+                    <span className="agent-model-tag" data-kind="default">
+                      {t("agents.models.default")}
+                    </span>
+                  ) : null}
+                  {row.custom ? (
+                    <span className="agent-model-tag">{t("agents.models.custom")}</span>
+                  ) : null}
+                </span>
+                <span className="agent-model-tools">
+                  {!filtering ? (
+                    <>
+                      <button
+                        type="button"
+                        className="agent-icon-btn"
+                        aria-label={t("agents.models.moveUp").replace("{model}", row.label)}
+                        title={t("agents.models.moveUp").replace("{model}", row.label)}
+                        disabled={index === 0}
+                        onClick={() => reorder(index, index - 1)}
+                      >
+                        <ArrowUp className="ic ic-xs" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="agent-icon-btn"
+                        aria-label={t("agents.models.moveDown").replace("{model}", row.label)}
+                        title={t("agents.models.moveDown").replace("{model}", row.label)}
+                        disabled={index === rows.length - 1}
+                        onClick={() => reorder(index, index + 1)}
+                      >
+                        <ArrowDown className="ic ic-xs" aria-hidden="true" />
+                      </button>
+                    </>
+                  ) : null}
+                  {row.custom ? (
+                    <button
+                      type="button"
+                      className="agent-icon-btn"
+                      data-tone="danger"
+                      aria-label={t("agents.models.remove").replace("{model}", row.id)}
+                      title={t("agents.models.remove").replace("{model}", row.id)}
+                      onClick={() => remove(row)}
+                    >
+                      <X className="ic ic-xs" aria-hidden="true" />
+                    </button>
+                  ) : null}
+                </span>
+                <Switch
+                  size="sm"
+                  className="agent-model-switch"
+                  aria-label={t("agents.models.show").replace("{model}", row.label)}
+                  checked={!row.hidden}
+                  onCheckedChange={(checked) => toggle(row, checked)}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : filtering ? (
+          <div className="agent-models-empty">
+            <p className="agent-muted">{t("agents.models.noMatches")}</p>
+          </div>
+        ) : null}
+
+        {allowCustom ? (
+          <div className="agent-models-add">
+            <div className="agent-input-row">
+              <Input
+                className="mono"
+                aria-label={t("agents.models.placeholder")}
+                placeholder={t("agents.models.placeholder")}
+                value={draft}
+                maxLength={256}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => {
+                  setDraft(event.target.value)
+                  setError(null)
+                }}
+                onKeyDown={onKeyDown}
+              />
+              <Button type="button" variant="secondary" disabled={!draft.trim()} onClick={add}>
+                <Plus className="ic ic-sm" aria-hidden="true" />
+                {t("agents.models.add")}
+              </Button>
+            </div>
+            {error ? <p className="error-text">{error}</p> : null}
+          </div>
         ) : null}
       </div>
-      {catalog === undefined ? (
-        <div className="agent-model-list" aria-busy="true">
-          {[0, 1, 2].map((index) => (
-            <Skeleton key={index} className="agent-model-skeleton" />
-          ))}
-        </div>
-      ) : rows.length > 0 ? (
-        <ul
-          ref={listRef}
-          className="agent-model-list"
-          aria-label={t("agents.section.models")}
-          data-dragging={dragging !== null || undefined}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropAt(null)
-          }}
-        >
-          {rows.map((row, index) => (
-            <li
-              key={row.id}
-              className="agent-model"
-              data-hidden={row.hidden || undefined}
-              data-dragging={dragging === row.id || undefined}
-              data-drop={
-                dropAt === index
-                  ? "before"
-                  : dropAt === rows.length && index === rows.length - 1
-                    ? "after"
-                    : undefined
-              }
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move"
-                event.dataTransfer.setData("text/plain", row.id)
-                setDragging(row.id)
-              }}
-              onDragEnd={() => {
-                setDragging(null)
-                setDropAt(null)
-              }}
-              onDragOver={(event) => onDragOver(event, index)}
-              onDrop={onDrop}
-            >
-              <span className="agent-model-grip" aria-hidden="true" title={t("agents.models.drag")}>
-                <GripVertical className="ic ic-sm" />
-              </span>
-              <span className="agent-model-text">
-                <span className="agent-model-name truncate">{row.label}</span>
-                {row.label !== row.id ? (
-                  <code className="agent-model-id truncate">{row.id}</code>
-                ) : null}
-              </span>
-              {row.fast ? (
-                <span className="agent-model-cap" title={t("agents.models.fast")}>
-                  <Zap className="ic ic-xs" aria-hidden="true" />
-                  <span className="sr-only">{t("agents.models.fast")}</span>
-                </span>
-              ) : null}
-              {row.isDefault ? (
-                <span className="agent-model-tag" data-kind="default">
-                  {t("agents.models.default")}
-                </span>
-              ) : null}
-              {row.custom ? (
-                <span className="agent-model-tag">{t("agents.models.custom")}</span>
-              ) : null}
-              <span className="agent-model-tools">
-                <button
-                  type="button"
-                  className="agent-icon-btn"
-                  aria-label={t("agents.models.moveUp").replace("{model}", row.label)}
-                  title={t("agents.models.moveUp").replace("{model}", row.label)}
-                  disabled={index === 0}
-                  onClick={() => reorder(index, index - 1)}
-                >
-                  <ArrowUp className="ic ic-xs" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  className="agent-icon-btn"
-                  aria-label={t("agents.models.moveDown").replace("{model}", row.label)}
-                  title={t("agents.models.moveDown").replace("{model}", row.label)}
-                  disabled={index === rows.length - 1}
-                  onClick={() => reorder(index, index + 1)}
-                >
-                  <ArrowDown className="ic ic-xs" aria-hidden="true" />
-                </button>
-                {row.custom ? (
-                  <button
-                    type="button"
-                    className="agent-icon-btn"
-                    data-tone="danger"
-                    aria-label={t("agents.models.remove").replace("{model}", row.id)}
-                    title={t("agents.models.remove").replace("{model}", row.id)}
-                    onClick={() => remove(row)}
-                  >
-                    <X className="ic ic-xs" aria-hidden="true" />
-                  </button>
-                ) : null}
-              </span>
-              <Switch
-                size="sm"
-                className="agent-model-switch"
-                aria-label={t("agents.models.show").replace("{model}", row.label)}
-                checked={!row.hidden}
-                onCheckedChange={(checked) => toggle(row, checked)}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {allowCustom ? (
-        <div className="agent-input-row">
-          <Input
-            className="mono"
-            aria-label={t("agents.models.placeholder")}
-            placeholder={t("agents.models.placeholder")}
-            value={draft}
-            maxLength={256}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(event) => {
-              setDraft(event.target.value)
-              setError(null)
-            }}
-            onKeyDown={onKeyDown}
-          />
-          <Button type="button" disabled={!draft.trim()} onClick={add}>
-            <Plus className="ic ic-sm" aria-hidden="true" />
-            {t("agents.models.add")}
-          </Button>
-        </div>
-      ) : null}
-      {error ? <p className="error-text">{error}</p> : null}
-    </div>
+    </AgentSection>
   )
 }

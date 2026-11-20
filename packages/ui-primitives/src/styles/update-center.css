@@ -7,13 +7,6 @@
 .update-indicator {
   -webkit-app-region: no-drag;
 }
-.agent-row-main .agent-row-update {
-  position: relative;
-  z-index: 1;
-  flex: none;
-  pointer-events: auto;
-  color: var(--fg-2);
-}
 .popup.update-center-popup {
   width: min(344px, calc(100vw - 32px));
   max-height: min(520px, var(--available-height, 520px));

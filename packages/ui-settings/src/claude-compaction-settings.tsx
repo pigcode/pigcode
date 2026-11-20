@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { AgentSettingField, AgentSettingsValues, ClaudeIdlePolicy } from "@pigcode/contracts"
-import { Button, useLocale } from "@pigcode/ui-primitives"
+import { SettingRow, useLocale } from "@pigcode/ui-primitives"
 import { ChoiceSelect } from "./choice-select"
 import { AgentFields } from "./agent-fields"
 
@@ -9,6 +9,10 @@ export interface ClaudeDefaults {
   set(mode: ClaudeIdlePolicy): Promise<void>
 }
 
+/**
+ * Claude 的自动压缩，几行放在 .agent-rows 里：这个 Claude 空闲的会话怎么压缩；所有 Claude 共用的默认
+ * （选好就保存，不进草稿）；聊天中到多少 token 自动压缩。
+ */
 export function ClaudeCompactionSettings({
   defaultPolicy = "onReturn",
   onChangeDefault,
@@ -23,7 +27,6 @@ export function ClaudeCompactionSettings({
   onChange: (key: string, value: unknown) => void
 }) {
   const { t } = useLocale()
-  const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const policies = [
@@ -45,7 +48,6 @@ export function ClaudeCompactionSettings({
     setError("")
     try {
       await onChangeDefault(mode)
-      setEditing(false)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -53,65 +55,51 @@ export function ClaudeCompactionSettings({
     }
   }
   return (
-    <div className="claude-context">
-      <div className="claude-policy">
-        <div className="claude-policy-heading">
-          <span className="label">{t("agents.claude.instancePolicy")}</span>
+    <>
+      <SettingRow
+        title={t("agents.claude.instancePolicy")}
+        description={t(
+          effective === "off"
+            ? "agents.claude.offHint"
+            : effective === "beforeCacheExpires"
+              ? "agents.claude.cacheHint"
+              : "agents.claude.returnHint",
+        )}
+      >
+        <ChoiceSelect
+          variant="field"
+          className="agent-control"
+          label={t("agents.claude.instancePolicy")}
+          value={selected}
+          options={[{ value: "default", label: inherited }, ...policies]}
+          onChange={(mode) => onChange("idleCompaction", mode)}
+        />
+      </SettingRow>
+      {onChangeDefault ? (
+        <SettingRow
+          title={t("agents.claude.idleDefault")}
+          description={
+            error ? (
+              <span className="error-text" role="alert">
+                {error}
+              </span>
+            ) : (
+              t("agents.claude.defaultHint")
+            )
+          }
+        >
           <ChoiceSelect
             variant="field"
-            label={t("agents.claude.instancePolicy")}
-            value={selected}
-            options={[{ value: "default", label: inherited }, ...policies]}
-            onChange={(mode) => onChange("idleCompaction", mode)}
+            className="agent-control"
+            label={t("agents.claude.idleDefault")}
+            value={shared}
+            options={policies}
+            disabled={saving}
+            onChange={(mode) => void changeDefault(mode)}
           />
-        </div>
-        <p className="agent-muted">
-          {t(
-            effective === "off"
-              ? "agents.claude.offHint"
-              : effective === "beforeCacheExpires"
-                ? "agents.claude.cacheHint"
-                : "agents.claude.returnHint",
-          )}
-        </p>
-        {onChangeDefault && (
-          <div className="claude-default-control">
-            <Button
-              size="sm"
-              variant="ghost"
-              type="button"
-              aria-expanded={editing}
-              disabled={saving}
-              onClick={() => {
-                setEditing(!editing)
-                setError("")
-              }}
-            >
-              {t("agents.claude.editDefault")}
-            </Button>
-            {editing && (
-              <div className="claude-default-editor">
-                <span className="label">{t("agents.claude.idleDefault")}</span>
-                <ChoiceSelect
-                  variant="field"
-                  label={t("agents.claude.idleDefault")}
-                  value={shared}
-                  options={policies}
-                  disabled={saving}
-                  onChange={(mode) => void changeDefault(mode)}
-                />
-                <p className="agent-muted">{t("agents.claude.defaultHint")}</p>
-              </div>
-            )}
-            {error && (
-              <p className="error-text" role="alert">
-                {error}
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-      {threshold && <AgentFields fields={[threshold]} values={values} onChange={onChange} />}
-    </div>
+        </SettingRow>
+      ) : null}
+      {threshold ? <AgentFields fields={[threshold]} values={values} onChange={onChange} /> : null}
+    </>
   )
 }

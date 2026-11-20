@@ -1,32 +1,33 @@
-import { CircleArrowUp, ChevronDown, LoaderCircle } from "lucide-react"
-import { AgentIcon, agentBrandOf, StatusDot, Switch, useLocale } from "@pigcode/ui-primitives"
+import type { KeyboardEvent } from "react"
+import { CircleArrowUp, LoaderCircle } from "lucide-react"
+import { AgentIcon, StatusDot, Switch, useLocale } from "@pigcode/ui-primitives"
 import type { AgentStatus, AgentCliUpdateState } from "@pigcode/contracts"
 import type { AgentInstanceEntry } from "./agent-instances"
 import { instanceHeadline } from "./agent-status"
-import { SensitiveText } from "./sensitive-text"
-/** 实例卡片的头部：整块是展开按钮，右边是启用开关（开关不跟着展开）。 */
-export function InstanceHead({
+
+/**
+ * 列表里的一个 Agent：图标，名字和版本，下面一行状态，右边是开关。点这一行选中它，右边换成它的设置。
+ * 状态只有出问题时（没安装、没登录、出错）才带彩色圆点；能用时跟着账号的套餐。
+ */
+export function InstanceItem({
   entry,
   status,
-  open,
-  sessionDefault,
+  selected,
+  dirty = false,
   pending,
-  revealed,
-  onToggle,
-  onReveal,
+  onSelect,
+  onKeyDown,
   onSetEnabled,
   update,
   onShowUpdate,
 }: {
   entry: AgentInstanceEntry
   status: AgentStatus | undefined
-  open: boolean
-  sessionDefault: boolean
+  selected: boolean
+  dirty?: boolean | undefined
   pending: boolean
-  /** 账号邮箱是否显示原文；默认遮住。 */
-  revealed: boolean
-  onToggle: () => void
-  onReveal: () => void
+  onSelect: () => void
+  onKeyDown?: ((event: KeyboardEvent<HTMLButtonElement>) => void) | undefined
   onSetEnabled: (enabled: boolean) => void
   update: AgentCliUpdateState | undefined
   onShowUpdate: () => void
@@ -34,58 +35,64 @@ export function InstanceHead({
   const { t } = useLocale()
   const { agent, instance, label } = entry
   const headline = instanceHeadline(agent, instance, status)
-  const custom = !instance.isDefault
-  const signedIn = headline.tone === "ready" && status?.authenticated === true
+  const enabled = agent.enabled && instance.enabled
   const updating = Boolean(update && ["queued", "waiting", "running"].includes(update.phase))
+  const id = instance.instanceId
+  const version = status?.installed ? status.version : null
+  const problem = headline.tone === "error" || headline.tone === "warning"
+  const plan =
+    headline.tone === "ready" && (status?.authenticated || status?.credentialsConfigured)
+      ? status.account
+      : null
+
   return (
-    <div className="agent-row" data-open={open || undefined}>
-      {/* 整块卡片头可点：展开按钮铺满这一块，邮箱的显示按钮浮在它上面，不嵌套按钮。 */}
-      <div className="agent-row-main">
-        <button
-          type="button"
-          className="agent-row-hit"
-          id={"agent-select-" + instance.instanceId}
-          aria-controls={open ? "agent-instance-details" : undefined}
-          aria-expanded={open}
-          aria-label={t("agents.select").replace("{instance}", label)}
-          onClick={onToggle}
+    <div
+      className="agent-item"
+      role="listitem"
+      data-selected={selected || undefined}
+      data-disabled={!enabled || undefined}
+    >
+      <button
+        type="button"
+        className="agent-item-hit"
+        id={"agent-select-" + id}
+        aria-label={t("agents.select").replace("{instance}", label)}
+        aria-current={selected || undefined}
+        aria-controls={selected ? "agent-detail" : undefined}
+        onClick={onSelect}
+        onKeyDown={onKeyDown}
+      />
+      <div className="agent-item-main">
+        <AgentIcon
+          agentId={agent.agentId}
+          instanceId={id}
+          accentColor={instance.accentColor}
+          name={label}
+          size="lg"
         />
-        <span className="agent-tile" data-brand={agentBrandOf(agent.agentId) ?? undefined}>
-          <AgentIcon
-            agentId={agent.agentId}
-            instanceId={instance.instanceId}
-            accentColor={instance.accentColor}
-            name={label}
-            size="lg"
-          />
-        </span>
-        <span className="agent-row-text">
-          <span className="agent-row-title">
-            <span className="agent-row-name truncate">{label}</span>
-            {custom ? <code className="agent-row-id">{instance.instanceId}</code> : null}
-            {sessionDefault && (
-              <small className="agent-default-mark">{t("agents.instance.isSessionDefault")}</small>
-            )}
+        <span className="agent-item-text">
+          <span className="agent-item-title">
+            <span className="agent-item-name">{label}</span>
+            {version ? <code className="agent-item-version">{version}</code> : null}
+            {dirty ? (
+              <span
+                className="agent-item-dirty"
+                title={t("agents.unsaved")}
+                aria-label={t("agents.unsaved")}
+              />
+            ) : null}
           </span>
-        </span>
-        <span className="agent-row-status" data-tone={headline.tone}>
-          <StatusDot tone={headline.tone} />
-          <span className="agent-row-state">{t(headline.label)}</span>
-          {signedIn && status?.email ? (
-            <SensitiveText
-              className="agent-row-email"
-              value={status.email}
-              revealed={revealed}
-              onToggle={onReveal}
-            />
-          ) : null}
-          {signedIn && status?.account ? (
-            <span className="agent-plan truncate">{status.account}</span>
-          ) : null}
+          <span className="agent-item-status" data-tone={headline.tone}>
+            {problem ? <StatusDot tone={headline.tone} /> : null}
+            <span className="agent-item-state">
+              {t(headline.label)}
+              {plan ? ` · ${plan}` : ""}
+            </span>
+          </span>
         </span>
         {update && (update.available || updating) ? (
           <button
-            className="icon-btn agent-row-update"
+            className="icon-btn agent-item-update"
             type="button"
             aria-label={t("updates.agent").replace("{agent}", label)}
             title={
@@ -102,13 +109,13 @@ export function InstanceHead({
             )}
           </button>
         ) : null}
-        <ChevronDown className="ic ic-sm agent-row-caret" aria-hidden="true" />
       </div>
       <Switch
+        size="sm"
         aria-label={t("agents.enable").replace("{agent}", label)}
-        checked={agent.enabled && instance.enabled}
+        checked={enabled}
         disabled={pending}
-        onCheckedChange={(checked) => onSetEnabled(checked)}
+        onCheckedChange={onSetEnabled}
       />
     </div>
   )

@@ -108,7 +108,7 @@ async function openWizard(
       />
     </LocaleProvider>,
   )
-  await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
+  await userEvent.click(screen.getByRole("button", { name: "添加 Agent" }))
   const wizard = within(screen.getByRole("dialog"))
   expect(wizard.getByRole("option", { name: "Claude Code" })).toBeTruthy()
   expect(wizard.queryByText("0.99.7")).toBeNull()
@@ -134,9 +134,9 @@ it("prepares from the row before identity, saves once, and offers account setup 
   expect(wizard.getByRole("option", { name: "下载中… Amp" })).toHaveProperty("disabled", true)
   expect(create).not.toHaveBeenCalled()
   installing.resolve(item)
-  expect(await wizard.findByRole("textbox", { name: "实例名称" })).toHaveProperty("value", "Amp")
+  expect(await wizard.findByRole("textbox", { name: "名字" })).toHaveProperty("value", "Amp")
   expect(wizard.getByText("0.13.0 · binary")).toBeTruthy()
-  await userEvent.click(button("继续登录"))
+  await userEvent.click(button("去登录"))
   expect(create).toHaveBeenCalledExactlyOnceWith({
     agentId: "acp",
     label: "Amp",
@@ -161,7 +161,7 @@ it("retries a failed preparation in place and can leave the prepared draft witho
   await userEvent.click(await wizard.findByRole("option", { name: "添加 Amp" }))
   expect((await wizard.findByRole("alert")).textContent).toContain("Download failed")
   await userEvent.click(wizard.getByRole("option", { name: "重试 Amp" }))
-  await wizard.findByRole("textbox", { name: "实例名称" })
+  await wizard.findByRole("textbox", { name: "名字" })
   await userEvent.click(wizard.getByRole("button", { name: "关闭" }))
   expect(attempt).toHaveBeenCalledTimes(2)
   expect(create).not.toHaveBeenCalled()
@@ -186,10 +186,10 @@ it("uses the manual registry ID and executable override for a second configurati
   await userEvent.type(field("可执行文件"), "my-amp-acp")
   await userEvent.type(field("认证方式 ID"), "terminal")
   await userEvent.click(button("下一步"))
-  await userEvent.clear(field("实例名称"))
-  await userEvent.type(field("实例名称"), "Amp")
-  expect(field("实例 ID")).not.toHaveProperty("value", "acp_amp")
-  await userEvent.click(button("继续登录"))
+  await userEvent.clear(field("名字"))
+  await userEvent.type(field("名字"), "Amp")
+  expect(field("ID")).not.toHaveProperty("value", "acp_amp")
+  await userEvent.click(button("去登录"))
   expect(prepare).not.toHaveBeenCalled()
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -209,8 +209,8 @@ it("takes the literal local command before identity and finishes without an inst
   await userEvent.click(button("添加参数"))
   fireEvent.change(field("参数 2"), { target: { value: "with spaces" } })
   await userEvent.click(button("下一步"))
-  await userEvent.type(wizard.getByRole("textbox", { name: "实例名称" }), "Local")
-  await userEvent.click(button("创建实例"))
+  await userEvent.type(wizard.getByRole("textbox", { name: "名字" }), "Local")
+  await userEvent.click(button("创建"))
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({
       label: "Local",
@@ -225,8 +225,9 @@ it("takes the literal local command before identity and finishes without an inst
 it("saves an optional accent and uses a recognizable default label for an unnamed instance", async () => {
   const { wizard, create } = await openWizard()
   await userEvent.click(wizard.getByRole("option", { name: "Claude Code" }))
-  fireEvent.change(wizard.getByLabelText("实例强调色"), { target: { value: "#a0522d" } })
-  await userEvent.click(wizard.getByRole("button", { name: "创建实例" }))
+  await userEvent.click(wizard.getByRole("button", { name: "颜色" }))
+  fireEvent.change(await screen.findByLabelText("自定义颜色"), { target: { value: "#a0522d" } })
+  await userEvent.click(wizard.getByRole("button", { name: "创建" }))
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({ label: "Claude Code", accentColor: "#a0522d" }),
   )
@@ -256,13 +257,13 @@ it("creates a named, private Codex account from the ChatGPT branch before starti
   const { wizard, create } = await openWizard({ extras: [codex] })
   expect(wizard.getByRole("option", { name: "Codex" }).getAttribute("aria-selected")).toBe("true")
   await userEvent.click(wizard.getByRole("option", { name: "Codex" }))
-  expect(
-    wizard.getByRole("radio", { name: "使用 ChatGPT 账号" }).getAttribute("aria-checked"),
-  ).toBe("true")
-  const name = wizard.getByRole("textbox", { name: "账号名称" })
+  expect(wizard.getByRole("radio", { name: "用 ChatGPT 登录" }).getAttribute("aria-checked")).toBe(
+    "true",
+  )
+  const name = wizard.getByRole("textbox", { name: "名字" })
   await userEvent.clear(name)
   await userEvent.type(name, "Work")
-  await userEvent.click(wizard.getByRole("button", { name: "继续登录" }))
+  await userEvent.click(wizard.getByRole("button", { name: "去登录" }))
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({
       agentId: "codex",
@@ -274,16 +275,13 @@ it("creates a named, private Codex account from the ChatGPT branch before starti
 
 it("searches direct connections and registry agents from the same input and supports keyboard activation", async () => {
   const { wizard, prepare } = await openWizard()
-  const search = wizard.getByRole("combobox", { name: "搜索 Agent 或 Registry ID" })
+  const search = wizard.getByRole("combobox", { name: "搜索" })
   await userEvent.type(search, "claude")
   expect(wizard.getAllByRole("option")).toHaveLength(1)
   await userEvent.clear(search)
   await userEvent.type(search, "amp-acp{Enter}")
   expect(prepare).toHaveBeenCalledExactlyOnceWith(item.id)
-  await wizard.findByRole("textbox", { name: "实例名称" })
-  await userEvent.click(wizard.getByRole("button", { name: "返回目录" }))
-  expect(wizard.getByRole("combobox", { name: "搜索 Agent 或 Registry ID" })).toHaveProperty(
-    "value",
-    "amp-acp",
-  )
+  await wizard.findByRole("textbox", { name: "名字" })
+  await userEvent.click(wizard.getByRole("button", { name: "返回" }))
+  expect(wizard.getByRole("combobox", { name: "搜索" })).toHaveProperty("value", "amp-acp")
 })

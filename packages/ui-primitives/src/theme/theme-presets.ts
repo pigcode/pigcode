@@ -55,6 +55,18 @@ export const builtInThemes: readonly [ThemeDefinition, ...ThemeDefinition[]] = [
   ),
 ]
 
+/** Agent 实例强调色的预设色板：低眩光桌面中性配色，深浅主题下皆可辨识。 */
+export const INSTANCE_ACCENT_PRESETS: readonly Hex[] = [
+  "#5279bf",
+  "#d97757",
+  "#3b9a6d",
+  "#c98834",
+  "#8669c4",
+  "#c95d74",
+  "#2d909b",
+  "#787882",
+]
+
 /** 先在自定义主题里找、再在内置主题里找；都找不到时保证返回 pigcode。 */
 export function findTheme(id: string, custom: readonly ThemeDefinition[]): ThemeDefinition {
   return (

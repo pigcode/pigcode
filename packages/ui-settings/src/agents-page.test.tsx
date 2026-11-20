@@ -1,4 +1,4 @@
-/** 验证 Agent 设置页：实例卡片、就地展开、账号与状态、启用开关、标签页里的表单、环境变量与模型（显示、排序、自定义）的保存。 */
+/** 验证 Agent 设置页：左边列表、右边选中那一个的设置、状态与账号、启用开关、启动设置、环境变量与模型（显示、排序、自定义）的保存。 */
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -67,6 +67,27 @@ const READY: AgentStatus = {
   command: "/usr/local/bin/claude",
 }
 
+const TWO_CLAUDES: AgentSummary["instances"] = [
+  {
+    instanceId: "claude",
+    agentId: "claude",
+    label: "Claude Code",
+    enabled: true,
+    values: {},
+    isDefault: true,
+    createdAt: null,
+  },
+  {
+    instanceId: "inst_work",
+    agentId: "claude",
+    label: "公司 API",
+    enabled: true,
+    values: {},
+    isDefault: false,
+    createdAt: "2026-11-01T00:00:00.000Z",
+  },
+]
+
 function renderPage(overrides: Partial<AgentsPageProps> = {}) {
   const props: AgentsPageProps = {
     agents: [
@@ -103,21 +124,17 @@ function renderPage(overrides: Partial<AgentsPageProps> = {}) {
   return { ...props, rerenderPage: (next: Partial<AgentsPageProps>) => rerender(page(next)) }
 }
 
-/** 展开一个实例：卡片头是一整块按钮。 */
+/** 选中一个 Agent：列表里的一行是一整块按钮，右边换成它的设置。 */
 const instanceButton = (label: string) =>
   screen.getByRole("button", { name: `打开 ${label} 的设置` })
 const openInstance = (label: string) => userEvent.click(instanceButton(label))
 
-/** 实例卡片头：展开按钮铺在这一块下面，文字与图标在它旁边。 */
+/** 列表里的一行：选中按钮铺在这一行下面，文字、开关和图标在它旁边。 */
 const cardHead = (label: string) =>
-  screen.getByRole("button", { name: `打开 ${label} 的设置` }).closest(".agent-row") as HTMLElement
-
-/** 切到展开区里的一个标签页。 */
-const openTab = (name: string) =>
-  userEvent.click(screen.getByRole("tab", { name: new RegExp(`^${name}`) }))
+  screen.getByRole("button", { name: `打开 ${label} 的设置` }).closest(".agent-item") as HTMLElement
 
 describe("AgentsPage", () => {
-  it("lists every instance with its brand icon, status and signed-in account", async () => {
+  it("lists every agent with its brand icon, version and status, and shows the account on the right", async () => {
     renderPage()
     // 两个 agent 的默认实例各占一行，默认实例用 agent 的名字。
     const claude = cardHead("Claude Code")
@@ -128,45 +145,46 @@ describe("AgentsPage", () => {
     expect(echo.querySelector(".entity-avatar")?.textContent).toBe(
       entityMark("echo", "Echo").initials,
     )
-    // 卡片头是状态、登录的邮箱与订阅；版本放在展开后的概览里。echo 还在检测中。
-    expect(claude.textContent).toContain("就绪")
-    expect(claude.textContent).toContain("max · claude.ai")
-    expect(claude.textContent).not.toContain("2.1.304")
-    expect(echo.textContent).toContain("检测中…")
+    // 一行是名字、版本和状态；能用时跟着套餐，echo 还在检查。
+    expect(claude.textContent).toContain("能用 · max · claude.ai")
+    expect(claude.textContent).toContain("2.1.304")
+    expect(echo.textContent).toContain("检查中…")
     expect(screen.queryByText("内置")).toBeNull()
 
-    // 邮箱默认遮住（同长的打乱字符），点一下显示，不会顺带展开卡片。
-    expect(claude.textContent).not.toContain("dev@example.com")
-    await userEvent.click(within(claude).getByRole("button", { name: "点击显示账号" }))
-    expect(claude.textContent).toContain("dev@example.com")
-    expect(instanceButton("Claude Code").getAttribute("aria-expanded")).toBe("false")
-    await userEvent.click(within(claude).getByRole("button", { name: "点击隐藏账号" }))
-    expect(claude.textContent).not.toContain("dev@example.com")
+    // 打开时选中第一个，右边是它的设置。
+    const detail = screen.getByRole("region", { name: "Claude Code" })
+    expect(detail.textContent).toContain("max · claude.ai")
+    // 邮箱默认遮住（同长的打乱字符），点一下显示、再点隐藏。
+    expect(detail.textContent).not.toContain("dev@example.com")
+    await userEvent.click(within(detail).getByRole("button", { name: "点击显示账号" }))
+    expect(detail.textContent).toContain("dev@example.com")
+    await userEvent.click(within(detail).getByRole("button", { name: "点击隐藏账号" }))
+    expect(detail.textContent).not.toContain("dev@example.com")
   })
 
-  it("starts collapsed and expands one instance at a time, loading its models", async () => {
+  it("selects the first agent, switches on click and loads the selected agent's models", async () => {
     const onLoadModels = vi.fn()
     renderPage({ onLoadModels })
-    expect(screen.queryByRole("textbox", { name: "启动参数" })).toBeNull()
-
-    await openInstance("Claude Code")
-    expect(instanceButton("Claude Code").getAttribute("aria-expanded")).toBe("true")
-    expect(screen.getByRole("tab", { name: "连接" }).getAttribute("aria-selected")).toBe("true")
-    await openTab("运行")
-    expect(screen.getByRole("textbox", { name: "启动参数" })).toBeTruthy()
+    expect(instanceButton("Claude Code").getAttribute("aria-current")).toBe("true")
+    expect(screen.getByRole("region", { name: "Claude Code" })).toBeTruthy()
     expect(onLoadModels).toHaveBeenCalledWith("claude")
+    expect(onLoadModels).not.toHaveBeenCalledWith("echo")
+    // 启动设置直接排在右边。
+    expect(screen.getByRole("textbox", { name: "启动参数" })).toBeTruthy()
 
     await openInstance("Echo")
-    expect(instanceButton("Claude Code").getAttribute("aria-expanded")).toBe("false")
+    expect(instanceButton("Claude Code").getAttribute("aria-current")).toBeNull()
+    expect(instanceButton("Echo").getAttribute("aria-current")).toBe("true")
+    expect(screen.getByRole("region", { name: "Echo" })).toBeTruthy()
     expect(screen.queryByRole("textbox", { name: "启动参数" })).toBeNull()
     expect(onLoadModels).toHaveBeenCalledWith("echo")
 
-    // 再点一次收起。
+    // 再点一次还是选中它。
     await openInstance("Echo")
-    expect(instanceButton("Echo").getAttribute("aria-expanded")).toBe("false")
+    expect(instanceButton("Echo").getAttribute("aria-current")).toBe("true")
   })
 
-  it("toggles a plugin-backed agent through the instance switch", async () => {
+  it("toggles a plugin-backed agent from its row", async () => {
     const props = renderPage()
     await userEvent.click(screen.getByRole("switch", { name: "启用 Echo" }))
     await waitFor(() =>
@@ -186,29 +204,24 @@ describe("AgentsPage", () => {
         ],
       },
     })
-    await openInstance("Claude Code")
-    // 概览里是登录的账号、订阅、版本与可执行文件。
-    expect(screen.getByText("/usr/local/bin/claude")).toBeTruthy()
-    // 卡片头与概览共用一个显示开关。
+    // 状态里是账号和套餐，版本在名字右边，程序位置在「其他」里。
     expect(screen.queryByText("dev@example.com")).toBeNull()
-    await userEvent.click(screen.getAllByRole("button", { name: "点击显示账号" })[1]!)
-    expect(screen.getAllByText("dev@example.com")).toHaveLength(2)
-    expect(screen.getByText("2.1.304")).toBeTruthy()
-    // 模型页列出目录里的模型，标出默认模型。
-    await openTab("模型")
+    await userEvent.click(screen.getByRole("button", { name: "点击显示账号" }))
+    expect(screen.getByText("dev@example.com")).toBeTruthy()
+    expect(screen.getAllByText("2.1.304").length).toBeGreaterThan(0)
+    // 模型列出目录里的模型，标出默认模型。
     const list = screen.getByRole("list", { name: "模型" })
     expect(list.textContent).toContain("Default (recommended)")
     expect(list.textContent).toContain("Opus 5.5")
-    expect(screen.getByText("2 个模型，2 个显示在选择器里")).toBeTruthy()
+    expect(screen.getByText("显示 2/2")).toBeTruthy()
 
-    await openTab("运行")
+    expect(screen.getByText("/usr/local/bin/claude")).toBeTruthy()
     fireEvent.change(screen.getByRole("textbox", { name: "可执行文件" }), {
       target: { value: "/opt/claude" },
     })
     fireEvent.change(screen.getByRole("textbox", { name: "启动参数" }), {
       target: { value: "--chrome" },
     })
-    await openTab("环境变量")
     await userEvent.click(screen.getByRole("button", { name: "添加变量" }))
     fireEvent.change(screen.getByRole("textbox", { name: "变量名 1" }), {
       target: { value: "HTTPS_PROXY" },
@@ -218,17 +231,16 @@ describe("AgentsPage", () => {
     })
     // 没填名字的行保存时去掉。
     await userEvent.click(screen.getByRole("button", { name: "添加变量" }))
-    await openTab("模型")
-    const model = screen.getByRole("textbox", { name: "模型 id，回车添加" })
+    const model = screen.getByRole("textbox", { name: "输入模型 ID，回车添加" })
     await userEvent.type(model, "opus{Enter}")
-    expect(screen.getByText("目录里已经有这个模型")).toBeTruthy()
+    expect(screen.getByText("已经有这个模型了")).toBeTruthy()
     await userEvent.clear(model)
     await userEvent.type(model, "claude-sonnet-5{Enter}")
     await userEvent.type(model, "claude-sonnet-5{Enter}")
-    expect(screen.getByText("已经添加过这个模型")).toBeTruthy()
-    expect(screen.getByText("3 个模型，3 个显示在选择器里")).toBeTruthy()
+    expect(screen.getByText("已经加过了")).toBeTruthy()
+    expect(screen.getByText("显示 3/3")).toBeTruthy()
 
-    expect(screen.getByText("有未保存的修改")).toBeTruthy()
+    expect(screen.getByText("还没保存")).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     await waitFor(() => expect(props.onSaveSettings).toHaveBeenCalledTimes(1))
     const savedValues = {
@@ -244,20 +256,20 @@ describe("AgentsPage", () => {
       expect.objectContaining({ instanceId: "claude" }),
       savedValues,
     )
-    const notice = "实例设置已保存"
+    const notice = "已保存"
     expect(await screen.findByText(notice)).toBeTruthy()
     props.rerenderPage({ agents: [agent({ values: savedValues })] })
     expect(screen.getByText(notice)).toBeTruthy()
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "保存" }).disabled).toBe(true)
   })
 
-  it("explains a signed-out instance in the overview", async () => {
+  it("explains a signed-out agent in its status", async () => {
     renderPage({ statuses: { claude: { ...READY, authenticated: false, email: null } } })
     const claude = cardHead("Claude Code")
-    expect(claude.textContent).toContain("未登录")
+    expect(claude.textContent).toContain("没登录")
     expect(claude.textContent).not.toContain("max · claude.ai")
-    await openInstance("Claude Code")
-    expect(screen.getByRole("note").textContent).toContain("在终端里用这个 CLI 登录")
+    const detail = screen.getByRole("region", { name: "Claude Code" })
+    expect(within(detail).getByText(/在终端登录/)).toBeTruthy()
   })
 
   it("shows the save error and keeps the draft", async () => {
@@ -266,8 +278,6 @@ describe("AgentsPage", () => {
         throw new Error("invalid value for claude.binaryPath")
       }),
     })
-    await openInstance("Claude Code")
-    await openTab("运行")
     fireEvent.change(screen.getByRole("textbox", { name: "启动参数" }), {
       target: { value: "--x" },
     })
@@ -281,88 +291,67 @@ describe("AgentsPage", () => {
   it("keeps third-party agent settings available without an uninstall action", async () => {
     renderPage()
     await openInstance("Echo")
-    expect(screen.getByRole("button", { name: "设为新会话默认" })).toBeTruthy()
+    const detail = screen.getByRole("region", { name: "Echo" })
+    expect(within(detail).getByRole("button", { name: "还原" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "卸载" })).toBeNull()
   })
 
   it("shows the CLI install hint when an agent plugin is enabled but the CLI is missing", async () => {
     renderPage({ statuses: { claude: { installed: false, version: null, authenticated: null } } })
-    expect(cardHead("Claude Code").textContent).toContain("未安装")
-    await openInstance("Claude Code")
-    expect(within(screen.getByRole("note")).getByText("安装 Claude Code")).toBeTruthy()
-    await openTab("运行")
-    expect(screen.getByRole("textbox", { name: "可执行文件" })).toBeTruthy()
+    expect(cardHead("Claude Code").textContent).toContain("没安装")
+    const detail = screen.getByRole("region", { name: "Claude Code" })
+    expect(within(detail).getByText("安装 Claude Code")).toBeTruthy()
+    expect(within(detail).getByRole("textbox", { name: "可执行文件" })).toBeTruthy()
   })
 
-  it("sets the instance new sessions start with, including back to automatic", async () => {
+  it("sets the agent new sessions start with, including back to automatic", async () => {
     const props = renderPage({
-      agents: [
-        agent({
-          instances: [
-            {
-              instanceId: "claude",
-              agentId: "claude",
-              label: "Claude Code",
-              enabled: true,
-              values: {},
-              isDefault: true,
-              createdAt: null,
-            },
-            {
-              instanceId: "inst_work",
-              agentId: "claude",
-              label: "公司 API",
-              enabled: true,
-              values: {},
-              isDefault: false,
-              createdAt: "2026-11-01T00:00:00.000Z",
-            },
-          ],
-        }),
-      ],
+      agents: [agent({ instances: TWO_CLAUDES })],
       defaultInstanceId: "inst_work",
     })
-    // 选择器显示实际生效的实例。
-    expect(screen.getByRole("combobox", { name: "新会话使用" }).textContent).toContain("公司 API")
+    // 选择器显示实际生效的那个，打开时右边选中的也是它。
+    expect(screen.getByRole("combobox", { name: "默认用" }).textContent).toContain("公司 API")
+    expect(instanceButton("公司 API").getAttribute("aria-current")).toBe("true")
 
-    await userEvent.click(screen.getByRole("combobox", { name: "新会话使用" }))
+    await userEvent.click(screen.getByRole("combobox", { name: "默认用" }))
     await userEvent.click(await screen.findByRole("option", { name: "自动" }, { timeout: 3_000 }))
     await waitFor(() => expect(props.onSetDefault).toHaveBeenCalledWith(null))
   })
 
   it("directs users to the Plugins page when there are no agents to configure", async () => {
     renderPage({ agents: [] })
-    expect(screen.getByText("还没有实例")).toBeTruthy()
-    expect(screen.getByText("启用 Agent 后，可在这里添加实例。")).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
-    expect(screen.getByText("请启用已有的 agent，或在「插件」页安装 agent 插件。")).toBeTruthy()
+    expect(screen.getByText("还没有 Agent")).toBeTruthy()
+    expect(screen.getByText("先去「插件」页打开一个 Agent")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "添加 Agent" })).toBeNull()
   })
 
-  it("creates a configured instance from the searchable directory", async () => {
+  it("creates a configured agent from the searchable directory", async () => {
     const props = renderPage()
-    await openInstance("Claude Code")
-    expect(screen.queryByRole("textbox", { name: "实例名称" })).toBeNull()
-    expect(screen.queryByRole("button", { name: "删除实例" })).toBeNull()
-    expect(screen.getByRole("button", { name: "设为新会话默认" })).toBeTruthy()
+    // 内置的那一个不能改名字，也不能删除。
+    expect(screen.queryByRole("textbox", { name: "名字" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "删除" })).toBeNull()
 
-    await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
+    await userEvent.click(screen.getByRole("button", { name: "添加 Agent" }))
     expect(screen.getByRole("option", { name: /Claude Code/ }).getAttribute("aria-selected")).toBe(
       "true",
     )
     await userEvent.click(screen.getByRole("option", { name: "Claude Code" }))
-    await userEvent.type(screen.getByRole("textbox", { name: "实例名称" }), "公司 API")
-    const id = screen.getByRole("textbox", { name: "实例 ID" })
+    await userEvent.type(screen.getByRole("textbox", { name: "名字" }), "公司 API")
+    const id = screen.getByRole("textbox", { name: "ID" })
     expect(id).toHaveProperty("value", "claude_api")
     await userEvent.clear(id)
     await userEvent.type(id, "claude")
     expect(id.getAttribute("aria-invalid")).toBe("true")
     await userEvent.clear(id)
     await userEvent.type(id, "work-api")
-    const wizard = within(screen.getByRole("dialog", { name: "添加实例" }))
+    const wizard = within(screen.getByRole("dialog", { name: "添加 Agent" }))
     expect(wizard.queryByRole("button", { name: "添加变量" })).toBeNull()
-    expect(wizard.queryByRole("textbox", { name: "模型 id，回车添加" })).toBeNull()
+    expect(wizard.queryByRole("textbox", { name: "输入模型 ID，回车添加" })).toBeNull()
+    // 启动设置也收在「高级设置」里。
+    expect(wizard.queryByRole("textbox", { name: "启动参数" })).toBeNull()
+    await userEvent.click(wizard.getByRole("button", { name: "高级设置" }))
     await userEvent.type(wizard.getByRole("textbox", { name: "启动参数" }), "--chrome")
-    await userEvent.click(screen.getByRole("button", { name: "创建实例" }))
+    await userEvent.click(screen.getByRole("button", { name: "创建" }))
     await waitFor(() =>
       expect(props.onCreateInstance).toHaveBeenCalledWith({
         agentId: "claude",
@@ -373,47 +362,25 @@ describe("AgentsPage", () => {
     )
   })
 
-  it("lists every instance in the list and renames, disables, defaults and removes one", async () => {
-    const props = renderPage({
-      agents: [
-        agent({
-          instances: [
-            {
-              instanceId: "claude",
-              agentId: "claude",
-              label: "Claude Code",
-              enabled: true,
-              values: {},
-              isDefault: true,
-              createdAt: null,
-            },
-            {
-              instanceId: "inst_work",
-              agentId: "claude",
-              label: "公司 API",
-              enabled: true,
-              values: {},
-              isDefault: false,
-              createdAt: "2026-11-01T00:00:00.000Z",
-            },
-          ],
-        }),
-      ],
-    })
-    // 两行：默认实例与新实例；新实例的行里带它的 id。
-    expect(cardHead("公司 API").textContent).toContain("inst_work")
+  it("renames, recolors, disables, sets as default and deletes an agent the user added", async () => {
+    const props = renderPage({ agents: [agent({ instances: TWO_CLAUDES })] })
     await openInstance("公司 API")
-    await openTab("实例")
+    expect(
+      within(screen.getByRole("region", { name: "公司 API" })).getByText("inst_work"),
+    ).toBeTruthy()
 
-    const name = screen.getByRole("textbox", { name: "实例名称" })
+    const name = screen.getByRole("textbox", { name: "名字" })
     await userEvent.clear(name)
     await userEvent.type(name, "个人号")
-    await userEvent.click(screen.getByRole("button", { name: "改名称" }))
+    // 名字和颜色进同一份草稿，由底部浮出的保存条一起保存；颜色在名字旁边的色板里。
+    await userEvent.click(screen.getByRole("button", { name: "颜色" }))
+    await userEvent.click(await screen.findByRole("button", { name: "#3b9a6d" }))
+    await userEvent.click(screen.getByRole("button", { name: "保存" }))
     await waitFor(() =>
       expect(props.onUpdateInstance).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: "claude" }),
         "inst_work",
-        { label: "个人号" },
+        { label: "个人号", accentColor: "#3b9a6d" },
       ),
     )
 
@@ -426,11 +393,14 @@ describe("AgentsPage", () => {
       ),
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "设为新会话默认" }))
+    await userEvent.click(screen.getByRole("combobox", { name: "默认用" }))
+    await userEvent.click(
+      await screen.findByRole("option", { name: "公司 API" }, { timeout: 3_000 }),
+    )
     await waitFor(() => expect(props.onSetDefault).toHaveBeenCalledWith("inst_work"))
 
-    await userEvent.click(screen.getByRole("button", { name: "删除实例" }))
-    await userEvent.click(screen.getByRole("button", { name: "确认删除" }))
+    await userEvent.click(screen.getByRole("button", { name: "删除" }))
+    await userEvent.click(screen.getByRole("button", { name: "确定删除" }))
     await waitFor(() =>
       expect(props.onRemoveInstance).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: "claude" }),
@@ -439,49 +409,28 @@ describe("AgentsPage", () => {
     )
   })
 
-  it("keeps each instance's own values while switching between them", async () => {
+  it("keeps each agent's own values while switching between them", async () => {
     const props = renderPage({
       agents: [
         agent({
           instances: [
-            {
-              instanceId: "claude",
-              agentId: "claude",
-              label: "Claude Code",
-              enabled: true,
-              values: { launchArgs: "--default" },
-              isDefault: true,
-              createdAt: null,
-            },
-            {
-              instanceId: "inst_work",
-              agentId: "claude",
-              label: "公司 API",
-              enabled: true,
-              values: { launchArgs: "--work" },
-              isDefault: false,
-              createdAt: "2026-11-01T00:00:00.000Z",
-            },
+            { ...TWO_CLAUDES[0]!, values: { launchArgs: "--default" } },
+            { ...TWO_CLAUDES[1]!, values: { launchArgs: "--work" } },
           ],
         }),
       ],
     })
     const args = () => screen.getByRole("textbox", { name: "启动参数" }) as HTMLInputElement
-    await openInstance("Claude Code")
-    await openTab("运行")
     expect(args().value).toBe("--default")
 
     await openInstance("公司 API")
-    await openTab("运行")
     expect(args().value).toBe("--work")
     await userEvent.type(args(), " extra")
     props.rerenderPage({ agents: structuredClone(props.agents) })
     expect(args().value).toBe("--work extra")
     await openInstance("Claude Code")
-    await openTab("运行")
     expect(args().value).toBe("--default")
     await openInstance("公司 API")
-    await openTab("运行")
     expect(args().value).toBe("--work extra")
     await userEvent.click(screen.getByRole("button", { name: "保存" }))
     await waitFor(() =>

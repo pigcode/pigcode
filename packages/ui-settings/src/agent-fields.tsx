@@ -1,5 +1,5 @@
 // Agent 设置表单的控件：按 manifest 声明的字段类型渲染，另有环境变量编辑器。模型列表在 agent-models。
-import { FolderOpen } from "lucide-react"
+import { ChevronDown, FolderOpen } from "lucide-react"
 import { CredentialField, LiteralArguments, EnvironmentEditor } from "./agent-credential-fields"
 export { EnvironmentEditor } from "./agent-credential-fields"
 import {
@@ -10,7 +10,8 @@ import {
   type EnvironmentEntry,
   type AgentSettingField,
 } from "@pigcode/contracts"
-import { Button, Input, Select, Switch, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, Select, SettingRow, Switch, useLocale } from "@pigcode/ui-primitives"
+import { AgentBlockRow } from "./agent-section"
 
 /** 选择文件或文件夹；返回选中的路径，取消时为 null。 */
 export type PickPath = (kind: "file" | "directory") => Promise<string | null>
@@ -71,7 +72,10 @@ export function cleanAgentValues(
   return next
 }
 
-/** 运行设置与向导中的配置字段都由 Agent 的 manifest 决定。 */
+/**
+ * 运行设置与向导中的配置字段都由 Agent 的 manifest 决定。每个字段一行：左边名字和说明、右边控件；
+ * 参数列表和环境变量放不进一行，名字和说明在上、内容铺开在下面。放在 .agent-rows 里。
+ */
 export function AgentFields({
   fields,
   values,
@@ -87,43 +91,54 @@ export function AgentFields({
 }) {
   const { locale } = useLocale()
   return (
-    <div className="agent-fields">
+    <>
       {fields
         .filter((f) => f.visibility !== "hidden")
         .map((field) => {
           const label = localizeText(field.label, locale)
-          return (
-            <div className="agent-field" key={field.key}>
-              <div className="agent-field-label">
-                <span>{label}</span>
-                {field.description ? (
-                  <span className="agent-muted">{localizeText(field.description, locale)}</span>
-                ) : null}
-              </div>
-              {field.type === "env" ? (
+          const description = field.description
+            ? localizeText(field.description, locale)
+            : undefined
+          if (field.type === "env") {
+            return (
+              <AgentBlockRow key={field.key} title={label} description={description}>
                 <EnvironmentEditor
                   label={label}
                   references={references}
                   entries={readEnvironment(values[field.key])}
                   onChange={(entries) => onChange(field.key, entries)}
                 />
-              ) : (
-                <FieldControl
-                  references={references}
-                  field={field}
+              </AgentBlockRow>
+            )
+          }
+          if (field.type === "arguments") {
+            return (
+              <AgentBlockRow key={field.key} title={label} description={description}>
+                <LiteralArguments
+                  label={label}
                   value={values[field.key]}
                   onChange={(value) => onChange(field.key, value)}
-                  onPickPath={onPickPath}
                 />
-              )}
-            </div>
+              </AgentBlockRow>
+            )
+          }
+          return (
+            <SettingRow key={field.key} title={label} description={description}>
+              <FieldControl
+                references={references}
+                field={field}
+                value={values[field.key]}
+                onChange={(value) => onChange(field.key, value)}
+                onPickPath={onPickPath}
+              />
+            </SettingRow>
           )
         })}
-    </div>
+    </>
   )
 }
 
-/** 一个字段的控件。env 字段由 EnvironmentEditor 单独渲染。 */
+/** 一个字段放在行右边的控件。env 与 arguments 字段由 AgentFields 整行铺开。 */
 function FieldControl({
   field,
   value,
@@ -131,7 +146,7 @@ function FieldControl({
   references,
   onPickPath,
 }: {
-  field: Exclude<AgentSettingField, { type: "env" }>
+  field: Exclude<AgentSettingField, { type: "env" | "arguments" }>
   value: unknown
   onChange: (value: unknown) => void
   references?: boolean | undefined
@@ -152,8 +167,14 @@ function FieldControl({
     const current = typeof value === "string" ? value : (field.default ?? field.options[0]?.value)
     return (
       <Select.Root value={current ?? null} onValueChange={(next) => onChange(next)}>
-        <Select.Trigger className="input select-trigger" data-size="xl" aria-label={label}>
-          <Select.Value className="grow truncate" />
+        <Select.Trigger className="input select-trigger agent-control" aria-label={label}>
+          <Select.Value className="grow truncate">
+            {(selected: string) => {
+              const option = field.options.find((item) => item.value === selected)
+              return option ? localizeText(option.label, locale) : selected
+            }}
+          </Select.Value>
+          <ChevronDown className="ic ic-sm agent-select-caret" aria-hidden="true" />
         </Select.Trigger>
         <Select.Portal>
           <Select.Positioner sideOffset={6} alignItemWithTrigger={false}>
@@ -169,8 +190,6 @@ function FieldControl({
       </Select.Root>
     )
   }
-  if (field.type === "arguments")
-    return <LiteralArguments label={label} value={value} onChange={onChange} />
   if (field.type === "secret")
     return (
       <CredentialField label={label} value={value} references={references} onChange={onChange} />
@@ -178,9 +197,8 @@ function FieldControl({
   const placeholder = field.placeholder ? localizeText(field.placeholder, locale) : undefined
   const pathKind = field.type === "path" ? field.pathKind : null
   return (
-    <div className="agent-input-row">
+    <div className="agent-input-row agent-control">
       <Input
-        size="xl"
         className={field.type === "text" && field.monospace ? "mono" : undefined}
         aria-label={label}
         value={typeof value === "string" ? value : ""}
@@ -198,9 +216,11 @@ function FieldControl({
       />
       {pathKind && onPickPath ? (
         <Button
-          size="lg"
+          size="icon"
+          variant="secondary"
           type="button"
           aria-label={`${t("agents.browse")} ${label}`}
+          title={t("agents.browse")}
           onClick={() => {
             void onPickPath(pathKind).then((picked) => {
               if (picked) onChange(picked)
@@ -208,7 +228,6 @@ function FieldControl({
           }}
         >
           <FolderOpen className="ic ic-sm" aria-hidden="true" />
-          {t("agents.browse")}
         </Button>
       ) : null}
     </div>

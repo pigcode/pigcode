@@ -8,7 +8,7 @@ import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { launchEnv, launchArgs } from "./projects"
 
-// 「在 Dock 中显示」只在 macOS 上有；Linux 会隐藏这两个开关。
+// 「在 Dock 里显示」只在 macOS 上有；Linux 会隐藏这两个开关。
 test.skip(process.platform !== "darwin", "the Dock switch only exists on macOS")
 
 const preferencesFile = () => join(process.env.PIGCODE_PROFILE_DIR ?? "", "preferences.json")
@@ -21,10 +21,10 @@ test("the Dock switch is saved and survives a restart", async () => {
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "通用", exact: true }).first().click()
 
-    const dock = page.getByRole("switch", { name: "在 Dock 中显示" })
+    const dock = page.getByRole("switch", { name: "在 Dock 里显示" })
     await expect(dock).toHaveAttribute("aria-checked", "true")
     // 开机自启默认关。
-    await expect(page.getByRole("switch", { name: "开机自动启动" })).toHaveAttribute(
+    await expect(page.getByRole("switch", { name: "开机自动打开" })).toHaveAttribute(
       "aria-checked",
       "false",
     )
@@ -44,7 +44,7 @@ test("the Dock switch is saved and survives a restart", async () => {
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "通用", exact: true }).first().click()
-    await expect(page.getByRole("switch", { name: "在 Dock 中显示" })).toHaveAttribute(
+    await expect(page.getByRole("switch", { name: "在 Dock 里显示" })).toHaveAttribute(
       "aria-checked",
       "false",
     )

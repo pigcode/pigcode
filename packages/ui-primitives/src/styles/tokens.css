@@ -117,6 +117,8 @@
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 4px 10px oklch(21% 0.006 286 / 0.06),
     0 16px 40px oklch(21% 0.006 286 / 0.12);
   --shadow-raised: 0 0 0 0.5px oklch(21% 0.006 286 / 0.1), 0 1px 2px oklch(21% 0.006 286 / 0.05);
+  --swatch-fg: #ffffff;
+  --swatch-ring: inset 0 0 0 1px oklch(0% 0 0 / 0.14);
   --shadow-modal:
     0 0 0 0.5px oklch(21% 0.006 286 / 0.12), 0 10px 24px oklch(21% 0.006 286 / 0.08),
     0 30px 80px oklch(21% 0.006 286 / 0.18);
@@ -490,11 +492,15 @@
   --avatar-sm: 16px;
   --avatar-md: 26px;
   --avatar-lg: 32px;
-  /* Agent 品牌图标：xs 模型行 / sm 侧栏会话行 / md 胶囊、菜单、标签 / lg 模型菜单左栏与设置；非默认实例的角标高度与字号 */
+  /*
+    Agent 品牌图标：xs 模型行 / sm 侧栏会话行 / md 胶囊、菜单、标签 / lg 模型菜单左栏与设置 /
+    xl 设置里连接卡和向导的品牌底座；非默认实例的角标高度与字号
+  */
   --agent-icon-xs: 12px;
   --agent-icon-sm: 14px;
   --agent-icon-md: 16px;
   --agent-icon-lg: 20px;
+  --agent-icon-xl: 22px;
   --agent-badge: 11px;
   --agent-badge-fs: 7px;
   /* 运行中的 3×3 点阵：整体边长与每个点的边长 */
@@ -519,7 +525,11 @@
   /* 侧栏的默认宽度；拖动分隔条后由 shell.tsx 写到 .app 上 */
   --sidebar-w: 260px;
   --col: 720px;
-  --col-narrow: 640px;
+  /*
+    设置页（通用、外观、Agent、插件的设置页）共用的版心，含左右各 32 的页边距，内容最宽 720：
+    比插件、定时任务页（--col-wide）窄一档，是表单的阅读宽度；内容区变窄时跟着收缩
+  */
+  --col-settings: 784px;
   /* 两列卡片的页面：插件与定时任务 */
   --col-wide: 860px;
   --market-search-basis: 224px;
@@ -583,10 +593,19 @@
   --schedule-card-h: 128px;
   --schedule-template-h: 114px;
   --instance-accent-default: #5279bf;
-  --wizard-pane-min-h: 236px;
-  --agent-instance-row-h: 56px;
-  --acp-directory-row-height: var(--agent-instance-row-h);
-  --agent-status-column: clamp(100px, 17vw, 208px);
+  /*
+    Agent 页（参照 t3code 的 Agent 设置页）：列表和设置装在同一张卡片里，左边列表栏的宽度、
+    列表每一行的高度；卡片高度跟着窗口、上下有界，两栏各自滚动。设置里输入框与下拉框的宽度，
+    右栏窄时换成窄一档的宽度。
+  */
+  --agents-rail-w: 240px;
+  --agents-item-h: 64px;
+  --agents-split-h: clamp(480px, calc(100dvh - 200px), 720px);
+  --agent-control-w: 224px;
+  --agent-control-w-narrow: 184px;
+  --agent-hero-tile: 40px;
+  --agent-empty-min-h: 240px;
+  --agent-directory-min-h: 160px;
   --acp-login-terminal-height: 240px;
   --acp-login-terminal-min-height: 120px;
   --turn-nav-item-h: 10px;

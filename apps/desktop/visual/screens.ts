@@ -371,8 +371,8 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await step("settings-agents")
   await page.getByRole("button", { name: t("agents.instance.add"), exact: true }).click()
   const instanceWizard = page.getByRole("dialog", { name: t("agents.instance.addTitle") })
+  // 选中内置的 Agent 直接进入设置这一步。
   await instanceWizard.getByRole("option", { name: /^Claude Code/ }).click()
-  await instanceWizard.getByRole("button", { name: t("agents.instance.next"), exact: true }).click()
   await expect(
     instanceWizard.getByRole("textbox", { name: t("agents.instance.name") }),
   ).toBeFocused()

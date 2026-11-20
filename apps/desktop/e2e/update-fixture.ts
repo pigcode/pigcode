@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net"
 
 /**
  * 假的 Release 列表接口。返回数组：`/releases/latest` 按 GitHub 的定义永远不返回
- * 预发布，所以客户端读的是列表，挑哪一条由「接收预发布版本」的偏好决定。
+ * 预发布，所以客户端读的是列表，挑哪一条由「试用测试版」的偏好决定。
  */
 export async function releaseServer(tag: string | null): Promise<{ url: string; server: Server }> {
   const server = createServer((request, response) => {

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react"
-import { ArrowRight, Check, ExternalLink, Terminal } from "lucide-react"
-import type { AcpRegistryEntry, AgentSummary } from "@pigcode/contracts"
+import { ArrowRight, Check, ExternalLink, LoaderCircle, Terminal } from "lucide-react"
+import { localizeText, type AcpRegistryEntry, type AgentSummary } from "@pigcode/contracts"
 import { AgentIcon, Button, SearchField, useLocale } from "@pigcode/ui-primitives"
 
 export function RegistryIcon({ entry }: { entry: AcpRegistryEntry }) {
@@ -16,7 +16,7 @@ export function RegistryIcon({ entry }: { entry: AcpRegistryEntry }) {
           onError={() => setFailed(entry.icon)}
         />
       ) : (
-        <Terminal className="ic" />
+        <Terminal className="ic ic-sm" />
       )}
     </span>
   )
@@ -60,7 +60,7 @@ export function AgentDirectory({
   onManual: () => void
   openExternal?: ((url: string) => void | Promise<void>) | undefined
 }) {
-  const { t } = useLocale()
+  const { locale, t } = useLocale()
   const listId = useId()
   const input = useRef<HTMLInputElement>(null)
   const [highlight, setHighlight] = useState<string | null>(
@@ -128,7 +128,8 @@ export function AgentDirectory({
     return (
       <div role="group" aria-label={label} className="agent-directory-group">
         <p className="agent-directory-heading" aria-hidden="true">
-          {label}
+          <span>{label}</span>
+          <span className="agent-directory-count agent-tabular">{rows.length}</span>
         </p>
         {rows.map((row) => {
           const entry = "entry" in row ? row.entry : null
@@ -149,6 +150,11 @@ export function AgentDirectory({
               )
             : undefined
           const link = entry?.website || entry?.repository
+          const description = entry
+            ? entry.description
+            : "agent" in row && row.agent.description
+              ? localizeText(row.agent.description, locale)
+              : null
           return (
             <div
               key={row.key}
@@ -172,31 +178,40 @@ export function AgentDirectory({
                 }}
                 onClick={() => choose(row)}
               >
-                {"agent" in row ? (
-                  <AgentIcon agentId={row.agent.agentId} name={row.name} />
-                ) : (
-                  <RegistryIcon entry={row.entry} />
-                )}
-                <span className="agent-directory-name truncate">{row.name}</span>
-                {entry && (
-                  <span className="agent-directory-description truncate" title={entry.description}>
-                    {entry.description}
-                  </span>
-                )}
-                <span className="agent-directory-action">
+                <span className="agent-directory-tile" aria-hidden="true">
+                  {"agent" in row ? (
+                    <AgentIcon agentId={row.agent.agentId} name={row.name} size="lg" />
+                  ) : (
+                    <RegistryIcon entry={row.entry} />
+                  )}
+                </span>
+                <span className="agent-directory-copy">
+                  <span className="agent-directory-name truncate">{row.name}</span>
+                  {description ? (
+                    <span className="agent-directory-description truncate" title={description}>
+                      {description}
+                    </span>
+                  ) : null}
+                </span>
+                <span
+                  className="agent-directory-action"
+                  data-state={exists ? "added" : busy ? "busy" : error ? "error" : undefined}
+                >
+                  {busy ? <LoaderCircle className="ic ic-xs spin" aria-hidden="true" /> : null}
                   {action ?? <ArrowRight className="ic ic-sm" aria-hidden="true" />}
-                  {exists && <Check className="ic ic-xs" />}
+                  {exists ? <Check className="ic ic-xs" aria-hidden="true" /> : null}
                 </span>
               </button>
               {link && openExternal && (
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-sm"
                   type="button"
+                  className="agent-directory-ext"
                   aria-label={t("agents.acp.about").replace("{name}", row.name)}
                   onClick={() => void openExternal(link)}
                 >
-                  <ExternalLink className="ic ic-sm" />
+                  <ExternalLink className="ic ic-xs" aria-hidden="true" />
                 </Button>
               )}
               {error && (
@@ -212,26 +227,28 @@ export function AgentDirectory({
   }
   return (
     <div className="agent-directory">
-      <SearchField
-        variant="plain"
-        autoFocus
-        inputRef={input}
-        value={query}
-        onValueChange={(value) => {
-          onQuery(value)
-          setHighlight(null)
-        }}
-        size="xl"
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded
-        aria-controls={listId}
-        aria-activedescendant={active ? listId + active.key : undefined}
-        onKeyDown={move}
-        readOnly={pending}
-        placeholder={t("agents.directory.search")}
-        clearLabel={pending ? undefined : t("agents.directory.clear")}
-      />
+      <div className="agent-directory-search">
+        <SearchField
+          variant="plain"
+          autoFocus
+          inputRef={input}
+          value={query}
+          onValueChange={(value) => {
+            onQuery(value)
+            setHighlight(null)
+          }}
+          size="xl"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded
+          aria-controls={listId}
+          aria-activedescendant={active ? listId + active.key : undefined}
+          onKeyDown={move}
+          readOnly={pending}
+          placeholder={t("agents.directory.search")}
+          clearLabel={pending ? undefined : t("agents.directory.clear")}
+        />
+      </div>
       <div
         className="agent-directory-results"
         id={listId}
@@ -240,39 +257,54 @@ export function AgentDirectory({
       >
         {group(t("agents.directory.drivers"), native)}
         {group(t("agents.acp.registry"), remote)}
-      </div>
-      {load && failed ? (
-        <div className="agent-directory-notice" role="alert">
-          {t("agents.acp.failed")}
-          <Button size="sm" variant="ghost" onClick={() => setRetry((value) => value + 1)}>
-            {t("agents.cli.retry")}
-          </Button>
-        </div>
-      ) : load && !entries ? (
-        <p className="agent-directory-notice" role="status">
-          {t("agents.acp.loading")}
-        </p>
-      ) : (
-        !native.length &&
-        !remote.length && (
-          <p className="agent-directory-notice">
-            {t(query ? "agents.instance.noMatches" : "agents.instance.noAgents")}
-          </p>
-        )
-      )}
-      {local && (
-        <div className="agent-directory-manual">
-          <Button size="lg" variant="ghost" disabled={pending} onClick={onLocal}>
-            <Terminal className="ic ic-sm" />
-            {t("agents.acp.useLocal")}
-          </Button>
-          {load && (
-            <Button size="lg" variant="ghost" disabled={pending} onClick={onManual}>
-              {t("agents.directory.byId")}
+        {load && failed ? (
+          <div className="agent-directory-notice" role="alert">
+            <span>{t("agents.acp.failed")}</span>
+            <Button size="sm" variant="ghost" onClick={() => setRetry((value) => value + 1)}>
+              {t("agents.cli.retry")}
             </Button>
-          )}
+          </div>
+        ) : load && !entries ? (
+          <p className="agent-directory-notice" role="status">
+            <LoaderCircle className="ic ic-xs spin" aria-hidden="true" />
+            <span>{t("agents.acp.loading")}</span>
+          </p>
+        ) : (
+          !native.length &&
+          !remote.length && (
+            <p className="agent-directory-notice">
+              {t(query ? "agents.instance.noMatches" : "agents.instance.noAgents")}
+            </p>
+          )
+        )}
+      </div>
+      <div className="agent-directory-foot">
+        <div className="agent-directory-manual-actions">
+          {local ? (
+            <>
+              <Button size="md" variant="ghost" disabled={pending} onClick={onLocal}>
+                <Terminal className="ic ic-sm" aria-hidden="true" />
+                {t("agents.acp.useLocal")}
+              </Button>
+              {load ? (
+                <Button size="md" variant="ghost" disabled={pending} onClick={onManual}>
+                  {t("agents.directory.byId")}
+                </Button>
+              ) : null}
+            </>
+          ) : null}
         </div>
-      )}
+        <div className="agent-directory-hints" aria-hidden="true">
+          <span>
+            <kbd>↑↓</kbd>
+            {t("agents.directory.hintMove")}
+          </span>
+          <span>
+            <kbd>↵</kbd>
+            {t("agents.directory.hintConfirm")}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

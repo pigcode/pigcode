@@ -3,23 +3,23 @@ import type { ReactNode } from "react"
 import { cn } from "./cn"
 import { ListRow } from "./list-row"
 
-/** 设置页容器：标题加居中内容列；两栏的页面（Agent）用 wide。 */
+/** 设置页容器：标题加居中内容列。所有设置页共用一个版心，内容区变窄时跟着收缩。 */
 export function SettingPage({
   title,
   sub,
   actions,
-  width = "narrow",
+  className,
   children,
 }: {
   title: string
   sub?: string | undefined
   actions?: ReactNode | undefined
-  /** narrow 是单列设置页的宽度；wide 给两栏的页面，并按页面宽度响应式换行。 */
-  width?: "narrow" | "wide" | undefined
+  /** 页面自己的类名，用来写这一页特有的布局。 */
+  className?: string | undefined
   children: ReactNode
 }) {
   return (
-    <div className={cn("page", width === "wide" ? "wide" : "narrow", "settings-page")}>
+    <div className={cn("page", "settings-page", className)}>
       <header className="page-head">
         <div>
           <h1>{title}</h1>

@@ -8,10 +8,27 @@ interface Edits {
 }
 const empty: Edits = { values: {} }
 
+function instanceKey(instance: Pick<AgentInstance, "instanceId" | "createdAt">): string {
+  return JSON.stringify([instance.instanceId, instance.createdAt])
+}
+
+/** 计算合并后的草稿值。 */
+export function mergeDraftValues(
+  base: AgentSettingsValues,
+  edits: AgentSettingsValues,
+): AgentSettingsValues {
+  const values = { ...base }
+  for (const [key, value] of Object.entries(edits)) {
+    if (value === undefined) delete values[key]
+    else values[key] = value
+  }
+  return values
+}
+
 /** 仅在当前设置页内保留各实例尚未保存的输入，关闭设置页即释放。 */
 export function useInstanceEdits(instance?: AgentInstance) {
   const [drafts, setDrafts] = useState(() => new Map<string, Edits>())
-  const key = instance ? JSON.stringify([instance.instanceId, instance.createdAt]) : ""
+  const key = instance ? instanceKey(instance) : ""
   function update(change: (current: Edits) => Edits) {
     setDrafts((current) => {
       const next = new Map(current)
@@ -28,6 +45,20 @@ export function useInstanceEdits(instance?: AgentInstance) {
   }
   return {
     ...(drafts.get(key) ?? empty),
+    /** 检查任意实例在当前设置页内是否有未保存改动（用于左侧清单未保存标记）。 */
+    isDirty(target: AgentInstance): boolean {
+      const draft = drafts.get(instanceKey(target))
+      if (!draft) return false
+      if (
+        draft.label !== undefined &&
+        draft.label.trim() !== target.label &&
+        draft.label.trim() !== ""
+      )
+        return true
+      const nextColor = draft.color === null ? undefined : (draft.color ?? target.accentColor)
+      if (nextColor !== target.accentColor) return true
+      return !sameValues(mergeDraftValues(target.values, draft.values), target.values)
+    },
     setValues(change: SetStateAction<AgentSettingsValues>) {
       update((current) => ({
         ...current,

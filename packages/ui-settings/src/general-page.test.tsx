@@ -39,7 +39,7 @@ function withPreferences(
 describe("GeneralPage", () => {
   it("shows the version the app reports", async () => {
     withBridge(async () => "1.2.3")
-    expect(await screen.findByText("当前版本 1.2.3")).toBeTruthy()
+    expect(await screen.findByText("现在是 1.2.3")).toBeTruthy()
     delete (globalThis as { pigcodeNative?: unknown }).pigcodeNative
   })
 
@@ -49,7 +49,7 @@ describe("GeneralPage", () => {
       showInDock: true,
       autoCheckUpdates: true,
     })
-    const dock = await screen.findByRole("switch", { name: "在 Dock 中显示" })
+    const dock = await screen.findByRole("switch", { name: "在 Dock 里显示" })
     expect(dock.getAttribute("aria-checked")).toBe("true")
     fireEvent.click(dock)
     await waitFor(() => expect(calls).toEqual([["showInDock", false]]))
@@ -58,8 +58,8 @@ describe("GeneralPage", () => {
 
   it("hides the switches that don't apply to the platform", async () => {
     withPreferences("linux", { launchAtLogin: false, showInDock: true, autoCheckUpdates: true })
-    await waitFor(() => expect(screen.queryByRole("switch", { name: "在 Dock 中显示" })).toBeNull())
-    expect(screen.queryByRole("switch", { name: "开机自动启动" })).toBeNull()
+    await waitFor(() => expect(screen.queryByRole("switch", { name: "在 Dock 里显示" })).toBeNull())
+    expect(screen.queryByRole("switch", { name: "开机自动打开" })).toBeNull()
     delete (globalThis as { pigcodeNative?: unknown }).pigcodeNative
   })
 
@@ -82,7 +82,7 @@ describe("GeneralPage", () => {
       { launchAtLogin: false, showInDock: true, autoCheckUpdates: true },
       async () => ({ status: "update-available", version: "0.2.0", url: "https://example.com" }),
     )
-    fireEvent.click(await screen.findByRole("button", { name: "立即检查" }))
+    fireEvent.click(await screen.findByRole("button", { name: "检查" }))
     expect(await screen.findByText("有新版本 0.2.0")).toBeTruthy()
     delete (globalThis as { pigcodeNative?: unknown }).pigcodeNative
   })

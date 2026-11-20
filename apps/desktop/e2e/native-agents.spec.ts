@@ -112,11 +112,11 @@ test("bundled agent choices, instance fields and native model discovery", async 
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "Agent", exact: true }).first().click()
-    const list = page.locator(".agents-list .agent-row-name")
+    const list = page.locator(".agents-list .agent-item-name")
     await checkNames(list, ["Claude Code", "Codex", "Antigravity"])
-    await page.getByRole("button", { name: "添加实例", exact: true }).click()
-    const wizard = page.getByRole("dialog", { name: "添加实例" })
-    const group = wizard.getByRole("group", { name: "可直接配置" })
+    await page.getByRole("button", { name: "添加 Agent", exact: true }).click()
+    const wizard = page.getByRole("dialog", { name: "添加 Agent" })
+    const group = wizard.getByRole("group", { name: "内置" })
     await checkNames(group.getByRole("option"), [...featured, ...extra])
     const catalog = wizard.getByRole("group", { name: "ACP Registry" })
     await expect(catalog.getByRole("option")).toHaveCount(1)
@@ -124,23 +124,27 @@ test("bundled agent choices, instance fields and native model discovery", async 
     for (const [agent, fields] of Object.entries(forms)) {
       await wizard.getByRole("option", { name: agent, exact: true }).click()
       if (agent === "Grok") {
-        await wizard.getByRole("textbox", { name: "实例名称" }).fill("Grok 本地")
-        await wizard.getByRole("textbox", { name: "实例 ID" }).fill("grok_local")
+        await wizard.getByRole("textbox", { name: "名字" }).fill("Grok 本地")
+        await wizard.getByRole("textbox", { name: "ID" }).fill("grok_local")
       }
+      // 启动设置收在「高级设置」里；换一个 Agent 时它可能已经打开了。
+      const advanced = wizard.getByRole("button", { name: "高级设置" })
+      if (fields.length > 0 && (await advanced.getAttribute("aria-expanded")) !== "true")
+        await advanced.click()
       const config = wizard.locator(".wizard-config")
       await expect(config.locator("input")).toHaveCount(fields.length)
       for (const label of fields)
         await expect(config.getByLabel(label, { exact: true })).toBeVisible()
       if (agent === "Grok") {
         await config.getByLabel("可执行文件", { exact: true }).fill(grokFixture(directory))
-        await wizard.getByRole("button", { name: "创建实例" }).click()
+        await wizard.getByRole("button", { name: "创建" }).click()
       } else {
-        await wizard.getByRole("button", { name: "返回目录" }).click()
+        await wizard.getByRole("button", { name: "返回" }).click()
       }
     }
     await expect(wizard).toBeHidden()
     await expect(page.getByRole("button", { name: "打开 Grok 本地 的设置" })).toHaveAttribute(
-      "aria-expanded",
+      "aria-current",
       "true",
     )
     const settings = JSON.parse(readFileSync(join(profile, "settings.json"), "utf8"))

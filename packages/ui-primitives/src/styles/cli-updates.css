@@ -1,8 +1,4 @@
 /* 更新作为版本信息的一部分，详细状态与日志只在浮层中展开。 */
-.agent-stat dd:has(.agent-cli-version) {
-  overflow: visible;
-  white-space: normal;
-}
 .agent-cli-version {
   display: flex;
   align-items: center;

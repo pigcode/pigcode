@@ -82,10 +82,7 @@ export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | 
       <SettingSection title={t("settings.general.startup")}>
         {/* Linux 上不显示开机自启，Dock 图标只在 macOS 上有。 */}
         {platform === "linux" ? null : (
-          <SettingRow
-            title={t("settings.general.launchAtLogin")}
-            description={t("settings.general.launchAtLogin.description")}
-          >
+          <SettingRow title={t("settings.general.launchAtLogin")}>
             <Switch
               checked={prefs.launchAtLogin}
               onCheckedChange={(value) => setPreference("launchAtLogin", value)}

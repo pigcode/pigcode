@@ -7,10 +7,11 @@
   margin: 0 auto;
   padding: 8px 32px 72px;
 }
-.page.narrow {
-  max-width: var(--col-narrow);
+/* 设置页共用一个版心：通用、外观、Agent 切换时标题和卡片的左缘不动 */
+.page.settings-page {
+  max-width: var(--col-settings);
 }
-/* 两列卡片的页面（插件、定时任务）比设置页的单列宽一些；卡片栏按页面自己的宽度换成一列 */
+/* 两列卡片的页面（插件、定时任务）；卡片栏按页面自己的宽度换成一列 */
 .page.wide {
   max-width: var(--col-wide);
   container-type: inline-size;
@@ -20,13 +21,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 22px 0 22px;
+  margin: 24px 0 20px;
   min-height: var(--page-head-h);
 }
 .page-head h1 {
   font-size: var(--fs-title);
-  font-weight: 650;
-  letter-spacing: -0.025em;
+  font-weight: 600;
   line-height: 1.25;
 }
 .page-head .sub {
@@ -51,13 +51,28 @@
   min-height: var(--section-head-h);
   margin: 0 4px 8px;
 }
-.section-head h2 {
+/* 分组名：比行标题小一号、淡一档，按句子大小写，不加字距 */
+.section-head :is(h2, h3) {
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: var(--fs-2xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+/* 分组名后面的计数或摘要 */
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.section-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .group {
   border-radius: var(--r-panel);
@@ -68,13 +83,14 @@
 .group > .list-row {
   gap: var(--space-7);
   min-height: calc(var(--row-h) + var(--space-9));
-  padding: 11px 14px;
+  padding: var(--space-6) var(--space-7);
 }
 /* 设置行的标题可以换行（定时任务的标题是用户写的任务内容），说明可以选中复制 */
 .group > .list-row .list-row-title {
   white-space: normal;
 }
 .group > .list-row .list-row-desc {
+  max-width: 64ch;
   -webkit-user-select: text;
   user-select: text;
 }
@@ -82,12 +98,49 @@
   content: "";
   position: absolute;
   top: 0;
-  left: 14px;
-  right: 14px;
+  left: var(--space-7);
+  right: var(--space-7);
   height: var(--hair);
   background: var(--border-strong);
   pointer-events: none;
 }
+
+/*
+  ─── 设置页（通用、外观、Agent）：参照 t3code 的设置页 ─────────
+  页头、分组标题都缩进到卡片里行文字的位置，所有文字落在同一条左缘上，卡片像是围着文字的框。
+  分组标题是深色的小标题，行标题比正文大一档、中等字重，说明是浅一档的小字；行与行之间一条通栏细线。
+*/
+.settings-page > .page-head {
+  margin-bottom: 0;
+  padding-inline: var(--space-7);
+}
+.settings-page .section {
+  margin-top: 32px;
+}
+.settings-page .section-head {
+  min-height: var(--control-md);
+  margin: 0 var(--space-7) var(--space-5);
+}
+.settings-page .section-head :is(h2, h3) {
+  color: var(--fg);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+}
+.settings-page .section-note {
+  margin: -4px var(--space-7) var(--space-6);
+}
+.settings-page .group > .list-row .list-row-title {
+  font-size: var(--fs-xl);
+  font-weight: 500;
+}
+.settings-page .group > .list-row .list-row-desc {
+  line-height: 1.5;
+}
+.settings-page .group > .list-row + .list-row::before {
+  left: 0;
+  right: 0;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: 4px 16px 64px;

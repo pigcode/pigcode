@@ -1,6 +1,6 @@
-import { Lock, Plus, Unlock, X } from "lucide-react"
+import { Lock, Plus, Trash2, Unlock, X } from "lucide-react"
 import { useId } from "react"
-import { Button, Input, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, SegmentedControl, useLocale } from "@pigcode/ui-primitives"
 import {
   secretReferenceSchema,
   type AgentSecretInput,
@@ -26,17 +26,17 @@ export function CredentialField({
   const reference = secret?.reference
   const configured = secret?.configured === true
   return (
-    <div className="agent-credential">
+    <div className="agent-credential agent-control">
       {(references || reference !== undefined) && (
-        <select
-          className="input"
+        <SegmentedControl
           aria-label={label + " · " + t("agents.secret.source")}
           value={reference !== undefined ? "op" : "stored"}
-          onChange={(e) => onChange(e.currentTarget.value === "op" ? { reference: "" } : "")}
-        >
-          <option value="stored">{t("agents.secret.stored")}</option>
-          <option value="op">1Password</option>
-        </select>
+          onValueChange={(next) => onChange(next === "op" ? { reference: "" } : "")}
+          options={[
+            { value: "stored", label: t("agents.secret.stored") },
+            { value: "op", label: "1Password" },
+          ]}
+        />
       )}
       <div className="agent-input-row">
         <Input
@@ -70,7 +70,7 @@ export function CredentialField({
             aria-label={t("agents.secret.clear") + " " + label}
             onClick={() => onChange("")}
           >
-            <X className="ic ic-sm" />
+            <X className="ic ic-sm" aria-hidden="true" />
           </Button>
         )}
       </div>
@@ -95,73 +95,89 @@ export function EnvironmentEditor({
     onChange(entries.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)))
   return (
     <div className="agent-env" role="group" aria-label={label}>
-      {!entries.length && <p className="agent-muted">{t("agents.env.empty")}</p>}
-      {entries.map((entry, index) => {
-        const saved = typeof entry.value === "object" && "configured" in entry.value
-        const referenced = typeof entry.value === "object" && "reference" in entry.value
-        const valueLabel = t("agents.env.value") + " " + (index + 1)
-        const invalidName = Boolean(entry.name && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.name))
-        return (
-          <div className="agent-env-row" key={index}>
-            <Input
-              className="mono"
-              aria-label={t("agents.env.name") + " " + (index + 1)}
-              value={entry.name}
-              disabled={saved}
-              placeholder={t("agents.env.name")}
-              aria-invalid={invalidName}
-              aria-describedby={invalidName ? errorId : undefined}
-              onChange={(e) => update(index, { name: e.target.value.trim() })}
-            />
-            {entry.sensitive ? (
-              <CredentialField
-                label={valueLabel}
-                value={entry.value}
-                references={references}
-                onChange={(value) => update(index, { value })}
-              />
-            ) : (
-              <Input
-                className="mono"
-                aria-label={valueLabel}
-                value={typeof entry.value === "string" ? entry.value : ""}
-                placeholder={t("agents.env.value")}
-                autoComplete="off"
-                onChange={(e) => update(index, { value: e.target.value })}
-              />
-            )}
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={t("agents.secret.sensitive") + " " + (index + 1)}
-              aria-pressed={Boolean(entry.sensitive)}
-              disabled={saved || referenced}
-              title={t("agents.secret.sensitive")}
-              onClick={() =>
-                update(index, {
-                  sensitive: !entry.sensitive,
-                  value:
-                    typeof entry.value === "object" && "secret" in entry.value
-                      ? entry.value.secret
-                      : entry.value,
-                })
-              }
-            >
-              {entry.sensitive ? <Lock className="ic ic-sm" /> : <Unlock className="ic ic-sm" />}
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label={t("agents.env.remove") + " " + (entry.name || index + 1)}
-              onClick={() => onChange(entries.filter((_, i) => i !== index))}
-            >
-              <X className="ic ic-sm" />
-            </Button>
+      {entries.length > 0 ? (
+        <div className="agent-env-table">
+          <div className="agent-env-cols" aria-hidden="true">
+            <span>{t("agents.env.name")}</span>
+            <span>{t("agents.env.value")}</span>
+            <span className="agent-env-cols-center">{t("agents.env.sensitiveCol")}</span>
+            <span />
           </div>
-        )
-      })}
+          {entries.map((entry, index) => {
+            const saved = typeof entry.value === "object" && "configured" in entry.value
+            const referenced = typeof entry.value === "object" && "reference" in entry.value
+            const valueLabel = t("agents.env.value") + " " + (index + 1)
+            const invalidName = Boolean(entry.name && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.name))
+            return (
+              <div className="agent-env-row" key={index}>
+                <Input
+                  className="mono"
+                  aria-label={t("agents.env.name") + " " + (index + 1)}
+                  value={entry.name}
+                  disabled={saved}
+                  placeholder={t("agents.env.name")}
+                  aria-invalid={invalidName}
+                  aria-describedby={invalidName ? errorId : undefined}
+                  onChange={(e) => update(index, { name: e.target.value.trim() })}
+                />
+                {entry.sensitive ? (
+                  <CredentialField
+                    label={valueLabel}
+                    value={entry.value}
+                    references={references}
+                    onChange={(value) => update(index, { value })}
+                  />
+                ) : (
+                  <Input
+                    className="mono"
+                    aria-label={valueLabel}
+                    value={typeof entry.value === "string" ? entry.value : ""}
+                    placeholder={t("agents.env.value")}
+                    autoComplete="off"
+                    onChange={(e) => update(index, { value: e.target.value })}
+                  />
+                )}
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="agent-env-lock"
+                  data-sensitive={entry.sensitive || undefined}
+                  aria-label={t("agents.secret.sensitive") + " " + (index + 1)}
+                  aria-pressed={Boolean(entry.sensitive)}
+                  disabled={saved || referenced}
+                  title={t("agents.secret.sensitive")}
+                  onClick={() =>
+                    update(index, {
+                      sensitive: !entry.sensitive,
+                      value:
+                        typeof entry.value === "object" && "secret" in entry.value
+                          ? entry.value.secret
+                          : entry.value,
+                    })
+                  }
+                >
+                  {entry.sensitive ? (
+                    <Lock className="ic ic-sm" aria-hidden="true" />
+                  ) : (
+                    <Unlock className="ic ic-sm" aria-hidden="true" />
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="agent-env-remove"
+                  aria-label={t("agents.env.remove") + " " + (entry.name || index + 1)}
+                  onClick={() => onChange(entries.filter((_, i) => i !== index))}
+                >
+                  <Trash2 className="ic ic-sm" aria-hidden="true" />
+                </Button>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
       {entries.some((e) => e.name && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(e.name)) && (
         <p className="error-text" id={errorId} role="alert">
           {t("agents.env.invalid")}
@@ -170,11 +186,11 @@ export function EnvironmentEditor({
       <Button
         size="sm"
         type="button"
-        variant="ghost"
+        variant="secondary"
         className="agent-add"
         onClick={() => onChange([...entries, { name: "", value: "", sensitive: true }])}
       >
-        <Plus className="ic ic-sm" />
+        <Plus className="ic ic-sm" aria-hidden="true" />
         {t("agents.env.add")}
       </Button>
     </div>
@@ -212,18 +228,18 @@ export function LiteralArguments({
             aria-label={t("agents.arguments.remove") + " " + (i + 1)}
             onClick={() => onChange(args.filter((_, j) => j !== i))}
           >
-            <X className="ic ic-sm" />
+            <X className="ic ic-sm" aria-hidden="true" />
           </Button>
         </div>
       ))}
       <Button
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="sm"
         className="agent-add"
         onClick={() => onChange([...args, ""])}
       >
-        <Plus className="ic ic-sm" />
+        <Plus className="ic ic-sm" aria-hidden="true" />
         {t("agents.arguments.add")}
       </Button>
     </div>

@@ -76,10 +76,10 @@ describe("arrangeModels", () => {
 describe("ModelsEditor", () => {
   it("hides a model from the picker and moves another up", async () => {
     const { last, names } = renderEditor()
-    expect(screen.getByText("3 个模型，3 个显示在选择器里")).toBeTruthy()
+    expect(screen.getByText("显示 3/3")).toBeTruthy()
 
     await userEvent.click(screen.getByRole("switch", { name: "在选择器里显示 Haiku 5.5" }))
-    expect(screen.getByText("3 个模型，2 个显示在选择器里")).toBeTruthy()
+    expect(screen.getByText("显示 2/3")).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "上移 Opus 5.5" }))
     expect(names()).toEqual(["Opus 5.5", "Default (recommended)", "Haiku 5.5"])
     // 第一行不能再上移，最后一行不能再下移。
@@ -108,9 +108,9 @@ describe("ModelsEditor", () => {
 
   it("adds a custom model, rejects duplicates and removes it from every list", async () => {
     const { last, names } = renderEditor()
-    const input = screen.getByRole("textbox", { name: "模型 id，回车添加" })
+    const input = screen.getByRole("textbox", { name: "输入模型 ID，回车添加" })
     await userEvent.type(input, "opus{Enter}")
-    expect(screen.getByText("目录里已经有这个模型")).toBeTruthy()
+    expect(screen.getByText("已经有这个模型了")).toBeTruthy()
     await userEvent.clear(input)
     await userEvent.type(input, "my-model{Enter}")
     expect(names().at(-1)).toBe("my-model")

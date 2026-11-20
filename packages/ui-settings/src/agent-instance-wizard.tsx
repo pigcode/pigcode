@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { ArrowLeft } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import {
   acpRegistryAgentIdSchema,
   customAgentInstanceIdSchema,
@@ -11,7 +11,6 @@ import {
   type ClaudeIdlePolicy,
 } from "@pigcode/contracts"
 import {
-  Button,
   Dialog,
   SegmentedControl,
   hostErrorMessageKey,
@@ -22,7 +21,13 @@ import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
 import { ClaudeCompactionSettings } from "./claude-compaction-settings"
 import { AgentDirectory, type RegistryActions } from "./agent-directory"
 import { AcpAccount, acpAuthPending } from "./acp-account"
-import { CodexConnection, InstanceIdentity, SignInIdentity } from "./agent-instance-identity"
+import {
+  CodexConnection,
+  InstanceIdentity,
+  SignInIdentity,
+  WizardFooter,
+  WizardSteps,
+} from "./agent-instance-identity"
 import { instanceIdTaken, suggestInstanceId } from "./agent-instances"
 import type { AgentSetupActions } from "./agent-setup"
 
@@ -84,6 +89,7 @@ export function InstanceCreateWizard({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rejected, setRejected] = useState<string>()
+  const [advanced, setAdvanced] = useState(false)
   const busy = useRef(false)
   const mounted = useRef(true)
   useEffect(() => {
@@ -304,6 +310,17 @@ export function InstanceCreateWizard({
       setFailure(null)
     }
   }
+
+  const steps: { id: Step; label: string }[] = [
+    { id: "agent", label: t("agents.instance.step.agent") },
+    ...(fromManual ? [{ id: "source" as const, label: t("agents.instance.step.source") }] : []),
+    { id: "configure", label: t("agents.instance.step.config") },
+    ...(signInAfterCreate && setupActions
+      ? [{ id: "signIn" as const, label: t("agents.instance.step.signIn") }]
+      : []),
+  ]
+  const currentStepIndex = steps.findIndex((item) => item.id === step)
+
   return (
     <Dialog.Root
       open
@@ -318,6 +335,8 @@ export function InstanceCreateWizard({
         closeLabel={t("common.close")}
         closeDisabled={locked}
       >
+        <WizardSteps steps={steps} currentIndex={currentStepIndex} />
+
         <Dialog.Body>
           {step === "agent" && (
             <AgentDirectory
@@ -354,7 +373,7 @@ export function InstanceCreateWizard({
                 <h3 className="label">{t("agents.acp.useLocal")}</h3>
               )}
               <fieldset className="wizard-config" disabled={Boolean(preparing)}>
-                {editFields}
+                <div className="agent-rows">{editFields}</div>
               </fieldset>
             </div>
           )}
@@ -388,23 +407,42 @@ export function InstanceCreateWizard({
                   openExternal={openExternal}
                 />
               )}
-              {source === "plugin" && startupFields.length > 0 && (
-                <fieldset className="wizard-config" disabled={saving}>
-                  <legend>{t("agents.section.runtime")}</legend>
-                  {editFields}
-                </fieldset>
-              )}
-              {hasCompaction && (
-                <details className="instance-compaction">
-                  <summary>{t("agents.claude.context")}</summary>
-                  <ClaudeCompactionSettings
-                    defaultPolicy={claudeDefault}
-                    values={draft.values}
-                    threshold={fields.find((field) => field.key === "autoCompactWindow")}
-                    onChange={editField}
-                  />
-                </details>
-              )}
+              {(source === "plugin" && startupFields.length > 0) || hasCompaction ? (
+                <div className="wizard-advanced" data-open={advanced || undefined}>
+                  <button
+                    type="button"
+                    className="wizard-advanced-toggle"
+                    aria-expanded={advanced}
+                    onClick={() => setAdvanced(!advanced)}
+                  >
+                    <span>{t("agents.advanced")}</span>
+                    <ChevronDown className="ic ic-sm wizard-advanced-caret" aria-hidden="true" />
+                  </button>
+                  {advanced ? (
+                    <div className="wizard-advanced-body">
+                      {source === "plugin" && startupFields.length > 0 ? (
+                        <fieldset className="wizard-config" disabled={saving}>
+                          <legend>{t("agents.section.runtime")}</legend>
+                          <div className="agent-rows">{editFields}</div>
+                        </fieldset>
+                      ) : null}
+                      {hasCompaction ? (
+                        <fieldset className="wizard-config" disabled={saving}>
+                          <legend>{t("agents.claude.context")}</legend>
+                          <div className="agent-rows">
+                            <ClaudeCompactionSettings
+                              defaultPolicy={claudeDefault}
+                              values={draft.values}
+                              threshold={fields.find((field) => field.key === "autoCompactWindow")}
+                              onChange={editField}
+                            />
+                          </div>
+                        </fieldset>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           )}
           {step === "signIn" && created && setupActions && (
@@ -415,82 +453,45 @@ export function InstanceCreateWizard({
                 entry={choice?.entry}
                 openExternal={openExternal}
               />
-              <AcpAccount
-                key={created}
-                agentId={agent?.agentId}
-                actions={setupActions}
-                openExternal={openExternal}
-                autoStartMethod={managedAccount ? "chatgpt" : undefined}
-                instanceId={created}
-                onPhase={setAuthPhase}
-                methodId={
-                  typeof draft.values.authMethodId === "string"
-                    ? draft.values.authMethodId
-                    : undefined
-                }
-              />
+              <div className="wizard-signin-card">
+                <AcpAccount
+                  key={created}
+                  agentId={agent?.agentId}
+                  actions={setupActions}
+                  openExternal={openExternal}
+                  autoStartMethod={managedAccount ? "chatgpt" : undefined}
+                  instanceId={created}
+                  onPhase={setAuthPhase}
+                  methodId={
+                    typeof draft.values.authMethodId === "string"
+                      ? draft.values.authMethodId
+                      : undefined
+                  }
+                />
+              </div>
             </div>
           )}
         </Dialog.Body>
         {step !== "agent" && (
-          <Dialog.Footer className="wizard-footer">
-            {error && (
-              <p className="error-text wizard-error" role="alert">
-                {error}
-              </p>
-            )}
-            {created ? (
-              <Button
-                size="lg"
-                variant={authPhase === "connected" ? "primary" : "secondary"}
-                disabled={locked}
-                onClick={() => onClose(created)}
-              >
-                {t(authPhase === "connected" ? "agents.acp.done" : "agents.acp.skip")}
-              </Button>
-            ) : (
-              <>
-                <Button
-                  size="lg"
-                  variant="ghost"
-                  disabled={saving || preparing !== null}
-                  onClick={back}
-                >
-                  <ArrowLeft className="ic ic-sm" />
-                  {t(
-                    step === "configure" && fromManual
-                      ? "agents.instance.back"
-                      : "agents.acp.backToList",
-                  )}
-                </Button>
-                <Button
-                  size="lg"
-                  variant="primary"
-                  disabled={
-                    saving ||
-                    Boolean(preparing) ||
-                    (step === "source" ? invalidSource : Boolean(idError))
-                  }
-                  onClick={() => {
-                    if (step === "source") fromSource()
-                    else void save()
-                  }}
-                >
-                  {t(
-                    saving
-                      ? "agents.saving"
-                      : preparing
-                        ? "agents.acp.preparing"
-                        : step === "source"
-                          ? "agents.instance.next"
-                          : signInAfterCreate && setupActions
-                            ? "agents.acp.continueSignIn"
-                            : "agents.instance.create",
-                  )}
-                </Button>
-              </>
-            )}
-          </Dialog.Footer>
+          <WizardFooter
+            error={error}
+            created={created}
+            authPhase={authPhase}
+            locked={locked}
+            saving={saving}
+            preparing={preparing !== null}
+            step={step}
+            fromManual={fromManual}
+            invalidSource={invalidSource}
+            idError={idError}
+            signInAfterCreate={Boolean(signInAfterCreate && setupActions)}
+            onClose={() => onClose(created)}
+            onBack={back}
+            onSubmit={() => {
+              if (step === "source") fromSource()
+              else void save()
+            }}
+          />
         )}
       </Dialog.Content>
     </Dialog.Root>

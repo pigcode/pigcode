@@ -29,8 +29,8 @@ test("a manual check shows the new version and can open the download page", asyn
       "aria-checked",
       "true",
     )
-    // 接收预发布默认关：正式版用户不该被推到 beta 上。
-    const prerelease = page.getByRole("switch", { name: "接收预发布版本" })
+    // 试用测试版默认关：正式版用户不该被推到 beta 上。
+    const prerelease = page.getByRole("switch", { name: "试用测试版" })
     await expect(prerelease).toHaveAttribute("aria-checked", "false")
     // 开关存进 profile，不是本机的 userData。
     await prerelease.click()
@@ -42,7 +42,7 @@ test("a manual check shows the new version and can open the download page", asyn
       )
     await expect.poll(stored).toMatchObject({ prereleaseUpdates: true })
 
-    await page.getByRole("button", { name: "立即检查" }).click()
+    await page.getByRole("button", { name: "检查", exact: true }).click()
     await expect(page.getByText("有新版本 9.9.9")).toBeVisible({ timeout: 10_000 })
     await page.locator(".page").getByRole("button", { name: "查看更新", exact: true }).click()
     await expect(page.locator(".update-center-popup")).toContainText("9.9.9")
@@ -107,7 +107,7 @@ test("a failed check says so and leaves the app alone", async () => {
     const page = await app.firstWindow()
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "通用", exact: true }).first().click()
-    await page.getByRole("button", { name: "立即检查" }).click()
+    await page.getByRole("button", { name: "检查", exact: true }).click()
     await expect(page.getByText("检查失败，请稍后再试")).toBeVisible({ timeout: 10_000 })
   } finally {
     await app.close()

@@ -170,9 +170,10 @@
 }
 
 /* ─── 模式：三扇窗口缩略图 ───────────────────────────────── */
+/* 三张缩略图是选项，不跟着版心一起变大，主角留给下面的主题大预览 */
 .mode-picker {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 208px));
   gap: var(--space-7);
 }
 .mode-card {
@@ -247,7 +248,7 @@
 }
 .theme-stage .mini-frame {
   flex: 1;
-  max-width: 420px;
+  max-width: 480px;
 }
 .theme-stage .mini {
   aspect-ratio: 16 / 8.2;
