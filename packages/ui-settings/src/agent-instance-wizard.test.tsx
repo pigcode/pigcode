@@ -36,10 +36,18 @@ async function openAcpWizard() {
   const onCreateInstance = vi.fn(async () => "acp-new")
   const onUpdateCli = vi.fn(async () => undefined)
   const noop = async () => undefined
+  const dedicated = {
+    ...acp,
+    agentId: "claude",
+    displayName: "Claude Code",
+    version: "0.99.7",
+    acpRegistry: false,
+  }
+  const external = { ...dedicated, agentId: "echo", displayName: "Echo", builtin: false }
   render(
     <LocaleProvider locale="zh-CN">
       <AgentsPage
-        agents={[acp]}
+        agents={[dedicated, acp, external]}
         defaultAgentId={null}
         statuses={{}}
         onDetect={noop}
@@ -63,9 +71,13 @@ async function openAcpWizard() {
     </LocaleProvider>,
   )
   await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
-  const options = within(screen.getByRole("dialog")).getAllByRole("option")
-  expect(options).toHaveLength(1)
-  await userEvent.click(within(screen.getByRole("dialog")).getByRole("option", { name: "ACP" }))
+  const wizard = within(screen.getByRole("dialog"))
+  expect(wizard.getByRole("option", { name: "Claude Code" })).toBeTruthy()
+  expect(wizard.queryByText("0.99.7")).toBeNull()
+  expect(wizard.queryByRole("option", { name: "Echo" })).toBeNull()
+  expect(wizard.queryByPlaceholderText("搜索 ACP Registry")).toBeNull()
+  await userEvent.click(wizard.getByRole("button", { name: "更多 Agent" }))
+  expect(wizard.getByRole("option", { name: "Echo" })).toBeTruthy()
   return { onCreateInstance, onUpdateCli }
 }
 
@@ -94,7 +106,7 @@ it("preserves spaces in the local ACP executable and literal arguments", async (
 })
 
 async function chooseRegistryAgent() {
-  await userEvent.click(await screen.findByRole("option", { name: /Registry fixture/ }))
+  await userEvent.click(await screen.findByRole("option", { name: /Registry fixture.*1\.0\.0/ }))
   await next()
   await next()
 }

@@ -1,11 +1,14 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { pathToFileURL } from "node:url"
+import Loader from "@cordisjs/plugin-loader"
 import { Context } from "cordis"
 import { expect, it } from "vitest"
 import { AcpDriver } from "../../../../packages/agent-acp/src/driver"
+import { apply as plugins } from "../services/plugins"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as settings } from "../services/settings"
@@ -120,28 +123,44 @@ it.skipIf(process.platform === "win32")(
     const os = process.platform === "darwin" ? "darwin" : process.platform
     const platform = `${os}-${process.arch === "arm64" ? "aarch64" : "x86_64"}`
     const digest = createHash("sha256").update(bytes).digest("hex")
+    const dedicated = join(root, "dedicated")
+    await mkdir(dedicated)
+    await writeFile(
+      join(dedicated, "package.json"),
+      JSON.stringify({
+        name: "@pigcode/agent-dedicated-fixture",
+        version: "1.0.0",
+        pigcode: {
+          apiVersion: 1,
+          kind: "agent",
+          host: "./index.mjs",
+          contributes: {
+            agent: { id: "dedicated", acpRegistryAgentIds: ["dedicated-registry-id"] },
+          },
+        },
+      }),
+    )
+    const entry = {
+      id: "fixture",
+      name: "Registry fixture",
+      version: "1.0.0",
+      description: "Fixture",
+      distribution: {
+        binary: {
+          [platform]: {
+            archive: "https://example.test/fixture.tar.gz",
+            cmd: "fixture",
+            sha256: digest,
+            args: ["Registry Agent", "resume"],
+          },
+        },
+      },
+    }
     let downloads = 0
     const driver = new AcpDriver(async (input) => {
       if (String(input).endsWith("/registry.json"))
         return Response.json({
-          agents: [
-            {
-              id: "fixture",
-              name: "Registry fixture",
-              version: "1.0.0",
-              description: "Fixture",
-              distribution: {
-                binary: {
-                  [platform]: {
-                    archive: "https://example.test/fixture.tar.gz",
-                    cmd: "fixture",
-                    sha256: digest,
-                    args: ["Registry Agent", "resume"],
-                  },
-                },
-              },
-            },
-          ],
+          agents: [entry, { ...entry, id: "dedicated-registry-id" }],
         })
       downloads += 1
       return new Response(Uint8Array.from(bytes))
@@ -154,6 +173,8 @@ it.skipIf(process.platform === "win32")(
       await ctx.plugin(threads)
       await ctx.plugin(sessions)
       await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
+      await ctx.plugin(Loader, { baseUrl: pathToFileURL(root + "/").href })
+      await ctx.plugin(plugins, { profileDir: join(root, "profile"), builtin: [dedicated] })
       ctx.agents.register(driver)
       await expect(ctx.agents.acpRegistry()).resolves.toMatchObject([
         { id: "fixture", distribution: "binary" },

@@ -5,11 +5,13 @@ import { Button, SearchField, useLocale } from "@pigcode/ui-primitives"
 export function AcpRegistryPicker({
   load,
   selected,
+  localSelected,
   onUseLocal,
   onSelect,
 }: {
   load: () => Promise<AcpRegistryEntry[]>
   selected: unknown
+  localSelected: boolean
   onUseLocal: () => void
   onSelect: (entry: AcpRegistryEntry) => void
 }) {
@@ -46,7 +48,13 @@ export function AcpRegistryPicker({
             placeholder={t("agents.acp.search")}
           />
         </div>
-        <Button size="sm" type="button" variant="secondary" onClick={onUseLocal}>
+        <Button
+          size="sm"
+          type="button"
+          variant={localSelected ? "primary" : "secondary"}
+          aria-pressed={localSelected}
+          onClick={onUseLocal}
+        >
           {t("agents.acp.useLocal")}
         </Button>
       </div>

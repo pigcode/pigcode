@@ -34,6 +34,9 @@
     "contributes": {
       "agent": {
         "id": "codex",
+        "acpRegistryAgentIds": [
+          "codex-acp"
+        ],
         "description": {
           "zh-CN": "OpenAI 的 Codex CLI，通过 app-server 协议提供审批、计划与原生会话恢复。",
           "en-US": "OpenAI's Codex CLI over the app-server protocol, with approvals, plans and native session resume."

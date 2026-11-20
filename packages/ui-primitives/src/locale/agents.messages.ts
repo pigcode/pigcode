@@ -1,7 +1,6 @@
 /** Agent 设置页与插件列表新增的文案；合并进各 locale 的主词典。 */
 export const agentsZhCN = {
   "agents.cli.title": "CLI 更新",
-  "agents.acp.local": "本地 ACP 命令",
   "agents.acp.useLocal": "使用已有命令",
   "agents.acp.registry": "ACP Registry",
   "agents.acp.search": "搜索 ACP Registry",
@@ -122,7 +121,7 @@ export const agentsZhCN = {
   "agents.instances": "实例",
   "agents.instance.add": "添加实例",
   "agents.instance.addTitle": "添加实例",
-  "agents.instance.addDescription": "为已有 agent 再建一套配置，例如个人号和公司 API 分开用。",
+  "agents.instance.addDescription": "选择要接入的 Agent，再设置实例名称和启动方式。",
   "agents.instance.name": "实例名称",
   "agents.instance.namePlaceholder": "例如 公司 API",
   "agents.instance.idHint":
@@ -145,7 +144,8 @@ export const agentsZhCN = {
   "agents.instance.search": "搜索 agent…",
   "agents.instance.noAgents": "请启用已有的 agent，或在「插件」页安装 agent 插件。",
   "agents.instance.noMatches": "没有匹配的 agent。",
-  "agents.instance.count": "{count} 个实例",
+  "agents.instance.showMore": "更多 Agent",
+  "agents.instance.showLess": "收起更多 Agent",
   "agents.instance.noConfig": "这个 Agent 可以直接创建实例。",
   "plugins.builtin": "内置",
   "plugins.uninstall": "卸载",
@@ -154,7 +154,6 @@ export const agentsZhCN = {
 
 export const agentsEnUS: Record<keyof typeof agentsZhCN, string> = {
   "agents.cli.title": "CLI updates",
-  "agents.acp.local": "Local ACP command",
   "agents.acp.useLocal": "Use an existing command",
   "agents.acp.registry": "ACP Registry",
   "agents.acp.search": "Search the ACP Registry",
@@ -280,7 +279,7 @@ export const agentsEnUS: Record<keyof typeof agentsZhCN, string> = {
   "agents.instance.add": "Add instance",
   "agents.instance.addTitle": "Add an instance",
   "agents.instance.addDescription":
-    "Give an agent a second configuration, for example a personal account and a work API.",
+    "Choose an agent, then name its instance and configure how it starts.",
   "agents.instance.name": "Instance name",
   "agents.instance.namePlaceholder": "e.g. Work API",
   "agents.instance.idHint":
@@ -304,7 +303,8 @@ export const agentsEnUS: Record<keyof typeof agentsZhCN, string> = {
   "agents.instance.search": "Search agents…",
   "agents.instance.noAgents": "Enable an agent or install an agent plugin from the Plugins page.",
   "agents.instance.noMatches": "No matching agents.",
-  "agents.instance.count": "{count} instances",
+  "agents.instance.showMore": "More agents",
+  "agents.instance.showLess": "Show fewer agents",
   "agents.instance.noConfig": "You can create an instance for this agent now.",
   "plugins.builtin": "Built-in",
   "plugins.uninstall": "Uninstall",

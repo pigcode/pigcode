@@ -35,6 +35,9 @@
     "contributes": {
       "agent": {
         "id": "claude",
+        "acpRegistryAgentIds": [
+          "claude-acp"
+        ],
         "description": {
           "zh-CN": "Anthropic 的 Claude Code CLI：审批、提问、计划模式、子代理与 MCP 工具。",
           "en-US": "Anthropic's Claude Code CLI with approvals, questions, plan mode, sub-agents and MCP tools."

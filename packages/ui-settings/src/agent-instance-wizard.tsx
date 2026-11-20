@@ -24,7 +24,7 @@ import {
 } from "@pigcode/ui-primitives"
 import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
 import { AcpRegistryPicker } from "./acp-registry-picker"
-import { instanceIdTaken, instancesOf, suggestInstanceId } from "./agent-instances"
+import { instanceIdTaken, suggestInstanceId } from "./agent-instances"
 
 /** 向导的三步；数组顺序就是步骤条的显示顺序。 */
 const STEPS = ["agent", "identity", "config"] as const
@@ -44,6 +44,38 @@ interface WizardDraft {
 }
 
 const EMPTY_DRAFT: WizardDraft = { label: "", idOverride: null, values: {} }
+
+function AgentOptions({
+  agents,
+  label,
+  selectedId,
+  onSelect,
+}: {
+  agents: readonly AgentSummary[]
+  label: string
+  selectedId: string | null
+  onSelect: (agentId: string) => void
+}) {
+  if (agents.length === 0) return null
+  return (
+    <div className="wizard-agents" role="listbox" aria-label={label}>
+      {agents.map((agent) => (
+        <button
+          key={agent.agentId}
+          type="button"
+          role="option"
+          aria-selected={selectedId === agent.agentId}
+          className="wizard-agent"
+          onClick={() => onSelect(agent.agentId)}
+        >
+          <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
+          <span className="truncate">{agent.displayName}</span>
+          {selectedId === agent.agentId ? <Check className="ic ic-sm" aria-hidden="true" /> : null}
+        </button>
+      ))}
+    </div>
+  )
+}
 
 export interface InstanceCreateWizardProps {
   open: boolean
@@ -72,10 +104,24 @@ export function InstanceCreateWizard({
   const [query, setQuery] = useState("")
   const [pickedId, setPickedId] = useState<string | null>(null)
   const [useLocalAcp, setUseLocalAcp] = useState(false)
+  const [showMore, setShowMore] = useState(false)
   const [drafts, setDrafts] = useState(() => new Map<string, WizardDraft>())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [rejectedId, setRejectedId] = useState<string | null>(null)
+
+  const selectable = useMemo(
+    () => agents.filter((agent) => agent.enabled && agent.registered),
+    [agents],
+  )
+  const featured = selectable.filter((agent) => agent.builtin && !agent.acpRegistry)
+  const additional = selectable.filter((agent) => !agent.builtin && !agent.acpRegistry)
+  const acp = selectable.find((agent) => agent.acpRegistry)
+  const hasMore = acp !== undefined || additional.length > 0
+  const showMoreInitially =
+    hasMore &&
+    (featured.length === 0 ||
+      (agentId !== null && !featured.some((agent) => agent.agentId === agentId)))
 
   // 每次打开都从第一步开始，沿用设置页里正在看的 Agent。
   useEffect(() => {
@@ -84,15 +130,12 @@ export function InstanceCreateWizard({
     setQuery("")
     setPickedId(agentId)
     setUseLocalAcp(false)
+    setShowMore(showMoreInitially)
     setDrafts(new Map())
     setError(null)
     setRejectedId(null)
-  }, [open, agentId])
+  }, [open, agentId, showMoreInitially])
 
-  const selectable = useMemo(
-    () => agents.filter((agent) => agent.enabled && agent.registered),
-    [agents],
-  )
   const picked = selectable.find((agent) => agent.agentId === pickedId) ?? null
   const registryMode = Boolean(picked?.acpRegistry && loadAcpRegistry && !useLocalAcp)
   const runtimeFields =
@@ -110,7 +153,9 @@ export function InstanceCreateWizard({
     [agents],
   )
   const keyword = query.trim().toLowerCase()
-  const matches = selectable.filter((agent) => agent.displayName.toLowerCase().includes(keyword))
+  const matches = (agent: AgentSummary) => agent.displayName.toLowerCase().includes(keyword)
+  const featuredMatches = featured.filter(matches)
+  const moreMatches = additional.filter(matches)
   const draftKey = picked ? picked.agentId + (registryMode ? "/registry" : "") : null
   const draft = draftKey ? (drafts.get(draftKey) ?? EMPTY_DRAFT) : EMPTY_DRAFT
   const registrySelection = registryMode && typeof draft.values.registryId === "string"
@@ -129,11 +174,31 @@ export function InstanceCreateWizard({
       ? t("agents.instance.idHint")
       : null
 
-  function updateDraft(update: (current: WizardDraft) => WizardDraft): void {
-    if (!draftKey) return
-    setDrafts((current) =>
-      new Map(current).set(draftKey, update(current.get(draftKey) ?? EMPTY_DRAFT)),
+  function updateDraft(update: (current: WizardDraft) => WizardDraft, key = draftKey): void {
+    if (!key) return
+    setDrafts((current) => new Map(current).set(key, update(current.get(key) ?? EMPTY_DRAFT)))
+    setError(null)
+  }
+
+  function pickAgent(id: string): void {
+    setPickedId(id)
+    setUseLocalAcp(false)
+    setError(null)
+  }
+
+  function pickRegistryEntry(entry: AcpRegistryEntry): void {
+    if (!acp) return
+    pickAgent(acp.agentId)
+    updateDraft(
+      () => ({ label: entry.name, idOverride: null, values: { registryId: entry.id } }),
+      `${acp.agentId}/registry`,
     )
+  }
+
+  function pickLocalAcp(): void {
+    if (!acp) return
+    setPickedId(acp.agentId)
+    setUseLocalAcp(true)
     setError(null)
   }
 
@@ -219,13 +284,18 @@ export function InstanceCreateWizard({
 
           {step === "agent" ? (
             <div className="wizard-pane">
-              <SearchField
-                size="lg"
-                value={query}
-                onValueChange={setQuery}
-                placeholder={t("agents.instance.search")}
-              />
-              {matches.length === 0 ? (
+              {featured.length + additional.length > 0 ? (
+                <SearchField
+                  size="lg"
+                  value={query}
+                  onValueChange={setQuery}
+                  placeholder={t("agents.instance.search")}
+                />
+              ) : null}
+              {selectable.length === 0 ||
+              (keyword &&
+                featuredMatches.length === 0 &&
+                (!showMore || moreMatches.length === 0)) ? (
                 <p className="agent-muted">
                   {t(
                     selectable.length === 0
@@ -233,66 +303,53 @@ export function InstanceCreateWizard({
                       : "agents.instance.noMatches",
                   )}
                 </p>
-              ) : (
-                <div className="wizard-agents" role="listbox" aria-label={t("agents.list")}>
-                  {matches.map((agent) => {
-                    const selected = agent.agentId === pickedId
-                    return (
-                      <button
-                        key={agent.agentId}
-                        type="button"
-                        role="option"
-                        aria-selected={selected}
-                        className="wizard-agent"
-                        onClick={() => {
-                          if (!selected) setUseLocalAcp(false)
-                          setPickedId(agent.agentId)
-                        }}
-                      >
-                        <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
-                        <span className="wizard-agent-text">
-                          <span className="truncate">{agent.displayName}</span>
-                          {agent.acpRegistry ? null : (
-                            <span className="agent-muted truncate">
-                              {agent.version ??
-                                t("agents.instance.count").replace(
-                                  "{count}",
-                                  String(instancesOf(agent).length),
-                                )}
-                            </span>
-                          )}
-                        </span>
-                        {selected ? <Check className="ic ic-sm" aria-hidden="true" /> : null}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-              {loadAcpRegistry && registryMode ? (
-                <AcpRegistryPicker
-                  load={loadAcpRegistry}
-                  selected={draft.values.registryId}
-                  onUseLocal={() => setUseLocalAcp(true)}
-                  onSelect={(entry) =>
-                    updateDraft(() => ({
-                      label: entry.name,
-                      idOverride: null,
-                      values: { registryId: entry.id },
-                    }))
-                  }
-                />
-              ) : picked?.acpRegistry && loadAcpRegistry ? (
-                <div className="flex items-center justify-between gap-3">
-                  <span>{t("agents.acp.local")}</span>
-                  <Button
-                    size="sm"
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setUseLocalAcp(false)}
-                  >
-                    {t("agents.acp.registry")}
-                  </Button>
-                </div>
+              ) : null}
+              <AgentOptions
+                agents={featuredMatches}
+                label={t("agents.list")}
+                selectedId={pickedId}
+                onSelect={pickAgent}
+              />
+              {hasMore ? (
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                  className="self-start"
+                  aria-expanded={showMore}
+                  onClick={() => setShowMore(!showMore)}
+                >
+                  {t(showMore ? "agents.instance.showLess" : "agents.instance.showMore")}
+                </Button>
+              ) : null}
+              {showMore ? (
+                <>
+                  <AgentOptions
+                    agents={moreMatches}
+                    label={t("agents.instance.showMore")}
+                    selectedId={pickedId}
+                    onSelect={pickAgent}
+                  />
+                  {acp && loadAcpRegistry ? (
+                    <AcpRegistryPicker
+                      load={loadAcpRegistry}
+                      selected={registrySelection ? draft.values.registryId : undefined}
+                      localSelected={picked?.agentId === acp.agentId && useLocalAcp}
+                      onUseLocal={pickLocalAcp}
+                      onSelect={pickRegistryEntry}
+                    />
+                  ) : acp ? (
+                    <Button
+                      size="sm"
+                      type="button"
+                      className="self-start"
+                      aria-pressed={picked?.agentId === acp.agentId}
+                      onClick={pickLocalAcp}
+                    >
+                      {t("agents.acp.useLocal")}
+                    </Button>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : null}

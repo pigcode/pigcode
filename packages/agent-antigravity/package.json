@@ -34,6 +34,9 @@
     "contributes": {
       "agent": {
         "id": "antigravity",
+        "acpRegistryAgentIds": [
+          "antigravity-acp"
+        ],
         "description": {
           "zh-CN": "Google Antigravity CLI，支持通过 ACP 使用独立的 Google 账号和原生会话。",
           "en-US": "Google Antigravity CLI over ACP, with per-instance Google sign-in and native sessions."

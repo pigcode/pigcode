@@ -3,7 +3,11 @@ import { access, mkdir, readdir, readFile, realpath, rename, rm, writeFile } fro
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { z } from "zod"
 import { openAcp, type AcpLaunch } from "@pigcode/acp-runtime"
-import { cliArgumentsSchema, type AcpRegistryEntry } from "@pigcode/contracts"
+import {
+  acpRegistryAgentIdSchema,
+  cliArgumentsSchema,
+  type AcpRegistryEntry,
+} from "@pigcode/contracts"
 import {
   settingEnvironment,
   settingString,
@@ -22,7 +26,6 @@ import {
 import { downloadRuntime, relativeArchivePath } from "./archive"
 
 const registryUrl = "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json"
-const registryId = z.string().regex(/^[a-z][a-z0-9-]{0,127}$/)
 const version = z.string().max(128).min(1)
 const defaults = {
   args: cliArgumentsSchema.optional(),
@@ -39,7 +42,7 @@ const binaryDistribution = z.object({
 })
 const packageDistribution = z.object({ ...defaults, package: z.string().max(512) })
 const agentEntry = z.object({
-  id: registryId,
+  id: acpRegistryAgentIdSchema,
   name: z.string().min(1).max(160),
   version,
   description: z.string().max(1024),
@@ -64,7 +67,7 @@ type Installation = z.infer<typeof installationSchema>
 
 function readId(settings: AgentSettingsValues): string | undefined {
   const value = settingString(settings, "registryId")
-  return value === undefined ? undefined : registryId.parse(value)
+  return value === undefined ? undefined : acpRegistryAgentIdSchema.parse(value)
 }
 
 function registryDir(instance: AgentInstanceContext, id: string) {
@@ -145,16 +148,17 @@ export class RegistryRuntimes {
 
   async list(): Promise<AcpRegistryEntry[]> {
     const catalog = await this.catalog()
-    return [...catalog.values()].map(
-      ({ id, name, version, description, license, distribution }) => ({
+    const managers = { npx: findExecutable("npm"), uvx: findExecutable("uv") }
+    return [...catalog.values()]
+      .filter(({ distribution }) => distribution === "binary" || managers[distribution])
+      .map(({ id, name, version, description, license, distribution }) => ({
         id,
         name,
         version,
         description,
         ...(license ? { license } : {}),
         distribution,
-      }),
-    )
+      }))
   }
 
   async launch(

@@ -15,6 +15,7 @@ import type {
   AgentModel,
   AgentStatus,
 } from "@pigcode/contracts"
+import { isAgentPlugin, readAgentContribution } from "@pigcode/plugin-sdk"
 import {
   DEFAULT_AGENT_KEY,
   DEFAULT_INSTANCE_KEY,
@@ -187,10 +188,18 @@ export function createAgentCatalog(
 
   return {
     async acpRegistry() {
-      const builtins = new Set(["claude-acp", "codex-acp", "antigravity-acp"])
-      return ((await drivers.get("acp")?.acpRegistry?.()) ?? []).filter(
-        ({ id }) => !builtins.has(id),
+      const entries = await drivers.get("acp")?.acpRegistry?.()
+      if (!entries?.length) return []
+      const records = (await ctx.get("plugins")?.records()) ?? []
+      const dedicated = new Set(
+        records.flatMap(({ manifest, builtin, disabled }) => {
+          if (!manifest || !isAgentPlugin(manifest)) return []
+          const agent = readAgentContribution(manifest)
+          if (!agent || (!builtin && (disabled || !drivers.has(agent.id)))) return []
+          return agent.acpRegistryAgentIds ?? []
+        }),
       )
+      return entries.filter(({ id }) => !dedicated.has(id))
     },
     settingsFor,
     settingsForInstance(agentId, instanceId) {

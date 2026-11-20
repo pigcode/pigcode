@@ -106,6 +106,8 @@ export const cliArgumentsSchema = z
   )
   .max(128)
 
+export const acpRegistryAgentIdSchema = z.string().regex(/^[a-z][a-z0-9-]{0,127}$/)
+
 export interface AcpRegistryEntry {
   id: string
   name: string
@@ -128,6 +130,8 @@ export const agentContributionSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
     acpRegistry: z.boolean().optional(),
+    /** 已由这个专用插件接入的 ACP Registry 条目。 */
+    acpRegistryAgentIds: z.array(acpRegistryAgentIdSchema).optional(),
     description: localizedTextSchema.optional(),
     /** 桌面端只用系统浏览器打开 https 链接。 */
     homepage: z.url({ protocol: /^https$/ }).optional(),
