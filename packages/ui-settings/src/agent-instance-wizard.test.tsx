@@ -111,9 +111,7 @@ async function openWizard(
   await userEvent.click(screen.getByRole("button", { name: "添加实例" }))
   const wizard = within(screen.getByRole("dialog"))
   expect(wizard.getByRole("option", { name: "Claude Code" })).toBeTruthy()
-  expect(wizard.queryByRole("option", { name: "Other" })).toBeNull()
   expect(wizard.queryByText("0.99.7")).toBeNull()
-  await userEvent.click(wizard.getByRole("button", { name: "更多 Agent" }))
   expect(wizard.getByRole("option", { name: "Other" })).toBeTruthy()
   return { wizard, prepare, create, auth, openExternal }
 }
@@ -131,9 +129,9 @@ it("prepares from the row before identity, saves once, and offers account setup 
   expect(openExternal).toHaveBeenCalledWith(item.website)
   expect(prepare).not.toHaveBeenCalled()
   expect(wizard.queryByText(item.version)).toBeNull()
-  await userEvent.click(button("添加 Amp"))
+  await userEvent.click(wizard.getByRole("option", { name: "添加 Amp" }))
   expect(prepare).toHaveBeenCalledExactlyOnceWith(item.id)
-  expect(button("下载中… Amp")).toHaveProperty("disabled", true)
+  expect(wizard.getByRole("option", { name: "下载中… Amp" })).toHaveProperty("disabled", true)
   expect(create).not.toHaveBeenCalled()
   installing.resolve(item)
   expect(await wizard.findByRole("textbox", { name: "实例名称" })).toHaveProperty("value", "Amp")
@@ -160,9 +158,9 @@ it("retries a failed preparation in place and can leave the prepared draft witho
     .mockRejectedValueOnce(new Error("Download failed"))
     .mockResolvedValue(item)
   const { wizard, create } = await openWizard({ prepare: attempt })
-  await userEvent.click(await wizard.findByRole("button", { name: "添加 Amp" }))
+  await userEvent.click(await wizard.findByRole("option", { name: "添加 Amp" }))
   expect((await wizard.findByRole("alert")).textContent).toContain("Download failed")
-  await userEvent.click(button("重试 Amp"))
+  await userEvent.click(wizard.getByRole("option", { name: "重试 Amp" }))
   await wizard.findByRole("textbox", { name: "实例名称" })
   await userEvent.click(wizard.getByRole("button", { name: "关闭" }))
   expect(attempt).toHaveBeenCalledTimes(2)
@@ -182,8 +180,8 @@ it("uses the manual registry ID and executable override for a second configurati
     },
   ]
   const { wizard, prepare, create } = await openWizard({ instances })
-  expect(await wizard.findByRole("button", { name: "已添加 Amp" })).toHaveProperty("disabled", true)
-  await userEvent.click(button("手动填写"))
+  expect(await wizard.findByRole("option", { name: "已添加 Amp" })).toHaveProperty("disabled", true)
+  await userEvent.click(button("输入 Registry ID"))
   await userEvent.type(field("ACP Registry ID"), item.id)
   await userEvent.type(field("可执行文件"), "my-amp-acp")
   await userEvent.type(field("认证方式 ID"), "terminal")
@@ -227,9 +225,7 @@ it("takes the literal local command before identity and finishes without an inst
 it("saves an optional accent and uses a recognizable default label for an unnamed instance", async () => {
   const { wizard, create } = await openWizard()
   await userEvent.click(wizard.getByRole("option", { name: "Claude Code" }))
-  await userEvent.click(wizard.getByRole("button", { name: "下一步" }))
   fireEvent.change(wizard.getByLabelText("实例强调色"), { target: { value: "#a0522d" } })
-  await userEvent.click(wizard.getByRole("button", { name: "下一步" }))
   await userEvent.click(wizard.getByRole("button", { name: "创建实例" }))
   expect(create).toHaveBeenCalledWith(
     expect.objectContaining({ label: "Claude Code", accentColor: "#a0522d" }),
@@ -259,7 +255,10 @@ it("creates a named, private Codex account from the ChatGPT branch before starti
   }
   const { wizard, create } = await openWizard({ extras: [codex] })
   expect(wizard.getByRole("option", { name: "Codex" }).getAttribute("aria-selected")).toBe("true")
-  await userEvent.click(wizard.getByRole("button", { name: "使用 ChatGPT 账号" }))
+  await userEvent.click(wizard.getByRole("option", { name: "Codex" }))
+  expect(
+    wizard.getByRole("radio", { name: "使用 ChatGPT 账号" }).getAttribute("aria-checked"),
+  ).toBe("true")
   const name = wizard.getByRole("textbox", { name: "账号名称" })
   await userEvent.clear(name)
   await userEvent.type(name, "Work")
@@ -270,5 +269,21 @@ it("creates a named, private Codex account from the ChatGPT branch before starti
       label: "ChatGPT - Work",
       values: { setupMode: "managed" },
     }),
+  )
+})
+
+it("searches direct connections and registry agents from the same input and supports keyboard activation", async () => {
+  const { wizard, prepare } = await openWizard()
+  const search = wizard.getByRole("combobox", { name: "搜索 Agent 或 Registry ID" })
+  await userEvent.type(search, "claude")
+  expect(wizard.getAllByRole("option")).toHaveLength(1)
+  await userEvent.clear(search)
+  await userEvent.type(search, "amp-acp{Enter}")
+  expect(prepare).toHaveBeenCalledExactlyOnceWith(item.id)
+  await wizard.findByRole("textbox", { name: "实例名称" })
+  await userEvent.click(wizard.getByRole("button", { name: "返回目录" }))
+  expect(wizard.getByRole("combobox", { name: "搜索 Agent 或 Registry ID" })).toHaveProperty(
+    "value",
+    "amp-acp",
   )
 })

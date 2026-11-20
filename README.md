@@ -148,7 +148,7 @@ and UI plugins load and unload without restarting the app.
 
 每个实例单独保存运行配置、自定义模型和标识色。默认 Antigravity 实例可沿用本机 CLI 的登录。在 Pigcode 里连接的 ChatGPT 和 Google 账号分别保存在相应实例下。Antigravity 支持个人 Google 账号、Gemini Enterprise、Gemini API 密钥和 Vertex AI。使用企业登录或 Vertex API 密钥时，Pigcode 会按需准备 Google 官方的独立 ACP 运行时。依赖本机 CLI 登录的 Agent 沿用各自 CLI 的凭据。
 
-实例页显示实际运行时版本和登录状态，模型出现在会话输入框的模型选择器里。环境变量可设为敏感值，也可引用 1Password CLI 中的凭据。
+在实例清单里选中一行，可以查看连接状态、运行时和模型。Claude 实例的「会话压缩」显示生效的规则，可覆盖本实例或修改 Claude 默认值。模型也会出现在会话输入框的模型选择器里。环境变量可设为敏感值，也可引用 1Password CLI 中的凭据。
 
 The Plugins page sits next to New chat in the sidebar and keeps the workspace sidebar. It
 groups plugins by kind into two columns of cards: a switch per plugin, Open for plugins

@@ -141,7 +141,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
         value: list.claudeIdleCompaction ?? "onReturn",
         set: async (mode) => {
           await connection.call("agent.setClaudeIdleCompaction", { mode })
-          await refresh()
+          setList((current) => ({ ...current, claudeIdleCompaction: mode }))
         },
       }}
       registry={{ list: loadAcpRegistry, prepare: prepareAcpRegistry }}

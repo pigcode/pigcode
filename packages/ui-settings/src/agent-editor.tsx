@@ -1,9 +1,5 @@
-/**
- * 实例展开后的设置（参照 t3code 设置页里实例的展开区）：最上面是概览（介绍、账号、版本与可执行文件），
- * 下面按标签页分开：模型（显示、排序、自定义）、运行设置、环境变量，自建实例还有一页「实例」
- * （改名、删除）。保存条在最下面，所有标签页的改动一起保存，对之后新建的会话生效。
- */
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+/** 同一份实例草稿供模型、运行、会话和环境设置使用。 */
+import { useMemo, useState, type ReactNode } from "react"
 import { Check, Trash2 } from "lucide-react"
 import {
   localizeText,
@@ -29,12 +25,16 @@ import {
 } from "./agent-fields"
 import { AccentField } from "./instance-accent"
 import { ModelsEditor, arrangeModels, type AgentModelInfo } from "./agent-models"
+import { ClaudeCompactionSettings, type ClaudeDefaults } from "./claude-compaction-settings"
+import { sameValues, type InstanceEdits } from "./instance-edits"
 import { AgentOverview } from "./agent-overview"
 
 export type { AgentModelInfo } from "./agent-models"
 
 /** 详情面板需要的回调；保存失败时抛错，由面板展示原因。 */
 export interface AgentEditorProps {
+  edits: InstanceEdits
+  idleDefaults?: ClaudeDefaults | undefined
   cliUpdate?: ReactNode
   setup?: ReactNode
   agent: AgentSummary
@@ -61,30 +61,8 @@ export interface AgentEditorProps {
   onOpenExternal?: ((url: string) => void) | undefined
 }
 
-/** 留空的值：保存时 Host 会去掉，比较时当作没有。 */
-function blank(value: unknown): boolean {
-  return (
-    value === undefined ||
-    value === null ||
-    value === "" ||
-    (Array.isArray(value) && value.length === 0)
-  )
-}
-
-/** 两份设置是否相同；对象键顺序与留空的项不影响结果。 */
-function sameValues(left: AgentSettingsValues, right: AgentSettingsValues): boolean {
-  const normalize = (values: AgentSettingsValues) =>
-    JSON.stringify(
-      Object.keys(values)
-        .filter((key) => !blank(values[key]))
-        .sort()
-        .map((key) => [key, values[key]]),
-    )
-  return normalize(left) === normalize(right)
-}
-
 /** 标签页。 */
-type EditorTab = "models" | "runtime" | "env" | "instance"
+type EditorTab = "connection" | "compaction" | "models" | "runtime" | "env" | "instance"
 
 /** 标签页里的一组：可选的小标题与说明，下面是内容。 */
 function Block({
@@ -111,6 +89,8 @@ function Block({
 
 /** 渲染实例的详情面板；保存成功后以 Host 返回的值为准。 */
 export function AgentEditor({
+  edits: pending,
+  idleDefaults,
   cliUpdate,
   setup,
   agent,
@@ -128,26 +108,30 @@ export function AgentEditor({
   onOpenExternal,
 }: AgentEditorProps) {
   const { locale, t } = useLocale()
-  const [draft, setDraft] = useState<AgentSettingsValues>(instance.values)
-  const [label, setLabel] = useState(instance.label)
-  const [color, setColor] = useState(instance.accentColor)
+  // 仅保留用户改过的键。Host 刷新提供最新底稿，实例切换时父组件按 ID 重新挂载。
+  const { values: edits, setValues: setEdits, label: editedName, color: editedColor } = pending
+  const draft = useMemo(() => {
+    const values = { ...instance.values }
+    for (const [key, value] of Object.entries(edits)) {
+      if (value === undefined) delete values[key]
+      else values[key] = value
+    }
+    return values
+  }, [edits, instance.values])
+  const label = editedName ?? instance.label
+  const color = editedColor === null ? undefined : (editedColor ?? instance.accentColor)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
 
-  // Host 刷新后同步草稿。保存提示由操作本身管理，列表刷新可能晚于保存回调。
-  useEffect(() => {
-    setDraft(instance.values)
-    setLabel(instance.label)
-    setColor(instance.accentColor)
-    setConfirmRemove(false)
-  }, [instance.instanceId, instance.label, instance.accentColor, instance.values])
-
   const dirty = useMemo(() => !sameValues(draft, instance.values), [draft, instance.values])
   const renamed = label.trim() !== instance.label || color !== instance.accentColor
+  const claudeContext =
+    agent.agentId === "claude" && agent.fields.some((field) => field.key === "idleCompaction")
   const runtimeFields = agent.fields.filter(
     (field) =>
       field.visibility !== "hidden" &&
+      !(claudeContext && (field.key === "idleCompaction" || field.key === "autoCompactWindow")) &&
       !(
         agent.agentId === "codex" &&
         draft.setupMode === "managed" &&
@@ -161,6 +145,7 @@ export function AgentEditor({
   const isDefaultForSessions = defaultInstanceId === instance.instanceId
   const modelRows = useMemo(() => (models ? arrangeModels(models, draft) : null), [models, draft])
   const tabs: { value: EditorTab; label: string; count?: number | undefined }[] = [
+    { value: "connection", label: t("agents.directory.connection") },
     ...(agent.customModels || models
       ? [
           {
@@ -173,6 +158,7 @@ export function AgentEditor({
     ...(runtimeFields.length > 0
       ? [{ value: "runtime" as const, label: t("agents.section.runtime") }]
       : []),
+    ...(claudeContext ? [{ value: "compaction" as const, label: t("agents.claude.context") }] : []),
     ...(envFields.length > 0 ? [{ value: "env" as const, label: t("agents.section.env") }] : []),
     ...(isDefault
       ? []
@@ -184,7 +170,14 @@ export function AgentEditor({
   const set = (key: string, value: unknown) => patch({ [key]: value })
   const patch = (changes: Record<string, unknown>) => {
     setNotice(null)
-    setDraft((current) => ({ ...current, ...changes }))
+    setEdits((current) => {
+      const next = { ...current }
+      for (const [key, value] of Object.entries(changes)) {
+        if (sameValues({ [key]: instance.values[key] }, { [key]: value })) delete next[key]
+        else next[key] = value
+      }
+      return next
+    })
   }
 
   /** 统一处理实例操作：期间禁用按钮，失败时把原因写进提示。 */
@@ -203,11 +196,18 @@ export function AgentEditor({
   async function save(): Promise<void> {
     const values = cleanAgentValues(agent.fields, draft)
     if (!values) {
-      setNotice({ kind: "error", text: t("agents.env.invalid") })
+      setNotice({ kind: "error", text: t("agents.settings.invalid") })
       return
     }
     await run(async () => {
       await onSave(values)
+      setEdits((current) =>
+        Object.fromEntries(
+          Object.entries(current).filter(
+            ([key, value]) => !Object.hasOwn(edits, key) || value !== edits[key],
+          ),
+        ),
+      )
       setNotice({ kind: "ok", text: t("agents.saved") })
     })
   }
@@ -240,18 +240,6 @@ export function AgentEditor({
 
   return (
     <div className="agent-editor">
-      <AgentOverview
-        agent={agent}
-        hasAccountSetup={Boolean(setup)}
-        status={status}
-        revealed={revealed}
-        onReveal={onReveal}
-        action={isDefault ? setDefaultButton : undefined}
-        onOpenExternal={onOpenExternal}
-        versionControl={cliUpdate}
-      />
-      {setup}
-
       {tabs.length > 0 ? (
         <Tabs.Root
           className="agent-tabs"
@@ -267,6 +255,21 @@ export function AgentEditor({
             ))}
           </Tabs.List>
 
+          <Tabs.Panel value="connection">
+            <Block>
+              <AgentOverview
+                agent={agent}
+                hasAccountSetup={Boolean(setup)}
+                status={status}
+                revealed={revealed}
+                onReveal={onReveal}
+                action={isDefault ? setDefaultButton : undefined}
+                onOpenExternal={onOpenExternal}
+                versionControl={cliUpdate}
+              />
+              {setup}
+            </Block>
+          </Tabs.Panel>
           <Tabs.Panel value="models">
             <Block description={t("agents.models.description")}>
               <ModelsEditor
@@ -290,6 +293,19 @@ export function AgentEditor({
             </Block>
           </Tabs.Panel>
 
+          {claudeContext && (
+            <Tabs.Panel value="compaction">
+              <Block>
+                <ClaudeCompactionSettings
+                  defaultPolicy={idleDefaults?.value}
+                  onChangeDefault={idleDefaults?.set}
+                  values={draft}
+                  threshold={agent.fields.find((field) => field.key === "autoCompactWindow")}
+                  onChange={set}
+                />
+              </Block>
+            </Tabs.Panel>
+          )}
           <Tabs.Panel value="env">
             {envFields.map((field) => {
               const fieldLabel = localizeText(field.label, locale)
@@ -326,7 +342,12 @@ export function AgentEditor({
                       value={label}
                       maxLength={120}
                       disabled={saving}
-                      onChange={(event) => setLabel(event.target.value)}
+                      onChange={(event) =>
+                        pending.setIdentity({
+                          label:
+                            event.target.value === instance.label ? undefined : event.target.value,
+                        })
+                      }
                     />
                     <Button
                       size="lg"
@@ -340,6 +361,7 @@ export function AgentEditor({
                               ? { accentColor: color ?? null }
                               : {}),
                           })
+                          pending.clearSavedIdentity()
                           setNotice({ kind: "ok", text: t("agents.saved") })
                         })
                       }
@@ -351,7 +373,15 @@ export function AgentEditor({
                     {t("agents.instance.idLabel")} <code>{instance.instanceId}</code>
                   </p>
                 </div>
-                <AccentField color={color} onChange={setColor} />
+                <AccentField
+                  color={color}
+                  disabled={saving}
+                  onChange={(value) =>
+                    pending.setIdentity({
+                      color: value === instance.accentColor ? undefined : (value ?? null),
+                    })
+                  }
+                />
                 <div className="agent-identity-actions">
                   {setDefaultButton}
                   {confirmRemove ? (
@@ -396,52 +426,56 @@ export function AgentEditor({
         </Tabs.Root>
       ) : null}
 
-      <footer className="agent-actions" data-dirty={dirty || undefined}>
-        <Button
-          size="sm"
-          variant="ghost"
-          type="button"
-          disabled={Object.keys(draft).length === 0}
-          onClick={() => {
-            setNotice(null)
-            setDraft({})
-          }}
-        >
-          {t("agents.reset")}
-        </Button>
-        <span className="spacer" />
-        {notice ? (
-          <span
-            className={notice.kind === "ok" ? "agent-notice" : "agent-notice error-text"}
-            role="status"
+      {(activeTab !== "connection" || dirty || notice) && (
+        <footer className="agent-actions" data-dirty={dirty || undefined}>
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            disabled={Object.keys(draft).length === 0}
+            onClick={() => {
+              setNotice(null)
+              setEdits(
+                Object.fromEntries(Object.keys(instance.values).map((key) => [key, undefined])),
+              )
+            }}
           >
-            {notice.text}
-          </span>
-        ) : dirty ? (
-          <span className="agent-notice">{t("agents.unsaved")}</span>
-        ) : null}
-        <Button
-          size="sm"
-          variant="ghost"
-          type="button"
-          disabled={!dirty || saving}
-          onClick={() => {
-            setNotice(null)
-            setDraft(instance.values)
-          }}
-        >
-          {t("agents.revert")}
-        </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          type="button"
-          disabled={!dirty || saving}
-          onClick={() => void save()}
-        >
-          {saving ? t("agents.saving") : t("agents.save")}
-        </Button>
-      </footer>
+            {t("agents.reset")}
+          </Button>
+          <span className="spacer" />
+          {notice ? (
+            <span
+              className={notice.kind === "ok" ? "agent-notice" : "agent-notice error-text"}
+              role="status"
+            >
+              {notice.text}
+            </span>
+          ) : dirty ? (
+            <span className="agent-notice">{t("agents.unsaved")}</span>
+          ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            type="button"
+            disabled={!dirty || saving}
+            onClick={() => {
+              setNotice(null)
+              setEdits({})
+            }}
+          >
+            {t("agents.revert")}
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            type="button"
+            disabled={!dirty || saving}
+            onClick={() => void save()}
+          >
+            {saving ? t("agents.saving") : t("agents.save")}
+          </Button>
+        </footer>
+      )}
     </div>
   )
 }

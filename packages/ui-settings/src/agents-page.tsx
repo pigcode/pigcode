@@ -1,6 +1,6 @@
 /** Agent 设置页与实例的就地编辑。 */
-import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, Plus, RefreshCw } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ChevronDown, Plus, RefreshCw, X } from "lucide-react"
 import type {
   AgentInstance,
   AgentInstanceDraft,
@@ -8,16 +8,16 @@ import type {
   AgentStatus,
   AgentSummary,
   AgentCliUpdateState,
-  ClaudeIdlePolicy,
 } from "@pigcode/contracts"
 import { AgentIcon, Button, EmptyState, Select, useLocale } from "@pigcode/ui-primitives"
-import { ClaudeIdleDefault } from "./instance-accent"
+import type { ClaudeDefaults } from "./claude-compaction-settings"
 import { AgentEditor } from "./agent-editor"
 import type { AgentModelInfo } from "./agent-models"
 import type { PickPath } from "./agent-fields"
 import { InstanceCreateWizard } from "./agent-instance-wizard"
-import type { RegistryActions } from "./acp-registry-picker"
-import { allInstances, hasInstanceSignIn, instancesOf } from "./agent-instances"
+import type { RegistryActions } from "./agent-directory"
+import { allInstances, hasInstanceSignIn } from "./agent-instances"
+import { useInstanceEdits } from "./instance-edits"
 import { InstanceHead } from "./agent-instance-head"
 import { AgentCliUpdate } from "./agent-cli-update"
 import { AgentSetup, type AgentSetupActions } from "./agent-setup"
@@ -26,8 +26,7 @@ export type { AgentModelInfo } from "./agent-models"
 
 /** Agent 页的数据与操作；操作失败时抛错，页面展示原因。 */
 export interface AgentsPageProps {
-  idleDefaults?:
-    { value: ClaudeIdlePolicy; set: (mode: ClaudeIdlePolicy) => Promise<void> } | undefined
+  idleDefaults?: ClaudeDefaults | undefined
   cliUpdates?: Readonly<Record<string, AgentCliUpdateState>> | undefined
   checkingCliUpdates?: boolean | undefined
   onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
@@ -99,6 +98,10 @@ export function AgentsPage({
   const { t } = useLocale()
   const entries = useMemo(() => allInstances(agents), [agents])
   const [openId, setOpenId] = useState<string | null>(null)
+  const detailTitle = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    if (openId) detailTitle.current?.scrollIntoView?.({ block: "nearest" })
+  }, [openId])
   // 显示了邮箱原文的实例；卡片头与概览共用，离开页面后重新遮住。
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set())
   const toggleReveal = (id: string) =>
@@ -121,20 +124,17 @@ export function AgentsPage({
 
   // 新会话实际会用的实例：用户选的实例优先；只选了 agent 时用它自己的默认实例。
   // 两个都没配时是「自动」，由 Host 按可用性挑。
-  const sessionDefaultId = useMemo(() => {
-    if (defaultInstanceId && entries.some((e) => e.instance.instanceId === defaultInstanceId)) {
-      return defaultInstanceId
-    }
-    const agent = agents.find((item) => item.agentId === defaultAgentId)
-    if (!agent) return null
-    return instancesOf(agent).find((item) => item.isDefault)?.instanceId ?? agent.agentId
-  }, [defaultInstanceId, defaultAgentId, entries, agents])
-
-  // 默认选择器只列启用的实例：停用的实例新会话不会用到，选它没有意义。
   const defaultChoices = entries.filter(
     (entry) => entry.agent.enabled && entry.agent.registered && entry.instance.enabled,
   )
+  const sameAgent = defaultChoices.filter((entry) => entry.agent.agentId === defaultAgentId)
+  const selectedDefault =
+    defaultChoices.find((entry) => entry.instance.instanceId === defaultInstanceId) ??
+    sameAgent.find((entry) => entry.instance.isDefault) ??
+    sameAgent[0]
+  const sessionDefaultId = selectedDefault?.instance.instanceId ?? null
   const openEntry = entries.find((entry) => entry.instance.instanceId === openId) ?? null
+  const instanceEdits = useInstanceEdits(openEntry?.instance)
 
   async function run(key: string, action: () => Promise<void>): Promise<void> {
     setPending(key)
@@ -154,7 +154,6 @@ export function AgentsPage({
       <header className="page-head">
         <div>
           <h1>{t("settings.agents")}</h1>
-          <p className="sub">{t("agents.sub")}</p>
         </div>
         <div className="actions">
           {onUpdateCli &&
@@ -217,9 +216,6 @@ export function AgentsPage({
       ) : null}
 
       <section className="section">
-        <div className="section-head">
-          <h2>{t("agents.section.session")}</h2>
-        </div>
         <div className="group">
           <div className="agents-default">
             <div className="agents-default-label">
@@ -276,15 +272,25 @@ export function AgentsPage({
       </section>
 
       <section className="section">
-        <div className="section-head">
+        <div className="section-head agent-list-head">
           <h2>{t("agents.instances")}</h2>
+          {entries.length > 0 && (
+            <>
+              <span>{t("agents.directory.status")}</span>
+              <span>{t("agents.directory.enabled")}</span>
+            </>
+          )}
         </div>
         <div className="agents-list" aria-label={t("agents.instances")}>
           {entries.length === 0 ? (
             <EmptyState
               size="compact"
               title={t("agents.empty")}
-              description={t("agents.emptyHint")}
+              description={t(
+                agents.some((agent) => agent.registered && agent.enabled)
+                  ? "agents.emptyConnect"
+                  : "agents.emptyHint",
+              )}
             />
           ) : null}
           {entries.map((entry) => {
@@ -313,63 +319,94 @@ export function AgentsPage({
                     })
                   }
                 />
-                {open && openEntry ? (
-                  <AgentEditor
-                    key={id}
-                    agent={openEntry.agent}
-                    instance={openEntry.instance}
-                    status={statuses[id]}
-                    revealed={revealed.has(id)}
-                    onReveal={() => toggleReveal(id)}
-                    models={models[id]}
-                    defaultInstanceId={sessionDefaultId}
-                    onSave={(values) =>
-                      onSaveSettings(openEntry.agent, openEntry.instance, values).then(
-                        () => undefined,
-                      )
-                    }
-                    onUpdateInstance={(instanceId, patch) =>
-                      onUpdateInstance(openEntry.agent, instanceId, patch)
-                    }
-                    onRemoveInstance={(instanceId) =>
-                      onRemoveInstance(openEntry.agent, instanceId).then(() => setOpenId(null))
-                    }
-                    onSetDefaultInstance={(instanceId) => onSetDefault(instanceId)}
-                    onPickPath={onPickPath}
-                    onOpenExternal={onOpenExternal}
-                    setup={
-                      hasInstanceSignIn(openEntry) && setupActions ? (
-                        <AgentSetup
-                          entry={openEntry}
-                          status={statuses[id]}
-                          actions={setupActions}
-                          update={cliUpdates[id]}
-                          onInstall={onUpdateCli ? () => onUpdateCli(id) : undefined}
-                          openExternal={onOpenExternal}
-                        />
-                      ) : null
-                    }
-                    cliUpdate={
-                      onCheckCliUpdates && onUpdateCli ? (
-                        <AgentCliUpdate
-                          version={statuses[id]?.version ?? null}
-                          state={cliUpdates[id]}
-                          checking={checkingCliUpdates}
-                          onCheck={() => onCheckCliUpdates(id)}
-                          onUpdate={() => onUpdateCli(id)}
-                        />
-                      ) : null
-                    }
-                  />
-                ) : null}
               </div>
             )
           })}
         </div>
       </section>
 
-      {idleDefaults && agents.some((a) => a.agentId === "claude") && (
-        <ClaudeIdleDefault value={idleDefaults.value} onChange={idleDefaults.set} />
+      {openEntry && openId && (
+        <section
+          className="agents-inspector"
+          id="agent-instance-details"
+          aria-labelledby="agent-detail-name"
+        >
+          <header className="agent-detail-head">
+            <AgentIcon
+              agentId={openEntry.agent.agentId}
+              instanceId={openId}
+              name={openEntry.label}
+              accentColor={openEntry.instance.accentColor}
+            />
+            <h2 ref={detailTitle} id="agent-detail-name">
+              {openEntry.label}
+            </h2>
+            {!openEntry.instance.isDefault && (
+              <span className="agent-muted">{openEntry.agent.displayName}</span>
+            )}
+            <Button
+              size="icon-lg"
+              variant="ghost"
+              aria-label={t("agents.directory.closeDetails")}
+              onClick={() => {
+                document.getElementById("agent-select-" + openId)?.focus()
+                setOpenId(null)
+              }}
+            >
+              <X className="ic ic-sm" />
+            </Button>
+          </header>
+          <AgentEditor
+            key={openId}
+            edits={instanceEdits}
+            idleDefaults={idleDefaults}
+            agent={openEntry.agent}
+            instance={openEntry.instance}
+            status={statuses[openId]}
+            revealed={revealed.has(openId)}
+            onReveal={() => toggleReveal(openId)}
+            models={models[openId]}
+            defaultInstanceId={sessionDefaultId}
+            onSave={(values) =>
+              onSaveSettings(openEntry.agent, openEntry.instance, values).then(() => undefined)
+            }
+            onUpdateInstance={(instanceId, patch) =>
+              onUpdateInstance(openEntry.agent, instanceId, patch)
+            }
+            onRemoveInstance={(instanceId) =>
+              onRemoveInstance(openEntry.agent, instanceId).then(() => {
+                instanceEdits.discard()
+                setOpenId((current) => (current === instanceId ? null : current))
+              })
+            }
+            onSetDefaultInstance={(instanceId) => onSetDefault(instanceId)}
+            onPickPath={onPickPath}
+            onOpenExternal={onOpenExternal}
+            setup={
+              hasInstanceSignIn(openEntry) && setupActions ? (
+                <AgentSetup
+                  entry={openEntry}
+                  status={statuses[openId]}
+                  actions={setupActions}
+                  update={cliUpdates[openId]}
+                  onInstall={onUpdateCli ? () => onUpdateCli(openId) : undefined}
+                  openExternal={onOpenExternal}
+                />
+              ) : null
+            }
+            cliUpdate={
+              onCheckCliUpdates && onUpdateCli ? (
+                <AgentCliUpdate
+                  version={statuses[openId]?.version ?? null}
+                  state={cliUpdates[openId]}
+                  checking={checkingCliUpdates}
+                  onCheck={() => onCheckCliUpdates(openId)}
+                  onUpdate={() => onUpdateCli(openId)}
+                />
+              ) : null
+            }
+          />
+        </section>
       )}
       {wizardOpen && (
         <InstanceCreateWizard
@@ -379,6 +416,7 @@ export function AgentsPage({
           }}
           agents={agents}
           agentId={openEntry?.agent.agentId ?? null}
+          claudeDefault={idleDefaults?.value}
           onPickPath={onPickPath}
           registry={registry}
           setupActions={setupActions}

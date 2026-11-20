@@ -1,12 +1,5 @@
 import { CircleArrowUp, ChevronDown, LoaderCircle } from "lucide-react"
-import {
-  AgentIcon,
-  Badge,
-  agentBrandOf,
-  StatusDot,
-  Switch,
-  useLocale,
-} from "@pigcode/ui-primitives"
+import { AgentIcon, agentBrandOf, StatusDot, Switch, useLocale } from "@pigcode/ui-primitives"
 import type { AgentStatus, AgentCliUpdateState } from "@pigcode/contracts"
 import type { AgentInstanceEntry } from "./agent-instances"
 import { instanceHeadline } from "./agent-status"
@@ -51,6 +44,8 @@ export function InstanceHead({
         <button
           type="button"
           className="agent-row-hit"
+          id={"agent-select-" + instance.instanceId}
+          aria-controls={open ? "agent-instance-details" : undefined}
           aria-expanded={open}
           aria-label={t("agents.select").replace("{instance}", label)}
           onClick={onToggle}
@@ -68,23 +63,25 @@ export function InstanceHead({
           <span className="agent-row-title">
             <span className="agent-row-name truncate">{label}</span>
             {custom ? <code className="agent-row-id">{instance.instanceId}</code> : null}
-            {sessionDefault ? <Badge>{t("agents.instance.isSessionDefault")}</Badge> : null}
+            {sessionDefault && (
+              <small className="agent-default-mark">{t("agents.instance.isSessionDefault")}</small>
+            )}
           </span>
-          <span className="agent-row-status" data-tone={headline.tone}>
-            <StatusDot tone={headline.tone} />
-            <span className="agent-row-state">{t(headline.label)}</span>
-            {signedIn && status?.email ? (
-              <SensitiveText
-                className="agent-row-email"
-                value={status.email}
-                revealed={revealed}
-                onToggle={onReveal}
-              />
-            ) : null}
-            {signedIn && status?.account ? (
-              <span className="agent-plan truncate">{status.account}</span>
-            ) : null}
-          </span>
+        </span>
+        <span className="agent-row-status" data-tone={headline.tone}>
+          <StatusDot tone={headline.tone} />
+          <span className="agent-row-state">{t(headline.label)}</span>
+          {signedIn && status?.email ? (
+            <SensitiveText
+              className="agent-row-email"
+              value={status.email}
+              revealed={revealed}
+              onToggle={onReveal}
+            />
+          ) : null}
+          {signedIn && status?.account ? (
+            <span className="agent-plan truncate">{status.account}</span>
+          ) : null}
         </span>
         {update && (update.available || updating) ? (
           <button

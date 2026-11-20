@@ -4,42 +4,58 @@ import {
   type AcpRegistryEntry,
   type AgentSummary,
 } from "@pigcode/contracts"
-import { AgentIcon, Button, Dialog, Input, useLocale } from "@pigcode/ui-primitives"
+import { AgentIcon, Button, Input, SegmentedControl, useLocale } from "@pigcode/ui-primitives"
 import { AccentField } from "./instance-accent"
-import { RegistryIcon } from "./acp-registry-picker"
+import { RegistryIcon } from "./agent-directory"
 
-export function AgentChoices({
-  agents,
+export function CodexConnection({
+  agent,
+  managed,
+  busy,
   label,
-  selectedId,
-  disabled,
-  onSelect,
+  onLabel,
+  onMode,
 }: {
-  agents: readonly AgentSummary[]
+  agent: AgentSummary
+  managed: boolean
+  busy: boolean
   label: string
-  selectedId?: string | undefined
-  disabled: boolean
-  onSelect: (agent: AgentSummary) => void
+  onLabel(value: string): void
+  onMode(mode: "managed" | "plugin"): void
 }) {
-  if (!agents.length) return null
+  const { t } = useLocale()
   return (
-    <div className="wizard-agents" role="listbox" aria-label={label}>
-      {agents.map((agent) => (
-        <button
-          key={agent.agentId}
-          type="button"
-          role="option"
-          disabled={disabled}
-          aria-selected={selectedId === agent.agentId}
-          className="wizard-agent"
-          onClick={() => onSelect(agent)}
-        >
-          <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
-          <span className="truncate">{agent.displayName}</span>
-          {selectedId === agent.agentId && <Check className="ic ic-sm" aria-hidden="true" />}
-        </button>
-      ))}
-    </div>
+    <>
+      <SegmentedControl
+        aria-label={t("agents.directory.connection")}
+        value={managed ? "managed" : "plugin"}
+        disabled={busy}
+        onValueChange={onMode}
+        options={[
+          { value: "managed", label: t("agents.codex.signIn") },
+          { value: "plugin", label: t("agents.codex.manual") },
+        ]}
+      />
+      {managed && (
+        <div className="instance-identity">
+          <div className="wizard-picked">
+            <AgentIcon agentId={agent.agentId} name={agent.displayName} />
+            <span>{agent.displayName}</span>
+          </div>
+          <label className="field">
+            {t("agents.codex.accountName")}
+            <Input
+              size="xl"
+              autoFocus
+              maxLength={100}
+              value={label}
+              placeholder={t("agents.codex.personal")}
+              onChange={(e) => onLabel(e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -68,7 +84,7 @@ export function InstanceIdentity({
 }) {
   const { t } = useLocale()
   return (
-    <div className="wizard-pane">
+    <div className="instance-identity">
       {entry ? (
         <div className="acp-identity">
           <RegistryIcon entry={entry} />
@@ -125,85 +141,6 @@ export function InstanceIdentity({
   )
 }
 
-export function WizardFooter({
-  created,
-  connected,
-  locked,
-  saving,
-  error,
-  first,
-  disabled,
-  nextLabel,
-  onBack,
-  onNext,
-  onManaged,
-}: {
-  created: boolean
-  connected: boolean
-  locked: boolean
-  saving: boolean
-  error: string | null
-  first: boolean
-  disabled: boolean
-  nextLabel: string
-  onBack: () => void
-  onNext: () => void
-  onManaged?: (() => void) | undefined
-}) {
-  const { t } = useLocale()
-  return (
-    <Dialog.Footer className="wizard-footer">
-      {error && (
-        <p className="error-text wizard-error" role="alert">
-          {error}
-        </p>
-      )}
-      {created ? (
-        <Button
-          size="lg"
-          variant={connected ? "primary" : "secondary"}
-          disabled={locked}
-          onClick={onBack}
-        >
-          {t(connected ? "agents.acp.done" : "agents.acp.skip")}
-        </Button>
-      ) : (
-        <>
-          <Button type="button" size="lg" variant="ghost" disabled={saving} onClick={onBack}>
-            {t(first ? "agents.instance.cancel" : "agents.instance.back")}
-          </Button>
-          {onManaged ? (
-            <>
-              <Button
-                type="button"
-                size="lg"
-                variant="secondary"
-                disabled={disabled}
-                onClick={onNext}
-              >
-                {t("agents.codex.manual")}
-              </Button>
-              <Button
-                type="button"
-                size="lg"
-                variant="primary"
-                disabled={disabled}
-                onClick={onManaged}
-              >
-                {t("agents.codex.signIn")}
-              </Button>
-            </>
-          ) : (
-            <Button type="button" size="lg" variant="primary" disabled={disabled} onClick={onNext}>
-              {nextLabel}
-            </Button>
-          )}
-        </>
-      )}
-    </Dialog.Footer>
-  )
-}
-
 export function SignInIdentity({
   label,
   instanceId,
@@ -230,48 +167,6 @@ export function SignInIdentity({
       </div>
       {entry && <RegistryLinks entry={entry} openExternal={openExternal} />}
     </div>
-  )
-}
-
-export type WizardStep = "agent" | "identity" | "config" | "signIn"
-const stepLabels = {
-  agent: "agents.instance.step.agent",
-  identity: "agents.instance.step.identity",
-  config: "agents.instance.step.config",
-  signIn: "agents.acp.account",
-} as const
-
-export function WizardSteps({
-  steps,
-  index,
-  locked,
-  onStep,
-}: {
-  steps: readonly WizardStep[]
-  index: number
-  locked: boolean
-  onStep: (step: WizardStep) => void
-}) {
-  const { t } = useLocale()
-  return (
-    <ol className="wizard-steps" aria-label={t("agents.instance.steps")}>
-      {steps.map((item, i) => (
-        <li key={item} className="wizard-step" data-current={i === index || undefined}>
-          <button
-            type="button"
-            className="wizard-step-btn"
-            aria-current={i === index ? "step" : undefined}
-            disabled={locked || i > index}
-            onClick={() => onStep(item)}
-          >
-            <span className="wizard-step-mark" data-done={i < index || undefined}>
-              {i < index ? <Check className="ic ic-sm" aria-hidden="true" /> : i + 1}
-            </span>
-            {t(stepLabels[item])}
-          </button>
-        </li>
-      ))}
-    </ol>
   )
 }
 

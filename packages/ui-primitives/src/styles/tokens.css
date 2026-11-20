@@ -584,7 +584,9 @@
   --schedule-template-h: 114px;
   --instance-accent-default: #5279bf;
   --wizard-pane-min-h: 236px;
-  --acp-directory-row-height: 56px;
+  --agent-instance-row-h: 56px;
+  --acp-directory-row-height: var(--agent-instance-row-h);
+  --agent-status-column: clamp(100px, 17vw, 208px);
   --acp-login-terminal-height: 240px;
   --acp-login-terminal-min-height: 120px;
   --turn-nav-item-h: 10px;

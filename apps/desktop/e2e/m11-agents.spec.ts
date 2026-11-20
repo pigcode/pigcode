@@ -35,7 +35,9 @@ test("signs in to built-in Antigravity from Agent settings", async () => {
     await page.getByRole("button", { name: "连接", exact: true }).click()
     const signOut = page.getByRole("button", { name: "退出 Google 登录", exact: true })
     await expect(signOut).toBeVisible()
+    await page.getByRole("tab", { name: /^模型/ }).click()
     await expect(page.getByRole("list", { name: "模型" })).toContainText("work model")
+    await page.getByRole("tab", { name: "连接" }).click()
     await signOut.click()
     await expect(signIn).toBeEnabled()
   } finally {
@@ -68,7 +70,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(claude.locator(".agent-brand")).toHaveAttribute("data-brand", "claude")
     await expect(codex.locator(".agent-brand")).toHaveAttribute("data-brand", "openai")
     await codex.click()
-    await wizard.getByRole("button", { name: "手动配置" }).click()
+    await wizard.getByRole("radio", { name: "使用已有 CLI" }).click()
     await expect(wizard.locator(".wizard-picked .agent-brand")).toHaveAttribute(
       "data-brand",
       "openai",
@@ -97,7 +99,6 @@ test("agents are plugins with settings that reach the composer", async () => {
     await expect(instanceId).toHaveCSS("box-shadow", invalidShadow)
     await expect(instanceId).toHaveCSS("height", "36px")
     await instanceId.fill("work_codex")
-    await wizard.getByRole("button", { name: "下一步" }).click()
     const runtimeValues = {
       homePath: join(profileDir, "work-home"),
       launchArgs: "-c model_reasoning_summary=detailed",
@@ -160,7 +161,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await model.fill("gpt-work-e2e")
     await model.press("Enter")
     await editor.getByRole("button", { name: "保存" }).click()
-    await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await expect(editor.getByText("实例设置已保存")).toBeVisible()
     await page.screenshot({ path: "test-results/agents-codex-settings.png" })
 
     const persisted = readFileSync(settingsPath, "utf8")
@@ -225,10 +226,10 @@ test("agents are plugins with settings that reach the composer", async () => {
     await editor.getByRole("tab", { name: "运行" }).click()
     await editor.getByRole("textbox", { name: "启动参数" }).fill(runtimeValues.launchArgs)
     await editor.getByRole("button", { name: "保存" }).click()
-    await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await expect(editor.getByText("实例设置已保存")).toBeVisible()
     await editor.getByRole("button", { name: "恢复默认" }).click()
     await editor.getByRole("button", { name: "保存" }).click()
-    await expect(editor.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await expect(editor.getByText("实例设置已保存")).toBeVisible()
   } finally {
     await app.close()
     rmSync(profileDir, { recursive: true, force: true })
@@ -243,12 +244,10 @@ test("an agent can hold several instances, and threads bind to the one they used
     await page.getByRole("button", { name: "添加实例" }).click()
     const fakeAgent = page.getByRole("option", { name: /^Fake Agent/ })
     await expect(fakeAgent.locator(".entity-avatar")).toHaveText("FA")
-    // 三步向导：Agent 已预选，填写名称并用默认配置创建。
-    await page.getByRole("button", { name: "下一步" }).click()
+    await fakeAgent.click()
     await page.getByRole("textbox", { name: "实例名称" }).fill("公司 API")
-    await page.getByRole("button", { name: "下一步" }).click()
     const wizard = page.getByRole("dialog", { name: "添加实例" })
-    await expect(wizard.getByText("这个 Agent 可以直接创建实例。")).toBeVisible()
+    await expect(wizard.locator(".wizard-config")).toHaveCount(0)
     await wizard.getByRole("button", { name: "创建实例" }).click()
     await expect(wizard).toBeHidden()
     // 新建后自动展开新实例，并读取 Agent 返回的模型目录。
@@ -317,7 +316,7 @@ test("projects, threads and agent settings survive a restart", async () => {
     await page.getByRole("tab", { name: "运行" }).click()
     await page.getByRole("textbox", { name: "启动参数" }).fill("--chrome")
     await page.getByRole("button", { name: "保存" }).click()
-    await expect(page.getByText("已保存，对之后新建的会话生效")).toBeVisible()
+    await expect(page.getByText("实例设置已保存")).toBeVisible()
     await first.close()
 
     const second = await electron.launch({ args: launchArgs(), env })
@@ -335,5 +334,69 @@ test("projects, threads and agent settings survive a restart", async () => {
   } finally {
     rmSync(profileDir, { recursive: true, force: true })
     rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("Claude defaults persist without replacing an instance draft, and an override stays independent", async () => {
+  const profile = mkdtempSync(join(tmpdir(), "pigcode-e2e-claude-defaults-"))
+  const { app, page } = await openThread("claude-defaults", { PIGCODE_PROFILE_DIR: profile })
+  const stored = () => JSON.parse(readFileSync(join(profile, "settings.json"), "utf8"))
+  try {
+    await openAgents(page)
+    await expect(page.getByText("高级设置", { exact: true })).toHaveCount(0)
+    await page.getByRole("button", { name: "打开 Claude Code 的设置" }).click()
+    const editor = page.locator(".agent-editor")
+    await editor.getByRole("tab", { name: "运行", exact: true }).click()
+    const args = editor.getByRole("textbox", { name: "启动参数", exact: true })
+    await args.fill("--verbose")
+    await editor.getByRole("tab", { name: "会话压缩" }).click()
+    const rule = editor.getByRole("combobox", { name: "空闲会话", exact: true })
+    await expect(rule).toContainText("跟随 Claude 默认 · 恢复会话时询问")
+    const global = editor.getByRole("button", { name: "编辑 Claude 默认值" })
+    const changeDefault = async (choice: string) => {
+      await global.click()
+      await editor.getByRole("combobox", { name: "Claude 默认规则" }).click()
+      await page.getByRole("option", { name: choice, exact: true }).click()
+      await expect(global).toHaveAttribute("aria-expanded", "false")
+    }
+    await changeDefault("缓存到期前自动压缩")
+    await expect(rule).toContainText("跟随 Claude 默认 · 缓存到期前自动压缩")
+    expect(stored()["claude.idleCompaction"]).toBe("beforeCacheExpires")
+    expect(stored()["agents.claude"]?.launchArgs).toBeUndefined()
+    await rule.click()
+    await page.getByRole("option", { name: "空闲时不压缩", exact: true }).click()
+    await editor.getByRole("tab", { name: "运行", exact: true }).click()
+    await expect(args).toHaveValue("--verbose")
+    await editor.getByRole("button", { name: "保存", exact: true }).click()
+    await expect(editor.getByText("实例设置已保存")).toBeVisible()
+    await editor.getByRole("tab", { name: "会话压缩" }).click()
+    await changeDefault("恢复会话时询问")
+    await expect(rule).toHaveText("空闲时不压缩")
+    expect(stored()["agents.claude"]).toMatchObject({
+      idleCompaction: "off",
+      launchArgs: "--verbose",
+    })
+    await app.close()
+    const restart = await electron.launch({
+      args: launchArgs(),
+      env: launchEnv({ PIGCODE_PROFILE_DIR: profile }),
+    })
+    try {
+      const again = await restart.firstWindow()
+      await openAgents(again)
+      await again.getByRole("button", { name: "打开 Claude Code 的设置" }).click()
+      await again.getByRole("tab", { name: "会话压缩" }).click()
+      const persistedRule = again.getByRole("combobox", { name: "空闲会话", exact: true })
+      await expect(persistedRule).toHaveText("空闲时不压缩")
+      await persistedRule.click()
+      await expect(
+        again.getByRole("option", { name: "跟随 Claude 默认 · 恢复会话时询问" }),
+      ).toBeVisible()
+    } finally {
+      await restart.close()
+    }
+  } finally {
+    await app.close().catch(() => undefined)
+    rmSync(profile, { recursive: true, force: true })
   }
 })

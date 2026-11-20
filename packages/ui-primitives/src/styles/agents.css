@@ -1,143 +1,125 @@
-/*
-  ─── Agent 设置页（参照 t3code 的 Agent 设置页）───────────────
-  页面和其他设置页一样是单列：「新会话」一张卡片，下面每个实例一张卡片。卡片头整块可点：
-  品牌色的图标方块、名字、状态与登录的账号，右边是展开箭头与启用开关。展开后卡片浮起一点，
-  里面依次是概览（介绍、账号信息格）、标签页（模型、运行、环境变量、实例）与保存条。
-*/
+/* 实例目录与详情共用设置页的表面、字号和焦点样式。 */
 .agents-page .page-head {
-  align-items: flex-start;
+  align-items: center;
 }
-
-/* 新会话默认实例：标题在左，选择器在右 */
 .agents-default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-7);
-  padding: 11px 14px;
+  gap: 16px;
+  padding: 16px;
 }
 .agents-default-label {
-  display: flex;
+  display: grid;
+  gap: 4px;
   min-width: 0;
-  flex-direction: column;
-  gap: 2px;
   font-size: var(--fs-md);
 }
 .agents-default .select-trigger {
   width: 220px;
   flex: none;
 }
-
-/* ─── 实例卡片 ─── */
+.agents-page .agent-list-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--agent-status-column) 24px 12px 32px;
+  align-items: baseline;
+  gap: 8px;
+  padding-inline: 16px;
+}
+.agent-list-head > span {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.agent-list-head > span:last-child {
+  grid-column: 5;
+  text-align: end;
+}
 .agents-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-.agents-list > .empty-state[data-size="compact"] {
-  padding: 24px 14px;
+  overflow: hidden;
+  border: var(--hair) solid var(--border);
   border-radius: var(--r-panel);
   background: var(--surface);
-  box-shadow: var(--shadow-raised);
 }
-.agent-card {
-  border-radius: var(--r-panel);
-  background: var(--surface);
-  box-shadow: var(--shadow-raised);
-  transition: box-shadow var(--t-med) var(--ease);
+.agents-list > .empty-state {
+  padding: 24px 16px;
 }
-.agent-card[data-open] {
-  box-shadow: var(--shadow-raised), var(--shadow-composer);
+.agent-card + .agent-card {
+  border-top: var(--hair) solid var(--divider);
 }
 .agent-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding-right: 14px;
-}
-/* 卡片头：展开按钮铺满左边这一块，里面的文字不接鼠标，只有邮箱的显示按钮浮在上面可点 */
-.agent-row-main {
   position: relative;
-  display: flex;
-  min-width: 0;
-  flex: 1;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) var(--agent-status-column) 24px 12px 32px;
   align-items: center;
-  gap: var(--space-6);
-  padding: 12px 4px 12px 12px;
+  gap: 8px;
+  min-height: var(--agent-instance-row-h);
+  padding: 8px 16px;
+}
+.agent-row[data-open] {
+  background: var(--active);
+}
+.agent-row:hover:not([data-open]) {
+  background: var(--hover);
+}
+.agent-row-main {
+  display: contents;
 }
 .agent-row-main > :not(.agent-row-hit) {
   pointer-events: none;
 }
 .agent-row-hit {
   position: absolute;
-  inset: 0;
-  border-radius: var(--r-panel) 0 0 var(--r-panel);
+  inset: 0 56px 0 0;
+  border-radius: var(--r-sm);
 }
 .agent-row-hit:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--border-focus);
+  outline-offset: -2px;
+  outline: 2px solid var(--border-focus);
 }
-.agent-row-main .sensitive {
-  position: relative;
-  z-index: 1;
-  pointer-events: auto;
-}
-
-/* 图标方块：Claude 用品牌橙的浅底，其余用中性浅底，外面一圈细边 */
 .agent-tile {
-  position: relative;
+  grid-column: 1;
+  grid-row: 1;
   display: grid;
-  width: var(--control-lg);
-  height: var(--control-lg);
-  flex: none;
   place-items: center;
-  border-radius: var(--r-lg);
-  background: var(--field);
-  box-shadow: inset 0 0 0 var(--hair) var(--border);
-  --agent-icon-ring: var(--surface);
-}
-.agent-tile[data-brand="claude"] {
-  background: color-mix(in oklch, var(--brand-claude) 13%, transparent);
-  box-shadow: inset 0 0 0 var(--hair) color-mix(in oklch, var(--brand-claude) 28%, transparent);
+  width: 24px;
+  height: var(--control-sm);
 }
 .agent-row-text {
-  display: flex;
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
 }
 .agent-row-title {
   display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
 }
 .agent-row-name {
   min-width: 0;
-  color: var(--fg);
+  max-width: 100%;
   font-size: var(--fs-md);
-  font-weight: 560;
-  letter-spacing: -0.005em;
+  font-weight: 550;
 }
-/* 自建实例的 id：等宽小字，带浅底 */
-.agent-row-id {
-  flex: none;
-  padding: 1px 5px;
-  border-radius: var(--r-xs);
-  background: var(--field);
+.agent-row-id,
+.agent-default-mark {
   color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-2xs);
+  font-size: var(--fs-xs);
+}
+.agent-row-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .agent-row-status {
+  grid-column: 3;
+  grid-row: 1;
   display: flex;
-  min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  min-width: 0;
+  gap: 2px 6px;
+  color: var(--fg-2);
   font-size: var(--fs-sm);
-  line-height: 1.45;
 }
 .agent-row-state {
   flex: none;
@@ -148,14 +130,91 @@
 .agent-row-status[data-tone="warning"] .agent-row-state {
   color: var(--warn-text);
 }
-/* 登录的账号：邮箱跟在状态后面，前面一个小圆点隔开 */
-.agent-row-state + .agent-row-email::before {
-  margin-right: 6px;
-  color: var(--faint);
-  content: "·";
+.agent-row-main .sensitive,
+.agent-row-main .agent-row-update {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
 }
-.agent-row-main:hover .agent-row-caret {
+.agent-row .agent-plan {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.agent-row .agent-row-update {
+  grid-column: 4;
+  grid-row: 1;
+}
+.agent-row-caret {
+  grid-column: 5;
+  grid-row: 1;
+  color: var(--muted);
+  transform: rotate(-90deg);
+}
+.agent-row[data-open] .agent-row-caret {
+  transform: none;
+}
+.agent-row > [role="switch"] {
+  grid-column: 6;
+  grid-row: 1;
+  justify-self: end;
+}
+.agents-inspector {
+  margin-block-start: var(--space-9);
+  border: var(--hair) solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+  padding: 16px;
+}
+.agent-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-lg);
+  margin-bottom: 12px;
+}
+.agent-detail-head h2 {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+.agent-detail-head > .btn {
+  margin-inline-start: auto;
+}
+.agent-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.claude-context {
+  display: grid;
+  gap: 20px;
+}
+.claude-policy {
+  display: grid;
+  gap: 8px;
+}
+.claude-policy-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.claude-policy-heading .select-trigger {
+  width: min(72%, 280px);
+}
+.claude-default-control > .btn {
   color: var(--fg-2);
+}
+.claude-default-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 8px 12px;
+  align-items: center;
+  background: var(--field);
+  padding: 12px;
+  border-radius: var(--r-md);
+}
+.claude-default-editor > p {
+  grid-column: 1/-1;
 }
 
 /* 敏感文字（账号邮箱）：默认是打乱的字符加模糊，点一下显示原文 */
@@ -191,36 +250,6 @@
 .agent-stat .sensitive {
   color: var(--fg);
 }
-/* 订阅：小号的胶囊 */
-.agent-plan {
-  flex: none;
-  max-width: 40%;
-  padding: 0 6px;
-  border-radius: var(--r-full);
-  background: var(--field);
-  box-shadow: inset 0 0 0 var(--hair) var(--border);
-  color: var(--fg-2);
-  font-size: var(--fs-2xs);
-  line-height: 17px;
-}
-.agent-row-caret {
-  flex: none;
-  margin-left: var(--space-3);
-  color: var(--faint);
-  transition: transform var(--t-med) var(--ease);
-}
-.agent-row[data-open] .agent-row-caret {
-  transform: rotate(180deg);
-}
-
-/* ─── 展开区 ─── */
-.agent-editor {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-7);
-  padding: 2px 16px 0 56px;
-}
-
 /* 概览：介绍一行，下面一块浅底的信息格 */
 .agent-overview {
   display: flex;
@@ -586,8 +615,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 -16px 0 -56px;
-  padding: 10px 16px 10px 56px;
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
   border-top: var(--hair) solid var(--border-strong);
   border-radius: 0 0 var(--r-panel) var(--r-panel);
   transition: background var(--t-med) var(--ease);
@@ -619,9 +648,6 @@
   .agents-default .select-trigger {
     width: 100%;
   }
-  .agent-editor {
-    padding-left: 16px;
-  }
   .agent-actions {
     margin-left: -16px;
     padding-left: 16px;
@@ -634,9 +660,9 @@
   }
 }
 
-/* ─── 新建实例的向导 ─── */
+/* 添加面板采用与命令搜索一致的单列结果，只有结果区滚动。 */
 .dialog.instance-wizard {
-  width: min(680px, calc(100vw - 32px));
+  width: min(600px, calc(100vw - 32px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -648,181 +674,154 @@
 .instance-wizard > .dialog-head,
 .instance-wizard > .dialog-body,
 .instance-wizard > .dialog-foot {
-  padding-inline: var(--space-9);
+  padding-inline: 20px;
 }
 .instance-wizard > .dialog-body {
-  min-height: 0;
   overflow-y: auto;
+  min-height: 0;
 }
-.wizard-steps {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding-bottom: var(--space-5);
-  box-shadow: inset 0 -1px 0 var(--divider);
-}
-.wizard-step {
-  flex: 1;
-  min-width: 0;
-}
-.wizard-step-btn {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2);
-  border-radius: var(--r-md);
-  color: var(--muted);
-  font-size: var(--fs-sm);
-  text-align: left;
-  white-space: nowrap;
-}
-.wizard-step-btn:not(:disabled):hover {
-  background: var(--hover);
-  color: var(--fg);
-}
-.wizard-step-btn:disabled {
-  cursor: default;
-}
-.wizard-step[data-current] .wizard-step-btn {
-  color: var(--fg);
-  font-weight: 550;
-}
-.wizard-step-mark {
-  display: grid;
-  width: var(--control-xs);
-  height: var(--control-xs);
-  flex: none;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--field);
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-}
-.wizard-step[data-current] .wizard-step-mark {
-  background: var(--accent-soft-strong);
-  color: var(--accent-text);
-}
-.wizard-step-mark[data-done] {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-.wizard-pane {
+.instance-wizard[data-view="agent"] > .dialog-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-7);
-  min-height: var(--wizard-pane-min-h);
+  overflow: hidden;
+  padding: 0;
 }
-/* 专用 Agent 是选择项，目录里的添加操作在单列清单内。 */
-.wizard-agents {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4);
-}
-.wizard-agent {
+.agent-directory {
   display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  min-height: var(--row-h-lg);
-  padding: var(--space-4) var(--space-6);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
-  text-align: left;
-  transition:
-    background var(--t-fast),
-    box-shadow var(--t-fast);
-}
-.wizard-agent:hover {
-  background: var(--hover);
-}
-.wizard-agent[aria-selected="true"] {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent-ring);
-}
-.wizard-agent > .agent-icon {
-  width: var(--control-sm);
-  height: var(--control-sm);
-}
-.wizard-agent .agent-brand {
-  width: var(--agent-icon-size);
-  height: var(--agent-icon-size);
-}
-.wizard-agent .entity-avatar {
-  --avatar-size: var(--avatar-lg);
-}
-.wizard-agent > .ic:last-child {
-  margin-inline-start: auto;
-}
-.wizard-sources {
+  flex-direction: column;
   min-height: 0;
 }
-.wizard-disclosure {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--control-sm);
-  color: var(--muted);
-  font-size: var(--fs-sm);
+.agent-directory > .search-field {
+  width: auto;
+  flex: none;
+  margin: 0 16px 8px;
+  padding-inline: 8px;
 }
-.wizard-disclosure:hover {
-  color: var(--fg);
-}
-.wizard-disclosure[aria-expanded="true"] .ic {
-  transform: rotate(180deg);
-}
-.acp-registry,
-.acp-account {
-  display: grid;
-  gap: var(--space-6);
-  min-width: 0;
-}
-.acp-registry-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-6);
-  color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.acp-registry-heading::after {
-  content: "";
-  flex: 1;
-  border-top: var(--hair) solid var(--divider);
-}
-.acp-registry-tools {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-4);
-}
-.acp-registry-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-height: min(280px, 36vh);
-  overflow-y: auto;
+.agent-directory-results {
+  overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  min-height: 0;
+  max-height: min(52vh, 440px);
+  padding: 0 16px 8px;
 }
-.acp-registry-row,
-.acp-identity {
-  display: grid;
-  grid-template-columns: var(--control-sm) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-6);
-  min-height: var(--acp-directory-row-height);
-  padding-inline: var(--space-2);
-}
-.acp-registry-item + .acp-registry-item {
+.agent-directory-group + .agent-directory-group {
   border-top: var(--hair) solid var(--divider);
+  margin-block-start: 8px;
+}
+.agent-directory-heading {
+  padding: 12px 8px 4px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+}
+.agent-directory-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  border-radius: var(--r-md);
+}
+.agent-directory-entry[data-active],
+.agent-directory-entry:focus-within {
+  background: var(--active);
+}
+.agent-directory-entry > .error-text {
+  flex-basis: 100%;
+  padding: 0 8px 8px;
+}
+.agent-directory-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--bar-h);
+  gap: 12px;
+  padding: 6px 8px;
+  text-align: start;
+  border-radius: inherit;
+}
+.agent-directory-option > .agent-icon,
+.agent-directory-option > .acp-registry-icon {
+  flex: none;
+  width: 20px;
+  height: var(--agent-icon-lg);
+  display: grid;
+  place-items: center;
+}
+.agent-directory-option:disabled {
+  color: var(--muted);
+}
+.agent-directory-name {
+  flex-shrink: 0;
+  max-width: 68%;
+  font-weight: 500;
+  font-size: var(--fs-md);
+}
+.agent-directory-description {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.agent-directory-action {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  margin-inline-start: auto;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+.agent-directory-option .agent-directory-action > .ic:only-child {
+  visibility: hidden;
+}
+.agent-directory-entry[data-active] .agent-directory-action > .ic:only-child {
+  visibility: visible;
+}
+.agent-directory-manual,
+.agent-directory-notice {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+}
+.agent-directory-manual {
+  border-top: var(--hair) solid var(--divider);
+  justify-content: space-between;
+}
+.agent-directory-notice {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.wizard-pane {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+.instance-identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+.instance-identity > .wizard-picked,
+.instance-identity > .acp-identity,
+.instance-identity > :last-child {
+  grid-column: 1/-1;
+}
+.acp-account {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.acp-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 4px;
 }
 .acp-registry-icon {
   display: grid;
   place-items: center;
-  width: var(--control-sm);
+  width: 24px;
   height: var(--control-sm);
   color: var(--muted);
 }
@@ -835,37 +834,16 @@
   filter: invert(0.9) hue-rotate(180deg);
 }
 .acp-registry-copy {
-  display: flex;
+  flex: 1;
+  display: grid;
   min-width: 0;
-  flex-direction: column;
-  gap: var(--space-1);
 }
 .acp-registry-name {
-  font-size: var(--fs-xl);
-  font-weight: 500;
+  font-weight: 550;
 }
-.acp-registry-description,
-.acp-registry-notice {
+.acp-registry-description {
   color: var(--muted);
-  font-size: var(--fs-sm);
-}
-.acp-registry-actions,
-.acp-manual-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-.acp-registry-add {
-  min-width: 76px;
-}
-.acp-registry-error {
-  margin: 0 0 var(--space-4) calc(var(--control-sm) + var(--space-6));
-}
-.acp-manual-heading {
-  justify-content: space-between;
-}
-.acp-identity {
-  border-bottom: var(--hair) solid var(--divider);
+  font-size: var(--fs-xs);
 }
 .acp-account > .btn {
   justify-self: start;
@@ -878,38 +856,53 @@
   border-radius: var(--r-block);
   background: var(--term-bg);
 }
-@media (max-width: 520px) {
-  .wizard-agents {
-    grid-template-columns: 1fr;
-  }
-  .acp-registry-tools {
-    grid-template-columns: auto 1fr;
-    justify-items: start;
-  }
-  .acp-registry-tools > :first-child {
-    grid-column: 1 / -1;
-    width: 100%;
-  }
-}
 .wizard-picked {
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: 8px;
+  font-weight: 550;
+}
+.instance-compaction {
+  border-block-start: var(--hair) solid var(--divider);
+  padding-block-start: 12px;
+}
+.instance-compaction summary {
+  cursor: pointer;
+  font-weight: 500;
   font-size: var(--fs-sm);
 }
-/* 第三步：字段随正文滚动，返回与创建始终可见。 */
+.instance-compaction .claude-context {
+  margin-block-start: 12px;
+}
 .wizard-config {
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
+.wizard-config legend {
+  width: 100%;
+  padding: 12px 0 8px;
+  margin-bottom: 8px;
+  border-top: var(--hair) solid var(--divider);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}
 .wizard-footer {
   flex-wrap: wrap;
+  justify-content: space-between;
 }
 .wizard-error {
   flex-basis: 100%;
+}
+@media (max-width: 640px) {
+  .agent-row-id,
+  .agent-directory-description {
+    display: none;
+  }
+  .instance-identity {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* ─── 插件安装对话框 ─── */

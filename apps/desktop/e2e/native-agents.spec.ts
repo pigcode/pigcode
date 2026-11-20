@@ -116,29 +116,17 @@ test("bundled agent choices, instance fields and native model discovery", async 
     await checkNames(list, ["Claude Code", "Codex", "Antigravity"])
     await page.getByRole("button", { name: "添加实例", exact: true }).click()
     const wizard = page.getByRole("dialog", { name: "添加实例" })
-    await checkNames(wizard.getByRole("option"), featured)
-    const more = wizard.getByRole("button", { name: "更多 Agent", exact: true })
-    await more.click()
-    await checkNames(wizard.getByRole("listbox", { name: "更多 Agent" }).getByRole("option"), extra)
-    const entries = wizard.locator(".acp-registry-name")
-    await expect(entries).toHaveText(["unlisted-example"])
-    await wizard.getByRole("button", { name: "收起更多 Agent", exact: true }).click()
-    await expect(entries).toHaveCount(0)
-
+    const group = wizard.getByRole("group", { name: "可直接配置" })
+    await checkNames(group.getByRole("option"), [...featured, ...extra])
+    const catalog = wizard.getByRole("group", { name: "ACP Registry" })
+    await expect(catalog.getByRole("option")).toHaveCount(1)
+    await expect(catalog.getByRole("option")).toHaveAccessibleName("添加 unlisted-example")
     for (const [agent, fields] of Object.entries(forms)) {
-      if (
-        extra.includes(agent) &&
-        !(await wizard.getByRole("option", { name: agent, exact: true }).isVisible())
-      )
-        await more.click()
       await wizard.getByRole("option", { name: agent, exact: true }).click()
-      const next = wizard.getByRole("button", { name: "下一步", exact: true })
-      await next.click()
       if (agent === "Grok") {
         await wizard.getByRole("textbox", { name: "实例名称" }).fill("Grok 本地")
         await wizard.getByRole("textbox", { name: "实例 ID" }).fill("grok_local")
       }
-      await next.click()
       const config = wizard.locator(".wizard-config")
       await expect(config.locator("input")).toHaveCount(fields.length)
       for (const label of fields)
@@ -147,9 +135,7 @@ test("bundled agent choices, instance fields and native model discovery", async 
         await config.getByLabel("可执行文件", { exact: true }).fill(grokFixture(directory))
         await wizard.getByRole("button", { name: "创建实例" }).click()
       } else {
-        const back = wizard.getByRole("button", { name: "上一步", exact: true })
-        await back.click()
-        await back.click()
+        await wizard.getByRole("button", { name: "返回目录" }).click()
       }
     }
     await expect(wizard).toBeHidden()

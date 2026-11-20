@@ -158,7 +158,7 @@ agent 的介绍和设置字段写在 `package.json` 的 `contributes.agent` 里�
 | `installHint`      | 否   | 检测到 agent 没安装时给用户的提示，例如安装命令。                              |
 | `settings`         | 否   | 设置字段，默认 `[]`；`key` 不能重复。                                          |
 | `customModels`     | 否   | 是否允许用户添加自定义模型 id，默认 `true`。                                   |
-| `featured`         | 否   | 控制 Agent 卡片在添加实例向导中是否优先展示。                                  |
+| `featured`         | 否   | 控制 Agent 在添加面板的搜索结果中是否优先展示。                                |
 | `requiresInstance` | 否   | 仅在用户创建实例后探测运行时和模型。驱动可以通过实例上下文访问自己的数据目录。 |
 
 没写 `contributes.agent` 时，Host 从 `provides` 里的 `agent:<id>` 推断 agent id，
