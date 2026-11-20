@@ -13,7 +13,7 @@ export async function createThread(
   const { projectId, title, agentId, parentThreadId, worktree } = value
   const parent = parentThreadId ? ctx.threads.get(parentThreadId) : undefined
   const modes = resolveModes(
-    modesForAgent(ctx, agentId),
+    modesForAgent(ctx, agentId, value.instanceId),
     {
       permissionMode: value.permissionMode ?? parent?.permissionMode,
       planMode: value.planMode ?? parent?.planMode,

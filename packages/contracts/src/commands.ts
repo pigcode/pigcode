@@ -64,6 +64,7 @@ const agentDefaultParams = z.object({})
 const agentModelsParams = z.object({
   agentId: z.string().min(1).optional(),
   instanceId: z.string().min(1).optional(),
+  withModes: z.boolean().optional(),
 })
 /** 换 Agent 或模型；返回 `{ agentId, instanceId, modelId, handoff, forkFromNativeSessionId }`。 */
 const threadSwitchAgentParams = z.object({
@@ -146,6 +147,7 @@ export const commandSchemas = {
   }),
   "agent.detect": agentDetectParams,
   "agent.cliUpdates": z.object({}),
+  "agent.acpRegistry": z.object({}),
   "agent.auth": z.object({ instanceId: z.string().min(1), request: agentAuthActionSchema }),
   "agent.cancelCliUpdate": z.object({ instanceId: z.string().min(1) }),
   "agent.removeCli": z.object({ instanceId: z.string().min(1) }),

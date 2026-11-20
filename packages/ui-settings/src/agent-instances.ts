@@ -34,7 +34,7 @@ export function suggestInstanceId(
  * 默认实例的 id 就是 agent id，值是 `agent.values`。
  */
 export function instancesOf(agent: AgentSummary): AgentInstance[] {
-  if (agent.instances.length > 0) return agent.instances
+  if (agent.acpRegistry || agent.instances.length > 0) return agent.instances
   return [
     {
       instanceId: agent.agentId,

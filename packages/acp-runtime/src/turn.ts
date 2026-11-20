@@ -99,7 +99,7 @@ export async function answerPermission(
     const [answer] = await runtime.askQuestions({
       questions: [
         {
-          question: toolCall.title ?? "Antigravity question",
+          question: toolCall.title ?? "Agent question",
           multiSelect: false,
           allowCustomAnswer: false,
           options: choices.map(({ label }) => ({ label })),
@@ -190,9 +190,6 @@ export class TurnEvents {
             autoCompactTokens: null,
           })
         if (event.cost) this.runtime.emit({ type: "usage.updated", usage: event.cost })
-        return
-      case "current_mode_update":
-        this.runtime.setPlanMode?.(event.currentModeId === "plan")
         return
     }
   }

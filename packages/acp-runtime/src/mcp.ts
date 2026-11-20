@@ -56,7 +56,7 @@ export interface SessionBridge {
   close(): void
 }
 
-/** Antigravity 的 worker 优先使用本机 Streamable HTTP，工具仍按 Host 提供的会话身份调用。 */
+/** 优先使用 Agent 声明支持的本机 Streamable HTTP，工具按 Host 提供的会话身份调用。 */
 export async function sessionBridge(
   mcp: SessionMcp | undefined,
   http: boolean,

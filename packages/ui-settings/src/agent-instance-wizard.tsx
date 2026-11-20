@@ -7,6 +7,7 @@ import { Check } from "lucide-react"
 import {
   AGENT_INSTANCE_ID_MAX_LENGTH,
   customAgentInstanceIdSchema,
+  type AcpRegistryEntry,
   type AgentInstanceDraft,
   type AgentSettingsValues,
   type AgentSummary,
@@ -21,7 +22,8 @@ import {
   toHostError,
   useLocale,
 } from "@pigcode/ui-primitives"
-import { AgentFields, type PickPath } from "./agent-fields"
+import { AgentFields, cleanAgentValues, type PickPath } from "./agent-fields"
+import { AcpRegistryPicker } from "./acp-registry-picker"
 import { instanceIdTaken, instancesOf, suggestInstanceId } from "./agent-instances"
 
 /** 向导的三步；数组顺序就是步骤条的显示顺序。 */
@@ -51,6 +53,7 @@ export interface InstanceCreateWizardProps {
   /** 打开时预选的 Agent，通常是设置页里正在看的那个。 */
   agentId?: string | null
   onPickPath?: PickPath | undefined
+  loadAcpRegistry?: (() => Promise<AcpRegistryEntry[]>) | undefined
   onCreateInstance: (draft: AgentInstanceDraft) => Promise<void>
 }
 
@@ -61,12 +64,14 @@ export function InstanceCreateWizard({
   agents,
   agentId = null,
   onPickPath,
+  loadAcpRegistry,
   onCreateInstance,
 }: InstanceCreateWizardProps) {
   const { t } = useLocale()
   const [step, setStep] = useState<Step>("agent")
   const [query, setQuery] = useState("")
   const [pickedId, setPickedId] = useState<string | null>(null)
+  const [registryMode, setRegistryMode] = useState(false)
   const [drafts, setDrafts] = useState(() => new Map<string, WizardDraft>())
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -78,6 +83,7 @@ export function InstanceCreateWizard({
     setStep("agent")
     setQuery("")
     setPickedId(agentId)
+    setRegistryMode(false)
     setDrafts(new Map())
     setError(null)
     setRejectedId(null)
@@ -88,7 +94,11 @@ export function InstanceCreateWizard({
     [agents],
   )
   const picked = selectable.find((agent) => agent.agentId === pickedId) ?? null
-  const runtimeFields = picked?.fields.filter((field) => field.type !== "env") ?? []
+  const acp = selectable.find((agent) => agent.acpRegistry)
+  const runtimeFields =
+    picked?.fields.filter((field) =>
+      picked.acpRegistry ? field.key !== "registryId" : field.type !== "env",
+    ) ?? []
   const usedIds = useMemo(
     () =>
       new Set(
@@ -102,9 +112,19 @@ export function InstanceCreateWizard({
   const matches = useMemo(() => {
     const keyword = query.trim().toLowerCase()
     if (!keyword) return selectable
-    return selectable.filter((agent) => agent.displayName.toLowerCase().includes(keyword))
-  }, [selectable, query])
-  const draft = picked ? (drafts.get(picked.agentId) ?? EMPTY_DRAFT) : EMPTY_DRAFT
+    return selectable.filter((agent) =>
+      (agent.acpRegistry ? t("agents.acp.local") : agent.displayName)
+        .toLowerCase()
+        .includes(keyword),
+    )
+  }, [selectable, query, t])
+  const draftKey = picked ? picked.agentId + (registryMode ? "/registry" : "") : null
+  const draft = draftKey ? (drafts.get(draftKey) ?? EMPTY_DRAFT) : EMPTY_DRAFT
+  const registrySelection = registryMode && typeof draft.values.registryId === "string"
+  const missingCommand =
+    picked?.acpRegistry &&
+    !registrySelection &&
+    (typeof draft.values.binaryPath !== "string" || !draft.values.binaryPath.trim())
   const label = draft.label.trim()
   const instanceId =
     draft.idOverride ?? (picked ? suggestInstanceId(picked.agentId, label, usedIds) : "")
@@ -117,9 +137,10 @@ export function InstanceCreateWizard({
       : null
 
   function updateDraft(update: (current: WizardDraft) => WizardDraft): void {
-    if (!picked) return
-    const id = picked.agentId
-    setDrafts((current) => new Map(current).set(id, update(current.get(id) ?? EMPTY_DRAFT)))
+    if (!draftKey) return
+    setDrafts((current) =>
+      new Map(current).set(draftKey, update(current.get(draftKey) ?? EMPTY_DRAFT)),
+    )
     setError(null)
   }
 
@@ -134,11 +155,17 @@ export function InstanceCreateWizard({
       goTo("identity")
       return
     }
-    const values = Object.fromEntries(
+    const configured = Object.fromEntries(
       runtimeFields
         .filter(({ key }) => Object.hasOwn(draft.values, key))
         .map(({ key }) => [key, draft.values[key]]),
     )
+    if (registrySelection) configured.registryId = draft.values.registryId
+    const values = cleanAgentValues(runtimeFields, configured)
+    if (!values) {
+      setError(t("agents.env.invalid"))
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -205,7 +232,7 @@ export function InstanceCreateWizard({
                 onValueChange={setQuery}
                 placeholder={t("agents.instance.search")}
               />
-              {matches.length === 0 ? (
+              {matches.length === 0 && !acp ? (
                 <p className="agent-muted">
                   {t(
                     selectable.length === 0
@@ -216,7 +243,7 @@ export function InstanceCreateWizard({
               ) : (
                 <div className="wizard-agents" role="listbox" aria-label={t("agents.list")}>
                   {matches.map((agent) => {
-                    const selected = agent.agentId === pickedId
+                    const selected = agent.agentId === pickedId && !registryMode
                     return (
                       <button
                         key={agent.agentId}
@@ -224,25 +251,61 @@ export function InstanceCreateWizard({
                         role="option"
                         aria-selected={selected}
                         className="wizard-agent"
-                        onClick={() => setPickedId(agent.agentId)}
+                        onClick={() => {
+                          setRegistryMode(false)
+                          setPickedId(agent.agentId)
+                        }}
                       >
                         <AgentIcon agentId={agent.agentId} name={agent.displayName} size="lg" />
                         <span className="wizard-agent-text">
-                          <span className="truncate">{agent.displayName}</span>
-                          <span className="agent-muted truncate">
-                            {agent.version ??
-                              t("agents.instance.count").replace(
-                                "{count}",
-                                String(instancesOf(agent).length),
-                              )}
+                          <span className="truncate">
+                            {agent.acpRegistry ? t("agents.acp.local") : agent.displayName}
                           </span>
+                          {agent.acpRegistry ? null : (
+                            <span className="agent-muted truncate">
+                              {agent.version ??
+                                t("agents.instance.count").replace(
+                                  "{count}",
+                                  String(instancesOf(agent).length),
+                                )}
+                            </span>
+                          )}
                         </span>
                         {selected ? <Check className="ic ic-sm" aria-hidden="true" /> : null}
                       </button>
                     )
                   })}
+                  {acp && loadAcpRegistry ? (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={registryMode}
+                      className="wizard-agent"
+                      onClick={() => {
+                        setPickedId(acp.agentId)
+                        setRegistryMode(true)
+                      }}
+                    >
+                      <AgentIcon agentId={acp.agentId} name={acp.displayName} size="lg" />
+                      <span>{t("agents.acp.registry")}</span>
+                      {registryMode ? <Check className="ic ic-sm" aria-hidden="true" /> : null}
+                    </button>
+                  ) : null}
                 </div>
               )}
+              {registryMode && loadAcpRegistry ? (
+                <AcpRegistryPicker
+                  load={loadAcpRegistry}
+                  selected={draft.values.registryId}
+                  onSelect={(entry) =>
+                    updateDraft(() => ({
+                      label: entry.name,
+                      idOverride: null,
+                      values: { registryId: entry.id },
+                    }))
+                  }
+                />
+              ) : null}
             </div>
           ) : null}
 
@@ -341,7 +404,7 @@ export function InstanceCreateWizard({
               size="lg"
               type="button"
               variant="primary"
-              disabled={saving || !picked}
+              disabled={saving || !picked || missingCommand}
               onClick={() => void create()}
             >
               {t(saving ? "agents.saving" : "agents.instance.create")}
@@ -351,7 +414,12 @@ export function InstanceCreateWizard({
               size="lg"
               type="button"
               variant="primary"
-              disabled={saving || !picked || (step === "identity" && (!label || idError !== null))}
+              disabled={
+                saving ||
+                !picked ||
+                (registryMode && !registrySelection) ||
+                (step === "identity" && (!label || idError !== null))
+              }
               onClick={() => goTo(STEPS[STEPS.indexOf(step) + 1] ?? step)}
             >
               {t("agents.instance.next")}

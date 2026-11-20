@@ -50,9 +50,10 @@ export function createInstanceSetup(
     const instance = agents.findInstance(instanceId)
     const driver = instance && drivers.get(instance.agentId)
     const scope = instance && agents.instanceContext(instance)
-    if (!driver?.removeManagedCli || !scope) throw new Error("Managed CLI removal is unavailable")
+    if (!instance || !driver?.removeManagedCli || !scope)
+      throw new Error("Managed CLI removal is unavailable")
     const configured = agents.instances(driver.id).map((item) => item.values)
-    await driver.removeManagedCli(scope, configured)
+    await driver.removeManagedCli(scope, configured, instance.values)
     agents.invalidate()
     await refreshCli()
   }

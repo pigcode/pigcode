@@ -35,3 +35,4 @@ builtinPlugins:
   - ../../../packages/agent-claude
   - ../../../packages/agent-codex
   - ../../../packages/agent-antigravity
+  - ../../../packages/agent-acp

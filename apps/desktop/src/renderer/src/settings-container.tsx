@@ -4,6 +4,7 @@
  */
 import { useCallback, useContext, useEffect, useState } from "react"
 import type {
+  AcpRegistryEntry,
   AgentAuthAction,
   AgentAuthState,
   AgentInstance,
@@ -81,6 +82,10 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       (await connection.call("agent.auth", { instanceId, request })) as AgentAuthState,
     [connection],
   )
+  const loadAcpRegistry = useCallback(
+    () => connection.call("agent.acpRegistry", {}) as Promise<AcpRegistryEntry[]>,
+    [connection],
+  )
   const accountChanged = useCallback(
     (instanceId: string) => {
       void detect({ instanceId, refresh: true }).catch(() => undefined)
@@ -127,6 +132,7 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
       checkingCliUpdates={cliUpdates.checking}
       onCheckCliUpdates={cliUpdates.check}
       onUpdateCli={cliUpdates.update}
+      loadAcpRegistry={loadAcpRegistry}
       setupActions={{
         auth,
         accountChanged,

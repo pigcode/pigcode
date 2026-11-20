@@ -1,5 +1,6 @@
 /** agents 服务对外的契约；实现见 registry.ts。 */
 import type {
+  AcpRegistryEntry,
   AgentAuthAction,
   AgentAuthState,
   PendingRequest,
@@ -60,6 +61,7 @@ export interface ApprovalHandle {
 /** Agent 注册表与运行生命周期入口。 */
 export interface AgentsService {
   cliUpdates(): Record<string, import("@pigcode/contracts").AgentCliUpdateState>
+  acpRegistry(): Promise<AcpRegistryEntry[]>
   checkCliUpdates(
     instanceId?: string,
   ): Promise<Record<string, import("@pigcode/contracts").AgentCliUpdateState>>
@@ -77,6 +79,7 @@ export interface AgentsService {
     features: AgentFeatures
     executionModes?: AgentExecutionModes | null
     accountSetup?: boolean
+    acpRegistry?: boolean
     managedCli?: boolean
   }>
   /** 只读检测：是否安装、版本与登录状态；结果短时缓存，refresh 时重新检测。 */

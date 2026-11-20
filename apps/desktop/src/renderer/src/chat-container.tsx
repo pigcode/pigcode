@@ -127,9 +127,21 @@ export function ChatViewContainer({
     main?.projectId ?? null,
   )
   const connected = state.status === "connected"
-  const agents = useAgents(deps.connection, state.agentRevision, connected)
+  const configuredAgents = useAgents(deps.connection, state.agentRevision, connected)
   const featuresByAgent = useAgentFeatures(deps.connection, state.agentRevision, connected)
-  const { catalog, load } = useModelCatalog(deps.connection, state.agentRevision, connected)
+  const { catalog, load, instanceModes } = useModelCatalog(
+    deps.connection,
+    state.agentRevision,
+    connected,
+  )
+  const agents = useMemo(
+    () =>
+      configuredAgents.map((agent) => {
+        const modes = instanceModes[agent.id]
+        return modes ? { ...agent, executionModes: modes } : agent
+      }),
+    [configuredAgents, instanceModes],
+  )
   const [notice, setNotice] = useState<string | null>(null)
   const tabState = useThreadTabState(mainId)
   const children = useMemo(() => childThreads(state.threads, mainId), [state.threads, mainId])

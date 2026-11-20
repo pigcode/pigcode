@@ -8,7 +8,13 @@
 import type { Context } from "cordis"
 import { createHash } from "node:crypto"
 import { join } from "node:path"
-import type { AgentCommand, AgentInstance, AgentModel, AgentStatus } from "@pigcode/contracts"
+import type {
+  AcpRegistryEntry,
+  AgentCommand,
+  AgentInstance,
+  AgentModel,
+  AgentStatus,
+} from "@pigcode/contracts"
 import {
   DEFAULT_AGENT_KEY,
   DEFAULT_INSTANCE_KEY,
@@ -54,6 +60,7 @@ export interface DefaultAgentChoice {
 
 /** agent 目录对 agents 服务暴露的方法。 */
 export interface AgentCatalog {
+  acpRegistry(): Promise<AcpRegistryEntry[]>
   /** 默认实例的设置；旧的调用方式，等价于 settingsForInstance(agentId, agentId)。 */
   settingsFor(agentId: string): AgentSettingsValues
   /** 指定实例的设置；实例不存在或不属于这个 agent 时退回默认实例。 */
@@ -179,6 +186,12 @@ export function createAgentCatalog(
   }
 
   return {
+    async acpRegistry() {
+      const builtins = new Set(["claude-acp", "codex-acp", "antigravity-acp"])
+      return ((await drivers.get("acp")?.acpRegistry?.()) ?? []).filter(
+        ({ id }) => !builtins.has(id),
+      )
+    },
     settingsFor,
     settingsForInstance(agentId, instanceId) {
       return instanceFor(agentId, instanceId).values
@@ -291,10 +304,7 @@ export function createAgentCatalog(
       detections.invalidate(instanceId ?? agentId)
       return normalized
     },
-    instances(agentId) {
-      const displayName = drivers.get(agentId)?.displayName ?? agentId
-      return listStoredInstances(store(), agentId, displayName)
-    },
+    instances: listInstancesOf,
     findInstance(instanceId) {
       return findInstanceWith(instanceId)
     },
@@ -341,15 +351,23 @@ export function createAgentCatalog(
 
   /** 一个 agent 的实例；agent 不在已注册列表里时也按默认实例返回一份。 */
   function listInstancesOf(agentId: string): ResolvedInstance[] {
-    const displayName = drivers.get(agentId)?.displayName ?? agentId
-    return listStoredInstances(store(), agentId, displayName)
+    const driver = drivers.get(agentId)
+    const instances = listStoredInstances(store(), agentId, driver?.displayName ?? agentId)
+    return (
+      driver?.acpRegistry ? instances.filter((instance) => !instance.isDefault) : instances
+    ).map((instance) => {
+      const scope = instanceContext(instance)
+      const modes = scope && driver?.modesForInstance?.(scope)
+      return modes ? { ...instance, executionModes: modes } : instance
+    })
   }
 
   /** 按 instanceId 找实例：默认实例的 id 就是某个已注册 agent 的 id。 */
   function findInstanceWith(instanceId: string): ResolvedInstance | null {
     const stored = readStoredInstances(store())[instanceId]
     if (stored) return instanceFor(stored.agentId, instanceId)
-    if (drivers.has(instanceId)) return instanceFor(instanceId)
+    if (drivers.has(instanceId) && !drivers.get(instanceId)?.acpRegistry)
+      return instanceFor(instanceId)
     return null
   }
 }

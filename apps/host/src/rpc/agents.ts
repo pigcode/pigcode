@@ -6,6 +6,7 @@ import type { Context } from "cordis"
 import {
   CUSTOM_MODELS_KEY,
   MODEL_PREFERENCE_KEYS,
+  cliArgumentsSchema,
   customModelsSchema,
   environmentEntriesSchema,
   type AgentList,
@@ -44,6 +45,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       features: driver?.features ?? null,
       executionModes: driver?.executionModes ?? null,
       ...(driver?.accountSetup ? { accountSetup: true } : {}),
+      ...(driver?.acpRegistry || contribution.acpRegistry ? { acpRegistry: true } : {}),
       ...(driver?.managedCli ? { managedCli: true } : {}),
       description: contribution.description ?? manifest.description ?? null,
       homepage: contribution.homepage ?? null,
@@ -52,7 +54,9 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       customModels: contribution.customModels,
       values,
       error: errors.get(record.id) ?? null,
-      instances: ctx.agents.listInstances(contribution.id),
+      instances: ctx.agents
+        .listInstances(contribution.id)
+        .filter((instance) => !contribution.acpRegistry || !instance.isDefault),
     })
   }
   for (const driver of registered.values()) {
@@ -69,6 +73,7 @@ export async function listAgents(ctx: Context): Promise<AgentList> {
       features: driver.features,
       executionModes: driver.executionModes ?? null,
       ...(driver.accountSetup ? { accountSetup: true } : {}),
+      ...(driver.acpRegistry ? { acpRegistry: true } : {}),
       ...(driver.managedCli ? { managedCli: true } : {}),
       description: null,
       homepage: null,
@@ -111,6 +116,8 @@ function matchesField(field: AgentSettingField, value: unknown): boolean {
       return typeof value === "boolean"
     case "env":
       return environmentEntriesSchema.safeParse(value).success
+    case "arguments":
+      return cliArgumentsSchema.safeParse(value).success
     case "select":
       return typeof value === "string" && field.options.some((option) => option.value === value)
     default:

@@ -1,0 +1,22 @@
+{
+  "name": "@pigcode/acp-runtime",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "2.8.0",
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/plugin-sdk": "workspace:*"
+  }
+}

@@ -43,7 +43,6 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   // E2E 用 PIGCODE_MAX_CONCURRENT_RUNS 把并发压到 1，好观察排队中的会话。
   const maxConcurrentRuns = envCount("PIGCODE_MAX_CONCURRENT_RUNS") ?? config.maxConcurrentRuns ?? 4
   const maxQueuedRuns = config.maxQueuedRuns ?? 32
-  // Claude Code、Codex 与第三方 agent 都由各自的插件注册；Host 只自带开发与测试用的 fake。
   const drivers = new Map<string, AgentDriver>()
   if (config.fake !== false || forcedAgentId() === "fake") {
     const fake = new FakeAgentDriver({
@@ -272,6 +271,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   const setup = createInstanceSetup(ctx, agents, drivers, stopInstanceRuns, cliUpdates.check)
   const service: AgentsService = {
     cliUpdates: cliUpdates.list,
+    acpRegistry: agents.acpRegistry,
     checkCliUpdates: cliUpdates.check,
     updateCli: cliUpdates.update,
     cancelCliUpdate: cliUpdates.cancel,
@@ -294,7 +294,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     setDefaultAgent: (agentId, instanceId) => agents.setDefaultAgent(agentId, instanceId ?? null),
     getSettings: (agentId, instanceId) => agents.settingsForInstance(agentId, instanceId),
     updateSettings: agents.updateSettings,
-    listInstances: (agentId) => agents.instances(agentId),
+    listInstances: agents.instances,
     findInstance: (instanceId) => agents.findInstance(instanceId),
     createInstance: agents.createInstance,
     updateInstance: setup.updateInstance,
@@ -315,15 +315,14 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         instance.instanceId,
         (id) =>
           drivers.get(agentId)?.continuationKey?.(agents.settingsForInstance(agentId, id)) ?? null,
-        modesForSwitch(ctx, threadId, agentId),
-        drivers.get(agentId)?.modelSwitch === "resume",
+        modesForSwitch(ctx, threadId, agentId, instance.instanceId),
+        drivers.get(agentId)?.modelSwitch,
       )
     },
     async startRun(threadId, text, emitLive, options = {}) {
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
       if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
-      // 切换后使用线程最近选择的 Agent 与实例，未切换过时回退到创建时的默认值。
       const agentId = thread.lastAgentId ?? thread.defaultAgentId
       if (cliUpdates.isUpdating(agentId))
         throw new Error("CLI update in progress. Please try again after it finishes.")
@@ -335,7 +334,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       )
       if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
       if (setup.isStopping(instance.instanceId)) throw new Error("Agent instance is stopping")
-      const selectedModes = resolveModes(modesOf(driver), thread, driver.id)
+      const modes = modesOf(driver, agents.instanceContext(instance))
+      const selectedModes = resolveModes(modes, thread, driver.id)
       const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
       if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
 

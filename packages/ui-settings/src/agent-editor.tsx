@@ -142,7 +142,9 @@ export function AgentEditor({
 
   const dirty = useMemo(() => !sameValues(draft, instance.values), [draft, instance.values])
   const renamed = label.trim().length > 0 && label.trim() !== instance.label
-  const runtimeFields = agent.fields.filter((field) => field.type !== "env")
+  const runtimeFields = agent.fields.filter(
+    (field) => field.type !== "env" && (!agent.acpRegistry || field.key !== "registryId"),
+  )
   const envFields = agent.fields.filter((field) => field.type === "env")
   const isDefault = instance.isDefault
   const isDefaultForSessions = defaultInstanceId === instance.instanceId

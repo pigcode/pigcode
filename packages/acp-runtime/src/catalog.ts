@@ -85,6 +85,7 @@ export async function readSessionModels(
   rpc: AcpProcess,
   setup: NewSessionResponse,
   signal: AbortSignal,
+  probeModelEfforts = false,
 ) {
   const models = nativeModels(setup)
   const modelConfig = selectConfig(setup.configOptions ?? [], "model")
@@ -94,6 +95,7 @@ export async function readSessionModels(
         models[index] = withModelEffort(model, setup.configOptions ?? [])
         continue
       }
+      if (!probeModelEfforts) continue
       const result = await rpc.agent
         .request(
           "session/set_config_option",
@@ -119,20 +121,36 @@ export async function configureSession(
   session: AgentSessionHandle,
   input: UserInput,
   signal: AbortSignal,
+  normalMode?: string,
 ) {
   const args = { sessionId: state.nativeId }
   const options = requestOptions(signal)
-  const mode = session.planMode
-    ? "plan"
-    : session.permissionMode === "auto" &&
-        state.setup.modes?.availableModes.some((mode) => mode.id === "auto")
-      ? "auto"
-      : "default"
-  if (session.planMode && !state.setup.modes?.availableModes.some((mode) => mode.id === "plan"))
-    throw new Error("This Antigravity CLI does not provide native plan mode")
-  if (state.setup.modes && mode !== state.setup.modes.currentModeId)
-    await state.rpc.agent.request("session/set_mode", { ...args, modeId: mode }, options)
   let config = state.setup.configOptions ?? []
+  const runnerMode = selectConfig(config, "mode")
+  const modes = runnerMode
+    ? configChoices(runnerMode).map(({ value }) => value)
+    : (state.setup.modes?.availableModes.map(({ id }) => id) ?? [])
+  const mode = session.planMode ? "plan" : normalMode
+  if (session.planMode && !modes.includes("plan"))
+    throw new Error("This ACP Agent does not provide native plan mode")
+  if (mode && modes.includes(mode)) {
+    if (runnerMode && runnerMode.currentValue !== mode) {
+      config = (
+        await state.rpc.agent.request(
+          "session/set_config_option",
+          {
+            ...args,
+            configId: runnerMode.id,
+            value: mode,
+          },
+          options,
+        )
+      ).configOptions
+    } else if (!runnerMode && state.setup.modes && state.setup.modes.currentModeId !== mode) {
+      await state.rpc.agent.request("session/set_mode", { ...args, modeId: mode }, options)
+      state.setup.modes.currentModeId = mode
+    }
+  }
   const model = selectConfig(config, "model")
   if (
     session.model &&
@@ -155,6 +173,7 @@ export async function configureSession(
         { ...args, modelId: session.model },
         options,
       )
+      state.setup.models.currentModelId = session.model
     }
   }
   const thought = selectConfig(config, "thought_level")
@@ -164,9 +183,19 @@ export async function configureSession(
     input.effort !== thought.currentValue &&
     configChoices(thought).some(({ value }) => value === input.effort)
   )
-    await state.rpc.agent.request(
-      "session/set_config_option",
-      { ...args, configId: thought.id, value: input.effort },
-      options,
-    )
+    config = (
+      await state.rpc.agent.request(
+        "session/set_config_option",
+        { ...args, configId: thought.id, value: input.effort },
+        options,
+      )
+    ).configOptions
+  state.setup.configOptions = config
+}
+
+export function supportsPlan(setup: SessionSetup): boolean {
+  const native = selectConfig(setup.configOptions ?? [], "mode")
+  return native
+    ? configChoices(native).some((option) => option.value === "plan")
+    : (setup.modes?.availableModes.some((option) => option.id === "plan") ?? false)
 }

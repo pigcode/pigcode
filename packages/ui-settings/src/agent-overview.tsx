@@ -66,7 +66,13 @@ export function AgentOverview({
         : signedOut
           ? {
               title: t("agents.status.signedOut"),
-              detail: t(agent.accountSetup ? "agents.setup.signInHint" : "agents.signedOutHint"),
+              detail: t(
+                agent.acpRegistry
+                  ? "agents.acp.signInHint"
+                  : agent.accountSetup
+                    ? "agents.setup.signInHint"
+                    : "agents.signedOutHint",
+              ),
             }
           : null
   const email = status?.authenticated ? (status.email ?? null) : null

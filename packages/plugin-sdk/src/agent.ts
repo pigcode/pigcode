@@ -4,6 +4,7 @@
  */
 import type {
   AgentEvent,
+  AcpRegistryEntry,
   AgentAuthAction,
   AgentAuthState,
   AgentCliProgress,
@@ -166,8 +167,11 @@ export interface AgentDriver {
   /** 接入统一四档权限协议，并声明计划能力；旧插件由 Host 兼容原有权限参数。 */
   readonly executionModes?: AgentExecutionModes
   readonly accountSetup?: AgentAccountSetup
+  acpRegistry?(): Promise<AcpRegistryEntry[]>
+  /** 由可执行文件探测得出的实例选项。缺省沿用 Agent 级声明。 */
+  modesForInstance?(instance: AgentInstanceContext): AgentExecutionModes | undefined
   /** 同一个实例换模型时，在现有原生会话内应用选项。 */
-  readonly modelSwitch?: "resume"
+  readonly modelSwitch?: "resume" | "reuse"
   /** 只读检测：是否安装、版本与登录状态；不能触发登录或创建会话。没实现时视为可用。 */
   detect?(settings: AgentSettingsValues, instance?: AgentInstanceContext): Promise<AgentStatus>
   /** 插件负责识别安装来源并准备自己的 CLI 更新，Host 负责展示、去重和排队。 */
@@ -178,6 +182,7 @@ export interface AgentDriver {
   removeManagedCli?(
     instance: AgentInstanceContext,
     configured: readonly AgentSettingsValues[],
+    settings?: AgentSettingsValues,
   ): Promise<void>
   /** 动态模型目录；没实现时目录为空，只列出用户添加的自定义模型。 */
   listModels?(

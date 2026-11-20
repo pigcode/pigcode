@@ -80,7 +80,10 @@ const EXEMPT_SECTIONS: ReadonlyArray<{ file: string; start: string; end: string;
 const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: string }> = [
   ...[
     "packages/agent-antigravity/src/connection.ts",
-    "packages/agent-antigravity/src/driver.ts",
+    "packages/acp-runtime/src/connection.ts",
+    "packages/acp-runtime/src/runtime.ts",
+    "packages/agent-acp/src/driver.ts",
+    "apps/host/src/agents/acp.test.ts",
     "apps/host/src/agents/fixtures/agy.ts",
   ].map((file) => ({
     file,
@@ -88,7 +91,7 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
     reason: "ACP 握手与会话的原生协议字段",
   })),
   {
-    file: "packages/agent-antigravity/src/mcp.ts",
+    file: "packages/acp-runtime/src/mcp.ts",
     pattern: /\bcapabilities: \{ tools\b/g,
     reason: "MCP 初始化响应的原生协议字段",
   },

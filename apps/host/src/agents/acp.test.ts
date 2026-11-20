@@ -1,0 +1,207 @@
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { execFileSync } from "node:child_process"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { Context } from "cordis"
+import { expect, it } from "vitest"
+import { AcpDriver } from "../../../../packages/agent-acp/src/driver"
+import { apply as projects } from "../services/projects"
+import { apply as sessions } from "../services/sessions"
+import { apply as settings } from "../services/settings"
+import { apply as storage } from "../services/storage"
+import { apply as threads } from "../services/threads"
+import { apply as agents } from "./registry"
+
+const fixture = String.raw`
+import { createInterface } from "node:readline"
+import { randomUUID } from "node:crypto"
+import { writeFileSync, existsSync } from "node:fs"
+import { join } from "node:path"
+const [label, resume] = process.argv.slice(2)
+const sessions = new Set()
+let model = label
+const send = (message) => console.log(JSON.stringify({ jsonrpc: "2.0", ...message }))
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line)
+  const result = (value) => send({ id, result: value })
+  if (method === "initialize") return result({
+    protocolVersion: 1, agentInfo: { name: label, version: "1.0.0" }, authMethods: [],
+    agentCapabilities: resume ? { sessionCapabilities: { resume: {}, close: {} } } : {},
+  })
+  const configOptions = () => [{ id: "model", category: "model", name: "Model", type: "select",
+    currentValue: model, options: [label, label + " Alternate"].map((value) => ({ value, name: value })),
+  }]
+  if (method === "session/new") {
+    const sessionId = randomUUID()
+    sessions.add(sessionId)
+    if (resume) writeFileSync(join(params.cwd, sessionId), label)
+    return result({ sessionId, configOptions: configOptions() })
+  }
+  if (method === "session/resume" && resume && existsSync(join(params.cwd, params.sessionId))) {
+    sessions.add(params.sessionId)
+    return result({ configOptions: configOptions() })
+  }
+  if (method === "session/set_config_option" && sessions.has(params.sessionId)) {
+    model = params.value
+    return result({ configOptions: configOptions() })
+  }
+  if (method === "session/prompt" && sessions.has(params.sessionId)) {
+    send({ method: "session/update", params: { sessionId: params.sessionId,
+      update: { sessionUpdate: "agent_message_chunk", content: {
+        type: "text", text: model + ": " + params.prompt[0].text,
+      } },
+    } })
+    return result({ stopReason: "end_turn" })
+  }
+  if (method === "session/close") return result({})
+  send({ id, error: { code: -32601, message: "Method not found" } })
+})
+`
+
+it("uses one driver for distinct ACP commands and keeps both kinds of native session usable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pigcode-acp-test-"))
+  const script = join(root, "acp.mjs")
+  await writeFile(script, fixture)
+  const ctx = new Context()
+  const driver = new AcpDriver()
+  try {
+    await ctx.plugin(storage, { path: ":memory:" })
+    await ctx.plugin(settings, {})
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
+    ctx.agents.register(driver)
+    expect(ctx.agents.listInstances("acp")).toEqual([])
+    for (const [label, argv] of [
+      ["Live only", [script, "Live only"]],
+      ["Restorable", [script, "Restorable", "resume"]],
+    ] as const) {
+      const instance = ctx.agents.createInstance("acp", label, {
+        values: { binaryPath: process.execPath, arguments: [...argv] },
+      })
+      const [model] = await ctx.agents.models("acp", instance.instanceId)
+      expect(model?.id).toBe(label)
+      const project = ctx.projects.add(root)
+      const thread = ctx.threads.create(project.id, label, "acp", undefined, {
+        instanceId: instance.instanceId,
+      })
+      await (
+        await ctx.agents.startRun(thread.id, "first")
+      ).done
+      await ctx.agents.switchAgent(thread.id, "acp", label + " Alternate", instance.instanceId)
+      await (
+        await ctx.agents.startRun(thread.id, "second")
+      ).done
+      expect(ctx.agents.listSessions(thread.id)).toHaveLength(1)
+      expect(ctx.sessions.read(thread.id, 0)).toContainEqual(
+        expect.objectContaining({
+          type: "message.completed",
+          payload: { role: "assistant", text: label + " Alternate: second" },
+        }),
+      )
+    }
+  } finally {
+    await driver.close()
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20_000)
+
+it.skipIf(process.platform === "win32")(
+  "installs a pinned Registry runtime and uses it from the same ACP driver",
+  async () => {
+    const root = await mkdtemp(join(tmpdir(), "pigcode-acp-registry-test-"))
+    const archive = join(root, "fixture.tar.gz")
+    await writeFile(join(root, "fixture"), "#!/usr/bin/env node\n" + fixture, { mode: 0o700 })
+    execFileSync("tar", ["-czf", archive, "-C", root, "fixture"])
+    const bytes = await readFile(archive)
+    const os = process.platform === "darwin" ? "darwin" : process.platform
+    const platform = `${os}-${process.arch === "arm64" ? "aarch64" : "x86_64"}`
+    const digest = createHash("sha256").update(bytes).digest("hex")
+    let downloads = 0
+    const driver = new AcpDriver(async (input) => {
+      if (String(input).endsWith("/registry.json"))
+        return Response.json({
+          agents: [
+            {
+              id: "fixture",
+              name: "Registry fixture",
+              version: "1.0.0",
+              description: "Fixture",
+              distribution: {
+                binary: {
+                  [platform]: {
+                    archive: "https://example.test/fixture.tar.gz",
+                    cmd: "fixture",
+                    sha256: digest,
+                    args: ["Registry Agent", "resume"],
+                  },
+                },
+              },
+            },
+          ],
+        })
+      downloads += 1
+      return new Response(Uint8Array.from(bytes))
+    })
+    const ctx = new Context()
+    try {
+      await ctx.plugin(storage, { path: ":memory:" })
+      await ctx.plugin(settings, {})
+      await ctx.plugin(projects)
+      await ctx.plugin(threads)
+      await ctx.plugin(sessions)
+      await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
+      ctx.agents.register(driver)
+      await expect(ctx.agents.acpRegistry()).resolves.toMatchObject([
+        { id: "fixture", distribution: "binary" },
+      ])
+      const one = ctx.agents.createInstance("acp", "Registry fixture", {
+        values: { registryId: "fixture" },
+      })
+      const two = ctx.agents.createInstance("acp", "Other fixture", {
+        values: { registryId: "fixture" },
+      })
+      await expect(ctx.agents.models("acp", one.instanceId)).resolves.toEqual([])
+      expect(downloads).toBe(0)
+      await Promise.all([
+        ctx.agents.updateCli(one.instanceId),
+        ctx.agents.updateCli(two.instanceId),
+      ])
+      await expect
+        .poll(() => ctx.agents.cliUpdates())
+        .toMatchObject({
+          [one.instanceId]: { phase: "succeeded", currentVersion: "1.0.0" },
+          [two.instanceId]: { phase: "succeeded", currentVersion: "1.0.0" },
+        })
+      expect(downloads).toBe(1)
+      await expect(ctx.agents.models("acp", one.instanceId)).resolves.toMatchObject([
+        { id: "Registry Agent" },
+        { id: "Registry Agent Alternate" },
+      ])
+      const thread = ctx.threads.create(
+        ctx.projects.add(root).id,
+        "Registry test",
+        "acp",
+        undefined,
+        { instanceId: two.instanceId },
+      )
+      await (
+        await ctx.agents.startRun(thread.id, "hello")
+      ).done
+      expect(ctx.sessions.read(thread.id, 0)).toContainEqual(
+        expect.objectContaining({
+          type: "message.completed",
+          payload: { role: "assistant", text: "Registry Agent: hello" },
+        }),
+      )
+    } finally {
+      await driver.close()
+      await ctx.fiber.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  },
+  20_000,
+)

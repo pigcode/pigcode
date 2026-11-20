@@ -8,7 +8,7 @@ import {
   type EnvironmentEntry,
   type AgentSettingField,
 } from "@pigcode/contracts"
-import { Button, Input, Select, Switch, useLocale } from "@pigcode/ui-primitives"
+import { Button, Input, Select, Switch, Textarea, useLocale } from "@pigcode/ui-primitives"
 
 /** 选择文件或文件夹；返回选中的路径，取消时为 null。 */
 export type PickPath = (kind: "file" | "directory") => Promise<string | null>
@@ -138,6 +138,20 @@ function FieldControl({
           </Select.Positioner>
         </Select.Portal>
       </Select.Root>
+    )
+  }
+  if (field.type === "arguments") {
+    return (
+      <Textarea
+        className="mono"
+        rows={3}
+        aria-label={label}
+        spellCheck={false}
+        value={Array.isArray(value) ? value.join("\n") : ""}
+        onChange={(event) =>
+          onChange(event.target.value === "" ? [] : event.target.value.split(/\r?\n/))
+        }
+      />
     )
   }
   const placeholder = field.placeholder ? localizeText(field.placeholder, locale) : undefined

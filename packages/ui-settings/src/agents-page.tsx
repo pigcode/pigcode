@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { ChevronDown, CircleArrowUp, LoaderCircle, Plus, RefreshCw } from "lucide-react"
 import type {
+  AcpRegistryEntry,
   AgentInstance,
   AgentInstanceDraft,
   AgentSettingsValues,
@@ -43,6 +44,7 @@ export interface AgentsPageProps {
   onCheckCliUpdates?: ((instanceId?: string) => Promise<void>) | undefined
   onUpdateCli?: ((instanceId: string) => Promise<void>) | undefined
   setupActions?: AgentSetupActions | undefined
+  loadAcpRegistry?: (() => Promise<AcpRegistryEntry[]>) | undefined
   onShowUpdates?: ((instanceId: string) => void) | undefined
   agents: readonly AgentSummary[]
   /** 用户选择的默认 agent。 */
@@ -191,6 +193,7 @@ export function AgentsPage({
   onCheckCliUpdates,
   onUpdateCli,
   setupActions,
+  loadAcpRegistry,
   onShowUpdates,
   agents,
   defaultAgentId,
@@ -228,7 +231,6 @@ export function AgentsPage({
   useEffect(() => {
     if (openId && !entries.some((entry) => entry.instance.instanceId === openId)) setOpenId(null)
   }, [entries, openId])
-  // 展开时读一次它的模型目录。
   useEffect(() => {
     if (openId && models[openId] === undefined) onLoadModels?.(openId)
   }, [openId, models, onLoadModels])
@@ -453,12 +455,9 @@ export function AgentsPage({
                     setup={
                       openEntry.agent.accountSetup && setupActions ? (
                         <AgentSetup
-                          instanceId={id}
-                          enabled={openEntry.agent.enabled && openEntry.instance.enabled}
+                          entry={openEntry}
                           status={statuses[id]}
                           actions={setupActions}
-                          managed={openEntry.agent.managedCli === true}
-                          customBinary={Boolean(openEntry.instance.values.binaryPath)}
                           update={cliUpdates[id]}
                           onInstall={onUpdateCli ? () => onUpdateCli(id) : undefined}
                           openExternal={onOpenExternal}
@@ -490,6 +489,7 @@ export function AgentsPage({
         agents={agents}
         agentId={openEntry?.agent.agentId ?? null}
         onPickPath={onPickPath}
+        loadAcpRegistry={loadAcpRegistry}
         onCreateInstance={async (draft) => {
           const created = await onCreateInstance(draft)
           setOpenId(created)

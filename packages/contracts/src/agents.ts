@@ -94,7 +94,26 @@ export const agentSettingFieldSchema = z.discriminatedUnion("type", [
     default: z.string().optional(),
   }),
   z.object({ ...fieldBase, type: z.literal("env") }),
+  z.object({ ...fieldBase, type: z.literal("arguments") }),
 ])
+
+export const cliArgumentsSchema = z
+  .array(
+    z
+      .string()
+      .max(8_192)
+      .refine((value) => !value.includes("\0")),
+  )
+  .max(128)
+
+export interface AcpRegistryEntry {
+  id: string
+  name: string
+  version: string
+  description: string
+  license?: string
+  distribution: "binary" | "npx" | "uvx"
+}
 
 /** 一组环境变量；名称遵循 POSIX 规则，值原样传给子进程。 */
 export const environmentEntriesSchema = z.array(
@@ -108,6 +127,7 @@ export const customModelsSchema = z.array(z.string().trim().min(1).max(256))
 export const agentContributionSchema = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9._-]*$/),
+    acpRegistry: z.boolean().optional(),
     description: localizedTextSchema.optional(),
     /** 桌面端只用系统浏览器打开 https 链接。 */
     homepage: z.url({ protocol: /^https$/ }).optional(),
@@ -156,6 +176,7 @@ export const agentInstanceSchema = z.object({
   /** 默认实例：随 Agent 存在，不能删除。 */
   isDefault: z.boolean(),
   createdAt: z.string().nullable(),
+  executionModes: agentExecutionModesSchema.optional(),
 })
 
 /** 要保存的实例改动；没给的项保持不变。 */
@@ -183,7 +204,7 @@ export const agentStatusSchema = z.object({
 const agentAuthFlowId = z.string().uuid()
 export const agentAuthActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("status") }),
-  z.object({ action: z.literal("start") }),
+  z.object({ action: z.literal("start"), methodId: z.string().min(1).max(256).optional() }),
   z.object({
     action: z.literal("submit"),
     flowId: agentAuthFlowId,
@@ -201,6 +222,8 @@ export interface AgentAuthState {
   expiresAt: number | null
   error: string | null
   usingCliLogin?: boolean
+  methods?: readonly { id: string; name: string }[]
+  canLogout?: boolean
 }
 
 export interface AgentCliProgress {
@@ -225,6 +248,7 @@ export const agentSummarySchema = z.object({
   features: agentFeaturesSchema.nullable(),
   executionModes: agentExecutionModesSchema.nullish(),
   accountSetup: z.boolean().optional(),
+  acpRegistry: z.boolean().optional(),
   managedCli: z.boolean().optional(),
   description: localizedTextSchema.nullable(),
   homepage: z.string().nullable(),

@@ -82,6 +82,16 @@ async function createInstance(
   if (!ctx.agents.list().some((driver) => driver.id === agentId)) {
     throw new Error(`agent not found: ${agentId}`)
   }
+  if (agentId === "acp") {
+    const source = options.copyFrom ? ctx.agents.findInstance(options.copyFrom) : null
+    const values = options.values ?? (source?.agentId === agentId ? source.values : {})
+    if (
+      ![values.binaryPath, values.registryId].some(
+        (value) => typeof value === "string" && value.trim(),
+      )
+    )
+      throw new Error("Choose a local ACP command or an ACP Registry agent")
+  }
   return ctx.agents.createInstance(agentId, label, options)
 }
 
@@ -93,6 +103,8 @@ export async function dispatchAgentCommand(
 ): Promise<unknown> {
   const value = parsed as Params
   switch (command) {
+    case "agent.acpRegistry":
+      return ctx.agents.acpRegistry()
     case "agent.auth": {
       const { instanceId, request } = parsed as CommandParams<"agent.auth">
       return ctx.agents.auth(instanceId, request)
@@ -126,7 +138,15 @@ export async function dispatchAgentCommand(
       const instanceId = (value.instanceId as string) ?? null
       const instance = instanceId ? ctx.agents.findInstance(instanceId) : null
       const agentId = instance?.agentId ?? (value.agentId as string)
-      return ctx.agents.models(agentId, instanceId)
+      const models = await ctx.agents.models(agentId, instanceId)
+      if (value.withModes !== true) return models
+      const configured = ctx.agents
+        .listInstances(agentId)
+        .find((item) => item.instanceId === instanceId)
+      return {
+        models,
+        ...(configured?.executionModes ? { executionModes: configured.executionModes } : {}),
+      }
     }
     case "agent.commands": {
       const instance = ctx.agents.findInstance(value.instanceId as string)

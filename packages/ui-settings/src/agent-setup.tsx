@@ -6,6 +6,7 @@ import type {
   AgentStatus,
 } from "@pigcode/contracts"
 import { Button, Input, useLocale } from "@pigcode/ui-primitives"
+import type { AgentInstanceEntry } from "./agent-instances"
 
 export interface AgentSetupActions {
   auth(instanceId: string, request: AgentAuthAction): Promise<AgentAuthState>
@@ -18,27 +19,27 @@ const authPending = (state?: AgentAuthState) =>
   state?.phase === "starting" || state?.phase === "waiting" || state?.phase === "verifying"
 
 export function AgentSetup({
-  instanceId,
-  enabled,
+  entry,
   status,
   actions,
-  managed,
-  customBinary,
   update,
   onInstall,
   openExternal,
 }: {
-  instanceId: string
-  enabled: boolean
+  entry: AgentInstanceEntry
   status: AgentStatus | undefined
   actions: AgentSetupActions
-  managed: boolean
-  customBinary: boolean
   update: AgentCliUpdateState | undefined
   onInstall: (() => Promise<void>) | undefined
   openExternal: ((url: string) => void | Promise<void>) | undefined
 }) {
   const { t } = useLocale()
+  const { agent, instance } = entry
+  const instanceId = instance.instanceId
+  const enabled = agent.enabled && instance.enabled
+  const acp = agent.acpRegistry
+  const managed = agent.managedCli && (!acp || Boolean(instance.values.registryId))
+  const customBinary = Boolean(instance.values.binaryPath)
   const [auth, setAuth] = useState<AgentAuthState>()
   const [code, setCode] = useState("")
   const [pending, setPending] = useState(false)
@@ -127,7 +128,7 @@ export function AgentSetup({
         <div className="agent-setup-actions">
           {cliBusy ? (
             <>
-              <span role="status">{t(installMessage)}</span>
+              <span role="status">{t(acp ? "agents.acp.installing" : installMessage)}</span>
               {stage?.stage === "downloading" && stage.total && stage.bytes !== undefined ? (
                 <progress
                   max={stage.total}
@@ -150,7 +151,7 @@ export function AgentSetup({
               disabled={pending || !enabled}
               onClick={() => void perform(onInstall)}
             >
-              {t("agents.setup.install")}
+              {t(acp ? "agents.acp.install" : "agents.setup.install")}
             </Button>
           ) : confirmRemoval ? (
             <>
@@ -195,7 +196,9 @@ export function AgentSetup({
               <span role="status">
                 {t(
                   auth?.phase === "starting"
-                    ? "agents.setup.starting"
+                    ? acp
+                      ? "agents.acp.signingIn"
+                      : "agents.setup.starting"
                     : auth?.phase === "waiting"
                       ? "agents.setup.awaitingCode"
                       : "agents.setup.verifying",
@@ -210,15 +213,28 @@ export function AgentSetup({
                 {t("agents.setup.cancel")}
               </Button>
             </>
-          ) : linked && !auth?.usingCliLogin ? (
+          ) : linked && !auth?.usingCliLogin && auth?.canLogout !== false ? (
             <Button
               size="sm"
               variant="ghost"
               disabled={pending}
               onClick={() => authorize({ action: "logout" })}
             >
-              {t("agents.setup.signOut")}
+              {t(acp ? "agents.acp.signOut" : "agents.setup.signOut")}
             </Button>
+          ) : acp ? (
+            linked ? null : (
+              auth?.methods?.map((method) => (
+                <Button
+                  key={method.id}
+                  size="sm"
+                  disabled={pending || !enabled}
+                  onClick={() => authorize({ action: "start", methodId: method.id })}
+                >
+                  {t("agents.acp.signIn").replace("{method}", method.name)}
+                </Button>
+              ))
+            )
           ) : (
             <Button
               size="sm"

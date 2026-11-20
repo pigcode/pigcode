@@ -3,7 +3,7 @@
  * 一个 Agent 可以有多份配置（实例）；选择器列的是实例，模型目录也按实例读取。
  */
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { AgentFeatures, AgentList, AgentModel } from "@pigcode/contracts"
+import type { AgentExecutionModes, AgentFeatures, AgentList, AgentModel } from "@pigcode/contracts"
 import type { Connection } from "@pigcode/client-runtime"
 import type { ComposerAgent, ComposerModel, ComposerModelCatalog } from "@pigcode/ui-composer"
 import { pickInstanceId } from "./agent-context"
@@ -37,7 +37,9 @@ export function toComposerAgents(list: AgentList): ComposerAgent[] {
           id: instance.instanceId,
           agentId: agent.agentId,
           label: instance.isDefault ? agent.displayName : instance.label,
-          executionModes: agent.executionModes ?? null,
+          executionModes:
+            instance.executionModes ??
+            (agent.acpRegistry ? { plan: false } : (agent.executionModes ?? null)),
         })),
     )
 }
@@ -161,24 +163,42 @@ export function useModelCatalog(
   connection: Connection,
   revision: number,
   connected: boolean,
-): { catalog: ComposerModelCatalog; load: (instanceId: string) => void } {
+): {
+  catalog: ComposerModelCatalog
+  load: (instanceId: string) => void
+  instanceModes: Record<string, AgentExecutionModes | undefined>
+} {
   const [catalog, setCatalog] = useState<Record<string, readonly ComposerModel[] | undefined>>({})
+  const [instanceModes, setInstanceModes] = useState<
+    Record<string, AgentExecutionModes | undefined>
+  >({})
   const pending = useRef(new Set<string>())
   useEffect(() => {
     pending.current.clear()
     setCatalog({})
+    setInstanceModes({})
   }, [connection, revision, connected])
   const load = useCallback(
     (instanceId: string) => {
       if (!connected || pending.current.has(instanceId)) return
       pending.current.add(instanceId)
       // 只传实例：Host 按实例找到它所属的 Agent，不会把实例 id 当成 driver id。
-      void (connection.call("agent.models", { instanceId }) as Promise<AgentModel[]>)
-        .then((models) => models.map(toComposerModel))
+      void (
+        connection.call("agent.models", { instanceId, withModes: true }) as Promise<
+          AgentModel[] | { models: AgentModel[]; executionModes?: AgentExecutionModes }
+        >
+      )
+        .then((value) => {
+          if (Array.isArray(value)) return value.map(toComposerModel)
+          if (value.executionModes) {
+            setInstanceModes((current) => ({ ...current, [instanceId]: value.executionModes }))
+          }
+          return value.models.map(toComposerModel)
+        })
         .catch((): ComposerModel[] => [])
         .then((models) => setCatalog((current) => ({ ...current, [instanceId]: models })))
     },
     [connection, connected],
   )
-  return { catalog, load }
+  return { catalog, load, instanceModes }
 }

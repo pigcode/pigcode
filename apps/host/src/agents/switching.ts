@@ -208,7 +208,7 @@ export async function switchAgent(
   /** 实例的原生会话放在哪里（driver.continuationKey）；值相同的实例能接着用彼此的原生会话（#82）。 */
   keyFor?: (instanceId: string) => string | null,
   modes?: AgentModeSelection,
-  resumeOnModelSwitch = false,
+  modelSwitch?: AgentDriver["modelSwitch"],
 ): Promise<Switch> {
   if (!ctx.threads.get(threadId)) throw new Error(`thread not found: ${threadId}`)
   const chosenInstance = instanceId ?? agentId
@@ -219,9 +219,7 @@ export async function switchAgent(
   // - 都没有：新会话，交接整个会话。
   // 还没聊过的线程没有上下文可交接，新 agent 的第一条消息保持用户原文。
   const activeSession = sessions.findActive(threadId, agentId, chosenInstance)
-  const forkFromNativeSessionId = resumeOnModelSwitch
-    ? null
-    : (activeSession?.nativeSessionId ?? null)
+  const forkFromNativeSessionId = modelSwitch ? null : (activeSession?.nativeSessionId ?? null)
   const parked =
     forkFromNativeSessionId === null
       ? sessions.findResumable(threadId, agentId, chosenInstance)
@@ -249,10 +247,11 @@ export async function switchAgent(
   const previous = ctx.threads.get(threadId)
   const previousInstance = previous?.lastInstanceId ?? previous?.defaultInstanceId ?? null
   const active = sessions.listByThread(threadId).filter((session) => session.status === "active")
-  for (const session of active) await disposeActive?.(session)
+  const reuse = modelSwitch === "reuse" && activeSession?.nativeSessionId && active.length === 1
+  if (!reuse) for (const session of active) await disposeActive?.(session)
   ctx.threads.updateSelection(threadId, agentId, modelId, chosenInstance, modes)
   // 子进程关了，原生会话留着：切回来时接着用。
-  sessions.parkActive(threadId, now)
+  if (!reuse) sessions.parkActive(threadId, now)
   // 交接记在 thread_handoffs 里，下一轮发送时带上；事件里只留它的 id，时间线据此画切换标记。
   // 之前切换留下、还没发出去的交接是给别的实例的，先作废。
   const handoffs = new HandoffStore(ctx.storage.db)

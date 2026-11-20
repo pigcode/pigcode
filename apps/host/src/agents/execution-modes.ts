@@ -7,10 +7,14 @@ import {
   type AgentModeSelection,
   type Thread,
 } from "@pigcode/contracts"
-import type { AgentDriver } from "./driver"
+import type { AgentDriver, AgentInstanceContext } from "./driver"
 
-export function modesOf(driver: AgentDriver): AgentExecutionModes | null {
-  return driver.executionModes ? agentExecutionModesSchema.parse(driver.executionModes) : null
+export function modesOf(
+  driver: AgentDriver,
+  instance?: AgentInstanceContext,
+): AgentExecutionModes | null {
+  const options = (instance && driver.modesForInstance?.(instance)) ?? driver.executionModes
+  return options ? agentExecutionModesSchema.parse(options) : null
 }
 
 export function registeredAgents(drivers: ReadonlyMap<string, AgentDriver>) {
@@ -20,6 +24,7 @@ export function registeredAgents(drivers: ReadonlyMap<string, AgentDriver>) {
     features: driver.features,
     executionModes: modesOf(driver),
     ...(driver.accountSetup ? { accountSetup: true } : {}),
+    ...(driver.acpRegistry ? { acpRegistry: true } : {}),
     ...(driver.removeManagedCli ? { managedCli: true } : {}),
   }))
 }
@@ -38,8 +43,15 @@ export function resolveModes(
   return { permissionMode, planMode }
 }
 
-export function modesForAgent(ctx: Context, agentId: string) {
-  return ctx.agents.list().find((agent) => agent.id === agentId)?.executionModes ?? null
+export function modesForAgent(ctx: Context, agentId: string, instanceId?: string | null) {
+  const instance = instanceId
+    ? ctx.agents.listInstances(agentId).find((item) => item.instanceId === instanceId)
+    : undefined
+  return (
+    instance?.executionModes ??
+    ctx.agents.list().find((agent) => agent.id === agentId)?.executionModes ??
+    null
+  )
 }
 
 export function updateThreadModes(
@@ -51,7 +63,7 @@ export function updateThreadModes(
   if (!thread) throw new Error(`thread not found: ${threadId}`)
   const agentId = thread.lastAgentId ?? thread.defaultAgentId
   const selected = resolveModes(
-    modesForAgent(ctx, agentId),
+    modesForAgent(ctx, agentId, thread.lastInstanceId ?? thread.defaultInstanceId),
     {
       permissionMode: thread.permissionMode,
       planMode: thread.planMode ?? false,
@@ -76,11 +88,12 @@ export function modesForSwitch(
   ctx: Context,
   threadId: string,
   agentId: string,
+  instanceId?: string,
 ): AgentModeSelection {
   const thread = ctx.threads.get(threadId)
   if (!thread) throw new Error(`thread not found: ${threadId}`)
   return resolveModes(
-    modesForAgent(ctx, agentId),
+    modesForAgent(ctx, agentId, instanceId),
     thread,
     thread.lastAgentId ?? thread.defaultAgentId,
   )
