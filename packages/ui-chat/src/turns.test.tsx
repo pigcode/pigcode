@@ -90,10 +90,13 @@ describe("buildTimeline", () => {
       answer: "Fixed it.",
       replyText: "Looking around.\n\nFixed it.",
     })
+    // 工作是平铺的一列，连续的摘要在渲染时才合成一组。
     expect(turn?.work.map((item) => item.kind)).toEqual([
       "reasoning",
       "message",
-      "explore",
+      "tool",
+      "tool",
+      "tool",
       "tool",
       "tool",
     ])
@@ -107,7 +110,7 @@ describe("buildTimeline", () => {
     const timeline = buildTimeline(scriptedRun())
     const [turn] = onlyTurns(scriptedRun())
     const names = turn?.work.flatMap((item) => (item.kind === "tool" ? [item.tool.name] : []))
-    expect(names).toEqual(["Edit", "Bash"])
+    expect(names).toEqual(["Read", "Read", "Grep", "Edit", "Bash"])
     expect(latestPlan(timeline)).toEqual([
       { text: "Read the code", status: "completed" },
       { text: "Fix the answer", status: "in-progress" },
@@ -223,30 +226,41 @@ describe("turn rendering", () => {
     expect(screen.getByText("Fixed it.").closest(".msg-ai")).not.toBeNull()
     expect(screen.queryByText("Looking around.")).toBeNull()
     expect(screen.getByRole("button", { name: "展开改动" }).textContent).toBe("改了 1 个文件+1 -1")
-    const header = screen.getByRole("button", { name: "做了 12 秒" })
+    const header = screen.getByRole("button", { name: "用时 12 秒" })
     expect(header.getAttribute("aria-expanded")).toBe("false")
     await userEvent.click(header)
     expect(header.getAttribute("aria-expanded")).toBe("true")
     expect(screen.getByText("Looking around.")).toBeTruthy()
-    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·想了 3 秒")
-    expect(screen.getByRole("button", { name: /查看/ }).textContent).toBe("查看·2 个文件, 1 次搜索")
-    expect(screen.getByRole("button", { name: /终端/ }).textContent).toContain("pnpm test")
+    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考持续了 3 秒")
+    // 两次读取、一次搜索、一次编辑和一条命令连成一组，结束后显示统计。
+    const group = screen.getByRole("button", { name: "已查阅 3 项，已执行 1 命令，已修改 1 文件" })
+    expect(group.textContent).toBe("已查阅 3 项，已执行 1 命令，已修改 1 文件")
+    await userEvent.click(group)
+    expect(screen.getByRole("button", { name: /^已执行/ }).textContent).toContain("pnpm test")
   })
 
-  it("keeps the work open without a chevron while running and streams the answer below it", () => {
+  it("keeps the work open while running, previews the newest item and streams the answer below", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(Date.UTC(2026, 9, 21, 8, 0, 9)))
-    const { container } = renderList(scriptedRun().slice(0, 14), "partial answer", "Checking the")
-    const header = screen.getByRole("button", { name: "已经做了 9 秒" })
-    expect(header.hasAttribute("disabled")).toBe(true)
-    expect(header.querySelector(".work-chev")).toBeNull()
+    const { container } = renderList(scriptedRun().slice(0, 14), "", "Checking the")
+    // 运行中没有折叠头，工作一直展开，末尾一行「工作中」和计时。
+    expect(container.querySelector(".work-head")).toBeNull()
     expect(screen.getByText("Looking around.")).toBeTruthy()
+    expect(screen.getByRole("status", { name: "工作中" }).textContent).toBe("工作中9 秒")
+    // 末尾的摘要组还没闭合：组头就是正在输出的思考，动作扫光，后面跟着最新的一句。
+    const group = container.querySelector(".summary-group[data-running]")!
+    expect(group.querySelector(".summary-group-preview .tool-shimmer")?.textContent).toBe(
+      "正在思考",
+    )
+    expect(group.querySelector(".reasoning-peek")?.textContent).toBe("Checking the")
+    cleanup()
+    const streaming = renderList(scriptedRun().slice(0, 14), "partial answer")
+    // 开始写回答以后，前面的组闭合，换成统计；回答在工作下面流出来。
+    expect(screen.getByRole("button", { name: "已查阅 3 项，已修改 1 文件" })).toBeTruthy()
     expect(screen.getByText("partial answer").closest(".msg-ai")?.className).toContain(
       "is-streaming",
     )
-    expect(container.querySelector(".reasoning-row .tool-shimmer")?.textContent).toBe("正在思考")
-    expect(container.querySelector(".reasoning-peek")?.textContent).toBe("Checking the")
-    expect(container.querySelector(".turn-loading")).not.toBeNull()
+    expect(streaming.container.querySelector(".turn-loading")).not.toBeNull()
   })
 
   it("keeps the work open when a turn fails or is stopped, or ends without an answer", () => {
@@ -258,7 +272,7 @@ describe("turn rendering", () => {
     ]
     renderList(failed)
     expect(screen.getByRole("alert").textContent).toBe("agent crashed")
-    expect(screen.getByRole("button", { name: /终端/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /已执行/ })).toBeTruthy()
     cleanup()
     renderList([
       event(1, "run.started", { text: "go" }),
@@ -266,7 +280,7 @@ describe("turn rendering", () => {
       event(3, "run.interrupted", {}),
     ])
     expect(screen.getByRole("button", { name: "已停止" }).hasAttribute("disabled")).toBe(true)
-    expect(screen.getByRole("button", { name: /终端/ })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /已执行/ })).toBeTruthy()
   })
 
   it("asks inline while waiting and keeps an answered question as a history row", async () => {
@@ -278,8 +292,10 @@ describe("turn rendering", () => {
       event(1, "run.started", { text: "ask" }),
       event(2, "question.requested", question),
     ]
-    renderList(asking)
-    expect(screen.getByRole("button", { name: "等你回答" })).toBeTruthy()
+    const { container } = renderList(asking)
+    // 等用户回答时没有折叠头，也不显示「工作中」，由提问卡片说明在等什么。
+    expect(container.querySelector(".work-head")).toBeNull()
+    expect(container.querySelector(".turn-loading")).toBeNull()
     expect(screen.getByRole("form", { name: "Agent 想问你几件事" })).toBeTruthy()
     expect(screen.getByText("正在提问").className).toContain("tool-shimmer")
     cleanup()
@@ -290,7 +306,7 @@ describe("turn rendering", () => {
       event(5, "run.completed", {}),
     ])
     expect(screen.queryByRole("form")).toBeNull()
-    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
+    await userEvent.click(screen.getByRole("button", { name: /^用时/ }))
     await userEvent.click(screen.getByRole("button", { name: /问过了/ }))
     expect(screen.getByText("Linux")).toBeTruthy()
   })

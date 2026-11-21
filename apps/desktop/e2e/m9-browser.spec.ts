@@ -38,12 +38,12 @@ test("the agent logs in on a local page in the built-in browser", async () => {
       timeout: 5_000,
     })
 
-    // 时间线：浏览器步骤合成分组，截图默认展开。
-    await page.getByRole("button", { name: /^做了/ }).click()
-    const groups = page.locator(".tool-group").filter({ hasText: "浏览器" })
-    await expect(groups).toHaveCount(2)
-    await groups.last().locator(".tool-row-head").first().click()
-    await expect(groups.last().locator(".tool-row-images img")).toHaveAttribute(
+    // 时间线：浏览器步骤算「执行」，和前后的工具连成摘要组；展开后截图默认展开。
+    await page.getByRole("button", { name: /^用时/ }).click()
+    const heads = page.locator(".turn-work .summary-group-head")
+    await expect(heads.first()).toContainText("命令")
+    for (const head of await heads.all()) await head.click()
+    await expect(page.locator(".turn-work .tool-row-images img").last()).toHaveAttribute(
       "src",
       /^data:image\/jpeg;base64,/,
     )

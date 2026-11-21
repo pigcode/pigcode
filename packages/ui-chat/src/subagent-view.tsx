@@ -12,10 +12,9 @@ import type { SubagentCall } from "./subagent-card"
 import { isHiddenTool } from "./tool-identity"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
 import type { WorkItem } from "./turns"
-import { groupTools } from "./work-groups"
 import { WorkList } from "./work-list"
 
-/** 子 agent 的过程：思考、完成的消息与合并后的工具调用，按 seq 排列，连续的同类工具合并。 */
+/** 子 agent 的过程：思考、完成的消息与工具调用，按 seq 排列；连续的摘要由工作列表合成一组。 */
 export function subagentSteps(events: readonly ThreadEvent[]): WorkItem[] {
   const sorted = [...events].sort((left, right) => left.seq - right.seq)
   const tools = collectTools(sorted)
@@ -39,7 +38,7 @@ export function subagentSteps(events: readonly ThreadEvent[]): WorkItem[] {
     seen.add(tool.id)
     steps.push({ kind: "tool", key: `tool-${tool.id}`, tool: tools.get(tool.id) ?? tool })
   }
-  return groupTools(steps, (item) => (item.kind === "tool" ? item.tool : null)) as WorkItem[]
+  return steps
 }
 
 /** 主 agent 交给子 agent 的任务；超过四行时折叠，可以展开。 */

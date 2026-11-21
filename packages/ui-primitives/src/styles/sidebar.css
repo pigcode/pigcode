@@ -130,6 +130,26 @@
   background: var(--hover);
   color: var(--fg);
 }
+/*
+  标题右侧的「自定义侧栏」和「添加项目」：显示更新时间时两个按钮隔开 9，和下面行里的时间列对齐，
+  关掉时间时挨着（照 Cursor）。漏斗比文件夹小一号；筛选偏离默认时换成强调色，提醒列表不是全部。
+*/
+.side-label-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.side-label-actions[data-spread] {
+  gap: 9px;
+}
+.side-label .side-filter .ic {
+  width: var(--icon-side-filter);
+  height: var(--icon-side-filter);
+}
+.side-label .icon-btn.side-filter[data-active],
+.side-label .icon-btn.side-filter[data-active]:hover {
+  color: var(--accent);
+}
 /* 设置侧栏的搜索入口使用与导航行同高的普通按钮。 */
 .btn.settings-search-trigger {
   --button-icon-size: var(--icon-btn-lg);
@@ -150,8 +170,33 @@
   项目行：打开的项目显示展开的文件夹；悬停或键盘聚焦时右侧出现新会话按钮。
   按钮不画底色，悬停在按钮上时只把加号的颜色加深一档，和行里其余部分是同一种样子。
 */
+.proj-block {
+  position: relative;
+}
 .proj-block + .proj-block {
   margin-top: 10px;
+}
+/* 拖动调整项目顺序：被拖的项目淡下去，落点在项目之间的空隙里画一条强调色的线 */
+.proj-block[data-dragging] {
+  opacity: 0.5;
+}
+.proj-block[data-drop]::before {
+  content: "";
+  position: absolute;
+  inset-inline: var(--space-3);
+  border-top: 2px solid var(--accent);
+  border-radius: 1px;
+  pointer-events: none;
+}
+.proj-block[data-drop="before"]::before {
+  top: calc(var(--space-3) * -1);
+}
+/* 第一个项目上面紧挨着标题行，没有空隙，线贴着项目画，不压在标题上 */
+.side-label + .proj-block[data-drop="before"]::before {
+  top: calc(var(--space-1) * -1);
+}
+.proj-block[data-drop="after"]::before {
+  bottom: calc(var(--space-3) * -1);
 }
 .proj-row,
 .sess {
@@ -195,12 +240,16 @@
 .sess.is-active .sess-agent {
   opacity: 0.9;
 }
-/* 按时间排列时显示会话所在的项目 */
-.sess-project {
-  flex: 0 1 auto;
-  max-width: 84px;
-  color: var(--faint);
-  font-size: var(--fs-sm);
+/* 两行的会话行（标题下面是项目名）：状态点和右侧的图标、时间跟着标题那一行，不夹在两行中间（照 Cursor） */
+.sess:has(.list-row-desc) {
+  align-items: flex-start;
+}
+.sess:has(.list-row-desc) > :is(.list-row-leading, .list-row-meta) {
+  height: var(--lh-md);
+}
+/* 已归档的会话淡一档（照 Cursor），正在看的那一行照常 */
+.sess[data-archived]:not(.is-active) .sess-title {
+  color: var(--muted);
 }
 .sess time {
   flex: none;

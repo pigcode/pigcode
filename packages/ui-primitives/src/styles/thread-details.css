@@ -1,0 +1,240 @@
+/*
+  会话详情（thread-details.tsx，照 T3 Code 的 ThreadDetailsPanel 与 threadDetailsPanelStyles）：线程头的按钮
+  开关一张宽 280 的卡片。会话区放得下时钉在会话区右上角，离上边、右边 12，会话列往左让出卡片和 32 的间距；
+  放不下时是按钮下面的浮层，右边同样离会话区 12。
+  卡片分几段，段间一条细线，每段四周内衬 6；一行和菜单项一样：最矮 30、圆角 8、文字离卡片边 14、图标与
+  文字间距 10，只有能点的行悬停才有底色。工作区与版本控制两段不写标题，待办与后台任务的标题可以折起来。
+*/
+
+/* ─── 线程头的开关：和布局按钮一样的图标按钮；收着且待办没做完时带上进度 ─── */
+.panel-top .details-toggle[data-progress] {
+  width: auto;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+.details-toggle-count {
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── 卡片：底色、阴影与磨砂来自 .popup，圆角和菜单一样是 14 ─── */
+.details-card {
+  display: flex;
+  width: var(--details-w);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-xl);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+/* 浮层最高到窗口里还剩的高度（Base UI 写的 --available-height） */
+.details-card:not([data-pinned]) {
+  max-height: var(--available-height);
+}
+/* 钉住时在时间线的右上角，底下也留出 12 */
+.details-card[data-pinned] {
+  position: absolute;
+  top: var(--details-inset);
+  right: var(--details-inset);
+  z-index: 20;
+  max-height: calc(100% - 2 * var(--details-inset));
+  transform-origin: top right;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .details-card[data-pinned] {
+    animation: pop-in var(--t-med) var(--ease);
+  }
+}
+.details-body {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+.details-section {
+  padding: var(--space-3);
+}
+.details-section + .details-section {
+  border-top: var(--hair) solid var(--border-strong);
+}
+
+/* ─── 一行：图标、文字，行尾是灰色的补充信息 ─── */
+.details-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--menu-row-h);
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 calc(var(--menu-pad-x) - var(--space-3));
+  border-radius: var(--r-block);
+  color: var(--fg);
+  text-align: left;
+}
+/* 行首图标和应用图标一样是 16，几行文字的左边缘对齐 */
+.details-row > .ic {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  color: var(--muted);
+}
+.details-row-label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.details-row-meta {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+button.details-row:hover,
+.details-split-more:hover,
+.details-split-more[aria-expanded="true"] {
+  background: var(--hover);
+}
+
+/*
+  分成两半的一行（用哪个应用打开）：左边整行打开，右边 30 宽的箭头换应用。悬停时整行先铺一层底色，
+  指着的那一半再叠一层；中间的细线只在用到这一行时出现，平时看起来就是普通的一行。
+*/
+.details-split {
+  display: flex;
+  align-items: center;
+  border-radius: var(--r-block);
+}
+.details-split:hover,
+.details-split:has(> [aria-expanded="true"]) {
+  background: var(--hover);
+}
+.details-split > .details-row {
+  flex: 1;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.details-split-sep {
+  flex: none;
+  align-self: stretch;
+  width: var(--hair);
+  margin-block: var(--space-3);
+}
+.details-split:is(:hover, :has(> [aria-expanded="true"])) .details-split-sep {
+  background: var(--border-strong);
+}
+.details-split-more {
+  display: grid;
+  flex: none;
+  align-self: stretch;
+  place-items: center;
+  width: var(--menu-row-h);
+  border-radius: 0 var(--r-block) var(--r-block) 0;
+  color: var(--muted);
+}
+
+/* ─── 待办与后台任务：标题 12/16 的灰字，悬停时出现折叠箭头；数字是等宽的 ─── */
+.details-head {
+  display: flex;
+  min-height: var(--control-md);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 0 calc(var(--menu-pad-x) - var(--space-3));
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.details-head-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: inherit;
+}
+.details-head-toggle .ic {
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.details-head-toggle:is(:hover, :focus-visible, [aria-expanded="false"]) .ic {
+  opacity: 1;
+}
+.details-head-meta {
+  font-variant-numeric: tabular-nums;
+}
+.details-head-meta[data-done] {
+  color: var(--cv-success);
+}
+.details-todos,
+.details-running {
+  list-style: none;
+}
+/* 一项一行时和菜单项一样高 30，长的最多两行；图标和第一行文字居中对齐 */
+.details-todo,
+.details-work {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  padding: var(--space-3) calc(var(--menu-pad-x) - var(--space-3));
+}
+.details-todo > .ic,
+.details-work > .ic {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  margin-top: calc((var(--lh-md) - var(--icon-lg)) / 2);
+  color: var(--faint);
+}
+.details-todo > .ic.is-done {
+  color: var(--cv-success);
+}
+.details-todo > .ic.is-current {
+  color: var(--fg);
+}
+.details-todo-text,
+.details-work-title {
+  display: -webkit-box;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.details-todo[data-status="pending"] .details-todo-text {
+  color: var(--fg-2);
+}
+.details-todo[data-status="completed"] .details-todo-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.details-work > .ic {
+  color: var(--muted);
+}
+.details-work[data-kind="command"] .details-work-title {
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);
+}
+.details-work-time {
+  flex: none;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+  ─── 钉住时会话列让位 ───
+  消息、输入框、子代理的只读条和回到底部按钮一起往左挪：右边让出卡片、离右边的 12 和离卡片的 32，
+  左边照旧留出会话导航的留白；居中放得下就居中，放不下才挪。会话列最宽 780，最窄 640，再窄卡片就
+  改成浮层（thread-details.tsx）。
+*/
+.chat-view[data-details="pinned"] :is(.thread-wrap, .composer-wrap) {
+  --cv-lane-end: calc(var(--details-w) + var(--details-inset) + var(--details-clearance));
+  --cv-width: min(var(--cv-col), calc(100cqi - var(--cv-lane-end) - var(--cv-gutter)));
+  --cv-shift: max(0px, calc(var(--cv-lane-end) + var(--cv-width) / 2 - 50cqi));
+}
+.chat-view[data-details="pinned"] :is(.msgs, .composer-shell, .subagent-readonly) {
+  translate: calc(-1 * var(--cv-shift)) 0;
+}
+.chat-view[data-details="pinned"] .scroll-bottom {
+  left: calc(50% - var(--cv-shift));
+}

@@ -102,7 +102,7 @@ describe("QuestionCard", () => {
     expect(onApproval).toHaveBeenLastCalledWith("req_1", "allow-once")
   })
 
-  it("puts the turn in 'waiting for your answer' until it is answered", () => {
+  it("asks inline while waiting and stops saying the turn is working", () => {
     const event = (seq: number, type: ThreadEvent["type"], payload: unknown): ThreadEvent => ({
       seq,
       threadId: "t1",
@@ -123,7 +123,9 @@ describe("QuestionCard", () => {
         />
       </LocaleProvider>,
     )
-    expect(screen.getByRole("button", { name: /等你回答/ })).toBeTruthy()
     expect(screen.getByRole("form", { name: "Agent 想问你几件事" })).toBeTruthy()
+    // 等用户回答时由提问卡片说明在等什么，「工作中」那一行和折叠头都不显示。
+    expect(screen.queryByRole("status", { name: "工作中" })).toBeNull()
+    expect(document.querySelector(".work-head")).toBeNull()
   })
 })

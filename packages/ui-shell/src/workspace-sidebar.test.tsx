@@ -1,105 +1,21 @@
-/** 验证侧栏渲染导航、项目与会话，以及会话的右键菜单与数字快捷键。 */
+/** 验证侧栏渲染导航、项目与会话，会话的右键菜单、数字快捷键与项目的拖动排序。 */
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import type { ComponentProps } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
-import { ToastProvider } from "./toast"
-import { WorkspaceSidebar, visibleThreads } from "./workspace-sidebar"
+import { chooseMenuItem, mockMenu, project, renderSidebar, thread } from "./sidebar.fixtures"
+import { PROJECT_DRAG_TYPE } from "./sidebar-rows"
+import { WorkspaceSidebar } from "./workspace-sidebar"
 
-afterEach(cleanup)
-
-const project = (id: string, name: string) => ({
-  id,
-  rootPath: `/tmp/${name}`,
-  name,
-  createdAt: "2026-10-20T00:00:00.000Z",
+afterEach(() => {
+  cleanup()
+  window.localStorage.removeItem("pigcode.sidebarGrouping")
+  window.localStorage.removeItem("pigcode.sidebarView")
 })
-
-const thread = (id: string, projectId: string, title: string, updatedAt: string) => ({
-  id,
-  projectId,
-  title,
-  defaultAgentId: "claude",
-  defaultInstanceId: null,
-  lastAgentId: null,
-  lastInstanceId: null,
-  lastModelId: null,
-  permissionMode: "workspace-write" as const,
-  createdAt: updatedAt,
-  updatedAt,
-  archivedAt: null as string | null,
-  lastRunId: null,
-})
-
-function renderSidebar(props: Partial<ComponentProps<typeof WorkspaceSidebar>> = {}) {
-  return render(
-    <LocaleProvider locale="zh-CN">
-      <ToastProvider>
-        <WorkspaceSidebar
-          projects={[project("p1", "alpha")]}
-          threads={[thread("t1", "p1", "First thread", "2026-10-20T01:00:00.000Z")]}
-          activeThreadId={null}
-          expandedProjects={{}}
-          onAddProject={() => {}}
-          onToggleProject={() => {}}
-          onOpenThread={() => {}}
-          onNewThread={() => {}}
-          {...props}
-        />
-      </ToastProvider>
-    </LocaleProvider>,
-  )
-}
-
-/** 用替身代替 preload 暴露的原生桥。 */
-function mockNative(value: Partial<NonNullable<Window["pigcodeNative"]>>): void {
-  Object.defineProperty(window, "pigcodeNative", { configurable: true, value })
-}
-
-type PopupMenu = NonNullable<NonNullable<Window["pigcodeNative"]>["popupMenu"]>
-
-function mockMenu(overrides?: Partial<NonNullable<Window["pigcodeNative"]>>) {
-  const popupMenu = vi.fn<PopupMenu>().mockResolvedValue(null)
-  mockNative({ platform: "linux", ...overrides, popupMenu })
-  return popupMenu
-}
-
-async function chooseMenuItem(menu: ReturnType<typeof mockMenu>, target: HTMLElement, id: string) {
-  menu.mockResolvedValueOnce(id)
-  await act(async () => {
-    fireEvent.contextMenu(target)
-  })
-}
 
 afterEach(() => {
   Reflect.deleteProperty(window, "pigcodeNative")
-})
-
-describe("visibleThreads", () => {
-  it("lists live threads top to bottom as the sidebar shows them", () => {
-    const projects = [project("p1", "alpha"), project("p2", "beta")]
-    const threads = [
-      thread("t1", "p1", "older", "2026-10-20T01:00:00.000Z"),
-      thread("t2", "p2", "newest", "2026-10-20T03:00:00.000Z"),
-      thread("t3", "p1", "middle", "2026-10-20T02:00:00.000Z"),
-      {
-        ...thread("t4", "p1", "archived", "2026-10-20T04:00:00.000Z"),
-        archivedAt: "2026-10-21T00:00:00.000Z",
-      },
-      thread("t5", "gone", "no project", "2026-10-20T05:00:00.000Z"),
-    ]
-    const ids = (list: Array<{ id: string }>) => list.map((item) => item.id)
-
-    expect(ids(visibleThreads(projects, threads, "project", {}))).toEqual(["t1", "t3", "t2"])
-    expect(ids(visibleThreads(projects, threads, "project", { p1: false }))).toEqual(["t2"])
-    expect(ids(visibleThreads(projects, threads, "time", { p1: false }))).toEqual([
-      "t2",
-      "t3",
-      "t1",
-    ])
-  })
 })
 
 describe("WorkspaceSidebar", () => {
@@ -150,40 +66,55 @@ describe("WorkspaceSidebar", () => {
     )
   })
 
-  it("switches to a single list sorted by time from the filter menu and remembers it", async () => {
-    window.localStorage.removeItem("pigcode.sidebarGrouping")
-    render(
-      <LocaleProvider locale="zh-CN">
-        <WorkspaceSidebar
-          projects={[project("p1", "alpha"), project("p2", "beta")]}
-          threads={[
-            thread("t1", "p1", "older", "2026-10-20T01:00:00.000Z"),
-            thread("t2", "p2", "newest", "2026-10-20T03:00:00.000Z"),
-            thread("t3", "p1", "middle", "2026-10-20T02:00:00.000Z"),
-            thread("t4", "gone", "hidden", "2026-10-20T04:00:00.000Z"),
-          ]}
-          activeThreadId={null}
-          expandedProjects={{}}
-          onAddProject={() => {}}
-          onToggleProject={() => {}}
-          onOpenThread={() => {}}
-          onNewThread={() => {}}
-        />
-      </LocaleProvider>,
-    )
-    const titles = () =>
-      Array.from(document.querySelectorAll(".sess-title")).map((node) => node.textContent)
-    expect(titles()).toEqual(["older", "middle", "newest"])
+  it("reorders projects by dragging or from their menu and switches to the manual order", async () => {
+    const menu = mockMenu()
+    renderSidebar({
+      projects: [project("p1", "alpha"), project("p2", "beta"), project("p3", "gamma")],
+      threads: [],
+      onRenameProject: vi.fn(),
+      onRemoveProject: vi.fn(),
+    })
+    const names = () =>
+      Array.from(document.querySelectorAll(".proj-row .list-row-title")).map(
+        (node) => node.textContent,
+      )
+    const row = (name: string) => screen.getByRole("button", { name }).closest(".proj-row")!
+    const block = (name: string) => row(name).closest(".proj-block")!
+    const dataTransfer = {
+      types: [PROJECT_DRAG_TYPE],
+      getData: (type: string) => (type === PROJECT_DRAG_TYPE ? "p3" : ""),
+      setData: vi.fn(),
+      effectAllowed: "",
+      dropEffect: "",
+    }
 
-    await userEvent.click(screen.getByRole("button", { name: "会话排列方式" }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "按时间" }))
-    expect(titles()).toEqual(["newest", "middle", "older"])
-    expect(screen.getByText("最近会话")).toBeTruthy()
-    expect(
-      Array.from(document.querySelectorAll(".sess-project")).map((node) => node.textContent),
-    ).toEqual(["beta", "alpha", "alpha"])
-    expect(window.localStorage.getItem("pigcode.sidebarGrouping")).toBe("time")
-    window.localStorage.removeItem("pigcode.sidebarGrouping")
+    fireEvent.dragStart(row("gamma"), { dataTransfer })
+    expect(block("gamma").hasAttribute("data-dragging")).toBe(true)
+    fireEvent.dragOver(block("alpha"), { dataTransfer })
+    expect(block("alpha").getAttribute("data-drop")).toBe("before")
+    fireEvent.drop(block("alpha"), { dataTransfer })
+    expect(names()).toEqual(["gamma", "alpha", "beta"])
+    expect(JSON.parse(window.localStorage.getItem("pigcode.sidebarView") ?? "{}")).toMatchObject({
+      projectOrder: "manual",
+      projectIds: ["p3", "p1", "p2"],
+    })
+    // 拖进来的文件不当成调整顺序。
+    fireEvent.dragOver(block("beta"), { dataTransfer: { ...dataTransfer, types: ["Files"] } })
+    expect(block("beta").hasAttribute("data-drop")).toBe(false)
+
+    await chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), "move-up")
+    expect(menu.mock.lastCall?.[0]).toEqual(
+      expect.arrayContaining([
+        { type: "separator" },
+        { id: "move-up", label: "上移" },
+        { id: "move-down", label: "下移" },
+      ]),
+    )
+    expect(names()).toEqual(["alpha", "gamma", "beta"])
+    // 最上面的项目没有「上移」。
+    await chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), "move-down")
+    expect(menu.mock.lastCall?.[0]).not.toContainEqual(expect.objectContaining({ id: "move-up" }))
+    expect(names()).toEqual(["gamma", "alpha", "beta"])
   })
 
   it("animates a dot matrix for running threads and keeps a status dot for the rest", () => {

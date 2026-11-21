@@ -1,10 +1,12 @@
-/** 验证线程头的「用…打开」分段按钮：应用图标、记住上次选的应用、失败提示与复制路径。 */
+/**
+ * 验证「用…打开」：分段按钮的应用图标、记住上次选的应用、失败提示与复制路径，以及会话详情卡里那一行。
+ */
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
-import { OpenInButton } from "./open-in"
+import { OpenInButton, OpenInRow } from "./open-in"
 import { ToastProvider } from "./toast"
 
 const APPS = [
@@ -48,7 +50,7 @@ describe("OpenInButton", () => {
     mockNative({ platform: "darwin", listOpenApps, openWithApp })
     renderButton("/Users/me/app")
 
-    const main = await screen.findByRole("button", { name: "用 Finder 打开" })
+    const main = await screen.findByRole("button", { name: "在访达中打开" })
     expect(main.querySelector("img")?.getAttribute("src")).toBe(APPS[0]?.icon)
     await userEvent.click(main)
     expect(openWithApp).toHaveBeenLastCalledWith("finder", "/Users/me/app")
@@ -85,7 +87,7 @@ describe("OpenInButton", () => {
     })
     renderButton("C:\\work\\app")
 
-    expect(await screen.findByRole("button", { name: "用 资源管理器 打开" })).toBeTruthy()
+    expect(await screen.findByRole("button", { name: "在资源管理器中打开" })).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "选打开方式" }))
     await userEvent.click(await screen.findByRole("menuitem", { name: "复制路径" }))
     expect(writeText).toHaveBeenCalledExactlyOnceWith("C:\\work\\app")
@@ -131,5 +133,35 @@ describe("OpenInButton", () => {
   it("renders nothing without the native bridge", async () => {
     renderButton("/home/me/app")
     await waitFor(() => expect(screen.queryByRole("group")).toBeNull())
+  })
+})
+
+describe("OpenInRow", () => {
+  it("spells out the app in the details card and shares the choice with the split button", async () => {
+    const openWithApp = vi.fn().mockResolvedValue(undefined)
+    mockNative({
+      platform: "darwin",
+      listOpenApps: vi.fn().mockResolvedValue(APPS),
+      openWithApp,
+    })
+    window.localStorage.setItem("pigcode.openInApp", "cursor")
+    render(
+      <LocaleProvider locale="zh-CN">
+        <ToastProvider>
+          <OpenInRow path="/Users/me/app" />
+        </ToastProvider>
+      </LocaleProvider>,
+    )
+
+    const row = await screen.findByRole("button", { name: "用 Cursor 打开" })
+    expect(row.textContent).toBe("用 Cursor 打开")
+    await userEvent.click(row)
+    expect(openWithApp).toHaveBeenLastCalledWith("cursor", "/Users/me/app")
+
+    await userEvent.click(screen.getByRole("button", { name: "选打开方式" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Finder" }))
+    expect(openWithApp).toHaveBeenLastCalledWith("finder", "/Users/me/app")
+    expect(window.localStorage.getItem("pigcode.openInApp")).toBe("finder")
+    expect(await screen.findByRole("button", { name: "在访达中打开" })).toBeTruthy()
   })
 })

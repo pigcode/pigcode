@@ -1,6 +1,7 @@
 /**
- * 读写文件的工具行（参照 ZCode 的 read / edit）：读取只有一行摘要——文件名与灰色的父目录，
- * 点文件名在文件面板中打开；写入、编辑与删除显示改动行数，展开后是内联 diff，多个文件时逐个列出。
+ * 读写文件的工具行（参照 ZCode 3.18 的 read / edit）：读取只有一行摘要「已读取 文件名」，文件名是
+ * 正文色、不带父目录，悬停看完整路径，点文件名在文件面板中打开；写入、编辑与删除显示改动行数，
+ * 展开后是内联 diff，多个文件时逐个列出。
  */
 import { memo } from "react"
 import { Pencil, Search } from "lucide-react"
@@ -9,7 +10,7 @@ import { fileChanges, type FileChange } from "../file-changes"
 import { outputText, readPath } from "../tool-fields"
 import type { ToolCall } from "../tool-meta"
 import { ToolRow } from "../tool-row"
-import { FileChip, FileChips, FileParent, headLines, toolStatusWord } from "./common"
+import { FileChip, FileChips, headLines, toolStatusWord } from "./common"
 import { InlineDiff } from "./inline-diff"
 
 /** 读取文件：一行摘要，不能展开。 */
@@ -28,12 +29,10 @@ export const ReadRow = memo(function ReadRow({
       id={tool.id}
       icon={Search}
       showIcon={showIcon}
-      kind={running ? t("chat.toolCall.read.reading") : t("chat.toolCall.kind.read")}
+      kind={running ? t("chat.toolCall.read.reading") : t("chat.toolCall.read.read")}
       running={running}
       primary={path ? <FileChip path={path} /> : null}
-      secondary={path ? <FileParent path={path} /> : null}
       status={toolStatusWord(t, tool, headLines(outputText(tool)))}
-      title={path}
       dataStatus={tool.status}
     />
   )
@@ -45,12 +44,12 @@ function editKind(
   running: boolean,
 ): string {
   if (operation === "write") {
-    return running ? t("chat.toolCall.edit.writing") : t("chat.toolCall.kind.write")
+    return running ? t("chat.toolCall.edit.writing") : t("chat.toolCall.edit.wrote")
   }
   if (operation === "delete") {
-    return running ? t("chat.toolCall.edit.deleting") : t("chat.toolCall.kind.delete")
+    return running ? t("chat.toolCall.edit.deleting") : t("chat.toolCall.edit.deleted")
   }
-  return running ? t("chat.toolCall.edit.editing") : t("chat.toolCall.kind.edit")
+  return running ? t("chat.toolCall.edit.editing") : t("chat.toolCall.edit.edited")
 }
 
 /** 一个文件的改动行，用在多文件编辑的展开列表里。 */
@@ -63,9 +62,7 @@ function FileChangeRow({ id, change }: { id: string; change: FileChange }) {
       showIcon={false}
       kind={editKind(t, change.operation, false)}
       primary={<FileChip path={change.path} />}
-      secondary={<FileParent path={change.path} />}
       diff={change}
-      title={change.path}
     >
       {change.lines.length > 0
         ? () => <InlineDiff lines={change.lines} path={change.path} />
@@ -114,7 +111,6 @@ export const EditRow = memo(function EditRow({
       primary={
         changes.length > 0 ? <FileChips paths={changes.map((change) => change.path)} /> : null
       }
-      secondary={single ? <FileParent path={single.path} /> : null}
       expandedPrimary={
         changes.length > 1
           ? t("chat.toolCall.edit.multipleFiles").replace("{count}", String(changes.length))

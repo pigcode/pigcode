@@ -10,11 +10,16 @@ export async function projectFilePaths(
   return entries.map((entry) => entry.path)
 }
 
-/** 用 Host 返回的记录替换 store 里的同一个会话。 */
-function replaceThread(store: AppStore, thread: Thread): void {
+/** 用 Host 返回的记录替换 store 里的同一批会话。 */
+function replaceThreads(store: AppStore, records: readonly Thread[]): void {
+  const byId = new Map(records.map((thread) => [thread.id, thread]))
   store.update({
-    threads: store.getSnapshot().threads.map((item) => (item.id === thread.id ? thread : item)),
+    threads: store.getSnapshot().threads.map((item) => byId.get(item.id) ?? item),
   })
+}
+
+function replaceThread(store: AppStore, thread: Thread): void {
+  replaceThreads(store, [thread])
 }
 
 /** 项目按创建时间排列，与 Host 的 project.list 一致。 */
@@ -148,4 +153,62 @@ export async function archiveThread(
       closeThread(connection, store, child.id)
   }
   return wasActive ? nextThread(store, archived.projectId) : null
+}
+
+/** 取消归档；一起归档的子代理由 Host 的 thread.changed 带回来。 */
+export async function unarchiveThread(
+  connection: Connection,
+  store: AppStore,
+  threadId: string,
+): Promise<void> {
+  replaceThread(store, (await connection.call("thread.unarchive", { threadId })) as Thread)
+}
+
+/** 标为已读或未读。标已读时先改 store，正在看的会话跑完时侧栏不会闪一下未读。 */
+export async function setThreadRead(
+  connection: Connection,
+  store: AppStore,
+  threadId: string,
+  read: boolean,
+): Promise<void> {
+  const current = store.getSnapshot().threads.find((thread) => thread.id === threadId)
+  if (read && current?.unread) replaceThread(store, { ...current, unread: false })
+  replaceThread(store, (await connection.call("thread.markRead", { threadId, read })) as Thread)
+}
+
+/** 侧栏菜单里的「全部标为已读」。 */
+export async function markAllThreadsRead(connection: Connection, store: AppStore): Promise<void> {
+  replaceThreads(store, (await connection.call("thread.markAllRead", {})) as Thread[])
+}
+
+/**
+ * 侧栏右键菜单与「全部标为已读」接到 Host 的回调。归档或移除了正在看的会话时打开接下来的那个；
+ * 失败交给 onError。
+ */
+export function sidebarActions(
+  connection: Connection,
+  store: AppStore,
+  {
+    openThread,
+    onError,
+  }: { openThread: (threadId: string) => void; onError: (error: unknown) => void },
+) {
+  const run = (task: Promise<unknown>) => void task.catch(onError)
+  const openNext = (next: string | null) => {
+    if (next) openThread(next)
+  }
+  return {
+    onRenameThread: (threadId: string, title: string) =>
+      run(renameThread(connection, store, threadId, title)),
+    onArchiveThread: (threadId: string) =>
+      run(archiveThread(connection, store, threadId).then(openNext)),
+    onUnarchiveThread: (threadId: string) => run(unarchiveThread(connection, store, threadId)),
+    onMarkThreadRead: (threadId: string, read: boolean) =>
+      run(setThreadRead(connection, store, threadId, read)),
+    onMarkAllRead: () => run(markAllThreadsRead(connection, store)),
+    onRenameProject: (projectId: string, name: string) =>
+      run(renameProject(connection, store, projectId, name)),
+    onRemoveProject: (projectId: string) =>
+      run(removeProject(connection, store, projectId).then(openNext)),
+  }
 }

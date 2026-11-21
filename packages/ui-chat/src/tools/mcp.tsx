@@ -100,7 +100,6 @@ export const McpRow = memo(function McpRow({
       kind="MCP"
       running={running}
       kindDetail={<span className="tool-row-server">{humanizeName(call.server)}</span>}
-      separator
       primary={humanizeName(call.tool)}
       status={toolStatusWord(t, tool, headLines(call.text))}
       title={tool.name}

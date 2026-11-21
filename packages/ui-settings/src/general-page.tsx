@@ -165,6 +165,7 @@ export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | 
             options={[
               { value: "project", label: t("settings.general.byProject") },
               { value: "time", label: t("settings.general.byTime") },
+              { value: "status", label: t("settings.general.byStatus") },
             ]}
           />
         </SettingRow>

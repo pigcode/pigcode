@@ -28,13 +28,13 @@ export function recoverAfterRestart(
   const interrupted = ctx.storage.db
     .prepare(
       `SELECT id, thread_id FROM runs
-       WHERE status IN ('running', 'waiting-approval', 'queued')`,
+       WHERE status IN ('running', 'waiting-approval', 'waiting-input', 'queued')`,
     )
     .all() as Array<{ id: string; thread_id: string }>
   const interruptedRuns = ctx.storage.db
     .prepare(
       `UPDATE runs SET status = 'interrupted', completed_at = ?
-       WHERE status IN ('running', 'waiting-approval', 'queued')`,
+       WHERE status IN ('running', 'waiting-approval', 'waiting-input', 'queued')`,
     )
     .run(now).changes
   for (const row of interrupted) {

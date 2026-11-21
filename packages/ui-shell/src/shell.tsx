@@ -3,6 +3,7 @@
  * 窗口按钮全部由系统绘制：macOS 的交通灯落在侧栏顶行，Windows/Linux 的按钮叠在标题栏上。
  */
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -12,7 +13,7 @@ import {
 } from "react"
 import type { Project, Thread } from "@pigcode/contracts"
 import { useExtensionRegistry } from "@pigcode/client-runtime"
-import { Button, formatShortcut, useLocale, useSidebarGrouping } from "@pigcode/ui-primitives"
+import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 import { AddProjectDialog } from "./add-project-dialog"
 import { registerBuiltinCommands } from "./builtin-commands"
 import { CommandPalette } from "./command-palette"
@@ -22,6 +23,7 @@ import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar } from "./settings-sidebar"
 import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
 import type { ThreadStatus } from "./thread-status"
+import { useThreadShortcuts } from "./thread-shortcuts"
 import { TitleBar } from "./title-bar"
 import { titleBarMenus } from "./title-bar-menus"
 import { WindowControls } from "./window-controls"
@@ -29,17 +31,32 @@ import {
   hasCustomTitleBar,
   historyStep,
   nativePlatform,
-  threadShortcutIndex,
   useModifierHints,
   useNarrowWindow,
 } from "./window-state"
-import { WorkspaceSidebar, visibleThreads } from "./workspace-sidebar"
+import { WorkspaceSidebar, useHeldThread, type WorkspaceSidebarProps } from "./workspace-sidebar"
 
 /** 顶层视图：聊天、设置、插件与定时任务。 */
 export type ShellView = "chat" | "settings" | "plugins" | "schedules"
 
+/** 没传 threadStatus 时用的同一个空表，快捷键的监听不会每次渲染都重新挂。 */
+const NO_STATUS: Readonly<Record<string, ThreadStatus>> = {}
+
+/** 侧栏右键菜单与「全部标为已读」的回调，原样交给工作区侧栏；说明见 WorkspaceSidebarProps。 */
+type SidebarActionProps = Pick<
+  WorkspaceSidebarProps,
+  | "onRenameThread"
+  | "onArchiveThread"
+  | "onUnarchiveThread"
+  | "onMarkThreadRead"
+  | "onMarkAllRead"
+  | "onReferenceThread"
+  | "onRenameProject"
+  | "onRemoveProject"
+>
+
 /** 外壳所需的数据与事件；项目/线程数据由 store 传入。 */
-export interface ShellProps {
+export interface ShellProps extends SidebarActionProps {
   updates?: ReactNode
   view: ShellView
   projects: Project[]
@@ -78,14 +95,6 @@ export interface ShellProps {
   onNewThread: (projectId?: string) => void
   onBrowseFiles?: ((projectId: string) => void) | undefined
   onOpenThread: (threadId: string) => void
-  /** 会话行右键菜单的重命名与归档；两个都传时才有右键菜单。 */
-  onRenameThread?: (threadId: string, title: string) => void
-  onArchiveThread?: (threadId: string) => void
-  /** 会话行右键菜单里的「在输入框里引用」。 */
-  onReferenceThread?: (thread: Thread) => void
-  /** 项目行右键菜单的重命名与从侧栏移除；两个都传时才有右键菜单。 */
-  onRenameProject?: (projectId: string, name: string) => void
-  onRemoveProject?: (projectId: string) => void
   children?: ReactNode
 }
 
@@ -144,6 +153,9 @@ export function Shell({
   onOpenThread,
   onRenameThread,
   onArchiveThread,
+  onUnarchiveThread,
+  onMarkThreadRead,
+  onMarkAllRead,
   onReferenceThread,
   onRenameProject,
   onRemoveProject,
@@ -162,7 +174,8 @@ export function Shell({
   const platform = nativePlatform()
   const narrow = useNarrowWindow()
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [grouping] = useSidebarGrouping()
+  const statusOf = threadStatus ?? NO_STATUS
+  const heldThreadId = useHeldThread(view === "chat" ? activeThreadId : null, threads, statusOf)
   const shortcutHints = useModifierHints() && !inSettings
   const expanded = expandedProjects ?? localExpanded
   const open = sidebarOpen ?? localSidebarOpen
@@ -268,21 +281,22 @@ export function Shell({
     return () => window.removeEventListener("mouseup", onMouseUp)
   }, [onBack, onForward])
 
-  // ⌘/Ctrl+1…9 打开侧栏里从上往下数的第 n 个会话，输入框里同样生效。
-  useEffect(() => {
-    if (inSettings) return
-    function onKeyDown(event: KeyboardEvent): void {
-      const index = threadShortcutIndex(event)
-      if (index === null) return
-      const target = visibleThreads(projects, threads, grouping, expanded)[index - 1]
-      if (!target) return
-      event.preventDefault()
+  const openFromShortcut = useCallback(
+    (threadId: string) => {
       setDrawerOpen(false)
-      onOpenThread(target.id)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [inSettings, projects, threads, grouping, expanded, onOpenThread])
+      onOpenThread(threadId)
+    },
+    [onOpenThread],
+  )
+  useThreadShortcuts({
+    enabled: !inSettings,
+    projects,
+    threads,
+    status: statusOf,
+    expandedProjects: expanded,
+    heldThreadId,
+    onOpen: openFromShortcut,
+  })
 
   /** 宽窗口里收起或展开侧栏；窄窗口里开关抽屉。 */
   function toggleSidebar(): void {
@@ -417,9 +431,13 @@ export function Shell({
             activeNav={view === "schedules" || view === "plugins" ? view : undefined}
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}
+            onUnarchiveThread={onUnarchiveThread}
+            onMarkThreadRead={onMarkThreadRead}
+            onMarkAllRead={onMarkAllRead}
             onReferenceThread={onReferenceThread}
             onRenameProject={onRenameProject}
             onRemoveProject={onRemoveProject}
+            heldThreadId={heldThreadId}
             shortcutHints={shortcutHints}
           >
             <SidebarPanels />

@@ -59,7 +59,7 @@ describe("MCP rows", () => {
       />,
     )
     const head = screen.getByRole("button", { name: /MCP/ })
-    expect(head.textContent).toBe("MCPContext7·Get library docs")
+    expect(head.textContent).toBe("MCPContext7Get library docs")
     await userEvent.click(head)
     expect(screen.getByText("useState returns a pair.").className).toBe("mcp-compact")
     await userEvent.click(screen.getByRole("button", { name: "看详情" }))
@@ -186,7 +186,7 @@ describe("browser tools", () => {
     )
   })
 
-  it("fold consecutive steps into one browser row", async () => {
+  it("count consecutive steps as commands in one summary group, with the browser icon", async () => {
     const event = (seq: number, type: ThreadEvent["type"], payload: unknown): ThreadEvent => ({
       seq,
       threadId: "t1",
@@ -213,8 +213,10 @@ describe("browser tools", () => {
         onApproval={() => {}}
       />,
     )
-    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
-    const group = screen.getByRole("button", { name: /浏览器.*localhost:4173 · 3 步/ })
+    await userEvent.click(screen.getByRole("button", { name: /^用时/ }))
+    const group = screen.getByRole("button", { name: "已执行 3 命令" })
+    // 组头的图标取浏览器操作自己的图标，排在修改、命令和查阅前面。
+    expect(group.querySelector(".summary-group-icon svg")).toBeTruthy()
     await userEvent.click(group)
     expect(screen.getByText("打开网页")).toBeTruthy()
     expect(screen.getByText('"demo" → e1')).toBeTruthy()

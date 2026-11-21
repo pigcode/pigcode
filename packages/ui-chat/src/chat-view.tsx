@@ -1,7 +1,7 @@
 import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
 /**
- * 聊天主视图：标签栏（主会话与子代理）、消息时间线与输入框。时间线左侧是会话导航，
- * 右上角浮着状态面板，离开底部时出现圆形的「滚动到底部」按钮。还没有消息时和新会话草稿页一样：
+ * 聊天主视图：标签栏（主会话与子代理）、消息时间线与输入框。时间线左侧是会话导航，线程头的按钮开关
+ * 会话详情（thread-details.tsx），离开底部时出现圆形的「滚动到底部」按钮。还没有消息时和新会话草稿页一样：
  * 问候、卡片上方带项目的高输入框与建议；会话已经属于这个项目，项目只显示，不能换。历史还没读到时
  * 不知道有没有消息，先按对话的样子摆（输入框在底部），读到了再决定要不要换成问候。
  */
@@ -32,12 +32,19 @@ import type { ApprovalDecision } from "./approval-card"
 import { MessageList } from "./message-list"
 import { ChatLinkContext, type ChatLinkActions } from "./chat-link-actions"
 import { NewThreadHero, NewThreadStage, NewThreadSuggestions, ProjectChip } from "./new-thread-view"
-import { StatusPanel } from "./status-panel"
 import type { SubagentCall } from "./subagent-card"
 import { SubagentView } from "./subagent-view"
+import {
+  PinnedThreadDetails,
+  ThreadDetailsBody,
+  ThreadDetailsToggle,
+  runningWorks,
+  usePinnedLayout,
+  usePinnedOpen,
+} from "./thread-details"
 import { ThreadTabs, type ThreadTabsProps } from "./thread-tabs"
 import { TurnNavigator } from "./turn-navigator"
-import { buildTimeline } from "./turns"
+import { buildTimeline, latestPlan } from "./turns"
 import { latestContextUsage } from "./context-usage"
 
 /** 线程头切换入口需要的 agent 展示信息。 */
@@ -102,8 +109,11 @@ export interface ChatViewProps {
   onToggleRight?: () => void
   /** 线程头末尾的布局按钮，替代单个右栏按钮；传 null 表示按钮已放在别处（例如右栏标签栏）。 */
   layoutControls?: ReactNode
-  /** 线程头右侧「在编辑器中打开项目」的入口；由容器按项目目录组装。 */
-  openIn?: ReactNode
+  /**
+   * 会话详情卡上面几段：工作区（用哪个应用打开）与版本控制（分支、改动），由容器按工作目录组装；
+   * 每段是一个 `.details-section`。卡片打开时才挂上，取数据的请求可以放在里面。
+   */
+  details?: ReactNode
   /** 线程头的标签栏：主会话与子代理；不提供时只显示主会话标题。 */
   tabs?: ThreadTabsProps | undefined
   /** 正在查看的派生子代理；有值时显示它的只读过程，不显示输入框。 */
@@ -168,7 +178,7 @@ export function ChatView({
   rightOpen = false,
   onToggleRight,
   layoutControls,
-  openIn,
+  details,
   tabs,
   subagent = null,
   onOpenSubagent,
@@ -226,6 +236,27 @@ export function ChatView({
   // 问候换成对话时，焦点随着问候里的输入框一起没了，放回底部的输入框。
   const [composerFocus, setComposerFocus] = useState(0)
   const wasBlank = useRef(blank)
+
+  const viewRef = useRef<HTMLElement>(null)
+  const headRef = useRef<HTMLDivElement>(null)
+  const roomy = usePinnedLayout(viewRef)
+  const [pinnedOpen, setPinnedOpen] = usePinnedOpen()
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  // 派生子代理的只读过程里看不到它自己的待办，详情卡只有工作区。
+  const plan = useMemo(() => (subagent ? null : latestPlan(timeline)), [subagent, timeline])
+  const works = useMemo(() => (subagent ? [] : runningWorks(timeline)), [subagent, timeline])
+  const hasDetails = thread !== null && (details != null || plan !== null || works.length > 0)
+  // 还没有消息时问候和输入框在正中，卡片只从按钮弹出，不去挤它们。
+  const detailsPinned = hasDetails && roomy && !blank
+  const detailsShown = detailsPinned && pinnedOpen
+  const detailsBody = hasDetails ? (
+    <ThreadDetailsBody workspace={details} plan={plan} running={works} />
+  ) : null
+
+  // 换了会话、或者窗口变宽卡片钉住了，就收起浮层；再回到窄窗口时它不会自己弹出来。
+  useEffect(() => {
+    setPopoverOpen(false)
+  }, [viewKey, detailsPinned])
 
   useEffect(() => {
     setPinned(true)
@@ -289,8 +320,12 @@ export function ChatView({
   const shownProject = projectName ?? folderName
 
   return (
-    <section className="view chat-view">
-      <div className="panel-top">
+    <section
+      ref={viewRef}
+      className="view chat-view"
+      data-details={detailsShown ? "pinned" : undefined}
+    >
+      <div className="panel-top" ref={headRef}>
         {tabs ? (
           <ThreadTabs {...tabs} />
         ) : thread ? (
@@ -301,7 +336,17 @@ export function ChatView({
           />
         ) : null}
         <span className="spacer" />
-        {thread ? openIn : null}
+        {hasDetails ? (
+          <ThreadDetailsToggle
+            pinned={detailsPinned}
+            open={detailsPinned ? pinnedOpen : popoverOpen}
+            onOpenChange={detailsPinned ? setPinnedOpen : setPopoverOpen}
+            plan={plan}
+            anchor={headRef}
+          >
+            {detailsBody}
+          </ThreadDetailsToggle>
+        ) : null}
         {layoutControls !== undefined ? (
           layoutControls
         ) : onToggleRight ? (
@@ -370,7 +415,7 @@ export function ChatView({
               </ChatLinkContext.Provider>
             </div>
             {subagent ? null : <TurnNavigator timeline={timeline} scroller={threadRef} />}
-            {subagent ? null : <StatusPanel timeline={timeline} />}
+            {detailsShown ? <PinnedThreadDetails>{detailsBody}</PinnedThreadDetails> : null}
             {!pinned ? (
               <button
                 type="button"

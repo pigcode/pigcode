@@ -258,6 +258,9 @@ export async function walkWorkbench(walk: Walk): Promise<void> {
   await step("timeline-summary")
   await turn.locator(".work-toggle").click()
   await expect(turn.locator(".tool-row").first()).toBeVisible()
+  // 展开第一个摘要组：里面有读文件、命令和一次失败的读取，截图和对比度检查都要看到它们。
+  await turn.locator(".summary-group-head").first().click()
+  await expect(turn.locator(".summary-group-list .file-chip").first()).toBeVisible()
   await scrollThread(page, 0)
   await step("timeline-work-top")
   await scrollThread(page, 0.5)

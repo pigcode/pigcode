@@ -6,9 +6,12 @@ import {
   addProject,
   archiveThread,
   loadWorkspace,
+  markAllThreadsRead,
   removeProject,
   renameProject,
   renameThread,
+  setThreadRead,
+  unarchiveThread,
 } from "./workspace-actions"
 
 const project = (id: string): Project => ({
@@ -121,6 +124,32 @@ describe("workspace actions", () => {
     )
     await expect(archiveThread(connection, other, "t3")).resolves.toBeNull()
     expect(other.getSnapshot().activeThreadId).toBe("t1")
+  })
+
+  it("unarchives a thread and keeps the read state in step with the Host", async () => {
+    const archived = { ...thread("t1", "p1", "2026-10-20T01:00:00.000Z"), archivedAt: "2026-10-21" }
+    const unread = { ...thread("t2", "p1", "2026-10-20T02:00:00.000Z"), unread: true }
+    const store = storeWith([archived, unread], null)
+    const { connection, call } = fakeConnection({
+      "thread.unarchive": () => ({ ...archived, archivedAt: null }),
+      "thread.markRead": () => ({ ...unread, unread: false }),
+      "thread.markAllRead": () => [{ ...archived, archivedAt: null, unread: false }],
+    })
+
+    await unarchiveThread(connection, store, "t1")
+    expect(store.getSnapshot().threads[0]?.archivedAt).toBeNull()
+
+    const reading = setThreadRead(connection, store, "t2", true)
+    // 标已读不等 Host：侧栏马上不再显示未读。
+    expect(store.getSnapshot().threads[1]?.unread).toBe(false)
+    await reading
+    expect(call).toHaveBeenCalledWith("thread.markRead", { threadId: "t2", read: true })
+
+    await markAllThreadsRead(connection, store)
+    expect(store.getSnapshot().threads.map((item) => [item.id, item.unread])).toEqual([
+      ["t1", false],
+      ["t2", false],
+    ])
   })
 
   it("adds a project once and keeps projects in creation order when one comes back", async () => {

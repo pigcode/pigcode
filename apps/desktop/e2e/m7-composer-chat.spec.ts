@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
-import { openThread } from "./projects"
+import { closeThreadDetails, openThread, openThreadDetails } from "./projects"
 
 test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permissions, @files, /commands and skills", async () => {
   // Codex 指向一个不存在的文件，不管本机装没装 Codex，结果都一样。
@@ -187,45 +187,57 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
     await page.keyboard.type("tools")
     await page.keyboard.press("Enter")
 
-    // 运行中：侧栏显示点阵，线程头只有标签、没有状态胶囊；工作区展开、没有箭头并实时计时。
+    // 运行中：侧栏显示点阵；没有折叠头，工作一直展开，末尾一行「工作中」在计时。
     await expect(page.locator(".sess.is-active .sess-indicator .dot-matrix")).toBeVisible()
     await expect(page.locator(".thread-tab[data-kind='main']")).toHaveAttribute(
       "data-active",
       "true",
     )
-    await expect(page.getByRole("button", { name: /^已经做了/ })).toBeDisabled()
+    await expect(page.getByRole("status", { name: "工作中" })).toBeVisible()
+    await expect(page.locator(".work-head")).toHaveCount(0)
     await expect(page.locator(".turn-work .tool-row").first()).toBeVisible()
-    // 右上角的状态胶囊显示当前待办。
-    await expect(page.getByRole("button", { name: "展开" })).toContainText("阅读 README")
-    // 运行中的命令「正在执行」扫光、默认收起；点开后输出一段段流进来。
-    const live = page.locator(".cmd-row[data-status='running']")
-    await expect(live.locator(".tool-shimmer")).toHaveText("正在运行")
+    // 待办在会话详情里，当前这一项排着箭头。
+    const details = await openThreadDetails(page)
+    await expect(details.locator(".details-todo[data-status='in-progress']")).toContainText(
+      "阅读 README",
+    )
+    await closeThreadDetails(page)
+    // 运行中的命令在末尾那一组里：收起的组头预览它，「正在执行」扫光；
+    // 展开这一组再点开命令，输出一段段流进来。
+    const tail = page.locator(".summary-group[data-running]")
+    await expect(tail.locator(".summary-group-preview .tool-shimmer")).toHaveText("正在执行")
+    await tail.locator(".summary-group-head").click()
+    const live = tail.locator(".summary-group-list .cmd-row[data-status='running']")
     await expect(live.locator(".tool-row-head")).toHaveAttribute("aria-expanded", "false")
     await live.locator(".tool-row-head").click()
     const lint = page.locator(".cmd-row").filter({ hasText: "pnpm lint" }).first()
     await expect(lint.locator(".cmd-output")).toContainText("eslint src")
 
-    // 结束后折叠成「做了…」，只留最终回答与改动汇总；展开后看到查阅分组与命令。
-    const header = page.getByRole("button", { name: /^做了/ })
+    // 结束后折叠成「用时…」，只留最终回答与改动汇总；展开后是两个摘要组，各自显示统计。
+    const header = page.getByRole("button", { name: /^用时/ })
     await expect(header).toBeVisible({ timeout: 30_000 })
     await expect(page.locator(".sess.is-active .sess-indicator")).toHaveCount(0)
     await expect(page.locator(".msg-ai").filter({ hasText: "改好了" })).toBeVisible()
     await expect(page.locator(".turn-work")).toHaveCount(0)
     await header.click()
-    await expect(page.locator(".turn-work").getByRole("button", { name: /^查看/ })).toContainText(
-      "2 个文件, 1 次搜索",
-    )
+    const groups = page.locator(".turn-work .summary-group")
+    await expect(groups.locator(".summary-group-head")).toHaveText([
+      "已查阅 3 项，已执行 1 命令，已修改 1 文件",
+      "已执行 1 命令，已修改 1 文件",
+    ])
     // 第一次 lint 失败显示「执行失败」，悬停看到退出码；修好后的命令展开能看到 `$ 命令` 与完整输出。
+    await groups.nth(0).locator(".summary-group-head").click()
     const failed = page.locator(".cmd-row[data-status='failed']")
     await failed.locator(".tool-row-status").hover()
     await expect(page.locator(".tool-tip")).toContainText("退出码 1")
+    await groups.nth(1).locator(".summary-group-head").click()
     const command = page.locator(".cmd-row").filter({ hasText: "pnpm lint && pnpm test" })
     await command.locator(".tool-row-kind").click()
     await expect(command.locator(".cmd-text pre")).toHaveText("pnpm lint && pnpm test")
     await expect(command.locator(".cmd-output")).toContainText("Tests  3 passed")
 
-    // 从时间线打开右栏：「修改」行里的文件名在这个文件自己的标签里打开它，改动汇总的「审查」打开 Diff。
-    const edit = page.locator(".tool-row").filter({ hasText: "修改" }).first()
+    // 从时间线打开右栏：「已编辑」行里的文件名在这个文件自己的标签里打开它，改动汇总的「审查」打开 Diff。
+    const edit = page.locator(".tool-row").filter({ hasText: "已编辑" }).first()
     await edit.getByRole("button", { name: "index.ts", exact: true }).click()
     const panelTabs = page.locator(".right-panel").getByRole("tab")
     await expect(

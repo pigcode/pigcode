@@ -1,15 +1,16 @@
 /**
- * 终端命令（参照 ZCode 的 execute）：运行中「正在执行」扫光，结束后「终端」，摘要是命令本身；
- * 失败时显示「执行失败」，悬停看退出码与输出开头。展开后是一张卡片：`$ 命令`（超过三行折叠）
- * 与输出区（最多五行，运行中跟随最新输出，往上翻时停下）。连续的命令合成「终端 · N 个命令」。
+ * 终端命令（参照 ZCode 3.18 的 execute）：运行中「正在执行」扫光，结束后「已执行」；摘要优先用
+ * agent 写的说明（Bash 的 description），没有时是命令的第一行，第三级颜色、界面字体。失败时显示
+ * 「执行失败」，悬停看退出码与输出开头。展开后是一张卡片：`$ 命令`（超过三行折叠）与输出区
+ * （最多五行，运行中跟随最新输出，往上翻时停下）。
  */
 import { memo, useLayoutEffect, useRef, useState } from "react"
 import { ChevronDown, SquareTerminal } from "lucide-react"
 import { useLocale } from "@pigcode/ui-primitives"
+import { toolInputValue } from "../file-changes"
 import { commandText, toolPreview, type ToolCall } from "../tool-meta"
 import { ToolRow } from "../tool-row"
 import { headLines, toolStatusWord } from "./common"
-import { ToolBlock } from "./tool-block"
 
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, "g")
 
@@ -25,6 +26,14 @@ function firstLine(text: string): string {
       .find((line) => line.trim().length > 0)
       ?.trim() ?? ""
   )
+}
+
+/** agent 给这条命令写的说明（Claude Code 的 Bash 带 description）；展开的详情里仍是真实命令。 */
+function commandDescription(tool: ToolCall): string | undefined {
+  const input = toolInputValue(tool)
+  if (typeof input !== "object" || input === null) return undefined
+  const description = (input as { description?: unknown }).description
+  return typeof description === "string" && description.trim() ? description.trim() : undefined
 }
 
 /** `$ 命令`：超过三行时折叠，可以展开看完整命令。 */
@@ -114,6 +123,7 @@ export const CommandRow = memo(function CommandRow({
   const { t } = useLocale()
   const running = tool.status === "running"
   const command = commandText(tool.input) ?? toolPreview(tool.input) ?? ""
+  const description = commandDescription(tool)
   const output = running ? (live ?? "") : (tool.output ?? "")
   const failed = tool.status === "failed"
   const reason = failed
@@ -131,12 +141,13 @@ export const CommandRow = memo(function CommandRow({
       id={tool.id}
       icon={SquareTerminal}
       showIcon={showIcon}
-      kind={running ? t("chat.toolCall.execute.running") : t("chat.toolCall.kind.terminal")}
+      kind={running ? t("chat.toolCall.execute.running") : t("chat.toolCall.execute.ran")}
       running={running}
-      secondary={<code className="cmd-summary">{firstLine(command)}</code>}
-      hideSecondaryWhenOpen
+      secondary={<code className="cmd-summary">{description ?? firstLine(command)}</code>}
+      // 说明是调用的意图，展开后留着；命令本身在详情里，展开后不重复。
+      hideSecondaryWhenOpen={!description}
       status={toolStatusWord(t, tool, reason)}
-      title={command}
+      title={description ?? command}
       className="cmd-row"
       dataStatus={tool.status}
     >
@@ -144,62 +155,6 @@ export const CommandRow = memo(function CommandRow({
         <div className="tool-card cmd-card">
           <CommandText command={command} />
           <CommandOutput text={output} running={running} />
-        </div>
-      )}
-    </ToolRow>
-  )
-})
-
-/** 连续的命令合成一行「终端 · N 个命令，M 个失败」，运行中显示正在执行的命令。 */
-export const CommandGroup = memo(function CommandGroup({
-  tools,
-  liveOutput,
-}: {
-  tools: readonly ToolCall[]
-  liveOutput?: Readonly<Record<string, string>> | undefined
-}) {
-  const { t } = useLocale()
-  const running = tools.some((tool) => tool.status === "running")
-  const failed = tools.filter((tool) => tool.status === "failed").length
-  const stopped = tools.filter((tool) => tool.status === "stopped").length
-  const count = t(
-    tools.length === 1
-      ? "chat.toolCall.executeGroup.commands.one"
-      : "chat.toolCall.executeGroup.commands.other",
-  ).replace("{count}", String(tools.length))
-  const summary = [
-    count,
-    failed > 0 ? t("chat.toolCall.executeGroup.failed").replace("{count}", String(failed)) : null,
-    stopped > 0
-      ? t("chat.toolCall.executeGroup.stopped").replace("{count}", String(stopped))
-      : null,
-  ]
-    .filter(Boolean)
-    .join(", ")
-  const active = [...tools].reverse().find((tool) => tool.status === "running")
-  return (
-    <ToolRow
-      id={`commands-${tools[0]?.id ?? ""}`}
-      icon={SquareTerminal}
-      kind={t("chat.toolCall.kind.terminal")}
-      running={running}
-      separator
-      primary={running ? t("chat.toolCall.execute.running") : summary}
-      secondary={
-        running && active ? (
-          <code className="cmd-summary">{firstLine(commandText(active.input) ?? "")}</code>
-        ) : undefined
-      }
-      expandedPrimary={summary}
-      hideSecondaryWhenOpen
-      className="tool-group cmd-group"
-      dataStatus={running ? "running" : failed > 0 ? "failed" : "completed"}
-    >
-      {() => (
-        <div className="tool-children">
-          {tools.map((tool) => (
-            <ToolBlock key={tool.id} tool={tool} live={liveOutput?.[tool.id]} showIcon={false} />
-          ))}
         </div>
       )}
     </ToolRow>

@@ -14,7 +14,8 @@ import {
   type ExtensionRegistry,
 } from "@pigcode/client-runtime"
 import type { ClientPluginContext } from "@pigcode/plugin-sdk"
-import { CommandGroup, ToolBlock, type ToolCall } from "@pigcode/ui-chat"
+import type { ThreadEvent } from "@pigcode/contracts"
+import { MessageList, ToolBlock, type ToolCall } from "@pigcode/ui-chat"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { registerBuiltinToolRenderers, ToolRenderersScope } from "./builtin-tool-renderers"
 import { entry, serve, setup } from "./client-plugins.fixtures"
@@ -122,19 +123,40 @@ describe("plugin tool renderers", () => {
     expect(screen.getByText("named")).toBeTruthy()
   })
 
-  it("apply a plugin's family renderer to the children of an expanded command group", async () => {
+  it("apply a plugin's family renderer to the children of an expanded summary group", async () => {
     const { extensions } = await withComponent(
       `ctx.toolRenderers.register({ id: "shells", families: ["shell"], ${named("plugin")} })`,
     )
+    const event = (seq: number, type: ThreadEvent["type"], payload: unknown): ThreadEvent => ({
+      seq,
+      threadId: "t1",
+      runId: "run_1",
+      type,
+      payload,
+      schemaVersion: 1,
+      createdAt: new Date(Date.UTC(2026, 9, 21, 8, 0, seq)).toISOString(),
+    })
     const { container } = render(
       timeline(
         extensions,
-        <CommandGroup tools={[call("Bash", { id: "a" }), call("Bash", { id: "b" })]} />,
+        <MessageList
+          events={[
+            event(1, "run.started", { text: "check" }),
+            event(2, "tool.started", { id: "a", name: "Bash", input: { command: "pnpm lint" } }),
+            event(3, "tool.completed", { id: "a", name: "Bash", output: "ok" }),
+            event(4, "tool.started", { id: "b", name: "Bash", input: { command: "pnpm test" } }),
+            event(5, "tool.completed", { id: "b", name: "Bash", output: "ok" }),
+            event(6, "message.completed", { role: "assistant", text: "done" }),
+            event(7, "run.completed", {}),
+          ]}
+          onApproval={() => {}}
+        />,
       ),
     )
-    // 分组标题行由宿主画；展开后子项走插件的渲染器。
+    await userEvent.click(screen.getByRole("button", { name: /^用时/ }))
+    // 组头由宿主画；展开后子项走插件的渲染器。
     expect(container.querySelector("[data-plugin-content]")).toBeNull()
-    await userEvent.click(container.querySelector(".cmd-group .tool-row-head")!)
+    await userEvent.click(screen.getByRole("button", { name: "已执行 2 命令" }))
     expect(screen.getAllByText("plugin Bash")).toHaveLength(2)
   })
 

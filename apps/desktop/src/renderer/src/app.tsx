@@ -55,14 +55,7 @@ const WorkbenchPanel = lazy(() =>
 const TerminalDrawer = lazy(() =>
   import("./terminal-drawer").then((module) => ({ default: module.TerminalDrawer })),
 )
-import {
-  addProject,
-  archiveThread,
-  loadWorkspace,
-  removeProject,
-  renameProject,
-  renameThread,
-} from "./workspace-actions"
+import { addProject, loadWorkspace, setThreadRead, sidebarActions } from "./workspace-actions"
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
@@ -175,6 +168,13 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       store.update({ error: messageOf(error) }),
     )
   }, [state.status, state.activeThreadId, activeAgentId, connection, store])
+
+  // 正在看的会话算已读：切过来时，或者它在眼前跑完时。
+  const viewingUnread = inChat && activeThread?.unread === true ? activeThread.id : null
+  useEffect(() => {
+    if (state.status !== "connected" || !viewingUnread) return
+    void setThreadRead(connection, store, viewingUnread, true).catch(() => undefined)
+  }, [state.status, viewingUnread, connection, store])
 
   /**
    * 进入新会话草稿（参照 ZCode）：不在 Host 上建会话，第一次发送时才建。草稿落在指定的项目里；
@@ -334,6 +334,11 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     })
   }, [panels, state.threads, threadOf])
 
+  const sidebar = sidebarActions(connection, store, {
+    openThread,
+    onError: (error) => store.update({ error: messageOf(error) }),
+  })
+
   const layoutControls = (maximizable: boolean) => (
     <PanelLayoutControls
       rightOpen={rightOpen && slot.scope !== null}
@@ -377,34 +382,11 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       onNewThread={startDraft}
       onBrowseFiles={browseProjectFiles}
       onOpenThread={openThread}
-      onRenameThread={(threadId, title) => {
-        void renameThread(connection, store, threadId, title).catch((error: unknown) =>
-          store.update({ error: messageOf(error) }),
-        )
-      }}
+      {...sidebar}
       onReferenceThread={(thread) => {
         // 在当前会话（或草稿）的输入框里插入这个会话的引用；在设置等页面时先回到聊天。
         setView("chat")
         requestComposerThreadMention(thread.id, thread.title)
-      }}
-      onArchiveThread={(threadId) => {
-        void archiveThread(connection, store, threadId)
-          .then((next) => {
-            if (next) openThread(next)
-          })
-          .catch((error: unknown) => store.update({ error: messageOf(error) }))
-      }}
-      onRenameProject={(projectId, name) => {
-        void renameProject(connection, store, projectId, name).catch((error: unknown) =>
-          store.update({ error: messageOf(error) }),
-        )
-      }}
-      onRemoveProject={(projectId) => {
-        void removeProject(connection, store, projectId)
-          .then((next) => {
-            if (next) openThread(next)
-          })
-          .catch((error: unknown) => store.update({ error: messageOf(error) }))
       }}
       rightOpen={rightOpen && inChat}
       rightMaximized={rightMaximized}

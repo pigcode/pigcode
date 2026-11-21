@@ -23,9 +23,20 @@ function volatile(page: Page): Locator[] {
 /** 截图时额外加的样式：隐藏会变的文字（时间、耗时），见 hide-volatile.css。 */
 const HIDE_VOLATILE = new URL("./hide-volatile.css", import.meta.url).pathname
 
+/**
+ * 工具行文字和会话底色的最低对比度：动作、文件名和失败状态 4.5∶1；命令摘要是第三级（ZCode 的
+ * subtlest），比动作淡一级，悬停整行时变成正文色，只要求 2.5∶1。
+ */
+const MIN_CONTRAST: Record<string, number> = {
+  ".tool-row-kind": 4.5,
+  ".file-chip": 4.5,
+  ".cmd-summary": 2.5,
+  '.tool-row[data-status="failed"] .tool-row-status': 4.5,
+}
+
 /** 在会话底色上合成实际渲染的文字色，计入半透明文字和主题的 OKLCH 颜色。 */
 async function expectReadableToolText(page: Page): Promise<void> {
-  const { background, samples } = await page.locator(".msgs").evaluate((list) => {
+  const { background, samples } = await page.locator(".msgs").evaluate((list, selectors) => {
     const surface = getComputedStyle(list.closest(".workspace")!).backgroundColor
     const ctx = document.createElement("canvas").getContext("2d")!
     function paint(color: string): `#${string}` {
@@ -36,12 +47,6 @@ async function expectReadableToolText(page: Page): Promise<void> {
       const rgb = ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)
       return `#${Array.from(rgb, (c) => c.toString(16).padStart(2, "0")).join("")}`
     }
-    const selectors = [
-      ".tool-row-kind",
-      ".file-chip",
-      ".cmd-summary",
-      '.tool-row[data-status="failed"] .tool-row-status',
-    ]
     return {
       background: paint(surface),
       samples: selectors.map((selector) => ({
@@ -49,9 +54,11 @@ async function expectReadableToolText(page: Page): Promise<void> {
         color: paint(getComputedStyle(list.querySelector(selector)!).color),
       })),
     }
-  })
+  }, Object.keys(MIN_CONTRAST))
   for (const { selector, color } of samples) {
-    expect(contrastRatio(color, background), selector).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(color, background), selector).toBeGreaterThanOrEqual(
+      MIN_CONTRAST[selector]!,
+    )
   }
 }
 

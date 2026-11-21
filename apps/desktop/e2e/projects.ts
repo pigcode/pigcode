@@ -5,6 +5,7 @@ import {
   _electron as electron,
   expect,
   type ElectronApplication,
+  type Locator,
   type Page,
 } from "@playwright/test"
 
@@ -56,6 +57,33 @@ export async function openThread(
     .click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   return { app, page, root }
+}
+
+/**
+ * 拿到会话详情卡：会话区够宽时它钉在右上角、默认开着；窄的时候点线程头的按钮，从浮层里弹出来。
+ * 按钮的名字在待办没做完时带着进度，所以只按开头匹配。
+ */
+export async function openThreadDetails(page: Page): Promise<Locator> {
+  const toggle = page.locator(".panel-top").getByRole("button", { name: /^会话详情/ })
+  await expect(toggle).toBeVisible()
+  const pinned = page.getByRole("complementary", { name: "会话详情" })
+  if (await pinned.isVisible()) return pinned
+  const popup = page.getByRole("dialog", { name: "会话详情" })
+  if (await popup.isVisible()) return popup
+  await toggle.click()
+  await expect(popup).toBeVisible()
+  return popup
+}
+
+/** 收起浮层里的详情卡，再点一下线程头的按钮；钉住的卡片留着。 */
+export async function closeThreadDetails(page: Page): Promise<void> {
+  const popup = page.getByRole("dialog", { name: "会话详情" })
+  if (!(await popup.isVisible())) return
+  await page
+    .locator(".panel-top")
+    .getByRole("button", { name: /^会话详情/ })
+    .click()
+  await expect(popup).toBeHidden()
 }
 
 /** 在插件页标题栏的「添加」里打开「安装插件」对话框，安装一个插件目录、npm 包或 GitHub 仓库。 */

@@ -78,7 +78,7 @@ describe("AgentRow", () => {
       </ConversationActionsContext.Provider>,
     )
     const row = screen.getByRole("button", { name: "在标签页打开 Explore" })
-    expect(row.textContent).toBe("子 AgentExplore·Find the entry point")
+    expect(row.textContent).toBe("子 AgentExploreFind the entry point")
     await userEvent.click(row)
     expect(opened).toEqual(["task_1"])
     expect(screen.queryByText("child reply")).toBeNull()
@@ -123,17 +123,17 @@ describe("sub-agents in the timeline", () => {
       />,
     )
     expect(screen.getByText("parent reply")).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: /做了|做完了/ }))
+    await userEvent.click(screen.getByRole("button", { name: /^(用时|已处理)/ }))
     expect(screen.getAllByRole("button", { name: /子 Agent/ })).toHaveLength(1)
     expect(screen.queryByText("child reply")).toBeNull()
-    expect(screen.queryByText("读取")).toBeNull()
+    expect(screen.queryByText("已读取")).toBeNull()
   })
 
   it("shows the sub-agent's steps with the same tool rows in its own tab", () => {
     inLocale(<SubagentView subagent={SUBAGENT} />)
     expect(screen.getByText("Look for the main export.")).toBeTruthy()
     expect(screen.getByText("child reply")).toBeTruthy()
-    expect(screen.getByText("读取")).toBeTruthy()
+    expect(screen.getByText("已读取")).toBeTruthy()
     expect(screen.getByText("It is src/index.ts.")).toBeTruthy()
   })
 })

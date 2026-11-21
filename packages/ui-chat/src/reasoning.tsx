@@ -1,7 +1,7 @@
 /**
- * 思考（参照 ZCode 的 Reasoning）：大脑图标与「正在思考」（扫光，后面滚动显示最新一句）或
- * 「思考 · 持续了 N 秒」，默认收起。展开后是纯文本的思考内容：最多 240px 高、左侧一条细线，
- * 流式输出时跟随到底部，用户往上翻时停下。
+ * 思考（参照 ZCode 3.18 的 Reasoning）：大脑图标与「正在思考」（扫光，后面滚动显示最新一句）或
+ * 「思考 持续了 N 秒」，标签是次级色，时长和最新一句是第三级，默认收起。展开后是纯文本的思考内容：
+ * 最多 240px 高、左侧一条细线，流式输出时跟随到底部，用户往上翻时停下。
  */
 import { memo, useLayoutEffect, useRef, useState } from "react"
 import { Brain } from "lucide-react"
@@ -41,11 +41,14 @@ export const ReasoningBlock = memo(function ReasoningBlock({
   text,
   durationMs,
   streaming = false,
+  showIcon = true,
 }: {
   id: string
   text: string
   durationMs: number | null
   streaming?: boolean | undefined
+  /** 摘要组展开后的子项不显示图标。 */
+  showIcon?: boolean | undefined
 }) {
   const { t } = useLocale()
   if (!text.trim()) return null
@@ -61,9 +64,9 @@ export const ReasoningBlock = memo(function ReasoningBlock({
     <ToolRow
       id={id}
       icon={Brain}
+      showIcon={showIcon}
       kind={streaming ? t("chat.reasoning.thinking") : t("chat.reasoning.thought")}
       running={streaming}
-      separator={!streaming || Boolean(peek)}
       primary={
         streaming ? (
           peek ? (
@@ -72,7 +75,7 @@ export const ReasoningBlock = memo(function ReasoningBlock({
             </span>
           ) : null
         ) : (
-          duration
+          <span className="reasoning-duration">{duration}</span>
         )
       }
       expandedPrimary={streaming ? null : undefined}

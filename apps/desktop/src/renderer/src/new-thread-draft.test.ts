@@ -91,6 +91,19 @@ describe("new thread draft", () => {
     expect(store.getSnapshot().threads.map((thread) => thread.id)).toEqual(["t-new"])
   })
 
+  it("keeps one row when the Host's thread.changed arrives before the reply to thread.create", async () => {
+    const store = storeWith("p2")
+    const call = vi.fn(async (method: string) => {
+      if (method === "agent.default") return { id: "claude" }
+      store.upsertThread({ ...created, status: "idle" })
+      return created
+    })
+
+    await materializeDraft({ call } as unknown as Connection, store, "zh-CN")
+
+    expect(store.getSnapshot().threads.map((thread) => thread.id)).toEqual(["t-new"])
+  })
+
   it("carries the draft input over while the draft is still showing, and knows the thread is empty", async () => {
     const store = storeWith("p2")
     const { connection } = fakeConnection()

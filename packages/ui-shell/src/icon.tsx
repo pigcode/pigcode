@@ -23,6 +23,12 @@ const marks: Record<string, string> = {
   x: '<path d="M6 6l12 12M18 6L6 18"/>',
   alert: '<path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.3v.2"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.2"/>',
+  "alert-circle": '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5M12 15.8v.2"/>',
+  "x-circle": '<circle cx="12" cy="12" r="8.5"/><path d="M9.5 9.5l5 5M14.5 9.5l-5 5"/>',
+  bell: '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5h-14z"/><path d="M10 20.5h4"/>',
+  loader: '<path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/>',
+  "circle-dashed": '<circle cx="12" cy="12" r="8.5" stroke-dasharray="2 4.68"/>',
+  "check-circle": '<circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.2l2.5 2.5 4.5-5"/>',
   refresh:
     '<path d="M19.5 10.5A7.5 7.5 0 0 0 6 6.8L4.5 8.5M4.5 4.5v4h4M4.5 13.5A7.5 7.5 0 0 0 18 17.2l1.5-1.7M19.5 19.5v-4h-4"/>',
   pause: '<path d="M9 6v12M15 6v12"/>',
@@ -69,7 +75,7 @@ const marks: Record<string, string> = {
   route:
     '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h6.5a3.5 3.5 0 0 1 0 7h-5a3.5 3.5 0 0 0 0 7H16"/>',
   cube: '<path d="M12 3.5l7.5 4.3v8.4L12 20.5l-7.5-4.3V7.8z"/><path d="M12 12l7.5-4.2M12 12v8.5M12 12L4.5 7.8"/>',
-  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+  filter: '<path d="M2.25 4.5h19.5M6 12h12M10.5 19.5h3"/>',
   sidebar: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   download: '<path d="M12 4v11M7 10.5l5 4.5 5-4.5M5 19.5h14"/>',

@@ -1,12 +1,29 @@
 /**
- * 工具调用的公共外壳（参照 ZCode 的 ToolLayout / ToolSummaryRow）：一行摘要——图标、动作
- * （运行中扫光）、对象、改动行数与失败状态——悬停时出现箭头，点开在下面显示详情。
- * 失败的原因挂在「执行失败」上，悬停可以看到并复制。
+ * 工具调用的公共外壳（参照 ZCode 3.18 的 ToolLayout / ToolSummaryRow）：一行摘要——图标、动作
+ * （运行中扫光）、对象、改动行数与失败状态，字段之间只用间距分开，不加「·」。整行是次级色，
+ * 悬停时变成正文色并出现箭头，点开在下面显示详情。失败的原因挂在「执行失败」上，悬停可以看到并复制。
  */
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import { Check, ChevronRight, Copy, type LucideIcon } from "lucide-react"
 import { Tooltip, copyText, useLocale } from "@pigcode/ui-primitives"
 import { useToolOpen } from "./tool-open"
+
+/**
+ * 在连续摘要组的组头里预览一行（ZCode 的 SummaryPreviewContext）：只画摘要，不能点、不能展开，
+ * 动作一直扫光，表示这一组还没结束；不改写工具自己的状态。
+ */
+export const SummaryPreviewContext = createContext(false)
+
+/** 只要这一行的图标（ZCode 的 SummaryIconOnlyContext）：组头的代表图标复用工具自己的图标。 */
+export const SummaryIconContext = createContext(false)
 
 /** 失败等状态词；tooltip 是悬停时显示的原因。 */
 export interface ToolRowStatus {
@@ -24,8 +41,6 @@ export interface ToolRowProps {
   kind: ReactNode
   running?: boolean | undefined
   kindDetail?: ReactNode
-  /** 在动作和摘要之间放一个「·」。 */
-  separator?: boolean | undefined
   primary?: ReactNode
   secondary?: ReactNode
   diff?: { added: number; removed: number } | null | undefined
@@ -116,7 +131,6 @@ export function ToolRow({
   kind,
   running = false,
   kindDetail,
-  separator = false,
   primary,
   secondary,
   diff,
@@ -133,15 +147,18 @@ export function ToolRow({
   className,
 }: ToolRowProps) {
   const { t } = useLocale()
-  const canToggle = !action && Boolean(children) && !forceOpen
+  const preview = useContext(SummaryPreviewContext)
+  const iconOnly = useContext(SummaryIconContext)
+  const canToggle = !preview && !action && Boolean(children) && !forceOpen
   const [stored, setOpen] = useToolOpen(id, false)
   const autoOpened = useRef(false)
   useEffect(() => {
-    if (!autoOpen || autoOpened.current) return
+    if (preview || !autoOpen || autoOpened.current) return
     autoOpened.current = true
     setOpen(true)
-  }, [autoOpen, setOpen])
-  const open = !action && Boolean(children) && (forceOpen || stored)
+  }, [preview, autoOpen, setOpen])
+  if (iconOnly) return <Icon className="ic tool-row-icon" aria-hidden="true" />
+  const open = !preview && !action && Boolean(children) && (forceOpen || stored)
   const shownPrimary = open && expandedPrimary !== undefined ? expandedPrimary : primary
   const shownSecondary = open && hideSecondaryWhenOpen ? null : secondary
   const shownDiff = diff && !(open && hideDiffWhenOpen) ? diff : null
@@ -156,7 +173,7 @@ export function ToolRow({
     event.preventDefault()
     activate()
   }
-  const interactive = Boolean(action) || canToggle
+  const interactive = !preview && (Boolean(action) || canToggle)
 
   return (
     <div
@@ -168,18 +185,19 @@ export function ToolRow({
         role={interactive ? "button" : undefined}
         tabIndex={interactive ? 0 : undefined}
         aria-expanded={canToggle ? open : undefined}
-        aria-label={action ? action.label : undefined}
-        title={title}
+        aria-label={action && !preview ? action.label : undefined}
+        title={preview ? undefined : title}
         data-interactive={interactive || undefined}
         onClick={interactive ? activate : undefined}
         onKeyDown={interactive ? onKeyDown : undefined}
       >
         {showIcon ? <Icon className="ic ic-sm tool-row-icon" aria-hidden="true" /> : null}
-        <span className={running ? "tool-row-kind tool-shimmer" : "tool-row-kind"}>{kind}</span>
+        <span className={running || preview ? "tool-row-kind tool-shimmer" : "tool-row-kind"}>
+          {kind}
+        </span>
         {kindDetail ? <span className="tool-row-detail">{kindDetail}</span> : null}
         {hasSummary ? (
           <span className="tool-row-summary">
-            {separator ? <span className="tool-row-sep">·</span> : null}
             {shownPrimary ? <span className="tool-row-primary">{shownPrimary}</span> : null}
             {shownSecondary ? <span className="tool-row-secondary">{shownSecondary}</span> : null}
             {shownDiff ? <DiffCount added={shownDiff.added} removed={shownDiff.removed} /> : null}
@@ -187,7 +205,7 @@ export function ToolRow({
           </span>
         ) : null}
         {running ? <span className="sr-only">{t("chat.tool.running")}</span> : null}
-        {canToggle || (forceOpen && children) ? (
+        {canToggle || (!preview && forceOpen && children) ? (
           <ChevronRight className="ic ic-sm tool-row-chev" aria-hidden="true" />
         ) : null}
       </div>

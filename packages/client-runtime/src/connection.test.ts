@@ -1,6 +1,6 @@
 /** 验证连接从 snapshot/cursor 恢复线程事件，并维护每线程订阅。 */
 import { describe, expect, it } from "vitest"
-import type { ThreadEvent } from "@pigcode/contracts"
+import type { Thread, ThreadEvent } from "@pigcode/contracts"
 import { MemoryTransport } from "../../../apps/host/src/rpc/memory-transport"
 import { Connection } from "./connection"
 
@@ -114,6 +114,36 @@ describe("Connection", () => {
     off()
     transport.host.send({ jsonrpc: "2.0", method: "terminal.exit", params: { terminalId: "x" } })
     expect(exits).toHaveLength(1)
+  })
+
+  it("hands over the thread records the Host pushes and drops malformed ones", async () => {
+    const transport = new MemoryTransport()
+    const changed: Thread[] = []
+    const connection = new Connection({
+      onEvent: () => {},
+      onDelta: () => {},
+      onStatus: () => {},
+      onThreadChanged: (thread) => changed.push(thread),
+    })
+    await connection.attach(transport.client)
+    const thread = {
+      id: "th_1",
+      projectId: "p1",
+      title: "Thread",
+      defaultAgentId: "fake",
+      lastAgentId: null,
+      lastModelId: null,
+      permissionMode: "workspace-write",
+      createdAt: "2026-10-20T00:00:00.000Z",
+      updatedAt: "2026-10-20T00:00:00.000Z",
+      archivedAt: null,
+      lastRunId: null,
+      status: "completed",
+      unread: true,
+    }
+    transport.host.send({ jsonrpc: "2.0", method: "thread.changed", params: thread })
+    transport.host.send({ jsonrpc: "2.0", method: "thread.changed", params: { id: "broken" } })
+    expect(changed).toEqual([expect.objectContaining({ id: "th_1", unread: true })])
   })
 
   it("opens two threads and routes notifications by threadId", async () => {

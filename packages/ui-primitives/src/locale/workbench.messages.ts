@@ -1,4 +1,7 @@
-/** 工作树选择器、检查点、Diff 的文案，以及时间写法与 Host 错误说明；合并进各 locale 的主词典。 */
+/**
+ * 工作树选择器、检查点、Diff、会话详情里的工作区与版本控制的文案，以及时间写法与 Host 错误说明；
+ * 合并进各 locale 的主词典。
+ */
 export const workbenchZhCN = {
   "worktree.label": "worktree",
   "worktree.root": "项目文件夹",
@@ -13,6 +16,13 @@ export const workbenchZhCN = {
   "worktree.delete": "删除",
   "worktree.deletePrompt": "确定删除？",
   "worktree.confirmDelete": "删除",
+  "details.workspace": "工作区",
+  "details.versionControl": "版本控制",
+  "details.changes": "改动",
+  "details.changes.review": "在右侧面板查看改动",
+  "details.changes.uncommitted.one": "{count} 个文件未提交",
+  "details.changes.uncommitted.other": "{count} 个文件未提交",
+  "details.changes.clean": "全部已提交",
   "checkpoint.phase.baseline": "开始前",
   "checkpoint.phase.final": "结束后",
   "checkpoint.phase.manual": "手动",
@@ -48,6 +58,13 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
   "worktree.delete": "Delete",
   "worktree.deletePrompt": "Delete it?",
   "worktree.confirmDelete": "Delete",
+  "details.workspace": "Workspace",
+  "details.versionControl": "Version control",
+  "details.changes": "Changes",
+  "details.changes.review": "Review changes in the side panel",
+  "details.changes.uncommitted.one": "{count} file uncommitted",
+  "details.changes.uncommitted.other": "{count} files uncommitted",
+  "details.changes.clean": "All committed",
   "checkpoint.phase.baseline": "Before",
   "checkpoint.phase.final": "After",
   "checkpoint.phase.manual": "Manual",

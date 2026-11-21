@@ -14,7 +14,8 @@ test("the agent asks questions and continues with the answers", async () => {
 
     const card = page.getByRole("form", { name: "Agent 想问你几件事" })
     await expect(card).toBeVisible()
-    await expect(page.getByRole("button", { name: /等你回答/ })).toBeVisible()
+    // 等回答时由提问卡片说明在等什么，「工作中」那一行不显示。
+    await expect(page.getByRole("status", { name: "工作中" })).toHaveCount(0)
     const submit = card.getByRole("button", { name: "提交" })
     await expect(submit).toBeDisabled()
     await card.getByRole("checkbox", { name: "macOS" }).check()
@@ -26,7 +27,7 @@ test("the agent asks questions and continues with the answers", async () => {
       page.locator(".msg-ai").filter({ hasText: "好的：平台 macOS, Linux，测试用 Vitest。" }),
     ).toBeVisible()
     await expect(card).toHaveCount(0)
-    await page.getByRole("button", { name: /^做了/ }).click()
+    await page.getByRole("button", { name: /^用时/ }).click()
     const asked = page.getByRole("button", { name: /问过了/ })
     await expect(asked).toContainText("2 个问题")
     await asked.click()

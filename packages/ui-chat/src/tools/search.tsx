@@ -1,6 +1,6 @@
 /**
- * 搜索与网页抓取（参照 ZCode 的 search / web-fetch）：都只有一行摘要，不能展开。
- * 搜索显示查找的内容或列出的目录，网页抓取只显示网址。
+ * 搜索与网页抓取（参照 ZCode 3.18 的 search / web-fetch）：都只有一行摘要，不能展开。
+ * 搜索是「正在搜索 / 已搜索」加查找的内容或列出的目录，网页抓取是「正在抓取 / 网页抓取」加网址。
  */
 import { memo } from "react"
 import { Globe, Search } from "lucide-react"
@@ -47,7 +47,11 @@ export const SearchRow = memo(function SearchRow({
       icon={Search}
       showIcon={showIcon}
       kind={
-        tools ? "" : running ? t("chat.toolCall.search.searching") : t("chat.toolCall.kind.search")
+        tools
+          ? ""
+          : running
+            ? t("chat.toolCall.search.searching")
+            : t("chat.toolCall.search.searched")
       }
       running={running}
       primary={<span className="truncate">{text}</span>}

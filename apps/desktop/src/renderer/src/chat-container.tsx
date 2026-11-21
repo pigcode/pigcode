@@ -22,11 +22,12 @@ import {
 } from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
 import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
-import { OpenInButton } from "@pigcode/ui-shell"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
 import { NewThreadPage } from "./new-thread-page"
+import { ThreadWorkspaceDetails } from "./thread-workspace-details"
 import { useThreadWorkspaceRoot } from "./use-thread-workspace-root"
+import { workspaceRevision } from "./workspace-revision"
 import {
   buildThreadTabs,
   childThreads,
@@ -48,7 +49,7 @@ export interface CoreDeps {
 export interface ChatControls {
   rightOpen?: boolean
   onToggleRight?: () => void
-  /** 与「打开」同组的布局按钮。 */
+  /** 线程头末尾的布局按钮，排在会话详情的开关后面。 */
   layoutControls?: ReactNode
   /** 在右栏的文件标签里打开项目内的文件（相对路径）。 */
   onOpenFile?: (path: string) => void
@@ -210,6 +211,8 @@ export function ChatViewContainer({
   }, [fail, onOpenLinkTab, t])
 
   const mainEvents = mainId ? (state.threadStates[mainId]?.events ?? state.events) : state.events
+  // 子代理共用主会话的工作目录，详情卡里的 git 状态跟着主会话的改动重读。
+  const detailsRevision = useMemo(() => workspaceRevision(mainEvents), [mainEvents])
   const subagents = useMemo(() => collectSubagents(mainEvents), [mainEvents])
   const spawned = visibleSpawned(subagents, tabState)
   const selected = tabState.selected
@@ -456,7 +459,20 @@ export function ChatViewContainer({
         rightOpen={rightOpen}
         {...(onToggleRight ? { onToggleRight } : {})}
         {...(layoutControls !== undefined ? { layoutControls } : {})}
-        {...(workspaceRoot ? { openIn: <OpenInButton path={workspaceRoot} /> } : {})}
+        {...(workspaceRoot && mainId
+          ? {
+              details: (
+                <ThreadWorkspaceDetails
+                  connection={deps.connection}
+                  threadId={mainId}
+                  root={workspaceRoot}
+                  projectRoot={project?.rootPath}
+                  revision={detailsRevision + checkoutRevision}
+                  onOpenDiff={onOpenDiff}
+                />
+              ),
+            }
+          : {})}
         {...(main
           ? {
               tabs: {

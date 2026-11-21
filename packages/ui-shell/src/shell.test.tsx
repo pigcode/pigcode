@@ -309,8 +309,9 @@ describe("Shell", () => {
 
       fireEvent.keyDown(window, { key: "1", code: "Digit1", ctrlKey: true })
       expect(onOpenThread).not.toHaveBeenCalled()
+      // 项目里新的会话在上面：t3、t2、t1。
       fireEvent.keyDown(window, { key: "3", code: "Digit3", metaKey: true })
-      expect(onOpenThread).toHaveBeenCalledExactlyOnceWith("t3")
+      expect(onOpenThread).toHaveBeenCalledExactlyOnceWith("t1")
 
       fireEvent.keyDown(window, { key: "Meta", code: "MetaLeft", metaKey: true })
       fireEvent.keyDown(window, { key: "k", code: "KeyK", metaKey: true })

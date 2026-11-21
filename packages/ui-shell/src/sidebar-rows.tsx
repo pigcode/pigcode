@@ -94,23 +94,44 @@ function RenameInput({
   )
 }
 
-/** 会话的状态标记：运行中是游走的点阵（.sess-indicator），其余状态是一个彩色圆点（.sess-dot）。 */
-export function ThreadStatusMark({ status }: { status: ThreadStatus }) {
+/**
+ * 会话的状态标记：运行中是游走的点阵（.sess-indicator），其余状态是一个彩色圆点（.sess-dot）。
+ * 跑完的会话只在结果还没看时亮绿点，看过以后和空闲的一样，侧栏里不会满是绿点；失败一直是红点。
+ */
+export function ThreadStatusMark({
+  status,
+  unread = false,
+}: {
+  status: ThreadStatus
+  unread?: boolean
+}) {
+  const tone =
+    unread && status !== "failed"
+      ? "ready"
+      : status === "completed"
+        ? "idle"
+        : THREAD_STATUS_TONE[status]
   return (
     <StatusDot
-      tone={THREAD_STATUS_TONE[status]}
+      tone={tone}
       className={status === "running" ? "sess-indicator" : "sess-dot"}
       data-status={status}
+      data-unread={unread ? "" : undefined}
     />
   )
 }
 
-/** 一行会话：状态点、标题、补充信息（agent 缩写或项目名）与时间；按住 ⌘/Ctrl 时时间换成快捷键。 */
+/**
+ * 一行会话：状态点、标题、agent 图标与更新时间，可选的第二行（按时间分组时的项目名）；
+ * 按住 ⌘/Ctrl 时右侧换成快捷键。
+ */
 export function ThreadRow({
   thread,
   active,
   status,
   detail,
+  description,
+  showTime = true,
   shortcut,
   rename,
   actions,
@@ -121,6 +142,9 @@ export function ThreadRow({
   active: boolean
   status: ThreadStatus
   detail: ReactNode
+  /** 标题下面的第二行。 */
+  description?: ReactNode
+  showTime?: boolean
   shortcut: string | null
   /** 改名中时传入；行换成输入框。 */
   rename: RenameHandlers | null
@@ -131,13 +155,15 @@ export function ThreadRow({
 }) {
   const { t, locale } = useLocale()
   const statusKey = THREAD_STATUS_MESSAGE[status]
+  const unread = thread.unread === true
+  const mark = <ThreadStatusMark status={status} unread={unread} />
   if (rename) {
     return (
       <ListRow
         className="sess is-editing"
         data-status={status}
         selected
-        leading={<ThreadStatusMark status={status} />}
+        leading={mark}
         title={<RenameInput value={thread.title} label={t("sidebar.threadName")} {...rename} />}
       />
     )
@@ -150,24 +176,30 @@ export function ThreadRow({
         selected={active}
         aria-current={active ? "page" : undefined}
         data-status={status}
+        data-unread={unread ? "" : undefined}
+        data-archived={thread.archivedAt !== null ? "" : undefined}
         onClick={onOpen}
         leading={
           <>
-            <ThreadStatusMark status={status} />
+            {mark}
             {statusKey ? <span className="sr-only">{t(statusKey)}</span> : null}
+            {unread ? <span className="sr-only">{t("sidebar.status.unread")}</span> : null}
           </>
         }
         title={thread.title}
         titleProps={{ className: "sess-title", title: thread.title }}
+        description={description}
         meta={
           shortcut ? (
             <kbd className="sess-kbd">{shortcut}</kbd>
           ) : (
             <>
               {detail}
-              <time dateTime={thread.updatedAt}>
-                {formatRelativeTime(thread.updatedAt, locale, now)}
-              </time>
+              {showTime ? (
+                <time dateTime={thread.updatedAt}>
+                  {formatRelativeTime(thread.updatedAt, locale, now)}
+                </time>
+              ) : null}
             </>
           )
         }
@@ -176,7 +208,10 @@ export function ThreadRow({
   )
 }
 
-/** 项目行：文件夹图标与名字，点击折叠或展开；悬停时右侧出现新会话按钮。 */
+/** 拖动项目行时 dataTransfer 里的类型；只认这种拖动，拖进来的文件、文字不当成调整顺序。 */
+export const PROJECT_DRAG_TYPE = "application/x-pigcode-project"
+
+/** 项目行：文件夹图标与名字，点击折叠或展开；悬停时右侧出现新会话按钮；可以拖动调整顺序。 */
 export function ProjectRow({
   project,
   open,
@@ -185,6 +220,8 @@ export function ProjectRow({
   onToggle,
   onNewThread,
   onBrowseFiles,
+  onDragStart,
+  onDragEnd,
 }: {
   project: Project
   open: boolean
@@ -193,6 +230,9 @@ export function ProjectRow({
   onToggle: () => void
   onNewThread: () => void
   onBrowseFiles?: (() => void) | undefined
+  /** 传了才能拖动。 */
+  onDragStart?: (() => void) | undefined
+  onDragEnd?: (() => void) | undefined
 }) {
   const { t } = useLocale()
   const folder = <Icon name={open ? "folder-open" : "folder"} className="proj-folder" />
@@ -210,6 +250,17 @@ export function ProjectRow({
     <RowMenu actions={actions}>
       <ListRow
         className="proj-row"
+        draggable={onDragStart ? true : undefined}
+        onDragStart={
+          onDragStart
+            ? (event) => {
+                event.dataTransfer.effectAllowed = "move"
+                event.dataTransfer.setData(PROJECT_DRAG_TYPE, project.id)
+                onDragStart()
+              }
+            : undefined
+        }
+        onDragEnd={onDragEnd}
         button={{ className: "proj", "aria-expanded": open, onClick: onToggle }}
         leading={folder}
         title={project.name}

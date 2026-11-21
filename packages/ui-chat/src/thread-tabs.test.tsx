@@ -196,7 +196,7 @@ describe("spawned sub-agents", () => {
         <MessageList events={SPAWN_EVENTS} onApproval={() => {}} onOpenSubagent={onOpen} />
       </LocaleProvider>,
     )
-    await userEvent.click(screen.getByRole("button", { name: /做了|做完了/ }))
+    await userEvent.click(screen.getByRole("button", { name: /^(用时|已处理)/ }))
     await userEvent.click(screen.getByRole("button", { name: "在标签页打开 Explore" }))
     expect(onOpen).toHaveBeenCalledWith("task_1")
   })

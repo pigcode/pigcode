@@ -1,4 +1,4 @@
-/** 工具行共用的小部件：文件名与父目录、打开文件与子 agent 的入口、状态词与计数文案。 */
+/** 工具行共用的小部件：文件名（悬停看相对路径）、打开文件与子 agent 的入口、状态词与计数文案。 */
 import { createContext, useContext, type MouseEvent } from "react"
 import { FileIcon, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { splitPath } from "../tool-fields"
@@ -69,13 +69,6 @@ export function FileChip({ path }: { path: string }) {
       <span className="truncate">{name}</span>
     </button>
   )
-}
-
-/** 文件的父目录（相对项目），灰色、空间不够时先被截断。 */
-export function FileParent({ path }: { path: string }) {
-  const { root } = useConversationActions()
-  const { parent } = splitPath(relativePath(path, root))
-  return parent ? <span className="file-parent truncate">{parent}</span> : null
 }
 
 /** 用逗号分隔的多个文件名。 */

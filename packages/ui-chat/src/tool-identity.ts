@@ -93,7 +93,7 @@ export function toolFamily(name: string): ToolFamily {
   return FAMILY_BY_NAME[name.trim().toLowerCase()] ?? "unknown"
 }
 
-/** 时间线里不单独显示的工具：待办在状态面板里显示，进入计划模式只是内部切换。 */
+/** 时间线里不单独显示的工具：待办在会话详情里显示，进入计划模式只是内部切换。 */
 export function isHiddenTool(name: string): boolean {
   const family = toolFamily(name)
   return family === "todo" || family === "plan-guidance"

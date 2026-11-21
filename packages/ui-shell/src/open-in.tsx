@@ -1,8 +1,9 @@
 /**
- * 在本机应用里打开项目文件夹：线程头的分段按钮（左边用上次选的应用打开，右边展开应用列表），
- * 以及侧栏项目菜单里的「在文件管理器中打开」。
+ * 在本机应用里打开项目文件夹：新会话页顶栏与文件标签的分段按钮（左边用上次选的应用打开，右边展开
+ * 应用列表）、会话详情卡里同样分成两半的一行，以及侧栏项目菜单里的「在文件管理器中打开」。
  */
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
+import { ChevronDown } from "lucide-react"
 import { Menu, copyText, useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
 import { useToast } from "./toast"
@@ -83,16 +84,15 @@ function useAppName(): (app: OpenApp) => string {
         : app.name
 }
 
-/** 文件与项目共用「打开」分段按钮，按目标类型记住打开方式。 */
-export function OpenInButton({
-  path,
-  openFile,
-}: {
+interface OpenInProps {
   /** 用于复制路径和显示错误的绝对路径。 */
   path: string
   /** 传入时打开当前文件，appId 为 null 时交给系统默认应用。 */
   openFile?: ((appId: string | null) => Promise<void>) | undefined
-}) {
+}
+
+/** 分段按钮和详情卡里那一行共用：可选的应用、记住的选择、打开失败的提示。 */
+function useOpenIn({ path, openFile }: OpenInProps) {
   const { t } = useLocale()
   const toast = useToast()
   const nameOf = useAppName()
@@ -122,37 +122,28 @@ export function OpenInButton({
     }
   }
 
-  if (!selected && !openFile) return null
-  const openLabel = selected
-    ? t("openIn.editor").replace("{name}", nameOf(selected))
-    : t("files.menu.defaultApp")
-  return (
-    <div
-      className="open-in-split"
-      role="group"
-      aria-label={t(openFile ? "files.menu.openWith" : "openIn.title")}
-    >
-      <button
-        type="button"
-        className="open-in-main"
-        aria-label={openLabel}
-        title={openLabel}
-        onClick={() => open(selected)}
-      >
-        {selected ? <AppIcon app={selected} /> : <Icon name="file" />}
-      </button>
+  // 文件管理器按系统习惯说「在访达中打开」，其他应用说「用 Cursor 打开」。
+  const openLabel = !selected
+    ? t("files.menu.defaultApp")
+    : selected.kind === "file-manager"
+      ? t(revealLabelKey())
+      : t("openIn.editor").replace("{name}", nameOf(selected))
+
+  /** 右半边展开的应用列表，末尾是复制路径。 */
+  function menu(trigger: { className: string; children: ReactNode }) {
+    return (
       <Menu.Root
         onOpenChange={(next) => {
           if (next) refresh()
         }}
       >
         <Menu.Trigger
-          className="open-in-more"
+          className={trigger.className}
           type="button"
           aria-label={t("openIn.choose")}
           title={t("openIn.choose")}
         >
-          <Icon name="down" />
+          {trigger.children}
         </Menu.Trigger>
         <Menu.Portal>
           <Menu.Positioner side="bottom" align="end" sideOffset={6}>
@@ -186,6 +177,64 @@ export function OpenInButton({
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
+    )
+  }
+
+  return {
+    selected,
+    open,
+    openLabel,
+    menu,
+    groupLabel: t(openFile ? "files.menu.openWith" : "openIn.title"),
+    /** 打开项目时一个应用都没有就不显示入口；打开文件时还能交给系统默认应用。 */
+    hidden: !selected && !openFile,
+  }
+}
+
+/** 文件与项目共用「打开」分段按钮，按目标类型记住打开方式。 */
+export function OpenInButton(props: OpenInProps) {
+  const openIn = useOpenIn(props)
+  if (openIn.hidden) return null
+  const { selected, openLabel } = openIn
+  return (
+    <div className="open-in-split" role="group" aria-label={openIn.groupLabel}>
+      <button
+        type="button"
+        className="open-in-main"
+        aria-label={openLabel}
+        title={openLabel}
+        onClick={() => openIn.open(selected)}
+      >
+        {selected ? <AppIcon app={selected} /> : <Icon name="file" />}
+      </button>
+      {openIn.menu({ className: "open-in-more", children: <Icon name="down" /> })}
+    </div>
+  )
+}
+
+/**
+ * 会话详情卡里的「打开」：左边整行写着用哪个应用打开，右边的箭头换应用。和分段按钮记的是同一个选择。
+ */
+export function OpenInRow({ path }: { path: string }) {
+  const openIn = useOpenIn({ path })
+  if (!openIn.selected) return null
+  const { selected } = openIn
+  return (
+    <div className="details-split" role="group" aria-label={openIn.groupLabel}>
+      <button
+        type="button"
+        className="details-row"
+        title={path}
+        onClick={() => openIn.open(selected)}
+      >
+        <AppIcon app={selected} />
+        <span className="details-row-label">{openIn.openLabel}</span>
+      </button>
+      <span className="details-split-sep" aria-hidden="true" />
+      {openIn.menu({
+        className: "details-split-more",
+        children: <ChevronDown className="ic" aria-hidden="true" />,
+      })}
     </div>
   )
 }

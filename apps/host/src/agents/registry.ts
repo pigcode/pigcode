@@ -17,6 +17,7 @@ import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./s
 import { createExecute } from "./run-execute"
 import { registerThreadReadTool } from "./thread-read-tool"
 import { recordThreadReferences } from "./thread-reference"
+import { THREAD_ACTIVITY } from "../services/threads"
 import { threadCwd } from "../services/worktrees"
 import { createCliUpdates } from "./cli-updates"
 import { ApprovalBridge, createApprovalRequest } from "./approval-bridge"
@@ -65,21 +66,16 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   /** 正在异步创建 Agent 会话的 run 数；用于避免并发空位被重复占用。 */
   let launching = 0
   const starting = new Map<string, QueuedRun>()
-  /** 追加一条线程事件并触发实时订阅者。 */
+  /** 追加一条线程事件并触发订阅者；run 开始和结束时先推进会话的更新时间，订阅者读到的是新的。 */
   function append(
     threadId: string,
     runId: string | null,
     type: ThreadEvent["type"],
     payload: unknown,
   ): void {
-    ctx.sessions.append({
-      threadId,
-      runId,
-      type,
-      payload,
-      schemaVersion: 1,
-      createdAt: new Date().toISOString(),
-    })
+    const createdAt = new Date().toISOString()
+    if (THREAD_ACTIVITY.has(type)) ctx.threads.touch(threadId, createdAt, runId)
+    ctx.sessions.append({ threadId, runId, type, payload, schemaVersion: 1, createdAt })
   }
 
   function finishRun(

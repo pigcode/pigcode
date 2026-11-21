@@ -38,6 +38,20 @@
     transform: translateY(0);
   }
 }
+/* 不经过 Base UI 的浮层（钉在会话区的详情卡）进场：和弹层一样淡入，从 enter-scale 放大到原尺寸 */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--enter-scale));
+  }
+}
+/* 摘要组还没闭合时，组头换成下一项的摘要：从下面滚上来（ZCode 的 QueuedSummaryContent） */
+@keyframes summary-roll {
+  from {
+    opacity: 0;
+    transform: translateY(60%);
+  }
+}
 /* 页面和新会话的问候进场：淡入，并上移一小段 */
 @keyframes page-in {
   from {

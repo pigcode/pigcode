@@ -85,8 +85,8 @@ describe("built-in tool renderers", () => {
         </>,
       ),
     )
-    expect(screen.getByRole("button", { name: /终端/ }).textContent).toContain("true")
-    expect(screen.getByRole("button", { name: /MCP/ }).textContent).toBe("MCPGithub·List issues")
+    expect(screen.getByRole("button", { name: /已执行/ }).textContent).toContain("true")
+    expect(screen.getByRole("button", { name: /MCP/ }).textContent).toBe("MCPGithubList issues")
     expect(screen.getByText("Frob widget")).toBeTruthy()
   })
 
@@ -95,7 +95,7 @@ describe("built-in tool renderers", () => {
     registerBuiltinToolRenderers(extensions)
     const running = call("Bash", { status: "running", input: '{"command":"make"}' })
     render(timeline(extensions, <ToolBlock tool={running} live={"building\n"} />))
-    const row = screen.getByRole("button", { name: /正在运行/ })
+    const row = screen.getByRole("button", { name: /正在执行/ })
     if (row.getAttribute("aria-expanded") === "false") await userEvent.click(row)
     expect(screen.getByText("building")).toBeTruthy()
   })
@@ -204,8 +204,8 @@ describe("the clock sample's tool renderer", () => {
     await act(() => controller.reload())
     expect(hosted()).toEqual([])
     expect(screen.getAllByRole("button").map((row) => row.textContent)).toEqual([
-      "Clock now失败",
-      "MCPPigcode·Clock now",
+      "Clock now执行失败",
+      "MCPPigcodeClock now",
     ])
   })
 

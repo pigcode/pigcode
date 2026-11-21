@@ -1,6 +1,7 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
 import {
   scheduleRunChangeSchema,
+  threadSchema,
   type AgentEvent,
   type ReasoningEffort,
   type ScheduleRunChange,
@@ -22,6 +23,8 @@ export interface ConnectionHandlers {
   onDelta(event: { threadId: string; event: AgentEvent }): void
   onStatus(status: ConnectionStatus): void
   onScheduledThread?(thread: Thread): void
+  /** Host 推来的会话新记录：状态、未读、标题、更新时间或归档变了，打开没打开都会推。 */
+  onThreadChanged?(thread: Thread): void
 }
 
 /** `thread.subscribe` 的响应结构；Host 尚未返回事件时 events 为空。 */
@@ -176,6 +179,11 @@ export class Connection {
         data?: unknown
         exitCode?: unknown
       }
+    }
+    if (value.method === "thread.changed") {
+      const thread = threadSchema.safeParse(value.params)
+      if (thread.success) this.handlers.onThreadChanged?.(thread.data)
+      return
     }
     if (value.method === "schedule.runChanged") {
       const change = scheduleRunChangeSchema.safeParse(value.params)

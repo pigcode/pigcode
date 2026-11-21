@@ -122,6 +122,51 @@
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
+/*
+  ─── 子菜单、单选与勾选（侧栏的「自定义侧栏」菜单）：入口行右侧是当前值和箭头，子菜单开着时入口保持高亮；
+  选中的项行尾一个对勾，没选中时不占位置 ───
+*/
+.menu-submenu-trigger[data-popup-open] {
+  background: var(--active);
+}
+.menu-item .menu-submenu-chevron {
+  margin-left: calc(var(--space-2) - var(--space-5));
+  color: var(--muted);
+}
+.menu-indicator {
+  display: inline-flex;
+  flex: none;
+}
+/* 筛选偏离默认时，子菜单入口上的小圆点 */
+.menu-dot {
+  flex: none;
+  width: var(--dot-size-sm);
+  height: var(--dot-size-sm);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.menu-popup.sidebar-menu {
+  min-width: 220px;
+  max-width: 420px;
+}
+/* 「筛选」标题和它右侧的「重置」：重置是一个小号的文字按钮，和菜单项一样能用键盘选到 */
+.sidebar-menu-head {
+  display: flex;
+  align-items: center;
+}
+.sidebar-menu-head .menu-label {
+  flex: 1;
+}
+.menu-item.sidebar-menu-reset {
+  width: auto;
+  min-height: var(--control-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--r-sm);
+  color: var(--accent-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
 /* 分隔线：上下 6，左右离外框 14 */
 .menu-sep {
   height: var(--hair);

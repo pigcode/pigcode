@@ -18,7 +18,7 @@ async function createServer() {
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
   await ctx.plugin(agentsPlugin)
-  const transport = new MemoryTransport()
+  const transport = new MemoryTransport({ skip: ["thread.changed"] })
   const server = new RpcServer(ctx, transport.host)
   server.start()
   return { ctx, transport, server }

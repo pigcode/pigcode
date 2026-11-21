@@ -91,6 +91,11 @@ export function draftProjectId(
   return (recent ?? state.projects[0])?.id ?? null
 }
 
+/** 新会话放到最前面。Host 推的 thread.changed 可能比 thread.create 的回复先到，已经在列表里的那份换掉。 */
+function withThread(threads: readonly Thread[], thread: Thread): Thread[] {
+  return [thread, ...threads.filter((item) => item.id !== thread.id)]
+}
+
 /**
  * 按草稿在 Host 上建会话并打开它，成为当前会话；侧栏这时才出现这一行。草稿输入框里的内容
  * 跟着搬进新会话的输入框：发送成功时它已经发出去了，run 没能开始时用户还能在新会话里接着发。
@@ -119,14 +124,14 @@ export async function materializeDraft(
   })) as Thread
   const state = store.getSnapshot()
   if (state.activeThreadId || draftProjectId(state) !== projectId) {
-    store.update({ threads: [thread, ...state.threads] })
+    store.update({ threads: withThread(state.threads, thread) })
     return thread
   }
   // 草稿页还挂着时就搬：它的输入框先交出正在写的内容。
   moveComposerDraft(NEW_THREAD_DRAFT_KEY, thread.id)
   for (const listener of materializedListeners) listener(thread, worktree !== null)
   store.update({
-    threads: [thread, ...store.getSnapshot().threads],
+    threads: withThread(store.getSnapshot().threads, thread),
     activeProjectId: projectId,
     error: null,
   })

@@ -4,7 +4,7 @@
   工作区里的工具行是一行行安静的灰字，运行中动作扫光，悬停出现箭头，展开后是卡片或带左线的子列表。
   颜色用 tokens.css 里对话区的 --cv-* 变量，从主题变量推出，用户换主题时一起变化。
   这个文件放会话区布局、一轮的骨架（用户气泡、工作区折叠头）、操作栏、标记行与回到底部；
-  回答的 Markdown、代码块、工具行与卡片、审批、改动汇总、会话导航与状态面板各在自己的文件里。
+  回答的 Markdown、代码块、工具行与卡片、审批、改动汇总、会话导航与会话详情各在自己的文件里。
 */
 
 /* ─── 会话区布局 ───────────────────────────────────────── */
@@ -221,7 +221,7 @@
   font-variant-numeric: tabular-nums;
 }
 .work-chev {
-  color: var(--cv-decoration);
+  color: var(--cv-subtlest);
   opacity: 0.7;
   transition: transform var(--t-slow) var(--ease);
 }
@@ -234,16 +234,35 @@
   flex-direction: column;
   gap: 16px;
 }
+/*
+  运行中接在这一轮末尾的一行（ZCode 的 ChatLoading）：点阵放在和工具图标一样宽的槽里，文字的起点
+  和工具行对齐；「工作中」扫光，后面是等宽数字的计时
+*/
 .turn-loading {
-  display: flex;
-  min-height: var(--control-xs);
+  display: inline-flex;
+  width: fit-content;
   align-items: center;
+  gap: 8px;
   color: var(--cv-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  line-height: 1.6;
 }
-.turn-loading .ic {
+.turn-loading-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
   width: var(--icon-cv);
   height: var(--icon-cv);
-  animation: spin 1s linear infinite;
+}
+.turn-loading-icon .dot-matrix {
+  color: var(--fg-2);
+}
+.turn-loading-time {
+  font-family: var(--font-mono);
+  font-size: var(--cv-fs-sm);
+  font-variant-numeric: tabular-nums;
 }
 .turn-error {
   display: flex;

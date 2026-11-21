@@ -19,6 +19,8 @@ import { createThread } from "../services/thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { forwardTerminal } from "./terminal-notify"
+import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
+import { ThreadFeed } from "./thread-feed"
 import type { WorkspaceScope } from "../services/worktrees"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
@@ -39,6 +41,7 @@ function scopeOf(value: { threadId?: string | undefined; projectId?: string | un
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
 export class RpcServer {
   private disposers: Array<() => void> = []
+  private readonly feed: ThreadFeed
   /** 每个线程只保留一个实时监听器；重复订阅先释放旧的。 */
   private readonly subscriptions = new Map<string, () => void>()
   /** 页面打开的终端的输出订阅。 */
@@ -49,7 +52,9 @@ export class RpcServer {
   constructor(
     private readonly ctx: Context,
     private readonly transport: HostTransport,
-  ) {}
+  ) {
+    this.feed = new ThreadFeed(ctx, (message) => transport.send(message))
+  }
 
   /** 开始监听传输层消息。 */
   start(): void {
@@ -66,6 +71,7 @@ export class RpcServer {
         ),
       )
     }
+    this.disposers.push(this.feed.start())
   }
 
   /** 停止监听并释放所有订阅。 */
@@ -113,6 +119,9 @@ export class RpcServer {
     if (!(method in commandSchemas)) throw new Error(`unknown method: ${method}`)
     const command = method as CommandMethod
     const parsed = commandSchemas[command].parse(params)
+    if (THREAD_COMMANDS.has(command)) {
+      return dispatchThreadCommand(this.ctx, command, parsed, (id) => this.feed.changed(id))
+    }
 
     switch (command) {
       case "project.list":
@@ -140,39 +149,6 @@ export class RpcServer {
         // 终端也一样（会话里的和草稿里开的）：之后没有界面能关它，里面的进程会一直跑下去。
         this.ctx.get("terminal")?.closeProject(value.projectId)
         return project
-      }
-      case "thread.list":
-        return this.ctx.threads.list((parsed as { projectId?: string }).projectId)
-      case "thread.rename": {
-        const value = parsed as { threadId: string; title: string }
-        const thread = this.ctx.threads.rename(value.threadId, value.title)
-        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
-        this.ctx.sessions.append({
-          threadId: thread.id,
-          runId: null,
-          type: "thread.updated",
-          payload: { title: thread.title },
-          schemaVersion: 1,
-          createdAt: new Date().toISOString(),
-        })
-        return thread
-      }
-      case "thread.archive": {
-        const value = parsed as { threadId: string }
-        // 归档的会话从界面上消失；还在跑或排队的 run 先停下，免得在看不见的地方改代码或卡在审批上。
-        // 子代理随主会话一起归档，它们的 run 也一并停下。
-        const archived = new Set([
-          value.threadId,
-          ...this.ctx.threads.children(value.threadId).map((child) => child.id),
-        ])
-        for (const run of this.ctx.agents.listRuns()) {
-          if (archived.has(run.threadId)) this.ctx.agents.cancelRun(run.runId)
-        }
-        // 终端也一样：归档后没有界面能关它，里面的进程会一直跑下去。
-        for (const threadId of archived) this.ctx.get("terminal")?.closeThread(threadId)
-        const thread = this.ctx.threads.archive(value.threadId)
-        if (!thread) throw new Error(`thread not found: ${value.threadId}`)
-        return thread
       }
       case "thread.create":
         return createThread(this.ctx, parsed as CommandParams<"thread.create">)
@@ -232,6 +208,11 @@ export class RpcServer {
           ultracode?: boolean
           instanceId?: string
           references?: Array<{ kind: "thread"; threadId: string }>
+        }
+        // 在已归档的会话里接着发消息，会话回到侧栏。
+        if (this.ctx.threads.get(value.threadId)?.archivedAt) {
+          this.ctx.threads.unarchive(value.threadId)
+          this.feed.changed(value.threadId)
         }
         const { runId } = await this.ctx.agents.startRun(
           value.threadId,

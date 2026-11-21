@@ -1,12 +1,12 @@
 /**
- * 一轮对话（参照 ZCode 的 ConversationTurnGroup）：右侧的用户气泡；下面是「工作中 / 已工作 N 秒」
- * 折叠头与折叠起来的工作（思考、工具、过程消息、提问与子 agent）；再下面是待处理的审批与提问、
- * 工作区之外的最终回答、改过的文件与悬停出现的操作栏。运行中、出错、被停下或没有最终回答时
- * 工作区一直展开、没有箭头；正常结束后折叠，只留最终回答。
+ * 一轮对话（参照 ZCode 3.18 的 ConversationTurnGroup）：右侧的用户气泡；下面是工作（思考、工具、过程
+ * 消息、提问与子 agent）；再下面是待处理的审批与提问、工作区之外的最终回答、改过的文件与操作栏。
+ * 运行中没有折叠头，工作一直展开，末尾一行「工作中」和计时；结束后才出现「用时 N 秒」折叠头，
+ * 正常结束时把工作收起来，只留最终回答；出错、被停下或没有最终回答时工作照样展开。
  */
 import { memo, useState } from "react"
-import { AlertTriangle, ChevronRight, Info, LoaderCircle } from "lucide-react"
-import { formatDuration, isMessageKey, useLocale } from "@pigcode/ui-primitives"
+import { AlertTriangle, ChevronRight, Info } from "lucide-react"
+import { DotMatrix, formatDuration, isMessageKey, useLocale } from "@pigcode/ui-primitives"
 import { ApprovalCard, type ApprovalDecision } from "./approval-card"
 import { elapsed, useNow } from "./duration"
 import type { SessionNotice } from "./event-parsers"
@@ -18,23 +18,41 @@ import { isEnded, type Turn } from "./turns"
 import { UserBubble } from "./user-bubble"
 import { WorkList } from "./work-list"
 
-/** 折叠头的文字：排队、等待、工作中、已停止、已工作或已处理。 */
+/** 结束后折叠头的文字：已停止、用时 N 秒，或者没有开始时间时的已处理。 */
 function useWorkLabel(turn: Turn): string {
   const { t, locale } = useLocale()
-  const live = !isEnded(turn)
-  const now = useNow(live && turn.status !== "queued")
-  const ms = elapsed(turn.startedAt, live ? now : turn.endedAt)
-  const duration = ms === null ? "" : formatDuration(ms, locale)
-  if (turn.status === "queued") return t("tabs.status.queued")
-  if (turn.status === "waiting") {
-    const asking = turn.work.some((item) => item.kind === "question" && !item.answers)
-    return t(asking ? "chat.status.waitingAnswer" : "chat.status.waitingApproval")
-  }
-  if (live) return t("chat.history.workingFor").replace("{duration}", duration).trim()
+  const ms = elapsed(turn.startedAt, turn.endedAt)
   if (turn.status === "interrupted") return t("chat.history.stopped")
   return ms === null
     ? t("chat.history.worked")
-    : t("chat.history.workedFor").replace("{duration}", duration)
+    : t("chat.history.workedFor").replace("{duration}", formatDuration(ms, locale))
+}
+
+/**
+ * 运行中接在这一轮末尾的一行（ZCode 的 ChatLoading）：点阵、扫光的「工作中」和已经用了多久；
+ * 排队时写「排队中」、不计时。等用户批准或回答时不显示，由审批与提问卡片说明在等什么。
+ */
+function TurnLoading({ turn }: { turn: Turn }) {
+  const { t, locale } = useLocale()
+  const queued = turn.status === "queued"
+  const now = useNow(!queued)
+  const ms = queued ? null : elapsed(turn.startedAt, now)
+  const label = queued ? t("tabs.status.queued") : t("chat.loading.working")
+  return (
+    <div className="turn-loading" role="status" aria-label={label}>
+      <span className="turn-loading-icon" aria-hidden="true">
+        <DotMatrix />
+      </span>
+      <span className={queued ? "turn-loading-label" : "turn-loading-label tool-shimmer"}>
+        {label}
+      </span>
+      {ms === null ? null : (
+        <span className="turn-loading-time" aria-hidden="true">
+          {formatDuration(ms, locale)}
+        </span>
+      )}
+    </div>
+  )
 }
 
 /** 工作区的折叠头；一直展开时没有箭头、不能点。 */
@@ -129,7 +147,7 @@ function TurnViewImpl({
       {turn.userText ? (
         <UserBubble text={turn.userText} at={turn.userAt} references={turn.userReferences} />
       ) : null}
-      {turn.runId !== null || !ended ? (
+      {ended && turn.runId !== null ? (
         <WorkHeader
           turn={turn}
           open={open}
@@ -141,6 +159,7 @@ function TurnViewImpl({
         <WorkList
           items={turn.work}
           ended={ended}
+          growing={turn.status === "running" && !streamingText}
           liveOutput={liveOutput}
           liveReasoning={liveReasoning}
         />
@@ -179,11 +198,7 @@ function TurnViewImpl({
           <span>{turn.error || t("chat.error")}</span>
         </div>
       ) : null}
-      {turn.status === "running" ? (
-        <div className="turn-loading" aria-hidden="true">
-          <LoaderCircle className="ic ic-sm" />
-        </div>
-      ) : null}
+      {turn.status === "running" || turn.status === "queued" ? <TurnLoading turn={turn} /> : null}
       {ended ? <FileSummary id={turn.key} files={turn.files} /> : null}
       {ended && turn.replyText ? <TurnActions text={turn.replyText} at={turn.replyAt} /> : null}
     </section>

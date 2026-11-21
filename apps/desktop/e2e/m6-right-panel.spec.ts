@@ -64,7 +64,7 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await page.keyboard.press("Enter")
     await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
 
-    // 底部终端始终与「打开」同在聊天顶部，右栏展开只迁移右栏自己的按钮。
+    // 底部终端始终与会话详情的开关同在聊天顶部，右栏展开只迁移右栏自己的按钮。
     const header = page.locator(".panel-top")
     const terminalToggle = header.getByRole("button", { name: "显示或隐藏终端" })
     const terminalButton = await terminalToggle.elementHandle()

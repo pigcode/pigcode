@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import { readFileSync, realpathSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
-import { openThread } from "./projects"
+import { closeThreadDetails, openThread, openThreadDetails } from "./projects"
 import { expectTerminalText } from "./terminal"
 
 test("switches branches in the project and starts an isolated thread only when sent", async () => {
@@ -96,8 +96,12 @@ test("switches branches in the project and starts an isolated thread only when s
       ?.slice("worktree ".length)
     expect(created).toBeTruthy()
     try {
-      const top = page.locator(".panel-top")
-      await expect(top.getByRole("button", { name: "选打开方式" })).toBeVisible()
+      // 会话建好以后，详情卡里的工作区是新建的 worktree。
+      const details = await openThreadDetails(page)
+      const workspace = details.getByRole("region", { name: "工作区" })
+      await expect(workspace).toContainText(created!.split("/").at(-1)!)
+      await expect(workspace).toContainText("worktree")
+      await closeThreadDetails(page)
       expect(worktrees).toContain(`HEAD ${base}`)
       expect(git("branch", "--show-current")).toBe("main")
       expect(readFileSync(join(root, "README.md"), "utf8")).toBe("# Local edits\n")

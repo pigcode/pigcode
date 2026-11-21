@@ -140,4 +140,19 @@ describe("thread tabs", () => {
       }),
     ).toMatchObject({ main: "waiting-approval" })
   })
+
+  it("uses the Host's status for threads that are not open or still replaying", () => {
+    const threads = [
+      thread("closed", { status: "failed" }),
+      thread("replaying", { status: "running" }),
+      thread("open", { status: "running" }),
+      thread("child", { parentThreadId: "closed", status: "queued" }),
+    ]
+    expect(
+      mergeChildStatus(threads, {
+        replaying: { status: "idle", loaded: false },
+        open: { status: "completed", loaded: true },
+      }),
+    ).toEqual({ closed: "queued", replaying: "running", open: "completed", child: "queued" })
+  })
 })

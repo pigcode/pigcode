@@ -314,21 +314,28 @@ describe("ChatView", () => {
     expect(screen.queryByRole("button", { name: "layout" })).toBeNull()
   })
 
-  it("puts the open-in entry in the thread header only when a thread is shown", () => {
-    const openIn = <button type="button">IDE</button>
-    const { container, rerender } = render(
-      <LocaleProvider locale="zh-CN">
-        <ChatView thread={thread} events={[]} openIn={openIn} />
-      </LocaleProvider>,
+  it("offers thread details from the header only when a thread is shown", async () => {
+    const details = (
+      <section className="details-section">
+        <button type="button">IDE</button>
+      </section>
     )
-    expect(container.querySelector(".panel-top")?.textContent).toContain("IDE")
-
-    rerender(
+    const { rerender } = render(
       <LocaleProvider locale="zh-CN">
-        <ChatView thread={null} events={[]} openIn={openIn} />
+        <ChatView thread={thread} events={[]} details={details} />
       </LocaleProvider>,
     )
     expect(screen.queryByRole("button", { name: "IDE" })).toBeNull()
+    await userEvent.click(screen.getByRole("button", { name: "会话详情" }))
+    const card = await screen.findByRole("dialog", { name: "会话详情" })
+    expect(within(card).getByRole("button", { name: "IDE" })).toBeTruthy()
+
+    rerender(
+      <LocaleProvider locale="zh-CN">
+        <ChatView thread={null} events={[]} details={details} />
+      </LocaleProvider>,
+    )
+    expect(screen.queryByRole("button", { name: "会话详情" })).toBeNull()
   })
 })
 

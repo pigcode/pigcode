@@ -135,11 +135,14 @@
   --shadow-composer: 0 1px 2px oklch(21% 0.006 286 / 0.04), 0 6px 20px oklch(21% 0.006 286 / 0.05);
 
   /*
-    对话区的两级辅助文字跟随主题文字色。半透明前景用于装饰图标和分隔符，细线、卡片从主题表面推出，
-    用户换主题时一起变化；改动的增删与成功色、@ 提到的文件与子 agent 类型的文字色是固定值。
+    对话区的文字分三级（ZCode 的 foreground / subtle / subtlest，同一个文字色按透明度分层）：
+    正文是 --fg；过程（思考、工具摘要的图标、动作和统计，工作区折叠头）是次级，和正文一眼能分开；
+    命令、路径、耗时这些补充信息是第三级。浅色 62% / 45%（次级在默认底色上 4.5∶1），深色在下面的深色块里另取。
+    半透明前景用于装饰图标和分隔符，细线、卡片从主题表面推出，用户换主题时一起变化；
+    改动的增删与成功色、@ 提到的文件与子 agent 类型的文字色是固定值。
   */
-  --cv-subtle: var(--muted);
-  --cv-subtlest: var(--faint);
+  --cv-subtle: color-mix(in oklab, var(--fg) 62%, transparent);
+  --cv-subtlest: color-mix(in oklab, var(--fg) 45%, transparent);
   --cv-decoration: color-mix(in oklab, var(--fg) 40%, transparent);
   --cv-surface: var(--field);
   --cv-user-fill: color-mix(in srgb, var(--bg) 95%, var(--fg));
@@ -154,8 +157,9 @@
   --cv-diff-added: var(--cv-added);
   --cv-diff-removed: var(--cv-removed);
   --cv-success: #1e8a3e;
+  /* 运行中的扫光：底色是正文色，扫过的那道光是 22% 的正文色（ZCode 的 animated-gradient-text） */
   --cv-shimmer-strong: var(--fg);
-  --cv-shimmer-soft: var(--cv-subtle);
+  --cv-shimmer-soft: color-mix(in oklab, var(--fg) 22%, transparent);
   --file-node-fg: #1a70b8;
   --subagent-node-fg: #6f7a2f;
 
@@ -274,6 +278,9 @@
   --composer-ring-focus: oklch(100% 0 0 / 0.11);
   --shadow-composer: 0 8px 24px oklch(0% 0 0 / 0.3);
 
+  /* 深色里浅字更刺眼，次级和第三级比浅色再淡一点（ZCode 深色是 60% / 30%） */
+  --cv-subtle: color-mix(in oklab, var(--fg) 60%, transparent);
+  --cv-subtlest: color-mix(in oklab, var(--fg) 36%, transparent);
   --cv-decoration: color-mix(in oklab, var(--fg) 30%, transparent);
   --cv-added: #46bf72;
   --cv-removed: #ff5c5c;
@@ -500,6 +507,8 @@
   --icon-cv-sm: 14px;
   --icon-titlebar: 16px;
   --check-icon: 10px;
+  /* 侧栏标题旁「自定义侧栏」的漏斗比旁边 14 的文件夹小一号（Cursor 的 spacing-3-25） */
+  --icon-side-filter: 13px;
   /*
     状态点的直径：sm 5（标签页未保存点、文件树改动点）/ 6（IndicatorDot）/ lg 7（图标角上带描边的状态点）；
     头像（avatar.tsx）：sm 16 菜单、胶囊与标签 / md 24 模型菜单左栏、侧栏底部的账户 / lg 32 设置里的列表
@@ -568,6 +577,13 @@
   --cv-col: 780px;
   --cv-pad: 16px;
   --cv-bubble: 560px;
+  /*
+    会话详情卡（T3 Code 的 ThreadDetailsCard）：宽 280，离会话区的上边和右边 12；钉在右上角时
+    会话列离它至少 32。thread-details.tsx 按这几个数算会话区多宽才钉得下
+  */
+  --details-w: 280px;
+  --details-inset: var(--space-6);
+  --details-clearance: 32px;
   /* 浮层与窗口边缘的间距；顶行高度（侧栏顶行、线程头与右侧面板标签栏，交通灯竖直居中其中） */
   --gap: 8px;
   --topbar-h: 40px;

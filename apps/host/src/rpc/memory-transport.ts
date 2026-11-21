@@ -7,10 +7,14 @@ class Side implements HostTransport {
   private queue: unknown[] = []
   private waiters: Array<(value: unknown) => void> = []
   peer!: Side
+  /** next() 不取这些方法的通知；监听器照常收到。 */
+  skipped: ReadonlySet<string> = new Set()
 
   send(message: unknown): void {
     const target = this.peer
     for (const listener of target.listeners) listener(message)
+    const method = (message as { method?: unknown } | null)?.method
+    if (typeof method === "string" && target.skipped.has(method)) return
     const waiter = target.waiters.shift()
     if (waiter) waiter(message)
     else target.queue.push(message)
@@ -35,13 +39,17 @@ class Side implements HostTransport {
   }
 }
 
-/** 内存双工传输，host 与 client 两个端点互为对端。 */
+/**
+ * 内存双工传输，host 与 client 两个端点互为对端。只关心请求与回复的测试用 skip 跳过 Host 主动推的通知，
+ * 例如每次会话变化都会推的 thread.changed。
+ */
 export class MemoryTransport {
   readonly host = new Side()
   readonly client = new Side()
 
-  constructor() {
+  constructor(options: { skip?: readonly string[] } = {}) {
     this.host.peer = this.client
     this.client.peer = this.host
+    this.client.skipped = new Set(options.skip ?? [])
   }
 }

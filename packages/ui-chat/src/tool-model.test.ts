@@ -1,6 +1,13 @@
-/** 验证工具的展示族、写文件的改动解析、工具字段读取与连续工具的合并规则。 */
+/** 验证工具的展示族、写文件的改动解析、工具字段读取与连续摘要组的规则。 */
 import { describe, expect, it } from "vitest"
 import { fileChanges, mergeFileChanges, unifiedDiffLines } from "./file-changes"
+import {
+  activeSummaryItem,
+  groupSummaries,
+  summaryCounts,
+  summaryIconItem,
+  summaryPath,
+} from "./summary-groups"
 import {
   askedQuestions,
   fetchUrl,
@@ -20,7 +27,7 @@ import {
   toolFamily,
 } from "./tool-identity"
 import type { ToolCall } from "./tool-meta"
-import { groupTools } from "./work-groups"
+import type { WorkItem } from "./turns"
 
 function tool(name: string, inputValue: unknown, extra: Partial<ToolCall> = {}): ToolCall {
   return {
@@ -241,26 +248,69 @@ describe("tool fields", () => {
   })
 })
 
-describe("work groups", () => {
-  type Entry = { key: string; tool?: ToolCall }
-  const item = (value: ToolCall): Entry => ({ key: value.id, tool: value })
-  const toolOf = (entry: Entry) => entry.tool ?? null
+describe("summary groups", () => {
+  const item = (value: ToolCall): WorkItem => ({ kind: "tool", key: value.id, tool: value })
+  const thought = (key: string, streaming = false): WorkItem => ({
+    kind: "reasoning",
+    key,
+    text: "thinking",
+    durationMs: null,
+    streaming,
+  })
+  const message = (key: string): WorkItem => ({ kind: "message", key, text: "Looking around." })
+  const edit = (id: string, path: string) =>
+    item(tool("Edit", { file_path: path, old_string: "a", new_string: "b" }, { id }))
 
-  it("folds two or more consecutive lookups or commands and leaves single tools alone", () => {
-    const items = [
+  it("joins thinking with lookups, commands and edits across kinds; text and other tools break it", () => {
+    const entries = groupSummaries([
+      thought("t1"),
       item(tool("Read", { file_path: "a" }, { id: "r1" })),
-      item(tool("Grep", { pattern: "x" }, { id: "g1" })),
-      item(tool("Bash", { command: "rg x" }, { id: "b0" })),
       item(tool("Bash", { command: "pnpm lint" }, { id: "b1" })),
-      item(tool("Bash", { command: "pnpm test" }, { id: "b2" })),
-      { key: "m1" } as Entry,
+      edit("e1", "src/a.ts"),
+      message("m1"),
       item(tool("Read", { file_path: "b" }, { id: "r2" })),
-    ]
-    const grouped = groupTools(items, toolOf)
+      item(tool("mcp__github__create_issue", {}, { id: "mcp" })),
+      item(tool("Grep", { pattern: "x" }, { id: "g1" })),
+      thought("t2"),
+    ])
     expect(
-      grouped.map((entry) =>
-        "tools" in entry ? `${entry.kind}:${entry.tools.length}` : entry.key,
+      entries.map((entry) =>
+        entry.kind === "group" ? `group:${entry.items.map((it) => it.key).join("+")}` : entry.key,
       ),
-    ).toEqual(["explore:3", "commands:2", "m1", "r2"])
+    ).toEqual(["group:t1+r1+b1+e1", "m1", "r2", "mcp", "group:g1+t2"])
+    // 组的 key 跟着第一项，后面接上新的工作时不变。
+    expect(entries[0]).toMatchObject({ key: "group-t1" })
+  })
+
+  it("counts every call, dedupes changed files and keeps edits without a path apart", () => {
+    const counts = summaryCounts(
+      [
+        thought("t1"),
+        item(tool("Read", { file_path: "a" }, { id: "r1" })),
+        item(tool("WebFetch", { url: "https://x.dev" }, { id: "f1" })),
+        item(tool("Bash", { command: "pnpm lint" }, { id: "b1", status: "failed" })),
+        item(tool("mcp__pigcode__browser_click", { ref: "e1" }, { id: "c1" })),
+        edit("e1", "src/a.ts"),
+        edit("e2", "/repo/src/./a.ts"),
+        edit("e3", "src/b.ts"),
+        item(tool("Edit", {}, { id: "e4" })),
+      ],
+      "/repo",
+    )
+    expect(counts).toEqual({ explore: 2, run: 2, files: ["src/a.ts", "src/b.ts"], unresolved: 1 })
+    expect(summaryPath("../src/./lib/../a.ts", "/repo/x")).toBe("/repo/src/a.ts")
+    expect(summaryPath("C:\\work\\.\\a.ts")).toBe("C:/work/a.ts")
+  })
+
+  it("follows the running item and picks the icon by browser, edit, command, lookup", () => {
+    const read = item(tool("Read", { file_path: "a" }, { id: "r1" }))
+    const bash = item(tool("Bash", { command: "pnpm test" }, { id: "b1", status: "running" }))
+    const live = thought("live", true)
+    expect(activeSummaryItem([read, bash, thought("t1")])).toBe(bash)
+    expect(activeSummaryItem([read, bash, live])).toBe(live)
+    expect(activeSummaryItem([read, thought("t1")])).toBeUndefined()
+    expect(summaryIconItem([read, bash, edit("e1", "a.ts")])?.key).toBe("e1")
+    expect(summaryIconItem([read, bash])?.key).toBe("b1")
+    expect(summaryIconItem([thought("t1"), thought("t2")])).toBeUndefined()
   })
 })

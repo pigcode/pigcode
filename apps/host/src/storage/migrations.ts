@@ -279,6 +279,22 @@ const MIGRATIONS: Migration[] = [
   CREATE INDEX idx_schedule_runs_schedule ON schedule_runs(schedule_id, triggered_at);
   `,
   `ALTER TABLE schedules ADD COLUMN draft_json TEXT`,
+  `
+  -- 会话的已读时间：最近一次 run 结束得比它晚就算未读。已有的会话都当作看过了。
+  -- updated_at 以前只在改名和换 Agent 时变，这里补上最近一次 run 的开始或结束，last_run_id 同样补上。
+  ALTER TABLE threads ADD COLUMN read_at TEXT;
+  CREATE INDEX idx_runs_thread ON runs(thread_id);
+  UPDATE threads SET
+    read_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+    updated_at = MAX(updated_at, COALESCE((
+      SELECT MAX(created_at) FROM thread_events
+      WHERE thread_id = threads.id
+        AND type IN ('run.started', 'run.completed', 'run.failed', 'run.interrupted')
+    ), updated_at)),
+    last_run_id = COALESCE(last_run_id, (
+      SELECT id FROM runs WHERE thread_id = threads.id ORDER BY rowid DESC LIMIT 1
+    ));
+  `,
 ]
 
 /**

@@ -1,7 +1,7 @@
 /**
  * 把线程事件整理成一轮一轮的对话（参照 ZCode 的 turn render unit）：用户消息、折叠起来的工作
  * （思考、工具、过程消息、提问与子 agent）、待处理的审批、工作区之外的最终回答、改过的文件与
- * 结束状态。待办与进入计划模式不进时间线，待办在状态面板里显示。
+ * 结束状态。待办与进入计划模式不进时间线，待办在会话详情里显示。
  */
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { ApprovalRequest } from "./approval-card"
@@ -25,15 +25,20 @@ import type { SubagentCall } from "./subagent-card"
 import { todoItems, type TodoItem } from "./tool-fields"
 import { isHiddenTool, toolFamily } from "./tool-identity"
 import type { ToolCall, ToolStatus } from "./tool-meta"
-import { groupTools, type GroupKind } from "./work-groups"
 import { collectWorkflows, type WorkflowCall } from "./workflow-card"
 
-/** 一轮里的一项工作。 */
+/** 一轮里的一项工作；连续的摘要在渲染时才合成一组（summary-groups.ts）。 */
 export type WorkItem =
   | { kind: "message"; key: string; text: string }
-  | { kind: "reasoning"; key: string; text: string; durationMs: number | null }
+  | {
+      kind: "reasoning"
+      key: string
+      text: string
+      durationMs: number | null
+      /** 还在输出的思考；只有渲染时接在末尾的那一段是 true。 */
+      streaming?: boolean
+    }
   | { kind: "tool"; key: string; tool: ToolCall }
-  | { kind: GroupKind; key: string; tools: ToolCall[] }
   | { kind: "subagent"; key: string; subagent: SubagentCall }
   | { kind: "workflow"; key: string; workflow: WorkflowCall }
   | { kind: "question"; key: string; request: QuestionRequestView; answers: string[] | undefined }
@@ -64,7 +69,7 @@ export interface Turn {
   replyAt: string | null
   /** 这一轮改过的文件（按路径合并）。 */
   files: FileChange[]
-  /** 这一轮最新的待办；状态面板用。 */
+  /** 这一轮最新的待办；会话详情用。 */
   plan: TodoItem[] | null
   /**
    * 这一轮里的会话提示。不放进 work：工作区会折叠，而「插件工具没接上」这类事用户要在
@@ -342,7 +347,7 @@ function stopUnfinished(item: WorkItem): WorkItem {
 
 /**
  * 整理一轮：结束后还在运行的工具记为已停止；最后一项若是文字，提出来作为工作区之外的回答；
- * 和提问事件重复的提问工具、结束后才失去意义的审批去掉；连续的同类工具合并；改过的文件按路径汇总。
+ * 和提问事件重复的提问工具、结束后才失去意义的审批去掉；改过的文件按路径汇总。
  */
 function finalizeTurn(turn: Turn, draft: Draft): void {
   const ended = isEnded(turn)
@@ -366,7 +371,7 @@ function finalizeTurn(turn: Turn, draft: Draft): void {
       item.kind === "tool" && item.tool.status === "completed" ? fileChanges(item.tool) : [],
     ),
   )
-  turn.work = groupTools(work, (item) => (item.kind === "tool" ? item.tool : null)) as WorkItem[]
+  turn.work = work
   turn.signature += `|${turn.status}|${turn.approvals.map((request) => request.id).join(",")}`
 }
 

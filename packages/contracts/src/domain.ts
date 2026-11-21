@@ -99,6 +99,20 @@ export const projectSchema = z.object({
   createdAt: z.string().datetime(),
 })
 
+/**
+ * 会话的状态，取最近一次 run：没跑过是 idle，等审批和等回答都是 waiting-approval。
+ * 侧栏的状态点、按状态分组和筛选都用它。
+ */
+export const threadStatusSchema = z.enum([
+  "idle",
+  "queued",
+  "running",
+  "waiting-approval",
+  "completed",
+  "failed",
+  "interrupted",
+])
+
 /** 线程实体，保存会话级 Agent 与模型的最近选择。 */
 export const threadSchema = z.object({
   id: z.string().min(1),
@@ -120,6 +134,10 @@ export const threadSchema = z.object({
   lastRunId: z.string().nullable(),
   /** 子代理会话所属的主会话；主会话为 null。子代理共用主会话的项目与工作目录，不出现在侧栏。 */
   parentThreadId: z.string().nullable().optional(),
+  /** Host 按 runs 与待处理请求算出，不落库；没带时当作 idle。 */
+  status: threadStatusSchema.optional(),
+  /** 最近一次 run 结束得比上次打开它晚：结果还没看过。 */
+  unread: z.boolean().optional(),
 })
 
 /** 一次运行的生命周期状态。 */
@@ -404,6 +422,8 @@ export type AgentCommand = z.infer<typeof agentCommandSchema>
 export type Project = z.infer<typeof projectSchema>
 /** 线程的类型。 */
 export type Thread = z.infer<typeof threadSchema>
+/** 会话状态的类型。 */
+export type ThreadStatus = z.infer<typeof threadStatusSchema>
 /** 运行的类型。 */
 export type Run = z.infer<typeof runSchema>
 /** 运行状态的类型。 */

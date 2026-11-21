@@ -4,7 +4,9 @@
  * 内容变化时这里跟着重渲染，所以插件停用后时间线立即换回去。
  */
 import { createContext, memo, useContext, type ReactNode } from "react"
+import { toolFamily } from "../tool-identity"
 import type { ToolCall } from "../tool-meta"
+import { BUILTIN_TOOL_ROWS } from "./builtin-rows"
 import { FallbackRow } from "./misc"
 
 /** 工具渲染器的 render 收到的参数。 */
@@ -43,3 +45,13 @@ export const ToolBlock = memo(function ToolBlock({
   if (!renderer) return <FallbackRow tool={tool} showIcon={showIcon} />
   return renderer.render({ tool, live, showIcon })
 })
+
+/**
+ * 只用内置的工具行画：摘要组的组头预览当前那一项、取代表图标时不交给插件，插件画的内容
+ * 只出现在展开后的列表里。
+ */
+export function BuiltinToolBlock({ tool }: { tool: ToolCall }) {
+  const family = toolFamily(tool.name)
+  const entry = BUILTIN_TOOL_ROWS.find(([name]) => name === family)
+  return entry ? entry[1]({ tool, showIcon: true }) : <FallbackRow tool={tool} showIcon />
+}

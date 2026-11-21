@@ -333,13 +333,17 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* 「持续了 N 秒」和流式时最新的一句是第三级，标签「思考」是次级 */
+.reasoning-duration {
+  color: var(--cv-subtlest);
+}
 .reasoning-peek {
   display: flex;
   max-width: min(32rem, 60cqw);
   min-width: 0;
   justify-content: flex-end;
   overflow: hidden;
-  color: var(--cv-subtle);
+  color: var(--cv-subtlest);
   white-space: nowrap;
   -webkit-mask-image: linear-gradient(to right, transparent, var(--mask-fill) 24px);
   mask-image: linear-gradient(to right, transparent, var(--mask-fill) 24px);

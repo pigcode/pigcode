@@ -304,7 +304,6 @@ export const WorkflowRow = memo(function WorkflowRow({ workflow }: { workflow: W
       kindDetail={
         workflow.name ? <span className="workflow-name">{workflow.name}</span> : undefined
       }
-      separator={Boolean(primary)}
       primary={primary ? <span className="truncate">{primary}</span> : undefined}
       secondary={<AgentPips workflow={workflow} />}
       status={status}

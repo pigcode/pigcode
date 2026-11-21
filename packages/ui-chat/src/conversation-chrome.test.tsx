@@ -1,17 +1,17 @@
-/** 验证时间线的外围部件：用户气泡、思考、改动汇总与状态面板；会话导航见 turn-navigator.test.tsx。 */
+/**
+ * 验证时间线的外围部件：用户气泡、思考与改动汇总；会话导航见 turn-navigator.test.tsx，
+ * 会话详情里的待办见 thread-details.test.tsx。
+ */
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReactNode } from "react"
-import type { ThreadEvent } from "@pigcode/contracts"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { FileSummary } from "./file-summary"
 import { ReasoningBlock } from "./reasoning"
-import { StatusPanel } from "./status-panel"
 import { resetToolOpen } from "./tool-open"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
-import { buildTimeline } from "./turns"
 import { UserBubble } from "./user-bubble"
 
 afterEach(() => {
@@ -28,23 +28,6 @@ function inLocale(node: ReactNode, actions: ConversationActions = {}) {
       </ConversationActionsContext.Provider>
     </LocaleProvider>,
   )
-}
-
-function event(
-  seq: number,
-  type: ThreadEvent["type"],
-  payload: unknown,
-  runId = "run_1",
-): ThreadEvent {
-  return {
-    seq,
-    threadId: "t1",
-    runId,
-    type,
-    payload,
-    schemaVersion: 1,
-    createdAt: new Date(Date.UTC(2026, 9, 21, 8, 0, seq)).toISOString(),
-  }
 }
 
 describe("UserBubble", () => {
@@ -81,7 +64,8 @@ describe("ReasoningBlock", () => {
       <ReasoningBlock id="r1" text={"First idea.\nSecond idea."} durationMs={4200} />,
     )
     const head = screen.getByRole("button", { name: /思考/ })
-    expect(head.textContent).toBe("思考·想了 5 秒")
+    expect(head.textContent).toBe("思考持续了 5 秒")
+    expect(head.querySelector(".reasoning-duration")?.textContent).toBe("持续了 5 秒")
     expect(head.getAttribute("aria-expanded")).toBe("false")
     await userEvent.click(head)
     expect(container.querySelector(".reasoning-body")?.textContent).toBe(
@@ -89,7 +73,7 @@ describe("ReasoningBlock", () => {
     )
     cleanup()
     inLocale(<ReasoningBlock id="r2" text="Hmm." durationMs={null} />)
-    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·想了几秒")
+    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考持续了几秒")
   })
 })
 
@@ -120,40 +104,6 @@ describe("FileSummary", () => {
     expect(reviewed).toEqual(["/repo/src/index.ts"])
     await userEvent.click(screen.getByRole("button", { name: "在文件面板打开 README.md" }))
     expect(opened).toEqual(["/repo/README.md"])
-  })
-})
-
-describe("StatusPanel", () => {
-  const todos = [
-    { content: "Read the code", status: "completed" },
-    { content: "Fix the bug", status: "in_progress" },
-    { content: "Run the tests", status: "pending" },
-  ]
-
-  it("shows the current todo in a capsule and the full list when expanded", async () => {
-    const timeline = buildTimeline([
-      event(1, "run.started", { text: "fix" }),
-      event(2, "tool.started", { id: "t1", name: "TodoWrite", input: { todos } }),
-      event(3, "tool.started", { id: "b1", name: "Bash", input: { command: "pnpm dev" } }),
-    ])
-    inLocale(<StatusPanel timeline={timeline} />)
-    const capsule = screen.getByRole("button", { name: "展开" })
-    expect(capsule.textContent).toBe("Fix the bug")
-    await userEvent.click(capsule)
-    const panel = screen.getByRole("complementary", { name: "状态" })
-    expect(panel.textContent).toContain("进度1/3")
-    expect(panel.querySelector("[data-status='completed']")?.textContent).toBe("Read the code")
-    expect(panel.textContent).toContain("后台任务1")
-    expect(panel.textContent).toContain("pnpm dev")
-    await userEvent.click(screen.getByRole("button", { name: "收起" }))
-    expect(screen.getByRole("button", { name: "展开" })).toBeTruthy()
-  })
-
-  it("stays out of the way when there is nothing to report", () => {
-    const { container } = inLocale(
-      <StatusPanel timeline={buildTimeline([event(1, "run.started", { text: "hi" })])} />,
-    )
-    expect(container.querySelector(".status-panel")).toBeNull()
   })
 })
 

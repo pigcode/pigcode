@@ -47,7 +47,7 @@ async function setup() {
   await ctx.plugin(agentsPlugin)
   const project = ctx.projects.add("/tmp/pigcode-m5")
   const thread = ctx.threads.create(project.id, "M5", "fake")
-  const transport = new MemoryTransport()
+  const transport = new MemoryTransport({ skip: ["thread.changed"] })
   const server = new RpcServer(ctx, transport.host)
   server.start()
   return { ctx, thread, transport, server }

@@ -1,6 +1,8 @@
 /*
-  工具行：工作区里一行一个动作的安静灰字，左边图标与动作，悬停出现箭头；运行中的动作扫光。
-  还有行里共用的改动行数、文件名与父目录，以及展开后带左线的子列表。展开后的卡片在 tool-cards.css。
+  工具行（参照 ZCode 3.18 的 ToolSummaryRow 与 docs/ui/tool-display-rendering.md）：一行一个动作。
+  图标、动作和摘要都是次级色、正常字重，命令、路径与耗时是第三级，文件名是正文色，和回答正文一眼能分开；
+  字段之间只用 8 的间距，不加「·」。悬停时整行变成正文色并出现箭头；运行中的动作扫光。
+  还有行里共用的改动行数与文件名、连续摘要组与展开后带导线的子列表。展开后的卡片在 tool-cards.css。
 */
 /* ─── 工具行 ───────────────────────────────────────────── */
 .tool-row {
@@ -28,7 +30,7 @@
 }
 /* 图标带 .ic-sm；在对话的一轮里放大到 16，别处保持 .ic-sm 的尺寸 */
 .tool-row-icon {
-  color: var(--cv-decoration);
+  color: var(--cv-subtle);
 }
 .turn .tool-row .ic.tool-row-icon {
   width: var(--icon-cv);
@@ -36,12 +38,10 @@
 }
 .tool-row-kind {
   flex: none;
-  font-weight: 500;
   white-space: nowrap;
 }
 .tool-row-detail {
   flex: none;
-  color: var(--cv-subtle);
   white-space: nowrap;
 }
 .tool-row-summary {
@@ -50,9 +50,21 @@
   align-items: center;
   gap: 8px;
 }
-.tool-row-sep {
-  flex: none;
-  color: var(--cv-decoration);
+/*
+  悬停时整行变成正文色：改的是文字填充色，扫光那一段有自己的透明填充不受影响；
+  改动行数、失败状态和子 agent 名字保留自己的颜色
+*/
+@media (hover: hover) {
+  :is(.tool-row-head, .summary-group-head):hover {
+    -webkit-text-fill-color: var(--fg);
+  }
+  :is(.tool-row-head, .summary-group-head):hover .tool-row-icon {
+    color: var(--fg);
+  }
+}
+.tool-row-head :is(.diff-count, .subagent-type),
+.tool-row[data-status="failed"] .tool-row-status {
+  -webkit-text-fill-color: currentColor;
 }
 .tool-row-primary,
 .tool-row-secondary {
@@ -72,7 +84,7 @@
 }
 .tool-row-chev {
   flex: none;
-  color: var(--cv-decoration);
+  color: var(--cv-subtlest);
   opacity: 0;
   transition:
     opacity var(--t-slow) var(--ease),
@@ -91,25 +103,25 @@
 }
 .tool-row-status {
   flex: none;
-  color: var(--cv-subtlest);
   white-space: nowrap;
 }
 .tool-row[data-status="failed"] .tool-row-status {
   color: var(--bad-text);
 }
+/* 有原因可看的状态词下面是一条点线，和普通的摘要文字分开 */
 .tool-row-status.has-tip {
   cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
+/* 命令摘要是第三级：用界面字体，和同一行的文字对齐；展开后的完整命令仍是等宽字体 */
 .cmd-summary {
   overflow: hidden;
-  color: inherit;
+  color: var(--cv-subtlest);
   font-family: var(--font-ui);
   font-size: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.tool-row-server {
-  color: var(--cv-subtle);
 }
 .subagent-type {
   color: var(--subagent-node-fg);
@@ -143,7 +155,7 @@
   }
 }
 
-/* 改动行数、文件名与父目录 */
+/* 改动行数与文件名 */
 .diff-count {
   display: inline-flex;
   flex: none;
@@ -163,12 +175,13 @@
 .file-summary .del {
   color: var(--cv-diff-removed);
 }
+/* 文件名是正文色，只写文件名；完整路径在悬停提示里 */
 .file-chip {
   display: inline-flex;
   min-width: 0;
   align-items: center;
   gap: 6px;
-  color: var(--fg-2);
+  color: var(--fg);
   font: inherit;
 }
 .file-chip .file-icon {
@@ -177,10 +190,6 @@
 }
 .file-chip.is-link:hover > .truncate {
   text-decoration: underline;
-}
-.file-parent {
-  min-width: 0;
-  color: var(--cv-subtlest);
 }
 .file-chips {
   display: inline-flex;
@@ -197,16 +206,141 @@
   margin-right: 6px;
 }
 
-/* 展开后的子列表：左侧一条细线，子项不带图标 */
-.tool-children {
+/*
+  展开后的子列表（多文件的改动、连续摘要组）：子项不带图标，沿一条不占宽度的导线排开；
+  导线离左边 8，文字从 24 开始，正好接在组头 16 的图标和 8 的间距后面
+*/
+:is(.tool-children, .summary-group-list) {
+  position: relative;
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 8px;
   margin: 0 0 0 8px;
-  padding: 0 0 0 14px;
-  border-left: 1px solid var(--cv-border);
+  padding: 0 0 0 16px;
   list-style: none;
+}
+:is(.tool-children, .summary-group-list)::before {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  border-left: 1px solid var(--cv-border);
+  content: "";
+}
+
+/* ─── 连续摘要组 ───────────────────────────────────────── */
+.summary-group {
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: var(--cv-fs);
+  line-height: 1.6;
+}
+/* 组头只有一行：图标和箭头不缩，统计放不下时省略，悬停看全文 */
+.summary-group-head {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--cv-subtle);
+  cursor: pointer;
+}
+.summary-group-head:focus-visible {
+  border-radius: var(--r-xs);
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+.summary-group-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+.summary-group-icon .ic {
+  width: var(--icon-cv);
+  height: var(--icon-cv);
+}
+.summary-group-stats {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.summary-group-files {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.summary-group-label,
+.summary-group-more {
+  flex: none;
+}
+/* 组还没闭合时，组头是当前那一项的摘要；换成下一项时从下面滚上来 */
+.summary-group-preview {
+  display: flex;
+  min-width: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .summary-group-preview {
+    animation: summary-roll var(--t-slow) var(--ease);
+  }
+}
+.summary-group-chev {
+  flex: none;
+  color: var(--cv-subtlest);
+  opacity: 0;
+  transition:
+    opacity var(--t-slow) var(--ease),
+    transform var(--t-slow) var(--ease);
+}
+.summary-group-head:is(:hover, :focus-visible) .summary-group-chev,
+.summary-group[data-open] .summary-group-chev {
+  opacity: 1;
+}
+.summary-group[data-open] .summary-group-chev {
+  transform: rotate(90deg);
+}
+/* 展开后最多 16 行高（16 行加 15 个 8 的间距），再多就在组里滚动；有藏起来的内容时那一边淡出 24 */
+.summary-group-body {
+  max-height: calc(16lh + 15 * 8px);
+  margin-top: 8px;
+  overflow-y: auto;
+}
+.summary-group-body[data-edges="top"] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, var(--mask-fill) 24px);
+  mask-image: linear-gradient(to bottom, transparent, var(--mask-fill) 24px);
+}
+.summary-group-body[data-edges="bottom"] {
+  -webkit-mask-image: linear-gradient(to top, transparent, var(--mask-fill) 24px);
+  mask-image: linear-gradient(to top, transparent, var(--mask-fill) 24px);
+}
+.summary-group-body[data-edges="both"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--mask-fill) 24px,
+    var(--mask-fill) calc(100% - 24px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    var(--mask-fill) 24px,
+    var(--mask-fill) calc(100% - 24px),
+    transparent
+  );
+}
+/* 组里的思考只用组的导线：正文贴着思考的标题左对齐，上面只留 4 */
+.summary-group-list .reasoning-body {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+}
+.summary-group-list .reasoning-row > .tool-row-body {
+  padding-top: 4px;
 }
 @media (prefers-reduced-motion: reduce) {
   .tool-shimmer {
@@ -215,7 +349,7 @@
     color: var(--fg);
     -webkit-text-fill-color: currentColor;
   }
-  .tool-row-chev {
+  :is(.tool-row-chev, .summary-group-chev) {
     transition: none;
   }
 }

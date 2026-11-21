@@ -1,12 +1,11 @@
 import { threadPatchFromEvent } from "./thread-patch"
 /** Renderer 的应用状态；组件通过 useSyncExternalStore 订阅。 */
 import { useSyncExternalStore } from "react"
-import type { Project, AgentFeatures, Thread, ThreadEvent } from "@pigcode/contracts"
+import type { Project, AgentFeatures, Thread, ThreadEvent, ThreadStatus } from "@pigcode/contracts"
 import type { ConnectionStatus } from "./connection"
 
-/** 单个线程在 Renderer 中的运行状态。 */
-export type ThreadViewStatus =
-  "idle" | "queued" | "running" | "waiting-approval" | "completed" | "failed" | "interrupted"
+/** 单个线程在 Renderer 中的运行状态；取值和 Host 给会话算的状态一样。 */
+export type ThreadViewStatus = ThreadStatus
 
 /** 每个打开线程独立维护的事件、流式文本与运行状态。 */
 export interface ThreadViewState {
@@ -210,6 +209,16 @@ export class AppStore {
   update(patch: Partial<AppState>): void {
     this.state = { ...this.state, ...patch }
     this.emit()
+  }
+
+  /** 用 Host 推来的会话记录替换同一个会话；还不认识的会话（例如定时任务刚建的）放到最前面。 */
+  upsertThread(thread: Thread): void {
+    const threads = this.state.threads
+    this.update({
+      threads: threads.some((item) => item.id === thread.id)
+        ? threads.map((item) => (item.id === thread.id ? thread : item))
+        : [thread, ...threads],
+    })
   }
 
   /** 打开线程：初始化独立状态并加入打开列表；loaded 给刚建好、没有历史要回放的会话。 */

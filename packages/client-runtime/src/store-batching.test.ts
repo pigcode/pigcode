@@ -150,6 +150,19 @@ describe("AppStore batching", () => {
     })
   })
 
+  it("replaces a thread with the record the Host pushes and puts an unknown one first", () => {
+    const store = new AppStore()
+    const other = { ...thread, id: "th_2" }
+    store.update({ threads: [thread, other] })
+    store.upsertThread({ ...other, status: "completed", unread: true })
+    expect(store.getSnapshot().threads.map((item) => [item.id, item.unread])).toEqual([
+      ["th_1", undefined],
+      ["th_2", true],
+    ])
+    store.upsertThread({ ...thread, id: "th_3" })
+    expect(store.getSnapshot().threads.map((item) => item.id)).toEqual(["th_3", "th_1", "th_2"])
+  })
+
   it("collects a running command's output per frame and drops it once the command ends", () => {
     const frames = manualSchedule()
     const store = new AppStore({ schedule: frames.schedule })

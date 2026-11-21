@@ -24,6 +24,24 @@ function Label({ className, ...props }: ComponentProps<typeof BaseMenu.GroupLabe
   return <BaseMenu.GroupLabel className={withBaseClass("menu-label", className)} {...props} />
 }
 
+/** 打开子菜单的一行；右侧可以放当前值和箭头。 */
+function SubmenuTrigger({ className, ...props }: ComponentProps<typeof BaseMenu.SubmenuTrigger>) {
+  return (
+    <BaseMenu.SubmenuTrigger
+      className={withBaseClass("menu-item menu-submenu-trigger", className)}
+      {...props}
+    />
+  )
+}
+
+function RadioItem({ className, ...props }: ComponentProps<typeof BaseMenu.RadioItem>) {
+  return <BaseMenu.RadioItem className={withBaseClass("menu-item", className)} {...props} />
+}
+
+function CheckboxItem({ className, ...props }: ComponentProps<typeof BaseMenu.CheckboxItem>) {
+  return <BaseMenu.CheckboxItem className={withBaseClass("menu-item", className)} {...props} />
+}
+
 export const Menu = {
   Root: BaseMenu.Root,
   Trigger: BaseMenu.Trigger,
@@ -34,6 +52,13 @@ export const Menu = {
   Separator,
   Group: BaseMenu.Group,
   Label,
+  SubmenuRoot: BaseMenu.SubmenuRoot,
+  SubmenuTrigger,
+  RadioGroup: BaseMenu.RadioGroup,
+  RadioItem,
+  RadioItemIndicator: BaseMenu.RadioItemIndicator,
+  CheckboxItem,
+  CheckboxItemIndicator: BaseMenu.CheckboxItemIndicator,
 }
 
 /** 在触发区域里右键或长按时，在指针处打开的菜单；弹层与菜单项和普通菜单是同一组部件。 */

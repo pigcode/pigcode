@@ -95,7 +95,6 @@ export const AgentRow = memo(function AgentRow({ subagent }: { subagent: Subagen
       kind={t("chat.toolCall.agent.label")}
       running={running}
       kindDetail={<span className="subagent-type">{subagent.name}</span>}
-      separator={Boolean(title || (running && activity))}
       primary={running && activity ? <span className="truncate">{activity}</span> : title}
       status={status}
       title={subagent.prompt ?? title}

@@ -1,6 +1,7 @@
 /*
-  线程头：聊天面板顶部与侧栏顶行等高的拖动条。左边是主会话与子代理的标签（tabs.css），
-  右边是「用…打开」（open-in.css）、状态胶囊与布局按钮（surface-tabs.css）。这里写拖动区、胶囊和图标按钮在顶栏里的样子。
+  线程头：聊天面板顶部与侧栏顶行等高的拖动条。左边是主会话与子代理的标签（tabs.css），右边是会话详情的
+  开关（thread-details.css）与布局按钮（surface-tabs.css），新会话页是「用…打开」（open-in.css）。
+  这里写拖动区、胶囊和图标按钮在顶栏里的样子。
 */
 .panel-top {
   display: flex;

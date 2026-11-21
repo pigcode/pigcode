@@ -53,6 +53,7 @@ const connection = new Connection({
     if (!threads.some((item) => item.id === thread.id))
       store.update({ threads: [thread, ...threads] })
   },
+  onThreadChanged: (thread) => store.upsertThread(thread),
 })
 
 const plugins = createClientPluginController({ extensions, connection })
