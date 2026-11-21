@@ -213,7 +213,8 @@ export function OpenInButton(props: OpenInProps) {
 }
 
 /**
- * 会话详情卡里的「打开」：左边整行写着用哪个应用打开，右边的箭头换应用。和分段按钮记的是同一个选择。
+ * 会话详情卡里的「打开」：左边整行写着用哪个应用打开，右边的箭头换应用。打开项目的选择只记一份，
+ * 会话和新会话草稿的详情卡共用。
  */
 export function OpenInRow({ path }: { path: string }) {
   const openIn = useOpenIn({ path })

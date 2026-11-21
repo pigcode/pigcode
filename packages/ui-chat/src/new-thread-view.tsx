@@ -3,7 +3,7 @@
  * 输入框下方几条建议，点一下预填进输入框。草稿还不是会话，侧栏里也没有它；第一次发送时容器才建会话。
  * 版式、问候、项目条与建议也给还没有消息的会话用（chat-view.tsx），两处长得一样。
  */
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { BookOpen, Bug, FlaskConical, ScanSearch, type LucideIcon } from "lucide-react"
 import {
   type ComposerThreadOption,
@@ -20,6 +20,7 @@ import {
   type PermissionMode,
 } from "@pigcode/ui-composer"
 import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { ThreadDetailsBody, ThreadDetailsToggle } from "./thread-details"
 export { ProjectChip } from "@pigcode/ui-composer"
 
 /** 草稿可以落到的项目。 */
@@ -61,8 +62,11 @@ export interface NewThreadViewProps {
   pending?: boolean
   /** 每次变化都把光标放回输入框，例如在草稿里再按一次新会话。 */
   focusKey?: number
-  /** 顶栏右侧「在编辑器中打开项目」的入口，打开的是草稿的项目。 */
-  openIn?: ReactNode
+  /**
+   * 会话详情卡上面的工作区与版本控制，看的是草稿的项目；和会话页一样由顶栏右侧的按钮打开。
+   * 问候和输入框在正中，卡片只从按钮弹出，不钉在右上角。
+   */
+  details?: ReactNode
   /** 顶栏右侧的布局按钮。 */
   layoutControls?: ReactNode
 }
@@ -219,16 +223,28 @@ export function NewThreadView({
   onSubmit,
   pending = false,
   focusKey,
-  openIn,
+  details,
   layoutControls,
 }: NewThreadViewProps) {
   const { t } = useLocale()
   const ready = projects.some((project) => project.id === projectId)
+  const headRef = useRef<HTMLDivElement>(null)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   return (
     <section className="view new-thread-view" aria-label={t("nav.newThread")}>
-      <div className="panel-top">
+      <div className="panel-top" ref={headRef}>
         <span className="spacer" />
-        {ready ? openIn : null}
+        {ready && details ? (
+          <ThreadDetailsToggle
+            pinned={false}
+            open={detailsOpen}
+            onOpenChange={setDetailsOpen}
+            plan={null}
+            anchor={headRef}
+          >
+            <ThreadDetailsBody workspace={details} plan={null} running={[]} />
+          </ThreadDetailsToggle>
+        ) : null}
         {layoutControls}
       </div>
       <NewThreadStage>

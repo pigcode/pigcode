@@ -56,7 +56,7 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
     await page.locator(".proj-block .proj").first().click({ button: "right" })
     await expect
       .poll(async () => (await menus())[2]?.labels.filter(Boolean))
-      .toEqual(["重命名", expect.stringMatching(/^在.+中打开$/), "从侧栏移除"])
+      .toEqual(["查看文件", expect.stringMatching(/^在.+中打开$/), "重命名", "从侧栏移除"])
     await page.locator(".sess").first().click({ button: "right" })
     await expect.poll(async () => (await menus())[3]?.labels).toEqual(["重命名", "归档"])
 

@@ -46,7 +46,7 @@ const marks: Record<string, string> = {
   monitor:
     '<rect x="3.5" y="4.5" width="17" height="11.5" rx="2"/><path d="M8.5 19.5h7M12 16v3.5"/>',
   "folder-plus":
-    '<path d="M20.5 12V10a2 2 0 0 0-2-2h-7l-2-2.5h-4a2 2 0 0 0-2 2V17a2 2 0 0 0 2 2H12"/><path d="M18 15v6M15 18h6"/>',
+    '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M12 10.75v6M9 13.75h6"/>',
   file: '<path d="M7 3.5h6.5L18 8v12.5H7z"/><path d="M13 3.5V8h5"/>',
   terminal:
     '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M7.5 9.5l3 2.5-3 2.5M12.5 15h4"/>',
@@ -75,7 +75,7 @@ const marks: Record<string, string> = {
   route:
     '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h6.5a3.5 3.5 0 0 1 0 7h-5a3.5 3.5 0 0 0 0 7H16"/>',
   cube: '<path d="M12 3.5l7.5 4.3v8.4L12 20.5l-7.5-4.3V7.8z"/><path d="M12 12l7.5-4.2M12 12v8.5M12 12L4.5 7.8"/>',
-  filter: '<path d="M2.25 4.5h19.5M6 12h12M10.5 19.5h3"/>',
+  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   sidebar: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="M9.5 4.5v15"/>',
   arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   download: '<path d="M12 4v11M7 10.5l5 4.5 5-4.5M5 19.5h14"/>',
@@ -112,20 +112,33 @@ const marks: Record<string, string> = {
     '<path d="M14.5 6.5l3-3a2.1 2.1 0 0 1 3 3l-3 3"/><path d="M12.5 7.5l4 4M14.5 9.5L7 17l-2.5.5.5-2.5L12.5 7.5"/>',
 }
 
+/**
+ * 按 16 显示的图标，画在 16 格里、线宽 1：横竖线都落在半像素上，1 倍屏和 Retina 屏上都不发虚。
+ * 侧栏标题行的两个按钮用，画出来和 Cursor 同一处的图标一样大（约 11.5×9.5 和 13×11）。
+ */
+const pixelMarks: Record<string, string> = {
+  "sidebar-customize":
+    '<path d="M2.75 5.5h1.25M7.5 5.5h5.75M2.75 10.5h5.75M12 10.5h1.25"/><circle cx="5.75" cy="5.5" r="1.75"/><circle cx="10.25" cy="10.5" r="1.75"/>',
+  "sidebar-add-project":
+    '<path d="M2.5 11.5v-6a2 2 0 0 1 2-2h2.09a1.5 1.5 0 0 1 1.06.44L9.2 5.5h3.3a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2z"/><path d="M8.5 7.5v4M6.5 9.5h4"/>',
+}
+
 /** 图标表里有没有这个名字；插件传来的名字用它判断，没有时换成通用图标。 */
 export function hasIcon(name: string): boolean {
-  return Object.hasOwn(marks, name)
+  return Object.hasOwn(marks, name) || Object.hasOwn(pixelMarks, name)
 }
 
 type IconProps = SVGProps<SVGSVGElement> & { name: keyof typeof marks | string; small?: boolean }
 
 /** 画出设计稿里的线性图标。未知名字不渲染图形。 */
 export function Icon({ name, small, className, ...props }: IconProps) {
-  const markup = marks[name] ?? ""
+  const pixel = Object.hasOwn(pixelMarks, name)
+  const markup = (pixel ? pixelMarks[name] : marks[name]) ?? ""
   return (
     <svg
       className={["ic", small ? "ic-sm" : "", className].filter(Boolean).join(" ")}
-      viewBox="0 0 24 24"
+      viewBox={pixel ? "0 0 16 16" : "0 0 24 24"}
+      data-grid={pixel ? "16" : undefined}
       aria-hidden="true"
       dangerouslySetInnerHTML={{ __html: markup }}
       {...props}

@@ -16,11 +16,11 @@ import {
   type ComposerSubmitOptions,
 } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
-import { OpenInButton } from "@pigcode/ui-shell"
 import { useAgentCommandsLoader } from "./agent-commands"
 import { useDefaultInstanceId } from "./agents"
 import type { CoreDeps } from "./chat-container"
 import { DraftWorkspaceControls } from "./draft-workspace-controls"
+import { ThreadWorkspaceDetails } from "./thread-workspace-details"
 import { useDraftBranches } from "./use-draft-branches"
 import { projectFilePaths } from "./workspace-actions"
 import {
@@ -49,6 +49,10 @@ interface NewThreadPageProps {
   focusKey?: number | undefined
   layoutControls?: ReactNode
   onBranchChanged?: (() => void) | undefined
+  /** 详情卡里的「改动」在右侧面板打开草稿项目的 Diff。 */
+  onOpenDiff?: (() => void) | undefined
+  /** 切过分支就变，详情卡据此重读 git 状态。 */
+  checkoutRevision?: number | undefined
 }
 
 export function NewThreadPage(props: NewThreadPageProps) {
@@ -66,6 +70,8 @@ function ProjectDraft({
   focusKey,
   layoutControls,
   onBranchChanged,
+  onOpenDiff,
+  checkoutRevision = 0,
   projectId,
 }: NewThreadPageProps & { projectId: string | null }) {
   const state = useAppStore(deps.store)
@@ -220,7 +226,18 @@ function ProjectDraft({
       onSubmit={(text, submitOptions) => void submit(text, submitOptions)}
       pending={pending || switching || needsBase}
       {...(focusKey !== undefined ? { focusKey } : {})}
-      {...(project ? { openIn: <OpenInButton path={project.rootPath} /> } : {})}
+      details={
+        project ? (
+          <ThreadWorkspaceDetails
+            connection={deps.connection}
+            projectId={project.id}
+            root={project.rootPath}
+            projectRoot={project.rootPath}
+            revision={checkoutRevision}
+            onOpenDiff={onOpenDiff}
+          />
+        ) : undefined
+      }
       layoutControls={layoutControls}
     />
   )

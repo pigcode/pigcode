@@ -258,7 +258,7 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
   }
 })
 
-test("the header's open-in button opens the project with the chosen app", async () => {
+test("the draft's details card opens the project with the chosen app", async () => {
   const { app, page, root } = await openThread("open-in")
   try {
     await app.evaluate(({ shell }) => {
@@ -270,15 +270,24 @@ test("the header's open-in button opens the project with the chosen app", async 
       }
     })
     const opened = () => app.evaluate(() => (globalThis as { __opened?: string[] }).__opened ?? [])
-    // 列表第一项总是文件管理器；选中后它成为左半边按钮的默认应用。
-    await page.getByRole("button", { name: "选打开方式" }).click()
+    // 草稿页和会话页一样：顶栏没有「打开」分段按钮，它在详情卡的工作区一段里。
+    await expect(page.locator(".panel-top .open-in-split")).toHaveCount(0)
+    let details = await openThreadDetails(page)
+    await expect(details.getByRole("region", { name: "工作区" })).toContainText(
+      "pigcode-e2e-open-in",
+    )
+    // 这个项目不是 git 仓库，没有版本控制一段。
+    await expect(details.getByRole("region", { name: "版本控制" })).toHaveCount(0)
+    // 列表第一项总是文件管理器；选中后它成为这一行左半边的默认应用。
+    await details.getByRole("button", { name: "选打开方式" }).click()
     const items = page.locator(".open-in-menu .open-in-item")
     await expect(items.first()).toBeVisible()
     await expect(page.getByRole("menuitem", { name: "复制路径" })).toBeVisible()
     await items.first().click()
     await expect.poll(opened).toEqual([root])
 
-    await page.locator(".open-in-main").click()
+    details = await openThreadDetails(page)
+    await details.locator(".details-split .details-row").click()
     await expect.poll(opened).toEqual([root, root])
   } finally {
     await app.close()

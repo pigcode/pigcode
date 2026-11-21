@@ -132,7 +132,8 @@
 }
 /*
   标题右侧的「自定义侧栏」和「添加项目」：显示更新时间时两个按钮隔开 9，和下面行里的时间列对齐，
-  关掉时间时挨着（照 Cursor）。漏斗比文件夹小一号；筛选偏离默认时换成强调色，提醒列表不是全部。
+  关掉时间时挨着（照 Cursor）。两个图标是按 16 画的（icon.tsx 的 pixelMarks），画出来和 Cursor 一样大；
+  筛选偏离默认时滑轨换成强调色，提醒列表不是全部。
 */
 .side-label-actions {
   display: flex;
@@ -142,9 +143,10 @@
 .side-label-actions[data-spread] {
   gap: 9px;
 }
-.side-label .side-filter .ic {
-  width: var(--icon-side-filter);
-  height: var(--icon-side-filter);
+/* 两个图标都按 16 显示，线条才落在像素上；「添加项目」是 Button，要盖过它默认的 12 */
+.side-label-actions .icon-btn .ic {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 .side-label .icon-btn.side-filter[data-active],
 .side-label .icon-btn.side-filter[data-active]:hover {
@@ -202,18 +204,18 @@
 .sess {
   margin-bottom: var(--space-1);
 }
-.icon-btn:is(.proj-add, .proj-files) {
+.icon-btn.proj-add {
   width: var(--control-xs);
   height: var(--control-xs);
   border-radius: var(--r-sm);
   opacity: 0;
 }
-.proj-row:hover :is(.proj-add, .proj-files),
-.proj-row:has(:focus-visible) :is(.proj-add, .proj-files) {
+.proj-row:hover .proj-add,
+.proj-row:has(:focus-visible) .proj-add {
   opacity: 1;
 }
-.icon-btn:is(.proj-add, .proj-files):hover,
-.icon-btn:is(.proj-add, .proj-files):focus-visible {
+.icon-btn.proj-add:hover,
+.icon-btn.proj-add:focus-visible {
   background: none;
   color: var(--fg);
 }

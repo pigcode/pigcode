@@ -148,6 +148,10 @@ select:focus-visible {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* 画在 16 格里的图标（icon.tsx 的 pixelMarks）按 16 显示，线宽 1 就是一个像素 */
+.ic[data-grid="16"] {
+  stroke-width: 1;
+}
 .ic-sm {
   width: var(--icon-sm);
   height: var(--icon-sm);

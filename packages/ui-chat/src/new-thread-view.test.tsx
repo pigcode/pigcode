@@ -85,6 +85,19 @@ describe("NewThreadView", () => {
     expect(onSubmit).toHaveBeenCalledWith("修一下登录页", { effort: null })
   })
 
+  it("keeps the project's workspace in the details card, opened from the top bar", async () => {
+    renderView({ details: <section aria-label="工作区">/work/pigcode</section> })
+    expect(screen.queryByRole("region", { name: "工作区" })).toBeNull()
+    await userEvent.click(screen.getByRole("button", { name: "会话详情" }))
+    const card = await screen.findByRole("dialog", { name: "会话详情" })
+    expect(card.textContent).toContain("/work/pigcode")
+    cleanup()
+
+    // 还没有项目时没有可看的工作区，也就没有按钮。
+    renderView({ projectId: null, details: <section>/work/pigcode</section> })
+    expect(screen.queryByRole("button", { name: "会话详情" })).toBeNull()
+  })
+
   it("asks for a project first when there is none", async () => {
     const { onAddProject } = renderView({ projects: [], projectId: null })
     expect(screen.getByText(/先添加一个项目/)).toBeTruthy()

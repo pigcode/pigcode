@@ -86,6 +86,26 @@ export async function closeThreadDetails(page: Page): Promise<void> {
   await expect(popup).toBeHidden()
 }
 
+/**
+ * 下一次弹出的系统菜单（侧栏的右键菜单）直接选 label 这一项，之后恢复原样；
+ * 系统菜单不在页面里，Playwright 点不到。
+ */
+export async function pickNextMenuItem(app: ElectronApplication, label: string): Promise<void> {
+  await app.evaluate(({ Menu }, wanted) => {
+    const original = Menu.buildFromTemplate.bind(Menu)
+    Menu.buildFromTemplate = (template) => {
+      Menu.buildFromTemplate = original
+      return {
+        popup(options: { callback?: () => void }) {
+          const item = template.find((entry) => entry.label === wanted)
+          if (typeof item?.click === "function") (item.click as () => void)()
+          options.callback?.()
+        },
+      } as ReturnType<typeof Menu.buildFromTemplate>
+    }
+  }, label)
+}
+
 /** 在插件页标题栏的「添加」里打开「安装插件」对话框，安装一个插件目录、npm 包或 GitHub 仓库。 */
 export async function openInstallDialog(page: Page): Promise<void> {
   await page.locator(".page-head").getByRole("button", { name: /^添加/ }).click()

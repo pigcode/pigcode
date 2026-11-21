@@ -297,6 +297,28 @@ describe("WorkspaceSidebar", () => {
     expect(screen.getByText("已移除「alpha」，再添加这个文件夹就回来了")).toBeTruthy()
   })
 
+  it("keeps only new chat on the project row and puts browsing files first in its menu, like Cursor", async () => {
+    const menu = mockMenu()
+    const onBrowseFiles = vi.fn()
+    renderSidebar({ onBrowseFiles, onRenameProject: vi.fn(), onRemoveProject: vi.fn() })
+    const projectRow = screen.getByRole("button", { name: "alpha" }).closest(".proj-row")!
+    expect(
+      Array.from(projectRow.querySelectorAll(".list-row-actions button")).map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["新会话"])
+
+    await chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), "browse-files")
+    expect(menu.mock.lastCall?.[0].map((item) => ("id" in item ? item.label : "—"))).toEqual([
+      "查看文件",
+      "在文件管理器中打开",
+      "重命名",
+      "—",
+      "从侧栏移除",
+    ])
+    expect(onBrowseFiles).toHaveBeenCalledExactlyOnceWith("p1")
+  })
+
   it("says so when the project folder can't be opened, naming it after the platform's file manager", async () => {
     const menu = mockMenu({
       platform: "darwin",

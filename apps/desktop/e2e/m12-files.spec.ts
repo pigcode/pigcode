@@ -9,7 +9,7 @@ import {
   type ElectronApplication,
   type Page,
 } from "@playwright/test"
-import { addProject, launchEnv, launchArgs } from "./projects"
+import { addProject, launchEnv, launchArgs, pickNextMenuItem } from "./projects"
 
 /** 一个带 git 历史、忽略目录、嵌套目录与图片的项目。 */
 function createProject(): string {
@@ -42,15 +42,16 @@ function row(page: Page, scope: string, name: string) {
   return page.locator(`${scope} [role="treeitem"]`).filter({ hasText: new RegExp(`^${name}`) })
 }
 
-/** 从项目行打开文件面板；此时只有草稿。 */
+/** 从项目行的右键菜单打开文件面板；此时只有草稿。 */
 async function openFilesPanel(app: ElectronApplication, root: string): Promise<Page> {
   const page = await app.firstWindow()
   await addProject(app, page, root)
+  await pickNextMenuItem(app, "查看文件")
   await page
     .locator(".proj-block")
     .filter({ hasText: "pigcode-e2e-files" })
-    .getByRole("button", { name: "查看文件" })
-    .click()
+    .locator(".proj-row")
+    .click({ button: "right" })
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await expect(page.getByRole("tab", { name: "文件" })).toBeVisible()
   await expect(page.locator(".sess")).toHaveCount(0)

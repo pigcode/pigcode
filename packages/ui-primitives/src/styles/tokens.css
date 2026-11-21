@@ -507,8 +507,6 @@
   --icon-cv-sm: 14px;
   --icon-titlebar: 16px;
   --check-icon: 10px;
-  /* 侧栏标题旁「自定义侧栏」的漏斗比旁边 14 的文件夹小一号（Cursor 的 spacing-3-25） */
-  --icon-side-filter: 13px;
   /*
     状态点的直径：sm 5（标签页未保存点、文件树改动点）/ 6（IndicatorDot）/ lg 7（图标角上带描边的状态点）；
     头像（avatar.tsx）：sm 16 菜单、胶囊与标签 / md 24 模型菜单左栏、侧栏底部的账户 / lg 32 设置里的列表

@@ -17,7 +17,7 @@ import {
   type MessageKey,
 } from "@pigcode/ui-primitives"
 import { Icon } from "./icon"
-import { openFolder, revealLabelKey, useOpenFailure } from "./open-in"
+import { openFolder, useOpenFailure } from "./open-in"
 import { SideScroll } from "./side-scroll"
 import {
   filtersActive,
@@ -28,6 +28,7 @@ import {
   type SidebarSection,
 } from "./sidebar-arrangement"
 import { SidebarMenu } from "./sidebar-menu"
+import { projectMenu, threadMenu } from "./sidebar-row-menus"
 import {
   PROJECT_DRAG_TYPE,
   ProjectRow,
@@ -120,8 +121,6 @@ function dropPlace(event: DragEvent<HTMLElement>): "before" | "after" {
   return event.clientY > box.top + box.height / 2 ? "after" : "before"
 }
 
-const FINISHED = new Set<ThreadStatus>(["completed", "failed", "interrupted"])
-
 /** 绘制工作区导航，不读取会话内核。 */
 export function WorkspaceSidebar({
   projects,
@@ -196,89 +195,38 @@ export function WorkspaceSidebar({
         }
       : null
 
-  const threadActions = (thread: Thread): RowAction[] => {
-    if (!onRenameThread || !onArchiveThread) return []
-    const unread = thread.unread === true
-    const finished = FINISHED.has(threadStatus[thread.id] ?? thread.status ?? "idle")
-    return [
-      { id: "rename", label: t("sidebar.rename"), run: () => setRenamingId(thread.id) },
-      // 正在看的会话标未读没有意义，马上又会变成已读。
-      ...(onMarkThreadRead && (unread || (finished && thread.id !== activeThreadId))
-        ? [
-            {
-              id: unread ? "mark-read" : "mark-unread",
-              label: t(unread ? "sidebar.markRead" : "sidebar.markUnread"),
-              run: () => onMarkThreadRead(thread.id, unread),
-            },
-          ]
-        : []),
-      // 当前会话引用自己没有意义。
-      ...(onReferenceThread && thread.id !== activeThreadId
-        ? [
-            {
-              id: "reference",
-              label: t("sidebar.reference"),
-              run: () => onReferenceThread(thread),
-            },
-          ]
-        : []),
-      ...(thread.archivedAt === null
-        ? [{ id: "archive", label: t("sidebar.archive"), run: () => onArchiveThread(thread.id) }]
-        : onUnarchiveThread
-          ? [
-              {
-                id: "unarchive",
-                label: t("sidebar.unarchive"),
-                run: () => onUnarchiveThread(thread.id),
-              },
-            ]
-          : []),
-    ]
-  }
+  const threadActions = (thread: Thread): RowAction[] =>
+    onRenameThread && onArchiveThread
+      ? threadMenu(thread, {
+          t,
+          status: threadStatus[thread.id] ?? thread.status ?? "idle",
+          active: thread.id === activeThreadId,
+          rename: () => setRenamingId(thread.id),
+          archive: () => onArchiveThread(thread.id),
+          unarchive: onUnarchiveThread && (() => onUnarchiveThread(thread.id)),
+          markRead: onMarkThreadRead && ((read) => onMarkThreadRead(thread.id, read)),
+          reference: onReferenceThread && (() => onReferenceThread(thread)),
+        })
+      : []
 
   const projectActions = (project: Project): RowAction[] => {
-    if (!onRenameProject || !onRemoveProject) return []
     const index = projectIds.indexOf(project.id)
-    const previous = projectIds[index - 1]
-    const next = projectIds[index + 1]
-    const moves: RowAction[] = [
-      ...(previous
-        ? [
-            {
-              id: "move-up",
-              label: t("sidebar.moveUp"),
-              run: () => reorder(project.id, previous, "before"),
-            },
-          ]
-        : []),
-      ...(next
-        ? [
-            {
-              id: "move-down",
-              label: t("sidebar.moveDown"),
-              run: () => reorder(project.id, next, "after"),
-            },
-          ]
-        : []),
-    ].map((action, position) => (position === 0 ? { ...action, separated: true } : action))
-    return [
-      { id: "rename", label: t("sidebar.rename"), run: () => setRenamingId(project.id) },
-      {
-        id: "open-folder",
-        label: t(revealLabelKey()),
-        run: () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath)),
-      },
-      ...moves,
-      {
-        id: "remove",
-        label: t("sidebar.removeProject"),
-        separated: true,
-        run: () => {
-          onRemoveProject(project.id)
-          toast(t("sidebar.projectRemoved").replace("{name}", project.name))
-        },
-      },
-    ]
+    const manageable = onRenameProject !== undefined && onRemoveProject !== undefined
+    return projectMenu({
+      t,
+      previous: projectIds[index - 1],
+      next: projectIds[index + 1],
+      browse: onBrowseFiles && (() => onBrowseFiles(project.id)),
+      reveal: () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath)),
+      rename: manageable ? () => setRenamingId(project.id) : undefined,
+      move: (target, place) => reorder(project.id, target, place),
+      remove: manageable
+        ? () => {
+            onRemoveProject?.(project.id)
+            toast(t("sidebar.projectRemoved").replace("{name}", project.name))
+          }
+        : undefined,
+    })
   }
 
   const row = (thread: Thread) => {
@@ -349,7 +297,7 @@ export function WorkspaceSidebar({
           title={t("nav.addProject")}
           onClick={onAddProject}
         >
-          <Icon name="folder-plus" />
+          <Icon name="sidebar-add-project" />
         </Button>
       </div>
     </div>
@@ -461,7 +409,6 @@ export function WorkspaceSidebar({
                   actions={projectActions(project)}
                   onToggle={() => onToggleProject(project.id, !open)}
                   onNewThread={() => onNewThread(project.id)}
-                  onBrowseFiles={onBrowseFiles ? () => onBrowseFiles(project.id) : undefined}
                   onDragStart={projects.length > 1 ? () => setDragging(project.id) : undefined}
                   onDragEnd={() => {
                     setDragging(null)

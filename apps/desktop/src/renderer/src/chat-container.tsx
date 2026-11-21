@@ -407,6 +407,8 @@ export function ChatViewContainer({
         focusKey={draftFocus}
         layoutControls={layoutControls}
         onBranchChanged={onCheckoutChanged}
+        onOpenDiff={onOpenDiff}
+        checkoutRevision={checkoutRevision}
       />
     )
   }

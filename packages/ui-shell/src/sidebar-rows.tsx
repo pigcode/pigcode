@@ -211,7 +211,10 @@ export function ThreadRow({
 /** 拖动项目行时 dataTransfer 里的类型；只认这种拖动，拖进来的文件、文字不当成调整顺序。 */
 export const PROJECT_DRAG_TYPE = "application/x-pigcode-project"
 
-/** 项目行：文件夹图标与名字，点击折叠或展开；悬停时右侧出现新会话按钮；可以拖动调整顺序。 */
+/**
+ * 项目行：文件夹图标与名字，点击折叠或展开；悬停时右侧只出现新会话按钮（照 Cursor），查看文件、
+ * 在文件管理器中打开这些都在右键菜单里；可以拖动调整顺序。
+ */
 export function ProjectRow({
   project,
   open,
@@ -219,7 +222,6 @@ export function ProjectRow({
   actions,
   onToggle,
   onNewThread,
-  onBrowseFiles,
   onDragStart,
   onDragEnd,
 }: {
@@ -229,7 +231,6 @@ export function ProjectRow({
   actions: RowAction[]
   onToggle: () => void
   onNewThread: () => void
-  onBrowseFiles?: (() => void) | undefined
   /** 传了才能拖动。 */
   onDragStart?: (() => void) | undefined
   onDragEnd?: (() => void) | undefined
@@ -265,30 +266,16 @@ export function ProjectRow({
         leading={folder}
         title={project.name}
         actions={
-          <>
-            {onBrowseFiles ? (
-              <Button
-                variant="plain"
-                className="icon-btn proj-files"
-                type="button"
-                aria-label={t("files.viewProjectFiles")}
-                title={t("files.viewProjectFiles")}
-                onClick={onBrowseFiles}
-              >
-                <Icon name="folder-open" small />
-              </Button>
-            ) : null}
-            <Button
-              variant="plain"
-              className="icon-btn proj-add"
-              type="button"
-              aria-label={t("nav.newThread")}
-              title={t("nav.newThread")}
-              onClick={onNewThread}
-            >
-              <Icon name="plus" small />
-            </Button>
-          </>
+          <Button
+            variant="plain"
+            className="icon-btn proj-add"
+            type="button"
+            aria-label={t("nav.newThread")}
+            title={t("nav.newThread")}
+            onClick={onNewThread}
+          >
+            <Icon name="plus" small />
+          </Button>
         }
       />
     </RowMenu>

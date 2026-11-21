@@ -2,8 +2,8 @@
  * 侧栏的状态、未读与筛选走真的 Host：后台跑完的会话标成未读，按状态分组时排在「需要处理」，
  * 打开它就变成已读；归档的会话只在「已归档」里，取消归档后回到列表。
  */
-import { expect, test, type ElectronApplication, type Page } from "@playwright/test"
-import { openThread } from "./projects"
+import { expect, test, type Page } from "@playwright/test"
+import { openThread, pickNextMenuItem } from "./projects"
 
 const PROJECT = "pigcode-e2e-sidebar-filters"
 
@@ -17,23 +17,6 @@ async function send(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text)
   await page.keyboard.press("Enter")
   await expect(page.locator(".msg-user").filter({ hasText: text })).toBeVisible()
-}
-
-/** 下一次弹出的系统菜单直接选 label 这一项；之后恢复原样。 */
-async function pickNextMenuItem(app: ElectronApplication, label: string): Promise<void> {
-  await app.evaluate(({ Menu }, wanted) => {
-    const original = Menu.buildFromTemplate.bind(Menu)
-    Menu.buildFromTemplate = (template) => {
-      Menu.buildFromTemplate = original
-      return {
-        popup(options: { callback?: () => void }) {
-          const item = template.find((entry) => entry.label === wanted)
-          if (typeof item?.click === "function") (item.click as () => void)()
-          options.callback?.()
-        },
-      } as ReturnType<typeof Menu.buildFromTemplate>
-    }
-  }, label)
 }
 
 /** 在「自定义侧栏」菜单里点一项；子菜单里的项先打开它的子菜单。 */

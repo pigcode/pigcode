@@ -162,7 +162,7 @@ export function SidebarMenu({
         aria-label={t("sidebar.customize")}
         title={t("sidebar.customize")}
       >
-        <Icon name="filter" />
+        <Icon name="sidebar-customize" />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner side="right" align="start" sideOffset={6}>
