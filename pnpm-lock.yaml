@@ -209,6 +209,46 @@ importers:
         specifier: 4.0.16
         version: 4.0.16(@opentelemetry/api@1.9.1)(@types/node@24.10.1)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(yaml@2.8.1)
 
+  apps/mobile-prototype:
+    dependencies:
+      '@pigcode/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@pigcode/ui-chat':
+        specifier: workspace:*
+        version: link:../../packages/ui-chat
+      '@pigcode/ui-primitives':
+        specifier: workspace:*
+        version: link:../../packages/ui-primitives
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
+      lucide-react:
+        specifier: 1.0.1
+        version: 1.0.1(react@19.2.3)
+      react:
+        specifier: 19.2.3
+        version: 19.2.3
+      react-dom:
+        specifier: 19.2.3
+        version: 19.2.3(react@19.2.3)
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.2
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: 19.2.2
+        version: 19.2.2(@types/react@19.2.2)
+      '@vitejs/plugin-react':
+        specifier: 5.1.0
+        version: 5.1.0(vite@7.1.12(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.30.1)(yaml@2.8.1))
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vite:
+        specifier: 7.1.12
+        version: 7.1.12(@types/node@24.10.1)(jiti@2.7.0)(lightningcss@1.30.1)(yaml@2.8.1)
+
   examples/agent-echo:
     devDependencies:
       '@pigcode/plugin-sdk':

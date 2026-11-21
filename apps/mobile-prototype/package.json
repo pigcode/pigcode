@@ -1,0 +1,28 @@
+{
+  "name": "@pigcode/mobile-prototype",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "原型：手机端的主要界面（pigcode/monorepo#94）。一次性代码，只留在 prototype/mobile-screens 分支上。",
+  "scripts": {
+    "dev": "vite --host",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pigcode/contracts": "workspace:*",
+    "@pigcode/ui-chat": "workspace:*",
+    "@pigcode/ui-primitives": "workspace:*",
+    "diff": "9.0.0",
+    "lucide-react": "1.0.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@vitejs/plugin-react": "5.1.0",
+    "typescript": "5.9.3",
+    "vite": "7.1.12"
+  }
+}

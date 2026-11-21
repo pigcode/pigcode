@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "pnpm --dir apps/desktop dev",
+    "prototype:mobile": "pnpm --dir apps/mobile-prototype dev",
     "build": "pnpm -r --if-present build",
     "build:host": "node scripts/build-host.ts",
     "marketplace:build": "node scripts/build-marketplace.ts",
