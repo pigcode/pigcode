@@ -73,7 +73,7 @@ export function Switcher({
         value={shortcut < 0 ? "" : String(shortcut)}
         onChange={(event) => {
           const item = SHORTCUTS[Number(event.target.value)]
-          if (item) update({ screen: item.place.screen, thread: item.place.thread, file: undefined }, true)
+          if (item) update({ screen: item.place.screen, thread: item.place.thread, file: undefined, project: undefined }, true)
         }}
       >
         {shortcut < 0 ? <option value="">（当前界面）</option> : null}

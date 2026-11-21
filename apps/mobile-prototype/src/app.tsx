@@ -10,6 +10,7 @@ import { Switcher } from "./switcher"
 import { VariantA } from "./variant-a"
 import { VariantB } from "./variant-b"
 import { VariantC } from "./variant-c"
+import { VariantD } from "./variant-d"
 
 function useWide(): boolean {
   const query = "(min-width: 640px)"
@@ -46,9 +47,14 @@ export function App() {
   }, [state.conn])
 
   const nav = useMemo<Nav>(() => {
-    const placePatch = (place: Place) => ({ screen: place.screen, thread: place.thread, file: place.file })
+    const placePatch = (place: Place) => ({
+      screen: place.screen,
+      thread: place.thread,
+      file: place.file,
+      project: place.project,
+    })
     return {
-      place: { screen: state.screen, thread: state.thread, file: state.file },
+      place: { screen: state.screen, thread: state.thread, file: state.file, project: state.project },
       conn: state.conn,
       variant: state.variant,
       go: (place) => update(placePatch(place), true),
@@ -60,7 +66,16 @@ export function App() {
     }
   }, [state, update])
 
-  const body = state.variant === "A" ? <VariantA /> : state.variant === "B" ? <VariantB /> : <VariantC />
+  const body =
+    state.variant === "A" ? (
+      <VariantA />
+    ) : state.variant === "B" ? (
+      <VariantB />
+    ) : state.variant === "C" ? (
+      <VariantC />
+    ) : (
+      <VariantD />
+    )
   const switcher = import.meta.env.DEV ? (
     <Switcher state={state} update={update} onHide={wide ? undefined : () => setHidden(true)} />
   ) : null

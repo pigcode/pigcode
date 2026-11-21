@@ -146,7 +146,7 @@ function CThread({ id }: { id: string }) {
 }
 
 /** 输入框正上方的一颗胶囊：此刻在做什么、本轮用时、计划进度。 */
-function CActivity({ id, onOpen }: { id: string; onOpen: () => void }) {
+export function CActivity({ id, onOpen }: { id: string; onOpen: () => void }) {
   const store = useProto()
   const tool = store.activeTool(id)
   const started = store.runStartedAt(id)
@@ -179,7 +179,7 @@ function CDrawer({ open, current }: { open: boolean; current: string | undefined
   const [chosen, setChosen] = useState<Filter>("all")
   const filter: Filter = nav.place.screen === "inbox" ? "attention" : chosen
   const counts = store.counts()
-  const ids = store.order.filter((id) =>
+  const ids = store.active().filter((id) =>
     filter === "all" ? true : filter === "attention" ? store.needsAttention(id) : store.stateOf(id) === "running",
   )
   const close = () => nav.replace({ screen: current ? "thread" : "new", thread: current })

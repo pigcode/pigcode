@@ -105,7 +105,7 @@ function BThreads() {
       ) : null}
       <div className="m-scroll">
         {PROJECTS.map((item) => {
-          const ids = store.order.filter(
+          const ids = store.active().filter(
             (id) => store.meta[id]?.projectId === item.id && store.meta[id]!.title.includes(query.trim()),
           )
           if (ids.length === 0) return null
@@ -177,7 +177,7 @@ function BThreads() {
 function BInbox() {
   const store = useProto()
   const nav = useNav()
-  const ids = store.order.filter((id) => store.needsAttention(id))
+  const ids = store.active().filter((id) => store.needsAttention(id))
   return (
     <>
       <NavBar title="需要处理" />

@@ -402,11 +402,11 @@ const PERMISSION_HINT: Record<string, string> = {
   完全访问: "什么都不问",
 }
 
-/** 新会话的选项和发送；三套方案只是摆法不同。 */
-export function useNewThreadForm() {
+/** 新会话的选项和发送；几套方案只是摆法不同。 */
+export function useNewThreadForm(initialProject = "pigcode") {
   const store = useProto()
   const nav = useNav()
-  const [projectId, setProjectId] = useState("pigcode")
+  const [projectId, setProjectId] = useState(initialProject)
   const [agentId, setAgentId] = useState("claude")
   const agent = AGENTS.find((item) => item.id === agentId) ?? AGENTS[0]!
   const [model, setModel] = useState(agent.models[0]!)

@@ -55,7 +55,7 @@ function AList() {
     if (nav.place.screen === "inbox" && next !== "attention") nav.replace({ screen: "list" })
   }
 
-  const ids = store.order.filter((id) =>
+  const ids = store.active().filter((id) =>
     filter === "all" ? true : filter === "attention" ? store.needsAttention(id) : store.stateOf(id) === "running",
   )
 

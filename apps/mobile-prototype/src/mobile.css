@@ -1718,3 +1718,340 @@ body {
   padding: 0 12px;
   scrollbar-width: none;
 }
+
+/* ─── 方案 D：对话优先 + 桌面式菜单 ───────────────────── */
+
+.m-screen.v-d {
+  overflow: hidden;
+  padding-top: 0;
+  background: var(--window);
+}
+.d-drawer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  width: 84%;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+  background: var(--window);
+}
+.d-page {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--safe-top);
+  background: var(--bg);
+  transition:
+    transform 320ms var(--ease),
+    border-radius 320ms var(--ease),
+    box-shadow 320ms var(--ease);
+}
+.v-d[data-drawer] .d-page {
+  overflow: hidden;
+  border-radius: 34px 0 0 34px;
+  box-shadow: -10px 0 40px oklch(21% 0.006 286 / 0.12);
+  transform: translateX(84%);
+}
+.d-cover {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+}
+.d-drawer-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 8px 4px 20px;
+}
+.d-brand {
+  font-size: 22px;
+  font-weight: 500;
+}
+.d-search {
+  margin-top: 4px;
+}
+.d-new {
+  display: flex;
+  height: 50px;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 12px 4px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  font-size: 16px;
+  font-weight: 500;
+}
+.m-app .d-new .ic {
+  width: 20px;
+  height: 20px;
+}
+.d-list {
+  padding-bottom: 12px;
+}
+.d-label {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 10px 2px 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.d-customize {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.d-customize[data-active] {
+  color: var(--accent-text);
+}
+.d-proj {
+  display: flex;
+  align-items: center;
+  margin: 0 6px 0 8px;
+}
+.d-proj-main {
+  display: flex;
+  min-height: 44px;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 0 12px;
+  border-radius: 12px;
+  font-size: 15px;
+  text-align: left;
+}
+.d-proj-main:active,
+.d-row:active {
+  background: var(--hover);
+}
+.m-app .d-proj-main > .ic {
+  color: var(--fg-2);
+}
+.d-proj-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.m-app .d-chev {
+  width: 14px;
+  height: 14px;
+  color: var(--faint);
+  transition: transform var(--t-slow) var(--ease);
+}
+.d-proj-main[aria-expanded="true"] .d-chev {
+  transform: rotate(90deg);
+}
+.d-proj-new {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.d-row {
+  display: flex;
+  width: calc(100% - 16px);
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 15px;
+  text-align: left;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.d-row[data-nested] {
+  padding-left: 40px;
+}
+.d-row[data-current] {
+  background: var(--active);
+  font-weight: 500;
+}
+.d-row[data-archived] .d-row-title {
+  color: var(--muted);
+}
+.d-row-main {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.d-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-row-sub {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.d-none {
+  padding: 8px 20px;
+  color: var(--faint);
+  font-size: 13px;
+}
+.d-none-nested {
+  padding-left: 52px;
+}
+.d-foot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px calc(10px + var(--safe-bottom));
+}
+.d-computer {
+  display: flex;
+  min-width: 0;
+  height: 50px;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  font-size: 14px;
+  text-align: left;
+}
+.m-app .d-computer > .ic {
+  flex: none;
+  color: var(--fg-2);
+}
+.d-settings {
+  display: grid;
+  width: 50px;
+  height: 50px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.m-app .d-settings .ic {
+  width: 20px;
+  height: 20px;
+}
+.d-head {
+  display: flex;
+  min-height: 58px;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+}
+.d-round {
+  position: relative;
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.m-app .d-round .ic {
+  width: 20px;
+  height: 20px;
+}
+.d-title {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+.d-title-main {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.d-title-sub {
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.d-capsule {
+  display: flex;
+  height: 44px;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+.d-capsule button {
+  display: inline-flex;
+  min-width: 40px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.d-capsule button:disabled {
+  color: var(--faint);
+}
+.d-customize-body,
+.d-settings-body {
+  display: grid;
+  gap: 16px;
+}
+.d-field {
+  display: grid;
+  gap: 8px;
+}
+.d-field h4,
+.d-settings-body h4 {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.d-seg {
+  margin: 0;
+}
+.d-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.m-pill:disabled {
+  opacity: 0.45;
+}
+.d-actions button {
+  gap: 14px;
+}
+.m-app .d-actions .ic {
+  width: 20px;
+  height: 20px;
+  color: var(--fg-2);
+}

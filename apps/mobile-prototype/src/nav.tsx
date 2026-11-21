@@ -4,7 +4,7 @@
  */
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react"
 
-export type Variant = "A" | "B" | "C"
+export type Variant = "A" | "B" | "C" | "D"
 export type Conn = "online" | "reconnecting" | "offline"
 export type Theme = "system" | "light" | "dark"
 export type Screen = "list" | "inbox" | "thread" | "diff" | "new" | "computer" | "pair"
@@ -13,12 +13,15 @@ export const VARIANTS: Array<{ key: Variant; name: string }> = [
   { key: "A", name: "收件箱" },
   { key: "B", name: "按项目 + 标签栏" },
   { key: "C", name: "对话优先" },
+  { key: "D", name: "对话优先 + 桌面式菜单" },
 ]
 
 export interface Place {
   screen: Screen
   thread?: string | undefined
   file?: string | undefined
+  /** 新会话预先选好的项目（从项目行的「+」进来）。 */
+  project?: string | undefined
 }
 
 export interface UrlState extends Place {
@@ -36,12 +39,13 @@ function pick<T extends string>(value: string | null, allowed: readonly T[], fal
 function read(): UrlState {
   const params = new URLSearchParams(window.location.search)
   return {
-    variant: pick(params.get("v"), ["A", "B", "C"], "A"),
+    variant: pick(params.get("v"), ["A", "B", "C", "D"], "D"),
     conn: pick(params.get("c"), ["online", "reconnecting", "offline"], "online"),
     theme: pick(params.get("theme"), ["system", "light", "dark"], "system"),
-    screen: pick(params.get("s"), SCREENS, "list"),
+    screen: pick(params.get("s"), SCREENS, "thread"),
     thread: params.get("t") ?? undefined,
     file: params.get("f") ?? undefined,
+    project: params.get("p") ?? undefined,
   }
 }
 
@@ -51,6 +55,7 @@ function write(state: UrlState, push: boolean): void {
   params.set("s", state.screen)
   if (state.thread) params.set("t", state.thread)
   if (state.file) params.set("f", state.file)
+  if (state.project) params.set("p", state.project)
   if (state.conn !== "online") params.set("c", state.conn)
   if (state.theme !== "system") params.set("theme", state.theme)
   const url = `${window.location.pathname}?${params.toString()}`

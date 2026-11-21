@@ -48,6 +48,24 @@ export interface PendingQuestion {
   questions: QuestionView[]
 }
 
+/** 状态类别：筛选、按状态分组和按状态排序都用它，顺序就是按状态排的先后。 */
+export type Category = "attention" | "error" | "unread" | "working" | "done"
+
+export const CATEGORIES: Array<{ key: Category; label: string }> = [
+  { key: "attention", label: "需要处理" },
+  { key: "error", label: "出错" },
+  { key: "unread", label: "未读" },
+  { key: "working", label: "进行中" },
+  { key: "done", label: "已完成" },
+]
+
+export interface Arrangement {
+  grouping: "project" | "time" | "status"
+  sort: "updated" | "status"
+  filters: Category[]
+  archived: boolean
+}
+
 export interface NewThreadInput {
   projectId: string
   agent: string
@@ -82,6 +100,16 @@ class ProtoStore {
   queued: Record<string, Queued[]> = {}
   drafts: Record<string, string> = {}
   seen = new Set(INITIAL_META.filter((item) => item.id !== "t-unread").map((item) => item.id))
+  /** 置顶存在电脑上，窗口和手机看到的是同一份（原型里只在内存）。 */
+  pinned = new Set<string>(["t-question", "t-market"])
+  archived = new Set<string>()
+  arrangement: Arrangement = {
+    grouping: "project",
+    sort: "updated",
+    filters: CATEGORIES.map((item) => item.key),
+    archived: false,
+  }
+  expanded: Record<string, boolean> = { pigcode: true, docs: true, blog: false }
   open: string | undefined
   conn: Conn = "online"
 
@@ -235,10 +263,43 @@ class ProtoStore {
     return files
   }
 
+  /** 没归档的会话，按更新时间排。 */
+  active(): string[] {
+    return this.order.filter((id) => !this.archived.has(id))
+  }
+
+  category(id: string): Category {
+    const state = this.stateOf(id)
+    if (state === "approval" || state === "question") return "attention"
+    if (state === "failed") return "error"
+    if (state === "unread") return "unread"
+    if (state === "running") return "working"
+    return "done"
+  }
+
+  /** 菜单里要列的会话：按筛选、归档和搜索过滤，再按排序方式排好。 */
+  arranged(query: string): string[] {
+    const { filters, archived, sort } = this.arrangement
+    const words = query.trim()
+    const ids = this.order.filter(
+      (id) =>
+        this.archived.has(id) === archived &&
+        (archived || filters.includes(this.category(id))) &&
+        (!words || (this.meta[id]?.title ?? "").includes(words)),
+    )
+    if (sort === "updated") return ids
+    const rank = (id: string) => CATEGORIES.findIndex((item) => item.key === this.category(id))
+    return [...ids].sort((a, b) => rank(a) - rank(b))
+  }
+
+  filtersActive(): boolean {
+    return this.arrangement.archived || this.arrangement.filters.length < CATEGORIES.length
+  }
+
   counts(): { attention: number; running: number } {
     let attention = 0
     let running = 0
-    for (const id of this.order) {
+    for (const id of this.active()) {
       if (this.needsAttention(id)) attention += 1
       if (this.stateOf(id) === "running") running += 1
     }
@@ -266,6 +327,55 @@ class ProtoStore {
 
   setDraft(id: string, text: string): void {
     this.drafts[id] = text
+    this.emit()
+  }
+
+  togglePin(id: string): void {
+    if (this.pinned.has(id)) this.pinned.delete(id)
+    else this.pinned.add(id)
+    this.emit()
+  }
+
+  /** 归档的会话同时取消置顶；在已归档的会话里发消息，它会自动回来（同桌面）。 */
+  toggleArchive(id: string): void {
+    if (this.archived.has(id)) this.archived.delete(id)
+    else {
+      this.archived.add(id)
+      this.pinned.delete(id)
+    }
+    this.emit()
+  }
+
+  markRead(id: string): void {
+    this.seen.add(id)
+    this.emit()
+  }
+
+  markUnread(id: string): void {
+    if (this.open !== id) this.seen.delete(id)
+    this.emit()
+  }
+
+  markAllRead(): void {
+    for (const id of this.order) this.seen.add(id)
+    this.emit()
+  }
+
+  setArrangement(patch: Partial<Arrangement>): void {
+    this.arrangement = { ...this.arrangement, ...patch }
+    this.emit()
+  }
+
+  /** 状态筛选多选；取消到一个不剩时回到全选（同桌面）。 */
+  toggleFilter(key: Category): void {
+    const filters = this.arrangement.filters.includes(key)
+      ? this.arrangement.filters.filter((item) => item !== key)
+      : [...this.arrangement.filters, key]
+    this.setArrangement({ filters: filters.length === 0 ? CATEGORIES.map((item) => item.key) : filters })
+  }
+
+  toggleProject(projectId: string): void {
+    this.expanded = { ...this.expanded, [projectId]: !this.expanded[projectId] }
     this.emit()
   }
 
@@ -458,6 +568,7 @@ class ProtoStore {
     this.counter += 1
     const run = `r-${id}-${this.counter}`
     this.append(id, event(id, run, "run.started", { text }))
+    this.archived.delete(id)
     this.bump(id)
     this.emit()
     const root = project(this.meta[id]?.projectId ?? "pigcode").root
