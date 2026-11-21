@@ -189,7 +189,7 @@ describe("SettingsView", () => {
       </LocaleProvider>
     )
     const { rerender } = render(view("broken"))
-    expect(screen.getByText("这个设置页没有显示出来")).toBeTruthy()
+    expect(screen.getByText("这个设置页出错了")).toBeTruthy()
     expect(screen.getByText("chunk failed")).toBeTruthy()
     rerender(view("general"))
     expect(screen.getByRole("heading", { name: "page general" })).toBeTruthy()

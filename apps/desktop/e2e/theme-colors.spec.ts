@@ -35,7 +35,7 @@ test("terminal colours follow the theme tokens", async () => {
   await page.evaluate(() => {
     document.documentElement.dataset.theme = "light"
   })
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   await page.getByLabel("打开一个面板").getByRole("button", { name: /终端/ }).click()
   await expect(page.locator(".xterm")).toBeVisible()
 

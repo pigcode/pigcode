@@ -37,7 +37,7 @@ describe("ErrorNotice", () => {
         <ErrorNotice error={{ code: "GIT_NO_REMOTE", message: "no git remotes found" }} />
       </LocaleProvider>,
     )
-    expect(screen.getByText(/This repository has no GitHub remote/)).toBeTruthy()
+    expect(screen.getByText(/This repo isn't connected to GitHub/)).toBeTruthy()
     expect(screen.queryByText("no git remotes found")).toBeNull()
     await userEvent.click(screen.getByRole("button", { name: "Details" }))
     expect(screen.getByText("no git remotes found")).toBeTruthy()

@@ -4,7 +4,7 @@
  * 有没保存的修改时离开要先确认；保存成功后回到列表。
  */
 import { useEffect, useState } from "react"
-import { ChevronLeft, Ellipsis, Pause, Play, Trash2 } from "lucide-react"
+import { Ellipsis, Pause, Play, Trash2 } from "lucide-react"
 import {
   DEFAULT_RUNTIME_MODE,
   type Project,
@@ -19,6 +19,7 @@ import {
   Button,
   Input,
   Menu,
+  PageCrumbs,
   StatusDot,
   toHostError,
   useLocale,
@@ -249,22 +250,12 @@ export function ScheduleEditor({
   const status = schedule?.status
   return (
     <div className="page schedule-editor">
-      <nav className="schedule-crumbs" aria-label={t("schedules.editor.backLabel")}>
-        <button type="button" className="schedule-back" onClick={requestBack}>
-          <ChevronLeft className="ic ic-sm" aria-hidden="true" />
-          {t("schedules.editor.back")}
-        </button>
-        {schedule ? (
-          <>
-            <span className="schedule-crumb-sep" aria-hidden="true">
-              /
-            </span>
-            <span className="schedule-crumb-current truncate" aria-current="page">
-              {schedule.title || t("schedules.untitled")}
-            </span>
-          </>
-        ) : null}
-      </nav>
+      <PageCrumbs
+        back={t("schedules.editor.back")}
+        backLabel={t("schedules.editor.backLabel")}
+        onBack={requestBack}
+        current={schedule ? schedule.title || t("schedules.untitled") : undefined}
+      />
       <header className="page-head">
         <div>
           <h1>{heading}</h1>
@@ -280,13 +271,13 @@ export function ScheduleEditor({
           ) : null}
           {schedule ? (
             <>
-              <Button type="button" size="lg" onClick={runNow}>
+              <Button type="button" size="lg" shape="pill" onClick={runNow}>
                 <Play className="ic ic-sm" aria-hidden="true" />
                 {t("settings.schedules.runNow")}
               </Button>
               <Menu.Root>
                 <Menu.Trigger
-                  render={<Button size="icon-lg" />}
+                  render={<Button size="icon-lg" shape="pill" variant="ghost" />}
                   aria-label={fill(t("schedules.more"), {
                     task: schedule.title || t("schedules.untitled"),
                   })}
@@ -337,7 +328,7 @@ export function ScheduleEditor({
               key={key}
               type="button"
               role="tab"
-              className="schedule-tab"
+              className="pill"
               aria-selected={tab === key}
               onClick={() => setTab(key)}
             >

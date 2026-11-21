@@ -36,7 +36,8 @@ export type ThemeSlot = {
 
 /** 全部外观设置，带版本号。 */
 export type AppearanceSettings = {
-  version: 1
+  /** 2：会话与代码字号的默认值改成 Cursor 的 15 与 12；版本 1 里没改过的旧默认值读进来时跟着换。 */
+  version: 2
   mode: ThemePreference
   splitModes: boolean
   light: ThemeSlot
@@ -69,7 +70,7 @@ const defaultSlot: ThemeSlot = { themeId: "pigcode", accentMode: "default", uiFo
 
 /** 默认外观设置：与引入外观设置前的界面一致。 */
 export const defaultAppearance: AppearanceSettings = {
-  version: 1,
+  version: 2,
   mode: "system",
   splitModes: false,
   light: defaultSlot,
@@ -79,8 +80,8 @@ export const defaultAppearance: AppearanceSettings = {
   sidebarTranslucency: 0,
   contrast: 45,
   uiSize: 13,
-  contentSize: 14,
-  codeSize: 11.5,
+  contentSize: 15,
+  codeSize: 12,
   motion: "system",
   uiWeight: "regular",
   contentFont: "same",
@@ -170,10 +171,14 @@ function parseOverrides(value: unknown): Record<string, ModeOverrides> {
   return result
 }
 
-function fromObject(o: Obj): AppearanceSettings {
+/** 版本 1 的默认字号：那时每份设置都会存下它们，读旧数据时把它们当成「没改过」。 */
+const VERSION_1_SIZES = { contentSize: 14, codeSize: 11.5 }
+
+function fromObject(o: Obj, version: 1 | 2): AppearanceSettings {
   const d = defaultAppearance
+  const legacy = version === 1
   return {
-    version: 1,
+    version: 2,
     mode:
       o.mode === undefined
         ? d.mode
@@ -186,8 +191,14 @@ function fromObject(o: Obj): AppearanceSettings {
     sidebarTranslucency: num(o.sidebarTranslucency, d.sidebarTranslucency, 0, 100, 1),
     contrast: num(o.contrast, d.contrast, 0, 100, 1),
     uiSize: num(o.uiSize, d.uiSize, 11, 18, 0.5),
-    contentSize: num(o.contentSize, d.contentSize, 11, 20, 0.5),
-    codeSize: num(o.codeSize, d.codeSize, 10, 18, 0.5),
+    contentSize:
+      legacy && o.contentSize === VERSION_1_SIZES.contentSize
+        ? d.contentSize
+        : num(o.contentSize, d.contentSize, 11, 20, 0.5),
+    codeSize:
+      legacy && o.codeSize === VERSION_1_SIZES.codeSize
+        ? d.codeSize
+        : num(o.codeSize, d.codeSize, 10, 18, 0.5),
     motion: pick(o.motion, ["system", "on", "off"], d.motion),
     uiWeight: pick(o.uiWeight, ["regular", "medium"], d.uiWeight),
     contentFont: pick(o.contentFont, ["same", "serif", "rounded"], d.contentFont),
@@ -212,8 +223,8 @@ export function parseStoredAppearance(raw: string): AppearanceSettings | null {
   } catch {
     return null
   }
-  if (!isRecord(data) || data.version !== 1) return null
-  return fromObject(data)
+  if (!isRecord(data) || (data.version !== 1 && data.version !== 2)) return null
+  return fromObject(data, data.version)
 }
 
 /**

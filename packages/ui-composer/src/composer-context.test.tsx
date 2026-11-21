@@ -76,18 +76,18 @@ describe("composer contexts", () => {
   it("opens a prefilled conversation with its text, attachments and the cursor at the end", async () => {
     prefillComposer("thread-new", {
       text: "帮我创建一个 Pigcode 插件：",
-      contexts: [element("guide", "Pigcode 插件创建指南")],
+      contexts: [element("guide", "怎么写 Pigcode 插件")],
     })
     const onSubmit = vi.fn()
     const editor = renderComposer({ onSubmit, draftKey: "thread-new" })
     expect(editor.textContent).toBe("帮我创建一个 Pigcode 插件：")
-    expect(screen.getByText("Pigcode 插件创建指南")).toBeTruthy()
+    expect(screen.getByText("怎么写 Pigcode 插件")).toBeTruthy()
     // 光标停在预填文字的末尾：不用点输入框，直接接着写。
     await vi.waitFor(() => expect(document.activeElement).toBe(editor))
     await userEvent.type(editor, "统计字数", { skipClick: true })
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith(
-      "帮我创建一个 Pigcode 插件：统计字数\n\n### Pigcode 插件创建指南\n\n- selector: `guide`",
+      "帮我创建一个 Pigcode 插件：统计字数\n\n### 怎么写 Pigcode 插件\n\n- selector: `guide`",
       { effort: null },
     )
   })

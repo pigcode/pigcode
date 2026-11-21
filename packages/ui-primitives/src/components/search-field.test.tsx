@@ -45,6 +45,16 @@ describe("SearchField", () => {
     expect((container.firstElementChild as HTMLElement).getAttribute("data-size")).toBe("compact")
   })
 
+  it("marks the pill shape only when asked", () => {
+    const { container } = render(<Controlled />)
+    expect((container.firstElementChild as HTMLElement).hasAttribute("data-shape")).toBe(false)
+    cleanup()
+    const pill = render(<Controlled size="lg" shape="pill" />)
+    expect((pill.container.firstElementChild as HTMLElement).getAttribute("data-shape")).toBe(
+      "pill",
+    )
+  })
+
   it("marks the plain variant used at the top of popups", () => {
     const { container } = render(<Controlled />)
     expect((container.firstElementChild as HTMLElement).getAttribute("data-variant")).toBe(

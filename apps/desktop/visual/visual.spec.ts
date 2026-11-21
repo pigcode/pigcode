@@ -62,7 +62,7 @@ async function snap(page: Page, name: string, theme: Theme): Promise<void> {
     ".page-head button:visible, .dialog-foot button:visible, .dialog-close:visible",
   )
   for (const button of await actions.all()) {
-    await expect(button).toHaveCSS("height", "32px")
+    await expect(button).toHaveCSS("height", "28px")
   }
   await expect.soft(page).toHaveScreenshot(`${name}-${theme}.png`, {
     maxDiffPixels: 0,

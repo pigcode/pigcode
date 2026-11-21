@@ -42,12 +42,12 @@
         "featured": true,
         "homepage": "https://grok.com/build",
         "description": {
-          "zh-CN": "通过本机 Grok 接入会话。",
-          "en-US": "Connect sessions through the local Grok CLI."
+          "zh-CN": "用电脑上的 Grok",
+          "en-US": "Use Grok on this computer"
         },
         "installHint": {
-          "zh-CN": "安装 grok 并在其终端中登录。",
-          "en-US": "Install grok and sign in using its CLI."
+          "zh-CN": "先装好 grok，再在终端里登录",
+          "en-US": "Install grok, then sign in from the terminal"
         },
         "settings": [
           {
@@ -55,8 +55,8 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "grok"
           },

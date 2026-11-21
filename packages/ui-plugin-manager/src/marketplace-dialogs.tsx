@@ -25,7 +25,7 @@ export function PluginAddMenu({
   const { t } = useLocale()
   return (
     <Menu.Root>
-      <Menu.Trigger className="btn btn-secondary btn-lg">
+      <Menu.Trigger render={<Button size="lg" shape="pill" variant="primary" />}>
         <Plus className="ic ic-sm" aria-hidden="true" />
         {t("plugins.add")}
         <ChevronDown className="ic ic-sm" aria-hidden="true" />

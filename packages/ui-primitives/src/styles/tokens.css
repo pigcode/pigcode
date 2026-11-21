@@ -365,59 +365,67 @@
   --font-weight-code: 400;
 
   /*
-    字号：键帽与头像字母 10 / 小键帽与分组名 10.5 / 快捷键与附注 11 / 说明 11.5 / 次要 12 /
-    右栏紧凑文字 12.5 / 界面 13 / 抽屉标题 13.5 / 面板标题 14 / 对话框标题 15 / 页面标题 20 /
-    空白页标题 22 / 新会话的问候 28，随「界面字号」整体缩放；对话 14
+    字号与行高取 Cursor 3.31 Agent 窗口的刻度（--cursor-font-size-* / --cursor-line-height-*，glass 模式），
+    对照表见 DESIGN.md：10/12 计数与头像字母 / 11/14 键帽与快捷键 / 12/16 说明、分组名与徽标 /
+    13/18 界面默认 / 15/24 弹窗标题 / 17/21 页面标题 / 22/26 新会话的问候。随「界面字号」整体缩放。
   */
   --ui-scale: 1;
   --fs-4xs: calc(var(--ui-scale) * 10px);
-  --fs-3xs: calc(var(--ui-scale) * 10.5px);
   --fs-2xs: calc(var(--ui-scale) * 11px);
-  --fs-xs: calc(var(--ui-scale) * 11.5px);
   --fs-sm: calc(var(--ui-scale) * 12px);
-  --fs-compact: calc(var(--ui-scale) * 12.5px);
   --fs-md: calc(var(--ui-scale) * 13px);
-  --fs-lg: calc(var(--ui-scale) * 13.5px);
-  --fs-xl: calc(var(--ui-scale) * 14px);
   --fs-heading: calc(var(--ui-scale) * 15px);
-  --fs-title: calc(var(--ui-scale) * 20px);
-  --fs-display: calc(var(--ui-scale) * 22px);
-  --fs-hero: calc(var(--ui-scale) * 28px);
+  --fs-title: calc(var(--ui-scale) * 17px);
+  --fs-hero: calc(var(--ui-scale) * 22px);
+  --lh-4xs: calc(var(--ui-scale) * 12px);
+  --lh-2xs: calc(var(--ui-scale) * 14px);
+  --lh-sm: calc(var(--ui-scale) * 16px);
+  --lh-md: calc(var(--ui-scale) * 18px);
+  --lh-heading: calc(var(--ui-scale) * 24px);
+  --lh-title: calc(var(--ui-scale) * 21px);
+  --lh-hero: calc(var(--ui-scale) * 26px);
   /* 固定大小的图标里的字母（应用图标的首字母）、文件树的 git 状态字母：不随界面字号缩放 */
   --fs-icon-letter: 10px;
   --fs-tree-badge: 10.5px;
   /* 相对周围文字：等宽片段（.mono）、输入框里 @ 提到的文件胶囊 */
   --fs-mono-inline: 0.9em;
   --fs-mention: 0.88em;
-  /* 对话正文与代码的字号由外观设置直接给出，不随界面字号缩放 */
-  --fs-content: 14px;
-  --fs-code: 11.5px;
-  /* 对话区的字号以对话正文为基准上下浮动 */
+  /*
+    对话正文与代码的字号由外观设置直接给出，不随界面字号缩放。默认值是 Cursor 对话区的
+    --cursor-font-size-transcript 15/24 和代码块 DefaultCode.tsx 的 12/18。
+  */
+  --fs-content: 15px;
+  --fs-code: 12px;
+  /* 对话区的字号以对话正文为基准上下浮动；托盘一类的小字是正文 − 2（Cursor 的 13） */
   --cv-fs: var(--fs-content);
   --cv-fs-sm: calc(var(--fs-content) - 2px);
   --cv-fs-xs: calc(var(--fs-content) - 4px);
   --cv-fs-lg: calc(var(--fs-content) + 2px);
   --cv-fs-xl: calc(var(--fs-content) + 4px);
-  --cv-fs-code: calc(var(--fs-code) + 1.5px);
+  --cv-fs-code: var(--fs-code);
 
   /*
-    圆角：2xs 2（细条）/ xs 4（复选框、特小控件）/ kbd 5（键帽、路径片段、字母图标）/ sm 6（普通控件）/
-    md 7（列表行）/ block 8（大号控件、小块、工具条与滚动条滑块）/
-    lg 10（卡片里的块）/ panel 12（页面搜索、卡片、分组）/ xl 14（对话输入区）/ 2xl 16（对话框）/ full（胶囊与圆形）
+    圆角（Cursor 的 --cursor-radius-* 与各组件）：2xs 2 细条 / kbd 3 键帽 / xs 4 复选框、20 高的按钮、徽标 /
+    sm 6 24 高的按钮与输入框、标签页、弹窗列表行 / block 8 28 与 32 高的控件、侧栏行、菜单项高亮、
+    命令面板项、提示气泡、卡片里的块 / panel 12 卡片、弹窗、浮层、代码块 / xl 14 菜单与命令面板的外框 /
+    composer 20 对话输入框 / full 胶囊与圆形：Cursor 显式改成胶囊的那些控件（筛选、输入框旁的建议、
+    插件页的搜索与页头按钮、对话卡片底栏的按钮），以及开关、头像、输入框里的圆形按钮
   */
   --r-2xs: 2px;
+  --r-kbd: 3px;
   --r-xs: 4px;
-  --r-kbd: 5px;
   --r-sm: 6px;
-  --r-md: 7px;
   --r-block: 8px;
-  --r-lg: 10px;
   --r-panel: 12px;
   --r-xl: 14px;
-  --r-2xl: 16px;
+  --r-composer: 20px;
   --r-full: 999px;
 
-  /* 间距：内边距、间隔、外边距都从这里取 */
+  /*
+    间距（Cursor 的 --cursor-spacing-* 刻度）：内边距、间隔、外边距都从这里取。
+    后面几个是固定用途的间距：菜单与命令面板行的左右内边距 14（popup-list.stylex.ts）；
+    页面左右边距 28、上下 48，分组之间 28（Cursor Settings 的 glass-settings-panel / settingsTabContainer）
+  */
   --space-1: 2px;
   --space-2: 4px;
   --space-3: 6px;
@@ -427,11 +435,16 @@
   --space-7: 16px;
   --space-8: 20px;
   --space-9: 24px;
+  --menu-pad-x: 14px;
+  --page-pad-x: 28px;
+  --page-pad-y: 48px;
+  --section-gap: 28px;
 
   /*
-    控件高度：2xs 18（胶囊和标签里的关闭按钮、小键帽）/ xs 20（特小按钮、键帽）/ sm 24（小按钮、紧凑搜索）/
-    bar 26（标签栏、标题栏与面板标题行里的标签和按钮，模型菜单行尾的收藏按钮）/
-    md 28（普通按钮、行内编辑、菜单行）/ lg 32（工具栏、紧凑表单、弹层搜索）/ xl 36（常规表单、页面搜索）
+    控件高度（Cursor 的 --cursor-height-* 只有 20 / 24 / 28 / 32 四档）：xs 20 小按钮、设置行里的按钮 /
+    sm 24 默认按钮、图标按钮、工具条里的输入框、顶栏按钮、对话卡片底栏的按钮 / md 28 输入框与下拉的默认档、
+    大一档的按钮（弹窗底栏、页头）、筛选与建议的胶囊、侧栏行 / lg 32 主输入框（任务的名字、项目的路径）。
+    另有：2xs 18 键帽与计数徽标，bar 26 标签页，xl 36 输入框编辑区的最小高度
   */
   --control-2xs: 18px;
   --control-xs: 20px;
@@ -440,67 +453,72 @@
   --control-md: 28px;
   --control-lg: 32px;
   --control-xl: 36px;
-  /* 列表行的最小高度：侧栏、设置分组、Agent 与插件、模型、命令面板的行 */
+  /* 侧栏行、设置导航、弹窗里的列表行（Sidebar.stylex.ts / DialogList.tsx） */
   --row-h: var(--control-md);
-  /* 文件树的紧凑行高；file-explorer.tsx 的虚拟滚动行高与它相同 */
+  /* 文件树的紧凑行高；file-explorer.tsx 的虚拟滚动行高与它相同（file-tree-entry-view rowHeightPx 24） */
   --row-h-compact: var(--control-sm);
-  /* 高一档的行：插件页的行、子 agent 的只读提示条 */
-  --row-h-lg: 44px;
-  /* 卡片标题行与浏览器工具条；右栏文件查看器与终端抽屉的标题行 */
+  /* 设置卡片里单行的设置行：上下内边距 12 加一行 18（Fieldset.tsx）；子 agent 的只读提示条同高 */
+  --row-h-lg: 42px;
+  /* 菜单项与下拉项（popup-list / picker.stylex.ts）；命令面板项（Palette.tsx） */
+  --menu-row-h: 30px;
+  --palette-row-h: 32px;
+  /* 顶栏、卡片标题行、浏览器工具条、右栏文件查看器与终端抽屉的标题行（--glass-chrome-bar-height） */
   --bar-h: 40px;
-  --panel-head-h: 34px;
+  --panel-head-h: var(--bar-h);
   /* 代码查看器的行高；code-editor.tsx 的虚拟滚动行高（LINE_HEIGHT）与它相同 */
   --code-line-h: 20px;
+  /* 开关 md 32×20、sm 26×16，滑块离轨道 2（Switch.tsx）；复选框 14（Checkbox.tsx md） */
   --switch-w: var(--control-lg);
-  --switch-h: var(--control-2xs);
+  --switch-h: var(--control-xs);
+  --switch-sm-w: 26px;
   --switch-sm-h: 16px;
-  --switch-inset: 1px;
-  --check-size: 16px;
-  /* 圆形小控件的直径：单选框、滑块的拇指（滑块与它同高）；滑块轨道的粗细；徽标的高度 */
-  --knob-size: 16px;
-  --slider-track-h: 4px;
-  --badge-h: 19px;
+  --switch-inset: var(--space-1);
+  --check-size: 14px;
+  /* 单选框与滑块拇指的直径、滑块轨道的粗细（RadioGroup.tsx / Slider.tsx）；计数徽标的高度（CountBadge md） */
+  --knob-size: 14px;
+  --slider-track-h: 6px;
+  --badge-h: var(--control-2xs);
   --textarea-min-h: 64px;
-  /* 滚动条的宽度；拖动分隔条（右栏、终端抽屉）的可拖范围 */
-  --scrollbar-size: 11px;
-  --resizer-size: 7px;
+  /* 滚动条的宽度（glass 根节点 10）；拖动分隔条的可拖范围（侧栏拖拽热区 4） */
+  --scrollbar-size: 10px;
+  --resizer-size: 4px;
 
   /*
-    图标：.ic-xs / .ic-sm / .ic / .ic-lg；按钮里的图标随档位使用 10 / 12 / 14 / 16；
-    对话区（消息、卡片、状态面板、输入区、文件图标）的图标 16，对话区分隔线标签里的小图标 14；
-    标题栏的应用图标与顶行按钮的图标 16；复选框里的对勾 10
+    图标（Cursor 的 .ui-icon 档位）：xs 10 / sm 12 / md 14 / lg 16。按钮里的图标：20 与 24 高的文字按钮 12，
+    28 高的 14（Button.tsx 的 dxn 映射）；图标按钮里的图标 14。对话区的图标跟对话字号走，15；
+    分隔线标签里的小图标 14；顶栏按钮与应用图标 16；复选框里的对勾 10
   */
-  --icon-xs: 11px;
-  --icon-sm: 13px;
-  --icon-md: 15px;
-  --icon-lg: 18px;
+  --icon-xs: 10px;
+  --icon-sm: 12px;
+  --icon-md: 14px;
+  --icon-lg: 16px;
   --icon-btn-xs: 10px;
-  --icon-btn: 14px;
+  --icon-btn: 12px;
   --icon-btn-sm: 12px;
-  --icon-btn-lg: 16px;
-  --icon-cv: 16px;
+  --icon-btn-lg: 14px;
+  --icon-cv: 15px;
   --icon-cv-sm: 14px;
   --icon-titlebar: 16px;
   --check-icon: 10px;
   /*
-    状态点的直径：sm 5（文件树的改动点）/ 6 / lg 7（图标角上带描边的状态点）；
-    Agent 与插件头像：sm 菜单、胶囊与标签 / md 模型菜单左栏、侧栏底部的账户 / lg 设置里的列表
+    状态点的直径：sm 5（标签页未保存点、文件树改动点）/ 6（IndicatorDot）/ lg 7（图标角上带描边的状态点）；
+    头像（avatar.tsx）：sm 16 菜单、胶囊与标签 / md 24 模型菜单左栏、侧栏底部的账户 / lg 32 设置里的列表
   */
   --dot-size-sm: 5px;
   --dot-size: 6px;
   --dot-size-lg: 7px;
   --avatar-sm: 16px;
-  --avatar-md: 26px;
+  --avatar-md: 24px;
   --avatar-lg: 32px;
   /*
-    Agent 品牌图标：xs 模型行 / sm 侧栏会话行 / md 胶囊、菜单、标签 / lg 模型菜单左栏与设置 /
-    xl 设置里连接卡和向导的品牌底座；非默认实例的角标高度与字号
+    Agent 品牌图标：xs 12 模型行 / sm 14 侧栏会话行 / md 16 胶囊、菜单、标签 / lg 20 模型菜单左栏与设置
+    （侧栏的图标盒）/ xl 24 连接卡和向导的品牌底座（头像 lg）；非默认实例的角标高度与字号
   */
   --agent-icon-xs: 12px;
   --agent-icon-sm: 14px;
   --agent-icon-md: 16px;
   --agent-icon-lg: 20px;
-  --agent-icon-xl: 22px;
+  --agent-icon-xl: 24px;
   --agent-badge: 11px;
   --agent-badge-fs: 7px;
   /* 运行中的 3×3 点阵：整体边长与每个点的边长 */
@@ -526,15 +544,23 @@
   --sidebar-w: 260px;
   --col: 720px;
   /*
-    设置页（通用、外观、Agent、插件的设置页）共用的版心，含左右各 32 的页边距，内容最宽 720：
-    比插件、定时任务页（--col-wide）窄一档，是表单的阅读宽度；内容区变窄时跟着收缩
+    所有页面（设置、插件、定时任务和它们的子页面）共用一个版心：内容最宽 680（Cursor Settings 的
+    max-width: 42.5rem），加上左右各 28 的页边距；内容区变窄时跟着收缩
   */
-  --col-settings: 784px;
-  /* 两列卡片的页面：插件与定时任务 */
-  --col-wide: 860px;
+  --col-page: 736px;
   --market-search-basis: 224px;
   --market-search-max-w: 320px;
-  --settings-search-dialog-w: 576px;
+  /*
+    对话框宽度（Cursor 的 Dialog.tsx）：sm 320 / 默认 400 / lg 480 / xl 560 / 2xl 640；
+    距窗口边缘至少 16。设置搜索弹层用 xl
+  */
+  --dialog-w-sm: 320px;
+  --dialog-w: 400px;
+  --dialog-w-lg: 480px;
+  --dialog-w-xl: 560px;
+  --dialog-w-2xl: 640px;
+  --dialog-inset: var(--space-7);
+  --settings-search-dialog-w: var(--dialog-w-xl);
   /*
     会话列最大 780px，正文和底部输入框左右各内收 16px。新会话草稿的输入框也使用 780px 的上限。
   */
@@ -557,18 +583,16 @@
   --controls-w: 126px;
 
   /*
-    组件尺寸：只属于一个组件的固定尺寸，也集中放在这里。
-    空白页的图标块与其中的图标、提示胶囊的高度；设置页的页头与分组标题行；
-    新会话草稿里输入框正文区的最小高度；模型菜单的高度、左栏按钮；侧栏底部账户行；
-    线程头里子 agent 的图标块；命令面板每行的图标块；内置浏览器里 agent 点击位置的圆圈；
-    添加项目对话框的文件夹选择区；终端抽屉的最小高度；会话导航里每一项的可点高度与其中的短横；
-    插件页卡片与插件详情里的应用图标；定时任务页的空状态卡与模板卡的最小高度
+    组件尺寸：只属于一个组件的固定尺寸，也集中放在这里。Cursor 有同类组件的按它取值，见 DESIGN.md。
+    新会话草稿里输入框正文区的最小高度；模型菜单的高度（下拉弹层上限 360）、左栏按钮（图标按钮 32）；
+    侧栏底部账户行（顶栏 40）；线程头里子 agent 的图标块与命令面板每行的图标块（侧栏图标盒 20）；
+    内置浏览器里 agent 点击位置的圆圈；添加项目对话框的文件夹选择区；终端抽屉的最小高度；
+    会话导航里每一项的可点高度与其中的短横；插件卡片与插件详情里的应用图标（头像 32、插件详情 35）；
+    定时任务页的空状态卡与模板卡的最小高度
   */
-  --page-head-h: 30px;
-  --section-head-h: 22px;
   --composer-input-h-tall: 70px;
-  --model-picker-h: min(400px, 62vh);
-  --model-rail-btn: 38px;
+  --model-picker-h: min(360px, 62vh);
+  --model-rail-btn: var(--control-lg);
   /* 思考深度滑块：轨道每档的宽度与高度、圆钮直径、档位圆点与「默认」档的空心圈；模型行里的快速闪电 */
   --model-effort-step: 18px;
   --model-effort-track-h: 14px;
@@ -579,31 +603,30 @@
   /* 工作流卡片：一行摘要后每个 agent 的小点、阶段序号的圆底（agent 行的状态图标与它同宽） */
   --workflow-pip: 6px;
   --workflow-phase-badge: 18px;
-  --side-foot-h: 52px;
-  --subagent-icon-size: 22px;
-  --palette-icon-size: 24px;
+  --side-foot-h: var(--bar-h);
+  --subagent-icon-size: 20px;
+  --palette-icon-size: 20px;
   --browser-pointer-size: 24px;
   --browser-progress-h: 2px;
   --browser-state-icon: 56px;
   --folder-picker-h: 132px;
   --terminal-drawer-min-h: 140px;
-  --plugin-icon: 36px;
-  --plugin-icon-lg: 40px;
+  --plugin-icon: var(--avatar-lg);
+  --plugin-icon-lg: 35px;
   --schedule-empty-h: 220px;
   --schedule-card-h: 128px;
   --schedule-template-h: 114px;
   --instance-accent-default: #5279bf;
   /*
-    Agent 页（参照 t3code 的 Agent 设置页）：列表和设置装在同一张卡片里，左边列表栏的宽度、
-    列表每一行的高度；卡片高度跟着窗口、上下有界，两栏各自滚动。设置里输入框与下拉框的宽度，
-    右栏窄时换成窄一档的宽度。
+    Agent 页：列表和设置装在同一张卡片里，左边列表栏的宽度、列表每一行的高度（两行的列表行，
+    DialogList 的多行最小高 48）；卡片高度跟着窗口、上下有界，两栏各自滚动。设置行里输入框与下拉框
+    的宽度取 Cursor 设置行控件区的上限 160（Fieldset.tsx 的 10rem）。品牌底座取头像 32。
   */
   --agents-rail-w: 240px;
-  --agents-item-h: 64px;
+  --agents-item-h: 48px;
   --agents-split-h: clamp(480px, calc(100dvh - 200px), 720px);
-  --agent-control-w: 224px;
-  --agent-control-w-narrow: 184px;
-  --agent-hero-tile: 40px;
+  --agent-control-w: 160px;
+  --agent-hero-tile: var(--avatar-lg);
   --agent-empty-min-h: 240px;
   --agent-directory-min-h: 160px;
   --acp-login-terminal-height: 240px;
@@ -611,9 +634,21 @@
   --turn-nav-item-h: 10px;
   --turn-nav-bar-h: 2px;
 
+  /*
+    动效（Cursor 的 --cursor-duration-*）：fast 100 悬停、按下、开关 / med 150 菜单与浮层 /
+    slow 200 展开、进场 / slower 300 高度变化。按下时缩到 press-scale，浮层从 enter-scale 放大进场
+    （press.stylex.ts 的 --ui-press-scale，浮层的 data-starting-style）
+  */
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --t-fast: 100ms;
-  --t-med: 160ms;
+  --t-med: 150ms;
+  --t-slow: 200ms;
+  --t-slower: 300ms;
+  --press-scale: 0.98;
+  --enter-scale: 0.97;
+  --enter-rise: 4px;
+  /* 可以点的卡片悬停时比卡片深一级 */
+  --surface-hover: color-mix(in oklab, var(--surface) 97%, var(--fg));
 }
 
 :root[data-platform="win32"],

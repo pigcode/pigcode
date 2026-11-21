@@ -13,7 +13,7 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
   try {
     // 新会话用 agent 的默认模型。思考深度是本机偏好，上一次运行可能留下档位，先显式选一次「默认」：
     // 不指定档位，胶囊上只有模型名；目录里 Fake Sage 的默认档位是「中」，也不显示。
-    const chip = page.getByRole("button", { name: /Agent 与模型/ })
+    const chip = page.getByRole("button", { name: /Agent 和模型/ })
     await expect(chip).toContainText("Fake Sage")
 
     await chip.click()
@@ -67,7 +67,7 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
     await expect(page.getByRole("listbox", { name: "Claude Code" })).toBeVisible()
     // Codex 启动失败时读取目录也失败；Host 不能因此崩溃，列表只是为空。
     await page.getByRole("tab", { name: "Codex" }).click()
-    await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没有匹配的模型")
+    await expect(page.getByRole("listbox", { name: "Codex" })).toContainText("没找到模型")
     await page.getByRole("tab", { name: "Fake Agent" }).click()
     await effort("最高")
     await expect(chip).toContainText("最高")
@@ -82,14 +82,14 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
 
     // 选完模型弹层不关，底栏马上换成 Fake Swift 的设置：没有档位，也没有快速模式与 Ultracode。
     // 权限在选择器底栏里，完全访问要确认，选择保存在线程上。
-    await expect(page.getByTitle("Fake Swift 没有可调的思考深度")).toBeVisible()
+    await expect(page.getByTitle("Fake Swift 不能调思考深度")).toBeVisible()
     await expect(fast).toBeDisabled()
     await expect(ultracode).toBeDisabled()
     await page.getByRole("button", { name: /^权限/ }).click()
-    await page.getByRole("menuitemradio", { name: /^监督审批/ }).click()
+    await page.getByRole("menuitemradio", { name: /^先问我/ }).click()
     await page.getByRole("button", { name: /^权限/ }).click()
     await page.getByRole("menuitemradio", { name: /完全访问/ }).click()
-    await page.getByRole("button", { name: "启用完全访问" }).click()
+    await page.getByRole("button", { name: "打开完全访问" }).click()
     await expect(chip).toHaveAttribute("aria-label", /· 完全访问$/)
 
     // @ 引用文件，发送后用户气泡里是带图标的文件名，悬停看到完整路径。
@@ -114,7 +114,7 @@ test("composer: agent rail, models, thinking depth, fast mode, Ultracode, permis
     await page.keyboard.press("Backspace")
     await page.keyboard.type("/ask")
     await page.keyboard.press("Enter")
-    await expect(chip).toHaveAttribute("aria-label", /· 监督审批$/)
+    await expect(chip).toHaveAttribute("aria-label", /· 先问我$/)
     await expect(page.locator(".tiptap")).toHaveText("")
 
     // / 菜单里还有 Agent 自己的命令与 skill：skill 带标签，说明来自线程的工作目录。
@@ -147,11 +147,20 @@ test("a long model list scrolls by itself beside a fixed search and thinking dep
   writeFileSync(join(profile, "settings.json"), JSON.stringify({ "agents.fake": { customModels } }))
   const { app, page } = await openThread("picker", { PIGCODE_PROFILE_DIR: profile })
   try {
-    await page.getByRole("button", { name: /Agent 与模型/ }).click()
+    await page.getByRole("button", { name: /Agent 和模型/ }).click()
     const list = page.getByRole("listbox", { name: "Fake Agent" })
     await expect(list.getByRole("option")).toHaveCount(18)
+    // 弹层进场时从小一点放大到原尺寸，量位置之前先等这段过渡播完。
+    await page.locator(".model-picker").evaluate((element) =>
+      Promise.all(
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished),
+      ),
+    )
     const popup = await page.locator(".model-picker").boundingBox()
-    const search = page.getByRole("searchbox", { name: "搜索模型…" })
+    const search = page.getByRole("searchbox", { name: "搜索模型" })
     const efforts = page.getByRole("slider", { name: "思考深度" })
     const searchBefore = await search.boundingBox()
     await list.evaluate((element) => {
@@ -184,26 +193,28 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
       "data-active",
       "true",
     )
-    await expect(page.getByRole("button", { name: /工作中/ })).toBeDisabled()
+    await expect(page.getByRole("button", { name: /^已经做了/ })).toBeDisabled()
     await expect(page.locator(".turn-work .tool-row").first()).toBeVisible()
     // 右上角的状态胶囊显示当前待办。
-    await expect(page.getByRole("button", { name: "展开状态" })).toContainText("阅读 README")
+    await expect(page.getByRole("button", { name: "展开" })).toContainText("阅读 README")
     // 运行中的命令「正在执行」扫光、默认收起；点开后输出一段段流进来。
     const live = page.locator(".cmd-row[data-status='running']")
-    await expect(live.locator(".tool-shimmer")).toHaveText("正在执行")
+    await expect(live.locator(".tool-shimmer")).toHaveText("正在运行")
     await expect(live.locator(".tool-row-head")).toHaveAttribute("aria-expanded", "false")
     await live.locator(".tool-row-head").click()
     const lint = page.locator(".cmd-row").filter({ hasText: "pnpm lint" }).first()
     await expect(lint.locator(".cmd-output")).toContainText("eslint src")
 
-    // 结束后折叠成「已工作」，只留最终回答与改动汇总；展开后看到查阅分组与命令。
-    const header = page.getByRole("button", { name: /已工作/ })
+    // 结束后折叠成「做了…」，只留最终回答与改动汇总；展开后看到查阅分组与命令。
+    const header = page.getByRole("button", { name: /^做了/ })
     await expect(header).toBeVisible({ timeout: 30_000 })
     await expect(page.locator(".sess.is-active .sess-indicator")).toHaveCount(0)
     await expect(page.locator(".msg-ai").filter({ hasText: "改好了" })).toBeVisible()
     await expect(page.locator(".turn-work")).toHaveCount(0)
     await header.click()
-    await expect(page.getByRole("button", { name: /查阅/ })).toContainText("2 文件, 1 搜索")
+    await expect(page.locator(".turn-work").getByRole("button", { name: /^查看/ })).toContainText(
+      "2 个文件, 1 次搜索",
+    )
     // 第一次 lint 失败显示「执行失败」，悬停看到退出码；修好后的命令展开能看到 `$ 命令` 与完整输出。
     const failed = page.locator(".cmd-row[data-status='failed']")
     await failed.locator(".tool-row-status").hover()
@@ -213,8 +224,8 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
     await expect(command.locator(".cmd-text pre")).toHaveText("pnpm lint && pnpm test")
     await expect(command.locator(".cmd-output")).toContainText("Tests  3 passed")
 
-    // 从时间线打开右栏：编辑行里的文件名在这个文件自己的标签里打开它，改动汇总的「审查」打开 Diff。
-    const edit = page.locator(".tool-row").filter({ hasText: "编辑" }).first()
+    // 从时间线打开右栏：「修改」行里的文件名在这个文件自己的标签里打开它，改动汇总的「审查」打开 Diff。
+    const edit = page.locator(".tool-row").filter({ hasText: "修改" }).first()
     await edit.getByRole("button", { name: "index.ts", exact: true }).click()
     const panelTabs = page.locator(".right-panel").getByRole("tab")
     await expect(
@@ -223,7 +234,7 @@ test("timeline folds a finished turn's work and the sidebar animates running thr
     await expect(page.getByRole("textbox", { name: "文件内容 src/index.ts" })).toHaveValue(
       "export const answer = 42\n",
     )
-    await page.getByRole("button", { name: "展开已更改文件" }).click()
+    await page.getByRole("button", { name: "展开改动" }).click()
     await page.getByRole("button", { name: "审查" }).click()
     await expect(panelTabs).toHaveText(["index.ts", "Diff"])
     await expect(page.locator(".right-panel").getByRole("tab", { name: "Diff" })).toHaveAttribute(
@@ -248,7 +259,7 @@ test("the header's open-in button opens the project with the chosen app", async 
     })
     const opened = () => app.evaluate(() => (globalThis as { __opened?: string[] }).__opened ?? [])
     // 列表第一项总是文件管理器；选中后它成为左半边按钮的默认应用。
-    await page.getByRole("button", { name: "选择打开方式" }).click()
+    await page.getByRole("button", { name: "选打开方式" }).click()
     const items = page.locator(".open-in-menu .open-in-item")
     await expect(items.first()).toBeVisible()
     await expect(page.getByRole("menuitem", { name: "复制路径" })).toBeVisible()

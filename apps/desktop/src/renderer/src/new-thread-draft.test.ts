@@ -152,14 +152,12 @@ describe("new thread draft", () => {
   it("refuses without a project or an agent, and creates nothing", async () => {
     const empty = new AppStore()
     const { connection, call } = fakeConnection()
-    await expect(materializeDraft(connection, empty, "zh-CN")).rejects.toThrow(
-      "先选择或添加一个项目",
-    )
+    await expect(materializeDraft(connection, empty, "zh-CN")).rejects.toThrow("先选一个项目")
     expect(call).not.toHaveBeenCalled()
 
     const noAgent = fakeConnection(null)
     await expect(materializeDraft(noAgent.connection, storeWith("p1"), "zh-CN")).rejects.toThrow(
-      "没有可用的 agent",
+      "没有能用的 Agent",
     )
     expect(noAgent.call).not.toHaveBeenCalledWith("thread.create", expect.anything())
     // 没建成会话时草稿原样留着。

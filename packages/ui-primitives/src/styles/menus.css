@@ -2,15 +2,16 @@
   菜单与浮层：Menu、ContextMenu、Select、Popover 的弹层，命令面板与输入框建议列表的外框，提示气泡。
   ui-primitives 的组件自动加上这些类名；手写的列表（@ 与 / 建议、命令面板）用同样的类名。
   区域样式只覆盖宽度这类布局，选择器带上组件自己的类（如 .menu-popup.surface-menu），不靠导入顺序。
+  尺寸照 Cursor 的 floating-surface / popup-list.stylex.ts，对照见 DESIGN.md。
 */
 
-/* ─── 浮层外框：所有弹出层同一种底色、圆角、阴影与磨砂 ─── */
+/* ─── 浮层外框：所有弹出层同一种底色、圆角 12、阴影与磨砂 ─── */
 .menu-positioner {
   /* 高于对话框（蒙层 80、卡片 81），对话框里打开的下拉不会被盖住；低于提示气泡 */
   z-index: 85;
 }
 .popup {
-  border-radius: var(--r-lg);
+  border-radius: var(--r-panel);
   background: var(--popover-glass);
   -webkit-backdrop-filter: var(--popup-blur);
   backdrop-filter: var(--popup-blur);
@@ -18,24 +19,47 @@
   outline: none;
 }
 
-/* ─── 菜单：行高 28、外框内边距 4，行的圆角 = 外框圆角 − 内边距 ─── */
+/*
+  弹层进出：从触发它的那一侧淡入，并从 enter-scale 放大到原尺寸；收起更快（Cursor 浮层的
+  data-starting-style：opacity 0、scale(.97)）。Base UI 打开、关闭时写 data-starting-style / data-ending-style
+*/
+.popup,
+.tip-popup {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity var(--t-med) var(--ease),
+    transform var(--t-med) var(--ease);
+}
+:is(.popup, .tip-popup):is([data-starting-style], [data-ending-style]) {
+  opacity: 0;
+  transform: scale(var(--enter-scale));
+}
+:is(.popup, .tip-popup)[data-ending-style] {
+  transition-duration: var(--t-fast);
+}
+
+/*
+  ─── 菜单：外框圆角 14、四周内衬 6；菜单项最小高 30，高亮离外框 6、圆角 8，文字离外框 14 ───
+*/
 .menu-popup {
   min-width: 200px;
-  padding: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--r-xl);
   -webkit-user-select: none;
   user-select: none;
 }
 .menu-item {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-5);
   width: 100%;
-  min-height: var(--control-md);
-  padding: var(--space-2) var(--space-4);
-  border-radius: calc(var(--r-lg) - var(--space-2));
+  min-height: var(--menu-row-h);
+  padding: 0 calc(var(--menu-pad-x) - var(--space-3));
+  border-radius: var(--r-block);
   outline: none;
   color: var(--fg);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   text-align: left;
   cursor: default;
 }
@@ -72,14 +96,15 @@
   margin-left: auto;
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .menu-item-desc {
   display: block;
   color: var(--muted);
   font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
-/* 两行的菜单项：标题下面一行说明，图标与标题对齐 */
+/* 两行的菜单项：标题下面一行说明，上下各 6，图标与标题对齐 */
 .menu-item:has(.menu-item-desc) {
   align-items: flex-start;
   padding-block: var(--space-3);
@@ -87,28 +112,34 @@
 .menu-item:has(.menu-item-desc) > .ic:first-child {
   margin-top: var(--space-1);
 }
+/* 分组标题：12/16 的灰字，和菜单项的文字左缘对齐 */
 .menu-label {
-  padding: var(--space-2) var(--space-4) var(--space-1);
+  display: flex;
+  align-items: center;
+  min-height: var(--control-md);
+  padding: 0 calc(var(--menu-pad-x) - var(--space-3));
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
+/* 分隔线：上下 6，左右离外框 14 */
 .menu-sep {
   height: var(--hair);
-  margin: var(--space-2) var(--space-3);
+  margin: var(--space-3) calc(var(--menu-pad-x) - var(--space-3));
   background: var(--border-strong);
 }
 /* 菜单底部的一段说明 */
 .menu-note {
   max-width: 240px;
-  margin-top: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3) calc(var(--menu-pad-x) - var(--space-3)) var(--space-1);
   border-top: var(--hair) solid var(--divider);
   color: var(--muted);
-  font-size: var(--fs-xs);
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 
-/* ─── 提示气泡 ─────────────────────────────────────────── */
+/* ─── 提示气泡：13/18，内边距 6×10，圆角 8 ───────────────── */
 .tip-positioner {
   z-index: 90;
 }
@@ -117,12 +148,12 @@
   align-items: flex-start;
   gap: var(--space-4);
   max-width: 20rem;
-  padding: var(--space-3) var(--space-6);
-  border-radius: var(--r-md);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--r-block);
   background: var(--popover);
   box-shadow: var(--shadow-pop);
   color: var(--fg);
   font-family: var(--font-ui);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }

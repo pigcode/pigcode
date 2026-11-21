@@ -72,7 +72,7 @@ test("browses, installs, uses and updates real Pigcode catalog plugins", async (
   try {
     execFileSync("git", ["init", "-q", "-b", "main"], { cwd: root })
     await openMarketplace(page)
-    await expect(page.getByRole("radio", { name: "公开" })).toBeChecked()
+    await expect(page.getByRole("radio", { name: "官方" })).toBeChecked()
     await expect(page.getByRole("button", { name: "Claude Code 的详情" })).toBeVisible()
     await installFromCard(page, "项目概览")
     await installFromCard(page, "文本统计")
@@ -86,14 +86,14 @@ test("browses, installs, uses and updates real Pigcode catalog plugins", async (
     await page.keyboard.press("Escape")
     await installFromCard(page, "YAML ↔ JSON 转换")
 
-    await page.getByRole("radio", { name: "个人" }).click()
-    await expect(page.getByRole("heading", { name: "还没有个人市场源" })).toBeVisible()
+    await page.getByRole("radio", { name: "我的" }).click()
+    await expect(page.getByRole("heading", { name: "还没添加插件市场" })).toBeVisible()
     await page
       .locator(".proj-block")
       .filter({ hasText: "pigcode-e2e-official-catalog" })
       .locator(".proj-add")
       .click()
-    await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+    await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     const projects = await openSurface(page, "项目概览", "pigcode.project-overview")
     await expect(projects).toContainText(root)
     await expect(projects).toContainText("src/index.ts")

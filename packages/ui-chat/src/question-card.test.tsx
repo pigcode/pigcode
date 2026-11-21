@@ -35,13 +35,13 @@ describe("QuestionCard", () => {
         <QuestionCard request={REQUEST} onAnswer={onAnswer} />
       </LocaleProvider>,
     )
-    const submit = screen.getByRole("button", { name: "提交回答" })
+    const submit = screen.getByRole("button", { name: "提交" })
     expect(submit.hasAttribute("disabled")).toBe(true)
     await userEvent.click(screen.getByRole("checkbox", { name: "macOS" }))
     await userEvent.click(screen.getByRole("checkbox", { name: "Linux" }))
     await userEvent.click(screen.getByRole("checkbox", { name: "macOS" }))
     await userEvent.type(
-      screen.getByRole("textbox", { name: "这次改动要覆盖哪些平台？ 其他（自己填写）" }),
+      screen.getByRole("textbox", { name: "这次改动要覆盖哪些平台？ 其他（自己写）" }),
       "FreeBSD",
     )
     expect(submit.hasAttribute("disabled")).toBe(true)
@@ -61,11 +61,11 @@ describe("QuestionCard", () => {
     await userEvent.click(screen.getByRole("checkbox", { name: "Windows" }))
     await userEvent.click(screen.getByRole("radio", { name: /Vitest/ }))
     await userEvent.type(
-      screen.getByRole("textbox", { name: "测试用哪个框架？ 其他（自己填写）" }),
+      screen.getByRole("textbox", { name: "测试用哪个框架？ 其他（自己写）" }),
       "node:test",
     )
     expect((screen.getByRole("radio", { name: /Vitest/ }) as HTMLInputElement).checked).toBe(false)
-    await userEvent.click(screen.getByRole("button", { name: "提交回答" }))
+    await userEvent.click(screen.getByRole("button", { name: "提交" }))
     expect(onAnswer).toHaveBeenCalledWith("q_1", ["Windows", "node:test"])
   })
 
@@ -93,12 +93,12 @@ describe("QuestionCard", () => {
         />
       </LocaleProvider>,
     )
-    const card = screen.getByRole("group", { name: "计划写好了，开始执行？" })
+    const card = screen.getByRole("group", { name: "计划写好了，开始做吗？" })
     expect(card.textContent).toContain("跑测试")
     expect(screen.queryByRole("button", { name: "本次会话允许" })).toBeNull()
-    await userEvent.click(screen.getByRole("button", { name: "继续完善" }))
+    await userEvent.click(screen.getByRole("button", { name: "再改改" }))
     expect(onApproval).toHaveBeenCalledWith("req_1", "deny")
-    await userEvent.click(screen.getByRole("button", { name: "开始执行" }))
+    await userEvent.click(screen.getByRole("button", { name: "开始做" }))
     expect(onApproval).toHaveBeenLastCalledWith("req_1", "allow-once")
   })
 
@@ -123,7 +123,7 @@ describe("QuestionCard", () => {
         />
       </LocaleProvider>,
     )
-    expect(screen.getByRole("button", { name: /等待回答/ })).toBeTruthy()
-    expect(screen.getByRole("form", { name: "Agent 想先确认几件事" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: /等你回答/ })).toBeTruthy()
+    expect(screen.getByRole("form", { name: "Agent 想问你几件事" })).toBeTruthy()
   })
 })

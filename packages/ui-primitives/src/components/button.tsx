@@ -25,8 +25,13 @@ const buttonVariants = cva("btn", {
       "icon-sm": "btn-icon btn-icon-sm",
       "icon-lg": "btn-icon btn-icon-lg",
     },
+    /** pill：两头全圆，图标按钮是正圆（Cursor Button / IconButton 的 rounded）。 */
+    shape: {
+      default: "",
+      pill: "btn-pill",
+    },
   },
-  defaultVariants: { variant: "secondary", size: "md" },
+  defaultVariants: { variant: "secondary", size: "md", shape: "default" },
 })
 
 export type ButtonProps = ComponentProps<"button"> &
@@ -36,13 +41,13 @@ export type ButtonProps = ComponentProps<"button"> &
   }
 
 /** 渲染按钮；render 存在时合并类名与事件。 */
-export function Button({ className, variant, size, render, ...props }: ButtonProps) {
+export function Button({ className, variant, size, shape, render, ...props }: ButtonProps) {
   return useRender({
     render,
     defaultTagName: "button",
     props: {
       ...props,
-      className: cn(buttonVariants({ variant, size }), className),
+      className: cn(buttonVariants({ variant, size, shape }), className),
     },
   })
 }

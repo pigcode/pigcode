@@ -222,16 +222,14 @@ describe("turn rendering", () => {
     expect(container.querySelector(".msg-user")?.textContent).toBe("fix the answer")
     expect(screen.getByText("Fixed it.").closest(".msg-ai")).not.toBeNull()
     expect(screen.queryByText("Looking around.")).toBeNull()
-    expect(screen.getByRole("button", { name: "展开已更改文件" }).textContent).toBe(
-      "1 个文件已更改+1 -1",
-    )
-    const header = screen.getByRole("button", { name: "已工作 12 秒" })
+    expect(screen.getByRole("button", { name: "展开改动" }).textContent).toBe("改了 1 个文件+1 -1")
+    const header = screen.getByRole("button", { name: "做了 12 秒" })
     expect(header.getAttribute("aria-expanded")).toBe("false")
     await userEvent.click(header)
     expect(header.getAttribute("aria-expanded")).toBe("true")
     expect(screen.getByText("Looking around.")).toBeTruthy()
-    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·持续了 3 秒")
-    expect(screen.getByRole("button", { name: /查阅/ }).textContent).toBe("查阅·2 文件, 1 搜索")
+    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·想了 3 秒")
+    expect(screen.getByRole("button", { name: /查看/ }).textContent).toBe("查看·2 个文件, 1 次搜索")
     expect(screen.getByRole("button", { name: /终端/ }).textContent).toContain("pnpm test")
   })
 
@@ -239,7 +237,7 @@ describe("turn rendering", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date(Date.UTC(2026, 9, 21, 8, 0, 9)))
     const { container } = renderList(scriptedRun().slice(0, 14), "partial answer", "Checking the")
-    const header = screen.getByRole("button", { name: "工作中 9 秒" })
+    const header = screen.getByRole("button", { name: "已经做了 9 秒" })
     expect(header.hasAttribute("disabled")).toBe(true)
     expect(header.querySelector(".work-chev")).toBeNull()
     expect(screen.getByText("Looking around.")).toBeTruthy()
@@ -281,9 +279,9 @@ describe("turn rendering", () => {
       event(2, "question.requested", question),
     ]
     renderList(asking)
-    expect(screen.getByRole("button", { name: "等待回答" })).toBeTruthy()
-    expect(screen.getByRole("form", { name: "Agent 想先确认几件事" })).toBeTruthy()
-    expect(screen.getByText("正在询问").className).toContain("tool-shimmer")
+    expect(screen.getByRole("button", { name: "等你回答" })).toBeTruthy()
+    expect(screen.getByRole("form", { name: "Agent 想问你几件事" })).toBeTruthy()
+    expect(screen.getByText("正在提问").className).toContain("tool-shimmer")
     cleanup()
     renderList([
       ...asking,
@@ -292,8 +290,8 @@ describe("turn rendering", () => {
       event(5, "run.completed", {}),
     ])
     expect(screen.queryByRole("form")).toBeNull()
-    await userEvent.click(screen.getByRole("button", { name: /已工作/ }))
-    await userEvent.click(screen.getByRole("button", { name: /已询问/ }))
+    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
+    await userEvent.click(screen.getByRole("button", { name: /问过了/ }))
     expect(screen.getByText("Linux")).toBeTruthy()
   })
 
@@ -313,7 +311,7 @@ describe("turn rendering", () => {
     // 提示不进工作区：工作区结束时会折叠起来。
     expect(turn?.work.some((item) => item.kind === "message")).toBe(true)
     renderList(events)
-    expect(screen.getByRole("status").textContent).toContain("插件工具没有接上")
+    expect(screen.getByRole("status").textContent).toContain("插件工具没连上")
     expect(screen.getByRole("status").getAttribute("data-level")).toBe("warning")
   })
 
@@ -326,29 +324,29 @@ describe("turn rendering", () => {
     const [turn] = onlyTurns(events)
     expect(turn?.notices[0]).toMatchObject({ key: "host.restarted", params: {} })
     renderList(events)
-    expect(screen.getByRole("status").textContent).toContain("应用重启过")
+    expect(screen.getByRole("status").textContent).toContain("Pigcode 重启过")
   })
 
   it("draws a marker divider when the agent changes", () => {
     renderList([...scriptedRun(), event(30, "thread.updated", { agentId: "codex" }, null)])
-    expect(screen.getByRole("separator").textContent).toBe("已切换到 codex")
+    expect(screen.getByRole("separator").textContent).toBe("换成了 codex")
   })
 
   it.each([
-    [{ resumed: true }, "已切换到 codex · 接回原来的会话"],
+    [{ resumed: true }, "换成了 codex · 接回原来的会话"],
     [
       { resumed: true, handoffId: "h", handoffItems: 3, handoffOmitted: 0 },
-      "已切换到 codex · 接回原来的会话，补上离开后的 3 条",
+      "换成了 codex · 接回原来的会话，补上离开后的 3 条",
     ],
     [
       { handoffId: "h", handoffItems: 12, handoffOmitted: 0 },
-      "已切换到 codex · 新会话，交接了 12 条",
+      "换成了 codex · 开了新会话，带上了 12 条",
     ],
     [
       { handoffId: "h", handoffItems: 12, handoffOmitted: 40 },
-      "已切换到 codex · 新会话，交接了 12 条，省略 40 条",
+      "换成了 codex · 开了新会话，带上了 12 条，省掉 40 条",
     ],
-    [{ handoff: "old text" }, "已切换到 codex · 上下文以摘要交接"],
+    [{ handoff: "old text" }, "换成了 codex · 把之前的内容总结后交给它"],
   ])("says how the context carried over: %j", (payload, text) => {
     renderList([
       ...scriptedRun(),

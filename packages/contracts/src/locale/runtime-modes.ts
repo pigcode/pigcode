@@ -6,31 +6,31 @@ export const runtimeModeMessages: Record<
   { label: LocalizedText; description: LocalizedText }
 > = {
   "approval-required": {
-    label: { "zh-CN": "监督审批", "en-US": "Supervised" },
+    label: { "zh-CN": "先问我", "en-US": "Ask first" },
     description: {
-      "zh-CN": "需要授权的命令和修改由你审批",
-      "en-US": "Ask you about commands and edits that require approval",
+      "zh-CN": "要改文件或跑命令时，先问你",
+      "en-US": "Asks you before editing files or running commands",
     },
   },
   "auto-accept-edits": {
-    label: { "zh-CN": "接受编辑", "en-US": "Auto-accept edits" },
+    label: { "zh-CN": "自动改文件", "en-US": "Auto-edit" },
     description: {
-      "zh-CN": "自动接受编辑，其余操作按需审批",
-      "en-US": "Accept edits automatically; ask about other actions as needed",
+      "zh-CN": "直接改文件，别的事先问你",
+      "en-US": "Edits files right away and asks about the rest",
     },
   },
   auto: {
-    label: { "zh-CN": "自动审批", "en-US": "Auto" },
+    label: { "zh-CN": "自动判断", "en-US": "Auto" },
     description: {
-      "zh-CN": "Agent 自动审查操作，不支持时使用监督审批",
-      "en-US": "The agent reviews actions; use supervised mode when unavailable",
+      "zh-CN": "Agent 自己判断要不要问你，做不到时先问你",
+      "en-US": "The agent decides when to ask. If it can't, it asks first",
     },
   },
   "full-access": {
     label: { "zh-CN": "完全访问", "en-US": "Full access" },
     description: {
-      "zh-CN": "允许 Agent 直接执行命令和修改文件",
-      "en-US": "Allow the agent to run commands and edit files directly",
+      "zh-CN": "不问你，直接改文件、跑命令",
+      "en-US": "Edits files and runs commands without asking",
     },
   },
 }

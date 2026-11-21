@@ -20,18 +20,17 @@ export interface UpdateLabels {
 
 const ZH_CN: UpdateLabels = {
   title: "有新版本 {version}",
-  detail: "打开下载页获取新版本。当前正在运行的任务不会受影响。",
+  detail: "打开下载页就能拿到新版本。正在跑的任务不受影响。",
   download: "打开下载页",
   later: "稍后",
   readyTitle: "新版本 {version} 已下载",
-  readyDetail: "重启 Pigcode 完成安装。正在运行的任务会先按退出流程确认。",
+  readyDetail: "重启 Pigcode 就装好了。有任务在跑时，退出前会先问你。",
   restart: "重启并更新",
   replaceTitle: "新版本 {version} 已下载",
-  replaceDetail:
-    "打开安装包，把 Pigcode 拖进「应用程序」替换旧版本。你的会话、设置和插件都在，不会丢。",
+  replaceDetail: "打开安装包，把 Pigcode 拖进「应用程序」换掉旧版本。你的会话、设置和插件都还在。",
   replace: "打开安装包",
-  downloadFailed: "下载新版本失败，改为打开下载页。",
-  openFailed: "安装包打不开，改为打开下载页。",
+  downloadFailed: "新版本没下载成功，帮你打开下载页",
+  openFailed: "安装包打不开，帮你打开下载页",
 }
 
 const EN_US: UpdateLabels = {

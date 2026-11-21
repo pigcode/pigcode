@@ -39,7 +39,7 @@ test("the agent logs in on a local page in the built-in browser", async () => {
     })
 
     // 时间线：浏览器步骤合成分组，截图默认展开。
-    await page.getByRole("button", { name: /已工作/ }).click()
+    await page.getByRole("button", { name: /^做了/ }).click()
     const groups = page.locator(".tool-group").filter({ hasText: "浏览器" })
     await expect(groups).toHaveCount(2)
     await groups.last().locator(".tool-row-head").first().click()
@@ -57,7 +57,7 @@ test("people can browse in the same browser tab with the address bar", async () 
   const site = await startDemoSite()
   const { app, page } = await openThread("browser-user")
   try {
-    await page.getByRole("button", { name: "切换右侧面板" }).first().click()
+    await page.getByRole("button", { name: "显示或隐藏右侧面板" }).first().click()
     await page
       .getByRole("button", { name: /浏览器/ })
       .first()
@@ -77,11 +77,11 @@ test("people can browse in the same browser tab with the address bar", async () 
     // 不允许的协议在地址栏就被拦下。
     await address.fill("file:///etc/passwd")
     await address.press("Enter")
-    await expect(page.locator(".browser-error")).toHaveText("只支持 http/https 网址")
+    await expect(page.locator(".browser-error")).toHaveText("只能打开 http 或 https 网址")
 
     // 标签显示页面标题；响应式视图按设备尺寸渲染页面。
     await expect(page.getByRole("tab", { name: "Demo 登录" })).toBeVisible()
-    await page.getByRole("button", { name: "响应式视图" }).click()
+    await page.getByRole("button", { name: "模拟设备尺寸" }).click()
     await expect(page.locator(".browser-hosted[data-responsive][data-shown]")).toBeVisible()
     await expect
       .poll(() =>
@@ -91,11 +91,11 @@ test("people can browse in the same browser tab with the address bar", async () 
         }),
       )
       .toBe(393)
-    await page.getByRole("button", { name: "退出响应式视图" }).click()
+    await page.getByRole("button", { name: "退出模拟" }).click()
     await expect(page.locator(".browser-hosted[data-responsive]")).toHaveCount(0)
 
     // 选择网页元素：点中登录按钮，它作为附件出现在输入框上方。
-    await page.getByRole("button", { name: "选择网页元素加入聊天" }).click()
+    await page.getByRole("button", { name: "选网页上的东西，加到会话里" }).click()
     await expect(page.locator('.browser-toast[data-tone="picker"]')).toBeVisible()
     const box = await page.locator(".browser-hosted[data-shown]").boundingBox()
     const target = await app.evaluate(async ({ webContents }) => {
@@ -107,16 +107,14 @@ test("people can browse in the same browser tab with the address bar", async () 
     await page.mouse.move(box!.x + target.x, box!.y + target.y, { steps: 4 })
     await page.mouse.click(box!.x + target.x, box!.y + target.y)
     await expect(page.locator(".composer-context")).toContainText("<button> 登录")
-    await expect(page.locator('.browser-toast[data-tone="done"]')).toContainText("已加入聊天")
+    await expect(page.locator('.browser-toast[data-tone="done"]')).toContainText("已加到会话")
     // 加入后光标去输入框，下一帧才落下；先等它落定，否则地址栏失焦会丢掉刚填的地址。
     await expect(page.locator(".tiptap")).toBeFocused()
 
     // 打不开的地址：页面区说明原因，可以重新加载。
     await address.fill("http://127.0.0.1:9/")
     await address.press("Enter")
-    await expect(page.locator('.browser-state[data-state="error"]')).toContainText(
-      "无法打开这个网页",
-    )
+    await expect(page.locator('.browser-state[data-state="error"]')).toContainText("打不开这个网页")
   } finally {
     await app.close()
     await site.close()

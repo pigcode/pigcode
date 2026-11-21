@@ -1,16 +1,11 @@
 /*
-  Agent 设置页，参照 t3code 的 Agent 设置页：Agent 列表和选中那一个的设置装在同一张卡片里，
-  左边一栏是列表，右边是设置；卡片高度跟着窗口，两栏各自滚动，内容区窄时列表叠到设置上面。
-  设置分成几组，每组一个小标题加几行，行与行之间一条通栏细线。卡片下面是新会话默认用哪个。
-  尺寸与颜色来自 tokens.css。
+  Agent 设置页：Agent 列表和选中那一个的设置装在同一张卡片里，左边一栏是列表，右边是设置；
+  卡片高度跟着窗口，两栏各自滚动，内容区窄时列表叠到设置上面。设置分成几组，每组一个分组标题加几行。
+  卡片下面是新会话默认用哪个。尺寸照 Cursor（见 DESIGN.md），尺寸与颜色来自 tokens.css。
 */
 
 .panel-scroll:has(> .agents-page) {
   container: agents-page / inline-size;
-}
-
-.agents-page {
-  --agent-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .agent-tabular {
@@ -30,7 +25,7 @@
 
 .agent-muted code {
   font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .agents-error-banner {
@@ -98,7 +93,7 @@
   width: var(--space-4);
   padding: 2px;
   opacity: 0;
-  transition: opacity 160ms var(--agent-ease);
+  transition: opacity var(--t-med) var(--ease);
 }
 
 .agents-pane:hover > .agents-pane-bar,
@@ -119,15 +114,18 @@
   text-align: center;
 }
 
-/* 列表里的一行：图标，名字和版本，下面一行状态；右边是开关。每行一样高，底下一条通栏细线 */
+/*
+  列表里的一行：图标，名字和版本，下面一行状态；右边是开关。照 Cursor 弹窗列表的多行行：
+  最小高 48，上下 8，图标和文字之间 8。每行一样高，底下一条通栏细线
+*/
 .agent-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-4);
   min-height: var(--agents-item-h);
-  padding: 12px 16px;
-  transition: background-color 140ms var(--agent-ease);
+  padding: var(--space-4) var(--space-6);
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .agent-item::after {
@@ -170,7 +168,7 @@
   gap: 12px;
   min-width: 0;
   pointer-events: none;
-  transition: opacity 140ms var(--agent-ease);
+  transition: opacity var(--t-fast) var(--ease);
 }
 
 .agent-item[data-disabled]:not([data-selected], :hover) .agent-item-main {
@@ -196,8 +194,8 @@
   min-width: 0;
   overflow: hidden;
   color: var(--fg);
-  font-size: var(--fs-xl);
-  font-weight: 500;
+  font-size: var(--fs-md);
+  font-weight: 400;
   line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -268,8 +266,8 @@
   font-size: var(--fs-md);
   text-align: start;
   transition:
-    background-color 140ms var(--agent-ease),
-    color 140ms var(--agent-ease);
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
 .agents-add:hover:not(:disabled) {
@@ -336,19 +334,20 @@
 .agent-section-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   min-height: var(--control-md);
-  padding: 0 16px;
+  padding: 0 var(--space-6);
 }
 
+/* 分组标题和设置页的一样：12/16 常规字重的灰字 */
 .agent-section-head :is(h3, h4) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: var(--fg);
-  font-size: var(--fs-heading);
-  font-weight: 600;
-  line-height: 1.3;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  font-weight: 400;
+  line-height: var(--lh-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -367,9 +366,16 @@
   gap: 4px;
 }
 
-/* 头部：图标、名字，右边是版本和更新 */
+/* 头部：图标、名字，右边是版本和更新；名字和弹窗标题一样是 15/24 中等字重 */
 .agent-head {
-  gap: 10px;
+  gap: var(--space-5);
+}
+
+.agent-section-head.agent-head :is(h3, h4) {
+  color: var(--fg);
+  font-size: var(--fs-heading);
+  font-weight: 500;
+  line-height: var(--lh-heading);
 }
 
 .agent-head-version {
@@ -406,22 +412,24 @@
   pointer-events: none;
 }
 
-/* 设置行：左边名字和说明，右边控件；和设置页其他卡片里的行一样大 */
+/* 设置行：左边名字和说明，右边控件；和设置页其他卡片里的行一样大（内边距 12，单行 42，文字和控件之间 20） */
 .agent-rows > .list-row {
-  gap: var(--space-7);
-  min-height: calc(var(--row-h) + var(--space-9));
-  padding: 12px 16px;
+  gap: var(--space-8);
+  min-height: var(--row-h-lg);
+  padding: var(--space-6);
   border-radius: 0;
 }
 
 .agent-rows > .list-row .list-row-title {
-  font-size: var(--fs-xl);
-  font-weight: 500;
+  font-size: var(--fs-md);
+  font-weight: 400;
+  line-height: var(--lh-md);
   white-space: normal;
 }
 
 .agent-rows > .list-row .list-row-desc {
-  line-height: 1.5;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   -webkit-user-select: text;
   user-select: text;
 }
@@ -452,8 +460,9 @@
 
 .agent-block-title {
   color: var(--fg);
-  font-size: var(--fs-xl);
-  font-weight: 500;
+  font-size: var(--fs-md);
+  font-weight: 400;
+  line-height: var(--lh-md);
 }
 
 .agent-block-desc {
@@ -564,8 +573,8 @@
   text-align: left;
   cursor: pointer;
   transition:
-    background-color 140ms var(--agent-ease),
-    filter 140ms var(--agent-ease);
+    background-color var(--t-fast) var(--ease),
+    filter var(--t-fast) var(--ease);
 }
 
 .sensitive:not([data-revealed]) > span {
@@ -598,8 +607,8 @@
     0 0 0 2px var(--surface),
     0 0 0 3px var(--border-strong);
   transition:
-    box-shadow 140ms var(--agent-ease),
-    color 140ms var(--agent-ease);
+    box-shadow var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
 .agent-accent-trigger[data-empty] {
@@ -668,8 +677,8 @@
   box-shadow: var(--swatch-ring);
   cursor: pointer;
   transition:
-    transform 120ms var(--agent-ease),
-    box-shadow 140ms var(--agent-ease);
+    transform var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
 }
 
 .agent-swatch:hover:not(:disabled, [data-active]) {
@@ -762,8 +771,8 @@
   padding: 4px 16px;
   font-size: var(--fs-md);
   transition:
-    background-color 140ms var(--agent-ease),
-    opacity 140ms var(--agent-ease);
+    background-color var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
 }
 
 .agent-model:hover {
@@ -801,7 +810,7 @@
   color: var(--faint);
   cursor: grab;
   opacity: 0;
-  transition: opacity 140ms var(--agent-ease);
+  transition: opacity var(--t-fast) var(--ease);
 }
 
 .agent-model:hover .agent-model-grip {
@@ -858,7 +867,7 @@
 .agent-model-tag {
   flex: none;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .agent-model-tag[data-kind="default"] {
@@ -870,7 +879,7 @@
   flex: none;
   gap: 2px;
   opacity: 0;
-  transition: opacity 140ms var(--agent-ease);
+  transition: opacity var(--t-fast) var(--ease);
 }
 
 .agent-model:hover .agent-model-tools,
@@ -886,8 +895,8 @@
   border-radius: var(--r-xs);
   color: var(--muted);
   transition:
-    background-color 140ms var(--agent-ease),
-    color 140ms var(--agent-ease);
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
 }
 
 .agent-icon-btn:hover:not(:disabled) {
@@ -966,7 +975,7 @@
   gap: 8px;
   padding-inline: 2px;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .agent-env-cols-center {
@@ -1010,7 +1019,7 @@
   border-radius: var(--r-panel);
   background: var(--popover);
   box-shadow: var(--shadow-pop);
-  animation: agent-savebar-in 220ms var(--agent-ease) both;
+  animation: agent-savebar-in var(--t-slow) var(--ease) both;
 }
 
 .agent-savebar .spacer {
@@ -1042,18 +1051,15 @@
   background: var(--warn);
 }
 
+/* 按钮里的快捷键不画键帽，只是一段淡一些的字（Cursor Button 的 kbs，主按钮上 0.65） */
 .agent-save-kbd {
-  display: inline-grid;
-  place-items: center;
-  height: var(--knob-size);
-  margin-left: 4px;
-  padding: 0 4px;
-  border-radius: var(--r-xs);
-  background: color-mix(in oklab, var(--on-primary) 16%, transparent);
+  min-width: 0;
+  height: auto;
+  margin-left: var(--space-1);
+  padding: 0;
+  background: none;
   color: inherit;
-  font-family: var(--font-ui);
-  font-size: var(--fs-4xs);
-  opacity: 0.85;
+  opacity: 0.65;
 }
 
 @keyframes agent-savebar-in {
@@ -1063,13 +1069,7 @@
   }
 }
 
-/* ─── 右栏窄时：控件变窄；再窄一些，控件换到名字下面 ─── */
-@container agent-detail (max-width: 520px) {
-  .agent-editor {
-    --agent-control-w: var(--agent-control-w-narrow);
-  }
-}
-
+/* ─── 右栏窄时：控件换到名字下面 ─── */
 @container agent-detail (max-width: 400px) {
   .agent-rows > .list-row {
     flex-wrap: wrap;
@@ -1110,7 +1110,7 @@
 .dialog.instance-wizard {
   display: flex;
   flex-direction: column;
-  width: min(640px, calc(100vw - 32px));
+  width: min(var(--dialog-w-2xl), calc(100vw - 2 * var(--dialog-inset)));
   overflow: hidden;
 }
 
@@ -1120,12 +1120,12 @@
 }
 
 .instance-wizard > .dialog-head {
-  padding: 20px 24px 12px;
+  padding: var(--space-7) var(--space-7) var(--space-6);
 }
 
 .instance-wizard > .dialog-body {
   min-height: 0;
-  padding: 20px 24px 24px;
+  padding: var(--space-7);
   overflow-y: auto;
 }
 
@@ -1224,16 +1224,17 @@
 .agent-directory-heading {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 12px 8px 6px;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-4) var(--space-3);
   color: var(--muted);
   font-size: var(--fs-sm);
-  font-weight: 500;
+  font-weight: 400;
+  line-height: var(--lh-sm);
 }
 
 .agent-directory-count {
   color: var(--faint);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-weight: 400;
 }
 
@@ -1242,7 +1243,7 @@
   flex-wrap: wrap;
   align-items: center;
   border-radius: var(--r-block);
-  transition: background-color 120ms var(--agent-ease);
+  transition: background-color var(--t-fast) var(--ease);
 }
 
 .agent-directory-entry[data-active],
@@ -1297,7 +1298,7 @@
 .agent-directory-name {
   color: var(--fg);
   font-size: var(--fs-md);
-  font-weight: 500;
+  font-weight: 400;
   line-height: 1.35;
 }
 
@@ -1308,7 +1309,7 @@
 .agent-directory-description {
   min-width: 0;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   line-height: 1.4;
 }
 
@@ -1319,7 +1320,7 @@
   gap: 4px;
   margin-inline-start: auto;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .agent-directory-action[data-state="added"] {
@@ -1334,8 +1335,8 @@
   opacity: 0;
   transform: translateX(-2px);
   transition:
-    opacity 120ms var(--agent-ease),
-    transform 120ms var(--agent-ease);
+    opacity var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
 }
 
 .agent-directory-entry[data-active] .agent-directory-action > .ic:only-child {
@@ -1378,26 +1379,13 @@
   align-items: center;
   gap: 12px;
   color: var(--faint);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .agent-directory-hints > span {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-.agent-directory-hints kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: var(--control-2xs);
-  height: var(--control-2xs);
-  padding: 0 4px;
-  border-radius: var(--r-kbd);
-  background: var(--field);
-  color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: var(--fs-4xs);
 }
 
 .wizard-pane {
@@ -1447,7 +1435,7 @@
   place-items: center;
   width: var(--agent-hero-tile);
   height: var(--agent-hero-tile);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-block);
   background: var(--field);
   box-shadow: inset 0 0 0 var(--hair) var(--border);
 }
@@ -1474,13 +1462,13 @@
 .wizard-picked-name {
   color: var(--fg);
   font-size: var(--fs-heading);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
 }
 
 .wizard-picked-meta {
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .wizard-registry-links {
@@ -1531,13 +1519,13 @@
 .acp-registry-name {
   color: var(--fg);
   font-size: var(--fs-heading);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.3;
 }
 
 .acp-registry-description {
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 
 .acp-account > .btn {
@@ -1578,7 +1566,7 @@
 .wizard-advanced-caret {
   flex: none;
   color: var(--muted);
-  transition: transform 160ms var(--agent-ease);
+  transition: transform var(--t-med) var(--ease);
 }
 
 .wizard-advanced[data-open] .wizard-advanced-caret {
@@ -1606,7 +1594,7 @@
   padding: 0;
   color: var(--fg);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .wizard-footer {
@@ -1628,7 +1616,7 @@
 
 /* ─── 插件安装对话框 ─── */
 .dialog.install-dialog {
-  width: min(520px, calc(100vw - 48px));
+  width: min(var(--dialog-w-xl), calc(100vw - 2 * var(--dialog-inset)));
 }
 
 .install-dialog-input {
@@ -1647,7 +1635,7 @@
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   background: var(--warn-soft);
   color: var(--warn-text);
   font-size: var(--fs-sm);

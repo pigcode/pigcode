@@ -28,14 +28,14 @@
   font-size: var(--fs-sm);
   box-shadow: var(--shadow-pop);
   pointer-events: auto;
-  animation: toast-in 160ms var(--ease);
+  animation: toast-in var(--t-med) var(--ease);
 }
 .toast .ic {
   color: var(--muted);
 }
 .toast.is-leaving {
   opacity: 0;
-  transition: opacity 140ms var(--ease);
+  transition: opacity var(--t-med) var(--ease);
 }
 @keyframes toast-in {
   from {
@@ -48,12 +48,13 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+/* 关闭：20 的圆形（Cursor ToastContent 的 IconButton rounded、size sm） */
 .toast-close {
   display: grid;
   place-items: center;
   width: var(--control-xs);
   height: var(--control-xs);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-full);
   color: var(--muted);
 }
 .toast-close:hover {

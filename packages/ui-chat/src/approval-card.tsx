@@ -57,10 +57,14 @@ export function ApprovalCard({
           <MessageText text={request.plan} />
         </div>
         <div className="acts">
-          <Button variant="primary" onClick={() => onApproval(request.id, "allow-once")}>
+          <Button
+            shape="pill"
+            variant="primary"
+            onClick={() => onApproval(request.id, "allow-once")}
+          >
             {t("chat.plan.start")}
           </Button>
-          <Button variant="ghost" onClick={() => onApproval(request.id, "deny")}>
+          <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
             {t("chat.plan.keep")}
           </Button>
         </div>
@@ -77,13 +81,17 @@ export function ApprovalCard({
       {request.description && request.title ? <p>{request.description}</p> : null}
       {request.command ? <pre>{request.command}</pre> : null}
       <div className="acts">
-        <Button variant="primary" onClick={() => onApproval(request.id, "allow-once")}>
+        <Button shape="pill" variant="primary" onClick={() => onApproval(request.id, "allow-once")}>
           {t("chat.approval.allowOnce")}
         </Button>
-        <Button variant="secondary" onClick={() => onApproval(request.id, "allow-for-session")}>
+        <Button
+          shape="pill"
+          variant="secondary"
+          onClick={() => onApproval(request.id, "allow-for-session")}
+        >
           {t("chat.approval.allowSession")}
         </Button>
-        <Button variant="ghost" onClick={() => onApproval(request.id, "deny")}>
+        <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
           {t("chat.approval.deny")}
         </Button>
       </div>

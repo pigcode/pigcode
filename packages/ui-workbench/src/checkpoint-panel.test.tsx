@@ -29,15 +29,15 @@ describe("CheckpointPanel", () => {
   it("says the conversation is not rolled back before anything is restored", async () => {
     const onRestore = setup("zh-CN")
     await userEvent.click(screen.getByRole("button", { name: "恢复" }))
-    expect(screen.getByText(/对话不会回滚/)).toBeTruthy()
+    expect(screen.getByText(/会话不会倒回去/)).toBeTruthy()
     expect(onRestore).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole("button", { name: "确认恢复" }))
+    await userEvent.click(screen.getByRole("button", { name: "恢复" }))
     expect(onRestore).toHaveBeenCalledWith("cp-1")
   })
 
   it("says the same in English", async () => {
     setup("en-US")
     await userEvent.click(screen.getByRole("button", { name: "Restore" }))
-    expect(screen.getByText(/conversation is not rolled back/)).toBeTruthy()
+    expect(screen.getByText(/thread doesn't go back/)).toBeTruthy()
   })
 })

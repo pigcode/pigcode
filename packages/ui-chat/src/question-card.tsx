@@ -117,7 +117,7 @@ export function QuestionCard({
         )
       })}
       <div className="acts">
-        <Button variant="primary" type="submit" disabled={!ready}>
+        <Button shape="pill" variant="primary" type="submit" disabled={!ready}>
           {t("chat.question.submit")}
         </Button>
       </div>

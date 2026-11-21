@@ -132,7 +132,12 @@ export function PrPanel({
                 onChange={(event) => setBase(event.target.value)}
               />
             </label>
-            <Button type="submit" size="sm" disabled={creating || trimmedTitle.length === 0}>
+            <Button
+              type="submit"
+              size="lg"
+              variant="primary"
+              disabled={creating || trimmedTitle.length === 0}
+            >
               {creating ? t("pr.creating") : t("pr.create")}
             </Button>
           </form>

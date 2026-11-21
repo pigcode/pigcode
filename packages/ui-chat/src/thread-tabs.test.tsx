@@ -96,7 +96,7 @@ describe("ThreadTabs", () => {
     // 主会话标签不显示运行状态，运行状态只在侧栏和时间线里。
     expect(tabs[0]?.querySelector(".dot-matrix")).toBeNull()
     expect(within(tabs[1]!).getByRole("img", { name: "运行中" })).toBeTruthy()
-    expect(within(tabs[2]!).getByRole("img", { name: "等待许可" })).toBeTruthy()
+    expect(within(tabs[2]!).getByRole("img", { name: "等你确认" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: /关闭 修登录/ })).toBeNull()
   })
 
@@ -181,10 +181,10 @@ describe("spawned sub-agents", () => {
     )
     expect(screen.getByText("阅读 src/index.ts，列出导出。")).toBeTruthy()
     expect(screen.getByText("只导出 answer。")).toBeTruthy()
-    expect(screen.getByText("交回的结果")).toBeTruthy()
+    expect(screen.getByText("它的结果")).toBeTruthy()
     expect(screen.getByText("导出：answer。")).toBeTruthy()
     expect(screen.queryByRole("textbox")).toBeNull()
-    expect(screen.getByText("主 agent 派生的子代理，只读")).toBeTruthy()
+    expect(screen.getByText("主 Agent 派出的子 Agent，只能看")).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "回到主会话" }))
     expect(onBack).toHaveBeenCalled()
   })
@@ -196,8 +196,8 @@ describe("spawned sub-agents", () => {
         <MessageList events={SPAWN_EVENTS} onApproval={() => {}} onOpenSubagent={onOpen} />
       </LocaleProvider>,
     )
-    await userEvent.click(screen.getByRole("button", { name: /已工作|已处理/ }))
-    await userEvent.click(screen.getByRole("button", { name: "在标签页中打开 Explore" }))
+    await userEvent.click(screen.getByRole("button", { name: /做了|做完了/ }))
+    await userEvent.click(screen.getByRole("button", { name: "在标签页打开 Explore" }))
     expect(onOpen).toHaveBeenCalledWith("task_1")
   })
 })
@@ -205,7 +205,7 @@ describe("spawned sub-agents", () => {
 describe("sub-agent threads", () => {
   it("greet with their own text and note the main thread's brief before the first message", () => {
     const events = [
-      event(0, "thread.created", { title: "子代理", parentThreadId: "main" }, null),
+      event(0, "thread.created", { title: "子 Agent", parentThreadId: "main" }, null),
       event(1, "thread.updated", { handoff: "You are a sub-agent…" }, null),
     ]
     expect(buildTimeline(events)).toEqual([{ kind: "brief", key: "brief-1" }])
@@ -229,12 +229,12 @@ describe("sub-agent threads", () => {
             parentThreadId: "main",
           }}
           events={events}
-          empty={{ title: "和主会话并行工作", hint: "共用工作目录" }}
+          empty={{ title: "和主会话一起干活", hint: "共用工作目录" }}
         />
       </LocaleProvider>,
     )
-    expect(screen.getByRole("heading", { level: 1, name: "和主会话并行工作" })).toBeTruthy()
+    expect(screen.getByRole("heading", { level: 1, name: "和主会话一起干活" })).toBeTruthy()
     expect(screen.getByText("共用工作目录")).toBeTruthy()
-    expect(screen.getByRole("note").textContent).toBe("已附上主会话的近况")
+    expect(screen.getByRole("note").textContent).toBe("已带上主会话的最新情况")
   })
 })

@@ -1,92 +1,169 @@
 # Pigcode 桌面界面尺寸标准
 
-下表使用默认字号下的 CSS px。控件高度按操作位置选择，主次操作通过填充、描边和字重区分。同一排的确认与取消、文字按钮与图标按钮取同一高度。尺寸值由公共组件和主题变量提供。[尺寸变量](packages/ui-primitives/src/styles/tokens.css)
+尺寸以 Cursor 3.31.15 为准：Agent 窗口（glass 模式）和 Cursor Settings。数值是从安装包里实测的，来源是 `out/vs/workbench/workbench.glass.main.js` 里的 `@anysphere/ui` 组件（StyleX 模块，表里写模块名，可以在文件里直接搜到）和 `workbench.glass.main.css`。经典编辑器的值只在 Agent 窗口没有对应物时才用。
 
-## 按场景选高度
+所有尺寸都写在 [`tokens.css`](packages/ui-primitives/src/styles/tokens.css)，样式文件只引用 token。`scripts/style-check.ts` 的硬性规则保证颜色、圆角、字号和控件高度不在别处写死。下表都是默认字号下的 CSS px，界面字号设置会整体缩放字号和行高。
 
-| 高度 | 适用位置                               | 示例                                                                          |
-| ---: | -------------------------------------- | ----------------------------------------------------------------------------- |
-|   24 | 密集列表与行内辅助操作                 | 文件树行、文件搜索、插件条目的安装按钮                                        |
-|   28 | 日常导航和普通操作                     | 侧栏会话、菜单项、行内编辑、输入区的附件和发送、设置行与 Agent 向导里的输入框 |
-|   32 | 页头操作、弹窗操作、紧凑表单和弹层搜索 | 新建任务、添加实例、刷新、关闭弹窗、取消与确认、右栏 PR 字段                  |
-|   36 | 完整表单和页面主搜索                   | 项目名称、定时任务标题、市场搜索                                              |
+## 字号与行高
 
-页头和弹窗的文字操作用 `Button size="lg"`，独立图标操作用 `size="icon-lg"`，点击区为 32 × 32。弹窗正文中的列表行、组合输入与搜索按各自场景选档。标准桌面工具栏图标取 16，行内图标取 14，辅助箭头取 12。独立操作的点击区目标至少为 24 × 24，密集行可以扩大热区或由整行响应。键盘焦点应落在实际可操作的区域。[点击目标与间距](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+| 用途                                                     | 字号 / 行高 | 字重          | Cursor 出处                                          | Pigcode token                   |
+| -------------------------------------------------------- | ----------- | ------------- | ---------------------------------------------------- | ------------------------------- |
+| 计数、头像字母                                           | 10 / 12     | 400，计数 600 | `--cursor-font-size-2xs`，`CountBadge.tsx`           | `--fs-4xs` / `--lh-4xs`         |
+| 行号、标签上的计数                                       | 11 / 14     | 400           | `--cursor-font-size-xs`                              | `--fs-2xs` / `--lh-2xs`         |
+| 说明、分组标题、徽标、键帽、菜单里的说明                 | 12 / 16     | 400           | `--cursor-font-size-sm`，`section.tsx`、`kbd.tsx` md | `--fs-sm` / `--lh-sm`           |
+| 界面默认：按钮、输入框、菜单、侧栏行、设置行的标题和说明 | 13 / 18     | 400           | `--cursor-font-size-base`，`Fieldset.tsx`            | `--fs-md` / `--lh-md`           |
+| 弹窗标题                                                 | 15 / 24     | 500           | `Dialog.tsx` 标题（glass 模式下 lg 为 15/24）        | `--fs-heading` / `--lh-heading` |
+| 页面标题                                                 | 17 / 21     | 500           | `settingsTabContainer.react.js` 的 h1                | `--fs-title` / `--lh-title`     |
+| 新会话的问候                                             | 22 / 26     | 500           | `--cursor-font-size-3xl`（字距 −0.26px）             | `--fs-hero` / `--lh-hero`       |
+| 会话正文、工具调用行                                     | 15 / 24     | 400           | `--cursor-font-size-transcript`                      | `--fs-content`（行高 1.6）      |
+| 代码块                                                   | 12 / 18     | 400           | `DefaultCode.tsx`                                    | `--fs-code`                     |
 
-## 排版、留白与会话列
+字重只有三档：400 是默认；500 用在标题（页面、弹窗、卡片）和主按钮；600 只用在 Markdown 标题、头像字母和计数。界面正文的行高是 18/13 的比例，继承到 11 到 13 号字时接近 Cursor 的 14、16、18。
 
-| 文字用途             | 默认设计目标             |
-| -------------------- | ------------------------ |
-| 说明、插件页分组名   | 12                       |
-| 导航、列表           | 13                       |
-| 表单输入、设置行标题 | 14（设置行标题中等字重） |
-| 设置页分组名         | 15，半粗                 |
-| 会话正文             | 字号 15，行高 24         |
-| 弹窗标题、页面标题   | 分别为 16、20            |
+## 控件高度
 
-标签到字段留 6，并排操作留 8，卡片内边距取 12–16，分组间距取 24。设置行最小高度为 52，说明换行时随内容增高。小控件、表单、卡片的圆角依次为 6、8、12，聊天输入区和弹窗的目标圆角为 16。界面、会话正文和代码各自遵循用户选择的字号。
+圆角跟着高度走，这是 Cursor 组件库的默认值（`control-size.stylex.ts` 的高度配 `Sbe` 的圆角）。少数界面 Cursor 会显式改成胶囊，见下一节。
 
-侧栏默认宽 260，右栏默认宽 460。设置页（通用、外观、Agent 和插件的设置页）共用一个版心，内容最宽 720，比插件、定时任务页的 796 窄一档，内容区变窄时跟着收缩。设置页参照 t3code：页头、分组名和卡片里行的文字落在同一条左缘上，行与行之间一条通栏细线。Agent 页的「我的 Agent」是一张卡片，左边一栏列出全部 Agent，右边是选中那一个的设置，卡片高度跟着窗口、两栏各自滚动；内容区窄于 720 时列表叠到设置上面。三栏布局的设计目标是给会话预留 480，空间不足时先将右栏收窄到 320，再切换为浮层。草稿输入框与正式会话以同一正文列对齐。当前会话正文字号为 14，弹窗标题为 15，聊天输入区圆角为 14，窄窗按 960 的窗口断点切换。这些项目在各自的版式调整中迁移。
+| 高度 | 圆角 |     左右内边距 | Pigcode 档位                                                        | 用在哪里                                                                           | Cursor 出处                                                                                 |
+| ---: | ---: | -------------: | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+|   20 |    4 |              6 | `Button` sm / xs，`icon-sm` / `icon-xs`，`Input` sm / xs            | 设置行里的按钮、行尾小动作、工具条里的数值和色值                                   | `--cursor-height-sm`；Cursor Settings 的按钮都是 `size:"sm"`                                |
+|   24 |    6 |  8（输入框 6） | `Button` 默认，`icon`，`Input` md，搜索框默认和 compact             | 默认按钮、图标按钮、顶栏按钮、右栏工具条里的下拉（工作树、Diff 的基准）            | `--cursor-height-md`，`Button` 与 `IconButton` 默认 md                                      |
+|   28 |    8 | 10（输入框 8） | `Button` lg，`icon-lg`，`Input` 默认与 lg，`Select` 默认，搜索框 lg | 输入框和下拉的默认档（设置行、表单、弹窗）、页头和弹窗底栏的按钮、弹层搜索、侧栏行 | `--cursor-height-lg`；`Input.tsx`、`Select.tsx` 不写 size 时是 lg；`Dialog.tsx` 底栏强制 lg |
+|   32 |    8 |              8 | `Input` xl，搜索框 xl                                               | 主输入框：任务的名字、项目的路径                                                   | `--cursor-height-xl`，`InputGroup.tsx`                                                      |
+|   26 |    6 |              8 | 标签页                                                              | 右栏标签栏里的标签                                                                 | `TabSystem.stylex.ts`                                                                       |
+|   18 |    3 |              4 | 键帽、计数徽标                                                      | 所有快捷键提示（命令面板、菜单、侧栏、模型列表）、计数；按钮里的快捷键只写淡色文字 | `kbd.tsx` md（底色 `bg-quaternary`），`CountBadge.tsx` md；按钮的 `kbs`                     |
 
-会话中的动作名、命令、文件名和运行结果在默认深浅主题中与所在表面的对比度至少为 4.5∶1。失败保留文字说明并使用错误文字色。图标、箭头和分隔符可以比文字更淡。[文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+按钮文字 13/18，图标和文字之间 6，主按钮 500 字重。按钮里的图标：20 与 24 高的文字按钮 12，28 高的 14（`Button.tsx` 的 `dxn` 映射）；24 与 28 高的图标按钮里是 14，20 高的是 12（xs 档 10）。同一排的确认与取消、文字按钮与图标按钮取同一档。
 
-## 单行表单
+开关 32 × 20，滑块 16、离轨道 2；小号 26 × 16（`Switch.tsx` md / sm）。复选框 14、圆角 4、对勾 10（`Checkbox.tsx` md）。单选框 14，滑块轨道 6、拇指 14（`RadioGroup.tsx` / `Slider.tsx`）。分段控件外框 28，里面的项 24、圆角 6（`SegmentedControl.tsx` md）。多行输入框最小 64，是 Pigcode 自己的值（PR 说明这类表单），内边距和单行输入框相同。
 
-| 场景                                                | `Input` / 表单型下拉档位 | 高度 | 圆角 | 水平内边距 |
-| --------------------------------------------------- | ------------------------ | ---: | ---: | ---------: |
-| 常规表单、向导和项目名称                            | `xl`                     |   36 |    8 |         12 |
-| 右栏表单、带目录选择的单项安装弹窗                  | `lg`                     |   32 |    8 |         12 |
-| 行内编辑、环境变量、模型 ID、重复规则中的数字和日期 | `md`（默认）             |   28 |    6 |          8 |
-| 密集工具条里的数值编辑                              | `sm`                     |   24 |    6 |          8 |
-| 色值等空间有限的行内编辑                            | `xs`                     |   20 |    4 |          8 |
+普通字段用 `Input`，表单型 `Select.Trigger` 用 `input select-trigger` 和相同的 `data-size`。用 `.field` 排列标签、控件和说明，提示用 `.hint`，校验消息用 `.error-text`；无效字段设置 `aria-invalid` 并用 `aria-describedby` 关联错误提示。业务样式只设容器宽度、换行和排列，单行控件默认填满容器。输入框旁边的按钮和输入框取同一档高度。
 
-同一表单里的普通单行字段用同一档，包含名称、ID、路径、参数和表单型下拉。标识符可以用 `mono` 字体，和普通文本框共用字号（默认 14 px）、内边距和外框。Agent 路径框用 36 px，旁边的 32 px 选择按钮垂直居中。一个紧凑行里的输入框及其提交或删除按钮用同一档，已有 Agent 实例的改名行用 32 px。
+## 胶囊与圆形
 
-普通字段用 `Input`，表单型 `Select.Trigger` 用 `input select-trigger` 和相同的 `data-size`。公共下拉随容器收缩，较长的选中值通过 `grow truncate` 保留箭头空间。用 `.field` 排列标签、控件和说明，标签和说明各与输入框相隔 6 px。提示用 `.hint`，校验消息用 `.error-text`。无效字段设置 `aria-invalid` 并用 `aria-describedby` 关联错误提示，公共控件在悬停、聚焦时也显示错误描边。
+Cursor 的 Agent 窗口在几类界面里把控件显式改成两头全圆：`Button` 和 `IconButton` 传 `rounded`，或者外层用 `buttonRounded` 统一打开；`InputGroup` 和下拉触发器传 `shape="pill"`；还有 `Pill` 组件，它默认就是胶囊。Pigcode 在对应的界面照做。胶囊按钮的左右内边距比同一档的普通按钮多 2（20 高 8、24 高 10、28 高 12），图标和文字之间收到 4（`button-layout.stylex.ts` 的 `pill` / `pillSize`）；图标按钮仍是正方形，所以是正圆。
 
-业务样式可设容器宽度、换行和排列。单行控件默认填满容器。需要横向伸缩时，把 `flex: 1 1 auto` 和 `min-width: 0` 写在横排容器的直接子元素上。纵向分组保留组件的实际高度。
+| 界面                                                       | 尺寸                                                                  | Cursor 出处                                                                                                                                                     | Pigcode                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 新会话输入框下方的建议                                     | 28 高、左右 10、13/18、图标 14，1px 描边，底色和输入框卡片相同        | 输入框上方的「Changes」「Create PRs」：`composer-pill.react.js` → `agent-header-pill.react.js` → `Pill` lg、outline                                             | `.pill.suggest-chip`                        |
+| 筛选：插件市场的目录、插件管理的状态、定时任务的状态与页签 | 28 高、左右 10、13/18，1px 描边，胶囊之间 8；选中时铺底色、描边深一档 | 插件页的 Plugins / MCPs / Skills：`CustomizeManageView.tsx` 的 `Pill` lg、outline；选中 `bg-tertiary`、`stroke-primary`；`controlsScroll` 间距 8                | `.pill`，`SegmentedControl variant="pills"` |
+| 插件页的搜索                                               | 28 高                                                                 | `CustomizeEngine.tsx` 的 `InputGroup shape="pill"`（默认 lg）                                                                                                   | `SearchField size="lg" shape="pill"`        |
+| 页头的按钮（插件市场、插件管理、定时任务、任务编辑）       | 28 高、左右 12；图标按钮是 28 的正圆                                  | 插件页的「Manage」「Browse Marketplace」：`CustomizeEngine.tsx` 的 `Button` lg、`rounded`                                                                       | `Button shape="pill"`                       |
+| 对话里审批、计划确认、提问卡片的按钮                       | 24 高、左右 10、13/18，靠右、间距 6                                   | `TranscriptCardFooter.tsx`：`buttonRounded`、`buttonSize:"md"`；`ToolApprovalGate`、`AgentTranscriptSwitchModeCard`、`AgentTranscriptMcpElicitationCard` 都用它 | `Button shape="pill"`，`.perm .acts`        |
+| 输入框卡片里的加号和发送                                   | 24 的正圆，加号里的图标 14                                            | `PlusButtonTrigger.tsx`（`IconButton` md、`rounded`）、`PromptInputSubmitButton.tsx`（全圆、`--cursor-height-md`）                                              | `.composer-attach`，`.btn.send`             |
+| 横幅里的按钮                                               | 档位不变，只换成胶囊                                                  | `BannerLayout.tsx`：`buttonRounded`（`Banner`、`TrayBanner`）                                                                                                   | 文件查看器的冲突提示                        |
+| 提示条的关闭                                               | 20 的正圆                                                             | `ToastContent.tsx`：`IconButton` sm、`rounded`                                                                                                                  | `.toast-close`                              |
 
-多行表单使用 `Textarea`，最小高度 64 px，按行数或编辑需要增高。默认圆角和内边距为 6 px 和 8 px。在 PR 等含有 32 或 36 px 单行字段的表单里，使用 `Textarea size="lg"`，使整组字段共用 12 px 横向内边距和 8 px 圆角。
+其余控件保持跟着高度的圆角，和 Cursor 一样：设置页的按钮、输入框和下拉（Cursor Settings 里没有一处传 `rounded` 或 `shape`），弹窗底栏和关闭按钮（`Dialog.tsx` 底栏只设 `buttonSize:"lg"`，关闭是 lg 的 ghost 图标按钮），表单，菜单，顶栏按钮（`--glass-chrome-control-radius` 取 `--cursor-radius-base`），以及设置页里卡片和行内的小按钮。
 
-聊天编辑器、文件编辑器、主题代码编辑区和定时任务的组合规则各有独立布局。浏览器地址栏（28 px）、视口数值框（24 px）、侧栏行内重命名和颜色卡片内的色值（20 px）可以按所在容器调整外观和内边距。定时任务和浏览器设备预设里的胶囊下拉用 24 px。
+## 按钮的分工
 
-## 搜索框
+同一种操作在每一页长得一样，看颜色就知道它是做什么的：
 
-| 场景                             | 档位      | 高度 | 外框圆角 |
-| -------------------------------- | --------- | ---: | -------: |
-| 插件市场等页面主搜索             | `xl`      |   36 |       12 |
-| 设置、命令、模型、分支等弹层搜索 | `lg`      |   32 |        8 |
-| 普通区域中的筛选                 | `default` |   28 |        6 |
-| 文件树等密集侧栏                 | `compact` |   24 |        6 |
+- **主按钮（墨黑）**：一个界面里最主要的一件事，只有一个，放在一排按钮的最右边。页头里就是这一页的「新建 / 添加」（定时任务的「新建任务」、插件市场和插件管理的「添加」），弹窗里是确认，审批卡片里是「允许一次」，PR 面板里是「创建 PR」。
+- **次要按钮（白底细描边）**：其他要明确点一下的操作，比如页头的「插件管理」「检查更新」「立即运行」，行和卡片里的「安装」「更新」「打开」，设置行里的「检查」。
+- **透明按钮**：工具和退出类的操作，平时只有图标或文字，悬停才有底色。页头的刷新、来源、更多（⋯）一律是透明的圆形图标按钮；弹窗的「取消」「返回」也是透明的。
+- **危险按钮**：删除、完全访问这类不能撤回或风险高的确认，只出现在确认那一步。
 
-普通搜索用 `SearchField`。需要键盘选择候选项的搜索沿用 `Autocomplete`，把 `search-field` 和 `data-size` 放在输入组上。整个搜索框由输入组绘制，搜索图标用 `search-field-icon`，内层输入只负责文字录入。弹层里与列表连在一起的搜索行用 `plain` 外观。
+列表行和卡片里的按钮：插件页是 20 高的白底胶囊，旁边的「⋯」是 24 的圆形；设置页按 Cursor Settings 用 20 高、圆角 4 的普通按钮。可以点的卡片（插件卡片、定时任务和模板）都是白底细描边，悬停时深一级（`--surface-hover`），键盘聚焦时描边换成焦点色。
 
-搜索清除按钮的点击区目标为 24 × 24 px。页面主搜索已经使用这一尺寸，常规和紧凑搜索目前为 20 × 20 px，调整时在输入组内扩展热区。会话导航也可保留 2 px 的短线，将每一项的可点击高度扩展到 24 px。设置侧栏的搜索入口是 28 px 按钮，点击打开 32 px 的搜索弹层，选中结果后跳到对应设置页。
+## 行、菜单与浮层
 
-插件市场标题行的操作按钮用 32 px，目录筛选标签用 28 px，主搜索用 36 px。搜索与筛选同排时宽度上限为 320 px。市场内容区宽度在 560 px 及以下时，搜索另起一行并填满可用宽度。
+| 组件                       | 尺寸                                                                                                    | Cursor 出处                                | Pigcode token / 样式               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ---------------------------------- |
+| 侧栏行、设置导航、列表行   | 最小高 28，左右 6，图标和文字之间 6，圆角 8，13/18；行与行之间 2                                        | `Sidebar.stylex.ts`                        | `--row-h`，`list-rows.css`         |
+| 侧栏分组标题（项目、会话） | 最小高 30，13/18 常规字重灰字，分组之间 16                                                              | `SidebarGroupLabelRow.tsx`                 | `sidebar.css` 的 `.side-label`     |
+| 文件树行                   | 24                                                                                                      | `file-tree-entry-view` 的 `rowHeightPx`    | `--row-h-compact`                  |
+| 菜单项、下拉项             | 最小高 30，文字离外框 14，高亮离外框 6、圆角 8                                                          | `popup-list.stylex.ts`、`picker.stylex.ts` | `--menu-row-h`，`--menu-pad-x`     |
+| 菜单外框                   | 圆角 14，四周内衬 6，最小宽 200；分隔线上下 6、左右离外框 14；分组标题 12/16                            | `popup-list.stylex.ts`                     | `menus.css`                        |
+| 命令面板                   | 最宽 640，圆角 14，输入行左右 14；每项最小 32、内边距 6 × 8、圆角 8、图标和文字之间 10；分组标题最小 28 | `Palette.tsx`                              | `--palette-row-h`，`palette.css`   |
+| 浮层、下拉弹层             | 圆角 12，13/18                                                                                          | `floating-surface.stylex.ts`               | `.popup`                           |
+| 提示气泡                   | 13/18，内边距 6 × 10，圆角 8                                                                            | `floating-surface.stylex.ts` 的 tooltip    | `.tip-popup`                       |
+| 设置卡片里的设置行         | 内边距 12，文字和控件之间 20，单行 42 高；行间细线左右各收进 12                                         | `Fieldset.tsx`                             | `--row-h-lg`，`.group > .list-row` |
+| 设置行里的控件             | 输入框和下拉最宽 160                                                                                    | `Fieldset.tsx` 控件区 `10rem`              | `--agent-control-w`                |
 
-## 按钮和选择控件
+## 弹窗
 
-| 场景                             | `Button` 档位    | 高度 | 图标按钮尺寸 |
-| -------------------------------- | ---------------- | ---: | -----------: |
-| 页头和弹窗操作、工具栏、选择目录 | `lg` / `icon-lg` |   32 |      32 × 32 |
-| 普通动作、设置搜索入口           | `md` / `icon`    |   28 |      28 × 28 |
-| 密集列表、插件条目里的动作       | `sm` / `icon-sm` |   24 |      24 × 24 |
-| 行尾小动作，以图标按钮为主       | `xs` / `icon-xs` |   20 |      20 × 20 |
+宽度五档：sm 320、默认 400、lg 480、xl 560、2xl 640，距窗口边缘至少 16（`Dialog.tsx`）。圆角 12。头部内边距 16，标题 15/24、500 字重，关闭按钮 28 高、和标题那一行竖直居中。正文紧接头部，左右下 16，项与项之间 16，文字 13/18。底栏内边距 16，按钮之间 8，上面一条细线，按钮 28 高。
 
-24 px 文字按钮使用 `--fs-sm`（默认 12 px），20 px 档有文字时使用 `--fs-xs`（默认 11.5 px）。两档的行高均为字号的 1.25 倍，并跟随界面字号缩放。
+| 弹窗                                           | 宽度     |
+| ---------------------------------------------- | -------- |
+| 确认、删除这类小弹窗                           | 默认 400 |
+| 添加项目、插件详情、自定义重复                 | lg 480   |
+| 安装插件、添加插件市场、插件市场列表、设置搜索 | xl 560   |
+| 添加 Agent 向导、命令面板                      | 2xl 640  |
 
-`Switch` 默认 32 × 18，紧凑 `sm` 为 28 × 16。`Checkbox` 为 16 × 16，圆角 4。18 px 用于胶囊内动作和键帽，26 px 用于标题栏等专用控件。
+## 栏高
 
-## 源码与验收
+| 栏                               |       高度 | Cursor 出处                               | Pigcode token                              |
+| -------------------------------- | ---------: | ----------------------------------------- | ------------------------------------------ |
+| 侧栏顶行、对话头、右栏标签栏     |         40 | `--glass-chrome-bar-height`               | `--topbar-h`、`--bar-h`                    |
+| 顶栏里的按钮                     | 24，圆角 6 | `--glass-chrome-control-size`             | `.panel-top .btn-icon`、`.window-controls` |
+| 右栏文件查看器与终端抽屉的标题行 |         40 | 和顶栏统一（Cursor 的面板都用这一个栏高） | `--panel-head-h`                           |
+| 侧栏底部的账户行                 |         40 | 参照顶栏                                  | `--side-foot-h`                            |
 
-ZCode 的规范将常规表单定为 36 px，紧凑表单与行内输入用 28 或 32 px。Pigcode 把 36 px 收进 `Input size="xl"`。页面搜索和弹层搜索沿用各自的尺寸。 [ZCode 尺寸规范][zcode-design] · [Input][zcode-input] · [SettingsSearchInput][zcode-page-search] · [设置弹层][zcode-setting-search] · [CommandInput][zcode-command] · [分支切换][zcode-branch]
+## 圆角
 
-修改控件时，在真实页面检查相邻控件、文字起点与点击区，也检查窄窗口、大字号、聚焦和校验状态。Electron 回归覆盖 Agent 向导和改名、字段报错、PR 表单、文件树清除搜索及英文大字号的窄窗口市场。
+| 圆角 | 用在哪里                                                                | Cursor 出处                                         | Pigcode token  |
+| ---: | ----------------------------------------------------------------------- | --------------------------------------------------- | -------------- |
+|    2 | 细条、滑块轨道                                                          | `--cursor-radius-xs`                                | `--r-2xs`      |
+|    3 | 键帽                                                                    | `kbd.tsx`                                           | `--r-kbd`      |
+|    4 | 复选框、20 高的按钮、徽标                                               | `--cursor-radius-sm`                                | `--r-xs`       |
+|    6 | 24 高的按钮和输入框、标签页、弹窗列表行                                 | `--cursor-radius-base`                              | `--r-sm`       |
+|    8 | 28 与 32 高的控件、侧栏行、菜单项高亮、命令面板项、提示气泡、卡片里的块 | `--cursor-radius-lg`                                | `--r-block`    |
+|   12 | 卡片、弹窗、浮层、代码块、用户消息                                      | `--cursor-radius-xl`                                | `--r-panel`    |
+|   14 | 菜单与命令面板的外框                                                    | `--cursor-radius-2xl`                               | `--r-xl`       |
+|   20 | 对话输入框                                                              | `PromptInput.tsx` 的 `--prompt-input-border-radius` | `--r-composer` |
+| 全圆 | 胶囊与圆形（见上面「胶囊与圆形」），开关、头像、状态点                  | `--cursor-radius-full`                              | `--r-full`     |
 
-[zcode-design]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/DESIGN.md#sizing
-[zcode-input]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/packages/ui/src/components/ui/input.tsx
-[zcode-page-search]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/packages/ui/src/settings/SettingsSearchInput.tsx
-[zcode-setting-search]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/packages/ui/src/settings-search/SettingsSearch.tsx
-[zcode-command]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/packages/ui/src/components/ui/command.tsx
-[zcode-branch]: https://github.com/zai-org/ZCode/blob/fec975905a2abd4c07e35c40d51fa097a2258ec9/packages/ui/src/GitBranchSwitcher.tsx
+## 间距
+
+间距刻度是 2、4、6、8、10、12、16、20、24（`--space-1` 到 `--space-9`），都在 Cursor 的 `--cursor-spacing-*` 里。另有几个固定用途的间距：菜单与命令面板行的左右内边距 14（`--menu-pad-x`），页面左右边距 28、上下 48（`--page-pad-x` / `--page-pad-y`），分组之间 28（`--section-gap`），都取自 Cursor Settings（`glass-settings-panel` / `settingsTabContainer`）。
+
+## 图标
+
+图标四档：10、12、14、16（`.ui-icon` 的 xs / sm / base / lg），对应 `--icon-xs` 到 `--icon-lg`，描边 1.5（Cursor 内联 SVG 最常用的 `strokeWidth`）。侧栏行和菜单项的图标 14；对话区的图标跟对话字号走，15；顶栏按钮和应用图标 16。头像 16、24、32（`avatar.tsx` sm / lg / xxl），Agent 品牌图标 12、14、16、20、24。
+
+## 版心与布局
+
+- 所有页面（设置、插件、定时任务和它们的子页面）共用一个版心：内容最宽 680（Cursor Settings 的 `max-width: 42.5rem`），左右各 28、上下 48 的页边距（`--col-page`）。
+- 页头：标题 17/21，下面一行 13/18 的说明，左右各收进 8，头部到内容 20。子页面在标题上方放「‹ 上一页」的返回链接（`PageCrumbs`）。按钮是 28 高的胶囊；有新建或添加的页面，页头恰好一个主按钮，放在最右（见「按钮的分工」）。
+- 分组标题 12/16、常规字重的灰字，左边收进 8，到卡片 8；分组之间 28（`section.tsx`）。插件市场的分类、插件管理的分组和定时任务的分组也用这一种。
+- 两列卡片（插件市场、定时任务）在内容宽 600 以下换成一列，卡片圆角 12、内边距 12（Cursor 插件市场的卡片）。
+- 会话列最宽 780，左右各 16（`agent-panel-constants.js`）；侧栏默认 260（`constants.js`）。
+
+## Cursor 没有对应物的组件
+
+| Pigcode 组件                    | 参照的 Cursor 组件               | 取值                                                       |
+| ------------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| 插件卡片、定时任务卡片和模板    | 插件市场卡片和 Settings 分区卡片 | 圆角 12，内边距 12，标题 13/18、500，说明 12/16            |
+| 插件与 Agent 的字母头像         | 头像（`avatar.tsx`）             | 列表里 32，插件详情 35（Cursor 插件详情的 logo），中性底色 |
+| Agent 页左边的列表              | `DialogList.tsx` 的多行行        | 最小高 48，图标盒 20                                       |
+| Agent 品牌底座                  | 头像 xxl                         | 32                                                         |
+| 新会话的问候                    | `--cursor-font-size-3xl`         | 22/26，500                                                 |
+| 模型菜单                        | 菜单和下拉弹层                   | 外框圆角 14、行 30、最高 360；左栏按钮用 32 的图标按钮     |
+| 输入框卡片的紧凑一行            | `PromptInput.tsx` 与提交按钮     | 圆角 20，按钮 24，正文 15/24，卡片内衬 8                   |
+| 新会话里加高的输入区            | 无                               | 正文区最小 70，Pigcode 自己的值                            |
+| 命令面板与子 agent 标题的图标盒 | 侧栏的图标盒                     | 20                                                         |
+
+## 动效
+
+时长只有四档（Cursor 的 `--cursor-duration-*`）：100 用于悬停、按下和开关（`--t-fast`），150 用于菜单和浮层（`--t-med`），200 用于展开和进场（`--t-slow`），300 用于高度变化（`--t-slower`）。曲线统一用 `--ease`，只动颜色、底色、描边、透明度和 transform。
+
+- 按下：按钮、图标按钮和胶囊缩到 0.98（`--press-scale`，Cursor `press.stylex.ts` 的 `--ui-press-scale`）。
+- 浮层：菜单、下拉、悬浮提示和弹窗从触发它的那一侧淡入，并从 0.97 放大（`--enter-scale`），收起用 100（Cursor 浮层的 `data-starting-style`）。
+- 页面：设置、插件、定时任务这些页面打开时淡入并上移 4（`--enter-rise`），新会话的问候（连同后面的标志）用 300。
+- 一直在动的只留给真的在进行中的东西：运行中的点阵、工具调用行的流光、Agent 正在操作浏览器的提示。
+- 居中的弹窗和按钮用独立的 `translate` 定位，进出场和按下只改 `transform`，两者不会互相覆盖。
+- 系统打开「减少动态效果」时，动画和过渡全部关掉；外观设置可以单独打开。
+
+## 和 Cursor 不同、有意保留的地方
+
+- 细线用 0.5px（`--hair`），Cursor 是 1px。Pigcode 的描边颜色是按 0.5px 调的，直接改成 1px 会比 Cursor 重一倍；要换成 1px，需要同时把描边颜色调淡。
+- 右栏默认宽 460（`--right-w`）。Cursor 的右侧面板默认占一半宽度、最小 384，Pigcode 还没有改成按比例。
+- 输入框卡片在只有一行时把按钮和正文排在同一行，这是 Pigcode 的排法；部件尺寸照 Cursor。
+- 所有页头的按钮都用插件页页头的胶囊。Cursor 的自动化列表页（对应定时任务）页头是 24 高的普通按钮（`AutomationsListPage.tsx` 的「New Automation」），Pigcode 的页头是同一个组件，统一取插件页的样子。
+
+## 验收
+
+修改控件时，在真实页面检查相邻控件、文字起点与点击区，也检查窄窗口、大字号、聚焦和校验状态。点击区至少 24 × 24，密集行可以扩大热区或由整行响应。会话中的动作名、命令、文件名和运行结果在默认深浅主题中与所在表面的对比度至少为 4.5∶1，失败保留文字说明并使用错误文字色。视觉回归会检查页头和弹窗底栏的按钮都是 28 高。[文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)

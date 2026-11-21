@@ -88,7 +88,7 @@ describe("ChatView", () => {
     expect(screen.getByText("half an answer").closest(".msg-ai")).not.toBeNull()
     expect(screen.getByRole("button", { name: "已停止" })).toBeTruthy()
     expect(screen.queryByText("运行中")).toBeNull()
-    expect(screen.queryByRole("button", { name: "中断" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "停下" })).toBeNull()
   })
 
   it("offers copy and the reply time once a reply is finished", async () => {
@@ -208,7 +208,7 @@ describe("ChatView", () => {
       </LocaleProvider>,
     )
     expect(screen.queryByRole("button", { name: "允许一次" })).toBeNull()
-    expect(screen.queryByText("等待许可")).toBeNull()
+    expect(screen.queryByText("等你确认")).toBeNull()
   })
 
   /** streaming 为 false 时线程头与 composer 都不显示停止入口。 */
@@ -218,7 +218,7 @@ describe("ChatView", () => {
         <ChatView thread={thread} features={featuresWith({})} events={[]} streamingText="partial" />
       </LocaleProvider>,
     )
-    expect(screen.getAllByRole("button", { name: "中断" }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole("button", { name: "停下" }).length).toBeGreaterThan(0)
 
     rerender(
       <LocaleProvider locale="zh-CN">
@@ -230,7 +230,7 @@ describe("ChatView", () => {
         />
       </LocaleProvider>,
     )
-    expect(screen.queryAllByRole("button", { name: "中断" })).toHaveLength(0)
+    expect(screen.queryAllByRole("button", { name: "停下" })).toHaveLength(0)
   })
 
   /** 输入框的模型胶囊显示当前 agent 的模型；选别的 agent 的模型交给容器切换。 */
@@ -254,7 +254,7 @@ describe("ChatView", () => {
         />
       </LocaleProvider>,
     )
-    const chip = screen.getByRole("button", { name: /Agent 与模型/ })
+    const chip = screen.getByRole("button", { name: /Agent 和模型/ })
     expect(chip.textContent).toContain("GPT-5")
     await userEvent.click(chip)
     await userEvent.click(await screen.findByRole("tab", { name: "Claude Code" }))
@@ -290,7 +290,7 @@ describe("ChatView", () => {
         <ChatView thread={thread} events={[]} onToggleRight={onToggleRight} />
       </LocaleProvider>,
     )
-    expect(screen.getByRole("button", { name: "切换右侧面板" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "显示或隐藏右侧面板" })).toBeTruthy()
 
     rerender(
       <LocaleProvider locale="zh-CN">
@@ -303,14 +303,14 @@ describe("ChatView", () => {
       </LocaleProvider>,
     )
     expect(screen.getByRole("button", { name: "layout" })).toBeTruthy()
-    expect(screen.queryByRole("button", { name: "切换右侧面板" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "显示或隐藏右侧面板" })).toBeNull()
 
     rerender(
       <LocaleProvider locale="zh-CN">
         <ChatView thread={thread} events={[]} onToggleRight={onToggleRight} layoutControls={null} />
       </LocaleProvider>,
     )
-    expect(screen.queryByRole("button", { name: "切换右侧面板" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "显示或隐藏右侧面板" })).toBeNull()
     expect(screen.queryByRole("button", { name: "layout" })).toBeNull()
   })
 
@@ -361,12 +361,12 @@ describe("ChatView before the first message", () => {
     expect(project?.tagName).toBe("SPAN")
     expect(project?.textContent).toBe("会话所在的项目: Pigcode App")
     expect(project?.getAttribute("title")).toBe("/work/pigcode")
-    expect(placeholder()).toBe("描述要做的事，@ 文件，$ Skill，/ 命令")
+    expect(placeholder()).toBe("想做什么？@ 文件，$ Skill，/ 命令")
     await waitFor(() =>
       expect(document.activeElement?.closest(".new-thread .tiptap")).not.toBeNull(),
     )
 
-    await userEvent.click(screen.getByRole("button", { name: "补充测试" }))
+    await userEvent.click(screen.getByRole("button", { name: "补测试" }))
     expect(screen.getByRole("textbox").textContent).toBe(
       "给最近改动的代码补充单元测试，并运行确认全部通过。",
     )
@@ -402,7 +402,7 @@ describe("ChatView before the first message", () => {
     )
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull()
     expect(document.querySelector(".msg-user")?.textContent).toBe("修一下登录页")
-    expect(placeholder()).toBe("继续对话")
+    expect(placeholder()).toBe("接着说")
     await waitFor(() =>
       expect(document.activeElement?.closest(".composer-wrap .tiptap")).not.toBeNull(),
     )

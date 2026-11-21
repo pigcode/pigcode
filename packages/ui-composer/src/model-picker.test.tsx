@@ -107,7 +107,7 @@ function renderPicker(props: Partial<ComponentProps<typeof Composer>> = {}) {
   return {
     onSelectModel,
     onSubmit,
-    chip: () => screen.getByRole("button", { name: /Agent 与模型/ }),
+    chip: () => screen.getByRole("button", { name: /Agent 和模型/ }),
   }
 }
 
@@ -157,7 +157,7 @@ describe("ModelPicker", () => {
 
   it("starts at 默认 when nothing is stored: bare model name on the chip and no effort sent", async () => {
     const { chip, onSubmit } = renderPicker()
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 和模型: Claude Code · Opus · 完全访问")
     await userEvent.type(screen.getByRole("textbox"), "go")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("go", { effort: null })
@@ -174,10 +174,10 @@ describe("ModelPicker", () => {
     expect((await effortSlider()).getAttribute("aria-valuetext")).toBe("最高")
     await pickEffort("默认")
     expect(JSON.parse(window.localStorage.getItem("pigcode.modelEfforts") ?? "{}")).toEqual({})
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 和模型: Claude Code · Opus · 完全访问")
     expect(chip().textContent).not.toContain("最高")
     await userEvent.keyboard("{Escape}")
-    await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "plain")
+    await userEvent.type(screen.getByRole("textbox", { name: "给 Agent 的消息" }), "plain")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenLastCalledWith("plain", { effort: null })
   })
@@ -235,7 +235,7 @@ describe("ModelPicker", () => {
     expect(onLoadModels).toHaveBeenCalledWith("claude")
     expect(onLoadModels).not.toHaveBeenCalledWith("codex")
     await userEvent.click(chip())
-    expect(await screen.findByText("正在读取模型…")).toBeTruthy()
+    expect(await screen.findByText("正在读取…")).toBeTruthy()
     await userEvent.click(screen.getByRole("tab", { name: "Codex" }))
     await waitFor(() => expect(onLoadModels).toHaveBeenCalledWith("codex"))
   })
@@ -243,7 +243,7 @@ describe("ModelPicker", () => {
   it("filters with the search box and picks with ⌘/Ctrl+number", async () => {
     const { chip, onSelectModel } = renderPicker()
     await userEvent.click(chip())
-    const search = await screen.findByRole("searchbox", { name: "搜索模型…" })
+    const search = await screen.findByRole("searchbox", { name: "搜索模型" })
     await waitFor(() => expect(document.activeElement).toBe(search))
     await userEvent.type(search, "hai")
     const list = screen.getByRole("listbox", { name: "Claude Code" })
@@ -277,7 +277,7 @@ describe("ModelPicker", () => {
     await pickEffort("最高")
     expect(chip().textContent).toContain("最高")
     await userEvent.keyboard("{Escape}")
-    await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "deep")
+    await userEvent.type(screen.getByRole("textbox", { name: "给 Agent 的消息" }), "deep")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("deep", { effort: "max" })
   })
@@ -295,7 +295,7 @@ describe("ModelPicker", () => {
     // 「默认」是滑块最下面一档，方向键一样能走到它。
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}")
     expect(slider.getAttribute("aria-valuetext")).toBe("默认")
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 完全访问")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 和模型: Claude Code · Opus · 完全访问")
 
     await userEvent.keyboard("{Enter}")
     expect(onSelectModel).toHaveBeenCalledWith({
@@ -309,9 +309,9 @@ describe("ModelPicker", () => {
     const { chip, onSubmit } = renderPicker({ catalog: CLAUDE_CATALOG, modelId: "default" })
     // 没选过档位时交给 Claude Code 自己决定：胶囊上不显示，发送时也不带。
     expect(chip().getAttribute("aria-label")).toBe(
-      "Agent 与模型: Claude Code · Default (recommended) · 完全访问",
+      "Agent 和模型: Claude Code · Default (recommended) · 完全访问",
     )
-    const input = screen.getByRole("textbox", { name: "给 agent 的消息" })
+    const input = screen.getByRole("textbox", { name: "给 Agent 的消息" })
     await userEvent.type(input, "a")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenLastCalledWith("a", { effort: null })
@@ -321,12 +321,12 @@ describe("ModelPicker", () => {
     expect(within(list).getAllByRole("option")).toHaveLength(13)
     const slider = await effortSlider()
     // 列表再长，搜索框和思考深度也不在滚动的列表里。
-    expect(list.contains(screen.getByRole("searchbox", { name: "搜索模型…" }))).toBe(false)
+    expect(list.contains(screen.getByRole("searchbox", { name: "搜索模型" }))).toBe(false)
     expect(list.contains(slider)).toBe(false)
     expect(slider.getAttribute("aria-valuetext")).toBe("默认")
-    expect(await effortStops()).toEqual(["默认", "低", "中", "高", "超高", "最高"])
-    await pickEffort("超高")
-    expect(chip().textContent).toContain("超高")
+    expect(await effortStops()).toEqual(["默认", "低", "中", "高", "很高", "最高"])
+    await pickEffort("很高")
+    expect(chip().textContent).toContain("很高")
     await userEvent.keyboard("{Escape}")
     await userEvent.type(input, "go")
     await userEvent.keyboard("{Enter}")
@@ -336,7 +336,7 @@ describe("ModelPicker", () => {
   it("scrolls only the list to follow the keyboard, not the pointer", async () => {
     const { chip } = renderPicker({ catalog: CLAUDE_CATALOG, modelId: "default" })
     await userEvent.click(chip())
-    const search = await screen.findByRole("searchbox", { name: "搜索模型…" })
+    const search = await screen.findByRole("searchbox", { name: "搜索模型" })
     await waitFor(() => expect(document.activeElement).toBe(search))
     const list = screen.getByRole("listbox", { name: "Claude Code" })
     const options = within(list).getAllByRole("option")
@@ -374,7 +374,7 @@ describe("ModelPicker", () => {
     await screen.findByRole("listbox", { name: "Claude Code" })
     expect(screen.queryByRole("slider", { name: "思考深度" })).toBeNull()
     // 置灰的轨道留在原处，底栏不因换模型而跳动。
-    expect(screen.getByTitle("Haiku 没有可调的思考深度")).toBeTruthy()
+    expect(screen.getByTitle("Haiku 不能调思考深度")).toBeTruthy()
   })
 
   it("turns fast mode on per model, shows it on the chip and sends it", async () => {
@@ -384,15 +384,15 @@ describe("ModelPicker", () => {
     expect(fast.getAttribute("aria-pressed")).toBe("false")
     await userEvent.click(fast)
     expect(fast.getAttribute("aria-pressed")).toBe("true")
-    expect(fast.getAttribute("title")).toBe("快速模式 · 更快 · 计费更高")
+    expect(fast.getAttribute("title")).toBe("快速模式 · 更快，但更贵")
     expect(chip().getAttribute("aria-label")).toBe(
-      "Agent 与模型: Claude Code · Opus · 快速模式 · 完全访问",
+      "Agent 和模型: Claude Code · Opus · 快速模式 · 完全访问",
     )
     expect(JSON.parse(window.localStorage.getItem("pigcode.fastModels") ?? "[]")).toEqual([
       "claude/opus",
     ])
     await userEvent.keyboard("{Escape}")
-    await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "quick")
+    await userEvent.type(screen.getByRole("textbox", { name: "给 Agent 的消息" }), "quick")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenLastCalledWith("quick", { effort: null, fast: true })
   })
@@ -405,9 +405,9 @@ describe("ModelPicker", () => {
     const fast = await screen.findByRole("button", { name: "快速模式" })
     expect(fast.getAttribute("aria-pressed")).toBe("false")
     expect((fast as HTMLButtonElement).disabled).toBe(true)
-    expect(fast.getAttribute("title")).toBe("此模型不支持快速模式")
+    expect(fast.getAttribute("title")).toBe("这个模型没有快速模式")
     await userEvent.keyboard("{Escape}")
-    await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "plain")
+    await userEvent.type(screen.getByRole("textbox", { name: "给 Agent 的消息" }), "plain")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenLastCalledWith("plain", { effort: null })
   })
@@ -418,14 +418,14 @@ describe("ModelPicker", () => {
     // 有模型选择器时，权限不再是单独的胶囊。
     expect(screen.queryByRole("button", { name: /^权限/ })).toBeNull()
     await userEvent.click(chip())
-    await userEvent.click(await screen.findByRole("button", { name: "权限: 监督审批" }))
-    await userEvent.click(screen.getByRole("menuitemradio", { name: /接受编辑/ }))
+    await userEvent.click(await screen.findByRole("button", { name: "权限: 先问我" }))
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /自动改文件/ }))
     expect(onPermissionMode).toHaveBeenLastCalledWith("auto-accept-edits")
 
-    await userEvent.click(screen.getByRole("button", { name: "权限: 监督审批" }))
+    await userEvent.click(screen.getByRole("button", { name: "权限: 先问我" }))
     await userEvent.click(screen.getByRole("menuitemradio", { name: /完全访问/ }))
     expect(onPermissionMode).not.toHaveBeenCalledWith("full-access")
-    await userEvent.click(await screen.findByRole("button", { name: "启用完全访问" }))
+    await userEvent.click(await screen.findByRole("button", { name: "打开完全访问" }))
     expect(onPermissionMode).toHaveBeenLastCalledWith("full-access")
   })
 
@@ -433,17 +433,17 @@ describe("ModelPicker", () => {
     const { chip, onSubmit } = renderPicker()
     await userEvent.click(chip())
     const ultracode = await screen.findByRole("button", { name: "Ultracode" })
-    expect(ultracode.getAttribute("title")).toContain("子代理")
+    expect(ultracode.getAttribute("title")).toContain("子 Agent")
     await userEvent.click(ultracode)
     await userEvent.click(screen.getByRole("button", { name: "快速模式" }))
     expect(chip().getAttribute("aria-label")).toBe(
-      "Agent 与模型: Claude Code · Opus · 快速模式 · Ultracode · 完全访问",
+      "Agent 和模型: Claude Code · Opus · 快速模式 · Ultracode · 完全访问",
     )
     expect(JSON.parse(window.localStorage.getItem("pigcode.ultracodeModels") ?? "[]")).toEqual([
       "claude/opus",
     ])
     await userEvent.keyboard("{Escape}")
-    await userEvent.type(screen.getByRole("textbox", { name: "给 agent 的消息" }), "big job")
+    await userEvent.type(screen.getByRole("textbox", { name: "给 Agent 的消息" }), "big job")
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenLastCalledWith("big job", {
       effort: null,
@@ -455,7 +455,7 @@ describe("ModelPicker", () => {
   it("lists levels the interface does not know yet under their own names", async () => {
     const { chip } = renderPicker({ agentId: "codex", modelId: "gpt-6.1-sol" })
     await userEvent.click(chip())
-    expect(await effortStops()).toEqual(["默认", "不思考", "极低", "超高", "极限", "Turbo max"])
+    expect(await effortStops()).toEqual(["默认", "不思考", "最低", "很高", "极限", "Turbo max"])
     expect(chip().textContent).toContain("Turbo max")
     expect((screen.getByRole("button", { name: "Ultracode" }) as HTMLButtonElement).disabled).toBe(
       true,
@@ -464,14 +464,14 @@ describe("ModelPicker", () => {
 
   it("marks a non-default permission on the chip", () => {
     const { chip } = renderPicker({ permissionMode: "approval-required" })
-    expect(chip().getAttribute("aria-label")).toBe("Agent 与模型: Claude Code · Opus · 监督审批")
+    expect(chip().getAttribute("aria-label")).toBe("Agent 和模型: Claude Code · Opus · 先问我")
     expect(chip().querySelector(".model-chip-mode[data-mode='approval-required']")).toBeTruthy()
   })
 
   it("does not switch models while a run is going", async () => {
     const { chip, onSelectModel } = renderPicker({ running: true })
     await userEvent.click(chip())
-    expect(await screen.findByText(/运行中不能切换模型/)).toBeTruthy()
+    expect(await screen.findByText(/不能换模型/)).toBeTruthy()
     await userEvent.click(screen.getByText("Haiku"))
     expect(onSelectModel).not.toHaveBeenCalled()
   })

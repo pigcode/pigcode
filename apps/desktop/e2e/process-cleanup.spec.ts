@@ -21,7 +21,7 @@ function isAlive(pid: number): boolean {
 
 /** 打开终端，启动一个后台进程，返回它的 pid。 */
 async function startBackgroundProcess(page: Page, root: string, name: string): Promise<number> {
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   await page.getByLabel("打开一个面板").getByRole("button", { name: /终端/ }).click()
   await expect(page.locator(".xterm")).toBeVisible()
   await page.locator(".xterm").click()

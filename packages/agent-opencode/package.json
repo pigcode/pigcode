@@ -44,8 +44,8 @@
             "key": "binaryPath",
             "type": "path",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "pathKind": "file",
             "placeholder": "opencode"

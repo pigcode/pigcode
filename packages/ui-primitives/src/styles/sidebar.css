@@ -85,17 +85,8 @@
 .nav-item.back {
   margin-bottom: var(--space-3);
 }
-/* 快捷键徽标在悬停、键盘聚焦或按住 ⌘/Ctrl 时出现 */
+/* 快捷键键帽（base.css 的 kbd）在悬停、键盘聚焦或按住 ⌘/Ctrl 时出现 */
 .nav-kbd {
-  height: var(--control-xs);
-  padding: 0 7px;
-  border-radius: var(--r-full);
-  background: var(--active);
-  color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: var(--fs-2xs);
-  line-height: var(--control-xs);
-  letter-spacing: 0.02em;
   opacity: 0;
   transition: opacity var(--t-fast);
 }
@@ -105,23 +96,22 @@
   opacity: 1;
 }
 
-/* ─── 分区标题：「项目」「会话」与设置侧栏的分组名 ─────────── */
+/*
+  ─── 分区标题：「项目」「会话」与设置侧栏的分组名 ───────────
+  照 Cursor 侧栏的分组标题（SidebarGroupLabelRow）：最小高 30，13/18 常规字重的灰字，分组之间 16
+*/
 .side-label,
 .side-group {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: var(--row-h);
-  margin-top: 18px;
-  padding: 0 4px 0 var(--space-4);
+  gap: var(--space-1);
+  min-height: calc(var(--row-h) + var(--space-1));
+  margin-top: var(--space-7);
+  padding: 0 var(--space-2) 0 var(--space-4);
   color: var(--muted);
   font-size: var(--fs-md);
   font-weight: 400;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.side-group {
-  margin-top: 10px;
+  line-height: var(--lh-md);
 }
 .side-label span {
   flex: 1;
@@ -143,6 +133,8 @@
 /* 设置侧栏的搜索入口使用与导航行同高的普通按钮。 */
 .btn.settings-search-trigger {
   --button-icon-size: var(--icon-btn-lg);
+  height: var(--row-h);
+  border-radius: var(--r-block);
   justify-content: flex-start;
   width: 100%;
   gap: var(--space-4);
@@ -208,7 +200,7 @@
   flex: 0 1 auto;
   max-width: 84px;
   color: var(--faint);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .sess time {
   flex: none;
@@ -220,19 +212,7 @@
 .row-menu-area {
   display: block;
 }
-/* 按住 ⌘/Ctrl 时，前九个会话右侧的数字快捷键 */
-.sess-kbd {
-  flex: none;
-  height: var(--control-xs);
-  padding: 0 7px;
-  border-radius: var(--r-full);
-  background: var(--active);
-  color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: var(--fs-2xs);
-  line-height: var(--control-xs);
-  letter-spacing: 0.02em;
-}
+/* 按住 ⌘/Ctrl 时，前九个会话右侧的数字快捷键；选中的会话底色已经是灰的，键帽换成白底 */
 .sess.is-active .sess-kbd {
   background: var(--surface-raised);
 }
@@ -294,12 +274,11 @@
 .side-avatar .ic {
   width: var(--icon-md);
   height: var(--icon-md);
-  stroke-width: 1.6;
 }
 .side-foot .foot-gear {
-  width: var(--control-md);
-  height: var(--control-md);
-  border-radius: var(--r-md);
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
   background: none;
   color: var(--muted);
 }
@@ -315,7 +294,6 @@
 .side-foot .foot-gear .ic {
   width: var(--icon-md);
   height: var(--icon-md);
-  stroke-width: 1.4;
 }
 
 /* ─── 窄窗口：侧栏变成抽屉 ─────────────────────────────── */

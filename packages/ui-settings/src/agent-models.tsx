@@ -365,7 +365,13 @@ export function ModelsEditor({
                 }}
                 onKeyDown={onKeyDown}
               />
-              <Button type="button" variant="secondary" disabled={!draft.trim()} onClick={add}>
+              <Button
+                type="button"
+                size="lg"
+                variant="secondary"
+                disabled={!draft.trim()}
+                onClick={add}
+              >
                 <Plus className="ic ic-sm" aria-hidden="true" />
                 {t("agents.models.add")}
               </Button>

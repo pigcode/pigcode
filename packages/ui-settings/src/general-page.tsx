@@ -135,6 +135,7 @@ export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | 
         >
           {update?.status === "update-available" && update.url ? (
             <Button
+              size="sm"
               variant="secondary"
               onClick={() =>
                 onShowUpdates
@@ -146,6 +147,7 @@ export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | 
             </Button>
           ) : null}
           <Button
+            size="sm"
             variant="secondary"
             onClick={checkNow}
             disabled={checking || !nativeBridge()?.checkForUpdates}

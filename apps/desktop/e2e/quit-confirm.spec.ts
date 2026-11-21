@@ -35,7 +35,7 @@ test("quitting with a running task asks first", async () => {
     await expect.poll(prompts).toHaveLength(1)
     const [first] = await prompts()
     expect(first).toContain("还有工作在运行")
-    expect(first).toMatch(/\d+ 个任务正在运行或排队/)
+    expect(first).toMatch(/\d+ 个任务还在跑或在排队/)
     expect(await app.evaluate(({ app: electronApp }) => electronApp.isReady())).toBe(true)
     await expect(page.getByText("Hello from fake agent")).toBeVisible({ timeout: 30_000 })
 

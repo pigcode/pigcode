@@ -25,7 +25,7 @@
   flex: 0 1 auto;
   min-width: 0;
   height: var(--control-bar);
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   color: var(--muted);
 }
 .thread-tab:hover {
@@ -183,7 +183,7 @@
   min-height: var(--row-h-lg);
   margin: 0 auto;
   padding: 0 8px 0 14px;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-block);
   background: var(--field);
   color: var(--muted);
   font-size: var(--fs-sm);
@@ -194,7 +194,7 @@
   gap: 6px;
   height: var(--control-md);
   padding: 0 10px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   color: var(--fg-2);
 }
 .subagent-back:hover {

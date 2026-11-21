@@ -7,7 +7,7 @@
   color: var(--fg);
   font-family: var(--font-content);
   font-size: var(--cv-fs);
-  line-height: 1.75;
+  line-height: 1.6;
   letter-spacing: 0.025em;
   overflow-wrap: anywhere;
 }

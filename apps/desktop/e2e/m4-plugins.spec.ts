@@ -90,7 +90,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await searchTrigger.click()
   const settingsSearch = page.getByRole("dialog", { name: "搜索设置" })
   const search = settingsSearch.getByRole("combobox", { name: "搜索设置" })
-  await expect(search).toHaveCSS("height", "32px")
+  await expect(search).toHaveCSS("height", "28px")
   await expect(search).toBeFocused()
   await search.fill("debug")
   await settingsSearch.getByRole("option", { name: "Debug Settings" }).click()
@@ -127,7 +127,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(panel.getByText(hostTheme, { exact: true })).toBeVisible()
   await expect(panel.getByText(hostLocale ?? "", { exact: true })).toBeVisible()
 
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   const tabs = page.locator(".right-panel").getByRole("tab")
   const addSurface = page.getByRole("button", { name: "添加面板" })
   await addSurface.click()
@@ -182,11 +182,11 @@ test("installs, enables, and disables plugins without restart", async () => {
   await page.locator(".tiptap").click()
   await page.keyboard.press("ControlOrMeta+k")
   await page.locator(".palette input").fill("示例命令")
-  await expect(page.locator(".palette")).toContainText("没有匹配结果")
+  await expect(page.locator(".palette")).toContainText("没找到")
   await page.keyboard.press("Escape")
   await page.locator(".tiptap").click()
   await page.keyboard.type("/debug")
-  await expect(page.getByRole("listbox", { name: "命令" })).toContainText("没有匹配的命令")
+  await expect(page.getByRole("listbox", { name: "命令" })).toContainText("没找到命令")
   await page.keyboard.press("Escape")
   // 没有匹配时触发词留在输入框里，像 @ 一样要自己删掉。
   await page.keyboard.press("ControlOrMeta+a")
@@ -199,7 +199,7 @@ test("installs, enables, and disables plugins without restart", async () => {
 
   // 选中的 Debug 设置页已经没有了：再打开设置时是通用页，不是空白页。
   await page.getByRole("button", { name: "设置", exact: true }).click()
-  await expect(page.getByRole("heading", { level: 1, name: "通用设置" })).toBeVisible()
+  await expect(page.getByRole("heading", { level: 1, name: "通用", exact: true })).toBeVisible()
   await expect(sidebar.getByRole("button", { name: "通用", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
@@ -283,7 +283,7 @@ test("a plugin's contributions on all five extension points come and go with it"
     if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click()
     await expect(toggle).toHaveAttribute("aria-expanded", "true")
   }
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
 
   // 启用：Panel、Surface、Command、工具渲染器和设置页都出现。
   await showWork()
@@ -328,7 +328,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await page.locator(".tiptap").click()
   await page.keyboard.press("ControlOrMeta+k")
   await page.locator(".palette input").fill("示例命令")
-  await expect(page.locator(".palette")).toContainText("没有匹配结果")
+  await expect(page.locator(".palette")).toContainText("没找到")
   await page.keyboard.press("Escape")
 
   // 重新启用：渲染器回来，已经在时间线里的调用换回插件的显示。
@@ -385,7 +385,7 @@ test("a generated UI plugin is a React plugin and runs right after generating", 
   // 生成的 Surface 与设置页也由组件渲染。
   await page.getByRole("button", { name: "新会话" }).first().click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   await page.getByRole("button", { name: "添加面板" }).click()
   await page.getByRole("menuitem", { name: "Demo" }).click()
   await expect(page.locator("[data-plugin-content='demo-surface']")).toBeVisible()
@@ -436,7 +436,7 @@ test("a plugin written with React renders the host's ui-primitives and reads the
   // 右侧面板要先有会话才能切换。
   await page.getByRole("button", { name: "新会话" }).first().click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   await page.getByRole("button", { name: "添加面板" }).click()
   await page.getByRole("menuitem", { name: "React Inspector" }).click()
   const surface = page.locator("[data-plugin-content='react-inspector']")

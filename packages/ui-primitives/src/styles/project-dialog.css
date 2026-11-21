@@ -2,7 +2,7 @@
   创建项目对话框和源文件夹选择框。对话框外框在 dialogs.css。
 */
 .dialog.project-dialog {
-  width: min(520px, calc(100vw - 48px));
+  width: min(var(--dialog-w-lg), calc(100vw - 2 * var(--dialog-inset)));
 }
 /* 源文件夹：虚线框整体是一个按钮，点开系统的文件夹选择框；选好后显示文件夹名与完整路径 */
 /* 带 .dialog 前缀：圆角比全局焦点环（html :focus-visible）优先 */
@@ -46,7 +46,7 @@
 .project-folder-title {
   max-width: 100%;
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
 }
 .project-folder-hint {
   max-width: 100%;
@@ -55,5 +55,5 @@
 }
 .project-folder[data-selected] .project-folder-hint {
   font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }

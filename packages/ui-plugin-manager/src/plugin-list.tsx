@@ -120,6 +120,7 @@ function PluginTile({
         {hasUpdate && onUpdate ? (
           <Button
             size="sm"
+            shape="pill"
             type="button"
             className="market-pill"
             aria-label={fill(t("plugins.market.updateLabel"), { plugin: name })}
@@ -161,9 +162,9 @@ function PluginTile({
         {settingsPage && onOpenSettings ? (
           <Button
             size="sm"
-            variant="plain"
+            shape="pill"
             type="button"
-            className="market-open"
+            className="market-pill"
             aria-label={fill(t("plugins.openLabel"), { plugin: name })}
             onClick={() => onOpenSettings(settingsPage)}
           >

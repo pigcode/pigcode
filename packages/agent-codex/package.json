@@ -40,13 +40,13 @@
           "codex-acp"
         ],
         "description": {
-          "zh-CN": "OpenAI 的 Codex CLI，通过 app-server 协议提供审批、计划与原生会话恢复。",
-          "en-US": "OpenAI's Codex CLI over the app-server protocol, with approvals, plans and native session resume."
+          "zh-CN": "OpenAI 的编程 Agent，能写计划，也能接着上次的会话继续",
+          "en-US": "OpenAI's coding agent. It can plan and pick up past threads"
         },
         "homepage": "https://developers.openai.com/codex/cli",
         "installHint": {
-          "zh-CN": "安装 Codex CLI（npm i -g @openai/codex），然后运行 codex login 登录。",
-          "en-US": "Install the Codex CLI (npm i -g @openai/codex), then run codex login."
+          "zh-CN": "先安装 Codex（npm i -g @openai/codex），再运行 codex login 登录",
+          "en-US": "Install Codex (npm i -g @openai/codex), then run codex login"
         },
         "settings": [
           {
@@ -54,24 +54,27 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "codex",
             "description": {
-              "zh-CN": "留空时在 PATH 与常见安装目录中查找 codex。",
-              "en-US": "Leave blank to look up codex on PATH and in common install locations."
+              "zh-CN": "不填就自动找 codex",
+              "en-US": "Leave empty to find codex automatically"
             }
           },
           {
             "key": "homePath",
             "type": "path",
             "pathKind": "directory",
-            "label": "CODEX_HOME",
+            "label": {
+              "zh-CN": "配置文件夹",
+              "en-US": "Config folder"
+            },
             "placeholder": "~/.codex",
             "description": {
-              "zh-CN": "Codex 读取配置与登录信息的目录；留空使用默认位置。",
-              "en-US": "Where Codex keeps its config and credentials; blank uses the default."
+              "zh-CN": "Codex 放设置和登录信息的地方（CODEX_HOME）。不填就用默认位置。",
+              "en-US": "Where Codex keeps its settings and sign-in (CODEX_HOME). Leave empty for the default."
             }
           },
           {
@@ -79,13 +82,13 @@
             "type": "path",
             "pathKind": "directory",
             "label": {
-              "zh-CN": "账号隔离目录",
-              "en-US": "Shadow home path"
+              "zh-CN": "单独的账号文件夹",
+              "en-US": "Separate account folder"
             },
             "placeholder": "~/.codex-pigcode/work",
             "description": {
-              "zh-CN": "单独保存此账号的登录凭据，沿用 CODEX_HOME 中的配置与会话。",
-              "en-US": "Keep this account’s credentials separate and share configuration and sessions from CODEX_HOME."
+              "zh-CN": "这个账号的登录信息单独放，设置和会话还用 CODEX_HOME 里的",
+              "en-US": "Keeps this account's sign-in on its own. Settings and threads still come from CODEX_HOME."
             }
           },
           {
@@ -98,8 +101,8 @@
             },
             "placeholder": "-c model_reasoning_summary=detailed",
             "description": {
-              "zh-CN": "追加在 codex app-server 之后的参数。",
-              "en-US": "Extra arguments appended after codex app-server."
+              "zh-CN": "加在 codex app-server 后面的参数",
+              "en-US": "Extra arguments after codex app-server"
             }
           },
           {
@@ -110,8 +113,8 @@
               "en-US": "Environment variables"
             },
             "description": {
-              "zh-CN": "启动 Codex 时额外设置的环境变量，例如代理或 API 密钥。",
-              "en-US": "Extra environment variables for the Codex process, such as a proxy or API key."
+              "zh-CN": "启动 Codex 时加的环境变量，比如代理或 API 密钥",
+              "en-US": "Extra environment variables for Codex, like a proxy or API key"
             }
           },
           {
@@ -119,15 +122,15 @@
             "type": "select",
             "visibility": "hidden",
             "label": {
-              "zh-CN": "账号设置",
-              "en-US": "Account setup"
+              "zh-CN": "账号",
+              "en-US": "Account"
             },
             "options": [
               {
                 "value": "existing",
                 "label": {
-                  "zh-CN": "已有 CLI",
-                  "en-US": "Existing CLI"
+                  "zh-CN": "用电脑上装好的 Codex",
+                  "en-US": "Use Codex on this computer"
                 }
               },
               {

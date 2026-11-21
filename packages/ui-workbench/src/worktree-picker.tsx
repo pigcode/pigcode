@@ -65,6 +65,7 @@ export function WorktreePicker({
         >
           <Select.Trigger
             className="input select-trigger worktree-compact-select"
+            data-size="md"
             aria-label={t("worktree.label")}
           >
             <Select.Value className="grow truncate">

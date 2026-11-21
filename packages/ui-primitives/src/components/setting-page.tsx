@@ -1,7 +1,43 @@
 // 设置类页面的通用外框（设置、Agent、插件管理共用）：标题栏、内容列、分组与设置行。
 import type { ReactNode } from "react"
+import { ChevronLeft } from "lucide-react"
 import { cn } from "./cn"
 import { ListRow } from "./list-row"
+
+/**
+ * 子页面标题上方的返回链接：按钮上写上一页的名字，读屏读「返回 + 上一页」；
+ * current 给出时在后面接着写当前这一页。
+ */
+export function PageCrumbs({
+  back,
+  backLabel,
+  onBack,
+  current,
+}: {
+  back: string
+  backLabel: string
+  onBack: () => void
+  current?: string | undefined
+}) {
+  return (
+    <nav className="page-crumbs" aria-label={backLabel}>
+      <button type="button" className="page-back" aria-label={backLabel} onClick={onBack}>
+        <ChevronLeft className="ic ic-sm" aria-hidden="true" />
+        {back}
+      </button>
+      {current ? (
+        <>
+          <span className="page-crumb-sep" aria-hidden="true">
+            /
+          </span>
+          <span className="page-crumb-current truncate" aria-current="page">
+            {current}
+          </span>
+        </>
+      ) : null}
+    </nav>
+  )
+}
 
 /** 设置页容器：标题加居中内容列。所有设置页共用一个版心，内容区变窄时跟着收缩。 */
 export function SettingPage({

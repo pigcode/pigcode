@@ -71,7 +71,7 @@ describe("NewThreadView", () => {
 
   it("fills the input from a suggestion without sending it", async () => {
     const { onSubmit } = renderView()
-    await userEvent.click(screen.getByRole("button", { name: "审查改动" }))
+    await userEvent.click(screen.getByRole("button", { name: "检查改动" }))
     expect(screen.getByRole("textbox").textContent).toBe(
       "审查当前还没提交的改动，指出可能的 bug、风险和可以改进的地方。",
     )

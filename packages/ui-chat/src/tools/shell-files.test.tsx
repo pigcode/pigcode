@@ -57,9 +57,9 @@ describe("command rows", () => {
   it("shimmer while running without opening, and follow the live output once opened", async () => {
     const running = tool("Bash", { command: "bash -lc 'pnpm test'" }, { status: "running" })
     const { container } = inLocale(<ToolBlock tool={running} live={"✓ a\n✓ b\n"} />)
-    const head = screen.getByRole("button", { name: /正在执行/ })
+    const head = screen.getByRole("button", { name: /正在运行/ })
     expect(head.getAttribute("aria-expanded")).toBe("false")
-    expect(container.querySelector(".tool-shimmer")?.textContent).toBe("正在执行")
+    expect(container.querySelector(".tool-shimmer")?.textContent).toBe("正在运行")
     expect(head.textContent).toContain("pnpm test")
     await userEvent.click(head)
     expect(screen.getByLabelText("输出").textContent).toBe("✓ a\n✓ b")
@@ -80,7 +80,7 @@ describe("command rows", () => {
         )}
       />,
     )
-    const status = screen.getByText("执行失败")
+    const status = screen.getByText("失败")
     expect(status.className).toContain("has-tip")
     await userEvent.hover(status)
     const tip = await screen.findByText(/退出码 1/)
@@ -91,7 +91,7 @@ describe("command rows", () => {
   it("say when a finished command printed nothing", async () => {
     inLocale(<ToolBlock tool={tool("Bash", { command: "true" }, { output: "" })} />)
     await userEvent.click(screen.getByRole("button", { name: /终端/ }))
-    expect(screen.getByText("没有输出。")).toBeTruthy()
+    expect(screen.getByText("没有输出")).toBeTruthy()
   })
 
   it("group consecutive commands and count the failures", async () => {
@@ -115,12 +115,12 @@ describe("command rows", () => {
         onApproval={() => {}}
       />,
     )
-    await userEvent.click(screen.getByRole("button", { name: /已工作/ }))
+    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
     const group = screen.getByRole("button", { name: /终端.*2 个命令, 1 个失败/ })
     await userEvent.click(group)
     const children = group.parentElement!.querySelector(".tool-children")!
     expect(within(children as HTMLElement).getByText("pnpm lint")).toBeTruthy()
-    expect(within(children as HTMLElement).getByText("执行失败")).toBeTruthy()
+    expect(within(children as HTMLElement).getByText("失败")).toBeTruthy()
     expect(children.querySelector(".tool-row-icon")).toBeNull()
   })
 
@@ -157,7 +157,7 @@ describe("file rows", () => {
       />,
     )
     expect(screen.getByLabelText("+2 -1").textContent).toBe("+2-1")
-    await userEvent.click(screen.getByRole("button", { name: /编辑/ }))
+    await userEvent.click(screen.getByRole("button", { name: /修改/ }))
     const lines = [...container.querySelectorAll(".idiff-line")].map(
       (line) =>
         `${line.className.replace("idiff-line ", "")}:${line.querySelector(".idiff-code")?.textContent}`,
@@ -176,10 +176,10 @@ describe("file rows", () => {
         })}
       />,
     )
-    const head = screen.getByRole("button", { name: /编辑.*a\.ts.*b\.ts/ })
+    const head = screen.getByRole("button", { name: /修改.*a\.ts.*b\.ts/ })
     await userEvent.click(head)
     expect(head.textContent).toContain("2 个文件")
-    expect(screen.getAllByRole("button", { name: /写入|编辑/ })).toHaveLength(3)
+    expect(screen.getAllByRole("button", { name: /写入|修改/ })).toHaveLength(3)
   })
 })
 
@@ -195,7 +195,7 @@ describe("search rows", () => {
     expect(screen.getByText("answer").closest(".tool-row-head")?.textContent).toBe("搜索answer")
     expect(
       screen.getByText("https://pigcode.dev/docs").closest(".tool-row-head")?.textContent,
-    ).toBe("网页抓取https://pigcode.dev/docs")
+    ).toBe("读网页https://pigcode.dev/docs")
     expect(screen.getByText("正在搜索").className).toContain("tool-shimmer")
   })
 
@@ -218,9 +218,9 @@ describe("search rows", () => {
         onApproval={() => {}}
       />,
     )
-    await userEvent.click(screen.getByRole("button", { name: /已工作/ }))
-    const explore = screen.getByRole("button", { name: /查阅/ })
-    expect(explore.textContent).toBe("查阅·2 文件, 1 搜索, 1 次网页抓取")
+    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
+    const explore = screen.getByRole("button", { name: /查看/ })
+    expect(explore.textContent).toBe("查看·2 个文件, 1 次搜索, 1 个网页")
     await userEvent.click(explore)
     expect(screen.getByText("a.ts")).toBeTruthy()
     expect(screen.getByText("https://x.dev")).toBeTruthy()

@@ -1,5 +1,6 @@
 /*
-  搜索框：紧凑列表用 24，默认用 28，弹层用 32，页面用 36。外框用浅底与细描边，悬停与聚焦时加深描边，
+  搜索框（Cursor 的 InputGroup）：默认与紧凑列表 24，弹层 28，页面 32，圆角跟着高度（6 / 8 / 8），插件页的是 28 高的胶囊。
+  外框用浅底与细描边，悬停与聚焦时加深描边，
   输入框自己不画描边。命令面板与模型菜单顶上的一行用 plain：那一行本身就是输入框，没有底色和描边，
   和下面的列表之间由所在区域画一条细线。区域样式只补它所在位置的外边距，不再写搜索框的颜色、高度与圆角。
 */
@@ -10,12 +11,12 @@
   gap: var(--space-3);
   width: 100%;
   min-width: 0;
-  height: var(--control-md);
+  height: var(--control-sm);
   padding: 0 var(--space-4);
   border-radius: var(--r-sm);
   background: var(--input-bg);
   color: var(--muted);
-  font-size: var(--fs-xl);
+  font-size: var(--fs-md);
   box-shadow: var(--shadow-field);
   cursor: text;
   transition:
@@ -30,17 +31,17 @@
   font-size: var(--fs-sm);
 }
 .search-field[data-size="lg"] {
-  height: var(--control-lg);
+  height: var(--control-md);
   border-radius: var(--r-block);
 }
 .search-field[data-size="xl"] {
   --search-clear-size: var(--control-sm);
   --search-clear-background-size: var(--control-sm);
   --search-clear-icon-size: var(--icon-btn);
-  gap: var(--space-4);
-  height: var(--control-xl);
-  padding-inline: var(--space-6);
-  border-radius: var(--r-panel);
+  gap: var(--space-3);
+  height: var(--control-lg);
+  padding-inline: var(--space-4);
+  border-radius: var(--r-block);
 }
 .search-field[data-size="xl"]:has(.search-field-clear) {
   padding-inline-end: var(--space-2);
@@ -48,6 +49,10 @@
 .search-field[data-size="lg"],
 .search-field[data-size="xl"] {
   --search-icon-size: var(--icon-btn-lg);
+}
+/* 胶囊：插件页的搜索（Cursor CustomizeEngine 的 InputGroup shape="pill"），只换圆角 */
+.search-field[data-shape="pill"] {
+  border-radius: var(--r-full);
 }
 .search-field > .search-field-icon {
   width: var(--search-icon-size);

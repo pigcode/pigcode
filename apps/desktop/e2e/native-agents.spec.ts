@@ -18,12 +18,12 @@ const featured = [
 const extra = ["fx", "Kiro"]
 const forms: Record<string, string[]> = {
   Cursor: [],
-  "Muse Code": ["可执行文件"],
-  Pi: ["可执行文件", "启动参数"],
-  OpenCode: ["可执行文件", "服务器地址", "服务器密码"],
-  fx: ["可执行文件"],
-  Kiro: ["可执行文件"],
-  Grok: ["可执行文件"],
+  "Muse Code": ["程序位置"],
+  Pi: ["程序位置", "启动参数"],
+  OpenCode: ["程序位置", "服务器地址", "服务器密码"],
+  fx: ["程序位置"],
+  Kiro: ["程序位置"],
+  Grok: ["程序位置"],
 }
 
 // 实际的 Host、内置插件与 Registry 客户端照常加载，仅替换 Registry 的网络响应。
@@ -117,7 +117,10 @@ test("bundled agent choices, instance fields and native model discovery", async 
     await page.getByRole("button", { name: "添加 Agent", exact: true }).click()
     const wizard = page.getByRole("dialog", { name: "添加 Agent" })
     const group = wizard.getByRole("group", { name: "内置" })
-    await checkNames(group.getByRole("option"), [...featured, ...extra])
+    await checkNames(group.getByRole("option").locator(".agent-directory-name"), [
+      ...featured,
+      ...extra,
+    ])
     const catalog = wizard.getByRole("group", { name: "ACP Registry" })
     await expect(catalog.getByRole("option")).toHaveCount(1)
     await expect(catalog.getByRole("option")).toHaveAccessibleName("添加 unlisted-example")
@@ -136,7 +139,7 @@ test("bundled agent choices, instance fields and native model discovery", async 
       for (const label of fields)
         await expect(config.getByLabel(label, { exact: true })).toBeVisible()
       if (agent === "Grok") {
-        await config.getByLabel("可执行文件", { exact: true }).fill(grokFixture(directory))
+        await config.getByLabel("程序位置", { exact: true }).fill(grokFixture(directory))
         await wizard.getByRole("button", { name: "创建" }).click()
       } else {
         await wizard.getByRole("button", { name: "返回" }).click()
@@ -153,7 +156,7 @@ test("bundled agent choices, instance fields and native model discovery", async 
       label: "Grok 本地",
     })
     await page.getByRole("button", { name: "返回应用" }).first().click()
-    await page.getByRole("button", { name: /Agent 与模型/ }).click()
+    await page.getByRole("button", { name: /Agent 和模型/ }).click()
     await page.getByRole("tab", { name: "Grok 本地" }).click()
     await expect(page.getByRole("listbox", { name: "Grok 本地" })).toContainText("grok-fixture")
   } finally {

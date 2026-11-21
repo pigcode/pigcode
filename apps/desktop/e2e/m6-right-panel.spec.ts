@@ -66,21 +66,21 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
 
     // 底部终端始终与「打开」同在聊天顶部，右栏展开只迁移右栏自己的按钮。
     const header = page.locator(".panel-top")
-    const terminalToggle = header.getByRole("button", { name: "切换底部终端" })
+    const terminalToggle = header.getByRole("button", { name: "显示或隐藏终端" })
     const terminalButton = await terminalToggle.elementHandle()
-    await header.getByRole("button", { name: "切换右侧面板" }).click()
+    await header.getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     const bar = page.locator(".right-panel-bar")
     await expect(page.getByLabel("打开一个面板")).toBeVisible()
-    await expect(bar.getByRole("button", { name: "切换右侧面板" })).toHaveAttribute(
+    await expect(bar.getByRole("button", { name: "显示或隐藏右侧面板" })).toHaveAttribute(
       "aria-pressed",
       "true",
     )
-    await expect(header.getByRole("button", { name: "切换右侧面板" })).toHaveCount(0)
+    await expect(header.getByRole("button", { name: "显示或隐藏右侧面板" })).toHaveCount(0)
     await expect(terminalToggle).toBeVisible()
     expect(
       await terminalToggle.evaluate((button, before) => button === before, terminalButton),
     ).toBe(true)
-    await expect(bar.getByRole("button", { name: "切换底部终端" })).toHaveCount(0)
+    await expect(bar.getByRole("button", { name: "显示或隐藏终端" })).toHaveCount(0)
 
     // 焦点不在输入框时，单键 B 打开浏览器。
     await page.locator(".right-panel-body").click({ position: { x: 8, y: 8 } })
@@ -91,7 +91,7 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     const address = page.getByRole("textbox", { name: /输入网址/ })
     await address.fill("file:///etc/passwd")
     await address.press("Enter")
-    await expect(page.getByRole("alert")).toContainText("只支持 http/https 网址")
+    await expect(page.getByRole("alert")).toContainText("只能打开 http 或 https 网址")
     await address.fill(base)
     await address.press("Enter")
     await expect.poll(() => heading(app)).toBe("local home")
@@ -127,11 +127,11 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
       .click()
     await expect(page.locator(".new-thread-view")).toBeVisible()
     await expect(page.locator(".right-panel")).toBeHidden()
-    await expect(header.getByRole("button", { name: "切换右侧面板" })).toHaveAttribute(
+    await expect(header.getByRole("button", { name: "显示或隐藏右侧面板" })).toHaveAttribute(
       "aria-pressed",
       "false",
     )
-    await header.getByRole("button", { name: "切换右侧面板" }).click()
+    await header.getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await expect(page.getByLabel("打开一个面板")).toBeVisible()
     await expect(page.locator(".browser-hosted[data-shown]")).toHaveCount(0)
     await page.locator('.sess:not([aria-current="page"])').click()
@@ -145,12 +145,12 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
 
     // 最大化时聊天区隐藏，还原后回来。
-    await bar.getByRole("button", { name: "最大化面板" }).click()
+    await bar.getByRole("button", { name: "放大面板" }).click()
     await expect(page.locator(".app")).toHaveClass(/is-right-max/)
     await expect(page.locator("main.panel")).toBeHidden()
-    await bar.getByRole("button", { name: "还原面板大小" }).click()
+    await bar.getByRole("button", { name: "恢复大小" }).click()
     await expect(page.locator("main.panel")).toBeVisible()
-    await bar.getByRole("button", { name: "最大化面板" }).click()
+    await bar.getByRole("button", { name: "放大面板" }).click()
     await page.keyboard.press("Control+Backquote")
     await expect(page.locator("main.panel")).toBeVisible()
     const drawer = page.getByRole("region", { name: "底部终端" })
@@ -159,7 +159,7 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     await expect(drawer).toBeHidden()
 
     // 收起右栏后标签仍在；⌃` 打开底部终端并能执行命令，再按一次隐藏。
-    await bar.getByRole("button", { name: "切换右侧面板" }).click()
+    await bar.getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await expect(page.locator(".right-panel")).toBeHidden()
     await page.keyboard.press("Control+Backquote")
     await expect(drawer.locator(".xterm")).toBeVisible()
@@ -183,14 +183,14 @@ test("right panel surfaces, embedded browser, maximize and bottom terminal", asy
     // shell 自己退出时关掉它的标签，回到第一个终端。
     await expect(termTabs).toHaveCount(1)
     await expectTerminalText(drawer.locator(".terminal-pane:not([hidden]) .xterm"), "DRAWER_OK")
-    await expect(header.getByRole("button", { name: "切换底部终端" })).toHaveAttribute(
+    await expect(header.getByRole("button", { name: "显示或隐藏终端" })).toHaveAttribute(
       "aria-pressed",
       "true",
     )
     await page.keyboard.press("Control+Backquote")
     await expect(drawer).toBeHidden()
 
-    await header.getByRole("button", { name: "切换右侧面板" }).click()
+    await header.getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await expect(tabs).toHaveText(["终端 1", "终端 2"])
   } finally {
     await app.close()

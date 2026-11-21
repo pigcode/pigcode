@@ -32,7 +32,7 @@ const acp: AgentSummary = {
   error: null,
   instances: [],
   fields: [
-    { key: "binaryPath", type: "path", pathKind: "file", label: "可执行文件" },
+    { key: "binaryPath", type: "path", pathKind: "file", label: "程序位置" },
     { key: "arguments", type: "arguments", label: "启动参数" },
     { key: "registryId", type: "text", label: "ACP Registry ID" },
     { key: "authMethodId", type: "text", label: "认证方式 ID" },
@@ -181,9 +181,9 @@ it("uses the manual registry ID and executable override for a second configurati
   ]
   const { wizard, prepare, create } = await openWizard({ instances })
   expect(await wizard.findByRole("option", { name: "已添加 Amp" })).toHaveProperty("disabled", true)
-  await userEvent.click(button("输入 Registry ID"))
+  await userEvent.click(button("输入 ID"))
   await userEvent.type(field("ACP Registry ID"), item.id)
-  await userEvent.type(field("可执行文件"), "my-amp-acp")
+  await userEvent.type(field("程序位置"), "my-amp-acp")
   await userEvent.type(field("认证方式 ID"), "terminal")
   await userEvent.click(button("下一步"))
   await userEvent.clear(field("名字"))
@@ -201,9 +201,9 @@ it("uses the manual registry ID and executable override for a second configurati
 
 it("takes the literal local command before identity and finishes without an install or login step", async () => {
   const { wizard, prepare, create, auth } = await openWizard()
-  await userEvent.click(button("本地 ACP 命令"))
+  await userEvent.click(button("用本机命令"))
   expect(button("下一步")).toHaveProperty("disabled", true)
-  await userEvent.type(field("可执行文件"), "/path/to/acp command")
+  await userEvent.type(field("程序位置"), "/path/to/acp command")
   await userEvent.click(button("添加参数"))
   fireEvent.change(field("参数 1"), { target: { value: "acp" } })
   await userEvent.click(button("添加参数"))

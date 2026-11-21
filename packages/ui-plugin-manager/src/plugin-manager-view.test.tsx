@@ -120,7 +120,7 @@ describe("PluginManagerView", () => {
   it("shows why the Host can't support a plugin's apiVersion", async () => {
     const error = "unsupported plugin apiVersion: 2; this Host supports 1"
     renderView([{ ...DEMO, error }])
-    expect(tile("Demo").textContent).toContain("加载失败")
+    expect(tile("Demo").textContent).toContain("没加载上")
     const dialog = await openDetails("Demo")
     expect(within(dialog).getByText(error)).toBeTruthy()
   })
@@ -146,14 +146,10 @@ describe("PluginManagerView", () => {
     expect(tile("Other").textContent).not.toContain("有冲突")
     const dialog = await openDetails("Demo")
     expect(
-      within(dialog).getByText(
-        "右侧面板的 Surface「terminal」已经属于工作台，这个插件的同名登记没有生效。",
-      ),
+      within(dialog).getByText("右侧面板「terminal」已经被工作台用了，这个插件里的同名项没生效"),
     ).toBeTruthy()
     expect(
-      within(dialog).getByText(
-        "侧栏 Panel「status」已经属于插件 Other，这个插件的同名登记没有生效。",
-      ),
+      within(dialog).getByText("侧栏面板「status」已经被插件 Other用了，这个插件里的同名项没生效"),
     ).toBeTruthy()
   })
 
@@ -169,7 +165,7 @@ describe("PluginManagerView", () => {
     const dialog = await openDetails("Demo")
     expect(
       within(dialog).getByText(
-        "Command「$&-{owner}-$'」已经属于内置功能 chat，这个插件的同名登记没有生效。",
+        "命令「$&-{owner}-$'」已经被内置功能 chat用了，这个插件里的同名项没生效",
       ),
     ).toBeTruthy()
   })
@@ -184,17 +180,17 @@ describe("PluginManagerView", () => {
         ],
       },
     ])
-    expect(tile("Demo").textContent).toContain("加载失败")
+    expect(tile("Demo").textContent).toContain("没加载上")
     const dialog = await openDetails("Demo")
-    expect(within(dialog).getByText("界面代码没有加载成功：Failed to fetch $1")).toBeTruthy()
-    expect(within(dialog).getByText("界面代码运行出错：boom")).toBeTruthy()
+    expect(within(dialog).getByText("界面没加载上：Failed to fetch $1")).toBeTruthy()
+    expect(within(dialog).getByText("界面出错了：boom")).toBeTruthy()
   })
 
   it("lists a command that threw without marking the plugin as failed", async () => {
     renderView([{ ...DEMO, clientErrors: [{ kind: "command", detail: "debug-run: boom" }] }])
-    expect(tile("Demo").textContent).not.toContain("加载失败")
+    expect(tile("Demo").textContent).not.toContain("没加载上")
     const dialog = await openDetails("Demo")
-    expect(within(dialog).getByText("命令执行出错：debug-run: boom")).toBeTruthy()
+    expect(within(dialog).getByText("命令出错了：debug-run: boom")).toBeTruthy()
   })
 
   it("toggles a plugin and uninstalls from the details after confirming", async () => {
@@ -274,7 +270,7 @@ describe("PluginManagerView", () => {
     expect(tile("Echo")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Demo 的详情" })).toBeNull()
     await user.type(search, "zzz")
-    expect(screen.getByText("没有匹配的插件")).toBeTruthy()
+    expect(screen.getByText("没找到插件")).toBeTruthy()
     await user.keyboard("{Escape}")
     expect(tile("Demo")).toBeTruthy()
   })
@@ -307,7 +303,7 @@ describe("PluginManagerView", () => {
     expect(screen.queryByRole("searchbox")).toBeNull()
     await user.click(installs[1] as HTMLElement)
     const spec = "pigcode-agent-demo@1.0.0"
-    await user.type(screen.getByLabelText("GitHub 仓库、npm 包或插件目录"), spec)
+    await user.type(screen.getByLabelText("GitHub 仓库、npm 包或文件夹"), spec)
     await user.click(screen.getByRole("button", { name: "安装" }))
     expect(onInstall).toHaveBeenCalledWith(spec)
   })

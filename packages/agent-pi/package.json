@@ -42,12 +42,12 @@
         "featured": true,
         "homepage": "https://pi.dev/",
         "description": {
-          "zh-CN": "通过本机 Pi 接入会话。",
-          "en-US": "Connect sessions through the local Pi CLI."
+          "zh-CN": "用电脑上的 Pi",
+          "en-US": "Use Pi on this computer"
         },
         "installHint": {
-          "zh-CN": "安装 pi 并在其终端中登录。",
-          "en-US": "Install pi and sign in using its CLI."
+          "zh-CN": "先装好 pi，再在终端里登录",
+          "en-US": "Install pi, then sign in from the terminal"
         },
         "settings": [
           {
@@ -55,8 +55,8 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "pi"
           },
@@ -69,8 +69,8 @@
             },
             "monospace": true,
             "description": {
-              "zh-CN": "追加到 Pi RPC 进程的参数。",
-              "en-US": "Additional arguments for the Pi RPC process."
+              "zh-CN": "加给 Pi 的额外参数",
+              "en-US": "Extra arguments for Pi"
             }
           },
           {

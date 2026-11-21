@@ -42,8 +42,8 @@ test("scheduled tasks save the Composer input and create a separate thread on ea
       .getByRole("button", { name: "新建任务", exact: true })
       .click()
     const create = page.getByRole("button", { name: "创建任务", exact: true })
-    const prompt = page.getByRole("textbox", { name: "指令", exact: true })
-    await page.getByLabel("标题", { exact: true }).fill(title)
+    const prompt = page.getByRole("textbox", { name: "要做什么", exact: true })
+    await page.getByLabel("名字", { exact: true }).fill(title)
     await prompt.fill(first)
     await expect(create).toBeDisabled()
 
@@ -58,7 +58,7 @@ test("scheduled tasks save the Composer input and create a separate thread on ea
       .getByRole("button", { name: "添加项目", exact: true })
       .click()
     await page.getByRole("button", { name: "选择文件夹" }).click()
-    await page.getByRole("button", { name: "创建项目", exact: true }).click()
+    await page.getByRole("dialog").getByRole("button", { name: "添加", exact: true }).click()
     const modelChip = page.locator(".schedule-editor .model-chip")
     await expect(modelChip).toContainText("Fake Sage")
     await modelChip.click()
@@ -73,8 +73,8 @@ test("scheduled tasks save the Composer input and create a separate thread on ea
     await expect(sidebar.getByText(title, { exact: true })).toHaveCount(0)
     expect(await worktrees()).toHaveLength(0)
 
-    const runNow = page.getByRole("button", { name: "立即运行", exact: true })
-    const history = page.getByRole("tab", { name: "历史", exact: true })
+    const runNow = page.getByRole("button", { name: "现在运行", exact: true })
+    const history = page.getByRole("tab", { name: "运行记录", exact: true })
     const rows = page.locator(".schedule-runs tbody tr")
     await task.click()
     await history.click()
@@ -93,7 +93,7 @@ test("scheduled tasks save the Composer input and create a separate thread on ea
     await expect(prompt).toBeVisible()
     await page.keyboard.type("@定时")
     await expect(
-      page.getByRole("listbox", { name: "引用" }).getByRole("option").first(),
+      page.getByRole("listbox", { name: "提到" }).getByRole("option").first(),
     ).toContainText(title)
     await page.keyboard.press("Enter")
     const mention = () => prompt.locator('.mention-chip[data-kind="thread"]')
@@ -108,13 +108,13 @@ test("scheduled tasks save the Composer input and create a separate thread on ea
     expect(await worktrees()).toHaveLength(2)
     await expect(sidebar.getByText(title, { exact: true })).toHaveCount(2)
 
-    await rows.first().getByRole("button", { name: "跳到会话" }).click()
+    await rows.first().getByRole("button", { name: "打开会话" }).click()
     await expect(page.locator(".msg-user")).toContainText(second)
     await expect(page.locator(".msg-user .mention-thread")).toHaveText(title)
     await schedules.click()
     await task.click()
     await history.click()
-    await rows.nth(1).getByRole("button", { name: "跳到会话" }).click()
+    await rows.nth(1).getByRole("button", { name: "打开会话" }).click()
     await expect(page.locator(".msg-user")).toHaveText(first)
   } finally {
     await app.close()

@@ -191,12 +191,12 @@
 .mode-thumb {
   position: relative;
   display: block;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-panel);
   box-shadow: 0 0 0 var(--hair) var(--border-strong);
-  transition: box-shadow 0.16s var(--ease);
+  transition: box-shadow var(--t-med) var(--ease);
 }
 .mode-thumb .mini {
-  border-radius: var(--r-lg);
+  border-radius: var(--r-block);
 }
 /* 跟随系统：深色那一扇盖在浅色上，沿一条斜线切开 */
 .mode-thumb-dark {
@@ -281,9 +281,9 @@
   cursor: pointer;
 }
 .theme-tile .mini {
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   box-shadow: 0 0 0 var(--hair) var(--border-strong);
-  transition: box-shadow 0.16s var(--ease);
+  transition: box-shadow var(--t-med) var(--ease);
 }
 .theme-tile:hover .mini {
   box-shadow: 0 0 0 1px var(--border-strong);
@@ -323,7 +323,7 @@
   color: var(--muted);
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s var(--ease);
+  transition: opacity var(--t-fast) var(--ease);
 }
 .theme-tile-remove svg {
   width: 12px;
@@ -430,7 +430,7 @@
   box-shadow: none;
   color: var(--muted);
   font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   text-transform: uppercase;
 }
 .input.color-chip-hex:hover {
@@ -451,7 +451,7 @@
   border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: var(--shadow-raised);
-  transition: box-shadow 0.16s var(--ease);
+  transition: box-shadow var(--t-med) var(--ease);
 }
 .code-panel:focus-within {
   box-shadow:

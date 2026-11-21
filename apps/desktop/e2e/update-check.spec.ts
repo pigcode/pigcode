@@ -108,7 +108,7 @@ test("a failed check says so and leaves the app alone", async () => {
     await page.getByRole("button", { name: "设置", exact: true }).click()
     await page.getByRole("button", { name: "通用", exact: true }).first().click()
     await page.getByRole("button", { name: "检查", exact: true }).click()
-    await expect(page.getByText("检查失败，请稍后再试")).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText("没查到，稍后再试")).toBeVisible({ timeout: 10_000 })
   } finally {
     await app.close()
     server.close()

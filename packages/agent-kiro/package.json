@@ -42,12 +42,12 @@
         "featured": false,
         "homepage": "https://kiro.dev/cli/",
         "description": {
-          "zh-CN": "通过本机 Kiro 接入会话。",
-          "en-US": "Connect sessions through the local Kiro CLI."
+          "zh-CN": "用电脑上的 Kiro",
+          "en-US": "Use Kiro on this computer"
         },
         "installHint": {
-          "zh-CN": "安装 kiro-cli 并在其终端中登录。",
-          "en-US": "Install kiro-cli and sign in using its CLI."
+          "zh-CN": "先装好 kiro-cli，再在终端里登录",
+          "en-US": "Install kiro-cli, then sign in from the terminal"
         },
         "settings": [
           {
@@ -55,8 +55,8 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "kiro-cli"
           },

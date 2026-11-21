@@ -1,17 +1,18 @@
 /*
   胶囊按钮（.chip-btn）：输入区工具栏、输入框下方一行和线程头里的文字按钮，左边可以带图标，右边可以带下拉箭头。
+  尺寸和默认按钮一样：24 高、左右 8、圆角 6、13 号字（Cursor 的输入框工具条按钮）。
   所在区域只改颜色和内边距，写在区域样式里，用带区域类名的选择器。
 */
 .chip-btn {
   display: inline-flex;
-  height: var(--control-md);
+  height: var(--control-sm);
   min-width: 0;
   align-items: center;
-  gap: 5px;
-  padding: 0 8px;
-  border-radius: var(--r-md);
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
   color: var(--fg-2);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   white-space: nowrap;
   transition:
     background var(--t-fast),

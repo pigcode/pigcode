@@ -39,8 +39,8 @@
           "antigravity-acp"
         ],
         "description": {
-          "zh-CN": "Google Antigravity CLI，支持通过 ACP 使用独立的 Google 账号和原生会话。",
-          "en-US": "Google Antigravity CLI over ACP, with per-instance Google sign-in and native sessions."
+          "zh-CN": "Google 的编程 Agent，每个都能登录自己的 Google 账号",
+          "en-US": "Google's coding agent. Each one can sign in to its own Google account"
         },
         "homepage": "https://antigravity.google/docs/cli/acp",
         "settings": [
@@ -91,8 +91,8 @@
               "en-US": "API key"
             },
             "description": {
-              "zh-CN": "用于 Gemini API 或 Vertex AI Express，由 Host 单独保存。",
-              "en-US": "Gemini or Vertex AI express key. Stored separately on the host."
+              "zh-CN": "Gemini API 或 Vertex AI Express 用的密钥，单独加密保存",
+              "en-US": "Key for the Gemini API or Vertex AI Express, stored on its own"
             }
           },
           {
@@ -104,7 +104,7 @@
             },
             "placeholder": "my-project-id",
             "description": {
-              "zh-CN": "Gemini Enterprise 需要项目和区域。Vertex AI 也可使用 API 密钥。",
+              "zh-CN": "Gemini Enterprise 要填项目和区域。Vertex AI 也可以用 API 密钥。",
               "en-US": "Gemini Enterprise needs a project and location. Vertex AI can also use an API key."
             }
           },
@@ -122,13 +122,13 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "agy",
             "description": {
-              "zh-CN": "留空使用托管安装，或查找 PATH 中的 agy。",
-              "en-US": "Leave blank to use the managed installation or find agy on PATH."
+              "zh-CN": "不填就用 Pigcode 装的版本，或者自动找 agy",
+              "en-US": "Leave empty to use the copy Pigcode installed, or find agy automatically"
             }
           },
           {
@@ -139,8 +139,8 @@
               "en-US": "Environment variables"
             },
             "description": {
-              "zh-CN": "为这个实例设置代理等运行环境。",
-              "en-US": "Configure the running environment for this instance, such as a proxy."
+              "zh-CN": "给这个 Agent 设置代理等环境",
+              "en-US": "Set things like a proxy for this agent"
             }
           }
         ]

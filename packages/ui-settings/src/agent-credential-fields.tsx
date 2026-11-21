@@ -66,7 +66,7 @@ export function CredentialField({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="icon-lg"
             aria-label={t("agents.secret.clear") + " " + label}
             onClick={() => onChange("")}
           >
@@ -139,7 +139,7 @@ export function EnvironmentEditor({
                 )}
                 <Button
                   type="button"
-                  size="icon"
+                  size="icon-lg"
                   variant="ghost"
                   className="agent-env-lock"
                   data-sensitive={entry.sensitive || undefined}
@@ -165,7 +165,7 @@ export function EnvironmentEditor({
                 </Button>
                 <Button
                   type="button"
-                  size="icon"
+                  size="icon-lg"
                   variant="ghost"
                   className="agent-env-remove"
                   aria-label={t("agents.env.remove") + " " + (entry.name || index + 1)}
@@ -222,7 +222,7 @@ export function LiteralArguments({
             onChange={(e) => onChange(args.map((v, j) => (i === j ? e.target.value : v)))}
           />
           <Button
-            size="icon"
+            size="icon-lg"
             variant="ghost"
             type="button"
             aria-label={t("agents.arguments.remove") + " " + (i + 1)}

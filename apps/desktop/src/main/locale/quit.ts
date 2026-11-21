@@ -11,18 +11,18 @@ export interface QuitLabels {
 
 const ZH_CN: QuitLabels = {
   title: "还有工作在运行",
-  runs: "{count} 个任务正在运行或排队，退出会中断它们。",
-  approvals: "{count} 个请求在等待你的审批。",
-  schedules: "{count} 个定时任务已启用，退出后不会触发。",
+  runs: "{count} 个任务还在跑或在排队，退出会让它们停下",
+  approvals: "{count} 个请求在等你确认",
+  schedules: "{count} 个定时任务开着，退出后到点也不会跑",
   quit: "退出",
   stay: "继续运行",
 }
 
 const EN_US: QuitLabels = {
   title: "Work is still running",
-  runs: "{count} task(s) are running or queued and will be interrupted.",
-  approvals: "{count} request(s) are waiting for your approval.",
-  schedules: "{count} scheduled task(s) are enabled and won't run while Pigcode is closed.",
+  runs: "{count} task(s) are running or waiting and will stop",
+  approvals: "{count} request(s) are waiting for you",
+  schedules: "{count} scheduled task(s) are on and won't run while Pigcode is closed",
   quit: "Quit",
   stay: "Keep running",
 }

@@ -164,7 +164,7 @@ describe("Shell", () => {
     renderShell()
 
     fireEvent.click(screen.getByRole("button", { name: "搜索" }))
-    expect(screen.getByRole("dialog", { name: "行动" })).toBeTruthy()
+    expect(screen.getByRole("dialog", { name: "操作" })).toBeTruthy()
   })
 
   it("does not open the command palette over an open dialog", () => {
@@ -174,11 +174,11 @@ describe("Shell", () => {
     document.body.append(dialog)
 
     fireEvent.keyDown(window, { key: "k", metaKey: true })
-    expect(screen.queryByRole("dialog", { name: "行动" })).toBeNull()
+    expect(screen.queryByRole("dialog", { name: "操作" })).toBeNull()
 
     dialog.remove()
     fireEvent.keyDown(window, { key: "k", metaKey: true })
-    expect(screen.getByRole("dialog", { name: "行动" })).toBeTruthy()
+    expect(screen.getByRole("dialog", { name: "操作" })).toBeTruthy()
   })
 
   it("places chat and the right panel side by side in the workspace", () => {
@@ -435,7 +435,7 @@ describe("Shell", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: "搜索" }))
-    const dialog = screen.getByRole("dialog", { name: "行动" })
+    const dialog = screen.getByRole("dialog", { name: "操作" })
     const input = dialog.querySelector("input") as HTMLInputElement
     // 内置命令由 Shell 登记，order 小于 0；缺省 order 的插件命令排在它们后面。
     const labels = screen.getAllByRole("option").map((item) => item.textContent ?? "")
@@ -448,7 +448,7 @@ describe("Shell", () => {
     expect(onPlugin).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole("button", { name: "搜索" }))
-    fireEvent.change(screen.getByRole("dialog", { name: "行动" }).querySelector("input")!, {
+    fireEvent.change(screen.getByRole("dialog", { name: "操作" }).querySelector("input")!, {
       target: { value: "debug" },
     })
     fireEvent.click(screen.getByRole("option", { name: /Run the sample command/ }))

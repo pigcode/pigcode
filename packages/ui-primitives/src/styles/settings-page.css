@@ -1,149 +1,165 @@
 /*
-  设置页与插件管理页：SettingPage 的页面宽度与页头，分区标题，分组卡片与卡片里的设置行。
+  页面骨架：设置、插件、定时任务和它们的子页面共用一个版心、页头、分组标题和分组卡片，
+  尺寸照 Cursor Settings（settingsTabContainer / section.tsx / Fieldset.tsx），对照见 DESIGN.md。
   设置行是 ListRow，这里用 .group > .list-row 只改间距与分隔线。
 */
 .page {
-  max-width: var(--col);
+  max-width: var(--col-page);
   margin: 0 auto;
-  padding: 8px 32px 72px;
-}
-/* 设置页共用一个版心：通用、外观、Agent 切换时标题和卡片的左缘不动 */
-.page.settings-page {
-  max-width: var(--col-settings);
-}
-/* 两列卡片的页面（插件、定时任务）；卡片栏按页面自己的宽度换成一列 */
-.page.wide {
-  max-width: var(--col-wide);
+  padding: var(--page-pad-y) var(--page-pad-x);
   container-type: inline-size;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .page {
+    animation: page-in var(--t-slow) var(--ease) backwards;
+  }
+}
+/* 页头：标题 17/21 中等字重，下面一行说明；左右各收进 8，头部到内容 20 */
 .page-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin: 24px 0 20px;
-  min-height: var(--page-head-h);
+  gap: var(--space-7);
+  margin: 0 0 var(--space-8);
+  padding: 0 var(--space-4);
 }
 .page-head h1 {
   font-size: var(--fs-title);
-  font-weight: 600;
-  line-height: 1.25;
+  font-weight: 500;
+  line-height: var(--lh-title);
 }
 .page-head .sub {
-  margin-top: 4px;
+  margin-top: var(--space-2);
   color: var(--muted);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .page-head .actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-4);
   flex: none;
+}
+/* 子页面标题上方的返回链接（PageCrumbs）：「‹ 上一页」，可以接着写当前这一页 */
+.page-crumbs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.page-back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--control-sm);
+  padding: 0 var(--space-3) 0 var(--space-1);
+  border-radius: var(--r-sm);
+  color: var(--muted);
+}
+.page-back:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.page-crumb-sep {
+  opacity: 0.6;
+}
+.page-crumb-current {
+  color: var(--fg-2);
 }
 /* ─── 分组与行 ─────────────────────────────────────────── */
 .section {
-  margin-top: 28px;
+  margin-top: var(--section-gap);
 }
+.page-head + .section {
+  margin-top: 0;
+}
+/* 分组标题：12/16 常规字重的灰字，左边收进 8，到卡片 8 */
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  min-height: var(--section-head-h);
-  margin: 0 4px 8px;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-4);
+  padding: 0 var(--space-2) 0 var(--space-4);
 }
-/* 分组名：比行标题小一号、淡一档，按句子大小写，不加字距 */
 .section-head :is(h2, h3) {
   color: var(--muted);
   font-family: var(--font-ui);
   font-size: var(--fs-sm);
-  font-weight: 500;
+  font-weight: 400;
+  line-height: var(--lh-sm);
 }
 /* 分组名后面的计数或摘要 */
 .section-title {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
   min-width: 0;
 }
 .section-meta {
   min-width: 0;
   overflow: hidden;
   color: var(--faint);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.section-note {
+  margin: calc(var(--space-2) * -1) var(--space-4) var(--space-4);
 }
 .group {
   border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: var(--shadow-raised);
 }
-/* 分组卡片里的设置行：卡片的内边距，标题与控件之间留宽一些；单行的行 52 高，行之间一条细线 */
+/* 卡片里的设置行：内边距 12，文字和控件之间 20，单行 42 高；标题和说明都是 13/18 */
 .group > .list-row {
-  gap: var(--space-7);
-  min-height: calc(var(--row-h) + var(--space-9));
-  padding: var(--space-6) var(--space-7);
+  gap: var(--space-8);
+  min-height: var(--row-h-lg);
+  padding: var(--space-6);
+  border-radius: 0;
+}
+.group > .list-row:first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+.group > .list-row:last-child {
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 /* 设置行的标题可以换行（定时任务的标题是用户写的任务内容），说明可以选中复制 */
 .group > .list-row .list-row-title {
+  line-height: var(--lh-md);
   white-space: normal;
 }
 .group > .list-row .list-row-desc {
   max-width: 64ch;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   -webkit-user-select: text;
   user-select: text;
 }
+/* 行与行之间一条细线，左右各收进 12，第一行上面没有 */
 .group > .list-row + .list-row::before {
   content: "";
   position: absolute;
   top: 0;
-  left: var(--space-7);
-  right: var(--space-7);
+  left: var(--space-6);
+  right: var(--space-6);
   height: var(--hair);
   background: var(--border-strong);
   pointer-events: none;
 }
 
-/*
-  ─── 设置页（通用、外观、Agent）：参照 t3code 的设置页 ─────────
-  页头、分组标题都缩进到卡片里行文字的位置，所有文字落在同一条左缘上，卡片像是围着文字的框。
-  分组标题是深色的小标题，行标题比正文大一档、中等字重，说明是浅一档的小字；行与行之间一条通栏细线。
-*/
-.settings-page > .page-head {
-  margin-bottom: 0;
-  padding-inline: var(--space-7);
-}
-.settings-page .section {
-  margin-top: 32px;
-}
-.settings-page .section-head {
-  min-height: var(--control-md);
-  margin: 0 var(--space-7) var(--space-5);
-}
-.settings-page .section-head :is(h2, h3) {
-  color: var(--fg);
-  font-size: var(--fs-heading);
-  font-weight: 600;
-}
-.settings-page .section-note {
-  margin: -4px var(--space-7) var(--space-6);
-}
-.settings-page .group > .list-row .list-row-title {
-  font-size: var(--fs-xl);
-  font-weight: 500;
-}
-.settings-page .group > .list-row .list-row-desc {
-  line-height: 1.5;
-}
-.settings-page .group > .list-row + .list-row::before {
-  left: 0;
-  right: 0;
-}
-
 @media (max-width: 640px) {
   .page {
-    padding: 4px 16px 64px;
+    padding: var(--space-9) var(--space-7);
   }
   .page-head {
     flex-direction: column;

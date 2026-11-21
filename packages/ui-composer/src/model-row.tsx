@@ -69,9 +69,7 @@ export function ModelRow({
         current || rowIndex < 9 ? (
           <>
             {current ? <Check className="ic ic-sm model-row-check" aria-hidden="true" /> : null}
-            {rowIndex < 9 ? (
-              <kbd className="model-row-kbd">{formatShortcut(`Mod+${rowIndex + 1}`)}</kbd>
-            ) : null}
+            {rowIndex < 9 ? <kbd>{formatShortcut(`Mod+${rowIndex + 1}`)}</kbd> : null}
           </>
         ) : null
       }

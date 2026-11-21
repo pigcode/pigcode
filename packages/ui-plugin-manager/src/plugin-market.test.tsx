@@ -101,7 +101,7 @@ async function openAddMenu(): Promise<void> {
 }
 
 async function openPersonal(): Promise<void> {
-  await userEvent.click(screen.getByRole("radio", { name: "个人" }))
+  await userEvent.click(screen.getByRole("radio", { name: "我的" }))
 }
 
 describe("plugin marketplace", () => {
@@ -121,14 +121,14 @@ describe("plugin marketplace", () => {
         },
       ],
     })
-    expect(screen.getByRole("radio", { name: "公开" }).getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByRole("radio", { name: "官方" }).getAttribute("aria-checked")).toBe("true")
     expect(screen.getByRole("button", { name: "Codex 的详情" })).toBeTruthy()
     expect(screen.queryByRole("switch")).toBeNull()
     expect(screen.queryByRole("radio", { name: /已安装/ })).toBeNull()
     expect(screen.queryByRole("region", { name: "开发工具" })).toBeNull()
     await userEvent.click(screen.getByRole("radio", { name: "社区" }))
-    expect(screen.getByText("暂无社区插件")).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "前往个人市场" }))
+    expect(screen.getByText("还没有社区插件")).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "去「我的」看看" }))
     expect(screen.getByRole("region", { name: "开发工具" })).toBeTruthy()
     expect(screen.queryByRole("button", { name: "Codex 的详情" })).toBeNull()
   })
@@ -142,7 +142,7 @@ describe("plugin marketplace", () => {
     const clock = within(section)
       .getByRole("button", { name: "时钟 的详情" })
       .closest(".market-tile")!
-    expect(clock.textContent).toContain("可更新")
+    expect(clock.textContent).toContain("有新版本")
     await userEvent.click(within(section).getByRole("button", { name: "更新 时钟" }))
     expect(props.onUpdate).toHaveBeenCalledWith("capability.pigcode-clock")
     await userEvent.click(within(section).getByRole("button", { name: "安装 笔记" }))
@@ -154,17 +154,17 @@ describe("plugin marketplace", () => {
     await openPersonal()
     const clock = screen.getByRole("button", { name: "时钟 的详情" }).closest(".market-tile")!
     expect(clock.textContent).toContain("已安装")
-    expect(clock.textContent).not.toContain("可更新")
+    expect(clock.textContent).not.toContain("有新版本")
     await userEvent.type(screen.getByRole("searchbox"), "笔记")
     expect(screen.queryByRole("button", { name: "时钟 的详情" })).toBeNull()
     expect(screen.getByRole("button", { name: "笔记 的详情" })).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "插件管理" }))
     expect(screen.getByRole("heading", { name: "插件管理" })).toBeTruthy()
-    expect(screen.queryByRole("radio", { name: "个人" })).toBeNull()
+    expect(screen.queryByRole("radio", { name: "我的" })).toBeNull()
     expect(screen.getByRole("button", { name: "Clock 的详情" })).toBeTruthy()
     await userEvent.type(screen.getByRole("searchbox"), "Clock")
     await userEvent.click(screen.getByRole("button", { name: "返回插件市场" }))
-    expect(screen.getByRole("radio", { name: "个人" }).getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByRole("radio", { name: "我的" }).getAttribute("aria-checked")).toBe("true")
     expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("笔记")
     expect(screen.getByRole("button", { name: "笔记 的详情" })).toBeTruthy()
   })
@@ -174,7 +174,7 @@ describe("plugin marketplace", () => {
     await openPersonal()
     await userEvent.click(screen.getByRole("button", { name: "时钟 的详情" }))
     const dialog = await screen.findByRole("dialog", { name: "时钟" })
-    expect(dialog.textContent).toContain("市场里有新版本 0.2.0")
+    expect(dialog.textContent).toContain("有新版本 0.2.0")
     expect(dialog.textContent).toContain("pigcode-clock")
     expect(dialog.textContent).toContain("Alice")
     await userEvent.click(within(dialog).getByRole("button", { name: /example\.com\/clock/ }))
@@ -187,7 +187,7 @@ describe("plugin marketplace", () => {
     const onCreatePlugin = vi.fn(async () => false)
     renderView({ onCreatePlugin })
     await openAddMenu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: /创建插件/ }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /写一个插件/ }))
     expect(onCreatePlugin).toHaveBeenCalled()
     expect((await screen.findByRole("alert")).textContent).toContain("先添加一个项目")
   })
@@ -201,39 +201,37 @@ describe("plugin marketplace", () => {
     await openAddMenu()
     await userEvent.click(await screen.findByRole("menuitem", { name: /添加插件市场/ }))
     const dialog = await screen.findByRole("dialog", { name: "添加插件市场" })
-    await userEvent.type(within(dialog).getByLabelText("来源"), "acme/tools")
+    await userEvent.type(within(dialog).getByLabelText("地址"), "acme/tools")
     const submit = within(dialog).getByRole("button", { name: "添加" }) as HTMLButtonElement
     expect(submit.disabled).toBe(true)
-    await userEvent.click(within(dialog).getByRole("checkbox", { name: /我已了解风险/ }))
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /我知道风险/ }))
     expect(submit.disabled).toBe(false)
     await userEvent.click(submit)
-    expect((await within(dialog).findByRole("alert")).textContent).toContain(
-      "这里没有插件市场的目录文件",
-    )
-    expect((within(dialog).getByLabelText("来源") as HTMLInputElement).value).toBe("acme/tools")
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("这里没有插件清单")
+    expect((within(dialog).getByLabelText("地址") as HTMLInputElement).value).toBe("acme/tools")
     await userEvent.click(submit)
     expect(onAddMarketplace).toHaveBeenLastCalledWith("acme/tools")
     await vi.waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "添加插件市场" })).toBeNull(),
     )
-    expect(screen.getByRole("radio", { name: "个人" }).getAttribute("aria-checked")).toBe("true")
+    expect(screen.getByRole("radio", { name: "我的" }).getAttribute("aria-checked")).toBe("true")
   })
 
   it("refreshes and removes marketplaces in the sources dialog", async () => {
     const props = renderView()
-    await userEvent.click(screen.getByRole("button", { name: /^市场源/ }))
-    const dialog = await screen.findByRole("dialog", { name: "市场源" })
-    expect(within(dialog).getByRole("status").textContent).toBe("1 个市场源")
+    await userEvent.click(screen.getByRole("button", { name: /^管理插件市场/ }))
+    const dialog = await screen.findByRole("dialog", { name: "插件市场" })
+    expect(within(dialog).getByRole("status").textContent).toBe("1 个插件市场")
     // 从这个来源装了时钟：一行里写着已安装几个。
-    expect(dialog.textContent).toContain("2 个插件 · 已安装 1 个")
+    expect(dialog.textContent).toContain("2 个插件 · 装了 1 个")
     await userEvent.click(within(dialog).getByRole("button", { name: "刷新 开发工具" }))
     expect(props.onRefreshMarketplaces).toHaveBeenCalledWith("dev-tools")
     await userEvent.click(within(dialog).getByRole("button", { name: "全部刷新" }))
     expect(props.onRefreshMarketplaces).toHaveBeenLastCalledWith()
     await userEvent.click(within(dialog).getByRole("button", { name: "开发工具 的更多操作" }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "删除市场源" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "删除这个市场" }))
     expect(props.onRemoveMarketplace).not.toHaveBeenCalled()
-    expect(dialog.textContent).toContain("从它安装的插件会保留")
+    expect(dialog.textContent).toContain("从它装的插件还在")
     await userEvent.click(within(dialog).getByRole("button", { name: "删除" }))
     expect(props.onRemoveMarketplace).toHaveBeenCalledWith("dev-tools")
   })
@@ -244,13 +242,13 @@ describe("plugin marketplace", () => {
       onSetMarketplaceEnabled,
       marketplaces: [{ ...MARKET, sourceUrl: "https://github.com/acme/tools", enabled: true }],
     })
-    await userEvent.click(screen.getByRole("button", { name: /^市场源/ }))
-    const dialog = await screen.findByRole("dialog", { name: "市场源" })
+    await userEvent.click(screen.getByRole("button", { name: /^管理插件市场/ }))
+    const dialog = await screen.findByRole("dialog", { name: "插件市场" })
     await userEvent.click(within(dialog).getByRole("switch", { name: "启用 开发工具" }))
     expect(onSetMarketplaceEnabled).toHaveBeenCalledWith("dev-tools", false)
 
     await userEvent.click(within(dialog).getByRole("button", { name: "开发工具 的更多操作" }))
-    await userEvent.click(await screen.findByRole("menuitem", { name: "在浏览器中打开" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "在浏览器打开" }))
     expect(props.onOpenExternal).toHaveBeenCalledWith("https://github.com/acme/tools")
   })
 
@@ -259,10 +257,10 @@ describe("plugin marketplace", () => {
     renderView({ onSetMarketplaceEnabled, marketplaces: [{ ...MARKET, enabled: false }] })
     await openPersonal()
     expect(screen.queryByRole("region", { name: "开发工具" })).toBeNull()
-    expect(screen.getByText("市场源都已停用")).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "管理市场源…" }))
-    const dialog = await screen.findByRole("dialog", { name: "市场源" })
-    expect(within(dialog).getByRole("status").textContent).toBe("1 个市场源，1 个已停用")
+    expect(screen.getByText("插件市场都停用了")).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "管理插件市场…" }))
+    const dialog = await screen.findByRole("dialog", { name: "插件市场" })
+    expect(within(dialog).getByRole("status").textContent).toBe("1 个插件市场，1 个停用了")
     expect(dialog.textContent).toContain("已停用")
     await userEvent.click(within(dialog).getByRole("switch", { name: "启用 开发工具" }))
     expect(onSetMarketplaceEnabled).toHaveBeenCalledWith("dev-tools", true)
@@ -279,24 +277,24 @@ describe("plugin marketplace", () => {
     await openPersonal()
     const menu = () => userEvent.click(screen.getByRole("button", { name: "开发工具 的操作" }))
     await menu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "刷新这个市场源" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "刷新这个市场" }))
     expect(props.onRefreshMarketplaces).toHaveBeenCalledWith("dev-tools")
     await menu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "停用这个市场源" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "停用这个市场" }))
     expect(onSetMarketplaceEnabled).toHaveBeenCalledWith("dev-tools", false)
     await menu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "管理市场源…" }))
-    expect(await screen.findByRole("dialog", { name: "市场源" })).toBeTruthy()
+    await userEvent.click(await screen.findByRole("menuitem", { name: "管理插件市场…" }))
+    expect(await screen.findByRole("dialog", { name: "插件市场" })).toBeTruthy()
   })
 
   it("explains marketplaces when there are none, with ways to get plugins", async () => {
     const props = renderView({ marketplaces: [] })
     await openPersonal()
-    expect(screen.getByRole("heading", { name: "还没有个人市场源" })).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "还没添加插件市场" })).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "从 GitHub 安装" }))
     expect(await screen.findByRole("dialog", { name: "安装插件" })).toBeTruthy()
     await userEvent.keyboard("{Escape}")
-    await userEvent.click(screen.getByRole("button", { name: "创建插件" }))
+    await userEvent.click(screen.getByRole("button", { name: "写一个插件" }))
     expect(props.onCreatePlugin).toHaveBeenCalled()
   })
 
@@ -319,7 +317,7 @@ describe("plugin marketplace", () => {
     await userEvent.click(await screen.findByRole("menuitem", { name: /安装插件/ }))
     const dialog = await screen.findByRole("dialog", { name: "安装插件" })
     await userEvent.type(
-      within(dialog).getByLabelText("GitHub 仓库、npm 包或插件目录"),
+      within(dialog).getByLabelText("GitHub 仓库、npm 包或文件夹"),
       "acme/missing",
     )
     await userEvent.click(within(dialog).getByRole("button", { name: "安装" }))

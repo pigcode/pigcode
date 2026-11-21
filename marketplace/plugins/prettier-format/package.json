@@ -22,7 +22,7 @@
       "zh-CN": "Prettier 格式化"
     },
     "description_i18n": {
-      "zh-CN": "在会话右侧用 Prettier 格式化 JavaScript、TypeScript、JSON 和 CSS。由 Pigcode 适配。"
+      "zh-CN": "在右侧面板把 JavaScript、TypeScript、JSON 和 CSS 代码排整齐。由 Pigcode 适配。"
     }
   }
 }

@@ -48,12 +48,12 @@ describe("OpenInButton", () => {
     mockNative({ platform: "darwin", listOpenApps, openWithApp })
     renderButton("/Users/me/app")
 
-    const main = await screen.findByRole("button", { name: "在 Finder 中打开" })
+    const main = await screen.findByRole("button", { name: "用 Finder 打开" })
     expect(main.querySelector("img")?.getAttribute("src")).toBe(APPS[0]?.icon)
     await userEvent.click(main)
     expect(openWithApp).toHaveBeenLastCalledWith("finder", "/Users/me/app")
 
-    await userEvent.click(screen.getByRole("button", { name: "选择打开方式" }))
+    await userEvent.click(screen.getByRole("button", { name: "选打开方式" }))
     const items = await screen.findAllByRole("menuitem")
     expect(items.map((item) => item.querySelector(".grow")?.textContent)).toEqual([
       "Finder",
@@ -67,7 +67,7 @@ describe("OpenInButton", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Cursor" }))
     expect(openWithApp).toHaveBeenLastCalledWith("cursor", "/Users/me/app")
     expect(window.localStorage.getItem("pigcode.openInApp")).toBe("cursor")
-    expect(await screen.findByRole("button", { name: "在 Cursor 中打开" })).toBeTruthy()
+    expect(await screen.findByRole("button", { name: "用 Cursor 打开" })).toBeTruthy()
     // 挂载时取一次，每次打开菜单再刷新。
     expect(listOpenApps).toHaveBeenCalledTimes(2)
   })
@@ -85,8 +85,8 @@ describe("OpenInButton", () => {
     })
     renderButton("C:\\work\\app")
 
-    expect(await screen.findByRole("button", { name: "在 资源管理器 中打开" })).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "选择打开方式" }))
+    expect(await screen.findByRole("button", { name: "用 资源管理器 打开" })).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "选打开方式" }))
     await userEvent.click(await screen.findByRole("menuitem", { name: "复制路径" }))
     expect(writeText).toHaveBeenCalledExactlyOnceWith("C:\\work\\app")
     expect(await screen.findByText("已复制路径")).toBeTruthy()
@@ -100,8 +100,8 @@ describe("OpenInButton", () => {
     })
     renderButton("/home/me/gone")
 
-    await userEvent.click(await screen.findByRole("button", { name: "在 Cursor 中打开" }))
-    expect(await screen.findByText("无法打开文件夹 /home/me/gone")).toBeTruthy()
+    await userEvent.click(await screen.findByRole("button", { name: "用 Cursor 打开" }))
+    expect(await screen.findByText("打不开文件夹 /home/me/gone")).toBeTruthy()
   })
 
   it("uses the same split button for files and offers editors and the system default", async () => {
@@ -109,22 +109,22 @@ describe("OpenInButton", () => {
     mockNative({ platform: "darwin", listOpenApps: vi.fn().mockResolvedValue(APPS) })
     renderButton("/home/me/project/notes.md", openFile)
 
-    const options = screen.getByRole("button", { name: "选择打开方式" })
-    await userEvent.click(screen.getByRole("button", { name: "使用系统默认应用打开" }))
+    const options = screen.getByRole("button", { name: "选打开方式" })
+    await userEvent.click(screen.getByRole("button", { name: "用默认应用打开" }))
     expect(openFile).toHaveBeenLastCalledWith(null)
     await userEvent.click(options)
     expect(await screen.findByRole("menuitem", { name: "Cursor" })).toBeTruthy()
     expect(screen.queryByRole("menuitem", { name: /Finder|Ghostty/ })).toBeNull()
     await userEvent.click(screen.getByRole("menuitem", { name: "Cursor" }))
     expect(openFile).toHaveBeenLastCalledWith("cursor")
-    expect(screen.getByRole("button", { name: "在 Cursor 中打开" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "用 Cursor 打开" })).toBeTruthy()
     expect(window.localStorage.getItem("pigcode.openInFileApp")).toBe("cursor")
 
     options.focus()
     await userEvent.keyboard("{ArrowDown}")
-    await userEvent.click(await screen.findByRole("menuitem", { name: "使用系统默认应用打开" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "用默认应用打开" }))
     expect(openFile).toHaveBeenLastCalledWith(null)
-    expect(screen.getByRole("button", { name: "使用系统默认应用打开" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "用默认应用打开" })).toBeTruthy()
     expect(window.localStorage.getItem("pigcode.openInFileApp")).toBeNull()
   })
 

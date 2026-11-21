@@ -1,9 +1,10 @@
 // 插件市场用于浏览与安装。插件管理有独立的工具栏和列表，返回市场时保留来源与搜索词。
 import { useEffect, useRef, useState } from "react"
-import { ArrowLeft, Layers, Plus, RefreshCw } from "lucide-react"
+import { Layers, Plus, RefreshCw } from "lucide-react"
 import {
   Button,
   InstallDialog,
+  PageCrumbs,
   SearchField,
   SegmentedControl,
   useLocale,
@@ -221,27 +222,22 @@ export function PluginManagerView({
       </div>
       <div className="panel-scroll">
         <div className="page wide plugin-market">
+          {marketEnabled && managing ? (
+            <PageCrumbs
+              back={t("plugins.pageTitle")}
+              backLabel={t("plugins.market.back")}
+              onBack={() => navigateToManagement(false)}
+            />
+          ) : null}
           <header className="page-head market-page-head">
-            <div className="market-page-title">
-              {marketEnabled && managing ? (
-                <Button
-                  size="icon-lg"
-                  variant="ghost"
-                  type="button"
-                  aria-label={t("plugins.market.back")}
-                  title={t("plugins.market.back")}
-                  onClick={() => navigateToManagement(false)}
-                >
-                  <ArrowLeft className="ic" aria-hidden="true" />
-                </Button>
-              ) : null}
-              <h1 ref={headingRef} tabIndex={-1}>
-                {title}
-              </h1>
-            </div>
+            <h1 ref={headingRef} tabIndex={-1}>
+              {title}
+            </h1>
             <div className="actions">
               <Button
                 size={managing ? "lg" : "icon-lg"}
+                shape="pill"
+                variant={managing ? "secondary" : "ghost"}
                 type="button"
                 aria-label={refreshLabel}
                 title={refreshLabel}
@@ -262,12 +258,24 @@ export function PluginManagerView({
               {!managing ? (
                 <Button
                   size="icon-lg"
+                  shape="pill"
+                  variant="ghost"
                   type="button"
                   aria-label={t("plugins.sources")}
                   title={t("plugins.sources")}
                   onClick={() => setSourcesOpen(true)}
                 >
                   <Layers className="ic ic-sm" aria-hidden="true" />
+                </Button>
+              ) : null}
+              {!managing ? (
+                <Button
+                  size="lg"
+                  shape="pill"
+                  type="button"
+                  onClick={() => navigateToManagement(true)}
+                >
+                  {t("plugins.title")}
                 </Button>
               ) : null}
               {marketEnabled ? (
@@ -279,6 +287,7 @@ export function PluginManagerView({
               ) : (
                 <Button
                   size="lg"
+                  shape="pill"
                   variant="primary"
                   type="button"
                   onClick={() => setInstallOpen(true)}
@@ -287,22 +296,13 @@ export function PluginManagerView({
                   {t("plugins.install")}
                 </Button>
               )}
-              {!managing ? (
-                <Button
-                  size="lg"
-                  variant="primary"
-                  type="button"
-                  onClick={() => navigateToManagement(true)}
-                >
-                  {t("plugins.title")}
-                </Button>
-              ) : null}
             </div>
           </header>
           {!managing || plugins.length > 0 ? (
             <div className="market-toolbar">
               {managing ? (
                 <SegmentedControl<PluginStatusFilter>
+                  variant="pills"
                   className="market-tabs"
                   aria-label={t("plugins.filter.label")}
                   value={filter}
@@ -315,6 +315,7 @@ export function PluginManagerView({
                 />
               ) : (
                 <SegmentedControl<Catalog>
+                  variant="pills"
                   className="market-tabs"
                   aria-label={t("plugins.market.sections")}
                   value={catalog}
@@ -328,7 +329,8 @@ export function PluginManagerView({
               )}
               {showSearch ? (
                 <SearchField
-                  size="xl"
+                  size="lg"
+                  shape="pill"
                   className="market-search"
                   value={managing ? installedQuery : marketQuery}
                   onValueChange={setQuery}

@@ -11,7 +11,7 @@ const ZH_CN: TrayLabels = {
   open: "打开窗口",
   quit: "退出 Pigcode",
   hiddenTitle: "Pigcode 还在运行",
-  hiddenBody: "窗口已隐藏到托盘，任务会继续在后台运行。",
+  hiddenBody: "窗口收到托盘里了，任务还会在后台跑",
 }
 
 const EN_US: TrayLabels = {

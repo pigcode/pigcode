@@ -25,7 +25,7 @@
 }
 .file-summary-chev {
   color: var(--cv-decoration);
-  transition: transform 200ms var(--ease);
+  transition: transform var(--t-slow) var(--ease);
 }
 .file-summary[data-open] .file-summary-chev {
   transform: rotate(90deg);

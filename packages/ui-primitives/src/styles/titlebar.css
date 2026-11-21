@@ -38,7 +38,7 @@
 .titlebar-menu {
   height: var(--control-bar);
   padding: 0 9px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   color: inherit;
   font-size: var(--fs-md);
   -webkit-app-region: no-drag;
@@ -82,9 +82,9 @@
 }
 /* 按钮是 Button 的 plain 变体加 .icon-btn；展开侧栏时（aria-expanded）也保持这个颜色 */
 .window-controls .btn.icon-btn {
-  width: var(--control-bar);
-  height: var(--control-bar);
-  border-radius: var(--r-md);
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
   color: color-mix(in oklab, var(--fg-2), var(--muted));
 }
 .window-controls .icon-btn .ic {

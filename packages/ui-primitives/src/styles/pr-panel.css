@@ -40,8 +40,8 @@
   font-size: var(--fs-sm);
 }
 .pr-title {
-  font-size: var(--fs-xl);
-  font-weight: 600;
+  font-size: var(--fs-md);
+  font-weight: 500;
   line-height: 1.4;
 }
 .pr-branches {

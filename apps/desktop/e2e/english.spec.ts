@@ -48,9 +48,12 @@ const USER_CONTENT = new Set([
   ...Object.values(FAKE_APPROVAL_TEXTS).flatMap(hanRuns),
 ])
 
-/** 比较整行时忽略有序列表的序号、空白、表格竖线和 markdown 标记：渲染后的表格行和列表项与脚本里的原文相同。 */
+/** 比较整行时忽略有序列表的序号、空白、表格竖线和 markdown 标记（链接只留文字）：渲染后的表格行和列表项与脚本里的原文相同。 */
 function normalizeLine(line: string): string {
-  return line.replace(/^\s*\d+[.)]\s+/, "").replace(/[\s|*#>`-]/g, "")
+  return line
+    .replace(/^\s*\d+[.)]\s+/, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[\s|*#>`-]/g, "")
 }
 
 /** 脚本里的每一行；页面上整行都等于其中一行时，行里的汉字都是用户内容。 */

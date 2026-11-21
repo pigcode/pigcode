@@ -51,7 +51,7 @@ describe("composer thread mentions", () => {
       files: async () => ["docs/解析器说明.md"],
     })
     await userEvent.type(editor, "接着 @解析器")
-    const list = await screen.findByRole("listbox", { name: "引用" })
+    const list = await screen.findByRole("listbox", { name: "提到" })
     await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(4))
     const options = within(list).getAllByRole("option")
     // 会话在前，文件在后；其他项目的会话写着项目名，已归档的标出来。

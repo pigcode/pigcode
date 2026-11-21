@@ -107,7 +107,7 @@ test("the marketplace search fills its own row in a narrow window with large tex
   try {
     await page.getByRole("button", { name: "Settings", exact: true }).click()
     await page.getByRole("button", { name: "Appearance", exact: true }).first().click()
-    await page.getByRole("slider", { name: "Interface size" }).press("End")
+    await page.getByRole("slider", { name: "Interface text size" }).press("End")
     await expect(page.locator("body")).toHaveCSS("font-size", "18px")
     await page.getByRole("button", { name: "Back to app", exact: true }).first().click()
     await page
@@ -118,14 +118,14 @@ test("the marketplace search fills its own row in a narrow window with large tex
     const search = page.locator(".market-search")
     await expect(search).toHaveCSS("width", "320px")
     const install = page.getByRole("button", { name: /^Install / }).first()
-    await expect(install).toHaveCSS("height", "24px")
+    await expect(install).toHaveCSS("height", "20px")
     const fontSize = await install.evaluate((button) =>
       parseFloat(getComputedStyle(button).fontSize),
     )
-    expect(fontSize).toBeCloseTo((12 * 18) / 13, 3)
+    expect(fontSize).toBeCloseTo((13 * 18) / 13, 3)
 
     await page.setViewportSize({ width: 560, height: 700 })
-    await expect(search).toHaveCSS("height", "36px")
+    await expect(search).toHaveCSS("height", "28px")
     await expect
       .poll(() =>
         search.evaluate((field) => {
@@ -149,27 +149,35 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     const toolbar = page.locator(".market-page-head .actions")
     const actions = toolbar.getByRole("button")
     await expect(actions).toHaveCount(4)
-    for (const action of await actions.all()) await expect(action).toHaveCSS("height", "32px")
-    await expect(toolbar.getByRole("button", { name: "刷新" })).toHaveCSS("width", "32px")
-    await expect(page.locator(".market-search")).toHaveCSS("height", "36px")
+    for (const action of await actions.all()) await expect(action).toHaveCSS("height", "28px")
+    await expect(toolbar.getByRole("button", { name: "刷新" })).toHaveCSS("width", "28px")
+    // 页头按钮、搜索框和目录筛选都是 28 高的胶囊（Cursor 插件页的 rounded Button、shape="pill" 的 InputGroup 与 Pill lg）
+    for (const pill of [
+      toolbar.getByRole("button", { name: "插件管理" }),
+      page.locator(".market-search"),
+      page.getByRole("radio", { name: "官方" }),
+    ]) {
+      await expect(pill).toHaveCSS("height", "28px")
+      await expect(pill).toHaveCSS("border-radius", "999px")
+    }
 
     await openAddMenu(page)
     await page.getByRole("menuitem", { name: /添加插件市场/ }).click()
     const dialog = page.getByRole("dialog", { name: "添加插件市场" })
-    const source = dialog.getByLabel("来源", { exact: true })
-    await expect(source).toHaveCSS("height", "32px")
+    const source = dialog.getByLabel("地址", { exact: true })
+    await expect(source).toHaveCSS("height", "28px")
     await source.fill(MARKET)
     const submit = dialog.getByRole("button", { name: "添加", exact: true })
     await expect(submit).toBeDisabled()
-    const acknowledge = dialog.getByRole("checkbox", { name: /我已了解风险/ })
-    await expect(acknowledge).toHaveCSS("width", "16px")
+    const acknowledge = dialog.getByRole("checkbox", { name: /我知道风险/ })
+    await expect(acknowledge).toHaveCSS("width", "14px")
     await acknowledge.click()
     await submit.click()
     await expect(dialog).toBeHidden()
-    await expect(page.getByRole("radio", { name: "个人" })).toBeChecked()
+    await expect(page.getByRole("radio", { name: "我的" })).toBeChecked()
 
     const section = page.getByRole("region", { name: "E2E 插件" })
-    await expect(section).toContainText("本地文件夹")
+    await expect(section).toContainText("电脑上的文件夹")
     await section.getByRole("button", { name: "安装 字数统计" }).click()
     await expect(section.locator(".market-tile")).toContainText("已安装")
     // 纯 JS 写的界面入口直接加载：侧栏多了它的面板。
@@ -187,19 +195,19 @@ test("adds a local marketplace, installs a plugin from it and updates it", async
     await expect(installed).toContainText("0.2.0")
     await expect(page.getByRole("button", { name: /字数统计 v0\.2\.0/ })).toBeVisible()
     await page.getByRole("button", { name: "返回插件市场" }).click()
-    await expect(page.getByRole("radio", { name: "个人" })).toBeChecked()
+    await expect(page.getByRole("radio", { name: "我的" })).toBeChecked()
     await expect(section.locator(".market-tile")).toContainText("已安装")
 
     // 停用市场源：插件市场里不再列出它，装好的插件照常在用；在市场源里重新启用后回来。
     await section.getByRole("button", { name: "E2E 插件 的操作" }).click()
-    await page.getByRole("menuitem", { name: "停用这个市场源" }).click()
+    await page.getByRole("menuitem", { name: "停用这个市场" }).click()
     await expect(section).toBeHidden()
-    await expect(page.getByText("市场源都已停用")).toBeVisible()
+    await expect(page.getByText("插件市场都停用了")).toBeVisible()
     await expect(page.locator(".plugin-panel-head").filter({ hasText: "Word Count" })).toBeVisible()
-    await page.getByRole("button", { name: "管理市场源…" }).click()
-    const sources = page.getByRole("dialog", { name: "市场源" })
+    await page.getByRole("button", { name: "管理插件市场…" }).click()
+    const sources = page.getByRole("dialog", { name: "插件市场" })
     await sources.getByRole("switch", { name: "启用 E2E 插件" }).click()
-    await expect(sources.getByRole("status")).toHaveText("2 个市场源")
+    await expect(sources.getByRole("status")).toHaveText("2 个插件市场")
     await sources.getByRole("button", { name: "关闭" }).last().click()
     await expect(section).toBeVisible()
 
@@ -218,9 +226,9 @@ test("creates a plugin by opening a conversation with the guide attached", async
   try {
     await openPlugins(page)
     await openAddMenu(page)
-    await page.getByRole("menuitem", { name: /创建插件/ }).click()
+    await page.getByRole("menuitem", { name: /写一个插件/ }).click()
     await expect(page.locator(".tiptap")).toHaveText("帮我创建一个 Pigcode 插件：")
-    await expect(page.locator(".composer-context")).toContainText("Pigcode 插件创建指南")
+    await expect(page.locator(".composer-context")).toContainText("怎么写 Pigcode 插件")
     // 光标停在末尾，直接接着写。
     await expect(page.locator(".tiptap")).toBeFocused()
     await page.keyboard.type("统计选中文字的字数")

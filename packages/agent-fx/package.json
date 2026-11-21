@@ -42,12 +42,12 @@
         "featured": false,
         "homepage": "https://github.com/vercel-labs/fx",
         "description": {
-          "zh-CN": "通过本机 fx 接入会话。",
-          "en-US": "Connect sessions through the local fx CLI."
+          "zh-CN": "用电脑上的 fx",
+          "en-US": "Use fx on this computer"
         },
         "installHint": {
-          "zh-CN": "安装 fx 并在其终端中登录。",
-          "en-US": "Install fx and sign in using its CLI."
+          "zh-CN": "先装好 fx，再在终端里登录",
+          "en-US": "Install fx, then sign in from the terminal"
         },
         "settings": [
           {
@@ -55,8 +55,8 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "fx"
           },

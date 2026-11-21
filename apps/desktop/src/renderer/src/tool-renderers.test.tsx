@@ -95,7 +95,7 @@ describe("built-in tool renderers", () => {
     registerBuiltinToolRenderers(extensions)
     const running = call("Bash", { status: "running", input: '{"command":"make"}' })
     render(timeline(extensions, <ToolBlock tool={running} live={"building\n"} />))
-    const row = screen.getByRole("button", { name: /正在执行/ })
+    const row = screen.getByRole("button", { name: /正在运行/ })
     if (row.getAttribute("aria-expanded") === "false") await userEvent.click(row)
     expect(screen.getByText("building")).toBeTruthy()
   })
@@ -204,7 +204,7 @@ describe("the clock sample's tool renderer", () => {
     await act(() => controller.reload())
     expect(hosted()).toEqual([])
     expect(screen.getAllByRole("button").map((row) => row.textContent)).toEqual([
-      "Clock now执行失败",
+      "Clock now失败",
       "MCPPigcode·Clock now",
     ])
   })

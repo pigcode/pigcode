@@ -177,6 +177,7 @@ function MarketTile({
         {installed && update ? (
           <Button
             size="sm"
+            shape="pill"
             type="button"
             className="market-pill"
             aria-label={fill(t("plugins.market.updateLabel"), { plugin: name })}
@@ -193,6 +194,7 @@ function MarketTile({
         ) : (
           <Button
             size="sm"
+            shape="pill"
             type="button"
             className="market-pill"
             aria-label={fill(t("plugins.market.installLabel"), { plugin: name })}

@@ -10,7 +10,10 @@ export interface PaletteItem {
   id: string
   group: "actions" | "threads" | "projects"
   label: string
+  /** 行尾的补充文字：会话的 Agent、项目的路径。 */
   hint?: string
+  /** 命令的快捷键，显示成键帽。 */
+  shortcut?: string
   icon: string
   keywords?: string
   run: () => void
@@ -48,7 +51,7 @@ export function CommandPalette(props: CommandPaletteProps) {
           // 插件给的图标名不在图标表里时用通用图标，不留空白。
           icon: command.icon && hasIcon(command.icon) ? command.icon : "spark",
           keywords: (command.keywords ?? []).join(" "),
-          ...(command.shortcut ? { hint: formatShortcut(command.shortcut) } : {}),
+          ...(command.shortcut ? { shortcut: formatShortcut(command.shortcut) } : {}),
           // 命令返回值不用等：面板关掉后它继续跑。
           run: () => void command.run(),
         })),
@@ -190,7 +193,11 @@ export function CommandPalette(props: CommandPaletteProps) {
                     }
                     title={item.label}
                     meta={
-                      item.hint ? <span className="palette-hint truncate">{item.hint}</span> : null
+                      item.shortcut ? (
+                        <kbd aria-hidden="true">{item.shortcut}</kbd>
+                      ) : item.hint ? (
+                        <span className="palette-hint truncate">{item.hint}</span>
+                      ) : null
                     }
                   />
                 </div>

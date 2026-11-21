@@ -44,7 +44,7 @@ function agent(overrides: Partial<AgentSummary>): AgentSummary {
         key: "binaryPath",
         type: "path",
         pathKind: "file",
-        label: { "zh-CN": "可执行文件" },
+        label: { "zh-CN": "程序位置" },
         placeholder: "claude",
       },
       { key: "launchArgs", type: "text", monospace: true, label: { "zh-CN": "启动参数" } },
@@ -156,9 +156,9 @@ describe("AgentsPage", () => {
     expect(detail.textContent).toContain("max · claude.ai")
     // 邮箱默认遮住（同长的打乱字符），点一下显示、再点隐藏。
     expect(detail.textContent).not.toContain("dev@example.com")
-    await userEvent.click(within(detail).getByRole("button", { name: "点击显示账号" }))
+    await userEvent.click(within(detail).getByRole("button", { name: "显示账号" }))
     expect(detail.textContent).toContain("dev@example.com")
-    await userEvent.click(within(detail).getByRole("button", { name: "点击隐藏账号" }))
+    await userEvent.click(within(detail).getByRole("button", { name: "隐藏账号" }))
     expect(detail.textContent).not.toContain("dev@example.com")
   })
 
@@ -206,7 +206,7 @@ describe("AgentsPage", () => {
     })
     // 状态里是账号和套餐，版本在名字右边，程序位置在「其他」里。
     expect(screen.queryByText("dev@example.com")).toBeNull()
-    await userEvent.click(screen.getByRole("button", { name: "点击显示账号" }))
+    await userEvent.click(screen.getByRole("button", { name: "显示账号" }))
     expect(screen.getByText("dev@example.com")).toBeTruthy()
     expect(screen.getAllByText("2.1.304").length).toBeGreaterThan(0)
     // 模型列出目录里的模型，标出默认模型。
@@ -216,7 +216,7 @@ describe("AgentsPage", () => {
     expect(screen.getByText("显示 2/2")).toBeTruthy()
 
     expect(screen.getByText("/usr/local/bin/claude")).toBeTruthy()
-    fireEvent.change(screen.getByRole("textbox", { name: "可执行文件" }), {
+    fireEvent.change(screen.getByRole("textbox", { name: "程序位置" }), {
       target: { value: "/opt/claude" },
     })
     fireEvent.change(screen.getByRole("textbox", { name: "启动参数" }), {
@@ -301,7 +301,7 @@ describe("AgentsPage", () => {
     expect(cardHead("Claude Code").textContent).toContain("没安装")
     const detail = screen.getByRole("region", { name: "Claude Code" })
     expect(within(detail).getByText("安装 Claude Code")).toBeTruthy()
-    expect(within(detail).getByRole("textbox", { name: "可执行文件" })).toBeTruthy()
+    expect(within(detail).getByRole("textbox", { name: "程序位置" })).toBeTruthy()
   })
 
   it("sets the agent new sessions start with, including back to automatic", async () => {

@@ -15,7 +15,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  font-size: var(--fs-compact);
+  font-size: var(--fs-md);
 }
 .fx-head {
   display: flex;
@@ -32,10 +32,8 @@
   flex: 1;
   min-width: 0;
   color: var(--muted);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: var(--fs-sm);
+  font-weight: 500;
 }
 .fx-actions {
   display: flex;
@@ -128,7 +126,7 @@
 .fx-match {
   background: none;
   color: var(--accent-text);
-  font-weight: 650;
+  font-weight: 600;
 }
 .fx-git {
   flex: none;
@@ -297,7 +295,7 @@
 }
 .file-crumb {
   padding: 2px 4px;
-  border-radius: var(--r-kbd);
+  border-radius: var(--r-xs);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -316,7 +314,7 @@ button.file-crumb:hover {
   gap: 8px;
   flex: none;
   color: var(--faint);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 .file-dirty {
@@ -488,7 +486,7 @@ button.file-crumb:hover {
 }
 .file-image figcaption {
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
 }
 

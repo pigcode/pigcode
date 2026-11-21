@@ -267,7 +267,7 @@
   color: var(--fg);
 }
 .mcp-details-toggle .ic {
-  transition: transform 200ms var(--ease);
+  transition: transform var(--t-slow) var(--ease);
 }
 .mcp-details-toggle[aria-expanded="true"] .ic {
   transform: rotate(90deg);
@@ -640,7 +640,7 @@
 .plan-card-body {
   padding: 8px 16px 16px;
   font-size: var(--cv-fs);
-  line-height: 1.75;
+  line-height: 1.6;
 }
 .plan-card-body[data-clamped] {
   max-height: 256px;

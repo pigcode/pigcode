@@ -121,7 +121,7 @@ describe("FileExplorer", () => {
     await userEvent.clear(screen.getByRole("searchbox", { name: "搜索文件" }))
     await waitFor(() => expect(labels()).toEqual(["dist", "src", "README.md"]))
     await userEvent.type(screen.getByRole("searchbox", { name: "搜索文件" }), "zzz")
-    expect(await screen.findByText("没有匹配的文件")).toBeTruthy()
+    expect(await screen.findByText("没找到文件")).toBeTruthy()
   })
 
   it("shows git decorations and forwards the context menu", async () => {

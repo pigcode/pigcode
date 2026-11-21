@@ -124,7 +124,10 @@ export function DiffPane() {
               onValueChange={(next) => diff.setBase(typeof next === "string" && next ? next : null)}
             >
               <Select.Label>{t("workbench.diffBase")}</Select.Label>
-              <Select.Trigger className="input select-trigger workbench-diff-base-select">
+              <Select.Trigger
+                className="input select-trigger workbench-diff-base-select"
+                data-size="md"
+              >
                 <Select.Value className="grow truncate">
                   {(value: string | null) => {
                     const checkpoint = diff.committed.find((item) => item.commitSha === value)

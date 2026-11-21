@@ -7,7 +7,7 @@
   gap: 12px;
   padding: 16px;
   border: 1px solid var(--cv-border);
-  border-radius: var(--r-2xl);
+  border-radius: var(--r-panel);
   background: var(--popover);
   box-shadow: var(--cv-shadow-md);
   color: var(--fg);
@@ -42,16 +42,11 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* 操作按钮靠右、间距 6，是默认 24 高的胶囊按钮（Cursor TranscriptCard.Footer：buttonRounded、buttonSize md） */
 .perm .acts {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-}
-.perm .acts .btn {
-  height: var(--control-lg);
-  padding: 0 12px;
-  border-radius: var(--r-block);
-  font-size: var(--cv-fs);
+  gap: var(--space-3);
 }
 .perm-done {
   display: flex;
@@ -64,7 +59,7 @@
   overflow: auto;
   padding: 4px 0;
   font-family: var(--font-content);
-  line-height: 1.75;
+  line-height: 1.6;
 }
 .question-card fieldset {
   display: flex;
@@ -126,6 +121,6 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .perm {
-    animation: message-in 200ms var(--ease) both;
+    animation: message-in var(--t-slow) var(--ease) both;
   }
 }

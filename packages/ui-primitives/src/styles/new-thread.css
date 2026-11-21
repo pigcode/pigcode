@@ -48,14 +48,19 @@
 .new-thread-mark * {
   vector-effect: non-scaling-stroke;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .new-thread-hero {
+    animation: page-in var(--t-slower) var(--ease) backwards;
+  }
+}
 .new-thread-title {
   position: relative;
   color: var(--fg);
   font-family: var(--font-display);
   font-size: var(--fs-hero);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  line-height: var(--lh-hero);
 }
 .new-thread-hint {
   position: relative;
@@ -178,7 +183,7 @@
 .draft-branch-group {
   padding: var(--space-4) var(--space-4) var(--space-2);
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .draft-branch-list .draft-branch-option {
   min-height: var(--control-lg);
@@ -207,7 +212,7 @@
 .draft-branch-current {
   flex: none;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .draft-branch-footer {
   flex: none;
@@ -231,7 +236,7 @@
   padding: var(--space-5) var(--space-6);
   border-top: var(--hair) solid var(--divider);
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   line-height: 1.5;
 }
 .draft-branch-empty {
@@ -268,18 +273,6 @@
     justify-self: start;
   }
 }
-@media (prefers-reduced-motion: no-preference) {
-  .popup.draft-branch-menu {
-    transition:
-      opacity var(--t-fast) var(--ease),
-      transform var(--t-fast) var(--ease);
-  }
-  .draft-branch-menu[data-starting-style],
-  .draft-branch-menu[data-ending-style] {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-}
 .draft-workspace-status {
   display: grid;
   gap: var(--space-2);
@@ -293,7 +286,11 @@
   white-space: pre-wrap;
 }
 
-/* ─── 输入框下方的建议：描边小胶囊，点一下预填进输入框 ─────── */
+/*
+  ─── 输入框下方的建议：点一下预填进输入框 ───
+  胶囊本身是 .pill（controls.css）。底色和输入框卡片相同，悬停时叠 8% 的文字色
+  （Cursor 输入框上方的 composer-pill：agent-header-pill 的 --ui-button-bg 取聊天气泡的底色）
+*/
 .new-thread-suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -301,29 +298,11 @@
   gap: var(--space-4);
   margin-top: var(--space-6);
 }
-.suggest-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-3);
-  height: var(--control-md);
-  padding: 0 var(--space-6) 0 var(--space-5);
-  border-radius: var(--r-lg);
-  color: var(--fg-2);
-  font-size: var(--fs-sm);
-  box-shadow: inset 0 0 0 1px var(--border);
-  transition:
-    background var(--t-fast),
-    color var(--t-fast);
+.pill.suggest-chip {
+  background: var(--surface-raised);
 }
-.suggest-chip .ic {
-  color: var(--muted);
-}
-.suggest-chip:hover:not(:disabled) {
-  background: var(--hover);
-  color: var(--fg);
-}
-.suggest-chip:disabled {
-  opacity: 0.5;
+.pill.suggest-chip:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--surface-raised) 92%, var(--fg));
 }
 
 @media (max-width: 720px) {

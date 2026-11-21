@@ -4,18 +4,22 @@
   区域样式只补它所在位置的布局（缩进、宽度、悬停才出现的操作），不再写行的颜色、高度与状态。
 */
 
-/* ─── 行：最小高度 28，两行的行随内容长高，左右两侧保持竖直居中 ─── */
+/*
+  ─── 行：照 Cursor 的侧栏行（Sidebar.stylex.ts）：最小高度 28，左右 6，图标和文字之间 6，圆角 8，13/18；
+  两行的行随内容长高，左右两侧保持竖直居中 ───
+*/
 .list-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   width: 100%;
   min-height: var(--row-h);
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--r-md);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-block);
   color: var(--fg);
   font-size: var(--fs-md);
+  line-height: var(--lh-md);
   text-align: left;
   cursor: default;
   -webkit-user-select: none;
@@ -79,7 +83,7 @@
   min-width: 0;
   color: var(--muted);
   font-size: var(--fs-sm);
-  line-height: 1.45;
+  line-height: var(--lh-sm);
   overflow-wrap: anywhere;
 }
 .list-row-desc > .truncate {
@@ -92,7 +96,7 @@
   gap: var(--space-4);
   margin-left: auto;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 /* 操作叠在主按钮盖住整行的 ::after 之上 */
 .list-row-actions {

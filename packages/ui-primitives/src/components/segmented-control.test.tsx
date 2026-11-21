@@ -42,4 +42,23 @@ describe("SegmentedControl", () => {
     await userEvent.keyboard("{ArrowRight}")
     expect(screen.getByRole("radio", { name: "深色" }).getAttribute("aria-checked")).toBe("true")
   })
+
+  it("draws each option as a pill in the pills variant", () => {
+    render(
+      <SegmentedControl
+        aria-label="目录"
+        variant="pills"
+        className="market-tabs"
+        value="public"
+        onValueChange={() => {}}
+        options={[
+          { value: "public", label: "官方" },
+          { value: "community", label: "社区" },
+        ]}
+      />,
+    )
+    expect(screen.getByRole("radiogroup", { name: "目录" }).className).toBe(
+      "seg seg-pills market-tabs",
+    )
+  })
 })

@@ -62,7 +62,7 @@ describe("MCP rows", () => {
     expect(head.textContent).toBe("MCPContext7·Get library docs")
     await userEvent.click(head)
     expect(screen.getByText("useState returns a pair.").className).toBe("mcp-compact")
-    await userEvent.click(screen.getByRole("button", { name: "查看调用详情" }))
+    await userEvent.click(screen.getByRole("button", { name: "看详情" }))
     expect(screen.getByText(/"libraryId": "\/react"/)).toBeTruthy()
   })
 
@@ -83,7 +83,7 @@ describe("skill, background task and unknown tool rows", () => {
     inLocale(
       <ToolBlock tool={tool("Skill", { skill: "pdf", args: "report.pdf" }, { output: "Done" })} />,
     )
-    const head = screen.getByRole("button", { name: /技能/ })
+    const head = screen.getByRole("button", { name: /Skill/ })
     expect(head.textContent).toContain("pdf")
     expect(head.textContent).toContain("report.pdf")
     await userEvent.click(head)
@@ -126,7 +126,7 @@ describe("skill, background task and unknown tool rows", () => {
   it("fall back to the tool name with its parameters and result", async () => {
     inLocale(<ToolBlock tool={tool("frob_widget", { size: 3 }, { output: "frobbed" })} />)
     await userEvent.click(screen.getByRole("button", { name: /Frob widget/ }))
-    expect(screen.getByText("调用参数")).toBeTruthy()
+    expect(screen.getByText("参数")).toBeTruthy()
     expect(screen.getByText("frobbed")).toBeTruthy()
   })
 })
@@ -144,7 +144,7 @@ describe("questions and plans", () => {
         )}
       />,
     )
-    const head = screen.getByRole("button", { name: /已询问/ })
+    const head = screen.getByRole("button", { name: /问过了/ })
     expect(head.textContent).toContain("2 个问题")
     await userEvent.click(head)
     expect(screen.getByText("Which OS?")).toBeTruthy()
@@ -213,7 +213,7 @@ describe("browser tools", () => {
         onApproval={() => {}}
       />,
     )
-    await userEvent.click(screen.getByRole("button", { name: /已工作/ }))
+    await userEvent.click(screen.getByRole("button", { name: /做了/ }))
     const group = screen.getByRole("button", { name: /浏览器.*localhost:4173 · 3 步/ })
     await userEvent.click(group)
     expect(screen.getByText("打开网页")).toBeTruthy()

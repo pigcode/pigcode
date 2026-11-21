@@ -28,10 +28,10 @@ describe("UnsavedGuard", () => {
       </LocaleProvider>,
     )
     expect(setUnsavedLabels).toHaveBeenCalledWith({
-      message: "放弃未保存的修改？",
-      detail: "有文件还没保存，关闭或刷新窗口后这些修改会丢失。",
-      discard: "放弃修改",
-      cancel: "继续编辑",
+      message: "不保存就关掉？",
+      detail: "有文件还没保存，关掉或刷新窗口就没了",
+      discard: "不保存",
+      cancel: "继续改",
     })
     expect(unload().defaultPrevented).toBe(false)
 

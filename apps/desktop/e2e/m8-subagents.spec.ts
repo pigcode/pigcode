@@ -16,7 +16,7 @@ test("spawned sub-agents get read-only tabs with their task, steps and result", 
     await expect(spawned.first().locator(".dot-matrix")).toBeVisible()
     await expect(page.locator(".thread-tab[data-kind='main'] .dot-matrix")).toHaveCount(0)
 
-    await expect(page.getByRole("button", { name: /已工作/ })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole("button", { name: /^做了/ })).toBeVisible({ timeout: 20_000 })
     await expect(spawned.locator(".dot-matrix")).toHaveCount(0)
     await page.getByRole("tab", { name: "检查测试覆盖" }).click()
     await expect(page.locator(".subagent-view")).toContainText("运行 pnpm test")
@@ -27,8 +27,8 @@ test("spawned sub-agents get read-only tabs with their task, steps and result", 
     await page.getByRole("button", { name: "关闭 检查测试覆盖" }).click()
     await expect(spawned).toHaveCount(1)
     await expect(page.locator(".msg-ai").filter({ hasText: "两个子代理都完成了" })).toBeVisible()
-    await page.getByRole("button", { name: /已工作/ }).click()
-    await page.getByRole("button", { name: "在标签页中打开 general-purpose" }).click()
+    await page.getByRole("button", { name: /^做了/ }).click()
+    await page.getByRole("button", { name: "在标签页打开 general-purpose" }).click()
     await expect(spawned).toHaveCount(2)
     await expect(page.getByRole("tab", { name: "检查测试覆盖" })).toHaveAttribute(
       "aria-selected",
@@ -60,7 +60,7 @@ test("a workflow shows its phases and agents live, then folds into the finished 
     await expect(page.locator(".msg-ai").filter({ hasText: "工作流完成了" })).toBeVisible({
       timeout: 20_000,
     })
-    await page.getByRole("button", { name: /已工作/ }).click()
+    await page.getByRole("button", { name: /^做了/ }).click()
     await expect(card.locator(".workflow-agent[data-state='done']")).toHaveCount(4)
     await expect(card.locator(".workflow-usage")).toContainText("tokens")
     await card.getByText("check:src/math.ts").click()

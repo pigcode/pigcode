@@ -60,7 +60,7 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
     await page.locator(".sess").first().click({ button: "right" })
     await expect.poll(async () => (await menus())[3]?.labels).toEqual(["重命名", "归档"])
 
-    await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+    await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await page
       .getByLabel("打开一个面板")
       .getByRole("button", { name: /浏览器/ })
@@ -72,7 +72,7 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
     await browser.click({ button: "right", position: { x: 12, y: 10 } })
     await expect
       .poll(async () => (await menus())[4]?.labels)
-      .toEqual(["关闭标签", "关闭其他标签", "关闭所有标签"])
+      .toEqual(["关闭标签", "关闭其他标签", "关闭全部标签"])
     const menu = (await menus())[4]!
     expect(Math.abs(menu.x - tab!.x - 12)).toBeLessThanOrEqual(2)
     expect(Math.abs(menu.y - tab!.y - 10)).toBeLessThanOrEqual(2)

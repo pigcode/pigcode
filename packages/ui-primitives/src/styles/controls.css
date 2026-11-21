@@ -4,23 +4,29 @@
   场景与档位见仓库根目录 DESIGN.md。
 */
 
-/* ─── 按钮 ─────────────────────────────────────────────── */
+/*
+  ─── 按钮：档位照 Cursor 的 Button（control-size / button-layout.stylex.ts）───
+  默认 24 高、左右 8、圆角 6；sm 与 xs 20 高、左右 6、圆角 4；lg 28 高、左右 10、圆角 8。
+  文字 13/18，图标和文字之间 6，主按钮中等字重
+*/
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  height: var(--control-md);
+  gap: var(--space-3);
+  height: var(--control-sm);
   padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--r-sm);
-  font-size: var(--fs-xl);
+  font-size: var(--fs-md);
   font-weight: var(--font-weight-ui);
+  line-height: var(--lh-md);
   white-space: nowrap;
   user-select: none;
   transition:
     background var(--t-fast),
-    filter var(--t-fast);
+    filter var(--t-fast),
+    transform var(--t-fast) var(--ease);
 }
 .btn .ic {
   width: var(--button-icon-size, var(--icon-btn));
@@ -71,22 +77,21 @@
 }
 .btn-xs {
   --button-icon-size: var(--icon-btn-xs);
-  height: var(--control-xs);
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .btn-sm {
   --button-icon-size: var(--icon-btn-sm);
-  height: var(--control-sm);
-  font-size: var(--fs-sm);
 }
 .btn-xs,
 .btn-sm {
-  line-height: 1.25;
+  height: var(--control-xs);
+  padding: 0 var(--space-3);
+  border-radius: var(--r-xs);
 }
 .btn-lg {
   --button-icon-size: var(--icon-btn-lg);
-  height: var(--control-lg);
+  height: var(--control-md);
   padding: 0 var(--space-5);
   border-radius: var(--r-block);
 }
@@ -99,28 +104,30 @@
   pointer-events: none;
 }
 
-/* 图标按钮保持正方形，图标跟随按钮档位。 */
+/* 图标按钮保持正方形（Cursor 的 IconButton：20 / 24 / 28），图标跟随按钮档位。 */
 .btn.btn-icon,
 .icon-btn {
   flex: none;
-  width: var(--icon-button-size, var(--control-md));
-  height: var(--icon-button-size, var(--control-md));
+  width: var(--icon-button-size, var(--control-sm));
+  height: var(--icon-button-size, var(--control-sm));
   padding: 0;
 }
 .btn-icon {
   --button-icon-size: var(--icon-btn-lg);
 }
-.btn-icon-xs {
+.btn-icon-xs,
+.btn-icon-sm {
   --icon-button-size: var(--control-xs);
-  --button-icon-size: var(--icon-btn-xs);
   border-radius: var(--r-xs);
 }
+.btn-icon-xs {
+  --button-icon-size: var(--icon-btn-xs);
+}
 .btn-icon-sm {
-  --icon-button-size: var(--control-sm);
   --button-icon-size: var(--icon-btn-sm);
 }
 .btn-icon-lg {
-  --icon-button-size: var(--control-lg);
+  --icon-button-size: var(--control-md);
   border-radius: var(--r-block);
 }
 .icon-btn {
@@ -130,7 +137,8 @@
   color: var(--muted);
   transition:
     background var(--t-fast),
-    color var(--t-fast);
+    color var(--t-fast),
+    transform var(--t-fast) var(--ease);
 }
 .icon-btn:disabled {
   pointer-events: none;
@@ -142,46 +150,76 @@
 }
 
 /*
+  胶囊按钮（Cursor 的 Button rounded，button-layout.stylex.ts 的 pill / pillSize）：两头全圆，
+  左右内边距比同一档的普通按钮多 2（20 高 8、24 高 10、28 高 12），图标和文字之间收到 4；
+  图标按钮保持正方形，所以是正圆（IconButton rounded）。哪些地方用胶囊见 DESIGN.md
+*/
+.btn-pill {
+  gap: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--r-full);
+}
+.btn-pill:is(.btn-xs, .btn-sm) {
+  padding-inline: var(--space-4);
+}
+.btn-pill.btn-lg {
+  padding-inline: var(--space-6);
+}
+
+/* 按下：按钮、图标按钮和胶囊都缩小一点（Cursor 的 press.stylex.ts，:active 时 scale(--ui-press-scale)） */
+:is(.btn, .icon-btn, .pill, .chip-btn, .seg-pills > .seg-item):active:not(
+    :disabled,
+    [data-disabled],
+    [aria-disabled="true"]
+  ) {
+  transform: scale(var(--press-scale));
+}
+
+/*
   ─── 输入框（Select 的触发器也用 .input） ────────────────
   浅底加一圈细描边；悬停时描边深一点，聚焦再深一档，不加外发光。Select 的触发器是按钮，
   键盘聚焦时同样只换描边，不叠加 base.css 里通用的焦点环。
+*/
+/*
+  输入框档位照 Cursor 的 InputGroup 与 Select：默认是 lg 28（圆角 8、左右 8；Input.tsx、Select.tsx 不写 size 时就是 lg），
+  设置行、表单和弹窗都用它；xl 32 是页面上的主表单。md 24（圆角 6、左右 6）只用在右栏工具条这类密集的一行里。
+  sm 与 xs 是 20 高的紧凑输入框（工具条里的数值、色值），圆角 4。文字都是 13/18
 */
 .input,
 .textarea {
   width: 100%;
   height: var(--control-md);
-  padding: var(--space-1) var(--space-4);
+  padding: 0 var(--space-4);
   border: 0;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-block);
   background: var(--input-bg);
   color: var(--fg);
-  font-size: var(--fs-xl);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   box-shadow: var(--shadow-field);
   transition:
     box-shadow var(--t-fast),
     background var(--t-fast);
 }
-.input:where([data-size="xs"]) {
+.input:where([data-size="md"]) {
+  height: var(--control-sm);
+  padding-inline: var(--space-3);
+  border-radius: var(--r-sm);
+}
+.textarea:where([data-size="md"]) {
+  padding-inline: var(--space-3);
+  border-radius: var(--r-sm);
+}
+.input:where([data-size="xs"], [data-size="sm"]) {
   height: var(--control-xs);
+  padding-inline: var(--space-3);
   border-radius: var(--r-xs);
 }
-.input:where([data-size="sm"]) {
-  height: var(--control-sm);
-}
-.input:where([data-size="lg"], [data-size="xl"]) {
-  height: var(--control-lg);
-  padding-block: var(--space-3);
-}
-.input:where([data-size="lg"], [data-size="xl"]),
-.textarea:where([data-size="lg"]) {
-  padding-inline: var(--space-6);
-  border-radius: var(--r-block);
-}
 .input:where([data-size="xl"]) {
-  height: var(--control-xl);
+  height: var(--control-lg);
 }
 .input.mono {
-  font-size: var(--fs-xl);
+  font-size: var(--fs-md);
 }
 .input::placeholder,
 .textarea::placeholder {
@@ -220,8 +258,7 @@
 .textarea {
   height: auto;
   min-height: var(--textarea-min-h);
-  padding-block: var(--space-4);
-  line-height: 1.5;
+  padding-block: var(--space-2);
   resize: vertical;
 }
 
@@ -239,7 +276,7 @@
   transition: background var(--t-med) var(--ease);
 }
 .switch[data-size="sm"] {
-  --switch-w: var(--control-md);
+  --switch-w: var(--switch-sm-w);
   --switch-h: var(--switch-sm-h);
 }
 .switch[aria-checked="true"] {
@@ -309,7 +346,7 @@
   flex: none;
   padding: var(--space-1);
   gap: var(--space-1);
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   background: var(--field);
 }
 .seg-item {
@@ -317,9 +354,9 @@
   align-items: center;
   height: var(--control-sm);
   padding: 0 var(--space-5);
-  border-radius: calc(var(--r-md) - var(--space-1));
+  border-radius: calc(var(--r-block) - var(--space-1));
   color: var(--fg-2);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: var(--font-weight-ui);
   white-space: nowrap;
 }
@@ -339,6 +376,59 @@
   opacity: 0.45;
 }
 
+/*
+  ─── 胶囊（Cursor 的 Pill：lg 档、outline 变体）───
+  28 高、左右 10、13/18，1px 描边，两头全圆，图标 14、和文字之间 6（Pill.tsx 的 capsule、sizeLg）。
+  筛选（插件页的目录与状态、定时任务的状态与页签）、新会话的建议都用它；分段控件的 pills 变体把每一项画成它，
+  项与项之间 8（CustomizeManageControls 的 controlsScroll）。悬停铺底色；选中时底色不变、描边深一档、文字变深
+  （CustomizeManageView 的筛选：bg-tertiary 底、stroke-primary 描边）
+*/
+.pill,
+.seg-pills > .seg-item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+  height: var(--control-md);
+  padding: 0 var(--space-5);
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--fg-2);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--input-border);
+  transition:
+    background var(--t-fast),
+    color var(--t-fast),
+    box-shadow var(--t-fast),
+    transform var(--t-fast) var(--ease);
+}
+.pill > .ic {
+  color: var(--muted);
+}
+.pill:hover:not(:disabled),
+.seg-pills > .seg-item:hover {
+  background: var(--active);
+  color: var(--fg);
+}
+.pill:is([aria-pressed="true"], [aria-selected="true"]),
+.seg-pills > .seg-item[data-checked] {
+  background: var(--active);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--input-border-hover);
+}
+.pill:disabled {
+  opacity: 0.5;
+}
+.seg.seg-pills {
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: 0;
+  border-radius: 0;
+  background: none;
+}
+
 /* ─── 标签页（Tabs）：文字标签排成一行，底下一条细线；选中的标签下面一条滑动的指示线 ─── */
 .tabs-list {
   position: relative;
@@ -353,7 +443,7 @@
   height: var(--control-lg);
   padding: 0;
   color: var(--muted);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-md);
   font-weight: 500;
   white-space: nowrap;
   transition: color var(--t-fast) var(--ease);
@@ -508,13 +598,13 @@
   gap: var(--space-2);
   margin-top: var(--space-2);
   opacity: 0.8;
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .error-notice-toggle:hover {
   opacity: 1;
 }
 .error-notice-toggle .ic {
-  transition: transform 200ms var(--ease);
+  transition: transform var(--t-slow) var(--ease);
 }
 .error-notice-toggle[data-panel-open] .ic {
   transform: rotate(90deg);
@@ -522,7 +612,7 @@
 .error-notice-raw {
   margin: var(--space-2) 0 0;
   font-family: var(--font-mono);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -547,11 +637,11 @@
   align-items: center;
   gap: var(--space-2);
   height: var(--badge-h);
-  padding: 0 var(--space-4);
-  border-radius: var(--r-full);
+  padding: 0 var(--space-3);
+  border-radius: var(--r-xs);
   background: var(--hover);
   color: var(--fg-2);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   font-weight: 500;
   white-space: nowrap;
 }

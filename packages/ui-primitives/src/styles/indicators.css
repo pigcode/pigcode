@@ -241,11 +241,10 @@
 }
 
 /*
-  Agent 与插件的头像（EntityAvatar）：缩写和底色都来自 entityMark，色相写在 --entity-hue 上。
-  sm 是菜单、胶囊与标签里的，md 是模型菜单的左栏，lg 是设置里的列表；inline 是一行文字里的彩色缩写。
+  Agent 与插件的头像（EntityAvatar）：缩写来自 entityMark，底色和文字用中性灰，和品牌标志的底座一致。
+  sm 是菜单、胶囊与标签里的，md 是模型菜单的左栏，lg 是设置里的列表；inline 是一行文字里的缩写。
 */
 .entity-avatar {
-  --entity-hue: 264;
   --avatar-size: var(--avatar-lg);
   display: inline-grid;
   flex: none;
@@ -253,17 +252,13 @@
   width: var(--avatar-size);
   height: var(--avatar-size);
   border-radius: 28%;
-  background: oklch(92% 0.045 var(--entity-hue));
-  color: oklch(42% 0.12 var(--entity-hue));
+  background: var(--field);
+  box-shadow: inset 0 0 0 var(--hair) var(--border);
+  color: var(--fg-2);
   font-family: var(--font-ui);
   font-size: calc(var(--avatar-size) * 0.4);
-  font-weight: 650;
-  letter-spacing: 0.02em;
+  font-weight: 600;
   line-height: 1;
-}
-[data-theme="dark"] .entity-avatar {
-  background: oklch(32% 0.06 var(--entity-hue));
-  color: oklch(86% 0.09 var(--entity-hue));
 }
 .entity-avatar[data-size="sm"] {
   --avatar-size: var(--avatar-sm);
@@ -327,7 +322,7 @@
   color: var(--surface);
   box-shadow: 0 0 0 1.5px var(--agent-icon-ring, var(--surface));
   font-size: var(--agent-badge-fs);
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -337,6 +332,8 @@
   width: auto;
   height: auto;
   background: none;
+  box-shadow: none;
+  color: inherit;
   font-weight: inherit;
   line-height: inherit;
 }

@@ -36,7 +36,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   await page.getByRole("button", { name: "新会话" }).first().click()
 
   // 新会话草稿里就能打开右侧面板（不建会话），从空面板启动器打开终端并跑一个命令。
-  await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+  await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
   await page.getByLabel("打开一个面板").getByRole("button", { name: /终端/ }).click()
   await expect(page.getByRole("tab", { name: "终端 1" })).toHaveAttribute("aria-selected", "true")
   await expect(page.locator(".xterm")).toBeVisible()
@@ -60,7 +60,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   // 手动 checkpoint，修改文件后 diff/restore；终端标签切走后保持同一个 shell。
   await page.getByRole("button", { name: "添加面板" }).click()
   await page.getByRole("menuitem", { name: /检查点/ }).click()
-  await page.getByRole("button", { name: "创建检查点" }).click()
+  await page.getByRole("button", { name: "存一个检查点" }).click()
   // 等快照真正建好再改文件；否则机器忙的时候，快照可能拍到下面写进去的内容。
   await expect(page.getByRole("button", { name: "恢复" }).first()).toBeVisible()
   await page.getByRole("tab", { name: "终端 1" }).click()
@@ -75,7 +75,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   // 改完再建一个快照：Diff 默认拿最新的快照和最近一次 run 的基线比，这样才看得到改动。
   // 列表里是那一轮的基线、结束，加上两个手动快照。
   await page.getByRole("tab", { name: "检查点" }).click()
-  await page.getByRole("button", { name: "创建检查点" }).click()
+  await page.getByRole("button", { name: "存一个检查点" }).click()
   await expect(page.getByRole("button", { name: "恢复" })).toHaveCount(4)
 
   // 从界面看 diff：右栏的 Diff 显示快照相对基准的改动。
@@ -89,7 +89,7 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   // 按 run 选基准：默认基准是最近一次 run 的基线。选一个快照作基准，看的就是
   // 「那个快照之后改了什么」。
   const basePicker = page.locator(".workbench-diff-base-select")
-  await expect(basePicker).toContainText("基线")
+  await expect(basePicker).toContainText("开始前")
   await basePicker.click()
   // 列表按时间倒序，最新的手动快照在最上面；跳过第一项「默认」。
   const snapshotOptions = page.getByRole("option").filter({ hasText: "手动" })
@@ -106,14 +106,15 @@ test("workbench files, terminal, checkpoint, and diff", async () => {
   // 切回默认基准。没有这个选项的话，选过一次快照就再也回不到最近一次 run 的基线。
   await basePicker.click()
   await page.getByRole("option", { name: /默认/ }).click()
-  await expect(basePicker).toContainText("基线")
+  await expect(basePicker).toContainText("开始前")
 
   await page.getByRole("tab", { name: "检查点" }).click()
   // 列表按时间从早到晚，第一个是那一轮 run 的基线，在改动之前。
   await page.getByRole("button", { name: "恢复" }).first().click()
-  await page.getByRole("button", { name: "确认恢复" }).click()
+  const confirmRestore = page.locator(".checkpoint-actions").getByRole("button", { name: "恢复" })
+  await confirmRestore.click()
   // 确认按钮消失代表 restore RPC 已完成，再读文件避免竞态。
-  await expect(page.getByRole("button", { name: "确认恢复" })).toBeHidden()
+  await expect(confirmRestore).toBeHidden()
 
   // 恢复后从文件树打开 a.txt，确认工作区回到 checkpoint 的内容；文件树标签换成文件标签。
   await page.getByRole("button", { name: "添加面板" }).click()

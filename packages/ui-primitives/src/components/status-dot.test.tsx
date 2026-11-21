@@ -25,7 +25,7 @@ describe("StatusDot", () => {
   })
 
   it("is announced when it has a label", () => {
-    render(<StatusDot tone="warning" label="等待许可" />)
-    expect(screen.getByRole("img", { name: "等待许可" }).dataset.tone).toBe("warning")
+    render(<StatusDot tone="warning" label="等你确认" />)
+    expect(screen.getByRole("img", { name: "等你确认" }).dataset.tone).toBe("warning")
   })
 })

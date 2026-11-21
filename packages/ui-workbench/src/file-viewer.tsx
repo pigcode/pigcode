@@ -257,10 +257,14 @@ export function FileViewer({
           {conflict ? (
             <div className="file-banner" role="alert">
               <span>{t("files.viewer.conflict")}</span>
-              <button type="button" className="btn btn-sm" onClick={onReload}>
+              <button type="button" className="btn btn-sm btn-pill" onClick={onReload}>
                 {t("files.viewer.reload")}
               </button>
-              <button type="button" className="btn btn-sm btn-danger" onClick={onOverwrite}>
+              <button
+                type="button"
+                className="btn btn-sm btn-pill btn-danger"
+                onClick={onOverwrite}
+              >
                 {t("files.viewer.overwrite")}
               </button>
             </div>

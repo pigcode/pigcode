@@ -140,7 +140,7 @@ describe("TurnNavigator", () => {
 
     await userEvent.hover(item(3))
     expect(await screen.findByText("third question")).toBeTruthy()
-    expect(screen.getByText("助手仍在工作")).toBeTruthy()
+    expect(screen.getByText("还在回复")).toBeTruthy()
     expect(screen.queryByText("second question with a second line")).toBeNull()
 
     await userEvent.keyboard("{Escape}")

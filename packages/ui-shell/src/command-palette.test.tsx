@@ -64,7 +64,7 @@ describe("CommandPalette", () => {
     const run = vi.fn()
     renderPalette({}, [command("plugins", { key: "settings.plugins" }, run)])
 
-    await user.type(screen.getByLabelText("搜索或执行命令…"), "插件")
+    await user.type(screen.getByLabelText("搜索或输入命令"), "插件")
     const item = screen.getByRole("option", { name: /插件/ })
     await user.click(item)
 
@@ -88,7 +88,8 @@ describe("CommandPalette", () => {
       }),
     ])
 
-    expect(screen.getByRole("option", { name: /新会话/ }).textContent).toContain("N")
+    const option = screen.getByRole("option", { name: /新会话/ })
+    expect(option.querySelector("kbd")?.textContent).toContain("N")
   })
 
   it("leaves out commands that are not available", () => {

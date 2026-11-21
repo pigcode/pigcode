@@ -270,7 +270,7 @@ describe("WorkspaceSidebar", () => {
     renderSidebar({ onRenameThread, onArchiveThread: vi.fn() })
 
     await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "rename")
-    const input = await screen.findByRole("textbox", { name: "会话名称" })
+    const input = await screen.findByRole("textbox", { name: "会话名字" })
     expect(document.activeElement).toBe(input)
     await userEvent.clear(input)
     await userEvent.type(input, "  Renamed  {Enter}")
@@ -286,7 +286,7 @@ describe("WorkspaceSidebar", () => {
     renderSidebar({ onRenameThread, onArchiveThread: vi.fn() })
     const startRename = async () => {
       await chooseMenuItem(menu, screen.getByRole("button", { name: /First thread/ }), "rename")
-      return screen.findByRole("textbox", { name: "会话名称" })
+      return screen.findByRole("textbox", { name: "会话名字" })
     }
 
     await userEvent.type(await startRename(), "changed{Escape}")
@@ -355,7 +355,7 @@ describe("WorkspaceSidebar", () => {
     expect(openFolder).toHaveBeenCalledExactlyOnceWith("/tmp/alpha")
 
     await choose("rename")
-    const input = await screen.findByRole("textbox", { name: "项目名称" })
+    const input = await screen.findByRole("textbox", { name: "项目名字" })
     expect(document.activeElement).toBe(input)
     await userEvent.clear(input)
     await userEvent.type(input, "客户门户{Enter}")
@@ -363,7 +363,7 @@ describe("WorkspaceSidebar", () => {
 
     await choose("remove")
     expect(onRemoveProject).toHaveBeenCalledExactlyOnceWith("p1")
-    expect(screen.getByText("已移除「alpha」，再次添加这个文件夹即可恢复")).toBeTruthy()
+    expect(screen.getByText("已移除「alpha」，再添加这个文件夹就回来了")).toBeTruthy()
   })
 
   it("says so when the project folder can't be opened, naming it after the platform's file manager", async () => {
@@ -375,7 +375,7 @@ describe("WorkspaceSidebar", () => {
 
     await chooseMenuItem(menu, screen.getByRole("button", { name: "alpha" }), "open-folder")
     expect(menu.mock.lastCall?.[0]).toContainEqual({ id: "open-folder", label: "在访达中打开" })
-    expect(await screen.findByText("无法打开文件夹 /tmp/alpha")).toBeTruthy()
+    expect(await screen.findByText("打不开文件夹 /tmp/alpha")).toBeTruthy()
   })
 
   it("shows Ctrl+1…9 on the first nine visible threads instead of their time", () => {

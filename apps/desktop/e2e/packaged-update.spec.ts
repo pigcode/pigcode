@@ -137,7 +137,7 @@ test("the packaged app downloads the dmg for its architecture", async () => {
     // 真的下载了，字节和假服务给的一致。
     expect(readFileSync(packagePath!).equals(DMG_BYTES)).toBe(true)
 
-    await expect(popup).toContainText("已下载，等待安装")
+    await expect(popup).toContainText("下载好了，等待安装")
   } finally {
     await app?.close()
     server.close()

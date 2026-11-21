@@ -237,7 +237,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     // 所以只在 macOS 断言被拒绝（#69 的讨论里有记录）。
     const dialog = page.getByRole("dialog", { name: "安装插件" })
     await openInstallDialog(page)
-    await dialog.getByLabel("GitHub 仓库、npm 包或插件目录").fill(sourcePlugin(workspace))
+    await dialog.getByLabel("GitHub 仓库、npm 包或文件夹").fill(sourcePlugin(workspace))
     await dialog.getByRole("button", { name: "安装", exact: true }).click()
     if (process.platform === "darwin") {
       await expect(dialog.getByRole("alert")).toContainText("不带编译器")
@@ -250,7 +250,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
 
     // 终端：node-pty 在安装包里能加载。插件页和聊天并列，沿历史后退回到刚才的会话。
     await page.getByRole("button", { name: "后退" }).click()
-    await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+    await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await page.getByLabel("打开一个面板").getByRole("button", { name: /终端/ }).click()
     await expect(page.locator(".xterm")).toBeVisible()
     await page.locator(".xterm").click()

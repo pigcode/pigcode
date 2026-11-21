@@ -34,11 +34,11 @@ describe("AddProjectDialog", () => {
     mockPicker(null)
     renderDialog()
 
-    expect(screen.getByRole("heading", { name: "创建项目" })).toBeTruthy()
-    expect(screen.getByLabelText("项目名称").getAttribute("placeholder")).toBe("新项目")
+    expect(screen.getByRole("heading", { name: "添加项目" })).toBeTruthy()
+    expect(screen.getByLabelText("名字").getAttribute("placeholder")).toBe("新项目")
     expect(screen.queryByRole("combobox")).toBeNull()
     expect(screen.getByRole("button", { name: "选择文件夹" })).toBeTruthy()
-    expect(screen.getByRole("button", { name: "创建项目" }).hasAttribute("disabled")).toBe(false)
+    expect(screen.getByRole("button", { name: "添加" }).hasAttribute("disabled")).toBe(false)
   })
 
   it("picks the folder with the system dialog and falls back to the folder name", async () => {
@@ -48,10 +48,10 @@ describe("AddProjectDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "选择文件夹" }))
     expect(pickFolder).toHaveBeenCalledWith({ title: "选择项目文件夹", buttonLabel: "选择" })
     expect(await screen.findByText("/home/me/work/pigcode")).toBeTruthy()
-    expect(screen.getByRole("button", { name: "更换文件夹 /home/me/work/pigcode" })).toBeTruthy()
-    expect(screen.getByLabelText("项目名称").getAttribute("placeholder")).toBe("pigcode")
+    expect(screen.getByRole("button", { name: "换文件夹 /home/me/work/pigcode" })).toBeTruthy()
+    expect(screen.getByLabelText("名字").getAttribute("placeholder")).toBe("pigcode")
 
-    await userEvent.click(screen.getByRole("button", { name: "创建项目" }))
+    await userEvent.click(screen.getByRole("button", { name: "添加" }))
     expect(onAdd).toHaveBeenCalledWith("/home/me/work/pigcode", undefined)
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
@@ -60,10 +60,10 @@ describe("AddProjectDialog", () => {
     mockPicker("/home/me/work/pigcode")
     const { onAdd } = renderDialog()
 
-    await userEvent.type(screen.getByLabelText("项目名称"), "  客户门户 ")
+    await userEvent.type(screen.getByLabelText("名字"), "  客户门户 ")
     await userEvent.click(screen.getByRole("button", { name: "选择文件夹" }))
     await screen.findByText("/home/me/work/pigcode")
-    await userEvent.click(screen.getByRole("button", { name: "创建项目" }))
+    await userEvent.click(screen.getByRole("button", { name: "添加" }))
     expect(onAdd).toHaveBeenCalledWith("/home/me/work/pigcode", "客户门户")
   })
 
@@ -71,8 +71,8 @@ describe("AddProjectDialog", () => {
     const pickFolder = mockPicker("/home/me/work/pigcode")
     const { onAdd } = renderDialog()
 
-    await userEvent.type(screen.getByLabelText("项目名称"), "门户")
-    await userEvent.click(screen.getByRole("button", { name: "创建项目" }))
+    await userEvent.type(screen.getByLabelText("名字"), "门户")
+    await userEvent.click(screen.getByRole("button", { name: "添加" }))
     expect(pickFolder).toHaveBeenCalledTimes(1)
     expect(onAdd).toHaveBeenCalledWith("/home/me/work/pigcode", "门户")
   })
@@ -82,9 +82,9 @@ describe("AddProjectDialog", () => {
     const { onAdd, onOpenChange } = renderDialog()
 
     await userEvent.click(screen.getByRole("button", { name: "选择文件夹" }))
-    await userEvent.click(screen.getByRole("button", { name: "创建项目" }))
+    await userEvent.click(screen.getByRole("button", { name: "添加" }))
     expect(pickFolder).toHaveBeenCalledTimes(2)
-    expect(screen.getByText("Pigcode 可读取和编辑这个文件夹")).toBeTruthy()
+    expect(screen.getByText("Agent 会在这个文件夹里读写文件")).toBeTruthy()
     expect(onAdd).not.toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalled()
   })
@@ -92,6 +92,6 @@ describe("AddProjectDialog", () => {
   it("disables folder selection and creation without the native bridge", () => {
     renderDialog()
     expect(screen.getByRole("button", { name: "选择文件夹" }).hasAttribute("disabled")).toBe(true)
-    expect(screen.getByRole("button", { name: "创建项目" }).hasAttribute("disabled")).toBe(true)
+    expect(screen.getByRole("button", { name: "添加" }).hasAttribute("disabled")).toBe(true)
   })
 })

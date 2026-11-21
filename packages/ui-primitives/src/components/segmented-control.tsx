@@ -21,6 +21,8 @@ export interface SegmentedControlProps<Value extends string> {
   /** 单选组的名字；读屏用。 */
   "aria-label": string
   disabled?: boolean | undefined
+  /** pills：每一项是一个独立的描边胶囊，用于页面上的筛选（Cursor 的 Pill）。 */
+  variant?: "default" | "pills" | undefined
   className?: string | undefined
 }
 
@@ -31,11 +33,12 @@ export function SegmentedControl<Value extends string>({
   onValueChange,
   "aria-label": label,
   disabled,
+  variant = "default",
   className,
 }: SegmentedControlProps<Value>) {
   return (
     <BaseRadioGroup<Value | null>
-      className={cn("seg", className)}
+      className={cn("seg", variant === "pills" && "seg-pills", className)}
       aria-label={label}
       value={value}
       disabled={disabled}

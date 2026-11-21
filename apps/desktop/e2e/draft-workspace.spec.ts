@@ -37,7 +37,7 @@ test("the bottom terminal opens in a draft without creating a thread", async () 
     await expect(page.locator(".new-thread-view")).toBeVisible()
     await expect(rows).toHaveCount(0)
     await expect(
-      page.locator(".panel-top").getByRole("button", { name: "切换底部终端" }),
+      page.locator(".panel-top").getByRole("button", { name: "显示或隐藏终端" }),
     ).toHaveAttribute("aria-pressed", "true")
 
     // 第一次发送才建会话；终端留在原地，还是同一个 shell（刚才设的变量还在）。
@@ -82,7 +82,7 @@ test("the right panel opens in a draft without creating a thread", async () => {
     const rows = project.locator(".sess")
     await expect(rows).toHaveCount(0)
 
-    await page.locator(".panel-top").getByRole("button", { name: "切换右侧面板" }).click()
+    await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     const launcher = page.getByLabel("打开一个面板")
     await expect(launcher).toBeVisible()
     // 检查点要等第一次运行才有：置灰并说明原因。

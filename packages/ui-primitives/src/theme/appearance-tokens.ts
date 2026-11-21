@@ -363,7 +363,7 @@ function translucencyVars(
 }
 
 function typeVars(settings: AppearanceSettings, env: AppearanceEnvironment): Vars {
-  const d = { uiSize: 13, contentSize: 14, codeSize: 11.5 }
+  const d = { uiSize: 13, contentSize: 15, codeSize: 12 }
   const vars: Vars = {}
   if (settings.uiSize !== d.uiSize) vars["--ui-scale"] = String(settings.uiSize / d.uiSize)
   if (settings.contentSize !== d.contentSize) vars["--fs-content"] = `${settings.contentSize}px`

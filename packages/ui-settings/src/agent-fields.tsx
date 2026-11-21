@@ -216,7 +216,7 @@ function FieldControl({
       />
       {pathKind && onPickPath ? (
         <Button
-          size="icon"
+          size="icon-lg"
           variant="secondary"
           type="button"
           aria-label={`${t("agents.browse")} ${label}`}

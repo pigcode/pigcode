@@ -1,6 +1,8 @@
 /*
   命令面板：⌘K 打开的面板。顶上一行是不带底色和描边的搜索输入（SearchField 的 plain），一条细线隔开
   下面分组的命令列表，最下面是按键提示。外框是 menus.css 的 .popup。
+  尺寸照 Cursor 的 Palette.tsx：最宽 640、圆角 14，输入行左右 14，列表内衬 6，每项最小 32、内边距 6×8、
+  圆角 8、图标和文字之间 10，分组标题最小 28。
 */
 /* 蒙层的颜色和层级来自 .scrim，这里只让面板靠上居中 */
 .palette-scrim {
@@ -12,9 +14,10 @@
 .popup.palette {
   display: flex;
   flex-direction: column;
-  width: min(580px, calc(100vw - 40px));
+  width: min(var(--dialog-w-2xl), calc(100vw - 2 * var(--dialog-inset)));
   max-height: min(560px, 72vh);
   overflow: hidden;
+  border-radius: var(--r-xl);
   /* 蒙层自己有 backdrop-filter，里面的面板模糊不到页面，半透明会透出底下的字，所以用不透明底色 */
   background: var(--popover);
   isolation: isolate;
@@ -22,42 +25,35 @@
 /* 顶部一行只负责给 SearchField 留出内边距，和下面列表的行左右对齐 */
 .palette-search {
   flex: none;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-6) calc(var(--menu-pad-x) - var(--space-3));
   border-bottom: var(--hair) solid var(--divider);
 }
 /* 放大镜居中在和下面各行图标一样宽的位置里，输入的文字和各行的标题左对齐 */
 .palette-search .search-field {
-  gap: var(--space-4);
+  gap: var(--space-5);
 }
 .palette-search .search-field > .ic {
   margin: 0 calc((var(--palette-icon-size) - var(--search-icon-size)) / 2);
-}
-.palette-search kbd,
-.palette-foot kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: var(--control-2xs);
-  height: var(--control-2xs);
-  padding: 0 5px;
-  border-radius: var(--r-kbd);
-  background: var(--field);
-  color: var(--muted);
-  font-family: var(--font-ui);
-  font-size: var(--fs-4xs);
 }
 .palette-list {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 6px;
+  padding: var(--space-3);
 }
 .palette-group {
-  padding: 10px 10px 4px;
+  display: flex;
+  align-items: center;
+  min-height: var(--control-md);
+  padding: 0 var(--space-4);
   color: var(--faint);
-  font-size: var(--fs-3xs);
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.list-row.palette-item {
+  gap: var(--space-5);
+  min-height: var(--palette-row-h);
+  padding: var(--space-3) var(--space-4);
 }
 .palette-icon {
   display: grid;
@@ -65,7 +61,7 @@
   width: var(--palette-icon-size);
   height: var(--palette-icon-size);
   flex: none;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   background: var(--field);
   color: var(--fg-2);
 }
@@ -89,20 +85,17 @@
   top: max(15vh, calc(var(--titlebar-h) + var(--space-4)));
   width: min(var(--settings-search-dialog-w), calc(100vw - 2 * var(--space-7)));
   overflow: hidden;
-  transform: translateX(-50%);
-}
-.dialog.settings-search-dialog[data-starting-style],
-.dialog.settings-search-dialog[data-ending-style] {
-  transform: translateX(-50%) scale(0.98);
+  translate: -50% 0;
+  transform-origin: top center;
 }
 .settings-search-dialog .palette-list {
   max-height: 55vh;
 }
 .settings-search-dialog .menu-item {
-  font-size: var(--fs-xl);
+  font-size: var(--fs-md);
 }
 @media (prefers-reduced-motion: no-preference) {
   .palette {
-    animation: palette-in 160ms var(--ease) both;
+    animation: palette-in var(--t-med) var(--ease) both;
   }
 }

@@ -29,7 +29,7 @@ test("mentions another thread with @ and opens it from the sent message", async 
     await expect(page.locator(".new-thread-view")).toBeVisible()
     await page.locator(".tiptap").click()
     await page.keyboard.type("接着做 @解析器")
-    const list = page.getByRole("listbox", { name: "引用" })
+    const list = page.getByRole("listbox", { name: "提到" })
     await expect(list.getByRole("option").first()).toContainText("整理解析器的计划")
     await page.keyboard.press("Enter")
     await expect(page.locator('.tiptap .mention-chip[data-kind="thread"]')).toHaveText(

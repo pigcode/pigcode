@@ -9,6 +9,6 @@ const version = JSON.parse(readFileSync(new URL("../package.json", import.meta.u
 test("the settings page shows the version the app was built with", async () => {
   const { app, page } = await openThread("version")
   await page.getByRole("button", { name: "设置", exact: true }).click()
-  await expect(page.getByText(`当前版本 ${version}`)).toBeVisible()
+  await expect(page.getByText(`现在是 ${version}`)).toBeVisible()
   await app.close()
 })

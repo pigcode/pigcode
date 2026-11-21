@@ -6,11 +6,11 @@ describe("quit confirmation", () => {
   it("lists only the work that exists", () => {
     const labels = quitLabels("zh-CN")
     expect(quitDetail(labels, { runs: 2, approvals: 0, schedules: 0 })).toEqual([
-      "2 个任务正在运行或排队，退出会中断它们。",
+      "2 个任务还在跑或在排队，退出会让它们停下",
     ])
     expect(quitDetail(labels, { runs: 0, approvals: 1, schedules: 3 })).toEqual([
-      "1 个请求在等待你的审批。",
-      "3 个定时任务已启用，退出后不会触发。",
+      "1 个请求在等你确认",
+      "3 个定时任务开着，退出后到点也不会跑",
     ])
   })
 

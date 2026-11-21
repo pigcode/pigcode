@@ -47,8 +47,8 @@ test("a thread beyond the run limit is queued in the sidebar", async () => {
 
     // 中断第一个，排队的那个接着跑完。
     await row("long").click()
-    await expect(page.getByRole("button", { name: "中断" })).toBeVisible()
-    await page.getByRole("button", { name: "中断" }).click()
+    await expect(page.getByRole("button", { name: "停下" })).toBeVisible()
+    await page.getByRole("button", { name: "停下" }).click()
     await expect(row("second run")).toHaveAttribute("data-status", "completed", { timeout: 20_000 })
   } finally {
     await app.close()
@@ -68,7 +68,7 @@ test("a background thread waiting for approval shows it in the sidebar", async (
 
   // 回到那个线程处理审批，之后这一轮结束。
   await row("approve").click()
-  const approval = page.getByRole("group", { name: "需要许可" })
+  const approval = page.getByRole("group", { name: "要你确认" })
   await expect(approval).toBeVisible()
   await approval.getByRole("button").first().click()
   await expect(row("approve")).toHaveAttribute("data-status", "completed", { timeout: 15_000 })
@@ -84,7 +84,7 @@ test("a notice from the agent stays visible outside the folded work", async () =
   await expect(row("notice")).toHaveAttribute("data-status", "completed", { timeout: 15_000 })
   // toast 容器也是 role="status"，用类名收窄。
   const notice = page.locator(".turn-notice")
-  await expect(notice).toContainText("插件工具没有接上")
+  await expect(notice).toContainText("插件工具没连上")
   // 收起的轮里仍然看得到：提示不在工作区里。
   await expect(page.getByText("插件工具这次用不了，其余照常。")).toBeVisible()
   await app.close()

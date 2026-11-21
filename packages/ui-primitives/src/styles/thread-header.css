@@ -26,9 +26,9 @@
   font-weight: 400;
 }
 .panel-top .chip-btn {
-  height: var(--control-md);
+  height: var(--control-sm);
   padding: 0 8px 0 10px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-sm);
   color: var(--fg-2);
 }
 /* 顶栏的胶囊悬停和展开时只有底色变化 */
@@ -53,9 +53,9 @@
 }
 .panel-top .btn-icon,
 .panel-top .btn.btn-icon {
-  width: var(--control-md);
-  height: var(--control-md);
-  border-radius: var(--r-md);
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-sm);
   color: var(--muted);
 }
 .panel-top .btn-icon:hover {

@@ -35,7 +35,7 @@
 .empty-state-title {
   color: var(--fg);
   font-size: var(--fs-md);
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
 }
 .empty-state-desc {

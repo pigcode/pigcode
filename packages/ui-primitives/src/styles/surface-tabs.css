@@ -40,7 +40,7 @@
   height: var(--control-bar);
   border-radius: var(--r-sm);
   color: var(--muted);
-  font-size: var(--fs-compact);
+  font-size: var(--fs-md);
 }
 .surface-tab:hover {
   background: var(--hover);
@@ -102,8 +102,8 @@
 .icon-btn.surface-add {
   display: grid;
   place-items: center;
-  width: var(--control-bar);
-  height: var(--control-bar);
+  width: var(--control-sm);
+  height: var(--control-sm);
   flex: none;
   margin-left: 2px;
   border-radius: var(--r-sm);
@@ -132,8 +132,8 @@
    比 thread-header.css 的 .panel-top .btn.btn-icon 更具体 */
 .layout-controls .btn.btn-icon,
 .panel-top .layout-controls .btn.btn-icon {
-  width: var(--control-md);
-  height: var(--control-md);
+  width: var(--control-sm);
+  height: var(--control-sm);
   border-radius: var(--r-sm);
   color: var(--muted);
 }

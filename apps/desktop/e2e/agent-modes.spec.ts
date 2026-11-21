@@ -88,23 +88,23 @@ test("uses four shared permissions, defaults to full access, and preserves the t
     await page.getByRole("button", { name: "新会话", exact: true }).first().click()
 
     async function pickAgent(name: string) {
-      await page.getByRole("button", { name: /^Agent 与模型:/ }).click()
+      await page.getByRole("button", { name: /^Agent 和模型:/ }).click()
       await page.getByRole("tab", { name, exact: true }).click()
       await page.getByRole("option", { name: new RegExp(name + " Model") }).click()
-      await expect(page.getByRole("button", { name: /^Agent 与模型:/ })).toHaveAttribute(
+      await expect(page.getByRole("button", { name: /^Agent 和模型:/ })).toHaveAttribute(
         "aria-label",
         new RegExp(name),
       )
       await page.keyboard.press("Escape")
     }
     async function openOptions() {
-      await page.getByRole("button", { name: /^Agent 与模型:/ }).click()
+      await page.getByRole("button", { name: /^Agent 和模型:/ }).click()
       return page.locator(".model-picker")
     }
     async function send(text: string) {
-      await page.getByRole("textbox", { name: "给 agent 的消息" }).fill(text)
+      await page.getByRole("textbox", { name: "给 Agent 的消息" }).fill(text)
       await page.getByRole("button", { name: "发送", exact: true }).click()
-      await expect(page.getByRole("button", { name: "中断", exact: true })).toHaveCount(0)
+      await expect(page.getByRole("button", { name: "停下", exact: true })).toHaveCount(0)
     }
 
     await pickAgent("Codex 模式测试")
@@ -113,7 +113,7 @@ test("uses four shared permissions, defaults to full access, and preserves the t
     await expect(picker.getByRole("menuitemradio")).toHaveCount(4)
     const sharedLabels = await picker.getByRole("menuitemradio").allTextContents()
     await expect(picker.getByRole("menuitemradio", { name: /计划|只读/ })).toHaveCount(0)
-    await picker.getByRole("menuitemradio", { name: /^自动审批/ }).click()
+    await picker.getByRole("menuitemradio", { name: /^自动判断/ }).click()
     await picker.getByRole("button", { name: "计划模式", exact: true }).click()
     await expect(picker.getByRole("button", { name: "计划模式", exact: true })).toHaveAttribute(
       "aria-pressed",
@@ -122,7 +122,7 @@ test("uses four shared permissions, defaults to full access, and preserves the t
     const planBox = await picker
       .getByRole("button", { name: "计划模式", exact: true })
       .boundingBox()
-    const permissionButton = picker.getByRole("button", { name: "权限: 自动审批", exact: true })
+    const permissionButton = picker.getByRole("button", { name: "权限: 自动判断", exact: true })
     const permissionBox = await permissionButton.boundingBox()
     expect(Math.abs(planBox!.y - permissionBox!.y)).toBeLessThan(5)
     await permissionButton.click()
@@ -143,13 +143,13 @@ test("uses four shared permissions, defaults to full access, and preserves the t
     await page.keyboard.press("Escape")
     await pickAgent("Claude 模式测试")
     picker = await openOptions()
-    await picker.getByRole("button", { name: "权限: 自动审批", exact: true }).click()
+    await picker.getByRole("button", { name: "权限: 自动判断", exact: true }).click()
     await expect(picker.getByRole("menuitemradio")).toHaveCount(4)
     expect(await picker.getByRole("menuitemradio").allTextContents()).toEqual(sharedLabels)
     await expect(picker.getByRole("menuitemradio", { name: /计划|只读/ })).toHaveCount(0)
-    await picker.getByRole("menuitemradio", { name: /^接受编辑/ }).click()
+    await picker.getByRole("menuitemradio", { name: /^自动改文件/ }).click()
     await picker.getByRole("button", { name: "计划模式", exact: true }).click()
-    await picker.getByRole("button", { name: "权限: 接受编辑", exact: true }).click()
+    await picker.getByRole("button", { name: "权限: 自动改文件", exact: true }).click()
     await page.screenshot({ path: "test-results/agent-modes-claude.png", animations: "disabled" })
     await page.emulateMedia({ colorScheme: "dark" })
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark")
@@ -167,7 +167,9 @@ test("uses four shared permissions, defaults to full access, and preserves the t
 
     await pickAgent("Codex 模式测试")
     picker = await openOptions()
-    await expect(picker.getByRole("button", { name: "权限: 接受编辑", exact: true })).toBeVisible()
+    await expect(
+      picker.getByRole("button", { name: "权限: 自动改文件", exact: true }),
+    ).toBeVisible()
     await expect(picker.getByRole("button", { name: "计划模式", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -182,7 +184,9 @@ test("uses four shared permissions, defaults to full access, and preserves the t
     page = await app.firstWindow()
     await page.locator(".sess").filter({ hasText: "验证 Codex 计划" }).click()
     picker = await openOptions()
-    await expect(picker.getByRole("button", { name: "权限: 接受编辑", exact: true })).toBeVisible()
+    await expect(
+      picker.getByRole("button", { name: "权限: 自动改文件", exact: true }),
+    ).toBeVisible()
     await expect(picker.getByRole("button", { name: "计划模式", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true",

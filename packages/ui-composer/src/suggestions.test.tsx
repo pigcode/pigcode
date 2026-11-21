@@ -222,7 +222,7 @@ describe("composer suggestions", () => {
     await userEvent.keyboard("{Escape}")
     await userEvent.clear(editor)
     await userEvent.type(editor, "/matt")
-    await screen.findByText("没有匹配的命令")
+    await screen.findByText("没找到命令")
   })
 
   it("keeps Claude plugin skills callable through their native slash commands", async () => {

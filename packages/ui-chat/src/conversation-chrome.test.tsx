@@ -81,7 +81,7 @@ describe("ReasoningBlock", () => {
       <ReasoningBlock id="r1" text={"First idea.\nSecond idea."} durationMs={4200} />,
     )
     const head = screen.getByRole("button", { name: /思考/ })
-    expect(head.textContent).toBe("思考·持续了 5 秒")
+    expect(head.textContent).toBe("思考·想了 5 秒")
     expect(head.getAttribute("aria-expanded")).toBe("false")
     await userEvent.click(head)
     expect(container.querySelector(".reasoning-body")?.textContent).toBe(
@@ -89,7 +89,7 @@ describe("ReasoningBlock", () => {
     )
     cleanup()
     inLocale(<ReasoningBlock id="r2" text="Hmm." durationMs={null} />)
-    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·持续了几秒")
+    expect(screen.getByRole("button", { name: /思考/ }).textContent).toBe("思考·想了几秒")
   })
 })
 
@@ -111,14 +111,14 @@ describe("FileSummary", () => {
         onOpenFile: (path) => opened.push(path),
       },
     )
-    const head = screen.getByRole("button", { name: "展开已更改文件" })
-    expect(head.textContent).toBe("2 个文件已更改+13 -1")
+    const head = screen.getByRole("button", { name: "展开改动" })
+    expect(head.textContent).toBe("改了 2 个文件+13 -1")
     await userEvent.click(head)
-    expect(screen.getByRole("button", { name: "收起已更改文件" })).toBeTruthy()
+    expect(screen.getByRole("button", { name: "收起改动" })).toBeTruthy()
     expect(screen.getByText("src").className).toBe("file-summary-path")
     await userEvent.click(screen.getAllByRole("button", { name: "审查" })[0]!)
     expect(reviewed).toEqual(["/repo/src/index.ts"])
-    await userEvent.click(screen.getByRole("button", { name: "在文件面板中打开 README.md" }))
+    await userEvent.click(screen.getByRole("button", { name: "在文件面板打开 README.md" }))
     expect(opened).toEqual(["/repo/README.md"])
   })
 })
@@ -137,16 +137,16 @@ describe("StatusPanel", () => {
       event(3, "tool.started", { id: "b1", name: "Bash", input: { command: "pnpm dev" } }),
     ])
     inLocale(<StatusPanel timeline={timeline} />)
-    const capsule = screen.getByRole("button", { name: "展开状态" })
+    const capsule = screen.getByRole("button", { name: "展开" })
     expect(capsule.textContent).toBe("Fix the bug")
     await userEvent.click(capsule)
     const panel = screen.getByRole("complementary", { name: "状态" })
-    expect(panel.textContent).toContain("进程1/3")
+    expect(panel.textContent).toContain("进度1/3")
     expect(panel.querySelector("[data-status='completed']")?.textContent).toBe("Read the code")
-    expect(panel.textContent).toContain("运行中的后台任务1")
+    expect(panel.textContent).toContain("后台任务1")
     expect(panel.textContent).toContain("pnpm dev")
-    await userEvent.click(screen.getByRole("button", { name: "收起为胶囊" }))
-    expect(screen.getByRole("button", { name: "展开状态" })).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "收起" }))
+    expect(screen.getByRole("button", { name: "展开" })).toBeTruthy()
   })
 
   it("stays out of the way when there is nothing to report", () => {

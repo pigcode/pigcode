@@ -53,7 +53,7 @@ describe("Composer", () => {
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).not.toHaveBeenCalled()
     expect(onPermissionMode).not.toHaveBeenCalled()
-    expect(screen.getByText(/请选择可用权限/)).toBeTruthy()
+    expect(screen.getByText(/换一个再发送/)).toBeTruthy()
     rerenderWith({ permissionMode: "full-access" })
     await userEvent.keyboard("{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("keep this", { effort: null })
@@ -247,7 +247,7 @@ describe("Composer", () => {
   it("shows stop while running and calls onStop", async () => {
     const onStop = vi.fn()
     renderComposer({ onStop, running: true })
-    await userEvent.click(screen.getByRole("button", { name: "中断" }))
+    await userEvent.click(screen.getByRole("button", { name: "停下" }))
     expect(onStop).toHaveBeenCalledTimes(1)
   })
 
@@ -276,16 +276,16 @@ describe("Composer", () => {
   it("asks before turning on full access from the permission menu", async () => {
     const onPermissionMode = vi.fn()
     renderComposer({ onPermissionMode, permissionMode: "approval-required" })
-    const chip = screen.getByRole("button", { name: "权限: 监督审批" })
+    const chip = screen.getByRole("button", { name: "权限: 先问我" })
     await userEvent.click(chip)
-    await userEvent.click(await screen.findByRole("menuitem", { name: /接受编辑/ }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: /自动改文件/ }))
     expect(onPermissionMode).toHaveBeenLastCalledWith("auto-accept-edits")
 
     await userEvent.click(chip)
     await userEvent.click(await screen.findByRole("menuitem", { name: /完全访问/ }))
     expect(onPermissionMode).toHaveBeenCalledTimes(1)
-    expect(await screen.findByRole("dialog", { name: "启用完全访问？" })).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "启用完全访问" }))
+    expect(await screen.findByRole("dialog", { name: "打开完全访问？" })).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "打开完全访问" }))
     expect(onPermissionMode).toHaveBeenLastCalledWith("full-access")
   })
 })

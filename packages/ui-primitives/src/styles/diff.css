@@ -30,7 +30,7 @@
 }
 .diff-view .diff-file {
   overflow: hidden;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-panel);
   background: var(--surface);
   box-shadow: var(--shadow-raised);
 }

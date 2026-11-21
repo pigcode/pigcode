@@ -46,7 +46,7 @@ function renderPage() {
 
 /** 把「编辑哪一套颜色」切到深色。 */
 function editDark() {
-  const group = screen.getByRole("radiogroup", { name: "编辑哪一套颜色" })
+  const group = screen.getByRole("radiogroup", { name: "改哪一套颜色" })
   fireEvent.click(within(group).getByRole("radio", { name: "深色" }))
 }
 
@@ -73,7 +73,7 @@ describe("AppearancePage", () => {
   it("writes a typed hex color into that mode only and can reset it", () => {
     renderPage()
     editDark()
-    fireEvent.change(screen.getByLabelText("深色主题 · 新增行的十六进制值"), {
+    fireEvent.change(screen.getByLabelText("深色主题 · 新增行的色值"), {
       target: { value: "#12ab34" },
     })
     expect(latest.overrides.pigcode?.dark?.diffAdded).toBe("#12AB34")
@@ -84,7 +84,7 @@ describe("AppearancePage", () => {
 
   it("custom accent switches the slot to a custom accent", () => {
     renderPage()
-    fireEvent.change(screen.getByLabelText("浅色主题 · 强调色的十六进制值"), {
+    fireEvent.change(screen.getByLabelText("浅色主题 · 强调色的色值"), {
       target: { value: "#FF0066" },
     })
     expect(latest.light.accentMode).toBe("custom")
@@ -198,7 +198,7 @@ describe("AppearancePage", () => {
 
   it("disables sidebar translucency where the system has no frosted material", () => {
     renderPage()
-    expect(screen.getByText("需要系统的磨砂材质，只在 macOS 和 Windows 上可用")).toBeTruthy()
+    expect(screen.getByText("只有 macOS 和 Windows 能用")).toBeTruthy()
   })
 
   it("moves through the theme gallery with arrow keys, one tab stop for the group", () => {

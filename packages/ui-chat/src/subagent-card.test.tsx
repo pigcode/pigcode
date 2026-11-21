@@ -77,8 +77,8 @@ describe("AgentRow", () => {
         <AgentRow subagent={SUBAGENT} />
       </ConversationActionsContext.Provider>,
     )
-    const row = screen.getByRole("button", { name: "在标签页中打开 Explore" })
-    expect(row.textContent).toBe("子智能体Explore·Find the entry point")
+    const row = screen.getByRole("button", { name: "在标签页打开 Explore" })
+    expect(row.textContent).toBe("子 AgentExplore·Find the entry point")
     await userEvent.click(row)
     expect(opened).toEqual(["task_1"])
     expect(screen.queryByText("child reply")).toBeNull()
@@ -86,8 +86,8 @@ describe("AgentRow", () => {
 
   it("expands to the task, the steps and the result when there is no tab to open", async () => {
     inLocale(<AgentRow subagent={RUNNING} />)
-    const row = screen.getByRole("button", { name: /子智能体/ })
-    expect(row.querySelector(".tool-shimmer")?.textContent).toBe("子智能体")
+    const row = screen.getByRole("button", { name: /子 Agent/ })
+    expect(row.querySelector(".tool-shimmer")?.textContent).toBe("子 Agent")
     expect(row.textContent).toContain("正在读取 a.ts")
     await userEvent.click(row)
     expect(screen.getByText("Look for the main export.")).toBeTruthy()
@@ -96,7 +96,7 @@ describe("AgentRow", () => {
 
   it("collapses again when the open row is clicked", async () => {
     inLocale(<AgentRow subagent={RUNNING} />)
-    const row = screen.getByRole("button", { name: /子智能体/ })
+    const row = screen.getByRole("button", { name: /子 Agent/ })
     await userEvent.click(row)
     expect(screen.getByText("Look for the main export.")).toBeTruthy()
     await userEvent.click(row)
@@ -123,8 +123,8 @@ describe("sub-agents in the timeline", () => {
       />,
     )
     expect(screen.getByText("parent reply")).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: /已工作|已处理/ }))
-    expect(screen.getAllByRole("button", { name: /子智能体/ })).toHaveLength(1)
+    await userEvent.click(screen.getByRole("button", { name: /做了|做完了/ }))
+    expect(screen.getAllByRole("button", { name: /子 Agent/ })).toHaveLength(1)
     expect(screen.queryByText("child reply")).toBeNull()
     expect(screen.queryByText("读取")).toBeNull()
   })

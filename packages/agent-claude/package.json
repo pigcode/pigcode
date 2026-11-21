@@ -40,13 +40,13 @@
           "claude-acp"
         ],
         "description": {
-          "zh-CN": "Anthropic 的 Claude Code CLI：审批、提问、计划模式、子代理与 MCP 工具。",
-          "en-US": "Anthropic's Claude Code CLI with approvals, questions, plan mode, sub-agents and MCP tools."
+          "zh-CN": "Anthropic 的编程 Agent，能写计划、派子 Agent、用 MCP 工具",
+          "en-US": "Anthropic's coding agent. It can plan, send subagents and use MCP tools"
         },
         "homepage": "https://claude.com/product/claude-code",
         "installHint": {
-          "zh-CN": "安装 Claude Code（npm i -g @anthropic-ai/claude-code），然后运行 claude auth login 登录。",
-          "en-US": "Install Claude Code (npm i -g @anthropic-ai/claude-code), then run claude auth login."
+          "zh-CN": "先安装 Claude Code（npm i -g @anthropic-ai/claude-code），再运行 claude auth login 登录",
+          "en-US": "Install Claude Code (npm i -g @anthropic-ai/claude-code), then run claude auth login"
         },
         "settings": [
           {
@@ -54,36 +54,39 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Binary path"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "placeholder": "claude",
             "description": {
-              "zh-CN": "留空时在 PATH 与常见安装目录中查找 claude。",
-              "en-US": "Leave blank to look up claude on PATH and in common install locations."
+              "zh-CN": "不填就自动找 claude",
+              "en-US": "Leave empty to find claude automatically"
             }
           },
           {
             "key": "configDir",
             "type": "path",
             "pathKind": "directory",
-            "label": "CLAUDE_CONFIG_DIR",
+            "label": {
+              "zh-CN": "配置文件夹",
+              "en-US": "Config folder"
+            },
             "placeholder": "~/.claude",
             "description": {
-              "zh-CN": "Claude Code 读取配置与登录信息的目录；留空使用默认位置。",
-              "en-US": "Where Claude Code keeps its settings and credentials; blank uses the default."
+              "zh-CN": "Claude Code 放设置和登录信息的地方（CLAUDE_CONFIG_DIR）。不填就用默认位置。",
+              "en-US": "Where Claude Code keeps its settings and sign-in (CLAUDE_CONFIG_DIR). Leave empty for the default."
             }
           },
           {
             "key": "autoCompactWindow",
             "type": "text",
             "label": {
-              "zh-CN": "自动压缩阈值",
-              "en-US": "Auto-compact after"
+              "zh-CN": "聊到多长时压缩",
+              "en-US": "Compact after"
             },
             "description": {
-              "zh-CN": "输入 100,000 至 1,000,000 个 token，留空使用 Claude 的默认值。",
-              "en-US": "Enter 100,000 to 1,000,000 tokens, or leave blank to use Claude’s default."
+              "zh-CN": "填 100,000 到 1,000,000（按 token 算），不填用 Claude 的默认值",
+              "en-US": "Enter 100,000 to 1,000,000 tokens, or leave empty for Claude's default"
             },
             "integerRange": {
               "min": 100000,
@@ -95,39 +98,39 @@
             "key": "idleCompaction",
             "type": "select",
             "label": {
-              "zh-CN": "空闲会话压缩",
+              "zh-CN": "空闲时压缩",
               "en-US": "Compact idle threads"
             },
             "description": {
-              "zh-CN": "上下文达 200,000 个 token 后的空闲压缩策略。",
-              "en-US": "When to compact an idle conversation with at least 200,000 tokens."
+              "zh-CN": "会话超过 200,000 token 后，空闲时怎么压缩",
+              "en-US": "What to do with idle threads over 200,000 tokens"
             },
             "options": [
               {
                 "value": "default",
                 "label": {
-                  "zh-CN": "使用默认设置",
-                  "en-US": "Use default"
+                  "zh-CN": "Claude 的默认",
+                  "en-US": "Claude's default"
                 }
               },
               {
                 "value": "onReturn",
                 "label": {
-                  "zh-CN": "返回会话时",
-                  "en-US": "When you return"
+                  "zh-CN": "回来时问我",
+                  "en-US": "Ask when I come back"
                 }
               },
               {
                 "value": "beforeCacheExpires",
                 "label": {
-                  "zh-CN": "在缓存过期前（Beta）",
-                  "en-US": "Before the cache expires (beta)"
+                  "zh-CN": "过期前自动压缩",
+                  "en-US": "Before the cache expires"
                 }
               },
               {
                 "value": "off",
                 "label": {
-                  "zh-CN": "从不",
+                  "zh-CN": "不压缩",
                   "en-US": "Never"
                 }
               }
@@ -144,8 +147,8 @@
             },
             "placeholder": "--chrome",
             "description": {
-              "zh-CN": "追加给 Claude Code 的长选项；权限相关的选项由 Pigcode 的权限模式管理。",
-              "en-US": "Extra long flags for Claude Code; permission flags follow Pigcode's permission mode."
+              "zh-CN": "加给 Claude Code 的额外参数。权限相关的参数由 Pigcode 的权限设置管。",
+              "en-US": "Extra flags for Claude Code. Permission flags follow Pigcode's permission setting."
             }
           },
           {
@@ -156,8 +159,8 @@
               "en-US": "Environment variables"
             },
             "description": {
-              "zh-CN": "启动 Claude Code 时额外设置的环境变量，例如代理或 API 地址。",
-              "en-US": "Extra environment variables for the Claude Code process, such as a proxy or API base URL."
+              "zh-CN": "启动 Claude Code 时加的环境变量，比如代理或 API 地址",
+              "en-US": "Extra environment variables for Claude Code, like a proxy or API address"
             }
           }
         ]

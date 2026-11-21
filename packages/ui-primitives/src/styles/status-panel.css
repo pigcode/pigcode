@@ -16,7 +16,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--cv-border);
-  border-radius: var(--r-2xl);
+  border-radius: var(--r-panel);
   background: var(--popover);
   box-shadow: var(--cv-shadow-md);
   color: var(--fg);

@@ -31,10 +31,10 @@ describe("PrPanel", () => {
     const onCreate = vi.fn()
     render(<PrPanel pullRequest={null} onCreate={onCreate} />)
 
-    expect(screen.getByText("还没有关联的 Pull Request")).toBeTruthy()
+    expect(screen.getByText("还没有 PR")).toBeTruthy()
     await userEvent.type(screen.getByLabelText("标题"), "Add feature")
-    await userEvent.type(screen.getByLabelText("描述"), "Why it matters")
-    await userEvent.type(screen.getByLabelText("目标分支"), "main")
+    await userEvent.type(screen.getByLabelText("说明"), "Why it matters")
+    await userEvent.type(screen.getByLabelText("合并到"), "main")
     await userEvent.click(screen.getByRole("button", { name: "创建 PR" }))
 
     expect(onCreate).toHaveBeenCalledWith({
@@ -76,9 +76,9 @@ describe("PrPanel", () => {
       />,
     )
 
-    expect(screen.getByText(/GitHub CLI（gh）还没有登录/)).toBeTruthy()
+    expect(screen.getByText(/gh 还没登录/)).toBeTruthy()
     expect(screen.queryByText(raw)).toBeNull()
-    await userEvent.click(screen.getByRole("button", { name: "原始信息" }))
+    await userEvent.click(screen.getByRole("button", { name: "详细信息" }))
     expect(screen.getByText(raw)).toBeTruthy()
   })
 
@@ -92,6 +92,6 @@ describe("PrPanel", () => {
     )
 
     expect(screen.getByText("gh command failed")).toBeTruthy()
-    expect(screen.queryByRole("button", { name: "原始信息" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "详细信息" })).toBeNull()
   })
 })

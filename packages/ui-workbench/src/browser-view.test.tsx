@@ -124,7 +124,7 @@ describe("BrowserView", () => {
     expect(screen.getByRole("button", { name: "后退" }).hasAttribute("disabled")).toBe(true)
     expect(screen.getByRole("button", { name: "重新加载" }).hasAttribute("disabled")).toBe(true)
     expect(
-      screen.getByRole("button", { name: "选择网页元素加入聊天" }).hasAttribute("disabled"),
+      screen.getByRole("button", { name: "选网页上的东西，加到会话里" }).hasAttribute("disabled"),
     ).toBe(true)
   })
 
@@ -133,7 +133,7 @@ describe("BrowserView", () => {
     visit("localhost:3000")
     expect(props.onNavigate).toHaveBeenCalledWith("http://localhost:3000/")
     visit("file:///etc/passwd")
-    expect(screen.getByRole("alert").textContent).toBe("只支持 http/https 网址")
+    expect(screen.getByRole("alert").textContent).toBe("只能打开 http 或 https 网址")
     expect(props.onNavigate).toHaveBeenCalledTimes(1)
   })
 
@@ -205,18 +205,18 @@ describe("BrowserView", () => {
     previewOpen.mockRejectedValueOnce(new Error("PREVIEW_BRIDGE_UNAVAILABLE"))
     await openMore()
     await userEvent.click(await screen.findByRole("menuitem", { name: "在新窗口打开" }))
-    expect((await screen.findByRole("alert")).textContent).toBe("当前环境不支持预览窗口")
+    expect((await screen.findByRole("alert")).textContent).toBe("这里不能预览")
   })
 
   it("turns on the responsive view and edits the device, size and orientation", async () => {
     const { props, rerender } = renderView({ page: LOCAL })
-    await userEvent.click(screen.getByRole("button", { name: "响应式视图" }))
+    await userEvent.click(screen.getByRole("button", { name: "模拟设备尺寸" }))
     expect(props.onViewportChange).toHaveBeenCalledWith(DEFAULT_VIEWPORT)
 
     rerender(<BrowserView {...props} viewport={DEFAULT_VIEWPORT} viewportScale={0.5} />)
-    expect(
-      screen.getByRole("button", { name: "退出响应式视图" }).getAttribute("aria-pressed"),
-    ).toBe("true")
+    expect(screen.getByRole("button", { name: "退出模拟" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    )
     expect(screen.getByText("缩放 50%")).toBeTruthy()
     await userEvent.click(screen.getByRole("combobox", { name: "设备" }))
     await userEvent.click(await screen.findByRole("option", { name: /iPad mini/ }))
@@ -226,7 +226,7 @@ describe("BrowserView", () => {
       height: 1024,
     })
 
-    const width = screen.getByRole("spinbutton", { name: "视口宽度" })
+    const width = screen.getByRole("spinbutton", { name: "宽度" })
     fireEvent.change(width, { target: { value: "500" } })
     fireEvent.blur(width)
     expect(props.onViewportChange).toHaveBeenLastCalledWith({
@@ -240,16 +240,16 @@ describe("BrowserView", () => {
       width: 852,
       height: 393,
     })
-    await userEvent.click(screen.getByRole("button", { name: "退出响应式视图" }))
+    await userEvent.click(screen.getByRole("button", { name: "退出模拟" }))
     expect(props.onViewportChange).toHaveBeenLastCalledWith(null)
   })
 
   it("toggles element picking from the toolbar", async () => {
     const { props, rerender } = renderView({ page: LOCAL })
-    await userEvent.click(screen.getByRole("button", { name: "选择网页元素加入聊天" }))
+    await userEvent.click(screen.getByRole("button", { name: "选网页上的东西，加到会话里" }))
     expect(props.onTogglePicker).toHaveBeenCalledTimes(1)
     rerender(<BrowserView {...props} picking />)
-    const cancel = screen.getByRole("button", { name: "取消选择元素" })
+    const cancel = screen.getByRole("button", { name: "取消选择" })
     expect(cancel.getAttribute("aria-pressed")).toBe("true")
     await userEvent.click(cancel)
     expect(props.onTogglePicker).toHaveBeenCalledTimes(2)
@@ -270,7 +270,7 @@ describe("BrowserView", () => {
     const alert = screen.getByRole("alert")
     expect(alert.textContent).toContain("这个网站的安全证书有问题")
     expect(alert.textContent).toContain("ERR_CERT_AUTHORITY_INVALID")
-    expect(alert.textContent).toContain("本机的开发服务器可以改用 http")
+    expect(alert.textContent).toContain("本机的网页可以改用 http")
     await userEvent.click(within(alert).getByRole("button", { name: "重新加载" }))
     expect(props.onReload).toHaveBeenCalled()
   })
@@ -282,9 +282,9 @@ describe("BrowserView", () => {
         error: { code: -102, description: "ERR_CONNECTION_REFUSED", url: "http://localhost:3000/" },
       },
     })
-    expect(screen.getByRole("alert").textContent).toContain("无法打开这个网页")
+    expect(screen.getByRole("alert").textContent).toContain("打不开这个网页")
     rerender(<BrowserView {...props} page={{ ...LOCAL, crashed: { reason: "oom" } }} />)
-    expect(screen.getByRole("alert").textContent).toContain("页面意外退出了")
+    expect(screen.getByRole("alert").textContent).toContain("网页崩溃了")
     expect(screen.getByRole("alert").textContent).toContain("oom")
   })
 })

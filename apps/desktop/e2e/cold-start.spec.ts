@@ -9,7 +9,7 @@ test("a stuck agent detection doesn't hold up the app", async () => {
   await page.getByRole("button", { name: "设置", exact: true }).click()
   await page.getByRole("button", { name: "Agent", exact: true }).first().click()
   // 检测进行中：按钮禁用，说明确实卡在检测上。
-  await expect(page.getByRole("button", { name: "重新检测" })).toBeDisabled()
+  await expect(page.getByRole("button", { name: "刷新", exact: true })).toBeDisabled()
 
   // 设置页的其他分区照常能切，检测没有堵住界面。
   await page.getByRole("button", { name: "通用", exact: true }).first().click()

@@ -56,12 +56,12 @@
   padding: 0 2px 10px;
   color: var(--fg-2);
   font-size: var(--fs-sm);
-  font-weight: 600;
+  font-weight: 500;
 }
 .workbench-error {
   margin: 0 0 10px;
   padding: 8px 10px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   background: var(--bad-soft);
   color: var(--bad-text);
   font-size: var(--fs-sm);
@@ -104,7 +104,7 @@
   gap: 4px;
   padding: 6px;
   border: var(--hair) solid var(--border);
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
 }
 .worktree-meta {
   display: flex;
@@ -124,7 +124,7 @@
 .worktree-confirm {
   flex: none;
   color: var(--muted);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
 }
 .worktree-actions {
   display: flex;

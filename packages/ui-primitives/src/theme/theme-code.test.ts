@@ -177,6 +177,22 @@ describe("appearance settings helpers", () => {
     expect(parseStoredAppearance(serializeAppearance(settings))).toEqual(settings)
   })
 
+  it("moves version 1's default text sizes to the new defaults and keeps chosen ones", () => {
+    const untouched = { ...defaultAppearance, version: 1, contentSize: 14, codeSize: 11.5 }
+    expect(parseStoredAppearance(JSON.stringify(untouched))).toMatchObject({
+      version: 2,
+      contentSize: 15,
+      codeSize: 12,
+    })
+    const chosen = { ...defaultAppearance, version: 1, contentSize: 16, codeSize: 13 }
+    expect(parseStoredAppearance(JSON.stringify(chosen))).toMatchObject({
+      contentSize: 16,
+      codeSize: 13,
+    })
+    const current = { ...defaultAppearance, contentSize: 14 }
+    expect(parseStoredAppearance(serializeAppearance(current))?.contentSize).toBe(14)
+  })
+
   it("maps preset fonts to names and back", () => {
     expect(fontDisplayName("code", "fira")).toBe("Fira Code")
     expect(fontDisplayName("ui", "system")).toBe("")

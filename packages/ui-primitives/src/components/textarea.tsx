@@ -7,7 +7,7 @@ export function Textarea({
   size,
   ...props
 }: ComponentProps<"textarea"> & {
-  /** lg 与同组的 32 px、36 px 单行输入共用横向内边距与圆角。 */
+  /** 横向内边距与圆角跟同一档的单行输入框一样：默认与 lg 是 8 / 8，md 是 6 / 6。 */
   size?: "md" | "lg" | undefined
 }) {
   return <textarea className={cn("textarea", className)} data-size={size} {...props} />

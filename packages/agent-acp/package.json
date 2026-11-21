@@ -41,8 +41,8 @@
         "acpRegistry": true,
         "homepage": "https://agentclientprotocol.com/",
         "description": {
-          "zh-CN": "接入本机命令或 ACP Registry 中的 Agent。",
-          "en-US": "Connect a local ACP command or an agent from the ACP Registry."
+          "zh-CN": "接入电脑上的命令，或 ACP Registry 里的 Agent",
+          "en-US": "Connect a command on this computer or an agent from the ACP Registry"
         },
         "settings": [
           {
@@ -53,8 +53,8 @@
               "en-US": "ACP Registry ID"
             },
             "description": {
-              "zh-CN": "目录实例的标识。本地命令留空。",
-              "en-US": "Registry identifier. Leave blank for a local command."
+              "zh-CN": "Registry 里的 ID。用电脑上的命令时不填",
+              "en-US": "The ID in the Registry. Leave empty for a local command"
             }
           },
           {
@@ -62,20 +62,20 @@
             "type": "path",
             "pathKind": "file",
             "label": {
-              "zh-CN": "可执行文件",
-              "en-US": "Executable"
+              "zh-CN": "程序位置",
+              "en-US": "Program path"
             },
             "description": {
-              "zh-CN": "填写命令名或绝对路径。Registry 实例留空使用托管运行时。",
-              "en-US": "Enter a command or an absolute path. Leave blank for a managed Registry runtime."
+              "zh-CN": "填命令名或完整路径。用 Registry 的 Agent 不用填。",
+              "en-US": "A command name or full path. Leave empty for Registry agents."
             }
           },
           {
             "key": "authMethodId",
             "type": "text",
             "label": {
-              "zh-CN": "认证方式 ID（可选）",
-              "en-US": "Authentication method ID (optional)"
+              "zh-CN": "登录方式 ID（可以不填）",
+              "en-US": "Sign-in method ID (optional)"
             }
           },
           {
@@ -86,8 +86,8 @@
               "en-US": "Arguments"
             },
             "description": {
-              "zh-CN": "每行一个参数，保留参数中的空格。",
-              "en-US": "Enter one literal argument per line. Spaces within an argument are preserved."
+              "zh-CN": "每行一个参数，空格会保留",
+              "en-US": "One argument per line. Spaces are kept."
             }
           },
           {

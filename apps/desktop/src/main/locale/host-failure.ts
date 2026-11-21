@@ -13,7 +13,7 @@ export interface HostFailureText {
 
 const ZH_CN: HostFailureText = {
   message: "Pigcode 的后台服务无法启动",
-  detail: "已连续失败 {count} 次，不再自动重试。请退出后重新打开 Pigcode。",
+  detail: "已经连续失败 {count} 次，不再自动重试。请退出后再打开 Pigcode。",
   reason: "原因：",
 }
 

@@ -24,14 +24,15 @@
   top: 50%;
   left: 50%;
   z-index: 81;
-  width: min(420px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
+  width: min(var(--dialog-w), calc(100vw - 2 * var(--dialog-inset)));
+  max-height: calc(100vh - 2 * var(--dialog-inset));
   overflow: auto;
-  border-radius: var(--r-2xl);
+  border-radius: var(--r-panel);
   background: var(--popover);
   box-shadow: var(--shadow-modal);
   outline: none;
-  transform: translate(-50%, -50%);
+  /* 居中用独立的 translate，进出场只改 transform：从 enter-scale 放大、淡入，和菜单浮层一样 */
+  translate: -50% -50%;
   transition:
     opacity var(--t-med) var(--ease),
     transform var(--t-med) var(--ease);
@@ -39,15 +40,21 @@
 .dialog[data-starting-style],
 .dialog[data-ending-style] {
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.98);
+  transform: scale(var(--enter-scale));
+}
+.dialog[data-ending-style] {
+  transition-duration: var(--t-fast);
 }
 
-/* 标题行：标题和说明在左，关闭按钮在右 */
+/*
+  标题行、正文、底栏照 Cursor 的 Dialog.tsx：头部内边距 16，标题 15/24 中等字重；正文紧接头部，
+  左右下 16、项与项之间 16，13/18；底栏内边距 16、按钮之间 8，上面一条细线，按钮 28 高（Button lg）
+*/
 .dialog-head {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-8) 0;
+  gap: var(--space-8);
+  padding: var(--space-7);
 }
 .dialog-heading {
   display: flex;
@@ -58,25 +65,24 @@
 }
 .dialog-title {
   font-size: var(--fs-heading);
-  font-weight: 600;
-  line-height: 1.4;
-  letter-spacing: -0.01em;
+  font-weight: 500;
+  line-height: var(--lh-heading);
 }
 .dialog-desc {
   color: var(--muted);
-  font-size: var(--fs-sm);
-  line-height: 1.5;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
-/* 关闭按钮往右上挪一点，图标和标题文字居中对齐，右边和正文对齐 */
+/* 关闭按钮 28 高，和标题那一行竖直居中 */
 .dialog-close {
-  margin: calc(var(--space-2) * -1) calc(var(--space-3) * -1) 0 0;
+  margin-top: calc((var(--lh-heading) - var(--control-md)) / 2);
 }
 
 .dialog-body {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-7) var(--space-8) 0;
+  gap: var(--space-7);
+  padding: 0 var(--space-7) var(--space-7);
 }
 
 /* 底部按钮靠右：取消在左、确认在右 */
@@ -85,5 +91,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-4);
-  padding: var(--space-8);
+  padding: var(--space-7);
+  border-top: var(--hair) solid var(--divider);
 }

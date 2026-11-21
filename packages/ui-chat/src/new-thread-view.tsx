@@ -181,11 +181,11 @@ export function NewThreadSuggestions({
         <button
           key={id}
           type="button"
-          className="suggest-chip"
+          className="pill suggest-chip"
           disabled={disabled}
           onClick={() => prefillComposer(draftKey, { text: t(prompt) })}
         >
-          <Icon className="ic ic-sm" aria-hidden="true" />
+          <Icon className="ic" aria-hidden="true" />
           {t(label)}
         </button>
       ))}

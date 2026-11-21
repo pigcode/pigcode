@@ -68,7 +68,7 @@ export async function openInstallDialog(page: Page): Promise<void> {
 export async function installPlugin(page: Page, spec: string): Promise<void> {
   await openInstallDialog(page)
   const dialog = page.getByRole("dialog", { name: "安装插件" })
-  await dialog.getByLabel("GitHub 仓库、npm 包或插件目录").fill(spec)
+  await dialog.getByLabel("GitHub 仓库、npm 包或文件夹").fill(spec)
   await dialog.getByRole("button", { name: "安装", exact: true }).click()
   await expect(dialog).toBeHidden()
 }
@@ -90,6 +90,6 @@ export async function addProject(
   }, rootPath)
   await page.getByRole("button", { name: "添加项目" }).first().click()
   await page.getByRole("button", { name: "选择文件夹" }).click()
-  await expect(page.getByRole("button", { name: `更换文件夹 ${rootPath}` })).toBeVisible()
-  await page.getByRole("button", { name: "创建项目", exact: true }).click()
+  await expect(page.getByRole("button", { name: `换文件夹 ${rootPath}` })).toBeVisible()
+  await page.getByRole("dialog").getByRole("button", { name: "添加", exact: true }).click()
 }

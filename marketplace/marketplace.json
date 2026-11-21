@@ -16,7 +16,7 @@
         "zh-CN": "Prettier 格式化"
       },
       "description_i18n": {
-        "zh-CN": "在会话右侧用 Prettier 格式化 JavaScript、TypeScript、JSON 和 CSS。由 Pigcode 适配。"
+        "zh-CN": "在右侧面板把 JavaScript、TypeScript、JSON 和 CSS 代码排整齐。由 Pigcode 适配。"
       },
       "source": {
         "source": "url",
@@ -36,7 +36,7 @@
         "zh-CN": "项目概览"
       },
       "description_i18n": {
-        "zh-CN": "在会话右侧工作台查看项目目录、Git 分支和变更文件。"
+        "zh-CN": "在右侧面板看项目的文件夹、Git 分支和改过的文件"
       },
       "source": {
         "source": "url",
@@ -56,7 +56,7 @@
         "zh-CN": "文本统计"
       },
       "description_i18n": {
-        "zh-CN": "在右侧工作台统计词数、字符、行数和 UTF‑8 字节数，也可通过 MCP 调用。"
+        "zh-CN": "在右侧面板数字数、字符、行数和字节数。Agent 也能通过 MCP 用它。"
       },
       "source": {
         "source": "url",
@@ -77,7 +77,7 @@
         "zh-CN": "YAML ↔ JSON 转换"
       },
       "description_i18n": {
-        "zh-CN": "在会话右侧双向转换 YAML 和 JSON，显示解析错误。基于 eemeli/yaml，由 Pigcode 适配。"
+        "zh-CN": "在右侧面板把 YAML 和 JSON 互相转换，写错了会提示。基于 eemeli/yaml，由 Pigcode 适配。"
       },
       "source": {
         "source": "url",

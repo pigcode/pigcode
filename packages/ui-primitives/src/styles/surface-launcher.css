@@ -38,7 +38,7 @@
   gap: 10px;
   height: var(--row-h);
   padding: 0 8px;
-  border-radius: var(--r-md);
+  border-radius: var(--r-block);
   color: var(--fg-2);
   font-size: var(--fs-md);
   text-align: left;
@@ -55,17 +55,6 @@
 }
 .surface-launcher-item:disabled {
   opacity: 0.45;
-}
-.surface-launcher-item kbd {
-  display: inline-grid;
-  place-items: center;
-  min-width: var(--control-xs);
-  height: var(--control-xs);
-  padding: 0 5px;
-  border-radius: var(--r-kbd);
-  color: var(--faint);
-  font-family: var(--font-ui);
-  font-size: var(--fs-2xs);
 }
 @media (prefers-reduced-motion: no-preference) {
   .surface-launcher-item {

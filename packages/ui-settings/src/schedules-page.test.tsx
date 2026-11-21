@@ -92,8 +92,8 @@ async function choose(name: string, option: string): Promise<void> {
 /** 打开新建页，写好指令。 */
 async function openCreate(prompt = "巡检"): Promise<void> {
   await userEvent.click(screen.getByRole("button", { name: "新建任务" }))
-  await screen.findByRole("heading", { name: "新建定时任务" })
-  if (prompt) await userEvent.type(screen.getByLabelText("指令"), prompt)
+  await screen.findByRole("heading", { name: "新建任务" })
+  if (prompt) await userEvent.type(screen.getByLabelText("要做什么"), prompt)
 }
 
 /** 卡片右上角的菜单。 */
@@ -125,8 +125,8 @@ describe("SchedulesPage list", () => {
     const card = screen.getByRole("button", { name: "每日汇总" }).closest("article")!
     const text = card.textContent ?? ""
     expect(text).toContain("把今天的改动整理成清单")
-    expect(text).toMatch(/每天 09:00 · 下次运行 (今天|明天) \d{2}:\d{2}/)
-    expect(text).toContain("已运行 3 次")
+    expect(text).toMatch(/每天 09:00 · 下次 (今天|明天) \d{2}:\d{2}/)
+    expect(text).toContain("跑了 3 次")
   })
 
   it("falls back to a placeholder title and shows paused and completed states without a next run", () => {
@@ -136,12 +136,12 @@ describe("SchedulesPage list", () => {
         scheduleFixture({ id: "b", title: "发版", status: "completed", nextRunAt: null }),
       ],
     })
-    const paused = screen.getByRole("button", { name: "未命名定时任务" }).closest("article")!
+    const paused = screen.getByRole("button", { name: "没有名字的任务" }).closest("article")!
     expect(paused.textContent).toContain("已暂停")
     expect(paused.textContent).not.toContain("下次运行")
     const done = screen.getByRole("button", { name: "发版" }).closest("article")!
     expect(done.getAttribute("data-status")).toBe("completed")
-    expect(done.textContent).toContain("已完成")
+    expect(done.textContent).toContain("已结束")
   })
 
   it("filters cards by status", async () => {
@@ -154,16 +154,16 @@ describe("SchedulesPage list", () => {
     await userEvent.click(screen.getByRole("button", { name: "已暂停" }))
     expect(screen.queryByRole("button", { name: "早报" })).toBeNull()
     expect(screen.getByRole("button", { name: "周报" })).toBeTruthy()
-    await userEvent.click(screen.getByRole("button", { name: "已完成" }))
-    expect(screen.getByText("没有符合条件的任务")).toBeTruthy()
+    await userEvent.click(screen.getByRole("button", { name: "已结束" }))
+    expect(screen.getByText("没有这样的任务")).toBeTruthy()
   })
 
   it("offers one create action, templates and the wake preference on the empty page", () => {
     renderPage({ schedules: [], threads: [] })
     expect(screen.getByText("还没有定时任务")).toBeTruthy()
     expect(screen.getByRole("button", { name: "新建任务" })).toBeTruthy()
-    expect(screen.getByRole("heading", { name: "定时任务模板" })).toBeTruthy()
-    expect(screen.getByRole("switch", { name: "保持电脑唤醒" })).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "从模板开始" })).toBeTruthy()
+    expect(screen.getByRole("switch", { name: "不让电脑睡着" })).toBeTruthy()
     expect(screen.queryByRole("group", { name: "按状态筛选" })).toBeNull()
   })
 
@@ -171,9 +171,9 @@ describe("SchedulesPage list", () => {
     const onRunNow = vi.fn().mockResolvedValue({ status: "busy", runId: null })
     renderPage({ onRunNow })
     await openMenu()
-    await userEvent.click(await screen.findByRole("menuitem", { name: "立即运行" }))
+    await userEvent.click(await screen.findByRole("menuitem", { name: "现在运行" }))
     expect(onRunNow).toHaveBeenCalledWith("sch_1")
-    expect((await screen.findByRole("status")).textContent).toBe("已有运行进行中，请稍后再试")
+    expect((await screen.findByRole("status")).textContent).toBe("上一次还没跑完，等会再试")
   })
 
   it("pauses and resumes from the menu, and offers neither for a completed task", async () => {
@@ -188,7 +188,7 @@ describe("SchedulesPage list", () => {
     expect(props.onUpdate).toHaveBeenCalledWith("sch_1", { enabled: false })
 
     await openMenu("发版")
-    await screen.findByRole("menuitem", { name: "立即运行" })
+    await screen.findByRole("menuitem", { name: "现在运行" })
     expect(screen.queryByRole("menuitem", { name: "暂停" })).toBeNull()
     expect(screen.queryByRole("menuitem", { name: "恢复" })).toBeNull()
   })
@@ -197,7 +197,7 @@ describe("SchedulesPage list", () => {
     const props = renderPage()
     await openMenu()
     await userEvent.click(await screen.findByRole("menuitem", { name: "删除" }))
-    const dialog = await screen.findByRole("dialog", { name: "删除这个定时任务？" })
+    const dialog = await screen.findByRole("dialog", { name: "删除这个任务？" })
     expect(props.onDelete).not.toHaveBeenCalled()
     await userEvent.click(within(dialog).getByRole("button", { name: "删除" }))
     expect(props.onDelete).toHaveBeenCalledWith("sch_1")
@@ -210,7 +210,7 @@ describe("SchedulesPage list", () => {
       setPreference,
     }
     renderPage()
-    await userEvent.click(screen.getByRole("switch", { name: "保持电脑唤醒" }))
+    await userEvent.click(screen.getByRole("switch", { name: "不让电脑睡着" }))
     expect(setPreference).toHaveBeenCalledWith("keepAwake", true)
   })
 })
@@ -219,7 +219,7 @@ describe("SchedulesPage editor", () => {
   it("creates a task that runs every day at nine by default and returns to the list", async () => {
     const props = renderPage({ threads: [] })
     await openCreate("发版检查")
-    expect(screen.getByText(/^下次运行：/)).toBeTruthy()
+    expect(screen.getByText(/^下次：/)).toBeTruthy()
     await userEvent.click(saveButton())
     expect(props.onCreate).toHaveBeenCalledWith({
       projectId: "pr_1",
@@ -256,19 +256,19 @@ describe("SchedulesPage editor", () => {
     async () => {
       const props = renderPage()
       await openCreate()
-      fireEvent.change(screen.getByLabelText("标题"), { target: { value: "周会" } })
+      fireEvent.change(screen.getByLabelText("名字"), { target: { value: "周会" } })
       await userEvent.click(
         within(screen.getByRole("group", { name: "运行设置" })).getByRole("button", {
           name: /Sprint/,
         }),
       )
       await userEvent.click(await screen.findByRole("menuitem", { name: /^Release/ }))
-      await choose("频率", "每周")
-      await userEvent.click(screen.getByRole("button", { name: "星期" }))
+      await choose("多久一次", "每周")
+      await userEvent.click(screen.getByRole("button", { name: "星期几" }))
       await userEvent.click(await screen.findByRole("menuitemcheckbox", { name: longDay(1) }))
       await userEvent.click(screen.getByRole("menuitemcheckbox", { name: longDay(5) }))
       await choose("几点", "16")
-      await choose("第几分", "30")
+      await choose("几分", "30")
       await userEvent.click(saveButton())
       expect(props.onCreate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -283,12 +283,12 @@ describe("SchedulesPage editor", () => {
   it("needs at least one day for a weekly task", async () => {
     renderPage()
     await openCreate()
-    await choose("频率", "每周")
-    await userEvent.click(screen.getByRole("button", { name: "星期" }))
+    await choose("多久一次", "每周")
+    await userEvent.click(screen.getByRole("button", { name: "星期几" }))
     await userEvent.click(
       await screen.findByRole("menuitemcheckbox", { name: longDay(new Date().getDay()) }),
     )
-    expect(screen.getByText("至少选一天。")).toBeTruthy()
+    expect(screen.getByText("至少选一天")).toBeTruthy()
     expect(saveButton().disabled).toBe(true)
   })
 
@@ -298,18 +298,18 @@ describe("SchedulesPage editor", () => {
     const day = (today + 1) % 7
     const props = renderPage()
     await openCreate()
-    await choose("频率", "自定义")
+    await choose("多久一次", "自定义")
     const dialog = await screen.findByRole("dialog", { name: "自定义重复" })
-    fireEvent.change(within(dialog).getByLabelText("间隔数值"), { target: { value: "2" } })
-    await choose("间隔单位", "周")
+    fireEvent.change(within(dialog).getByLabelText("间隔"), { target: { value: "2" } })
+    await choose("单位", "周")
     await userEvent.click(within(dialog).getByRole("button", { name: longDay(today) }))
     await userEvent.click(within(dialog).getByRole("button", { name: longDay(day) }))
-    await userEvent.click(within(dialog).getByRole("radio", { name: "指定日期" }))
+    await userEvent.click(within(dialog).getByRole("radio", { name: "到某天结束" }))
     fireEvent.change(within(dialog).getByLabelText("结束日期"), { target: { value: "2026-12-31" } })
     await userEvent.click(within(dialog).getByRole("button", { name: "确定" }))
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "自定义重复" })).toBeNull())
-    expect(screen.getByRole("button", { name: "修改自定义重复" }).textContent).toMatch(/^每 2 周的/)
+    expect(screen.getByRole("button", { name: "改重复规则" }).textContent).toMatch(/^每 2 周的/)
     await userEvent.click(saveButton())
     expect(props.onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -328,10 +328,10 @@ describe("SchedulesPage editor", () => {
   it("rejects a custom interval outside 1 to 200", async () => {
     renderPage()
     await openCreate()
-    await choose("频率", "自定义")
+    await choose("多久一次", "自定义")
     const dialog = await screen.findByRole("dialog", { name: "自定义重复" })
-    fireEvent.change(within(dialog).getByLabelText("间隔数值"), { target: { value: "0" } })
-    expect(within(dialog).getByText("间隔要是 1 到 200 之间的整数。")).toBeTruthy()
+    fireEvent.change(within(dialog).getByLabelText("间隔"), { target: { value: "0" } })
+    expect(within(dialog).getByText("填 1 到 200 的整数")).toBeTruthy()
     expect(
       (within(dialog).getByRole("button", { name: "确定" }) as HTMLButtonElement).disabled,
     ).toBe(true)
@@ -339,12 +339,12 @@ describe("SchedulesPage editor", () => {
 
   it("prefills the editor from a template", async () => {
     const props = renderPage()
-    await userEvent.click(screen.getByRole("button", { name: "用「晨会摘要」新建" }))
-    expect((screen.getByLabelText("标题") as HTMLInputElement).value).toBe("晨会摘要")
+    await userEvent.click(screen.getByRole("button", { name: "用「每日总结」新建" }))
+    expect((screen.getByLabelText("名字") as HTMLInputElement).value).toBe("每日总结")
     await userEvent.click(saveButton())
     expect(props.onCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: "晨会摘要",
+        title: "每日总结",
         prompt: translate("zh-CN", "schedules.template.standup.prompt" as MessageKey),
         rule: { kind: "weekdays", time: "09:00" },
       }),
@@ -354,11 +354,11 @@ describe("SchedulesPage editor", () => {
   it("edits a task, sending only what changed", async () => {
     const props = renderPage()
     await userEvent.click(screen.getByRole("button", { name: "每日汇总" }))
-    await screen.findByRole("heading", { name: "编辑定时任务" })
-    expect(screen.getByText("已绑定会话 · Sprint")).toBeTruthy()
+    await screen.findByRole("heading", { name: "编辑任务" })
+    expect(screen.getByText("用的会话 · Sprint")).toBeTruthy()
     expect(saveButton("保存").disabled).toBe(true)
-    await userEvent.clear(screen.getByLabelText("标题"))
-    await userEvent.type(screen.getByLabelText("标题"), "晚间汇总")
+    await userEvent.clear(screen.getByLabelText("名字"))
+    await userEvent.type(screen.getByLabelText("名字"), "晚间汇总")
     await userEvent.click(saveButton("保存"))
     expect(props.onUpdate).toHaveBeenCalledWith("sch_1", { title: "晚间汇总" })
   })
@@ -366,10 +366,10 @@ describe("SchedulesPage editor", () => {
   it("asks before leaving with unsaved changes", async () => {
     renderPage()
     await userEvent.click(screen.getByRole("button", { name: "每日汇总" }))
-    await userEvent.type(screen.getByLabelText("指令"), "，再加上风险")
-    await userEvent.click(screen.getByRole("button", { name: "定时任务" }))
-    const dialog = await screen.findByRole("dialog", { name: "放弃未保存的修改？" })
-    await userEvent.click(within(dialog).getByRole("button", { name: "放弃" }))
+    await userEvent.type(screen.getByLabelText("要做什么"), "，再加上风险")
+    await userEvent.click(screen.getByRole("button", { name: "返回定时任务" }))
+    const dialog = await screen.findByRole("dialog", { name: "不保存就离开？" })
+    await userEvent.click(within(dialog).getByRole("button", { name: "不保存" }))
     expect(await screen.findByRole("heading", { name: "定时任务" })).toBeTruthy()
   })
 
@@ -391,16 +391,16 @@ describe("SchedulesPage editor", () => {
     })
     const props = renderPage({ onLoadRuns })
     await userEvent.click(screen.getByRole("button", { name: "每日汇总" }))
-    await userEvent.click(screen.getByRole("tab", { name: "历史" }))
+    await userEvent.click(screen.getByRole("tab", { name: "运行记录" }))
 
     const rows = await screen.findAllByRole("row")
     expect(rows[1]!.textContent).toContain("成功")
     expect(rows[2]!.textContent).toContain("手动")
     expect(rows[2]!.textContent).toContain("已跳过")
-    expect(rows[2]!.textContent).toContain("会话正忙")
-    expect(within(rows[2]!).queryByRole("button", { name: "跳到会话" })).toBeNull()
+    expect(rows[2]!.textContent).toContain("会话在忙")
+    expect(within(rows[2]!).queryByRole("button", { name: "打开会话" })).toBeNull()
 
-    await userEvent.click(within(rows[1]!).getByRole("button", { name: "跳到会话" }))
+    await userEvent.click(within(rows[1]!).getByRole("button", { name: "打开会话" }))
     expect(props.onOpenThread).toHaveBeenCalledWith("th_1")
 
     await userEvent.click(within(rows[2]!).getByRole("button", { name: "删除记录" }))
@@ -419,7 +419,7 @@ describe("formatRule", () => {
 
   it("describes every kind of rule", () => {
     expect(say({ kind: "hourly", minute: 5 })).toBe("每小时的第 05 分")
-    expect(say({ kind: "weekdays", time: "09:00" })).toBe("每工作日 09:00")
+    expect(say({ kind: "weekdays", time: "09:00" })).toBe("工作日 09:00")
     expect(say({ kind: "weekly", days: [5, 1], time: "16:00" })).toBe("每周一、周五 16:00")
     expect(say({ kind: "monthly", day: 15, time: "10:00" })).toBe("每月 15 号 10:00")
     expect(say({ kind: "everyMinutes", every: 30, anchor })).toBe("每 30 分钟")

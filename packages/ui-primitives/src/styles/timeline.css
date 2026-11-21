@@ -109,7 +109,7 @@
   overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  transition: max-height 300ms ease-out;
+  transition: max-height var(--t-slower) var(--ease);
 }
 .msg-user[data-clamped] .msg-user-body {
   -webkit-mask-image: linear-gradient(
@@ -223,7 +223,7 @@
 .work-chev {
   color: var(--cv-decoration);
   opacity: 0.7;
-  transition: transform 200ms var(--ease);
+  transition: transform var(--t-slow) var(--ease);
 }
 .work-toggle[aria-expanded="true"] .work-chev {
   transform: rotate(90deg);
@@ -367,17 +367,25 @@
   place-items: center;
   width: var(--control-lg);
   height: var(--control-lg);
-  transform: translateX(-50%);
+  /* 居中用独立的 translate：进场动画和按下改的是 transform，两者不会互相覆盖 */
+  translate: -50% 0;
   border: 1px solid var(--cv-border);
   border-radius: var(--r-full);
   background: var(--cv-card);
   box-shadow: var(--cv-shadow-md);
   color: var(--fg);
-  animation: message-in 160ms var(--ease) both;
+  transition:
+    background var(--t-fast),
+    border-color var(--t-fast),
+    transform var(--t-fast) var(--ease);
+  animation: message-in var(--t-med) var(--ease) backwards;
 }
 .scroll-bottom:hover {
   background: var(--popover);
   border-color: var(--border-strong);
+}
+.scroll-bottom:active {
+  transform: scale(var(--press-scale));
 }
 .scroll-bottom .ic {
   width: var(--icon-cv);
@@ -385,7 +393,7 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .turn-user {
-    animation: message-in 200ms var(--ease) both;
+    animation: message-in var(--t-slow) var(--ease) both;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -1,6 +1,7 @@
 /**
  * 搜索框：放大镜、输入框、有内容时可选的清除按钮，以及右侧的补充元素（比如命令面板的 esc）。
  * 文件树用 compact，弹层用 lg，页面搜索用 xl。命令面板与模型菜单用 plain 外观。
+ * 插件页的搜索用 lg 加 pill 形状（Cursor 插件页的 InputGroup shape="pill"）。
  */
 import { Search, X } from "lucide-react"
 import type { ComponentProps, ReactNode, Ref } from "react"
@@ -14,6 +15,8 @@ export type SearchFieldProps = Omit<
   onValueChange: (value: string) => void
   size?: "default" | "compact" | "lg" | "xl"
   variant?: "default" | "plain" | undefined
+  /** pill：两头全圆。 */
+  shape?: "default" | "pill" | undefined
   /** 输入框本身的 ref，用来设置初始焦点。 */
   inputRef?: Ref<HTMLInputElement> | undefined
   /** 清除按钮的无障碍名称；给了它，有内容时右侧才出现清除按钮。 */
@@ -28,6 +31,7 @@ export function SearchField({
   onValueChange,
   size = "default",
   variant = "default",
+  shape = "default",
   inputRef,
   clearLabel,
   trailing,
@@ -37,7 +41,12 @@ export function SearchField({
   ...props
 }: SearchFieldProps) {
   return (
-    <label className={cn("search-field", className)} data-size={size} data-variant={variant}>
+    <label
+      className={cn("search-field", className)}
+      data-size={size}
+      data-variant={variant}
+      data-shape={shape === "pill" ? "pill" : undefined}
+    >
       <Search className="ic search-field-icon" aria-hidden="true" />
       <input
         type="search"

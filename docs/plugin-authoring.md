@@ -842,7 +842,7 @@ React 组件里用 `useTheme()` 和 `useLocale()`，见 [使用宿主的 React](
 
 插件没有自己的样式工具包，也没有 `pg-*` 类或 `--pg-*` 变量：界面用 `@pigcode/ui-primitives` 的组件搭，
 颜色、圆角、间距和字号都跟着宿主的设计 token 走。确实要写一小段样式时，用宿主 token 的同名 CSS 变量
-（`var(--fg)`、`var(--muted)`、`var(--space-4)`、`var(--r-md)` 等，见 `packages/ui-primitives/src/styles/tokens.css`），
+（`var(--fg)`、`var(--muted)`、`var(--space-4)`、`var(--r-block)` 等，见 `packages/ui-primitives/src/styles/tokens.css`），
 不要写死颜色。
 
 ### 调用 Host

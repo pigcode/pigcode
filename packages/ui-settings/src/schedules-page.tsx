@@ -6,7 +6,6 @@ import {
   Clock,
   Ellipsis,
   FileText,
-  Info,
   ListChecks,
   Pause,
   Pencil,
@@ -18,8 +17,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { Project, Schedule, ScheduleStatus } from "@pigcode/contracts"
-import { Button, Menu, Spinner, Switch, toHostError, useLocale } from "@pigcode/ui-primitives"
-import { usePreferences } from "./preferences"
+import { Button, Menu, Spinner, toHostError, useLocale } from "@pigcode/ui-primitives"
+import { KeepAwakeRow } from "./keep-awake-row"
 import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
 import { ScheduleEditor, type ScheduleDraft } from "./schedule-editor"
 import type { ScheduleRunsPage } from "./schedule-history"
@@ -221,26 +220,6 @@ function ScheduleCard({
   )
 }
 
-/** 「保持电脑唤醒」：和通用设置里的同一个开关。 */
-function KeepAwakeBar() {
-  const { t } = useLocale()
-  const [prefs, setPreference] = usePreferences()
-  return (
-    <div className="schedules-awake">
-      <Info className="ic ic-sm" aria-hidden="true" />
-      <p>
-        <span className="schedules-awake-title">{t("schedules.keepAwake.title")}</span>
-        <span className="schedules-awake-hint">{t("schedules.keepAwake.hint")}</span>
-      </p>
-      <Switch
-        aria-label={t("schedules.keepAwake.title")}
-        checked={prefs.keepAwake}
-        onCheckedChange={(checked) => setPreference("keepAwake", checked)}
-      />
-    </div>
-  )
-}
-
 /** 渲染定时任务页。 */
 export function SchedulesPage({
   schedules,
@@ -365,6 +344,7 @@ export function SchedulesPage({
             <Button
               type="button"
               size="icon-lg"
+              shape="pill"
               variant="ghost"
               aria-label={t("schedules.refresh")}
               title={t("schedules.refresh")}
@@ -375,6 +355,7 @@ export function SchedulesPage({
           ) : null}
           <Button
             size="lg"
+            shape="pill"
             variant="primary"
             type="button"
             onClick={() => openCreate({ title: "", prompt: "", rule: DEFAULT_RULE })}
@@ -397,7 +378,7 @@ export function SchedulesPage({
               <button
                 key={key}
                 type="button"
-                className="schedules-filter-pill"
+                className="pill"
                 aria-pressed={filter === key}
                 onClick={() => setFilter(key)}
               >
@@ -406,7 +387,7 @@ export function SchedulesPage({
             ))}
           </div>
           <div className="schedules-stack">
-            <KeepAwakeBar />
+            <KeepAwakeRow />
             <section className="schedules-mine" aria-label={t("settings.schedules.list")}>
               <h2 className="schedules-section-title">{t("settings.schedules.list")}</h2>
               {visible.length === 0 ? (
@@ -479,7 +460,7 @@ export function SchedulesPage({
           })}
         </div>
       </section>
-      {!hasSchedules && !loading ? <KeepAwakeBar /> : null}
+      {!hasSchedules && !loading ? <KeepAwakeRow /> : null}
 
       <ScheduleConfirmDialog
         open={deleting !== null}

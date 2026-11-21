@@ -22,7 +22,7 @@
       "zh-CN": "YAML ↔ JSON 转换"
     },
     "description_i18n": {
-      "zh-CN": "在会话右侧双向转换 YAML 和 JSON，显示解析错误。基于 eemeli/yaml，由 Pigcode 适配。"
+      "zh-CN": "在右侧面板把 YAML 和 JSON 互相转换，写错了会提示。基于 eemeli/yaml，由 Pigcode 适配。"
     }
   }
 }

@@ -299,8 +299,8 @@ export async function walkWorkbench(walk: Walk): Promise<void> {
   const fields = pr.getByRole("textbox")
   await expect(fields).toHaveCount(3)
   for (const field of await fields.all()) {
-    await expect(field).toHaveCSS("padding-inline-start", "12px")
-    await expect(field).toHaveCSS("padding-inline-end", "12px")
+    await expect(field).toHaveCSS("padding-inline-start", "8px")
+    await expect(field).toHaveCSS("padding-inline-end", "8px")
     await expect(field).toHaveCSS("border-radius", "8px")
   }
   await open("workbench.checkpoint", "surface-checkpoint", pane.locator(".checkpoint-item").first())

@@ -7,7 +7,7 @@
   min-width: 0;
   font-family: var(--font-ui);
   font-size: var(--cv-fs);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 .tool-row-head {
   display: inline-flex;
@@ -75,8 +75,8 @@
   color: var(--cv-decoration);
   opacity: 0;
   transition:
-    opacity 200ms var(--ease),
-    transform 200ms var(--ease);
+    opacity var(--t-slow) var(--ease),
+    transform var(--t-slow) var(--ease);
 }
 .tool-row-head:hover .tool-row-chev,
 .tool-row-head:focus-visible .tool-row-chev,
@@ -99,9 +99,6 @@
 }
 .tool-row-status.has-tip {
   cursor: help;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-underline-offset: 2px;
 }
 .cmd-summary {
   overflow: hidden;

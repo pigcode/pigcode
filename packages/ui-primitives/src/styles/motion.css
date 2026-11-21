@@ -38,6 +38,13 @@
     transform: translateY(0);
   }
 }
+/* 页面和新会话的问候进场：淡入，并上移一小段 */
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--enter-rise));
+  }
+}
 @keyframes palette-in {
   from {
     opacity: 0;

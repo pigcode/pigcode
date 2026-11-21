@@ -34,7 +34,7 @@ test("chat, plugin panel, and reconnect", async () => {
   // 插件的右栏标签和内置标签一样列在启动器里，内容由宿主的 React 与 ui-primitives 渲染，
   // 分组标题、设置行和按钮都是宿主自己的组件。点侧栏里的会话回到聊天。
   await page.locator(".sidebar .sess").first().click()
-  await page.getByRole("button", { name: "切换右侧面板" }).first().click()
+  await page.getByRole("button", { name: "显示或隐藏右侧面板" }).first().click()
   await page.getByRole("button", { name: "Debug Inspector" }).click()
   await expect(page.getByRole("tab", { name: "Debug Inspector" })).toHaveAttribute(
     "aria-selected",
@@ -58,7 +58,7 @@ test("chat, plugin panel, and reconnect", async () => {
     ;(window as unknown as { restoredMarker?: string }).restoredMarker = "still here"
   })
   await app.evaluate(({ app }) => app.emit("pigcode:test-kill-host"))
-  await expect(page.getByText("已重新连接")).toBeVisible()
+  await expect(page.getByText("又连上了")).toBeVisible()
   const marker = await page.evaluate(
     () => (window as unknown as { restoredMarker?: string }).restoredMarker,
   )
