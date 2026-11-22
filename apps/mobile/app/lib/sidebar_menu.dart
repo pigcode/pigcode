@@ -18,6 +18,7 @@ class SidebarMenu extends StatefulWidget {
     required this.onSelect,
     required this.onComputers,
     required this.focusNode,
+    this.onNewThread,
   });
 
   final SidebarSnapshot? snapshot;
@@ -27,6 +28,7 @@ class SidebarMenu extends StatefulWidget {
   final ValueChanged<String> onSelect;
   final VoidCallback onComputers;
   final FocusNode focusNode;
+  final ValueChanged<String?>? onNewThread;
 
   @override
   State<SidebarMenu> createState() => _SidebarMenuState();
@@ -199,6 +201,24 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
           ),
         ),
+      if (widget.onNewThread case final create?)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: SizedBox(
+            height: 50,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                alignment: AlignmentDirectional.centerStart,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              onPressed: () => create(null),
+              icon: const Icon(Icons.edit_square, size: 20),
+              label: const Text('新会话'),
+            ),
+          ),
+        ),
       for (final item in <Widget>[
         if (pinned.isNotEmpty) ...[
           const ListTile(title: Text('置顶'), dense: true),
@@ -208,33 +228,48 @@ class _SidebarMenuState extends State<SidebarMenu> {
           if (grouped.containsKey(project.id) ||
               (_filter == _Filter.all &&
                   project.name.toLowerCase().contains(_query))) ...[
-            InkWell(
-              onTap: () => setState(() {
-                if (!_collapsed.remove(project.id)) {
-                  _collapsed.add(project.id);
-                }
-              }),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: size),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _collapsed.contains(project.id)
-                            ? Icons.chevron_right
-                            : Icons.expand_more,
-                        size: 18,
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() {
+                      if (!_collapsed.remove(project.id)) {
+                        _collapsed.add(project.id);
+                      }
+                    }),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: size),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _collapsed.contains(project.id)
+                                  ? Icons.chevron_right
+                                  : Icons.expand_more,
+                              size: 18,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(project.name)),
+                          ],
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(project.name)),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                if (widget.onNewThread case final create?)
+                  SizedBox.square(
+                    dimension: size,
+                    child: IconButton(
+                      tooltip: '在${project.name}新建会话',
+                      onPressed: () => create(project.id),
+                      icon: const Icon(Icons.add, size: 20),
+                    ),
+                  ),
+              ],
             ),
             if (!_collapsed.contains(project.id) || _query.isNotEmpty)
               for (final thread

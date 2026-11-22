@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:pigcode_transport/pigcode_transport.dart';
 import 'host_rpc.dart';
+import 'draft_commands.dart';
 import 'pending_requests.dart';
 import 'run_commands.dart';
 import 'sidebar.dart';
@@ -10,6 +11,8 @@ import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
 export 'command_models.dart';
+export 'draft_commands.dart';
+export 'draft_models.dart';
 export 'run_commands.dart';
 export 'pending_requests.dart';
 export 'request_models.dart';
@@ -31,6 +34,7 @@ class MobileConnection {
     this.supportsTimeline,
     this.supportsRunCommands,
     this.supportsRequestCommands,
+    this.supportsDraftCommands,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -42,8 +46,10 @@ class MobileConnection {
   final bool supportsTimeline;
   final bool supportsRunCommands;
   final bool supportsRequestCommands;
+  final bool supportsDraftCommands;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
+  late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
     _rpc,
   );
@@ -218,6 +224,7 @@ class MobileConnection {
           'timeline.read',
           'run.write',
           'request.write',
+          'draft.write',
         ],
       });
       final welcome = await link.receive();
@@ -258,6 +265,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('timeline.read'),
         (welcome['features'] as List).contains('run.write'),
         (welcome['features'] as List).contains('request.write'),
+        (welcome['features'] as List).contains('draft.write'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

@@ -38,3 +38,6 @@ export class RunQueueFullError extends Error {
     this.name = "RunQueueFullError"
   }
 }
+
+/** 会话选定的 Agent 或实例目前不能接收 run。 */
+export class RunSelectionUnavailableError extends Error {}

@@ -4,6 +4,7 @@ import {
   mobileProjectListParamsSchema,
   mobileProjectListResultSchema,
   mobileCommandMethods,
+  mobileDraftMethods,
   mobileReceiptParams,
   mobileRelaySavedSchema,
   mobileSidebarChangedSchema,
@@ -25,6 +26,7 @@ import {
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
+import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
 import { MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
@@ -84,6 +86,7 @@ function threadSummary(thread: Thread) {
 export class MobileSidebarRpc {
   private readonly commands: MobileRunCommands
   private readonly requests: MobileRequestCommands
+  private readonly drafts: MobileDraftCommands
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -102,6 +105,7 @@ export class MobileSidebarRpc {
   ) {
     this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
     this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts)
+    this.drafts = new MobileDraftCommands(ctx, devices, session.deviceKey, this.receipts)
     this.requests = new MobileRequestCommands(
       ctx,
       this.receipts,
@@ -179,6 +183,7 @@ export class MobileSidebarRpc {
 
     const canRun = this.session.features.includes("run.write")
     const canRespond = this.session.features.includes("request.write")
+    const canDraft = this.session.features.includes("draft.write")
     if (canRun && mobileRunCommandRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.commands.dispatch(request)
@@ -187,12 +192,22 @@ export class MobileSidebarRpc {
       this.requirePairedDevice()
       return this.requests.dispatch(request)
     }
-    if ((canRun || canRespond) && request.method === mobileCommandMethods.receipt) {
+    if (canDraft && mobileDraftRequests.has(request.method)) {
+      this.requirePairedDevice()
+      return this.drafts.dispatch(request)
+    }
+    if ((canRun || canRespond || canDraft) && request.method === mobileCommandMethods.receipt) {
       this.requirePairedDevice()
       const { commandId } = params(mobileReceiptParams, request.params)
       const receipt = this.receipts.lookup(commandId)
       if (!receipt) return {}
-      if (mobileRunCommandRequests.has(receipt.method) ? !canRun : !canRespond) return {}
+      const allowed =
+        receipt.method === mobileDraftMethods.create
+          ? canDraft
+          : mobileRunCommandRequests.has(receipt.method)
+            ? canRun
+            : canRespond
+      if (!allowed) return {}
       requireMobileThread(this.ctx, receipt.threadId)
       return { receipt }
     }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'new_thread_draft.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
@@ -101,6 +102,16 @@ class MobileWorkspace extends ConsumerWidget {
           ? () => unawaited(ref.read(provider.notifier).refresh())
           : null,
       onComputers: onComputers,
+      draft: connection.supportsDraftCommands && connection.supportsTimeline
+          ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
+              connection: connection,
+              projects: data.snapshot?.projects ?? const [],
+              online: data.online,
+              projectId: projectId,
+              fallbackProjectId: fallbackProjectId,
+              onAccepted: onAccepted,
+            )
+          : null,
       timeline: (thread, online) => TimelinePane(
         key: ValueKey(thread.id),
         connection: connection,
@@ -121,6 +132,7 @@ class WorkspaceView extends StatefulWidget {
     this.error,
     this.onRetry,
     this.timeline,
+    this.draft,
   });
 
   final SidebarSnapshot? snapshot;
@@ -129,6 +141,12 @@ class WorkspaceView extends StatefulWidget {
   final String? error;
   final VoidCallback? onRetry;
   final Widget Function(MobileThreadSummary thread, bool online)? timeline;
+  final Widget Function(
+    String? projectId,
+    String? fallbackProjectId,
+    ValueChanged<MobileDraftReceipt> onAccepted,
+  )?
+  draft;
   final VoidCallback onComputers;
 
   @override
@@ -139,11 +157,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   final _menuFocus = FocusNode();
   final _menuButton = FocusNode();
   String? _threadId;
+  MobileThreadSummary? _acceptedThread;
+  String? _draftProject;
+  bool _draftOpen = false;
   bool _open = false;
 
-  MobileThreadSummary? get _thread => widget.snapshot?.threads
-      .where((item) => item.id == _threadId)
-      .firstOrNull;
+  MobileThreadSummary? get _thread =>
+      widget.snapshot?.threads
+          .where((item) => item.id == _threadId)
+          .firstOrNull ??
+      (_acceptedThread?.id == _threadId ? _acceptedThread : null);
 
   @override
   void initState() {
@@ -154,7 +177,47 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   @override
   void didUpdateWidget(covariant WorkspaceView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.snapshot != widget.snapshot) _selectRecentIfNeeded();
+    if (oldWidget.snapshot != widget.snapshot) {
+      if (widget.snapshot?.threads.any(
+            (thread) => thread.id == _acceptedThread?.id,
+          ) ==
+          true) {
+        _acceptedThread = null;
+      }
+      _selectRecentIfNeeded();
+    }
+  }
+
+  void _openDraft(String? projectId) {
+    setState(() {
+      _draftOpen = true;
+      _draftProject = projectId;
+    });
+    if (_open) _menu(false);
+  }
+
+  void _acceptDraft(MobileDraftReceipt receipt) {
+    setState(() {
+      _draftOpen = false;
+      _threadId = receipt.threadId;
+      // A receipt can arrive before the sidebar publishes the new thread.
+      _acceptedThread =
+          widget.snapshot?.threads.any(
+                (thread) => thread.id == receipt.threadId,
+              ) ==
+              true
+          ? null
+          : MobileThreadSummary(
+              id: receipt.threadId,
+              projectId: receipt.projectId,
+              title: receipt.title,
+              updatedAt: DateTime.now().toUtc().toIso8601String(),
+              archived: false,
+              pinned: false,
+              status: MobileThreadStatus.queued,
+              unread: false,
+            );
+    });
   }
 
   void _selectRecentIfNeeded() {
@@ -200,11 +263,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         ? '电脑连接已断开'
         : project?.name ?? widget.computerName;
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
+    final canOpenDraft =
+        widget.draft != null && widget.snapshot?.projects.isNotEmpty == true;
 
     return PopScope(
-      canPop: !_open,
+      canPop: !_open && !_draftOpen,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _open) _menu(false);
+        if (didPop) return;
+        if (_open) {
+          _menu(false);
+        } else if (_draftOpen) {
+          setState(() => _draftOpen = false);
+        }
       },
       child: Scaffold(
         backgroundColor: _open ? colors.window : colors.background,
@@ -229,14 +299,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                               enabled: _open,
                               child: SidebarMenu(
                                 snapshot: widget.snapshot,
-                                selectedId: thread?.id,
+                                selectedId: _draftOpen ? null : thread?.id,
                                 computerName: widget.computerName,
                                 online: widget.online,
                                 focusNode: _menuFocus,
                                 onSelect: (id) {
+                                  _draftOpen = false;
                                   _threadId = id;
                                   _menu(false);
                                 },
+                                onNewThread: canOpenDraft ? _openDraft : null,
                                 onComputers: () {
                                   _menu(false);
                                   widget.onComputers();
@@ -308,7 +380,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  thread?.title ?? '会话',
+                                                  _draftOpen
+                                                      ? '新会话'
+                                                      : thread?.title ?? '会话',
                                                   maxLines: 2,
                                                   overflow:
                                                       TextOverflow.ellipsis,
@@ -322,7 +396,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                                       ),
                                                 ),
                                                 Text(
-                                                  subtitle,
+                                                  _draftOpen && widget.online
+                                                      ? widget.computerName
+                                                      : subtitle,
                                                   style: theme
                                                       .textTheme
                                                       .bodySmall
@@ -335,12 +411,46 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                               ],
                                             ),
                                           ),
+                                          if (_draftOpen)
+                                            IconButton(
+                                              tooltip: '返回会话',
+                                              onPressed: () => setState(
+                                                () => _draftOpen = false,
+                                              ),
+                                              icon: const Icon(
+                                                Icons.close,
+                                                size: 20,
+                                              ),
+                                            )
+                                          else if (canOpenDraft)
+                                            IconButton(
+                                              tooltip: '新会话',
+                                              onPressed: () => _openDraft(null),
+                                              icon: const Icon(
+                                                Icons.edit_square,
+                                                size: 20,
+                                              ),
+                                            ),
                                         ],
                                       ),
                                     ),
                                   ),
                                   Divider(height: 1, color: colors.divider),
-                                  Expanded(child: _summary(thread)),
+                                  Expanded(
+                                    child: _draftOpen && widget.draft != null
+                                        ? KeyedSubtree(
+                                            key: ValueKey((
+                                              'new-thread',
+                                              _draftProject,
+                                            )),
+                                            child: widget.draft!(
+                                              _draftProject,
+                                              thread?.projectId,
+                                              _acceptDraft,
+                                            ),
+                                          )
+                                        : _summary(thread),
+                                  ),
                                 ],
                               ),
                             ),

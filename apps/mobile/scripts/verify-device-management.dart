@@ -191,6 +191,30 @@ Future<void> main() async {
             } else {
               report('command', {'receipt': (await result).toJson()});
             }
+          case 'draftOptions':
+            final options = await active[phone]!.drafts.options();
+            report('draftOptions', {'options': options.toJson()});
+          case 'draftModels':
+            final models = await active[phone]!.drafts.models(
+              command['instanceId'] as String,
+            );
+            report('draftModels', {'models': models.toJson()});
+          case 'createDraft' || 'createDraftWithoutReply':
+            final params = MobileDraftCreateParams.fromJson(
+              command['params'] as Map<String, dynamic>,
+            );
+            final result = active[phone]!.drafts.create(params);
+            if (command['action'] == 'createDraftWithoutReply') {
+              unawaited(result.then<void>((_) {}, onError: (Object _) {}));
+              report('waiting');
+            } else {
+              report('draftReceipt', {'receipt': (await result).toJson()});
+            }
+          case 'lookupDraft':
+            final receipt = await active[phone]!.drafts.receipt(
+              command['commandId'] as String,
+            );
+            report('draftReceipt', {'receipt': receipt?.toJson()});
           case 'stopCommand':
             final receipt = await active[phone]!.runCommands.interrupt(
               MobileInterruptRunParams(

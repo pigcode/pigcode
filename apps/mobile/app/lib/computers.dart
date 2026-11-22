@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mobile_secure_storage.dart';
 import 'mobile_command_journal.dart';
+import 'new_thread_draft_state.dart';
 
 final computersProvider =
     AsyncNotifierProvider<Computers, List<ComputerProfile>>(Computers.new);
@@ -25,6 +26,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       await mobileSecureStorage.delete(key: _seedKey);
       await mobileSecureStorage.delete(key: _computersKey);
       await MobileCommandJournal.clearOnInstall();
+      await NewThreadDraftStorage.clearOnInstall();
       await preferences.setBool(_installation, true);
     }
     final seed = await mobileSecureStorage.read(key: _seedKey);
@@ -57,6 +59,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
     );
     if (index < 0) {
       await MobileCommandJournal.clearForComputer(computer.computerKey);
+      await NewThreadDraftStorage.clearForComputer(computer.computerKey);
       next.add(computer);
     } else {
       next[index] = computer;
@@ -72,6 +75,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
     );
     try {
       await MobileCommandJournal.clearForComputer(computer.computerKey);
+      await NewThreadDraftStorage.clearForComputer(computer.computerKey);
       return true;
     } catch (_) {
       return false;

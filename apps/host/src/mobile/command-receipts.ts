@@ -1,11 +1,11 @@
 import { createHash } from "node:crypto"
-import { mobileRequestReceipt, mobileRunReceipt } from "@pigcode/contracts"
+import { mobileDraftReceipt, mobileRequestReceipt, mobileRunReceipt } from "@pigcode/contracts"
 import type { Context } from "cordis"
 import { z } from "zod"
 import type { ReceiptStore } from "../storage/receipt-store"
 import { MobileRequestError } from "./request-error"
 
-const receiptSchema = z.union([mobileRunReceipt, mobileRequestReceipt])
+const receiptSchema = z.union([mobileRunReceipt, mobileRequestReceipt, mobileDraftReceipt])
 const storedReceipt = z.strictObject({ binding: z.string(), receipt: receiptSchema })
 type Receipt = z.infer<typeof receiptSchema>
 

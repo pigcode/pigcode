@@ -8,6 +8,7 @@ export type MobileErrorCode =
   | "DEVICE_REVOKED"
   | "THREAD_BUSY"
   | "RUN_QUEUE_FULL"
+  | "DRAFT_SELECTION_UNAVAILABLE"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -19,6 +20,7 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   DEVICE_REVOKED: "这部手机的配对已失效。",
   THREAD_BUSY: "会话已有运行中的一轮，请等它结束后再发送。",
   RUN_QUEUE_FULL: "电脑的运行队列已满，请稍后发送。",
+  DRAFT_SELECTION_UNAVAILABLE: "草稿选中的项目、Agent 实例、模型或权限已不可用。",
 }
 
 export class MobileRequestError extends Error {

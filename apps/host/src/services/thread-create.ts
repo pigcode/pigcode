@@ -6,6 +6,18 @@ import type { CommandParams, Thread } from "@pigcode/contracts"
 import { recordSubagentBrief } from "../agents/switching"
 import { scopeCwd } from "./worktrees"
 
+export function appendThreadCreated(ctx: Context, thread: Thread): void {
+  const { id, title, parentThreadId, createdAt } = thread
+  ctx.sessions.append({
+    threadId: id,
+    runId: null,
+    type: "thread.created",
+    payload: { title, ...(parentThreadId ? { parentThreadId } : {}) },
+    schemaVersion: 1,
+    createdAt,
+  })
+}
+
 export async function createThread(
   ctx: Context,
   value: CommandParams<"thread.create">,
@@ -35,14 +47,7 @@ export async function createThread(
         ...modes,
       })
       prepared?.persist()
-      ctx.sessions.append({
-        threadId: thread.id,
-        runId: null,
-        type: "thread.created",
-        payload: { title: thread.title, ...(parentThreadId ? { parentThreadId } : {}) },
-        schemaVersion: 1,
-        createdAt: thread.createdAt,
-      })
+      appendThreadCreated(ctx, thread)
       if (parentThreadId) recordSubagentBrief(ctx, thread.id, parentThreadId)
       return thread
     })()

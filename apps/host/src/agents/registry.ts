@@ -1,31 +1,34 @@
 /** 注册 Agent driver，并把一次 run 的规范化事件映射为线程事件。 */
 import { modesOf, modesForSwitch, resolveModes, registeredAgents } from "./execution-modes"
 import type { Context } from "cordis"
-import type { ThreadEvent } from "@pigcode/contracts"
-import { randomUUID } from "node:crypto"
+import type { Thread, ThreadEvent } from "@pigcode/contracts"
 import type { AgentRunConfig, AgentDriver } from "./driver"
 import { FakeAgentDriver } from "./fake"
 import { createAgentCatalog } from "./agent-catalog"
 import { assertNoStoredInstanceId, forcedAgentId, readStoredInstances } from "./agent-settings"
-import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from "./errors"
+import {
+  RunAlreadyActiveError,
+  RunQueueFullError,
+  RunSelectionUnavailableError,
+  TooManyActiveRunsError,
+} from "./errors"
 import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
-import { persistRunAdmission } from "./run-admission"
+import { prepareRunEntry, writeRunAdmission } from "./run-admission"
 import { createRunFinisher } from "./run-finish"
 import { createRunRequestResponder } from "./run-requests"
 import type { RunEventHooks } from "./run-events"
-import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
+import { disposeSession, switchAgent } from "./switching"
 import { createExecute } from "./run-execute"
-import { registerThreadReadTool } from "./thread-read-tool"
 import { THREAD_ACTIVITY } from "../services/threads"
-import { threadCwd } from "../services/worktrees"
+import { appendThreadCreated } from "../services/thread-create"
 import { createCliUpdates } from "./cli-updates"
 import { ApprovalBridge, createApprovalRequest } from "./approval-bridge"
 import { AgentSessionStore } from "./session-store"
 import { PendingRequestStore } from "../storage/pending-request-store"
 import { RunStore } from "../storage/run-store"
-import { runInput, catalogOperations, type AgentsService } from "./service"
+import { catalogOperations, type AgentsService, type StartRunOptions } from "./service"
 import { createQuestionFlow } from "./questions"
 import { watchClaudeIdleCompaction } from "./idle-compaction"
 import { createInstanceSetup } from "./instance-setup"
@@ -253,6 +256,73 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       ),
   )
   const setup = createInstanceSetup(ctx, agents, drivers, stopInstanceRuns, cliUpdates.check)
+
+  function prepare(
+    thread: Thread,
+    text: string,
+    emitLive: QueuedRun["emitLive"],
+    options: StartRunOptions,
+  ) {
+    if (activeThreads.has(thread.id)) throw new RunAlreadyActiveError(thread.id)
+    const agentId = thread.lastAgentId ?? thread.defaultAgentId
+    if (cliUpdates.isUpdating(agentId))
+      throw new RunSelectionUnavailableError(
+        "CLI update in progress. Please try again after it finishes.",
+      )
+    const driver = drivers.get(agentId)
+    if (!driver) throw new RunSelectionUnavailableError(`agent not found: ${agentId}`)
+    const instance = agents.instance(
+      agentId,
+      options.instanceId ?? thread.lastInstanceId ?? thread.defaultInstanceId,
+    )
+    if (!instance.enabled)
+      throw new RunSelectionUnavailableError(`instance is disabled: ${instance.instanceId}`)
+    if (setup.isStopping(instance.instanceId))
+      throw new RunSelectionUnavailableError("Agent instance is stopping")
+    const modes = resolveModes(modesOf(driver, agents.instanceContext(instance)), thread, agentId)
+    const queued = activeRuns.size + launching >= maxConcurrentRuns
+    if (queued && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
+    const entry = prepareRunEntry(ctx, agentSessions, {
+      thread,
+      driver,
+      instanceId: instance.instanceId,
+      modes,
+      text,
+      emitLive,
+      options,
+    })
+    return { entry, queued }
+  }
+
+  async function startPrepared(
+    { entry, queued }: ReturnType<typeof prepare>,
+    persist: () => () => void,
+  ) {
+    const { runId, threadId, done } = entry
+    activeThreads.add(threadId)
+    if (!queued) launching += 1
+    try {
+      const publish = persist()
+      if (queued) {
+        if (!queue.push(entry)) throw new RunQueueFullError(maxQueuedRuns)
+        publish()
+        return { runId, done }
+      }
+      const launched = launch(entry)
+      publish()
+      await launched
+      return { runId, done }
+    } catch (error) {
+      activeThreads.delete(threadId)
+      throw error
+    } finally {
+      if (!queued) {
+        launching -= 1
+        pump()
+      }
+    }
+  }
+
   const service: AgentsService = {
     ...catalogOperations(agents),
     cliUpdates: cliUpdates.list,
@@ -299,90 +369,37 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     async startRun(threadId, text, emitLive, options = {}) {
       const thread = ctx.threads.get(threadId)
       if (!thread) throw new Error(`thread not found: ${threadId}`)
-      if (activeThreads.has(threadId)) throw new RunAlreadyActiveError(threadId)
-      const agentId = thread.lastAgentId ?? thread.defaultAgentId
-      if (cliUpdates.isUpdating(agentId))
-        throw new Error("CLI update in progress. Please try again after it finishes.")
-      const driver = drivers.get(agentId)
-      if (!driver) throw new Error(`agent not found: ${agentId}`)
-      const instance = agents.instance(
-        agentId,
-        options.instanceId ?? thread.lastInstanceId ?? thread.defaultInstanceId,
-      )
-      if (!instance.enabled) throw new Error(`instance is disabled: ${instance.instanceId}`)
-      if (setup.isStopping(instance.instanceId)) throw new Error("Agent instance is stopping")
-      const modes = modesOf(driver, agents.instanceContext(instance))
-      const selectedModes = resolveModes(modes, thread, driver.id)
-      const shouldQueue = activeRuns.size + launching >= maxConcurrentRuns
-      if (shouldQueue && queue.size >= maxQueuedRuns) throw new RunQueueFullError(maxQueuedRuns)
-
-      // activeThreads 同时覆盖运行中与排队中的线程，保证同一线程只有一个 run。
-      activeThreads.add(threadId)
-      const reserved = !shouldQueue
-      if (reserved) launching += 1
-      try {
-        const startedAt = new Date().toISOString()
-        // Host 重启后原生会话标成了 orphaned，也要接回来，否则每次重启都会悄悄换成空的原生会话。
-        const activeSession =
-          agentSessions.findActive(threadId, driver.id, instance.instanceId) ??
-          agentSessions.findResumable(threadId, driver.id, instance.instanceId)
-        const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
-        const runId = `run_${randomUUID()}`
-        let resolveDone: () => void = () => undefined
-        const done = new Promise<void>((resolve) => {
-          resolveDone = resolve
+      const prepared = prepare(thread, text, emitLive, options)
+      return startPrepared(prepared, () => {
+        const write = () =>
+          writeRunAdmission(ctx, runs, thread, prepared.entry, prepared.queued, options, append)
+        if (options.mobileAdmission) return ctx.sessions.stageEvents(write)
+        write()
+        return () => undefined
+      })
+    },
+    async startDraftRun(selection, text, mobileAdmission) {
+      const options = { mobileAdmission }
+      let prepared!: ReturnType<typeof prepare>
+      const publish = ctx.sessions.stageEvents(() => {
+        const { threadId: id, projectId, agentId, modelId, ...initial } = selection
+        if (
+          !agents
+            .instances(agentId)
+            .some(({ instanceId, enabled }) => enabled && instanceId === initial.instanceId)
+        ) {
+          throw new RunSelectionUnavailableError(`instance is unavailable: ${initial.instanceId}`)
+        }
+        const thread = ctx.threads.create(projectId, "新会话", agentId, undefined, {
+          id,
+          ...initial,
+          modelId: modelId ?? undefined,
         })
-        const bridge = ctx.reflect.get("mcpBridge")
-        // 内置的 thread_read 总在：交接和会话引用都靠它让 agent 读省略的历史。
-        if (bridge) {
-          const unregister = registerThreadReadTool(ctx, bridge)
-          if (unregister) ctx.effect(() => unregister)
-        }
-        const mcp = bridge?.sessionMcp(threadId)
-        const entry: QueuedRun = {
-          runId,
-          threadId,
-          ...(options.mobileAdmission
-            ? {
-                sourceDevice: options.mobileAdmission.deviceKey,
-                isAuthorized: options.mobileAdmission.isAuthorized,
-              }
-            : {}),
-          driver,
-          instanceId: instance.instanceId,
-          input: runInput(text, options),
-          emitLive,
-          controller: new AbortController(),
-          done,
-          resolveDone,
-          queuedAt: startedAt,
-          cwd: threadCwd(ctx, thread.id),
-          ...selectedModes,
-          model: thread.lastModelId,
-          nativeSessionId: forkFrom ? null : (activeSession?.nativeSessionId ?? null),
-          ...(forkFrom ? { forkFromNativeSessionId: forkFrom } : {}),
-          ...(activeSession ? { sessionId: activeSession.id } : {}),
-          ...(mcp ? { mcp } : {}),
-        }
-        const publish = persistRunAdmission(ctx, runs, thread, entry, shouldQueue, options, append)
-        if (shouldQueue) {
-          if (!queue.push(entry)) throw new RunQueueFullError(maxQueuedRuns)
-          publish()
-          return { runId, done }
-        }
-        const launched = launch(entry)
-        publish()
-        await launched
-        return { runId, done }
-      } catch (error) {
-        activeThreads.delete(threadId)
-        throw error
-      } finally {
-        if (reserved) {
-          launching -= 1
-          pump()
-        }
-      }
+        appendThreadCreated(ctx, thread)
+        prepared = prepare(thread, text, undefined, options)
+        writeRunAdmission(ctx, runs, thread, prepared.entry, prepared.queued, options, append)
+      })
+      return startPrepared(prepared, () => publish)
     },
     requestApproval(threadId, runId, request) {
       return requestApproval(threadId, runId, request)

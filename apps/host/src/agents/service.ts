@@ -16,6 +16,7 @@ import type {
   AgentStatus,
   ReasoningEffort,
   RunStatus,
+  RuntimeMode,
   MobileRequestOutcome,
 } from "@pigcode/contracts"
 import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
@@ -33,10 +34,19 @@ export interface StartRunResult {
 }
 
 /** run 的可选参数；effort 只作用于本次 run。 */
-interface MobileRunAdmission {
+export interface MobileRunAdmission {
   deviceKey: string
   isAuthorized(): boolean
   recordReceipt(runId: string): void
+}
+
+export interface DraftRunSelection {
+  threadId: string
+  projectId: string
+  agentId: string
+  instanceId: string
+  modelId: string | null
+  permissionMode: RuntimeMode
 }
 
 export interface StartRunOptions {
@@ -149,6 +159,11 @@ export interface AgentsService {
     text: string,
     emitLive?: (event: AgentEvent) => void,
     options?: StartRunOptions,
+  ): Promise<StartRunResult>
+  startDraftRun(
+    selection: DraftRunSelection,
+    text: string,
+    admission: MobileRunAdmission,
   ): Promise<StartRunResult>
   requestApproval(threadId: string, runId: string, request: ApprovalRequest): ApprovalHandle
   respondApproval(
