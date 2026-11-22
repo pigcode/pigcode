@@ -8,6 +8,7 @@ import { loadProfile } from "./kernel/profile"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
+import { ThreadFeed } from "./rpc/thread-feed"
 import { attachQuitState } from "./rpc/quit-state"
 import { desktopRelayCipher } from "./services/relay-credential"
 import { MobileConnections } from "./mobile/connections"
@@ -121,15 +122,16 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
+  const feed = new ThreadFeed(ctx)
   if (control) {
     const cipher = desktopRelayCipher(new MessagePortTransport(control))
     const relay = new RelaySettings(ctx.settings, cipher)
-    const mobile = new MobileConnections(ctx.settings, relay, cipher)
+    const mobile = new MobileConnections(ctx, relay, cipher, feed)
     ctx.provide("relaySettings", relay)
     ctx.provide("mobileConnections", mobile)
     ctx.effect(() => () => mobile.dispose())
   }
-  rpc = new RpcServer(ctx, page)
+  rpc = new RpcServer(ctx, page, feed)
   rpc.start()
   if (waitingPage) {
     servePage(waitingPage)

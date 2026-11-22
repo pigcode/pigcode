@@ -12,3 +12,5 @@ export * from "./runtime-mode-options"
 export * from "./relay"
 
 export * from "./mobile"
+
+export * from "./mobile-sidebar"

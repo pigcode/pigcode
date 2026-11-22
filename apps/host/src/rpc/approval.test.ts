@@ -25,7 +25,7 @@ async function setup() {
        VALUES (?, ?, ?, 'running', ?)`,
     )
     .run("run-1", thread.id, "ps-1", new Date().toISOString())
-  const transport = new MemoryTransport({ skip: ["thread.changed"] })
+  const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
   const server = new RpcServer(ctx, transport.host)
   server.start()
   return { ctx, thread, transport, server }

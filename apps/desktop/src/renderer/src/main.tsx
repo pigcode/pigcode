@@ -54,6 +54,7 @@ const connection = new Connection({
       store.update({ threads: [thread, ...threads] })
   },
   onThreadChanged: (thread) => store.upsertThread(thread),
+  onProjectsChanged: (projects) => store.update({ projects }),
 })
 
 const plugins = createClientPluginController({ extensions, connection })

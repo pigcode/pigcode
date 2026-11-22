@@ -1,9 +1,11 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
 import {
+  projectSchema,
   scheduleRunChangeSchema,
   threadSchema,
   type AgentEvent,
   type ReasoningEffort,
+  type Project,
   type ScheduleRunChange,
   type TerminalOutput,
   type Thread,
@@ -25,6 +27,7 @@ export interface ConnectionHandlers {
   onScheduledThread?(thread: Thread): void
   /** Host 推来的会话新记录：状态、未读、标题、更新时间或归档变了，打开没打开都会推。 */
   onThreadChanged?(thread: Thread): void
+  onProjectsChanged?(projects: Project[]): void
 }
 
 /** `thread.subscribe` 的响应结构；Host 尚未返回事件时 events 为空。 */
@@ -38,6 +41,7 @@ export class Connection {
   private client: RpcClient | undefined
   /** 每次 attach 递增；中途被新的 attach 取代时，旧的一次不再改连接状态。 */
   private attempts = 0
+  private receivedProjects = false
   private readonly subscriptions = new Map<string, number>()
   private readonly scheduleRunListeners = new Set<(change: ScheduleRunChange) => void>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
@@ -47,6 +51,11 @@ export class Connection {
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
+  /** A pushed project list supersedes the result of the initial workspace load. */
+  get hasProjectSnapshot(): boolean {
+    return this.receivedProjects
+  }
+
   /**
    * 绑定新的传输层；已有线程时逐个从各自 cursor 重订阅。
    * 返回这次 attach 是否成为当前连接：false 表示中途被新的 attach 取代，
@@ -54,6 +63,7 @@ export class Connection {
    */
   async attach(transport: HostTransport): Promise<boolean> {
     const attempt = ++this.attempts
+    this.receivedProjects = false
     const previous = this.client
     this.handlers.onStatus(previous ? "reconnecting" : "connecting")
     // 旧连接不会再收到响应：先拒绝在途调用，等它们的界面才能走错误路径而不是一直转圈。
@@ -179,6 +189,14 @@ export class Connection {
         data?: unknown
         exitCode?: unknown
       }
+    }
+    if (value.method === "project.changed") {
+      const projects = projectSchema.array().safeParse(value.params)
+      if (projects.success && this.handlers.onProjectsChanged) {
+        this.receivedProjects = true
+        this.handlers.onProjectsChanged(projects.data)
+      }
+      return
     }
     if (value.method === "thread.changed") {
       const thread = threadSchema.safeParse(value.params)

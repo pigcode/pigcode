@@ -59,6 +59,22 @@ function storeWith(threads: Thread[], activeThreadId: string | null): AppStore {
 }
 
 describe("workspace actions", () => {
+  it("does not re-add a project removed by a live snapshot while loading the workspace", async () => {
+    const store = new AppStore()
+    let receivedProjects = false
+    const { connection } = fakeConnection({
+      "project.list": () => [project("removed")],
+      "thread.list": () => {
+        receivedProjects = true
+        store.update({ projects: [project("current")] })
+        return []
+      },
+    })
+    Object.defineProperty(connection, "hasProjectSnapshot", { get: () => receivedProjects })
+    await loadWorkspace(connection, store)
+    expect(store.getSnapshot().projects).toEqual([project("current")])
+  })
+
   it("renames a thread with the record the Host returns", async () => {
     const store = storeWith([thread("t1", "p1", "2026-10-20T01:00:00.000Z")], null)
     const renamed = { ...thread("t1", "p1", "2026-10-21T00:00:00.000Z"), title: "Renamed" }

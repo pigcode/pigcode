@@ -6,6 +6,7 @@ on:
       - "apps/mobile/**"
       - "apps/desktop/package.json"
       - "apps/desktop/scripts/generate-mobile-theme.ts"
+      - "apps/desktop/scripts/generate-mobile-contracts.ts"
       - "packages/ui-primitives/src/styles/tokens.css"
       - "packages/ui-primitives/src/theme/**"
       - "apps/host/src/mobile/**"
@@ -17,6 +18,7 @@ on:
       - "apps/mobile/**"
       - "apps/desktop/package.json"
       - "apps/desktop/scripts/generate-mobile-theme.ts"
+      - "apps/desktop/scripts/generate-mobile-contracts.ts"
       - "packages/ui-primitives/src/styles/tokens.css"
       - "packages/ui-primitives/src/theme/**"
       - "apps/host/src/mobile/**"
@@ -55,11 +57,18 @@ jobs:
           git clone --depth 1 --branch "$(cat .flutter-version)" \
             https://github.com/flutter/flutter.git "$RUNNER_TEMP/pigcode-flutter"
           printf '%s\n' "$RUNNER_TEMP/pigcode-flutter/bin" >> "$GITHUB_PATH"
+      - if: matrix.target == 'apk'
+        working-directory: .
+        run: node apps/desktop/scripts/generate-mobile-contracts.ts --check
       - run: flutter pub get --enforce-lockfile
-      - run: dart format --output=none --set-exit-if-changed app/lib packages scripts
+      - run: dart format --output=none --set-exit-if-changed app/lib app/test packages scripts
       - run: dart analyze --fatal-infos
       - run: dart test
         working-directory: apps/mobile/packages/pigcode_transport
+      - run: dart test
+        working-directory: apps/mobile/packages/pigcode_client
+      - run: flutter test
+        working-directory: apps/mobile/app
       - if: matrix.target == 'apk'
         run: ./scripts/flutter-app.sh build apk --debug --no-pub
       - if: matrix.target == 'ios'

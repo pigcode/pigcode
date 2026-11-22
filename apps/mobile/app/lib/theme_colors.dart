@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 const pigcodeLight = (
   background: Color(0xFFFAFAFA),
+  window: Color(0xFFEDEDED),
   surface: Color(0xFFFFFFFF),
   foreground: Color(0xFF202020),
   secondaryText: Color(0xFF424242),
@@ -12,10 +13,16 @@ const pigcodeLight = (
   selected: Color(0x1318181B),
   error: Color(0xFFBA1D27),
   onError: Color(0xFFFCFCFC),
+  muted: Color(0xFF606060),
+  attention: Color(0xFF9C5400),
+  running: Color(0xFF2279DC),
+  online: Color(0xFF006F38),
+  scrim: Color(0x33161619),
 );
 
 const pigcodeDark = (
   background: Color(0xFF1D1D1D),
+  window: Color(0xFF151515),
   surface: Color(0xFF262626),
   foreground: Color(0xFFF5F5F5),
   secondaryText: Color(0xFFCECECE),
@@ -25,4 +32,9 @@ const pigcodeDark = (
   selected: Color(0x16FFFFFF),
   error: Color(0xFFFF8880),
   onError: Color(0xFFFCFCFC),
+  muted: Color(0xFFADADAD),
+  attention: Color(0xFFF5C16B),
+  running: Color(0xFF6AA7F4),
+  online: Color(0xFF6FD395),
+  scrim: Color(0x80000000),
 );

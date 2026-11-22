@@ -11,12 +11,13 @@ import {
   type PairedDevice,
 } from "@pigcode/contracts"
 import type { RelayCredentialCipher, RelaySettings } from "../services/relay-settings"
-import type { SettingsService } from "../services/settings"
+import type { Context } from "cordis"
+import type { ThreadFeed } from "../rpc/thread-feed"
 import { acceptNoise, noiseKeyPair, type NoiseKeyPair, type NoiseSession } from "./noise"
 import { fingerprint, PairedDevices } from "./paired-devices"
 import { pairingAttemptView, type Attempt } from "./pairing-attempt"
 import { openRelayHost, type RelayHost } from "./relay-host"
-import { respondToMobile } from "./requests"
+import { serveMobileSidebar } from "./sidebar-rpc"
 
 const validity = 180_000
 const identityKey = "mobile.identity"
@@ -28,7 +29,7 @@ interface Peer {
   noise?: NoiseSession
   device?: PairedDevice | undefined
   attempt?: Attempt | undefined
-  features?: readonly string[]
+  rpc?: ReturnType<typeof serveMobileSidebar>
 }
 
 declare module "cordis" {
@@ -53,12 +54,13 @@ export class MobileConnections {
   private unsubscribe: () => void
 
   constructor(
-    private readonly settings: SettingsService,
+    private readonly ctx: Context,
     private readonly relay: RelaySettings,
     private readonly cipher: RelayCredentialCipher,
+    private readonly feed: ThreadFeed,
     private readonly now = Date.now,
   ) {
-    this.devices = new PairedDevices(settings)
+    this.devices = new PairedDevices(ctx.settings)
     this.unsubscribe = relay.onConnectionChange(() => {
       this.finish(this.attempt ? "cancelled" : "idle", false)
       this.disconnect()
@@ -225,7 +227,7 @@ export class MobileConnections {
   }
 
   private async loadIdentity(): Promise<NoiseKeyPair> {
-    const sealed = this.settings.get(identityKey)
+    const sealed = this.ctx.settings.get(identityKey)
     if (typeof sealed === "string") {
       const seed = publicKeySchema.parse(await this.cipher.open(sealed))
       return noiseKeyPair(Buffer.from(seed, "base64url"))
@@ -233,7 +235,7 @@ export class MobileConnections {
     if (sealed !== undefined || this.devices.size > 0)
       throw new Error("computer identity unavailable")
     const identity = noiseKeyPair()
-    this.settings.set(identityKey, await this.cipher.seal(identity.seed.toString("base64url")))
+    this.ctx.settings.set(identityKey, await this.cipher.seal(identity.seed.toString("base64url")))
     return identity
   }
 
@@ -333,6 +335,7 @@ export class MobileConnections {
     if (!peer) return
     clearTimeout(peer.timer)
     this.peers.delete(session)
+    peer.rpc?.close()
     if (this.attempt?.candidate?.session === session) {
       this.attempt.candidate = null
       this.status = "waiting"
@@ -364,24 +367,11 @@ export class MobileConnections {
           this.dropPeer(session, true)
           break
         case "hello":
-          this.negotiate(session, peer, message)
+          this.negotiate(identity, session, peer, message)
           break
-        case "ready": {
-          if (!peer.device) throw new Error("device not authorized")
-          const response = respondToMobile(
-            this.devices,
-            {
-              computerKey: identity.publicKey,
-              computerName: this.computerName,
-              deviceKey: peer.device.publicKey,
-              features: peer.features ?? [],
-              relayRevision: this.relay.revision,
-            },
-            message,
-          )
-          if (response) this.send(session, peer, response)
+        case "ready":
+          peer.rpc?.receive(message)
           break
-        }
       }
     } catch {
       this.dropPeer(session, true)
@@ -456,7 +446,7 @@ export class MobileConnections {
     this.status = "verify"
   }
 
-  private negotiate(session: number, peer: Peer, message: unknown): void {
+  private negotiate(identity: NoiseKeyPair, session: number, peer: Peer, message: unknown): void {
     const hello = mobileHelloSchema.parse(message)
     if (hello.minVersion > mobileProtocolVersion || hello.maxVersion < mobileProtocolVersion) {
       this.send(session, peer, {
@@ -472,7 +462,19 @@ export class MobileConnections {
     const features = mobileFeatures.filter((feature) => hello.features.includes(feature))
     peer.device = { ...device, lastConnectedAt: this.now() }
     this.devices.save(peer.device)
-    peer.features = features
+    peer.rpc = serveMobileSidebar(
+      this.ctx,
+      this.feed,
+      this.devices,
+      {
+        computerKey: identity.publicKey,
+        computerName: this.computerName,
+        deviceKey: device.publicKey,
+        features,
+        relayRevision: () => this.relay.revision,
+      },
+      (message) => this.send(session, peer, message),
+    )
     peer.phase = "ready"
     clearTimeout(peer.timer)
     this.send(session, peer, {

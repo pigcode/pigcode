@@ -193,7 +193,7 @@ class _RelayInbox {
     }
   }
 
-  Future<Object> next(Duration timeout) async {
+  Future<Object> next(Duration? timeout) async {
     if (_buffer.isNotEmpty) return _buffer.removeFirst();
     if (_finished.isCompleted || _waiting != null) {
       throw const ConnectionFailure('closed');
@@ -201,7 +201,9 @@ class _RelayInbox {
     final reader = Completer<Object>();
     _waiting = reader;
     try {
-      return await reader.future.timeout(timeout);
+      return await (timeout == null
+          ? reader.future
+          : reader.future.timeout(timeout));
     } finally {
       if (identical(_waiting, reader)) _waiting = null;
     }
@@ -315,7 +317,7 @@ class SecureLink {
   }
 
   Future<Map<String, dynamic>> receive({
-    Duration timeout = const Duration(seconds: 8),
+    Duration? timeout = const Duration(seconds: 8),
   }) async {
     try {
       final frame = await _inbox.next(timeout);

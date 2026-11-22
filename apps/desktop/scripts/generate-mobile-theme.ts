@@ -9,6 +9,7 @@ const resolver = new URL("packages/ui-primitives/src/theme/resolve-color.ts", ro
 const destination = new URL("apps/mobile/app/lib/theme_colors.dart", root)
 const tokens = {
   background: "--bg",
+  window: "--window",
   surface: "--surface",
   foreground: "--fg",
   secondaryText: "--fg-2",
@@ -18,6 +19,11 @@ const tokens = {
   selected: "--active",
   error: "--bad-text",
   onError: "--on-bad",
+  muted: "--muted",
+  attention: "--warn-text",
+  running: "--info",
+  online: "--ok-text",
+  scrim: "--scrim",
 }
 
 const bundled = await build({

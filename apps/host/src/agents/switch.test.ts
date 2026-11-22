@@ -331,7 +331,7 @@ describe("agent switching", () => {
 
   it("dispatches thread.switchAgent over RPC", async () => {
     const { ctx, thread } = await setup()
-    const transport = new MemoryTransport({ skip: ["thread.changed"] })
+    const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
     const server = new RpcServer(ctx, transport.host)
     server.start()
     transport.client.send({

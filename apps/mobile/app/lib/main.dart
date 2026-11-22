@@ -10,6 +10,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'computers.dart';
 import 'theme_colors.dart';
+import 'workspace.dart';
 
 const _version = String.fromEnvironment('PIGCODE_PRODUCT_VERSION');
 
@@ -76,6 +77,8 @@ class ComputersPage extends ConsumerStatefulWidget {
 
 class _ComputersPageState extends ConsumerState<ComputersPage> {
   MobileConnection? _connection;
+  MobileConnection? _browsing;
+  bool _workspaceOpen = false;
   String? _selected;
   String? _verification;
   String? _feedback;
@@ -87,6 +90,12 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     PairingInvite? invite,
   }) async {
     if (_working) return;
+    if (invite == null &&
+        _connection != null &&
+        _selected == computer.computerKey) {
+      setState(() => _workspaceOpen = true);
+      return;
+    }
     final existing = invite == null
         ? null
         : ref
@@ -96,6 +105,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
               .firstOrNull;
     setState(() {
       _working = true;
+      _workspaceOpen = false;
+      _browsing = null;
       _updatingRelay = existing != null;
       _verification = null;
       _feedback = null;
@@ -139,6 +150,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       _connection = connected;
       setState(() {
         _selected = computer.computerKey;
+        _browsing = connected;
+        _workspaceOpen = true;
         if (existing != null) _feedback = '已更新这台电脑的中继配置。';
       });
       unawaited(
@@ -256,6 +269,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
         final connection = _connection;
         _connection = null;
         _selected = null;
+        _browsing = null;
         await connection?.close();
       }
       if (mounted) setState(() => _feedback = null);
@@ -277,8 +291,13 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
   @override
   Widget build(BuildContext context) {
     final computers = ref.watch(computersProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('电脑')),
+    final manager = Scaffold(
+      appBar: AppBar(
+        title: const Text('电脑'),
+        leading: _browsing != null
+            ? BackButton(onPressed: () => setState(() => _workspaceOpen = true))
+            : null,
+      ),
       body: SafeArea(
         top: false,
         child: computers.when(
@@ -386,6 +405,19 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
           ),
         ),
       ),
+    );
+    final workspace = _browsing;
+    if (workspace == null) return manager;
+    return IndexedStack(
+      index: _workspaceOpen ? 0 : 1,
+      children: [
+        MobileWorkspace(
+          key: ObjectKey(workspace),
+          connection: workspace,
+          onComputers: () => setState(() => _workspaceOpen = false),
+        ),
+        manager,
+      ],
     );
   }
 }

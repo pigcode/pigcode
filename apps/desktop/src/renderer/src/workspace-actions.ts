@@ -57,10 +57,12 @@ export async function loadWorkspace(connection: Connection, store: AppStore): Pr
   const addedProjects = new Set(current.projects.map((item) => item.id))
   const addedThreads = new Set(current.threads.map((item) => item.id))
   store.update({
-    projects: byCreation([
-      ...current.projects,
-      ...projects.filter((item) => !addedProjects.has(item.id)),
-    ]),
+    projects: connection.hasProjectSnapshot
+      ? current.projects
+      : byCreation([
+          ...current.projects,
+          ...projects.filter((item) => !addedProjects.has(item.id)),
+        ]),
     threads: [...current.threads, ...threads.filter((item) => !addedThreads.has(item.id))],
   })
 }

@@ -1,6 +1,13 @@
 import 'dart:io';
 
 import 'package:pigcode_transport/pigcode_transport.dart';
+import 'host_rpc.dart';
+import 'sidebar.dart';
+import 'sidebar_models.dart';
+
+export 'host_rpc.dart' show MobileRpcFailure;
+export 'sidebar.dart';
+export 'sidebar_models.dart';
 
 const mobileProtocolVersion = 1;
 
@@ -10,12 +17,27 @@ class MobileConnection {
     this.computerName,
     this.computer,
     this._acceptsRelayReceipt,
-  );
+    this.supportsSidebar,
+  ) : _rpc = HostRpc(_link);
 
   final SecureLink _link;
   final String computerName;
   final ComputerProfile computer;
   final bool _acceptsRelayReceipt;
+  final bool supportsSidebar;
+  final HostRpc _rpc;
+  Future<MobileSidebar>? _sidebar;
+
+  Future<MobileSidebar> openSidebar() {
+    if (!supportsSidebar) throw const ConnectionFailure('update-desktop');
+    return _sidebar ??= MobileSidebar.open(_rpc).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      _sidebar = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+  }
 
   Future<void> get done => _link.done;
   Future<void> close() => _link.close();
@@ -135,7 +157,7 @@ class MobileConnection {
         'type': 'mobile.hello',
         'minVersion': mobileProtocolVersion,
         'maxVersion': mobileProtocolVersion,
-        'features': ['connection.status', 'relay.saveReceipt'],
+        'features': ['connection.status', 'relay.saveReceipt', 'sidebar.read'],
       });
       final welcome = await link.receive();
       if (welcome['type'] == 'mobile.incompatible') {
@@ -156,19 +178,22 @@ class MobileConnection {
       await link.send({
         'jsonrpc': '2.0',
         'id': 'status',
-        'method': 'mobile.status',
-        'params': {},
+        'method': MobileSidebarMethods.status,
+        'params': const MobileStatusParams().toJson(),
       });
       final response = await link.receive();
       if (response['id'] != 'status') {
         throw const ConnectionFailure('authentication-failed');
       }
-      final status = response['result'] as Map<String, dynamic>;
+      final status = MobileStatus.fromJson(
+        response['result'] as Map<String, dynamic>,
+      );
       final connection = MobileConnection._(
         link,
-        status['computerName'] as String,
+        status.computerName,
         computer.withRelayRevision(revision),
         (welcome['features'] as List).contains('relay.saveReceipt'),
+        (welcome['features'] as List).contains('sidebar.read'),
       );
       if (confirm == null) await connection.announceRelaySaved();
       return connection;

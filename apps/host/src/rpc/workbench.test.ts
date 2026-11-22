@@ -80,7 +80,7 @@ async function setupWorkbenchRpc() {
 
   const project = ctx.projects.add(root)
   const thread = ctx.threads.create(project.id, "RPC", "fake")
-  const transport = new MemoryTransport({ skip: ["thread.changed"] })
+  const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
   const server = new RpcServer(ctx, transport.host)
   server.start()
   return { ctx, project, thread, transport, server, root }

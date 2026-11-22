@@ -18,6 +18,7 @@ import type {
 import { createThread } from "../services/thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
+import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
 import { forwardTerminal } from "./terminal-notify"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
 import { ThreadFeed } from "./thread-feed"
@@ -41,7 +42,6 @@ function scopeOf(value: { threadId?: string | undefined; projectId?: string | un
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
 export class RpcServer {
   private disposers: Array<() => void> = []
-  private readonly feed: ThreadFeed
   /** 每个线程只保留一个实时监听器；重复订阅先释放旧的。 */
   private readonly subscriptions = new Map<string, () => void>()
   /** 页面打开的终端的输出订阅。 */
@@ -52,9 +52,8 @@ export class RpcServer {
   constructor(
     private readonly ctx: Context,
     private readonly transport: HostTransport,
-  ) {
-    this.feed = new ThreadFeed(ctx, (message) => transport.send(message))
-  }
+    private readonly feed = new ThreadFeed(ctx),
+  ) {}
 
   /** 开始监听传输层消息。 */
   start(): void {
@@ -71,7 +70,9 @@ export class RpcServer {
         ),
       )
     }
-    this.disposers.push(this.feed.start())
+    this.disposers.push(
+      subscribeDesktopSidebar(this.ctx, this.feed, (message) => this.transport.send(message)),
+    )
   }
 
   /** 停止监听并释放所有订阅。 */

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto"
+import { rpcNotificationSchema } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { expect } from "vitest"
 import { apply as agents } from "../agents/registry"
@@ -11,6 +12,7 @@ import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 import { MemoryTransport } from "./memory-transport"
 import { RpcServer } from "./server"
+import { ThreadFeed } from "./thread-feed"
 
 export async function startMobileHost(options?: { settingsPath?: string; now?: () => number }) {
   const ctx = new Context()
@@ -27,19 +29,23 @@ export async function startMobileHost(options?: { settingsPath?: string; now?: (
       (JSON.parse(Buffer.from(value, "base64").toString()) as [string, string])[1],
   }
   const relay = new RelaySettings(ctx.settings, cipher)
-  const mobile = new MobileConnections(ctx.settings, relay, cipher, options?.now)
+  const feed = new ThreadFeed(ctx)
+  const mobile = new MobileConnections(ctx, relay, cipher, feed, options?.now)
   ctx.provide("relaySettings", relay)
   ctx.provide("mobileConnections", mobile)
 
-  const transport = new MemoryTransport({ skip: ["thread.changed"] })
-  const server = new RpcServer(ctx, transport.host)
+  const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
+  const server = new RpcServer(ctx, transport.host, feed)
   server.start()
 
   return {
     async call(method: string, params: Record<string, unknown> = {}) {
       const id = randomUUID()
       transport.client.send({ jsonrpc: "2.0", id, method, params })
-      const response = await transport.client.next()
+      let response: unknown
+      do {
+        response = await transport.client.next()
+      } while (rpcNotificationSchema.safeParse(response).success)
       expect(response).toMatchObject({ jsonrpc: "2.0", id })
       return response
     },

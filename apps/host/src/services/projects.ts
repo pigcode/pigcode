@@ -14,6 +14,7 @@ export interface ProjectsService {
   add(rootPath: string, name?: string): Project
   /** 侧栏里的项目，不含已移除的。 */
   list(): Project[]
+  subscribe(listener: () => void): () => void
   /** 按 id 读取项目，已移除的也能读到，供会话解析工作目录。 */
   get(projectId: string): Project | undefined
   /** 改展示名，不动磁盘上的文件夹；已移除的项目返回 undefined。 */
@@ -51,6 +52,17 @@ export const apply: ProjectsPlugin = (ctx) => {
   const row = (projectId: string) =>
     db.prepare(`SELECT * FROM projects WHERE id = ?`).get(projectId) as ProjectRow | undefined
 
+  const listeners = new Set<() => void>()
+  let queued = false
+  const changed = () => {
+    if (queued || listeners.size === 0) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      for (const listener of [...listeners]) listener()
+    })
+  }
+
   const service: ProjectsService = {
     add(rootPath, name) {
       const given = name?.trim()
@@ -63,6 +75,7 @@ export const apply: ProjectsPlugin = (ctx) => {
           label,
           existing.id,
         )
+        changed()
         return mapProject({ ...existing, name: label })
       }
       const project: Project = {
@@ -77,6 +90,7 @@ export const apply: ProjectsPlugin = (ctx) => {
         project.name,
         project.createdAt,
       )
+      changed()
       return project
     },
     list() {
@@ -86,28 +100,33 @@ export const apply: ProjectsPlugin = (ctx) => {
           .all() as ProjectRow[]
       ).map(mapProject)
     },
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
     get(projectId) {
       const value = row(projectId)
       return value ? mapProject(value) : undefined
     },
     rename(projectId, name) {
-      db.prepare(`UPDATE projects SET name = ? WHERE id = ? AND archived_at IS NULL`).run(
-        name,
-        projectId,
-      )
+      const result = db
+        .prepare(`UPDATE projects SET name = ? WHERE id = ? AND archived_at IS NULL`)
+        .run(name, projectId)
+      if (result.changes) changed()
       const value = row(projectId)
       return value?.archived_at === null ? mapProject(value) : undefined
     },
     remove(projectId) {
-      db.prepare(`UPDATE projects SET archived_at = ? WHERE id = ? AND archived_at IS NULL`).run(
-        new Date().toISOString(),
-        projectId,
-      )
+      const result = db
+        .prepare(`UPDATE projects SET archived_at = ? WHERE id = ? AND archived_at IS NULL`)
+        .run(new Date().toISOString(), projectId)
+      if (result.changes) changed()
       const value = row(projectId)
       return value ? mapProject(value) : undefined
     },
   }
   ctx.provide("projects", service)
+  ctx.effect(() => () => listeners.clear())
 }
 
 apply.inject = inject

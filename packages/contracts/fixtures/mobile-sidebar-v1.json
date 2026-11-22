@@ -1,0 +1,38 @@
+{
+  "projectList": {
+    "params": { "offset": 0, "limit": 64 },
+    "result": [{ "id": "pr_1", "name": "工作台" }]
+  },
+  "threadList": {
+    "params": { "projectId": "pr_1", "limit": 8 },
+    "result": [
+      {
+        "id": "th_1",
+        "projectId": "pr_1",
+        "title": "文档检查",
+        "updatedAt": "2026-11-22T02:18:00.000Z",
+        "archived": false,
+        "pinned": false,
+        "status": "waiting-approval",
+        "unread": true
+      },
+      {
+        "id": "th_2",
+        "projectId": "pr_1",
+        "title": "上周工作",
+        "updatedAt": "2026-11-18T02:18:00.000Z",
+        "archived": true,
+        "pinned": false,
+        "status": "completed",
+        "unread": false
+      }
+    ]
+  },
+  "subscribe": { "params": {}, "result": {} },
+  "changed": {},
+  "problem": {
+    "code": "METHOD_NOT_AVAILABLE",
+    "message": "手机端暂时无法使用此操作。",
+    "retryable": false
+  }
+}

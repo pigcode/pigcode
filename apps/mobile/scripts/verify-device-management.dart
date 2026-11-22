@@ -60,6 +60,42 @@ Future<void> main() async {
               client: client,
             );
             report('ready');
+          case 'sidebar':
+            final sidebar = await active[phone]!.openSidebar();
+            final projectName = command['projectName'] as String?;
+            final threadId = command['threadId'] as String?;
+            final status = command['status'] as String?;
+            bool matches(SidebarSnapshot snapshot) {
+              final projectMatches =
+                  projectName == null ||
+                  snapshot.projects.any(
+                    (project) => project.name == projectName,
+                  );
+              final threadMatches =
+                  threadId == null ||
+                  snapshot.threads.any(
+                    (thread) =>
+                        thread.id == threadId && thread.status.wire == status,
+                  );
+              return projectMatches && threadMatches;
+            }
+            final initial = sidebar.snapshot;
+            final snapshot = initial != null && matches(initial)
+                ? initial
+                : await sidebar.updates
+                      .firstWhere(matches)
+                      .timeout(const Duration(seconds: 12));
+            report('sidebar', {
+              'projects': snapshot.projects
+                  .map((project) => project.toJson())
+                  .toList(),
+              'threads': snapshot.threads
+                  .map((thread) => thread.toJson())
+                  .toList(),
+            });
+          case 'disconnect':
+            await active.remove(phone)?.close();
+            report('closed');
           case 'closed':
             await active[phone]!.done.timeout(const Duration(seconds: 8));
             report('closed');

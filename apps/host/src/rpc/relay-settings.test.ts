@@ -30,7 +30,7 @@ async function startHost(probe?: RelayProbe) {
       probe,
     ),
   )
-  const transport = new MemoryTransport({ skip: ["thread.changed"] })
+  const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
   const server = new RpcServer(ctx, transport.host)
   server.start()
   let nextId = 0
