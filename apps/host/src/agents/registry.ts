@@ -13,6 +13,7 @@ import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
 import { persistRunAdmission } from "./run-admission"
 import { createRunFinisher } from "./run-finish"
+import { createRunRequestResponder } from "./run-requests"
 import type { RunEventHooks } from "./run-events"
 import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
 import { createExecute } from "./run-execute"
@@ -79,6 +80,15 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   }
 
   const questions = createQuestionFlow({ append, pendingRequests, runs, activeRuns })
+  const respondToRequest = createRunRequestResponder({
+    ctx,
+    runs,
+    activeRuns,
+    pendingRequests,
+    approvals,
+    questions,
+    append,
+  })
   const finishRun = createRunFinisher({
     ctx,
     runs,
@@ -377,27 +387,19 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     requestApproval(threadId, runId, request) {
       return requestApproval(threadId, runId, request)
     },
-    respondApproval(threadId, runId, requestId, decision) {
-      const row = ctx.storage.db
-        .prepare(`SELECT thread_id, run_id, status FROM pending_requests WHERE id = ?`)
-        .get(requestId) as { thread_id: string; run_id: string; status: string } | undefined
-      if (!row || row.thread_id !== threadId || row.run_id !== runId || row.status !== "pending") {
-        throw new Error(`approval not pending: ${requestId}`)
-      }
-      if (!approvals.resolve(requestId, decision)) {
-        throw new Error(`approval not pending: ${requestId}`)
-      }
-      pendingRequests.resolve(requestId)
-      append(threadId, runId, "approval.resolved", { requestId, id: requestId, decision })
-      runs.setStatus(runId, "running")
-      const run = activeRuns.get(runId)
-      if (run) {
-        run.status = "running"
-        run.approvals.delete(requestId)
-      }
+    respondApproval(threadId, runId, requestId, decision, options) {
+      return respondToRequest(
+        { threadId, runId, requestId },
+        { kind: "approval", decision },
+        options,
+      )
     },
-    answerQuestion(threadId, runId, requestId, answers) {
-      questions.answer(threadId, runId, requestId, answers)
+    answerQuestion(threadId, runId, requestId, answers, options) {
+      return respondToRequest(
+        { threadId, runId, requestId },
+        { kind: "question", answers },
+        options,
+      )
     },
     getRunStatus(runId) {
       const active = activeRuns.get(runId)

@@ -1,6 +1,6 @@
 import type { SpawnedMspConnection } from "@muse-code/sdk"
 import { promptText, record, stringValue, untilAbort } from "@pigcode/native-agent-runtime"
-import type { AgentRuntime, UserInput } from "@pigcode/plugin-sdk"
+import type { AgentRuntime, ApprovalDecision, UserInput } from "@pigcode/plugin-sdk"
 
 export async function invokeTurn(
   host: SpawnedMspConnection,
@@ -35,23 +35,27 @@ export async function invokeTurn(
     if (!id || answered.has(stage)) return
     answered.add(stage)
     if (approval) {
-      const decision = await runtime.requestApproval({
-        toolName: stringValue(params.toolName) || "Muse",
-        input: params.subject ?? params.rawArgs,
-      })
       const choices = Array.isArray(params.availableChoices)
         ? params.availableChoices.map(record)
         : []
       const match = (name: string, scope = "once") =>
         choices.find((c) => c.decision === name && c.scope === scope)
-      const choice =
-        decision === "deny"
-          ? (match("denied") ?? match("deniedPolicyAmendment") ?? match("abort"))
-          : decision === "allow-for-session"
-            ? (match("approvedForSession", "session") ??
-              match("approvedPolicyAmendment", "session") ??
-              match("approved"))
-            : match("approved")
+      const offered = {
+        "allow-once": match("approved"),
+        "allow-for-session":
+          match("approvedForSession", "session") ?? match("approvedPolicyAmendment", "session"),
+        deny: match("denied") ?? match("deniedPolicyAmendment") ?? match("abort"),
+      }
+      const decisions = (Object.keys(offered) as ApprovalDecision[]).filter(
+        (decision) => offered[decision],
+      )
+      if (!decisions.length) throw new Error("Muse did not offer a supported approval decision")
+      const decision = await runtime.requestApproval({
+        toolName: stringValue(params.toolName) || "Muse",
+        input: params.subject ?? params.rawArgs,
+        decisions,
+      })
+      const choice = offered[decision]
       if (!choice) throw new Error("Muse did not offer the requested approval decision")
       runtime.signal.throwIfAborted()
       await command("approval/decide", {

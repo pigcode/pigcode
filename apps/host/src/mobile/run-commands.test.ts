@@ -344,7 +344,8 @@ it.skipIf(!address || !token)(
         prepare: (ctx) => ctx.agents.register(driver),
         onDesktopMessage: collectDesktopEvents,
       })
-      expect(await phoneCall("reconnect")).toEqual({ stage: "ready" })
+      // The restarted Host registers with Go asynchronously from its saved settings.
+      await expect.poll(() => phoneCall("reconnect"), { timeout: 8000 }).toEqual({ stage: "ready" })
       expect(await phoneCall("lookupCommand", { commandId: sendCommand.commandId })).toEqual(
         accepted,
       )

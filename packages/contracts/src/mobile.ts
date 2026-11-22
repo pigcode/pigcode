@@ -11,6 +11,7 @@ export const mobileFeatures = [
   "sidebar.read",
   "timeline.read",
   "run.write",
+  "request.write",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

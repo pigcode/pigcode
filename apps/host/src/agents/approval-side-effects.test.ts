@@ -199,7 +199,7 @@ describe.each([
 
     // 用户在取消的同时点了「允许」：决议到得太晚，不能再让工具跑起来。
     const late = await respond("allow-once")
-    expect(late.error?.message).toContain("approval not pending")
+    expect(late).toMatchObject({ result: { ok: true, outcome: { state: "expired" } } })
     await settle()
     expect(existsSync(file)).toBe(false)
   })

@@ -80,17 +80,7 @@ export function createQuestionFlow(deps: QuestionDeps) {
       })
       return done.finally(() => signal?.removeEventListener("abort", abort))
     },
-    /** 用户作答；请求不属于这个 run 或已经结束时抛错。 */
-    answer(threadId: string, runId: string, requestId: string, answers: string[]): void {
-      const waiter = waiters.get(requestId)
-      const run = deps.activeRuns.get(runId)
-      if (!waiter || waiter.runId !== runId || (run && run.threadId !== threadId)) {
-        throw new Error(`question not pending: ${requestId}`)
-      }
-      finish(run, runId, requestId)
-      deps.append(threadId, runId, "question.answered", { requestId, id: requestId, answers })
-      resolve(requestId, answers)
-    },
+    has: (requestId: string) => waiters.has(requestId),
     /** 已持久化结果后通知等待中的 Agent。 */
     resolve,
 

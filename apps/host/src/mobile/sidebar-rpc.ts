@@ -3,6 +3,8 @@ import type { HostTransport } from "@pigcode/client-runtime/transport"
 import {
   mobileProjectListParamsSchema,
   mobileProjectListResultSchema,
+  mobileCommandMethods,
+  mobileReceiptParams,
   mobileRelaySavedSchema,
   mobileSidebarChangedSchema,
   mobileSidebarMethods as methods,
@@ -22,6 +24,8 @@ import {
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { fingerprint, type PairedDevices } from "./paired-devices"
+import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
+import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
 import { MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
@@ -79,6 +83,8 @@ function threadSummary(thread: Thread) {
 /** Mobile allowlist. It never dispatches through the desktop RPC server. */
 export class MobileSidebarRpc {
   private readonly commands: MobileRunCommands
+  private readonly requests: MobileRequestCommands
+  private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
   private stopMessages: (() => void) | undefined
@@ -94,7 +100,13 @@ export class MobileSidebarRpc {
     private readonly devices: PairedDevices,
     private readonly session: MobileSession,
   ) {
-    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey)
+    this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
+    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts)
+    this.requests = new MobileRequestCommands(
+      ctx,
+      this.receipts,
+      "device:" + fingerprint(Buffer.from(session.deviceKey, "base64url")),
+    )
     this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message))
   }
 
@@ -165,8 +177,25 @@ export class MobileSidebarRpc {
     )
       return this.timeline.dispatch(request)
 
-    if (this.session.features.includes("run.write") && mobileRunCommandRequests.has(request.method))
+    const canRun = this.session.features.includes("run.write")
+    const canRespond = this.session.features.includes("request.write")
+    if (canRun && mobileRunCommandRequests.has(request.method)) {
+      this.requirePairedDevice()
       return this.commands.dispatch(request)
+    }
+    if (canRespond && mobileRequestCommands.has(request.method)) {
+      this.requirePairedDevice()
+      return this.requests.dispatch(request)
+    }
+    if ((canRun || canRespond) && request.method === mobileCommandMethods.receipt) {
+      this.requirePairedDevice()
+      const { commandId } = params(mobileReceiptParams, request.params)
+      const receipt = this.receipts.lookup(commandId)
+      if (!receipt) return {}
+      if (mobileRunCommandRequests.has(receipt.method) ? !canRun : !canRespond) return {}
+      requireMobileThread(this.ctx, receipt.threadId)
+      return { receipt }
+    }
 
     if (!this.session.features.includes("sidebar.read"))
       throw new MobileRequestError("METHOD_NOT_AVAILABLE")
@@ -196,6 +225,10 @@ export class MobileSidebarRpc {
       default:
         throw new MobileRequestError("METHOD_NOT_AVAILABLE")
     }
+  }
+
+  private requirePairedDevice(): void {
+    if (!this.devices.find(this.session.deviceKey)) throw new MobileRequestError("DEVICE_REVOKED")
   }
 
   private projectRows() {

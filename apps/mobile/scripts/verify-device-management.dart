@@ -100,6 +100,7 @@ Future<void> main() async {
             final expected = command['liveText'] as String?;
             final answer = command['answer'] as String?;
             final stoppedRunId = command['stoppedRunId'] as String?;
+            final requestResult = command['requestResult'] as String?;
             bool hasStopped(TimelineSnapshot snapshot) => snapshot.events.any(
               (item) =>
                   item.runId == stoppedRunId &&
@@ -110,6 +111,10 @@ Future<void> main() async {
                 (answer == null ||
                     (snapshot.live == null &&
                         snapshot.events.any((item) => item.text == answer))) &&
+                (requestResult == null ||
+                    snapshot.events.any(
+                      (item) => item.text == requestResult,
+                    )) &&
                 (stoppedRunId == null || hasStopped(snapshot));
             final first = timeline.snapshot;
             final view = first != null && matches(first)
@@ -131,7 +136,47 @@ Future<void> main() async {
                   answer != null &&
                   view.events.any((item) => item.text == answer),
               if (stoppedRunId != null) 'stopped': hasStopped(view),
+              if (requestResult != null) 'hasRequestResult': true,
             });
+          case 'pendingRequests':
+            final connection = active[phone]!;
+            final threadId = command['threadId'] as String;
+            final timeline = await connection.openTimeline(threadId);
+            final count = command['count'] as int;
+            bool matches(TimelineSnapshot snapshot) =>
+                (snapshot.live?.pending.length ?? 0) == count;
+            final snapshot = matches(timeline.snapshot!)
+                ? timeline.snapshot!
+                : await timeline.updates
+                      .firstWhere(matches)
+                      .timeout(const Duration(seconds: 12));
+            final live = snapshot.live;
+            final details = <Map<String, Object?>>[];
+            if (live != null) {
+              for (final request in live.pending) {
+                final detail = await connection.pendingRequests.details(
+                  MobileRequestTarget(
+                    threadId: threadId,
+                    runId: live.runId,
+                    requestId: request.id,
+                  ),
+                );
+                details.add(detail.toJson());
+              }
+            }
+            report('pending', {'requests': details});
+          case 'approveRequest' || 'answerRequest':
+            final api = active[phone]!.pendingRequests;
+            final params = command['params'] as Map<String, dynamic>;
+            final result = command['action'] == 'approveRequest'
+                ? await api.approve(MobileApproveParams.fromJson(params))
+                : await api.answer(MobileAnswerParams.fromJson(params));
+            report('requestReceipt', {'receipt': result.toJson()});
+          case 'lookupRequest':
+            final receipt = await active[phone]!.pendingRequests.receipt(
+              command['commandId'] as String,
+            );
+            report('requestReceipt', {'receipt': receipt?.toJson()});
           case 'startCommand' || 'startWithoutReply':
             final result = active[phone]!.runCommands.start(
               MobileStartRunParams(

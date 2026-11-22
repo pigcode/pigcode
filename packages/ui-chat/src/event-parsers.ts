@@ -1,5 +1,5 @@
 /** 把线程事件的 payload 解析成时间线组件需要的结构；字段名兼容各 Agent 的变体。 */
-import type { ThreadEvent } from "@pigcode/contracts"
+import { approvalDecisionSchema, type ThreadEvent } from "@pigcode/contracts"
 import type { ApprovalDecision, ApprovalRequest } from "./approval-card"
 import type { QuestionRequestView, QuestionView } from "./question-card"
 import type { SubagentCall, SubagentStatus } from "./subagent-card"
@@ -108,13 +108,23 @@ export function collectTools(events: ThreadEvent[]): Map<string, ToolCall> {
 export function approvalFromEvent(event: ThreadEvent): ApprovalRequest | undefined {
   const payload = asRecord(event.payload)
   if (!payload) return undefined
-  const plan =
-    asText(payload.toolName) === "ExitPlanMode" ? asText(asRecord(payload.input)?.plan) : undefined
+  const isPlan = payload.toolName === "ExitPlanMode"
+  const plan = isPlan ? asText(asRecord(payload.input)?.plan) : undefined
+  const decisions = approvalDecisionSchema.array().safeParse(payload.decisions)
   return {
     id: asText(payload.id) ?? asText(payload.requestId) ?? `approval-${event.seq}`,
     title: asText(payload.title),
     description: asText(payload.description) ?? asText(payload.reason) ?? asText(payload.question),
     command: displayValue(payload.command),
+    ...(isPlan
+      ? {
+          decisions: (decisions.success ? decisions.data : approvalDecisionSchema.options).filter(
+            (decision) => decision !== "allow-for-session",
+          ),
+        }
+      : decisions.success
+        ? { decisions: decisions.data }
+        : {}),
     ...(plan ? { plan } : {}),
   }
 }

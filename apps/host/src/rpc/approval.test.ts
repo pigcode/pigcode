@@ -71,7 +71,7 @@ describe("approval rpc", () => {
     await ctx.fiber.dispose()
   })
 
-  it("rejects an approval that is no longer pending", async () => {
+  it("returns the first decision instead of replacing it with a later submission", async () => {
     const { ctx, thread, transport, server } = await setup()
     const pending = ctx.agents.requestApproval(thread.id, "run-1", {
       toolName: "Bash",
@@ -91,11 +91,9 @@ describe("approval rpc", () => {
         decision: "allow-once",
       },
     })
-    const response = (await transport.client.next()) as {
-      error: { code: string; message: string }
-    }
-    expect(response.error.code).toBe("COMMAND_FAILED")
-    expect(response.error.message).toContain("not pending")
+    expect(await transport.client.next()).toMatchObject({
+      result: { ok: true, outcome: { state: "already-handled", decision: "deny" } },
+    })
     server.stop()
     await ctx.fiber.dispose()
   })

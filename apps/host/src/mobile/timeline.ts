@@ -19,6 +19,7 @@ import {
   mobileTimelineThreadParams,
 } from "@pigcode/contracts"
 import { mobileParams, MobileRequestError } from "./request-error"
+import { mobileThreadAvailable, requireMobileThread } from "./command-receipts"
 import { eventBody, preview, timelineEvent } from "./timeline-projection"
 
 export const mobileTimelineRequests: ReadonlySet<string> = new Set([
@@ -175,16 +176,11 @@ export class MobileTimelineSession {
   }
 
   private available(threadId: string): boolean {
-    const thread = this.ctx.threads.get(threadId)
-    return (
-      !!thread &&
-      !thread.parentThreadId &&
-      this.ctx.projects.list().some(({ id }) => id === thread.projectId)
-    )
+    return mobileThreadAvailable(this.ctx, threadId)
   }
 
   private requireThread(threadId: string): void {
-    if (!this.available(threadId)) throw new MobileRequestError("RESOURCE_NOT_AVAILABLE")
+    requireMobileThread(this.ctx, threadId)
   }
 
   private snapshot(threadId: string) {

@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/host_rpc.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_mobile/mobile_command_journal.dart';
 import 'package:pigcode_mobile/run_command_journal.dart';
 import 'package:pigcode_mobile/run_composer.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
@@ -217,7 +218,7 @@ void main() {
       final other = RunCommandJournal(second, _threadId);
       await original.reserve(savedSend);
       await other.reserve(savedSend);
-      await RunCommandJournal.clearForComputer(first.computer.computerKey);
+      await MobileCommandJournal.clearForComputer(first.computer.computerKey);
       expect(await original.read(savedSend.method), isNull);
       expect(
         (await other.read(savedSend.method))?.commandId,

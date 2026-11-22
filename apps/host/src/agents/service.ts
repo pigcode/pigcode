@@ -16,12 +16,14 @@ import type {
   AgentStatus,
   ReasoningEffort,
   RunStatus,
+  MobileRequestOutcome,
 } from "@pigcode/contracts"
 import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
 import type { InstanceCreateOptions } from "./agent-settings"
 import type { ApprovalDecision, ApprovalRequest, AgentDriver, UserInput } from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
+import type { RequestHandlingOptions } from "./run-requests"
 import type { Switch } from "./switching"
 
 /** 一次 run 的句柄；done 在 run 进入终态后 resolve。 */
@@ -154,9 +156,16 @@ export interface AgentsService {
     runId: string,
     requestId: string,
     decision: ApprovalDecision,
-  ): void
+    options?: RequestHandlingOptions,
+  ): MobileRequestOutcome
   /** 回答 agent 的提问；answers 与问题顺序一致。 */
-  answerQuestion(threadId: string, runId: string, requestId: string, answers: string[]): void
+  answerQuestion(
+    threadId: string,
+    runId: string,
+    requestId: string,
+    answers: string[],
+    options?: RequestHandlingOptions,
+  ): MobileRequestOutcome
   getRunStatus(runId: string): RunStatus | null
   cancelRun(runId: string, recordReceipt?: () => void): boolean
   cancelDeviceQueuedRuns(deviceKey: string): void

@@ -7,6 +7,7 @@ import type { ActiveRun } from "./run-queue"
 import type { PigcodeDatabase } from "../storage/database"
 import type { PendingRequestStore } from "../storage/pending-request-store"
 import type { RunStore } from "../storage/run-store"
+import { approvalDecisions } from "./run-requests"
 
 /** 一个等待 UI 决议的审批请求；Host 关闭时可统一拒绝。 */
 export interface Waiter {
@@ -28,6 +29,10 @@ export class ApprovalBridge {
     return new Promise((resolve, reject) => {
       this.waiters.set(id, { ...waiter, resolve, reject })
     })
+  }
+
+  has(id: string): boolean {
+    return this.waiters.has(id)
   }
 
   /** 完成指定请求；不存在时返回 false。 */
@@ -65,19 +70,15 @@ export function createApprovalRequest(
     if (!runRow || runRow.thread_id !== threadId) throw new Error(`run not found: ${runId}`)
 
     const requestId = `req_${randomUUID()}`
+    const approval = { ...request, decisions: approvalDecisions(request) }
     pendingRequests.create({
       id: requestId,
       threadId,
       runId,
       kind: "approval",
       agentRequestId: null,
-      payload: request,
+      payload: approval,
       createdAt: new Date().toISOString(),
-    })
-    append(threadId, runId, "approval.requested", {
-      requestId,
-      id: requestId,
-      ...request,
     })
     runs.setStatus(runId, "waiting-approval")
     const active = activeRuns.get(runId)
@@ -86,6 +87,11 @@ export function createApprovalRequest(
       active.approvals.add(requestId)
     }
     const decision = approvals.wait(requestId, { threadId, runId })
+    append(threadId, runId, "approval.requested", {
+      requestId,
+      id: requestId,
+      ...approval,
+    })
     return { requestId, decision }
   }
 }

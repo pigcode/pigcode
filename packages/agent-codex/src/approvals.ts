@@ -3,7 +3,18 @@ import type { ApprovalDecision, ApprovalRequest } from "@pigcode/plugin-sdk"
 
 /** Codex 审批响应；Pigcode 只会产生这三种决议。 */
 interface CodexApprovalResponse {
-  decision: "accept" | "acceptForSession" | "decline"
+  decision: "accept" | "acceptForSession" | "decline" | "cancel"
+}
+
+export function commandApprovalChoices(params: unknown) {
+  const choices = (params as { availableDecisions?: unknown } | undefined)?.availableDecisions
+  if (!Array.isArray(choices)) return undefined
+  const decisions: ApprovalDecision[] = []
+  if (choices.includes("accept")) decisions.push("allow-once")
+  if (choices.includes("acceptForSession")) decisions.push("allow-for-session")
+  const denial = choices.includes("decline") ? "decline" : "cancel"
+  if (choices.includes("decline") || choices.includes("cancel")) decisions.push("deny")
+  return { decisions, denial } as const
 }
 
 /**
@@ -43,8 +54,9 @@ export function toElicitationResponse(decision: ApprovalDecision): Record<string
 export function toApprovalResponse(
   decision: ApprovalDecision,
   sessionDecision: "acceptForSession",
+  denial: "decline" | "cancel" = "decline",
 ): CodexApprovalResponse {
-  if (decision === "deny") return { decision: "decline" }
+  if (decision === "deny") return { decision: denial }
   if (decision === "allow-for-session") return { decision: sessionDecision }
   return { decision: "accept" }
 }

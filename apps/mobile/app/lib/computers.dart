@@ -5,7 +5,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'mobile_secure_storage.dart';
-import 'run_command_journal.dart';
+import 'mobile_command_journal.dart';
 
 final computersProvider =
     AsyncNotifierProvider<Computers, List<ComputerProfile>>(Computers.new);
@@ -24,7 +24,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
     if (!(await preferences.getBool(_installation) ?? false)) {
       await mobileSecureStorage.delete(key: _seedKey);
       await mobileSecureStorage.delete(key: _computersKey);
-      await RunCommandJournal.clearOnInstall();
+      await MobileCommandJournal.clearOnInstall();
       await preferences.setBool(_installation, true);
     }
     final seed = await mobileSecureStorage.read(key: _seedKey);
@@ -56,7 +56,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       (entry) => entry.computerKey == computer.computerKey,
     );
     if (index < 0) {
-      await RunCommandJournal.clearForComputer(computer.computerKey);
+      await MobileCommandJournal.clearForComputer(computer.computerKey);
       next.add(computer);
     } else {
       next[index] = computer;
@@ -71,7 +71,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       ),
     );
     try {
-      await RunCommandJournal.clearForComputer(computer.computerKey);
+      await MobileCommandJournal.clearForComputer(computer.computerKey);
       return true;
     } catch (_) {
       return false;

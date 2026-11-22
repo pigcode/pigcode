@@ -288,9 +288,19 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
         }
         break
       }
-      case "approval.resolved":
-        if (turn.status === "waiting") turn.status = "running"
+      case "approval.resolved": {
+        const id = asText(payload?.requestId) ?? asText(payload?.id)
+        const decision = id ? resolved.get(id) : undefined
+        if (decision && !payload?.reason) {
+          turn.notices.push({
+            id: `approval-${event.seq}`,
+            level: "info",
+            key: `approval.${decision}`,
+            params: {},
+          })
+        }
         break
+      }
       case "question.requested": {
         const request = questionFromEvent(event)
         if (!request) break
@@ -301,7 +311,6 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
         break
       }
       case "question.answered":
-        if (turn.status === "waiting") turn.status = "running"
         break
       case "run.completed":
       case "run.failed":

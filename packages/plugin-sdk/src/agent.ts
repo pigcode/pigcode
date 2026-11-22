@@ -37,6 +37,7 @@ export interface ApprovalRequest {
   description?: string
   blockedPath?: string
   suggestions?: unknown
+  decisions?: ApprovalDecision[]
 }
 
 /** agent 向用户提的一个问题：标题、可选项，是否多选。 */

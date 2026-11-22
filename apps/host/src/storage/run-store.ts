@@ -42,7 +42,10 @@ export class RunStore {
       )
       .run(
         status,
-        status === "running" || status === "waiting-approval" || status === "queued"
+        status === "running" ||
+          status === "waiting-approval" ||
+          status === "waiting-input" ||
+          status === "queued"
           ? null
           : new Date().toISOString(),
         error?.code ?? null,

@@ -295,6 +295,7 @@ const MIGRATIONS: Migration[] = [
       SELECT id FROM runs WHERE thread_id = threads.id ORDER BY rowid DESC LIMIT 1
     ));
   `,
+  `ALTER TABLE pending_requests ADD COLUMN resolution_json TEXT;`,
 ]
 
 /**

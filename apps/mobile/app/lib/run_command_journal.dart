@@ -1,16 +1,17 @@
-import 'dart:async';
-import 'dart:convert';
-
 import 'package:pigcode_client/pigcode_client.dart';
 
-import 'mobile_secure_storage.dart';
+import 'mobile_command_journal.dart';
 
-sealed class PendingRunCommand {
+sealed class PendingRunCommand implements JournalCommand {
   const PendingRunCommand();
 
   MobileRunMethod get method;
+  @override
+  String get slot => method.name;
+  @override
   String get commandId;
   String get threadId;
+  @override
   Map<String, Object?> toJson();
   Future<MobileRunReceipt> sendVia(MobileRunCommands api);
 
@@ -19,8 +20,8 @@ sealed class PendingRunCommand {
       receipt.method == method &&
       receipt.threadId == threadId;
 
-  static PendingRunCommand decode(MobileRunMethod method, String raw) {
-    final data = jsonDecode(raw) as Map<String, dynamic>;
+  static PendingRunCommand decode(String slot, Map<String, dynamic> data) {
+    final method = MobileRunMethod.values.byName(slot);
     return switch (method) {
       MobileRunMethod.runStart => PendingSend(
         MobileStartRunParams.fromJson(data),
@@ -70,89 +71,24 @@ final class PendingStop extends PendingRunCommand {
       super.matches(receipt) && receipt.runId == params.runId;
 }
 
-/// Outgoing, unacknowledged operations are stored separately from editable drafts.
 class RunCommandJournal {
   RunCommandJournal(MobileConnection connection, String threadId)
-    : _computerKey = connection.computer.computerKey,
-      _threadScope =
-          '${connection.deviceId}.${base64Url.encode(utf8.encode(threadId))}';
-
-  static const _prefix = 'pigcode.mobile.command.v1.';
-  static final _locks = <String, Future<void>>{};
-  final String _computerKey;
-  final String _threadScope;
-
-  String _key(MobileRunMethod method) =>
-      '${_computerPrefix(_computerKey)}$_threadScope.${method.name}';
-
-  static String _computerPrefix(String computerKey) => '$_prefix$computerKey.';
-
-  static Future<T> _locked<T>(
-    String computerKey,
-    Future<T> Function() action,
-  ) async {
-    final previous = _locks[computerKey];
-    final done = Completer<void>();
-    final lock = done.future;
-    _locks[computerKey] = lock;
-    try {
-      await previous;
-      return await action();
-    } finally {
-      done.complete();
-      if (identical(_locks[computerKey], lock)) _locks.remove(computerKey);
-    }
-  }
-
-  static Future<void> _clear(String prefix) async {
-    final entries = await mobileSecureStorage.readAll();
-    final keys = entries.keys
-        .where((key) => key.startsWith(prefix))
-        .toList(growable: false);
-    for (final key in keys) {
-      await mobileSecureStorage.delete(key: key);
-    }
-  }
-
-  static Future<void> clearForComputer(String computerKey) =>
-      _locked(computerKey, () => _clear(_computerPrefix(computerKey)));
-
-  static Future<void> clearOnInstall() => _clear(_prefix);
-
-  Future<PendingRunCommand?> _read(String key, MobileRunMethod method) async {
-    final raw = await mobileSecureStorage.read(key: key);
-    return raw == null ? null : PendingRunCommand.decode(method, raw);
-  }
-
-  Future<PendingRunCommand?> read(MobileRunMethod method) {
-    final key = _key(method);
-    return _locked(_computerKey, () => _read(key, method));
-  }
-
-  /// An older connection must not replace an unresolved command in this slot.
-  Future<PendingRunCommand> reserve(PendingRunCommand command) {
-    final key = _key(command.method);
-    return _locked(_computerKey, () async {
-      final existing = await _read(key, command.method);
-      if (existing != null) return existing;
-      await mobileSecureStorage.write(
-        key: key,
-        value: jsonEncode(command.toJson()),
+    : _journal = MobileCommandJournal(
+        connection,
+        threadId,
+        PendingRunCommand.decode,
       );
-      return command;
-    });
-  }
+
+  final MobileCommandJournal<PendingRunCommand> _journal;
+
+  Future<PendingRunCommand?> read(MobileRunMethod method) =>
+      _journal.read(method.name);
+
+  Future<PendingRunCommand> reserve(PendingRunCommand command) =>
+      _journal.reserve(command);
 
   Future<void> remove(
     PendingRunCommand command, {
     required bool Function() mounted,
-  }) {
-    final key = _key(command.method);
-    return _locked(_computerKey, () async {
-      final current = await _read(key, command.method);
-      if (current?.commandId == command.commandId && mounted()) {
-        await mobileSecureStorage.delete(key: key);
-      }
-    });
-  }
+  }) => _journal.remove(command, mounted: mounted);
 }

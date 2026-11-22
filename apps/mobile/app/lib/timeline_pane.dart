@@ -6,6 +6,8 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'run_composer.dart';
+import 'run_composer_state.dart';
+import 'request_input.dart';
 import 'timeline_view.dart';
 
 typedef _Selection = (MobileConnection, String);
@@ -100,7 +102,41 @@ class TimelinePane extends ConsumerWidget {
           problem: data.problem == null ? null : _detail(data.problem!),
           retry: online ? () => ref.read(provider.notifier).retry() : null,
         );
-        if (!connection.supportsRunCommands) return timeline;
+        if (!connection.supportsRunCommands &&
+            !connection.supportsRequestCommands) {
+          return timeline;
+        }
+        final runId = _stoppableRun(data.snapshot);
+        final composer = connection.supportsRunCommands
+            ? RunComposer(
+                connection: connection,
+                threadId: threadId,
+                online: online,
+                stoppableRunId: runId,
+              )
+            : const SizedBox.shrink();
+        Widget input = composer;
+        if (connection.supportsRequestCommands) {
+          final runProvider = runComposerProvider((connection, threadId));
+          final stopState = connection.supportsRunCommands
+              ? ref.watch(runProvider).value
+              : null;
+          final canStop =
+              runId != null &&
+              stopState != null &&
+              !stopState.working.contains(MobileRunMethod.runInterrupt) &&
+              !stopState.pending.containsKey(MobileRunMethod.runInterrupt);
+          input = RequestInput(
+            connection: connection,
+            threadId: threadId,
+            live: data.snapshot.live,
+            online: online,
+            composer: composer,
+            onStop: canStop
+                ? () => ref.read(runProvider.notifier).stop(runId)
+                : null,
+          );
+        }
         return LayoutBuilder(
           builder: (context, constraints) {
             return Column(
@@ -110,14 +146,7 @@ class TimelinePane extends ConsumerWidget {
                   constraints: BoxConstraints(
                     maxHeight: constraints.maxHeight * .6,
                   ),
-                  child: SingleChildScrollView(
-                    child: RunComposer(
-                      connection: connection,
-                      threadId: threadId,
-                      online: online,
-                      stoppableRunId: _stoppableRun(data.snapshot),
-                    ),
-                  ),
+                  child: SingleChildScrollView(child: input),
                 ),
               ],
             );

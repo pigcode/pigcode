@@ -14,16 +14,12 @@ import {
   type Connection,
 } from "@pigcode/client-runtime"
 import { copyText, useLocale } from "@pigcode/ui-primitives"
-import {
-  ChatView,
-  collectSubagents,
-  type ApprovalDecision,
-  type ChatLinkActions,
-} from "@pigcode/ui-chat"
+import { ChatView, collectSubagents, type ChatLinkActions } from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
 import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
+import { runRequestHandlers } from "./run-request-handlers"
 import { NewThreadPage } from "./new-thread-page"
 import { ThreadWorkspaceDetails } from "./thread-workspace-details"
 import { useThreadWorkspaceRoot } from "./use-thread-workspace-root"
@@ -278,21 +274,14 @@ export function ChatViewContainer({
     void deps.connection.call("run.interrupt", { threadId, runId }).catch(fail)
   }
 
-  function respondApproval(requestId: string, decision: ApprovalDecision): void {
-    const runId = latestRunId()
-    if (!runId || !threadId) return
-    void deps.connection
-      .call("run.respondApproval", { threadId, runId, requestId, decision })
-      .catch(fail)
-  }
-
-  function answerQuestion(requestId: string, answers: string[]): void {
-    const runId = latestRunId()
-    if (!runId || !threadId) return
-    void deps.connection
-      .call("run.answerQuestion", { threadId, runId, requestId, answers })
-      .catch(fail)
-  }
+  const { respondApproval, answerQuestion } = runRequestHandlers({
+    connection: deps.connection,
+    threadId,
+    latestRunId,
+    t,
+    setNotice,
+    fail,
+  })
 
   /** 切换 Agent 实例与模型；换了实例时提示上下文以摘要交接。 */
   function selectModel(choice: ComposerModelChoice): void {

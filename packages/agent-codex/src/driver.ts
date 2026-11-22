@@ -33,7 +33,12 @@ import { codexStatus, detectCodex, type CodexDetection } from "./detect"
 import { prepareCodexLaunch, launchKey, type CodexLaunch, type PrepareCodexLaunch } from "./launch"
 import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
 import { parseCodexSkills } from "./skills"
-import { mcpToolApproval, toApprovalResponse, toElicitationResponse } from "./approvals"
+import {
+  commandApprovalChoices,
+  mcpToolApproval,
+  toApprovalResponse,
+  toElicitationResponse,
+} from "./approvals"
 import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { normalizeCodexNotification } from "./normalize"
 import {
@@ -316,8 +321,15 @@ export class CodexDriver implements AgentDriver {
       }),
     ]
     client.onServerRequest("item/commandExecution/requestApproval", async (params) => {
-      const decision = await runtime.requestApproval({ toolName: "Bash", input: params })
-      return toApprovalResponse(decision, "acceptForSession")
+      const offered = commandApprovalChoices(params)
+      if (offered && !offered.decisions.length)
+        throw new Error("Codex did not offer a supported approval decision")
+      const decision = await runtime.requestApproval({
+        toolName: "Bash",
+        input: params,
+        ...(offered ? { decisions: offered.decisions } : {}),
+      })
+      return toApprovalResponse(decision, "acceptForSession", offered?.denial)
     })
     client.onServerRequest("item/tool/requestUserInput", (params) =>
       answerCodexQuestions(params, runtime),

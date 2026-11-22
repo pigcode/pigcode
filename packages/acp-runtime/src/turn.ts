@@ -141,6 +141,11 @@ export async function answerPermission(
     toolName: name,
     input,
     ...(toolCall.title ? { title: toolCall.title } : {}),
+    decisions: once
+      ? key && !plan && !planConfirmation
+        ? ["allow-once", "allow-for-session", "deny"]
+        : ["allow-once", "deny"]
+      : ["deny"],
   })
   if (runtime.signal.aborted) return cancelled()
   if (decision === "deny") return reject ? select(reject.optionId) : cancelled()

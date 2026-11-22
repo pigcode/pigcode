@@ -25,10 +25,16 @@ export async function answerDialog(
         /* Pi extensions may ask in plain text. */
       }
       const key = JSON.stringify([title, message])
+      const canGrantSession = !message.endsWith("…")
       const decision = grants.has(key)
         ? "allow-once"
-        : await runtime.requestApproval({ toolName: name, input, title })
-      if (decision === "allow-for-session" && !message.endsWith("…")) grants.add(key)
+        : await runtime.requestApproval({
+            toolName: name,
+            input,
+            title,
+            ...(canGrantSession ? {} : { decisions: ["allow-once", "deny"] }),
+          })
+      if (decision === "allow-for-session" && canGrantSession) grants.add(key)
       response = { confirmed: decision !== "deny" }
     } else if (runtime.askQuestions) {
       const choices = Array.isArray(event.options)

@@ -276,29 +276,24 @@ export class RpcServer {
         return { interrupted: this.ctx.agents.cancelRun(value.runId) }
       }
       case "run.respondApproval": {
-        const value = parsed as {
-          threadId: string
-          runId: string
-          requestId: string
-          decision: "allow-once" | "allow-for-session" | "deny"
-        }
-        this.ctx.agents.respondApproval(
+        const value = parsed as CommandParams<"run.respondApproval">
+        const outcome = this.ctx.agents.respondApproval(
           value.threadId,
           value.runId,
           value.requestId,
           value.decision,
         )
-        return { ok: true }
+        return { ok: true, outcome }
       }
       case "run.answerQuestion": {
-        const value = parsed as {
-          threadId: string
-          runId: string
-          requestId: string
-          answers: string[]
-        }
-        this.ctx.agents.answerQuestion(value.threadId, value.runId, value.requestId, value.answers)
-        return { ok: true }
+        const value = parsed as CommandParams<"run.answerQuestion">
+        const outcome = this.ctx.agents.answerQuestion(
+          value.threadId,
+          value.runId,
+          value.requestId,
+          value.answers,
+        )
+        return { ok: true, outcome }
       }
       case "agent.detect":
       case "agent.cliUpdates":

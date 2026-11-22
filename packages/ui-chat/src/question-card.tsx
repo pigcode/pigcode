@@ -50,7 +50,7 @@ export function QuestionCard({
 
   function choose(index: number, question: QuestionView, label: string): void {
     update(index, (draft) => {
-      if (!question.multiSelect) return { ...draft, selected: [label] }
+      if (!question.multiSelect) return { selected: [label], other: "" }
       const selected = draft.selected.includes(label)
         ? draft.selected.filter((item) => item !== label)
         : [...draft.selected, label]

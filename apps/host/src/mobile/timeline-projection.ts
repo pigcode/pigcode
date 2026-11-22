@@ -110,7 +110,9 @@ export function timelineEvent(event: ThreadEvent): MobileTimelineEvent | undefin
     case "question.requested":
     case "question.answered": {
       const itemId = text(payload.requestId) ?? text(payload.id)
-      return itemId ? { ...base, kind: event.type, itemId } : undefined
+      if (!itemId) return undefined
+      const result = requestResult(event.type, payload)
+      return { ...base, kind: event.type, itemId, ...(result ? preview(result, 512) : {}) }
     }
     case "notice":
       return {
@@ -121,4 +123,18 @@ export function timelineEvent(event: ThreadEvent): MobileTimelineEvent | undefin
     default:
       return undefined
   }
+}
+
+function requestResult(type: ThreadEvent["type"], payload: Record<string, unknown>) {
+  if (type === "approval.resolved") {
+    if (payload.reason === "run-ended") return "审批已失效"
+    if (payload.decision === "allow-once") return "已允许一次"
+    if (payload.decision === "allow-for-session") return "本会话已允许"
+    if (payload.decision === "deny") return "已拒绝"
+  }
+  if (type === "question.answered") {
+    if (payload.reason) return "提问已失效"
+    if (Array.isArray(payload.answers)) return "已回答 · " + payload.answers.join(" / ")
+  }
+  return undefined
 }

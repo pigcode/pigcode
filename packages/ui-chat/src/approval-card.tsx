@@ -15,6 +15,7 @@ export interface ApprovalRequest {
   title: string | undefined
   description: string | undefined
   command: string | undefined
+  decisions?: ApprovalDecision[] | undefined
   /** 计划模式交出的计划（Markdown）；有值时按计划审批展示。 */
   plan?: string | undefined
 }
@@ -36,6 +37,7 @@ export function ApprovalCard({
   onApproval: (requestId: string, decision: ApprovalDecision) => void
 }) {
   const { t } = useLocale()
+  const decisions = request.decisions ?? ["allow-once", "allow-for-session", "deny"]
 
   if (resolved) {
     return (
@@ -57,16 +59,20 @@ export function ApprovalCard({
           <MessageText text={request.plan} />
         </div>
         <div className="acts">
-          <Button
-            shape="pill"
-            variant="primary"
-            onClick={() => onApproval(request.id, "allow-once")}
-          >
-            {t("chat.plan.start")}
-          </Button>
-          <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
-            {t("chat.plan.keep")}
-          </Button>
+          {decisions.includes("allow-once") ? (
+            <Button
+              shape="pill"
+              variant="primary"
+              onClick={() => onApproval(request.id, "allow-once")}
+            >
+              {t("chat.plan.start")}
+            </Button>
+          ) : null}
+          {decisions.includes("deny") ? (
+            <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
+              {t("chat.plan.keep")}
+            </Button>
+          ) : null}
         </div>
       </div>
     )
@@ -81,19 +87,29 @@ export function ApprovalCard({
       {request.description && request.title ? <p>{request.description}</p> : null}
       {request.command ? <pre>{request.command}</pre> : null}
       <div className="acts">
-        <Button shape="pill" variant="primary" onClick={() => onApproval(request.id, "allow-once")}>
-          {t("chat.approval.allowOnce")}
-        </Button>
-        <Button
-          shape="pill"
-          variant="secondary"
-          onClick={() => onApproval(request.id, "allow-for-session")}
-        >
-          {t("chat.approval.allowSession")}
-        </Button>
-        <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
-          {t("chat.approval.deny")}
-        </Button>
+        {decisions.includes("allow-once") ? (
+          <Button
+            shape="pill"
+            variant="primary"
+            onClick={() => onApproval(request.id, "allow-once")}
+          >
+            {t("chat.approval.allowOnce")}
+          </Button>
+        ) : null}
+        {decisions.includes("allow-for-session") ? (
+          <Button
+            shape="pill"
+            variant="secondary"
+            onClick={() => onApproval(request.id, "allow-for-session")}
+          >
+            {t("chat.approval.allowSession")}
+          </Button>
+        ) : null}
+        {decisions.includes("deny") ? (
+          <Button shape="pill" variant="ghost" onClick={() => onApproval(request.id, "deny")}>
+            {t("chat.approval.deny")}
+          </Button>
+        ) : null}
       </div>
     </div>
   )

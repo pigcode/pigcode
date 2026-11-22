@@ -138,6 +138,9 @@ class _Draft {
         _wait(event.itemId);
       case MobileTimelineKind.approvalResolved:
       case MobileTimelineKind.questionAnswered:
+        if (event.text?.isNotEmpty ?? false) {
+          notices.add(event);
+        }
         _requests.remove(event.itemId);
         if (_requests.isEmpty && status == TimelineTurnStatus.waiting) {
           status = TimelineTurnStatus.running;

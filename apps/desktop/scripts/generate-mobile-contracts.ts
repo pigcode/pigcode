@@ -246,6 +246,7 @@ try {
   const sidebar = await vite.ssrLoadModule("/packages/contracts/src/mobile-sidebar.ts")
   const timeline = await vite.ssrLoadModule("/packages/contracts/src/mobile-timeline.ts")
   const commands = await vite.ssrLoadModule("/packages/contracts/src/mobile-commands.ts")
+  const requests = await vite.ssrLoadModule("/packages/contracts/src/mobile-requests.ts")
   await generate({
     methods: sidebar.mobileSidebarMethods,
     schemas: sidebar.mobileSidebarJsonSchemas(),
@@ -269,6 +270,13 @@ try {
     fileName: "command_models.dart",
     methodsName: "MobileCommandMethods",
     constants: ["const mobileCommandTextLimit = " + commands.mobileCommandTextLimit + ";"],
+  })
+  await generate({
+    methods: requests.mobileRequestMethods,
+    schemas: requests.mobileRequestJsonSchemas(),
+    fileName: "request_models.dart",
+    methodsName: "MobileRequestMethods",
+    constants: ["const mobileRequestAnswerBytes = " + requests.mobileRequestAnswerBytes + ";"],
   })
 } finally {
   await vite.close()
