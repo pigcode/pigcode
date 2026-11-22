@@ -17,6 +17,10 @@ const pigcodeLight = (
   attention: Color(0xFF9C5400),
   running: Color(0xFF2279DC),
   online: Color(0xFF006F38),
+  diffAdded: Color(0xFF006F38),
+  diffAddedBackground: Color(0x1F17A35F),
+  diffRemoved: Color(0xFFBA1D27),
+  diffRemovedBackground: Color(0x1ADF3036),
   scrim: Color(0x33161619),
 );
 
@@ -36,5 +40,9 @@ const pigcodeDark = (
   attention: Color(0xFFF5C16B),
   running: Color(0xFF6AA7F4),
   online: Color(0xFF6FD395),
+  diffAdded: Color(0xFF6FD395),
+  diffAddedBackground: Color(0x2443C07A),
+  diffRemoved: Color(0xFFFF8880),
+  diffRemovedBackground: Color(0x24F3625D),
   scrim: Color(0x80000000),
 );

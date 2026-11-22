@@ -48,6 +48,7 @@ export interface QueuedRun {
   resolveDone: () => void
   queuedAt: string
   cwd: string
+  workspaceChanged?: boolean
   permissionMode: string
   planMode?: boolean
   model: string | null

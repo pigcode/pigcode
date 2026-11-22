@@ -83,6 +83,28 @@ Future<void> main() async {
               'state': states.current.state.name,
               'lastOnlineAt': states.current.lastOnlineAt?.toIso8601String(),
             });
+          case 'run.changes':
+            final params = MobileRunChangesParams.fromJson(
+              command['params'] as Map<String, dynamic>,
+            );
+            final page = await active[phone]!.changes.list(params);
+            report('result', {'result': page.toJson()});
+          case 'run.diff':
+            final params = MobileRunDiffParams.fromJson(
+              command['params'] as Map<String, dynamic>,
+            );
+            final page = await active[phone]!.changes.diff(params);
+            report('result', {'result': page.toJson()});
+          case 'runChangeMarkers':
+            final timeline = await active[phone]!.openTimeline(
+              command['threadId'] as String,
+            );
+            report('result', {
+              'result': timeline.snapshot?.events
+                  .where((event) => event.kind == MobileTimelineKind.changes)
+                  .map((event) => event.runId)
+                  .toList(),
+            });
           case 'captureRecovery' || 'resumeRecovery':
             final threadId = command['threadId'] as String;
             final key = (phone, threadId);

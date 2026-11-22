@@ -23,6 +23,10 @@ const tokens = {
   attention: "--warn-text",
   running: "--info",
   online: "--ok-text",
+  diffAdded: "--diff-add-fg",
+  diffAddedBackground: "--diff-add-bg",
+  diffRemoved: "--diff-remove-fg",
+  diffRemovedBackground: "--diff-remove-bg",
   scrim: "--scrim",
 }
 

@@ -8,6 +8,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'run_composer.dart';
 import 'run_composer_state.dart';
 import 'request_input.dart';
+import 'run_changes_card.dart';
 import 'timeline_view.dart';
 
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
@@ -133,6 +134,33 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
           problem: data.problem == null ? null : _detail(data.problem!),
           retry: widget.online
               ? () => ref.read(provider.notifier).retry()
+              : null,
+          changesCard: connection.supportsRunChanges
+              ? (turn) {
+                  final runId = turn.runId;
+                  if (runId == null) return const SizedBox.shrink();
+                  return RunChangesCard(
+                    key: ValueKey((connection, runId)),
+                    online: online,
+                    savedPaths: turn.files,
+                    checkpointRevision: turn.changes?.seq,
+                    loadFiles: (offset) => connection.changes.list(
+                      MobileRunChangesParams(
+                        threadId: threadId,
+                        runId: runId,
+                        offset: offset,
+                      ),
+                    ),
+                    loadDiff: (path, offset) => connection.changes.diff(
+                      MobileRunDiffParams(
+                        threadId: threadId,
+                        runId: runId,
+                        path: path,
+                        offset: offset,
+                      ),
+                    ),
+                  );
+                }
               : null,
         );
         if (!connection.supportsRunCommands &&

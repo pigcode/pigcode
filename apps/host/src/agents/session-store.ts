@@ -36,16 +36,18 @@ export class AgentSessionStore {
     threadId: string,
     agentId: string,
     instanceId?: string | null,
+    cwd?: string,
   ): AgentSession | undefined {
     const row = this.db
       .prepare(
         `SELECT * FROM agent_sessions
          WHERE thread_id = ? AND agent_id = ? AND COALESCE(instance_id, agent_id) = ?
            AND status IN ('active', 'parked', 'orphaned') AND native_session_id IS NOT NULL
+           AND (? IS NULL OR cwd = ?)
          ORDER BY created_at DESC, rowid DESC
          LIMIT 1`,
       )
-      .get(threadId, agentId, instanceId ?? agentId)
+      .get(threadId, agentId, instanceId ?? agentId, cwd ?? null, cwd ?? null)
     return row ? mapAgentSession(row) : undefined
   }
 
@@ -68,9 +70,10 @@ export class AgentSessionStore {
     createdAt: string
   }): AgentSessionHandle {
     const instanceId = input.instanceId ?? input.agentId
-    const existing =
-      this.findActive(input.draft.threadId, input.agentId, instanceId) ??
-      this.revive(input.draft.id, input.draft.threadId)
+    const active = this.findActive(input.draft.threadId, input.agentId, instanceId)
+    const existing = active?.cwd === input.draft.cwd
+      ? active
+      : this.revive(input.draft.id, input.draft.threadId, input.draft.cwd)
     if (existing) {
       return {
         ...input.draft,
@@ -98,13 +101,13 @@ export class AgentSessionStore {
   }
 
   /** 把同一线程里 id 对应的 orphaned 或 parked 行恢复成 active；没有这一行时返回 undefined。 */
-  private revive(sessionId: string, threadId: string): AgentSession | undefined {
+  private revive(sessionId: string, threadId: string, cwd: string): AgentSession | undefined {
     const changed = this.db
       .prepare(
         `UPDATE agent_sessions SET status = 'active', stopped_at = NULL
-         WHERE id = ? AND thread_id = ? AND status IN ('orphaned', 'parked')`,
+         WHERE id = ? AND thread_id = ? AND cwd = ? AND status IN ('orphaned', 'parked')`,
       )
-      .run(sessionId, threadId).changes
+      .run(sessionId, threadId, cwd).changes
     if (changed === 0) return undefined
     const row = this.db.prepare(`SELECT * FROM agent_sessions WHERE id = ?`).get(sessionId)
     return row ? mapAgentSession(row) : undefined

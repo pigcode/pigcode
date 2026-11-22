@@ -56,6 +56,7 @@ const mobileTimelineKind = z.enum([
   "tool.started",
   "tool.completed",
   "file",
+  "changes",
   "plan",
   "notice",
   "approval.requested",

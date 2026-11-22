@@ -32,6 +32,7 @@ import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
+import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
@@ -92,6 +93,7 @@ export class MobileSidebarRpc {
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
+  private readonly changes: MobileRunChanges
   private stopMessages: (() => void) | undefined
   private stopSidebar: (() => void) | undefined
   private queued = false
@@ -106,6 +108,7 @@ export class MobileSidebarRpc {
     private readonly session: MobileSession,
   ) {
     this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
+    this.changes = new MobileRunChanges(ctx)
     const canQueue = session.features.includes("queue.write")
     this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts, canQueue)
     this.drafts = new MobileDraftCommands(ctx, devices, session.deviceKey, this.receipts)
@@ -115,7 +118,11 @@ export class MobileSidebarRpc {
       "device:" + fingerprint(Buffer.from(session.deviceKey, "base64url")),
     )
     this.timeline = new MobileTimelineSession(
-      ctx, (message) => transport.send(message), canQueue, session.features.includes("timeline.resume"),
+      ctx,
+      (message) => transport.send(message),
+      canQueue,
+      session.features.includes("timeline.resume"),
+      session.features.includes("changes.read"),
     )
   }
 
@@ -188,6 +195,11 @@ export class MobileSidebarRpc {
       mobileTimelineRequests.has(request.method)
     )
       return this.timeline.dispatch(request)
+
+    if (this.session.features.includes("changes.read") && mobileRunChangesRequests.has(request.method)) {
+      this.requirePairedDevice()
+      return this.changes.dispatch(request)
+    }
 
     const canRun = this.session.features.includes("run.write")
     const canRespond = this.session.features.includes("request.write")

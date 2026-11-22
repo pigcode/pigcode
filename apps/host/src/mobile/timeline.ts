@@ -47,6 +47,7 @@ export class MobileTimelineSession {
     private readonly send: (message: unknown) => void,
     private readonly includeQueueChanges = false,
     private readonly canResume = false,
+    private readonly includeRunChanges = false,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
@@ -86,7 +87,7 @@ export class MobileTimelineSession {
     let previousSeq = through
     this.threadId = threadId
     this.stopEvents = this.ctx.sessions.subscribe(threadId, (stored) => {
-      const event = timelineEvent(stored, this.includeQueueChanges)
+      const event = timelineEvent(stored, this.includeQueueChanges, this.includeRunChanges)
       if (!event) return
       this.send({
         jsonrpc: "2.0",
@@ -144,7 +145,7 @@ export class MobileTimelineSession {
     let bytes = 0
     let cursor = after
     for (const stored of this.ctx.sessions.readAfter(threadId, after, through, maxEvents + 1)) {
-      const event = timelineEvent(stored, this.includeQueueChanges)
+      const event = timelineEvent(stored, this.includeQueueChanges, this.includeRunChanges)
       const size = event ? Buffer.byteLength(JSON.stringify(event)) + 1 : 0
       if (scanned === maxEvents || bytes + size > budget) {
         if (cursor === after) throw new MobileRequestError("RESULT_TOO_LARGE")
@@ -264,7 +265,7 @@ export class MobileTimelineSession {
     const userRuns = new Set<string>()
     let more = false
     for (const stored of this.ctx.sessions.readBefore(threadId, through, before, maxEvents + 1)) {
-      const event = timelineEvent(stored)
+      const event = timelineEvent(stored, false, this.includeRunChanges)
       const key = event?.runId ?? (event ? String(event.seq) : undefined)
       const crossesTurn = key !== undefined && !runs.has(key)
       if (scanned === maxEvents || (crossesTurn && runs.size >= 2 && (opening || messages >= 50))) {

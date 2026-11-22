@@ -52,11 +52,17 @@ export function eventBody(
 export function timelineEvent(
   event: ThreadEvent,
   includeQueueChanges = false,
+  includeRunChanges = false,
 ): MobileTimelineEvent | undefined {
   const payload = record(event.payload)
   if (payload.parentToolUseId) return undefined
   const base = { seq: event.seq, runId: event.runId ?? undefined, createdAt: event.createdAt }
   switch (event.type) {
+    case "checkpoint.created":
+      return includeRunChanges && event.runId && payload.phase === "final" &&
+        !(Array.isArray(payload.changedPaths) && payload.changedPaths.length === 0)
+        ? { ...base, kind: "changes" }
+        : undefined
     case "queue.changed":
       return includeQueueChanges ? { ...base, kind: "queue.changed" } : undefined
     case "run.queued":

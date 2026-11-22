@@ -27,6 +27,8 @@ class _ReadConnection implements MobileConnection {
   bool get supportsRunCommands => false;
   @override
   bool get supportsRequestCommands => false;
+  @override
+  bool get supportsRunChanges => false;
 
   @override
   Future<MobileSidebar> openSidebar() async {

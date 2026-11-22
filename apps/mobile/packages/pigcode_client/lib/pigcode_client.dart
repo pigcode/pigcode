@@ -5,6 +5,7 @@ import 'host_rpc.dart';
 import 'draft_commands.dart';
 import 'pending_requests.dart';
 import 'queued_messages.dart';
+import 'run_changes.dart';
 import 'run_commands.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
@@ -14,6 +15,8 @@ export 'host_rpc.dart' show MobileRpcFailure;
 export 'command_models.dart';
 export 'draft_commands.dart';
 export 'draft_models.dart';
+export 'run_change_models.dart';
+export 'run_changes.dart';
 export 'run_commands.dart';
 export 'pending_requests.dart';
 export 'request_models.dart';
@@ -40,6 +43,7 @@ class MobileConnection {
     this.supportsDraftCommands,
     this.supportsQueueCommands,
     this.supportsTimelineResume,
+    this.supportsRunChanges,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -54,8 +58,10 @@ class MobileConnection {
   final bool supportsDraftCommands;
   final bool supportsQueueCommands;
   final bool supportsTimelineResume;
+  final bool supportsRunChanges;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
+  late final MobileRunChanges changes = MobileRunChanges(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -240,6 +246,7 @@ class MobileConnection {
           'sidebar.read',
           'timeline.read',
           'timeline.resume',
+          'changes.read',
           'run.write',
           'request.write',
           'draft.write',
@@ -287,6 +294,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('draft.write'),
         (welcome['features'] as List).contains('queue.write'),
         (welcome['features'] as List).contains('timeline.resume'),
+        (welcome['features'] as List).contains('changes.read'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

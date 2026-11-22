@@ -1,12 +1,13 @@
 /** Git 服务：状态、diff 与隐藏 ref checkpoint；所有命令都通过 execFile 直接执行。 */
 import type { Context } from "cordis"
 import type { GitBranches } from "@pigcode/contracts"
-import { execFile } from "node:child_process"
+import { execFile, spawn } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, sep } from "node:path"
 import { promisify } from "node:util"
+import { ownProcessTree, PROCESS_TREE_SPAWN_OPTIONS } from "@pigcode/plugin-sdk/node"
 import { scopeCwd, threadCwd, type WorkspaceScope } from "./worktrees"
 
 const exec = promisify(execFile)
@@ -17,6 +18,8 @@ const MAX_BUFFER = 32 * 1024 * 1024
 const CHECKPOINT_PREFIX = "refs/pigcode/checkpoints"
 /** 临时 git index 文件名前缀。 */
 const INDEX_PREFIX = "pigcode-index-"
+/** 单次捕获的总时限，包括等待 git 读取工作区和写入 ref。 */
+const CAPTURE_TIMEOUT_MS = 8_000
 /** 无法识别的 git 仓库时使用的错误码。 */
 export const NOT_A_GIT_REPO = "NOT_A_GIT_REPO"
 const GIT_ENV = { ...process.env, LC_ALL: "C" }
@@ -204,26 +207,60 @@ export async function capture(
   threadId: string,
   runId: string,
   phase: string,
+  cancel?: AbortSignal,
 ): Promise<CheckpointRef> {
   assertRefComponent(threadId, "threadId")
   assertRefComponent(runId, "runId")
   assertRefComponent(phase, "phase")
   const ref = `${CHECKPOINT_PREFIX}/${threadId}/${runId}/${phase}`
   const indexFile = join(tmpdir(), `${INDEX_PREFIX}${randomUUID()}`)
+  const timeout = AbortSignal.timeout(CAPTURE_TIMEOUT_MS)
+  const signal = cancel ? AbortSignal.any([cancel, timeout]) : timeout
 
   try {
     const env = { GIT_INDEX_FILE: indexFile }
-    await runGit(cwd, ["add", "-A"], env)
-    const tree = (await runGit(cwd, ["write-tree"], env)).trim()
-    const parent = await headCommit(cwd)
+    await stageCheckpoint(cwd, env, signal)
+    const tree = (await runGit(cwd, ["write-tree"], env, signal)).trim()
+    const parent = await headCommit(cwd, signal)
     const args = ["commit-tree", tree]
     if (parent) args.push("-p", parent)
     args.push("-m", "pigcode checkpoint")
-    const commitSha = (await runGit(cwd, args)).trim()
-    await runGit(cwd, ["update-ref", ref, commitSha])
+    const commitSha = (await runGit(cwd, args, undefined, signal)).trim()
+    await runGit(cwd, ["update-ref", ref, commitSha], undefined, signal)
     return { ref, commitSha }
   } finally {
     await rm(indexFile, { force: true })
+    await rm(indexFile + ".lock", { force: true })
+  }
+}
+
+/** Configured Git filters may spawn children while staging the temporary index. */
+async function stageCheckpoint(cwd: string, extraEnv: NodeJS.ProcessEnv, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted()
+  const child = spawn("git", ["add", "-A"], {
+    ...PROCESS_TREE_SPAWN_OPTIONS,
+    cwd,
+    env: { ...GIT_ENV, ...extraEnv },
+    stdio: ["ignore", "ignore", "pipe"],
+  })
+  const tree = ownProcessTree(child)
+  let stderr = ""
+  child.stderr.setEncoding("utf8").on("data", (chunk: string) => {
+    stderr = (stderr + chunk).slice(-16_384)
+  })
+  let stopped: Promise<void> | undefined
+  const abort = () => { stopped = tree.terminate({ graceMs: 250 }) }
+  signal.addEventListener("abort", abort, { once: true })
+  try {
+    await new Promise<void>((resolve, reject) => {
+      child.once("error", reject)
+      child.once("close", (code) => code === 0 ? resolve() : reject(normalizeGitError({ stderr }, cwd)))
+      if (signal.aborted) abort()
+    })
+    signal.throwIfAborted()
+  } finally {
+    signal.removeEventListener("abort", abort)
+    await stopped
   }
 }
 
@@ -253,12 +290,13 @@ async function affectedPaths(cwd: string, commitSha: string): Promise<string[]> 
 }
 
 /** 运行 git；exit 1 等预期失败在调用侧用 runGitOrNull 处理。 */
-async function runGit(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
+async function runGit(cwd: string, args: string[], env?: NodeJS.ProcessEnv, signal?: AbortSignal): Promise<string> {
   try {
     const { stdout } = await exec("git", args, {
       cwd,
       maxBuffer: MAX_BUFFER,
       env: { ...GIT_ENV, ...env },
+      ...(signal ? { signal } : {}),
     })
     return stdout
   } catch (error) {
@@ -267,9 +305,9 @@ async function runGit(cwd: string, args: string[], env?: NodeJS.ProcessEnv): Pro
 }
 
 /** 允许失败的 git 调用；非 git 仓库仍然抛错，其余返回 null。 */
-async function runGitOrNull(cwd: string, args: string[]): Promise<string | null> {
+async function runGitOrNull(cwd: string, args: string[], signal?: AbortSignal): Promise<string | null> {
   try {
-    return await runGit(cwd, args)
+    return await runGit(cwd, args, undefined, signal)
   } catch (error) {
     if (error instanceof NotAGitRepoError) throw error
     return null
@@ -283,8 +321,8 @@ export async function currentBranch(cwd: string): Promise<string | null> {
 }
 
 /** HEAD 提交；空仓库返回 null，checkpoint 就作为根提交。 */
-async function headCommit(cwd: string): Promise<string | null> {
-  const output = await runGitOrNull(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"])
+async function headCommit(cwd: string, signal?: AbortSignal): Promise<string | null> {
+  const output = await runGitOrNull(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], signal)
   return output === null ? null : output.trim() || null
 }
 

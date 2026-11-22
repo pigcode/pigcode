@@ -249,6 +249,7 @@ enum MobileTimelineKind {
   toolStarted('tool.started'),
   toolCompleted('tool.completed'),
   file('file'),
+  changes('changes'),
   plan('plan'),
   notice('notice'),
   approvalRequested('approval.requested'),

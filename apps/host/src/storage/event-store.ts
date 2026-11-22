@@ -50,6 +50,14 @@ export class EventStore {
     return row?.seq ?? 0
   }
 
+  *readRunEvents(threadId: string, runId: string, type: ThreadEvent["type"]): Iterable<ThreadEvent> {
+    const rows = this.db.prepare(
+      `SELECT seq, thread_id, run_id, type, payload_json, schema_version, created_at
+       FROM thread_events WHERE thread_id = ? AND run_id = ? AND type = ? ORDER BY seq ASC`,
+    ).iterate(threadId, runId, type) as Iterable<EventRow>
+    for (const row of rows) yield decodeRow(row)
+  }
+
   *readBefore(
     threadId: string,
     through: number,

@@ -134,7 +134,11 @@ export function createExecute(
     try {
       await run.driver.dispose(run.session).catch(() => undefined)
       if (!run.startFresh) throw new Error("agent session cannot be restarted")
+      const previousCwd = run.session.cwd
       run.session = await run.startFresh()
+      if (run.session.cwd !== previousCwd) {
+        await deps.ctx.get("checkpoints")?.moveExecution(run.runId, run.session.cwd, run.controller.signal)
+      }
       const fresh = freshSessionHandoff(deps.ctx, run.threadId, run.runId, input.text)
       const handoff = handoffForRun(deps.ctx.storage.db, run.threadId, run.runId, input.text, fresh)
       const rest: UserInput = { ...input }
@@ -153,10 +157,16 @@ export function trackRunExecution(ctx: Context, send: ReturnType<typeof createEx
   return {
     busy: (threadId: string) => Array.from(executing).some((run) => run.threadId === threadId),
     execute(run: ActiveRun, input: UserInput): void {
+      const checkpoints = ctx.get("checkpoints")
+      let markSettled!: () => void
+      const settled = new Promise<void>((resolve) => { markSettled = resolve })
+      checkpoints?.trackExecution(run.runId, settled)
       executing.add(run)
       void send(run, input)
         .finally(async () => {
           await run.interruption
+          markSettled()
+          await checkpoints?.waitForFinal(run.runId)
           executing.delete(run)
           ctx.get("messageQueue")?.schedule(run.threadId)
         })

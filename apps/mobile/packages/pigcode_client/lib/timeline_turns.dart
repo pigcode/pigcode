@@ -36,7 +36,8 @@ class TimelineTurn {
       answer = draft.answer,
       work = List.unmodifiable(draft.work),
       notices = List.unmodifiable(draft.notices),
-      files = List.unmodifiable(draft.files);
+      files = List.unmodifiable(draft.files),
+      changes = draft.changes;
 
   final String key;
   final String? runId;
@@ -49,6 +50,7 @@ class TimelineTurn {
   final List<TimelineWork> work;
   final List<MobileTimelineEvent> notices;
   final List<String> files;
+  final MobileTimelineEvent? changes;
 
   bool get folded => status == TimelineTurnStatus.completed && work.isNotEmpty;
 }
@@ -84,6 +86,7 @@ class _Draft {
   final work = <TimelineWork>[];
   final notices = <MobileTimelineEvent>[];
   final files = <String>{};
+  MobileTimelineEvent? changes;
   final _tools = <String, int>{};
   final _requests = <String>{};
   bool _hasQuestionEvents = false;
@@ -147,6 +150,8 @@ class _Draft {
         }
       case MobileTimelineKind.file:
         if (event.name case final name?) files.add(name);
+      case MobileTimelineKind.changes:
+        changes = event;
       case MobileTimelineKind.notice:
         notices.add(event);
       case MobileTimelineKind.plan:

@@ -39,11 +39,12 @@ export interface LaunchDeps {
 /** 启动排队 run：此时才创建 Agent 会话，避免为未开始的 run 提前启动子进程。 */
 export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<void> {
   let opened: AgentSessionHandle | undefined
+  const checkpoints = deps.ctx.get("checkpoints")
   try {
     checkLaunch(entry)
     const resuming = Boolean(entry.nativeSessionId ?? entry.forkFromNativeSessionId)
     let session: AgentSessionHandle
-    let lost = false
+    let lost = entry.workspaceChanged === true
     try {
       session = await openSession(entry, deps, true)
     } catch (error) {
@@ -54,6 +55,12 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     }
     opened = session
     checkLaunch(entry)
+    // A resumed native session may still execute in its original directory.
+    const baseline = checkpoints?.captureBaseline(entry.threadId, entry.runId, session.cwd, entry.controller.signal)
+    if (baseline) {
+      await baseline
+      checkLaunch(entry)
+    }
     const run: ActiveRun = {
       runId: entry.runId,
       threadId: entry.threadId,
@@ -68,7 +75,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       approvals: new Set(),
       liveText: "",
       resuming: resuming && !lost,
-      startFresh: () => startFresh(entry, deps, run.session.id),
+      startFresh: () => startFresh(entry, deps, run.session.id, run.session.cwd),
     }
     // 带上还没发出的交接（切换 Agent、子代理说明）；原生会话接不上时，新会话还要带上这一轮之前的对话。
     const fresh = lost
@@ -106,6 +113,7 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })
       deps.append(entry.threadId, entry.runId, "run.failed", { message })
     }
+    checkpoints?.abandonBaseline(entry.runId)
     deps.activeThreads.delete(entry.threadId)
     entry.resolveDone()
   }
@@ -125,14 +133,28 @@ async function openSession(
   entry: QueuedRun,
   deps: LaunchDeps,
   resume: boolean,
+  cwd = entry.cwd,
 ): Promise<AgentSessionHandle> {
   const fork = resume ? entry.forkFromNativeSessionId : undefined
   const instance = deps.instanceContext?.(entry.driver.id, entry.instanceId)
   const settings = await deps.settingsFor(entry.driver.id, entry.instanceId)
   checkLaunch(entry)
+  const active = deps.agentSessions.findActive(entry.threadId, entry.driver.id, entry.instanceId)
+  if (active && active.cwd !== cwd) {
+    deps.agentSessions.parkActive(entry.threadId, new Date().toISOString())
+    await entry.driver.dispose({
+      id: active.id,
+      threadId: active.threadId,
+      cwd: active.cwd,
+      nativeSessionId: active.nativeSessionId,
+      permissionMode: "workspace-write",
+      model: null,
+    }).catch(() => undefined)
+    checkLaunch(entry)
+  }
   const draft = await entry.driver.createSession({
     threadId: entry.threadId,
-    cwd: entry.cwd,
+    cwd,
     nativeSessionId: fork || !resume ? null : entry.nativeSessionId,
     ...(fork ? { forkFromNativeSessionId: fork } : {}),
     permissionMode: entry.driver.executionModes
@@ -169,10 +191,11 @@ async function startFresh(
   entry: QueuedRun,
   deps: LaunchDeps,
   lostSessionId: string | undefined,
+  cwd = entry.cwd,
 ): Promise<AgentSessionHandle> {
   const now = new Date().toISOString()
   if (lostSessionId) deps.agentSessions.stop(lostSessionId, now)
-  const session = await openSession(entry, deps, false)
+  const session = await openSession(entry, deps, false, cwd)
   deps.append(entry.threadId, entry.runId, "notice", {
     level: "warning",
     key: "session.resumeFailed",

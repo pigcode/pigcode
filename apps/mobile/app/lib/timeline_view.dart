@@ -15,6 +15,7 @@ class TimelineView extends StatefulWidget {
     required this.content,
     this.problem,
     this.retry,
+    this.changesCard,
   });
 
   final TimelineSnapshot snapshot;
@@ -23,6 +24,7 @@ class TimelineView extends StatefulWidget {
   final TimelineContentLoader content;
   final String? problem;
   final VoidCallback? retry;
+  final Widget Function(TimelineTurn turn)? changesCard;
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -144,11 +146,12 @@ class _TimelineViewState extends State<TimelineView> {
           () => _subtle('已停下'),
         );
       }
-      if (turn.files.isNotEmpty) {
+      if (turn.changes != null || turn.files.isNotEmpty) {
         add(
           'files-$key',
-          turn.terminal?.seq ?? turn.firstSeq,
-          () => _subtle(turn.files.join(' · ')),
+          turn.changes?.seq ?? turn.terminal?.seq ?? turn.firstSeq,
+          () =>
+              widget.changesCard?.call(turn) ?? _subtle(turn.files.join(' · ')),
         );
       }
     }

@@ -28,9 +28,13 @@ export function prepareRunEntry(
   { thread, driver, instanceId, modes, text, emitLive, options }: RunPreparation,
 ): QueuedRun {
   const threadId = thread.id
-  const session =
+  const cwd = threadCwd(ctx, threadId)
+  const previous =
     agentSessions.findActive(threadId, driver.id, instanceId) ??
     agentSessions.findResumable(threadId, driver.id, instanceId)
+  const session = previous?.cwd === cwd
+    ? previous
+    : agentSessions.findResumable(threadId, driver.id, instanceId, cwd)
   const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
   let resolveDone: () => void = () => undefined
   const done = new Promise<void>((resolve) => {
@@ -56,7 +60,8 @@ export function prepareRunEntry(
     done,
     resolveDone,
     queuedAt: new Date().toISOString(),
-    cwd: threadCwd(ctx, threadId),
+    cwd,
+    ...(previous && !session ? { workspaceChanged: true } : {}),
     ...modes,
     model: thread.lastModelId,
     nativeSessionId: forkFrom ? null : (session?.nativeSessionId ?? null),

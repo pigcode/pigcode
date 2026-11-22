@@ -245,6 +245,7 @@ async function generate(family: ContractFamily): Promise<void> {
 try {
   const sidebar = await vite.ssrLoadModule("/packages/contracts/src/mobile-sidebar.ts")
   const timeline = await vite.ssrLoadModule("/packages/contracts/src/mobile-timeline.ts")
+  const changes = await vite.ssrLoadModule("/packages/contracts/src/mobile-run-changes.ts")
   const commands = await vite.ssrLoadModule("/packages/contracts/src/mobile-commands.ts")
   const requests = await vite.ssrLoadModule("/packages/contracts/src/mobile-requests.ts")
   const drafts = await vite.ssrLoadModule("/packages/contracts/src/mobile-drafts.ts")
@@ -272,6 +273,12 @@ try {
     fileName: "command_models.dart",
     methodsName: "MobileCommandMethods",
     constants: ["const mobileCommandTextLimit = " + commands.mobileCommandTextLimit + ";"],
+  })
+  await generate({
+    methods: changes.mobileRunChangesMethods,
+    schemas: changes.mobileRunChangesJsonSchemas(),
+    fileName: "run_change_models.dart",
+    methodsName: "MobileRunChangesMethods",
   })
   await generate({
     methods: requests.mobileRequestMethods,
