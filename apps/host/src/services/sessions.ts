@@ -7,6 +7,8 @@ import { RunStreams, type LiveAgentDelta, type LiveRunRecord, type RunDelta } fr
 /** 线程事件的追加、回读与实时订阅入口。 */
 export interface SessionsService {
   append(event: NewThreadEvent): ThreadEvent
+  /** Commit related writes and return a publisher for the newly committed events. */
+  stageEvents(write: () => void): () => void
   read(threadId: string, cursor: number): ThreadEvent[]
   latestSeq(threadId: string): number
   readBefore(
@@ -44,14 +46,42 @@ export const apply: SessionsPlugin = (ctx) => {
   const listeners = new Map<string, Set<(event: ThreadEvent) => void>>()
   const globalListeners = new Set<(event: ThreadEvent) => void>()
   const streams = new RunStreams()
+  let staged: ThreadEvent[] | undefined
+
+  function publish(event: ThreadEvent): void {
+    streams.record(event)
+    for (const listener of [...(listeners.get(event.threadId) ?? []), ...globalListeners]) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error("[host] thread event subscriber failed", error)
+      }
+    }
+  }
+
   const service: SessionsService = {
     append(event) {
       const stored = ctx.storage.events.append(event)
-      streams.record(stored)
-      // 复制监听器集合，允许回调在广播期间追加事件或取消订阅。
-      for (const listener of [...(listeners.get(event.threadId) ?? [])]) listener(stored)
-      for (const listener of [...globalListeners]) listener(stored)
+      if (staged) staged.push(stored)
+      else publish(stored)
       return stored
+    },
+    stageEvents(write) {
+      const parent = staged
+      const batch: ThreadEvent[] = []
+      staged = batch
+      try {
+        ctx.storage.db.transaction(write)()
+      } finally {
+        staged = parent
+      }
+      if (parent) {
+        parent.push(...batch)
+        return () => {}
+      }
+      return () => {
+        for (const event of batch.splice(0)) publish(event)
+      }
     },
     read(threadId, cursor) {
       return ctx.storage.events.read(threadId, cursor)

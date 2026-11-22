@@ -1,0 +1,240 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pigcode_client/pigcode_client.dart';
+import 'package:uuid/uuid.dart';
+
+import 'run_command_journal.dart';
+
+typedef ComposerTarget = (MobileConnection connection, String threadId);
+
+class RunCommandOutcome {
+  const RunCommandOutcome(this.command, {this.receipt, this.recovered = false});
+
+  final PendingRunCommand command;
+  final MobileRunReceipt? receipt;
+  final bool recovered;
+}
+
+class RunComposerState {
+  const RunComposerState({
+    this.pending = const {},
+    this.working = const {},
+    this.notices = const {},
+    this.outcomes = const {},
+  });
+
+  final Map<MobileRunMethod, PendingRunCommand> pending;
+  final Set<MobileRunMethod> working;
+  final Map<MobileRunMethod, String> notices;
+  final Map<MobileRunMethod, RunCommandOutcome> outcomes;
+}
+
+final runComposerProvider = AsyncNotifierProvider.autoDispose
+    .family<RunComposerController, RunComposerState, ComposerTarget>(
+      RunComposerController.new,
+    );
+
+class RunComposerController extends AsyncNotifier<RunComposerState> {
+  RunComposerController(this.target)
+    : _journal = RunCommandJournal(target.$1, target.$2);
+
+  final ComposerTarget target;
+  final RunCommandJournal _journal;
+  MobileRunCommands get _api => target.$1.runCommands;
+
+  @override
+  Future<RunComposerState> build() async {
+    final pending = <MobileRunMethod, PendingRunCommand>{};
+    final notices = <MobileRunMethod, String>{};
+    final outcomes = <MobileRunMethod, RunCommandOutcome>{};
+    for (final method in MobileRunMethod.values) {
+      final command = await _journal.read(method);
+      if (!ref.mounted) break;
+      if (command == null) continue;
+      try {
+        final receipt = await _api.receipt(command.commandId);
+        if (receipt != null && command.matches(receipt)) {
+          if (!ref.mounted) break;
+          await _journal.remove(command, mounted: () => ref.mounted);
+          outcomes[method] = RunCommandOutcome(
+            command,
+            receipt: receipt,
+            recovered: true,
+          );
+          continue;
+        }
+        notices[method] = _waiting(method);
+      } catch (_) {
+        notices[method] = _waiting(method);
+      }
+      pending[method] = command;
+    }
+    return RunComposerState(
+      pending: pending,
+      notices: notices,
+      outcomes: outcomes,
+    );
+  }
+
+  Future<void> send(String text) => _submit(
+    PendingSend(
+      MobileStartRunParams(
+        commandId: const Uuid().v4(),
+        threadId: target.$2,
+        text: text,
+      ),
+    ),
+  );
+
+  Future<void> stop(String runId) => _submit(
+    PendingStop(
+      MobileInterruptRunParams(
+        commandId: const Uuid().v4(),
+        threadId: target.$2,
+        runId: runId,
+      ),
+    ),
+  );
+
+  Future<void> check(MobileRunMethod method) async {
+    final pending = state.value?.pending[method];
+    if (pending == null || !_begin(method)) return;
+    try {
+      await _query(pending);
+    } catch (_) {
+      _notice(method, _waiting(method));
+    } finally {
+      _end(method);
+    }
+  }
+
+  Future<void> retry(MobileRunMethod method) async {
+    final pending = state.value?.pending[method];
+    if (pending == null || !_begin(method)) return;
+    try {
+      if (!await _query(pending)) await _transmit(pending);
+    } catch (_) {
+      _notice(method, _waiting(method));
+    } finally {
+      _end(method);
+    }
+  }
+
+  Future<bool> _query(PendingRunCommand command) async {
+    final receipt = await _api.receipt(command.commandId);
+    if (receipt == null) {
+      _notice(command.method, _waiting(command.method));
+      return false;
+    }
+    await _accept(command, receipt, recovered: true);
+    return true;
+  }
+
+  Future<void> _submit(PendingRunCommand command) async {
+    final method = command.method;
+    if (state.value?.pending[method] != null || !_begin(method)) return;
+    try {
+      final saved = await _journal.reserve(command);
+      if (ref.mounted) {
+        _change(pending: {...?state.value?.pending, method: saved});
+      }
+      if (saved.commandId != command.commandId) {
+        _notice(method, _waiting(method));
+        return;
+      }
+      await _transmit(saved);
+    } catch (_) {
+      _notice(method, '无法保存或确认这次操作，请重试。');
+    } finally {
+      _end(method);
+    }
+  }
+
+  Future<void> _transmit(PendingRunCommand command) async {
+    try {
+      await _accept(command, await command.sendVia(_api));
+    } on MobileRpcFailure catch (error) {
+      if (error.problem.retryable == true) {
+        _notice(command.method, _waiting(command.method));
+      } else {
+        await _settle(
+          RunCommandOutcome(command),
+          notice: error.problem.message,
+        );
+      }
+    } catch (_) {
+      _notice(command.method, _waiting(command.method));
+    }
+  }
+
+  Future<void> _accept(
+    PendingRunCommand command,
+    MobileRunReceipt receipt, {
+    bool recovered = false,
+  }) async {
+    if (!command.matches(receipt)) {
+      throw const FormatException('Unexpected command receipt');
+    }
+    await _settle(
+      RunCommandOutcome(command, receipt: receipt, recovered: recovered),
+    );
+  }
+
+  Future<void> _settle(RunCommandOutcome outcome, {String? notice}) async {
+    if (!ref.mounted) return;
+    final command = outcome.command;
+    await _journal.remove(command, mounted: () => ref.mounted);
+    if (!ref.mounted) return;
+    final pending = {...?state.value?.pending}..remove(command.method);
+    final notices = {...?state.value?.notices}..remove(command.method);
+    if (notice != null) notices[command.method] = notice;
+    _change(
+      pending: pending,
+      notices: notices,
+      outcomes: {...?state.value?.outcomes, command.method: outcome},
+    );
+  }
+
+  bool _begin(MobileRunMethod method) {
+    final current = state.value;
+    if (current == null || current.working.contains(method)) return false;
+    _change(
+      working: {...current.working, method},
+      notices: {...current.notices}..remove(method),
+      outcomes: {...current.outcomes}..remove(method),
+    );
+    return true;
+  }
+
+  void _end(MobileRunMethod method) {
+    if (!ref.mounted) return;
+    _change(working: {...?state.value?.working}..remove(method));
+  }
+
+  void _notice(MobileRunMethod method, String text) {
+    if (!ref.mounted) return;
+    _change(notices: {...?state.value?.notices, method: text});
+  }
+
+  String _waiting(MobileRunMethod method) => switch (method) {
+    MobileRunMethod.runStart => '发送结果待确认',
+    MobileRunMethod.runInterrupt => '停止结果待确认',
+  };
+
+  void _change({
+    Map<MobileRunMethod, PendingRunCommand>? pending,
+    Set<MobileRunMethod>? working,
+    Map<MobileRunMethod, String>? notices,
+    Map<MobileRunMethod, RunCommandOutcome>? outcomes,
+  }) {
+    if (!ref.mounted || state.value == null) return;
+    final current = state.requireValue;
+    state = AsyncData(
+      RunComposerState(
+        pending: pending ?? current.pending,
+        working: working ?? current.working,
+        notices: notices ?? current.notices,
+        outcomes: outcomes ?? current.outcomes,
+      ),
+    );
+  }
+}

@@ -32,20 +32,23 @@ export function createQuestionFlow(deps: QuestionDeps) {
     }
   }
 
-  function cancel(run: ActiveRun, requestId: string, withdrawn = false): boolean {
+  function resolve(requestId: string, answers: string[]): void {
     const waiter = waiters.get(requestId)
-    if (!waiter) return false
+    if (!waiter) return
     waiters.delete(requestId)
-    if (withdrawn) finish(run, run.runId, requestId)
-    else deps.pendingRequests.resolve(requestId)
+    waiter.resolve(answers)
+  }
+
+  function withdraw(run: ActiveRun, requestId: string): void {
+    if (!waiters.has(requestId)) return
+    finish(run, run.runId, requestId)
     deps.append(run.threadId, run.runId, "question.answered", {
       requestId,
       id: requestId,
       answers: [],
-      reason: withdrawn ? "agent-cancelled" : "run-ended",
+      reason: "agent-cancelled",
     })
-    waiter.resolve([])
-    return true
+    resolve(requestId, [])
   }
 
   return {
@@ -68,7 +71,7 @@ export function createQuestionFlow(deps: QuestionDeps) {
       const done = new Promise<string[]>((resolve) =>
         waiters.set(requestId, { runId: run.runId, resolve }),
       )
-      const abort = () => cancel(run, requestId, true)
+      const abort = () => withdraw(run, requestId)
       signal?.addEventListener("abort", abort, { once: true })
       deps.append(run.threadId, run.runId, "question.requested", {
         requestId,
@@ -84,13 +87,12 @@ export function createQuestionFlow(deps: QuestionDeps) {
       if (!waiter || waiter.runId !== runId || (run && run.threadId !== threadId)) {
         throw new Error(`question not pending: ${requestId}`)
       }
-      waiters.delete(requestId)
       finish(run, runId, requestId)
       deps.append(threadId, runId, "question.answered", { requestId, id: requestId, answers })
-      waiter.resolve(answers)
+      resolve(requestId, answers)
     },
-    /** run 结束时取消它还没回答的问题；返回是否取消了一个问题。 */
-    cancel,
+    /** 已持久化结果后通知等待中的 Agent。 */
+    resolve,
 
     /** Host 关闭：所有问题以空答案结束。 */
     dispose(): void {

@@ -35,6 +35,8 @@ export interface ActiveRun {
 export interface QueuedRun {
   runId: string
   threadId: string
+  sourceDevice?: string
+  isAuthorized?: () => boolean
   driver: AgentDriver
   /** 这个 run 用的 Agent 实例；缺省时等于 driver.id（默认实例）。 */
   instanceId: string

@@ -231,8 +231,18 @@ class _TimelineViewState extends State<TimelineView> {
     final hasEarlier = widget.online && widget.snapshot.nextBefore != null;
     return Stack(
       children: [
-        NotificationListener<ScrollNotification>(
-          onNotification: _scrollNotification,
+        NotificationListener<Notification>(
+          onNotification: (notification) {
+            if (notification is ScrollNotification) {
+              return _scrollNotification(notification);
+            }
+            if (notification is ScrollMetricsNotification &&
+                notification.depth == 0 &&
+                notification.metrics.axis == Axis.vertical) {
+              _follow();
+            }
+            return false;
+          },
           child: CustomScrollView(
             key: const ValueKey('timeline-scroll'),
             controller: _scroll,

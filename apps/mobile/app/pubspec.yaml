@@ -15,6 +15,7 @@ dependencies:
   pigcode_client: any
   pigcode_transport: any
   shared_preferences: ^2.5.0
+  uuid: ^4.6.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

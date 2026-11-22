@@ -191,6 +191,7 @@ export class MobileConnections {
       this.dropPeer(session, true)
     }
     if (this.devices.size === 0 || cancelAttempt) this.finish(this.attempt ? "cancelled" : "idle")
+    this.ctx.agents.cancelDeviceQueuedRuns(device.publicKey)
     return { status: "revoked", pairing: this.view() }
   }
 

@@ -31,7 +31,14 @@ export interface StartRunResult {
 }
 
 /** run 的可选参数；effort 只作用于本次 run。 */
+interface MobileRunAdmission {
+  deviceKey: string
+  isAuthorized(): boolean
+  recordReceipt(runId: string): void
+}
+
 export interface StartRunOptions {
+  mobileAdmission?: MobileRunAdmission
   effort?: ReasoningEffort
   /** 本次 run 用快速模式。 */
   fast?: boolean
@@ -151,7 +158,8 @@ export interface AgentsService {
   /** 回答 agent 的提问；answers 与问题顺序一致。 */
   answerQuestion(threadId: string, runId: string, requestId: string, answers: string[]): void
   getRunStatus(runId: string): RunStatus | null
-  cancelRun(runId: string): boolean
+  cancelRun(runId: string, recordReceipt?: () => void): boolean
+  cancelDeviceQueuedRuns(deviceKey: string): void
   /** 列出运行中与排队中的 run，供 run.list 查询。 */
   listRuns(): RunSummary[]
   /** Host 退出时中断所有活跃与排队中的 run。 */

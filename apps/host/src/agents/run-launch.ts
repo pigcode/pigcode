@@ -38,8 +38,9 @@ export interface LaunchDeps {
 
 /** 启动排队 run：此时才创建 Agent 会话，避免为未开始的 run 提前启动子进程。 */
 export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<void> {
+  let opened: AgentSessionHandle | undefined
   try {
-    entry.controller.signal.throwIfAborted()
+    checkLaunch(entry)
     const resuming = Boolean(entry.nativeSessionId ?? entry.forkFromNativeSessionId)
     let session: AgentSessionHandle
     let lost = false
@@ -51,6 +52,8 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       session = await startFresh(entry, deps, entry.sessionId)
       lost = true
     }
+    opened = session
+    checkLaunch(entry)
     const run: ActiveRun = {
       runId: entry.runId,
       threadId: entry.threadId,
@@ -84,13 +87,21 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       instanceId: entry.instanceId,
       agentSessionId: run.session.id,
     })
+    checkLaunch(entry)
+    delete entry.isAuthorized
     deps.activeRuns.set(run.runId, run)
     void deps.execute(run, handoff === null ? entry.input : { ...entry.input, handoff })
   } catch (error) {
     const message = messageOf(error)
     if (entry.controller.signal.aborted) {
-      deps.runs.setStatus(entry.runId, "interrupted")
-      deps.append(entry.threadId, entry.runId, "run.interrupted", {})
+      if (opened) await entry.driver.dispose(opened).catch(() => undefined)
+      if (deps.runs.get(entry.runId)?.status !== "interrupted") {
+        const publish = deps.ctx.sessions.stageEvents(() => {
+          deps.runs.setStatus(entry.runId, "interrupted")
+          deps.append(entry.threadId, entry.runId, "run.interrupted", {})
+        })
+        publish()
+      }
     } else {
       deps.runs.setStatus(entry.runId, "failed", { code: "AGENT_ERROR", message })
       deps.append(entry.threadId, entry.runId, "run.failed", { message })
@@ -98,6 +109,15 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
     deps.activeThreads.delete(entry.threadId)
     entry.resolveDone()
   }
+}
+
+function abortUnauthorized(entry: QueuedRun): void {
+  if (entry.isAuthorized && !entry.isAuthorized()) entry.controller.abort()
+}
+
+function checkLaunch(entry: QueuedRun): void {
+  abortUnauthorized(entry)
+  entry.controller.signal.throwIfAborted()
 }
 
 /** 让 driver 建会话并写会话行；resume 为 false 时不接续任何原生会话、也不复用旧行。 */
@@ -109,7 +129,7 @@ async function openSession(
   const fork = resume ? entry.forkFromNativeSessionId : undefined
   const instance = deps.instanceContext?.(entry.driver.id, entry.instanceId)
   const settings = await deps.settingsFor(entry.driver.id, entry.instanceId)
-  entry.controller.signal.throwIfAborted()
+  checkLaunch(entry)
   const draft = await entry.driver.createSession({
     threadId: entry.threadId,
     cwd: entry.cwd,
@@ -123,8 +143,10 @@ async function openSession(
     ...(resume && entry.sessionId ? { sessionId: entry.sessionId } : {}),
     ...(entry.mcp ? { mcp: entry.mcp } : {}),
     settings,
-    ...(instance ? { instance, signal: entry.controller.signal } : {}),
+    signal: entry.controller.signal,
+    ...(instance ? { instance } : {}),
   })
+  abortUnauthorized(entry)
   if (entry.controller.signal.aborted) {
     await entry.driver.dispose(draft).catch(() => undefined)
     entry.controller.signal.throwIfAborted()

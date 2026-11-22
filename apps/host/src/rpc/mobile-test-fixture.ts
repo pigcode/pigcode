@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { rpcNotificationSchema } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { expect } from "vitest"
+import type { AgentRunConfig } from "../agents/driver"
 import { apply as agents } from "../agents/registry"
 import { MobileConnections } from "../mobile/connections"
 import { apply as projects } from "../services/projects"
@@ -16,17 +17,19 @@ import { ThreadFeed } from "./thread-feed"
 
 export async function startMobileHost(options?: {
   settingsPath?: string
+  storagePath?: string
+  agentConfig?: AgentRunConfig
   now?: () => number
   prepare?: (ctx: Context) => void
   onDesktopMessage?: (message: unknown) => void
 }) {
   const ctx = new Context()
-  await ctx.plugin(storage, { path: ":memory:" })
+  await ctx.plugin(storage, { path: options?.storagePath ?? ":memory:" })
   await ctx.plugin(settings, options?.settingsPath ? { path: options.settingsPath } : {})
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
-  await ctx.plugin(agents)
+  await ctx.plugin(agents, options?.agentConfig ?? {})
   options?.prepare?.(ctx)
   const cipher = {
     seal: async (value: string) =>

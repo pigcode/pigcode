@@ -23,6 +23,7 @@ import {
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
+import { MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
@@ -77,6 +78,8 @@ function threadSummary(thread: Thread) {
 
 /** Mobile allowlist. It never dispatches through the desktop RPC server. */
 export class MobileSidebarRpc {
+  private readonly commands: MobileRunCommands
+  private active = false
   private readonly timeline: MobileTimelineSession
   private stopMessages: (() => void) | undefined
   private stopSidebar: (() => void) | undefined
@@ -91,14 +94,17 @@ export class MobileSidebarRpc {
     private readonly devices: PairedDevices,
     private readonly session: MobileSession,
   ) {
+    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey)
     this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message))
   }
 
   start(): void {
+    this.active = true
     this.stopMessages = this.transport.onMessage((message) => this.receive(message))
   }
 
   stop(): void {
+    this.active = false
     this.timeline.close()
     this.stopMessages?.()
     this.stopSidebar?.()
@@ -121,10 +127,16 @@ export class MobileSidebarRpc {
 
     const request = mobileRequestSchema.safeParse(message)
     if (!request.success) return
-    const { id } = request.data
+    void this.reply(request.data).catch((error: unknown) => {
+      if (this.active) console.error("[host] mobile reply failed", error)
+    })
+  }
+
+  private async reply(request: RpcRequest): Promise<void> {
+    const { id } = request
     let response: unknown
     try {
-      const result = this.dispatch(request.data)
+      const result = await this.dispatch(request)
       response = rpcSuccessSchema.parse({ jsonrpc: "2.0", id, result })
     } catch (error) {
       const code = error instanceof MobileRequestError ? error.code : "COMMAND_FAILED"
@@ -135,7 +147,7 @@ export class MobileSidebarRpc {
         error: { code, message: mobileErrorMessages[code], retryable: code === "COMMAND_FAILED" },
       })
     }
-    this.transport.send(response)
+    if (this.active) this.transport.send(response)
   }
 
   private dispatch(request: RpcRequest): unknown {
@@ -152,6 +164,9 @@ export class MobileSidebarRpc {
       mobileTimelineRequests.has(request.method)
     )
       return this.timeline.dispatch(request)
+
+    if (this.session.features.includes("run.write") && mobileRunCommandRequests.has(request.method))
+      return this.commands.dispatch(request)
 
     if (!this.session.features.includes("sidebar.read"))
       throw new MobileRequestError("METHOD_NOT_AVAILABLE")

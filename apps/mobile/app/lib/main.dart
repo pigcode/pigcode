@@ -264,7 +264,9 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     if (!mounted || accepted != true || _working) return;
     setState(() => _working = true);
     try {
-      await ref.read(computersProvider.notifier).forget(computer);
+      final cleared = await ref
+          .read(computersProvider.notifier)
+          .forget(computer);
       if (_selected == computer.computerKey) {
         final connection = _connection;
         _connection = null;
@@ -272,7 +274,9 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
         _browsing = null;
         await connection?.close();
       }
-      if (mounted) setState(() => _feedback = null);
+      if (mounted) {
+        setState(() => _feedback = cleared ? null : '电脑已移除，待确认记录将在重新配对时清理。');
+      }
     } catch (_) {
       if (mounted) setState(() => _feedback = '无法移除手机上保存的电脑。');
     } finally {

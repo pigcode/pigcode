@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -98,11 +99,18 @@ Future<void> main() async {
             final timeline = await active[phone]!.openTimeline(threadId);
             final expected = command['liveText'] as String?;
             final answer = command['answer'] as String?;
+            final stoppedRunId = command['stoppedRunId'] as String?;
+            bool hasStopped(TimelineSnapshot snapshot) => snapshot.events.any(
+              (item) =>
+                  item.runId == stoppedRunId &&
+                  item.kind == MobileTimelineKind.runInterrupted,
+            );
             bool matches(TimelineSnapshot snapshot) =>
                 (expected == null || snapshot.live?.text == expected) &&
                 (answer == null ||
                     (snapshot.live == null &&
-                        snapshot.events.any((item) => item.text == answer)));
+                        snapshot.events.any((item) => item.text == answer))) &&
+                (stoppedRunId == null || hasStopped(snapshot));
             final first = timeline.snapshot;
             final view = first != null && matches(first)
                 ? first
@@ -122,7 +130,36 @@ Future<void> main() async {
               'hasAnswer':
                   answer != null &&
                   view.events.any((item) => item.text == answer),
+              if (stoppedRunId != null) 'stopped': hasStopped(view),
             });
+          case 'startCommand' || 'startWithoutReply':
+            final result = active[phone]!.runCommands.start(
+              MobileStartRunParams(
+                commandId: command['commandId'] as String,
+                threadId: command['threadId'] as String,
+                text: command['text'] as String,
+              ),
+            );
+            if (command['action'] == 'startWithoutReply') {
+              unawaited(result.then<void>((_) {}, onError: (Object _) {}));
+              report('waiting');
+            } else {
+              report('command', {'receipt': (await result).toJson()});
+            }
+          case 'stopCommand':
+            final receipt = await active[phone]!.runCommands.interrupt(
+              MobileInterruptRunParams(
+                commandId: command['commandId'] as String,
+                threadId: command['threadId'] as String,
+                runId: command['runId'] as String,
+              ),
+            );
+            report('command', {'receipt': receipt.toJson()});
+          case 'lookupCommand':
+            final receipt = await active[phone]!.runCommands.receipt(
+              command['commandId'] as String,
+            );
+            report('command', {'receipt': receipt?.toJson()});
           case 'earlier':
             final timeline = await active[phone]!.openTimeline(
               command['threadId'] as String,
@@ -163,6 +200,8 @@ Future<void> main() async {
         }
       } on ConnectionFailure catch (failure) {
         report('failed', {'code': failure.code});
+      } on MobileRpcFailure catch (failure) {
+        report('failed', {'code': failure.problem.code});
       }
     }
   } finally {

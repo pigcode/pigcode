@@ -1,7 +1,7 @@
 /** 注册 Agent driver，并把一次 run 的规范化事件映射为线程事件。 */
 import { modesOf, modesForSwitch, resolveModes, registeredAgents } from "./execution-modes"
 import type { Context } from "cordis"
-import type { RunStatus, ThreadEvent } from "@pigcode/contracts"
+import type { ThreadEvent } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import type { AgentRunConfig, AgentDriver } from "./driver"
 import { FakeAgentDriver } from "./fake"
@@ -11,12 +11,12 @@ import { RunAlreadyActiveError, RunQueueFullError, TooManyActiveRunsError } from
 import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
-import { maybeAutoTitle } from "./title"
+import { persistRunAdmission } from "./run-admission"
+import { createRunFinisher } from "./run-finish"
 import type { RunEventHooks } from "./run-events"
 import { disposeSession, pendingForkFromNativeSessionId, switchAgent } from "./switching"
 import { createExecute } from "./run-execute"
 import { registerThreadReadTool } from "./thread-read-tool"
-import { recordThreadReferences } from "./thread-reference"
 import { THREAD_ACTIVITY } from "../services/threads"
 import { threadCwd } from "../services/worktrees"
 import { createCliUpdates } from "./cli-updates"
@@ -78,52 +78,20 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     ctx.sessions.append({ threadId, runId, type, payload, schemaVersion: 1, createdAt })
   }
 
-  function finishRun(
-    run: ActiveRun,
-    status: "completed" | "failed" | "interrupted",
-    type: "run.completed" | "run.failed" | "run.interrupted",
-    payload: unknown,
-    error?: { code: string; message: string },
-  ): void {
-    if (activeRuns.get(run.runId) !== run) return
-    run.status = status
-    runs.setStatus(run.runId, status, error)
-    // 未决审批必须先于终态事件写入，否则 UI 会把 approval.resolved 当成 run 仍在运行。
-    settlePending(run)
-    // 中断或失败时，已经流给 UI 的半截回复只存在于实时通道；落成一条消息，重开线程后仍能看到。
-    if (status !== "completed" && run.liveText.trim()) {
-      append(run.threadId, run.runId, "message.completed", {
-        role: "assistant",
-        text: run.liveText,
-        partial: true,
-      })
-    }
-    run.liveText = ""
-    append(run.threadId, run.runId, type, payload)
-    activeRuns.delete(run.runId)
-    activeThreads.delete(run.threadId)
-    run.resolveDone()
-    // 终态释放了并发空位，按 FIFO 启动排队中的 run。
-    pump()
-  }
-
-  /** 把 run 的未决审批以 deny、未答问题以空答案结束，避免 driver 永久等待。 */
-  function settlePending(run: ActiveRun): void {
-    for (const requestId of run.approvals) {
-      if (questions.cancel(run, requestId)) continue
-      if (!approvals.resolve(requestId, "deny")) continue
-      pendingRequests.resolve(requestId)
-      append(run.threadId, run.runId, "approval.resolved", {
-        requestId,
-        id: requestId,
-        decision: "deny",
-        reason: "run-ended",
-      })
-    }
-    run.approvals.clear()
-  }
-
   const questions = createQuestionFlow({ append, pendingRequests, runs, activeRuns })
+  const finishRun = createRunFinisher({
+    ctx,
+    runs,
+    pendingRequests,
+    activeRuns,
+    activeThreads,
+    append,
+    releaseRequest: ({ id, kind }) => {
+      if (kind === "question") questions.resolve(id, [])
+      else approvals.resolve(id, "deny")
+    },
+    pump,
+  })
 
   /** Agent 事件映射所需的 Host 回调。 */
   const runEventHooks: RunEventHooks = {
@@ -191,29 +159,39 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   }
 
   /** 取消排队中的 run；此时尚未创建 Agent 会话，只需写终态并释放线程。 */
-  function cancelQueuedRun(runId: string): boolean {
-    const entry = queue.remove((item) => item.runId === runId)
+  function cancelQueuedRun(runId: string, recordReceipt?: () => void): boolean {
+    const entry = queue.values().find((item) => item.runId === runId)
     if (!entry) return false
-    runs.setStatus(entry.runId, "interrupted")
-    append(entry.threadId, entry.runId, "run.interrupted", {})
+    const publish = persistUnstartedStop(entry, recordReceipt)
+    queue.remove((item) => item.runId === runId)
     activeThreads.delete(entry.threadId)
+    publish()
     entry.resolveDone()
     return true
   }
 
+  function persistUnstartedStop(entry: QueuedRun, recordReceipt?: () => void): () => void {
+    return ctx.sessions.stageEvents(() => {
+      recordReceipt?.()
+      if (runs.get(entry.runId)?.status === "interrupted") return
+      runs.setStatus(entry.runId, "interrupted")
+      append(entry.threadId, entry.runId, "run.interrupted", {})
+    })
+  }
+
   /** 中断单个活跃或排队中的 run；未知 run 返回 false。 */
-  function interruptRun(runId: string): boolean {
-    if (cancelQueuedRun(runId)) return true
+  function interruptRun(runId: string, recordReceipt?: () => void): boolean {
+    if (cancelQueuedRun(runId, recordReceipt)) return true
     const launching = starting.get(runId)
     if (launching && !activeRuns.has(runId)) {
+      const publish = persistUnstartedStop(launching, recordReceipt)
       launching.controller.abort()
+      publish()
       return true
     }
     const run = activeRuns.get(runId)
     if (!run) return false
-    run.controller.abort()
-    void run.driver.interrupt(run.session).catch(() => undefined)
-    finishRun(run, "interrupted", "run.interrupted", {})
+    finishRun(run, "interrupted", "run.interrupted", {}, undefined, recordReceipt)
     return true
   }
 
@@ -340,23 +318,6 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           agentSessions.findResumable(threadId, driver.id, instance.instanceId)
         const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
         const runId = `run_${randomUUID()}`
-        // 会话在 launchRun 中创建；排队阶段不启动 Codex app-server/Claude Query。
-        runs.create({
-          id: runId,
-          threadId,
-          agentSessionId: "pending",
-          status: shouldQueue ? "queued" : "running",
-          startedAt,
-        })
-        maybeAutoTitle(ctx, thread, text, runId, append)
-        // @ 引用的会话：说明记成这一轮的交接，消息里记下引用，用户气泡据此画可点的标签。
-        const references = recordThreadReferences(ctx, threadId, options.references ?? [])
-        append(threadId, runId, "message.completed", {
-          role: "user",
-          text,
-          ...(references.length > 0 ? { references } : {}),
-        })
-
         let resolveDone: () => void = () => undefined
         const done = new Promise<void>((resolve) => {
           resolveDone = resolve
@@ -371,6 +332,12 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         const entry: QueuedRun = {
           runId,
           threadId,
+          ...(options.mobileAdmission
+            ? {
+                sourceDevice: options.mobileAdmission.deviceKey,
+                isAuthorized: options.mobileAdmission.isAuthorized,
+              }
+            : {}),
           driver,
           instanceId: instance.instanceId,
           input: runInput(text, options),
@@ -387,12 +354,15 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
           ...(activeSession ? { sessionId: activeSession.id } : {}),
           ...(mcp ? { mcp } : {}),
         }
+        const publish = persistRunAdmission(ctx, runs, thread, entry, shouldQueue, options, append)
         if (shouldQueue) {
-          append(threadId, runId, "run.queued", { queuedAt: startedAt })
           if (!queue.push(entry)) throw new RunQueueFullError(maxQueuedRuns)
+          publish()
           return { runId, done }
         }
-        await launch(entry)
+        const launched = launch(entry)
+        publish()
+        await launched
         return { runId, done }
       } catch (error) {
         activeThreads.delete(threadId)
@@ -432,12 +402,21 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     getRunStatus(runId) {
       const active = activeRuns.get(runId)
       if (active) return active.status
-      const row = ctx.storage.db.prepare(`SELECT status FROM runs WHERE id = ?`).get(runId) as
-        { status: RunStatus } | undefined
-      return row?.status ?? null
+      return runs.get(runId)?.status ?? null
     },
-    cancelRun(runId) {
-      return interruptRun(runId)
+    cancelRun(runId, recordReceipt) {
+      return interruptRun(runId, recordReceipt)
+    },
+    cancelDeviceQueuedRuns(deviceKey) {
+      for (const entry of [...queue.values(), ...starting.values()]) {
+        if (entry.sourceDevice !== deviceKey || activeRuns.has(entry.runId)) continue
+        entry.controller.abort()
+        try {
+          interruptRun(entry.runId)
+        } catch (error) {
+          console.error("[host] could not record revoked run interruption", error)
+        }
+      }
     },
     listRuns() {
       return [

@@ -22,6 +22,12 @@ export class RunStore {
       .run(input.id, input.threadId, input.agentSessionId, input.status, input.startedAt)
   }
 
+  get(runId: string): { threadId: string; status: RunStatus } | undefined {
+    return this.db
+      .prepare(`SELECT thread_id AS threadId, status FROM runs WHERE id = ?`)
+      .get(runId) as { threadId: string; status: RunStatus } | undefined
+  }
+
   /** 会话在 run 真正启动时才创建；排队阶段先写占位值。 */
   setAgentSessionId(runId: string, agentSessionId: string): void {
     this.db.prepare(`UPDATE runs SET agent_session_id = ? WHERE id = ?`).run(agentSessionId, runId)

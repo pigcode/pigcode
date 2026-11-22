@@ -15,6 +15,7 @@ function deviceId(publicKey: string): string {
 
 export class PairedDevices {
   private records: PairedDevice[]
+  private readonly runAuthorizations = new Map<string, symbol>()
 
   constructor(private readonly settings: SettingsService) {
     const parsed = recordsSchema.safeParse(settings.get(key))
@@ -53,6 +54,13 @@ export class PairedDevices {
 
   remove(device: PairedDevice): void {
     this.replace(this.records.filter(({ publicKey }) => publicKey !== device.publicKey))
+    this.runAuthorizations.delete(device.publicKey)
+  }
+
+  runAuthorization(publicKey: string): () => boolean {
+    const permit = this.runAuthorizations.get(publicKey) ?? Symbol()
+    this.runAuthorizations.set(publicKey, permit)
+    return () => this.runAuthorizations.get(publicKey) === permit && !!this.find(publicKey)
   }
 
   acknowledgeRelay(publicKey: string, revision: string): void {

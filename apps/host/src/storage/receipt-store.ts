@@ -13,6 +13,15 @@ export class ReceiptStore {
     return row ? (JSON.parse(row.result_json) as unknown) : undefined
   }
 
+  /** Insert an immutable receipt. A duplicate key aborts the enclosing write. */
+  insert(commandId: string, result: unknown): void {
+    this.db
+      .prepare(
+        `INSERT INTO command_receipts (command_id, result_json, created_at) VALUES (?, ?, ?)`,
+      )
+      .run(commandId, JSON.stringify(result), new Date().toISOString())
+  }
+
   /** 写入或覆盖命令回执，使同一 commandId 幂等。 */
   put(commandId: string, result: unknown): void {
     this.db

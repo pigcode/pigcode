@@ -10,6 +10,7 @@ export const mobileFeatures = [
   "relay.saveReceipt",
   "sidebar.read",
   "timeline.read",
+  "run.write",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

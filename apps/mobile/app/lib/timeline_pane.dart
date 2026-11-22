@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'run_composer.dart';
 import 'timeline_view.dart';
 
 typedef _Selection = (MobileConnection, String);
@@ -90,14 +91,39 @@ class TimelinePane extends ConsumerWidget {
     final provider = _timelineProvider((connection, threadId));
     final selected = ref.watch(provider);
     return selected.when(
-      data: (data) => TimelineView(
-        snapshot: data.snapshot,
-        online: online,
-        loadEarlier: () => ref.read(provider.notifier).loadEarlier(),
-        content: ref.read(provider.notifier).content,
-        problem: data.problem == null ? null : _detail(data.problem!),
-        retry: online ? () => ref.read(provider.notifier).retry() : null,
-      ),
+      data: (data) {
+        final timeline = TimelineView(
+          snapshot: data.snapshot,
+          online: online,
+          loadEarlier: () => ref.read(provider.notifier).loadEarlier(),
+          content: ref.read(provider.notifier).content,
+          problem: data.problem == null ? null : _detail(data.problem!),
+          retry: online ? () => ref.read(provider.notifier).retry() : null,
+        );
+        if (!connection.supportsRunCommands) return timeline;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return Column(
+              children: [
+                Expanded(child: timeline),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: constraints.maxHeight * .6,
+                  ),
+                  child: SingleChildScrollView(
+                    child: RunComposer(
+                      connection: connection,
+                      threadId: threadId,
+                      online: online,
+                      stoppableRunId: _stoppableRun(data.snapshot),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
       loading: () => const Center(child: CircularProgressIndicator.adaptive()),
       error: (error, _) {
         return Center(
@@ -118,6 +144,24 @@ class TimelinePane extends ConsumerWidget {
         );
       },
     );
+  }
+
+  String? _stoppableRun(TimelineSnapshot snapshot) {
+    if (snapshot.live case final live?) return live.runId;
+    for (final event in snapshot.events.reversed) {
+      switch (event.kind) {
+        case MobileTimelineKind.runQueued:
+        case MobileTimelineKind.runStarted:
+          return event.runId;
+        case MobileTimelineKind.runCompleted:
+        case MobileTimelineKind.runFailed:
+        case MobileTimelineKind.runInterrupted:
+          return null;
+        default:
+          break;
+      }
+    }
+    return null;
   }
 
   String _detail(Object error) => switch (error) {
