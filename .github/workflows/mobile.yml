@@ -1,0 +1,66 @@
+name: Mobile
+
+on:
+  pull_request:
+    paths:
+      - "apps/mobile/**"
+      - "apps/desktop/package.json"
+      - "apps/desktop/scripts/generate-mobile-theme.ts"
+      - "packages/ui-primitives/src/styles/tokens.css"
+      - "packages/ui-primitives/src/theme/**"
+      - "apps/host/src/mobile/**"
+      - "packages/contracts/**"
+      - ".github/workflows/mobile.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - "apps/desktop/package.json"
+      - "apps/desktop/scripts/generate-mobile-theme.ts"
+      - "packages/ui-primitives/src/styles/tokens.css"
+      - "packages/ui-primitives/src/theme/**"
+      - "apps/host/src/mobile/**"
+      - "packages/contracts/**"
+      - ".github/workflows/mobile.yml"
+
+jobs:
+  mobile:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: apk
+          - runner: macos-15
+            target: ios
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - if: matrix.target == 'apk'
+        uses: pnpm/action-setup@v4
+        with: { version: 10.28.2 }
+      - if: matrix.target == 'apk'
+        working-directory: .
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir apps/desktop exec playwright install --with-deps chromium --only-shell
+          node apps/desktop/scripts/generate-mobile-theme.ts --check
+      - name: Install the pinned Flutter SDK
+        run: |
+          git clone --depth 1 --branch "$(cat .flutter-version)" \
+            https://github.com/flutter/flutter.git "$RUNNER_TEMP/pigcode-flutter"
+          printf '%s\n' "$RUNNER_TEMP/pigcode-flutter/bin" >> "$GITHUB_PATH"
+      - run: flutter pub get --enforce-lockfile
+      - run: dart format --output=none --set-exit-if-changed app/lib packages scripts
+      - run: dart analyze --fatal-infos
+      - run: dart test
+        working-directory: apps/mobile/packages/pigcode_transport
+      - if: matrix.target == 'apk'
+        run: ./scripts/flutter-app.sh build apk --debug --no-pub
+      - if: matrix.target == 'ios'
+        run: ./scripts/flutter-app.sh build ios --simulator --debug --no-pub

@@ -1,0 +1,20 @@
+{
+  "host": {
+    "type": "relay.host",
+    "version": 1,
+    "computerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "token": "fixture-access"
+  },
+  "phone": {
+    "type": "relay.phone",
+    "version": 1,
+    "computerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "token": "fixture-access"
+  },
+  "admitted": { "type": "relay.result", "version": 1, "status": "ok" },
+  "offline": { "type": "relay.result", "version": 1, "status": "offline" },
+  "open": { "type": "relay.open", "session": 1 },
+  "close": { "type": "relay.close", "session": 1 },
+  "ciphertextHex": "00ff0d",
+  "hostFrameHex": "0000000100ff0d"
+}

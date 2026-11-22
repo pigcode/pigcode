@@ -14,6 +14,7 @@ import {
   SettingSection,
   useLocale,
 } from "@pigcode/ui-primitives"
+import { PairingSettings } from "./pairing-settings"
 import type { CoreDeps } from "./chat-container"
 
 type Status = RelayTestResult["status"] | "host-unavailable"
@@ -119,6 +120,7 @@ export function RelaySettingsPage({ deps }: { deps: CoreDeps }) {
           </SettingRow>
         </SettingSection>
       </form>
+      <PairingSettings deps={deps} relayReady={Boolean(saved?.tokenConfigured)} />
     </SettingPage>
   )
 }

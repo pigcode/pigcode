@@ -134,6 +134,18 @@ export class RpcServer {
             status: "storage-unavailable",
           }
         )
+      case "mobile.pairing":
+        return this.ctx.mobileConnections.view()
+      case "mobile.pairing.start":
+        return this.ctx.mobileConnections.start()
+      case "mobile.pairing.cancel":
+        return this.ctx.mobileConnections.cancel(
+          (parsed as CommandParams<"mobile.pairing.cancel">).id,
+        )
+      case "mobile.pairing.confirm": {
+        const { id, confirmation } = parsed as CommandParams<"mobile.pairing.confirm">
+        return this.ctx.mobileConnections.confirm(id, confirmation)
+      }
       case "project.list":
         return this.ctx.projects.list()
       case "project.add": {

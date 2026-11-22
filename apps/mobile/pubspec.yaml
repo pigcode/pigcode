@@ -1,0 +1,8 @@
+name: pigcode_mobile_workspace
+publish_to: none
+environment:
+  sdk: '>=3.12.2 <4.0.0'
+workspace:
+  - app
+  - packages/pigcode_transport
+  - packages/pigcode_client

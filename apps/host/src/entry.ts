@@ -10,6 +10,7 @@ import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
 import { attachQuitState } from "./rpc/quit-state"
 import { desktopRelayCipher } from "./services/relay-credential"
+import { MobileConnections } from "./mobile/connections"
 import { RelaySettings } from "./services/relay-settings"
 import { apply as pluginsPlugin } from "./services/plugins"
 
@@ -121,10 +122,12 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
   if (control) {
-    ctx.provide(
-      "relaySettings",
-      new RelaySettings(ctx.settings, desktopRelayCipher(new MessagePortTransport(control))),
-    )
+    const cipher = desktopRelayCipher(new MessagePortTransport(control))
+    const relay = new RelaySettings(ctx.settings, cipher)
+    const mobile = new MobileConnections(ctx.settings, relay, cipher)
+    ctx.provide("relaySettings", relay)
+    ctx.provide("mobileConnections", mobile)
+    ctx.effect(() => () => mobile.dispose())
   }
   rpc = new RpcServer(ctx, page)
   rpc.start()

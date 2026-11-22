@@ -59,6 +59,24 @@ export class RelaySettings {
     return { address: saved?.address ?? null, tokenConfigured: saved !== undefined }
   }
 
+  async connectionConfig() {
+    const saved = this.stored()
+    if (!saved) return undefined
+    return { address: saved.address, token: await this.cipher.open(saved.sealedToken) }
+  }
+
+  onConnectionChange(listener: () => void) {
+    let previous = this.stored()
+    return this.settings.onChange((setting) => {
+      if (setting !== key) return
+      const current = this.stored()
+      const changed =
+        previous?.address !== current?.address || previous?.sealedToken !== current?.sealedToken
+      previous = current
+      if (changed) listener()
+    })
+  }
+
   async testAndSave(input: RelayTestAndSaveParams): Promise<RelayTestResult> {
     const address = relayAddress(input.address)
     if (!address) return { status: "invalid-address" }
