@@ -9,3 +9,4 @@ export * from "./updates"
 
 export * from "./runtime-modes"
 export * from "./runtime-mode-options"
+export * from "./relay"

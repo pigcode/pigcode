@@ -9,6 +9,8 @@ import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-t
 import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
 import { attachQuitState } from "./rpc/quit-state"
+import { desktopRelayCipher } from "./services/relay-credential"
+import { RelaySettings } from "./services/relay-settings"
 import { apply as pluginsPlugin } from "./services/plugins"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
@@ -118,6 +120,12 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
+  if (control) {
+    ctx.provide(
+      "relaySettings",
+      new RelaySettings(ctx.settings, desktopRelayCipher(new MessagePortTransport(control))),
+    )
+  }
   rpc = new RpcServer(ctx, page)
   rpc.start()
   if (waitingPage) {

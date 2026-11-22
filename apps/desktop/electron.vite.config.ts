@@ -65,10 +65,13 @@ function sharedModulesFromSource(): Plugin {
 }
 
 export default defineConfig({
-  // 标题栏默认色取自 ui-primitives 的 tokens.css 与纯函数模块；它的入口是 TS 源码，打进 main 而不外置。
+  // 标题栏 token 和 Host 控制端口的契约均来自工作区 TS 源码，随 main 一起构建。
   main: {
     define,
-    build: { outDir: "out/main", externalizeDeps: { exclude: ["@pigcode/ui-primitives"] } },
+    build: {
+      outDir: "out/main",
+      externalizeDeps: { exclude: ["@pigcode/ui-primitives", "@pigcode/contracts"] },
+    },
   },
   // sandbox 渲染器只能加载 CJS preload，因此显式输出 .cjs。
   preload: {

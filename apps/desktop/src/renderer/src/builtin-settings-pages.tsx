@@ -1,5 +1,5 @@
 /**
- * 三个内置设置页登记到设置页扩展点：通用、外观归设置，Agent 归 Agent 管理。
+ * 内置设置页登记到设置页扩展点：通用、外观归设置，Agent 归 Agent 管理。
  * 插件和定时任务不是设置页：它们是和聊天并列的顶层页面（workspace-pages）。
  * 顺序就是设置侧栏里的顺序。页面内容在第一次打开时才加载（settings-container），冷启动只加载这里的登记信息。
  */
@@ -26,12 +26,12 @@ import type { CoreDeps } from "./chat-container"
 export const AppearanceContext: Context<AppearanceController | null> =
   createContext<AppearanceController | null>(null)
 
-type PageName = "GeneralPage" | "AppearanceContainer" | "AgentsContainer"
+type PageName = "GeneralPage" | "AppearanceContainer" | "AgentsContainer" | "RelaySettingsPage"
 
 type SettingsModule = typeof import("./settings-container")
 type PageComponent = ComponentType<{ deps: CoreDeps }>
 
-/** 三页共用一份 settings-container 代码块：只加载一次，加载完后记下来。 */
+/** 内置页共用一份 settings-container 代码块：只加载一次，加载完后记下来。 */
 let settingsModule: SettingsModule | null = null
 let settingsModuleLoad: Promise<SettingsModule> | null = null
 function loadSettingsModule(): Promise<SettingsModule> {
@@ -71,7 +71,7 @@ function markIcon(name: string): ContributionIcon {
 
 const builtin = (id: string): ContributionOwner => ({ kind: "builtin", id })
 
-/** 登记三个内置设置页；返回注销函数。 */
+/** 登记内置设置页；返回注销函数。 */
 export function registerBuiltinSettingsPages(
   registry: ExtensionRegistry,
   deps: CoreDeps,
@@ -92,6 +92,14 @@ export function registerBuiltinSettingsPages(
       title: { key: "settings.appearance" },
       icon: markIcon("contrast"),
       render: page("AppearanceContainer", deps),
+    },
+    {
+      id: "mobile-relay",
+      owner: builtin("settings"),
+      order: 25,
+      title: { key: "settings.mobileRelay" },
+      icon: markIcon("wifi"),
+      render: page("RelaySettingsPage", deps),
     },
     {
       id: "agents",

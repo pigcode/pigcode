@@ -50,6 +50,7 @@ describe("client plugin settings pages", () => {
       "debug-settings",
       "general",
       "appearance",
+      "mobile-relay",
       "agents",
     ])
     const page = pages[0]
@@ -80,7 +81,7 @@ describe("client plugin settings pages", () => {
 
     controller.dispose()
     expect(extensions.get("settingsPage").map((item) => item.owner.kind)).toEqual(
-      Array(3).fill("builtin"),
+      Array(4).fill("builtin"),
     )
   })
 

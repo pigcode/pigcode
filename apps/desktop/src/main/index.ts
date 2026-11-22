@@ -19,6 +19,7 @@ import {
   readPathKind,
 } from "./folder-picker"
 import { createHostSupervisor } from "./host-supervisor"
+import { attachRelayCredentials } from "./relay-credential"
 import { hidesOnClose } from "./lifecycle"
 import {
   DEFAULT_PREFERENCES,
@@ -277,6 +278,7 @@ const hosts = createHostSupervisor({
   quitting: () => quitting,
   onStart(host) {
     browser.attachControlPort(host.controlPort)
+    attachRelayCredentials(host.controlPort, profileDir())
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.postMessage("pigcode:port", null, [host.connectPage()])
     }

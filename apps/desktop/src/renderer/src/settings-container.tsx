@@ -217,3 +217,5 @@ export function AgentsContainer({ deps }: { deps: CoreDeps }) {
     />
   )
 }
+
+export { RelaySettingsPage } from "./relay-settings-page"

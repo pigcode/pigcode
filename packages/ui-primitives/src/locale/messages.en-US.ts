@@ -138,6 +138,28 @@ export const enUS = {
   "settings.about": "About",
   "settings.about.description": "Pigcode desktop",
   "settings.about.version": "Version",
+  "settings.mobileRelay": "Phone Connections",
+  "settings.mobileRelay.relay": "Relay Configuration",
+  "settings.mobileRelay.address": "Relay address",
+  "settings.mobileRelay.token": "Access token",
+  "settings.mobileRelay.configured": "Configured",
+  "settings.mobileRelay.check": "Relay connectivity",
+  "settings.mobileRelay.checking": "Testing relay…",
+  "settings.mobileRelay.testAndSave": "Test and Save",
+  "settings.mobileRelay.status.saved": "Relay connection verified and settings saved.",
+  "settings.mobileRelay.status.invalid-address": "Enter a valid wss:// relay address.",
+  "settings.mobileRelay.status.token-required": "Enter the relay access token.",
+  "settings.mobileRelay.status.token-rejected":
+    "The relay rejected the access token. Check it and try again.",
+  "settings.mobileRelay.status.unreachable":
+    "Couldn't reach the relay. Check the address, network, and certificate.",
+  "settings.mobileRelay.status.incompatible":
+    "The relay probe protocol is incompatible. Check the relay version.",
+  "settings.mobileRelay.status.storage-unavailable":
+    "System credential storage is unavailable. Settings were not saved.",
+  "settings.mobileRelay.status.busy": "A relay test is already in progress.",
+  "settings.mobileRelay.status.host-unavailable":
+    "Couldn't read or update relay settings. Check the local Host connection.",
   "settings.general.pageTitle": "General",
   "settings.general.startup": "Startup",
   "settings.general.launchAtLogin": "Open at login",

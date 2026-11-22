@@ -1,0 +1,14 @@
+{
+  "valid": {
+    "request": { "type": "relay.probe", "version": 1, "token": "relay-test-token" },
+    "reply": { "type": "relay.probe.result", "version": 1, "status": "ok" }
+  },
+  "rejected": {
+    "request": { "type": "relay.probe", "version": 1, "token": "wrong-token" },
+    "reply": { "type": "relay.probe.result", "version": 1, "status": "token-rejected" }
+  },
+  "incompatible": {
+    "request": { "type": "relay.probe", "version": 2, "token": "relay-test-token" },
+    "reply": { "type": "relay.probe.result", "version": 1, "status": "incompatible" }
+  }
+}

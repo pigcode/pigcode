@@ -19,6 +19,7 @@ import {
   worktreeStartSchema,
 } from "./domain"
 import { DEFAULT_RUNTIME_MODE } from "./runtime-modes"
+import { relayTestAndSaveParamsSchema } from "./relay"
 
 export interface GitBranches {
   currentBranch: string | null
@@ -79,6 +80,8 @@ const threadSwitchAgentParams = z.object({
 
 /** 命令方法到参数 schema 的映射。 */
 export const commandSchemas = {
+  "relay.settings": z.object({}),
+  "relay.testAndSave": relayTestAndSaveParamsSchema,
   "project.add": z.object({
     rootPath: z.string().min(1),
     /** 展示名；缺省时取文件夹名。 */

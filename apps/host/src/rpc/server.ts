@@ -124,6 +124,16 @@ export class RpcServer {
     }
 
     switch (command) {
+      case "relay.settings":
+        return this.ctx.get("relaySettings")?.view() ?? { address: null, tokenConfigured: false }
+      case "relay.testAndSave":
+        return (
+          this.ctx
+            .get("relaySettings")
+            ?.testAndSave(parsed as CommandParams<"relay.testAndSave">) ?? {
+            status: "storage-unavailable",
+          }
+        )
       case "project.list":
         return this.ctx.projects.list()
       case "project.add": {
