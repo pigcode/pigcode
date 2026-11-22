@@ -5,13 +5,36 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 const mobileProtocolVersion = 1;
 
 class MobileConnection {
-  MobileConnection._(this._link, this.computerName);
+  MobileConnection._(
+    this._link,
+    this.computerName,
+    this.computer,
+    this._acceptsRelayReceipt,
+  );
 
   final SecureLink _link;
   final String computerName;
+  final ComputerProfile computer;
+  final bool _acceptsRelayReceipt;
 
   Future<void> get done => _link.done;
   Future<void> close() => _link.close();
+
+  /// Send only after the app has stored the approved profile. A later resume
+  /// announces the stored revision again if the connection was interrupted.
+  Future<void> announceRelaySaved() async {
+    if (!_acceptsRelayReceipt) return;
+    if (computer.relayRevision case final revision?) {
+      try {
+        await _link.send({
+          'type': 'device.relaySaved',
+          'relayRevision': revision,
+        });
+      } catch (_) {
+        // The stored profile can be acknowledged again on its next connection.
+      }
+    }
+  }
 
   static Future<MobileConnection> pair({
     required PairingInvite invite,
@@ -20,9 +43,9 @@ class MobileConnection {
     required String platform,
     required void Function(String) showVerificationCode,
     HttpClient? client,
-  }) => _connect(
-    invite.computer,
-    identity,
+  }) => _withDesktopConfirmation(
+    invite: invite,
+    identity: identity,
     client: client,
     handshake: {
       'type': 'device.pair',
@@ -30,6 +53,39 @@ class MobileConnection {
       'name': deviceName,
       'platform': platform,
     },
+    showVerificationCode: showVerificationCode,
+  );
+
+  static Future<MobileConnection> updateRelay({
+    required ComputerProfile computer,
+    required PairingInvite invite,
+    required NoiseIdentity identity,
+    required void Function(String) showVerificationCode,
+    HttpClient? client,
+  }) async {
+    if (computer.computerKey != invite.computer.computerKey) {
+      throw const ConnectionFailure('computer-key-changed');
+    }
+    return _withDesktopConfirmation(
+      invite: invite,
+      identity: identity,
+      client: client,
+      handshake: {'type': 'device.updateRelay', 'secret': invite.secret},
+      showVerificationCode: showVerificationCode,
+    );
+  }
+
+  static Future<MobileConnection> _withDesktopConfirmation({
+    required PairingInvite invite,
+    required NoiseIdentity identity,
+    required Map<String, Object> handshake,
+    required void Function(String) showVerificationCode,
+    HttpClient? client,
+  }) => _connect(
+    invite.computer,
+    identity,
+    client: client,
+    handshake: handshake,
     confirm: (link) async {
       await link.send({'type': 'device.confirm'});
       final prompt = await link.receive();
@@ -43,6 +99,7 @@ class MobileConnection {
       if (approval['type'] != 'device.approved') {
         throw const ConnectionFailure('authentication-failed');
       }
+      return approval['relayRevision'] as String?;
     },
   );
 
@@ -62,7 +119,7 @@ class MobileConnection {
     NoiseIdentity identity, {
     required Map<String, Object> handshake,
     required HttpClient? client,
-    Future<void> Function(SecureLink)? confirm,
+    Future<String?> Function(SecureLink)? confirm,
   }) async {
     final link = await SecureLink.connect(
       computer,
@@ -71,12 +128,14 @@ class MobileConnection {
       client: client,
     );
     try {
-      if (confirm != null) await confirm(link);
+      final revision = confirm == null
+          ? computer.relayRevision
+          : await confirm(link);
       await link.send({
         'type': 'mobile.hello',
         'minVersion': mobileProtocolVersion,
         'maxVersion': mobileProtocolVersion,
-        'features': ['connection.status'],
+        'features': ['connection.status', 'relay.saveReceipt'],
       });
       final welcome = await link.receive();
       if (welcome['type'] == 'mobile.incompatible') {
@@ -105,7 +164,14 @@ class MobileConnection {
         throw const ConnectionFailure('authentication-failed');
       }
       final status = response['result'] as Map<String, dynamic>;
-      return MobileConnection._(link, status['computerName'] as String);
+      final connection = MobileConnection._(
+        link,
+        status['computerName'] as String,
+        computer.withRelayRevision(revision),
+        (welcome['features'] as List).contains('relay.saveReceipt'),
+      );
+      if (confirm == null) await connection.announceRelaySaved();
+      return connection;
     } catch (_) {
       await link.close();
       rethrow;

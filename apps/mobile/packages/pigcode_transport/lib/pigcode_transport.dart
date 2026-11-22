@@ -35,7 +35,7 @@ List<int> _decodeKey(String encoded) {
   return base64Url.decode(base64Url.normalize(encoded));
 }
 
-Future<String> _fingerprint(List<int> key) async {
+Future<String> publicKeyFingerprint(List<int> key) async {
   final digest = await Sha256().hash(key);
   return digest.bytes
       .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
@@ -48,6 +48,7 @@ class ComputerProfile {
     required this.token,
     required this.computerKey,
     required this.name,
+    this.relayRevision,
   }) : address = _endpoint(address) {
     _decodeKey(computerKey);
     if (token.trim().isEmpty ||
@@ -62,6 +63,7 @@ class ComputerProfile {
   final String token;
   final String computerKey;
   final String name;
+  final String? relayRevision;
 
   factory ComputerProfile.fromJson(Map<String, dynamic> json) =>
       ComputerProfile(
@@ -69,13 +71,23 @@ class ComputerProfile {
         token: json['token'] as String,
         computerKey: json['computerKey'] as String,
         name: json['computerName'] as String,
+        relayRevision: json['relayRevision'] as String?,
       );
+
+  ComputerProfile withRelayRevision(String? revision) => ComputerProfile(
+    address: address.toString(),
+    token: token,
+    computerKey: computerKey,
+    name: name,
+    relayRevision: revision,
+  );
 
   Map<String, Object> toJson() => {
     'address': address.toString(),
     'token': token,
     'computerKey': computerKey,
     'computerName': name,
+    'relayRevision': ?relayRevision,
   };
 }
 
@@ -253,7 +265,7 @@ class SecureLink {
     final inbox = _RelayInbox(socket);
     try {
       final hostKey = _decodeKey(computer.computerKey);
-      final computerId = await _fingerprint(hostKey);
+      final computerId = await publicKeyFingerprint(hostKey);
       socket.add(
         jsonEncode({
           'type': 'relay.phone',

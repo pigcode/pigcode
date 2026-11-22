@@ -1,5 +1,9 @@
 /** 定义 Host 接受的命令参数；M0-A 只包含真实用到的命令。 */
-import { mobileConfirmParamsSchema, mobilePairingParamsSchema } from "./mobile"
+import {
+  mobileConfirmParamsSchema,
+  mobilePairingParamsSchema,
+  mobileRevokeParamsSchema,
+} from "./mobile"
 import { z } from "zod"
 import {
   acpRegistryAgentIdSchema,
@@ -87,6 +91,7 @@ export const commandSchemas = {
   "mobile.pairing.start": z.object({}),
   "mobile.pairing.cancel": mobilePairingParamsSchema,
   "mobile.pairing.confirm": mobileConfirmParamsSchema,
+  "mobile.devices.revoke": mobileRevokeParamsSchema,
   "project.add": z.object({
     rootPath: z.string().min(1),
     /** 展示名；缺省时取文件夹名。 */

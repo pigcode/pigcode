@@ -5,6 +5,7 @@ import { browserEnUS } from "./browser.messages"
 import { conversationEnUS } from "./conversation.messages"
 import { filesEnUS } from "./files.messages"
 import type { zhCN } from "./messages.zh-CN"
+import { mobileEnUS } from "./mobile.messages"
 import { newThreadEnUS } from "./new-thread.messages"
 import { pluginsEnUS } from "./plugins.messages"
 import { schedulesEnUS } from "./schedules.messages"
@@ -138,54 +139,7 @@ export const enUS = {
   "settings.about": "About",
   "settings.about.description": "Pigcode desktop",
   "settings.about.version": "Version",
-  "settings.pairing.title": "Pairing",
-  "settings.pairing.scan": "Scan to pair a phone",
-  "settings.pairing.sleep": "A MacBook in sleep mode cannot connect to your phone.",
-  "settings.pairing.start": "Pair Phone",
-  "settings.pairing.regenerate": "Generate a New QR Code",
-  "settings.pairing.remaining": "QR code expires in",
-  "settings.pairing.cancel": "Cancel Pairing",
-  "settings.pairing.qr": "Phone pairing QR code",
-  "settings.pairing.allow": "Codes Match, Allow",
-  "settings.pairing.devices": "Paired Devices",
-  "settings.pairing.online": "Connected",
-  "settings.pairing.offline": "Disconnected",
-  "settings.pairing.empty": "No paired devices",
-  "settings.pairing.status.qr-unavailable":
-    "Could not generate the QR code. Try a shorter relay address or token.",
-  "settings.pairing.status.connecting": "Connecting to the relay…",
-  "settings.pairing.status.waiting": "Scan the QR code in Pigcode on your phone.",
-  "settings.pairing.status.verify": "Check that the same digits appear on both devices.",
-  "settings.pairing.status.paired": "Phone paired.",
-  "settings.pairing.status.expired": "The QR code expired. Generate a new one.",
-  "settings.pairing.status.cancelled": "Pairing cancelled.",
-  "settings.pairing.status.relay-unavailable":
-    "Could not reach the relay for pairing. Check its settings and version.",
-  "settings.pairing.status.needs-relay": "Test and save a relay configuration first.",
-  "settings.pairing.status.storage-unavailable":
-    "System credential storage is unavailable. Pairing could not finish.",
-  "settings.mobileRelay": "Phone Connections",
-  "settings.mobileRelay.relay": "Relay Configuration",
-  "settings.mobileRelay.address": "Relay address",
-  "settings.mobileRelay.token": "Access token",
-  "settings.mobileRelay.configured": "Configured",
-  "settings.mobileRelay.check": "Relay connectivity",
-  "settings.mobileRelay.checking": "Testing relay…",
-  "settings.mobileRelay.testAndSave": "Test and Save",
-  "settings.mobileRelay.status.saved": "Relay connection verified and settings saved.",
-  "settings.mobileRelay.status.invalid-address": "Enter a valid wss:// relay address.",
-  "settings.mobileRelay.status.token-required": "Enter the relay access token.",
-  "settings.mobileRelay.status.token-rejected":
-    "The relay rejected the access token. Check it and try again.",
-  "settings.mobileRelay.status.unreachable":
-    "Couldn't reach the relay. Check the address, network, and certificate.",
-  "settings.mobileRelay.status.incompatible":
-    "The relay probe protocol is incompatible. Check the relay version.",
-  "settings.mobileRelay.status.storage-unavailable":
-    "System credential storage is unavailable. Settings were not saved.",
-  "settings.mobileRelay.status.busy": "A relay test is already in progress.",
-  "settings.mobileRelay.status.host-unavailable":
-    "Couldn't read or update relay settings. Check the local Host connection.",
+  ...mobileEnUS,
   "settings.general.pageTitle": "General",
   "settings.general.startup": "Startup",
   "settings.general.launchAtLogin": "Open at login",

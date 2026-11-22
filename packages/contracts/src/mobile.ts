@@ -2,9 +2,10 @@ import { z } from "zod"
 import { RELAY_PROTOCOL_VERSION } from "./relay"
 
 export const mobileProtocolVersion = 1
-export const computerIdSchema = z.string().regex(/^[0-9a-f]{64}$/)
+const fingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/)
+export const computerIdSchema = fingerprintSchema
 export const devicePlatformSchema = z.enum(["ios", "android"])
-export const mobileFeatures = ["connection.status"] as const
+export const mobileFeatures = ["connection.status", "relay.saveReceipt"] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
 export const pairingCodeSchema = z.object({
@@ -25,6 +26,10 @@ export const deviceHandshakeSchema = z.discriminatedUnion("type", [
     name: z.string().trim().min(1).max(80),
     platform: devicePlatformSchema,
   }),
+  z.object({
+    type: z.literal("device.updateRelay"),
+    secret: publicKeySchema,
+  }),
   z.object({ type: z.literal("device.connect") }),
 ])
 
@@ -39,8 +44,17 @@ export const pairedDeviceSchema = z.object({
   publicKey: publicKeySchema,
   name: z.string().min(1).max(80),
   platform: devicePlatformSchema,
-  lastConnectedAt: z.number().int(),
+  lastConnectedAt: z.number().int().nullable(),
+  relayRevision: z.uuid().optional(),
+  confirmedRelayRevision: z.uuid().optional(),
 })
+
+export const mobileRelaySavedSchema = z.object({
+  type: z.literal("device.relaySaved"),
+  relayRevision: z.uuid(),
+})
+
+export const mobileRevokeParamsSchema = z.object({ deviceId: fingerprintSchema })
 
 export const mobilePairingParamsSchema = z.object({ id: z.uuid() })
 export const mobileConfirmParamsSchema = mobilePairingParamsSchema.extend({
@@ -54,6 +68,7 @@ export const mobilePairingViewSchema = z.object({
     "waiting",
     "verify",
     "paired",
+    "update-approved",
     "expired",
     "cancelled",
     "relay-unavailable",
@@ -67,18 +82,32 @@ export const mobilePairingViewSchema = z.object({
       expiresAt: z.number().int(),
       qr: z.string().nullable(),
       candidate: z
-        .object({ confirmation: z.uuid(), code: z.string(), name: z.string() })
+        .object({
+          confirmation: z.uuid(),
+          code: z.string(),
+          name: z.string(),
+          mode: z.enum(["pair", "update"]),
+        })
         .nullable(),
     })
     .nullable(),
   devices: z.array(
-    pairedDeviceSchema.omit({ publicKey: true }).extend({
-      id: computerIdSchema,
-      connected: z.boolean(),
-    }),
+    pairedDeviceSchema
+      .omit({ publicKey: true, relayRevision: true, confirmedRelayRevision: true })
+      .extend({
+        id: fingerprintSchema,
+        connected: z.boolean(),
+        needsRelayUpdate: z.boolean(),
+      }),
   ),
 })
 
+export const mobileRevokeResultSchema = z.object({
+  status: z.enum(["revoked", "missing-device", "storage-unavailable"]),
+  pairing: mobilePairingViewSchema,
+})
+
+export type MobileRevokeResult = z.infer<typeof mobileRevokeResultSchema>
 export type PairedDevice = z.infer<typeof pairedDeviceSchema>
 export type MobilePairingView = z.infer<typeof mobilePairingViewSchema>
 

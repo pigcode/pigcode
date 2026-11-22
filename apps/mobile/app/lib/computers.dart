@@ -18,6 +18,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
     ),
   );
   late NoiseIdentity identity;
+  late String deviceNumber;
 
   @override
   Future<List<ComputerProfile>> build() async {
@@ -38,6 +39,9 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
         value: base64Url.encode(identity.seed),
       );
     }
+    deviceNumber = (await publicKeyFingerprint(
+      identity.publicKey,
+    )).substring(0, 8).toUpperCase();
     final raw = await _storage.read(key: _computersKey);
     if (raw == null) return const [];
     final entries = jsonDecode(raw) as List<dynamic>;
@@ -48,12 +52,27 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
     );
   }
 
-  Future<void> remember(ComputerProfile computer) async {
-    final previous = state.requireValue;
-    final next = List<ComputerProfile>.unmodifiable([
-      ...previous.where((entry) => entry.computerKey != computer.computerKey),
-      computer,
-    ]);
+  Future<void> remember(ComputerProfile computer) {
+    final next = [...state.requireValue];
+    final index = next.indexWhere(
+      (entry) => entry.computerKey == computer.computerKey,
+    );
+    if (index < 0) {
+      next.add(computer);
+    } else {
+      next[index] = computer;
+    }
+    return _save(next);
+  }
+
+  Future<void> forget(ComputerProfile computer) => _save(
+    state.requireValue.where(
+      (entry) => entry.computerKey != computer.computerKey,
+    ),
+  );
+
+  Future<void> _save(Iterable<ComputerProfile> entries) async {
+    final next = List<ComputerProfile>.unmodifiable(entries);
     await _storage.write(
       key: _computersKey,
       value: jsonEncode(next.map((entry) => entry.toJson()).toList()),

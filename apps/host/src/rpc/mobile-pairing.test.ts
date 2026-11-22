@@ -3,18 +3,8 @@ import { randomUUID } from "node:crypto"
 import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { mobilePairingViewSchema, pairingCodeSchema, rpcSuccessSchema } from "@pigcode/contracts"
-import { Context } from "cordis"
 import { expect, it } from "vitest"
-import { apply as agents } from "../agents/registry"
-import { MobileConnections } from "../mobile/connections"
-import { apply as projects } from "../services/projects"
-import { RelaySettings } from "../services/relay-settings"
-import { apply as sessions } from "../services/sessions"
-import { apply as settings } from "../services/settings"
-import { apply as storage } from "../services/storage"
-import { apply as threads } from "../services/threads"
-import { MemoryTransport } from "./memory-transport"
-import { RpcServer } from "./server"
+import { startMobileHost } from "./mobile-test-fixture"
 
 const address = process.env.PIGCODE_RELAY_TEST_URL
 const token = process.env.PIGCODE_RELAY_TEST_TOKEN
@@ -22,32 +12,10 @@ const token = process.env.PIGCODE_RELAY_TEST_TOKEN
 it.skipIf(!address || !token)(
   "pairs a Dart device through the Go relay only after the local desktop authorizes it",
   async () => {
-    const ctx = new Context()
-    await ctx.plugin(storage, { path: ":memory:" })
-    await ctx.plugin(settings, {})
-    await ctx.plugin(projects)
-    await ctx.plugin(threads)
-    await ctx.plugin(sessions)
-    await ctx.plugin(agents)
-    const cipher = {
-      seal: async (value: string) => Buffer.from(value).toString("base64"),
-      open: async (value: string) => Buffer.from(value, "base64").toString(),
-    }
-    const relay = new RelaySettings(ctx.settings, cipher)
     let now = Date.now()
-    const mobile = new MobileConnections(ctx.settings, relay, cipher, () => now)
-    ctx.provide("relaySettings", relay)
-    ctx.provide("mobileConnections", mobile)
-
-    const transport = new MemoryTransport({ skip: ["thread.changed"] })
-    const server = new RpcServer(ctx, transport.host)
-    server.start()
+    const host = await startMobileHost({ now: () => now })
     async function call(method: string, params: Record<string, unknown> = {}) {
-      const id = randomUUID()
-      transport.client.send({ jsonrpc: "2.0", id, method, params })
-      const response = rpcSuccessSchema.parse(await transport.client.next())
-      expect(response.id).toBe(id)
-      return response.result
+      return rpcSuccessSchema.parse(await host.call(method, params)).result
     }
 
     let child: ReturnType<typeof spawn> | undefined
@@ -124,9 +92,7 @@ it.skipIf(!address || !token)(
       expect(stages).toEqual(["blocked", "code", "verified"])
     } finally {
       child?.kill()
-      server.stop()
-      mobile.dispose()
-      await ctx.fiber.dispose()
+      await host.stop()
     }
   },
   30_000 + (Number(process.env.PIGCODE_RELAY_TEST_IDLE_SECONDS) || 0) * 1000,

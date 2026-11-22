@@ -146,6 +146,10 @@ export class RpcServer {
         const { id, confirmation } = parsed as CommandParams<"mobile.pairing.confirm">
         return this.ctx.mobileConnections.confirm(id, confirmation)
       }
+      case "mobile.devices.revoke":
+        return this.ctx.mobileConnections.revoke(
+          (parsed as CommandParams<"mobile.devices.revoke">).deviceId,
+        )
       case "project.list":
         return this.ctx.projects.list()
       case "project.add": {

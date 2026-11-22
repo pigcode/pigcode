@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react"
 import QRCode from "qrcode"
-import { mobilePairingViewSchema, type MobilePairingView } from "@pigcode/contracts"
-import { Button, SettingRow, SettingSection, useLocale } from "@pigcode/ui-primitives"
+import {
+  mobilePairingViewSchema,
+  mobileRevokeResultSchema,
+  type MobilePairingView,
+  type MobileRevokeResult,
+} from "@pigcode/contracts"
+import { Button, Dialog, SettingRow, SettingSection, useLocale } from "@pigcode/ui-primitives"
 import type { CoreDeps } from "./chat-container"
+
+function deviceNumber(id: string): string {
+  return id.slice(0, 8).toUpperCase()
+}
 
 export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayReady: boolean }) {
   const { t } = useLocale()
@@ -10,6 +19,8 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
   const [view, setView] = useState<MobilePairingView>()
   const [working, setWorking] = useState(false)
   const [error, setError] = useState(false)
+  const [revoking, setRevoking] = useState<MobilePairingView["devices"][number] | null>(null)
+  const [revokeStatus, setRevokeStatus] = useState<MobileRevokeResult["status"]>()
   const [qr, setQr] = useState<{ value: string; data: string | null }>()
   const attemptId = useRef<string | null>(null)
   const mounted = useRef(false)
@@ -87,18 +98,41 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
     }
   }
 
+  function dismissRevoke() {
+    setRevoking(null)
+    setError(false)
+    setRevokeStatus(undefined)
+  }
+
+  function revokeDevice() {
+    if (!revoking) return
+    const { id } = revoking
+    void change(async () => {
+      const result = mobileRevokeResultSchema.parse(
+        await connection.call("mobile.devices.revoke", { deviceId: id }),
+      )
+      if (mounted.current) {
+        setRevokeStatus(result.status)
+        if (result.status !== "storage-unavailable") setRevoking(null)
+      }
+      return result.pairing
+    })
+  }
+
+  const needsRelayUpdate = view?.devices.some((device) => device.needsRelayUpdate)
   const attempt = view?.attempt
   const candidate = attempt?.candidate
   const seconds = attempt ? Math.max(0, Math.ceil((attempt.expiresAt - Date.now()) / 1000)) : 0
   const remaining = String(Math.floor(seconds / 60)) + ":" + String(seconds % 60).padStart(2, "0")
   const qrMissing = qrValue && qr?.value === qrValue && !qr.data
-  const status = error
-    ? t("settings.mobileRelay.status.host-unavailable")
-    : qrMissing
-      ? t("settings.pairing.status.qr-unavailable")
-      : view?.status && view.status !== "idle"
-        ? t(`settings.pairing.status.${view.status}`)
-        : undefined
+  const status =
+    error && !revoking
+      ? t("settings.mobileRelay.status.host-unavailable")
+      : qrMissing
+        ? t("settings.pairing.status.qr-unavailable")
+        : view?.status && view.status !== "idle"
+          ? t(`settings.pairing.status.${view.status}`)
+          : undefined
 
   return (
     <>
@@ -112,10 +146,13 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
             {t(
               attempt || view?.status === "expired"
                 ? "settings.pairing.regenerate"
-                : "settings.pairing.start",
+                : needsRelayUpdate
+                  ? "settings.pairing.updateQr"
+                  : "settings.pairing.start",
             )}
           </Button>
         </SettingRow>
+        {needsRelayUpdate && <SettingRow title={t("settings.pairing.relayChanged")} />}
         {attempt && (
           <SettingRow
             title={t("settings.pairing.remaining")}
@@ -156,7 +193,11 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
                 )
               }
             >
-              {t("settings.pairing.allow")}
+              {t(
+                candidate.mode === "update"
+                  ? "settings.pairing.updateAllow"
+                  : "settings.pairing.allow",
+              )}
             </Button>
           </SettingRow>
         )}
@@ -170,16 +211,86 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
               title={device.name}
               description={[
                 device.platform === "ios" ? "iOS" : "Android",
-                new Date(device.lastConnectedAt).toLocaleString(),
-              ].join(" · ")}
+                t("settings.pairing.deviceNumber").replace("{number}", deviceNumber(device.id)),
+                device.lastConnectedAt === null
+                  ? t("settings.pairing.neverConnected")
+                  : t("settings.pairing.lastConnected").replace(
+                      "{time}",
+                      new Date(device.lastConnectedAt).toLocaleString(),
+                    ),
+                device.needsRelayUpdate ? t("settings.pairing.updatePending") : undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             >
-              {t(device.connected ? "settings.pairing.online" : "settings.pairing.offline")}
+              <span>
+                {t(device.connected ? "settings.pairing.online" : "settings.pairing.offline")}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                aria-label={t("settings.pairing.revokeDevice")
+                  .replace("{number}", deviceNumber(device.id))
+                  .replace("{name}", () => device.name)}
+                disabled={working}
+                onClick={() => {
+                  setError(false)
+                  setRevokeStatus(undefined)
+                  setRevoking(device)
+                }}
+              >
+                {t("settings.pairing.revoke")}
+              </Button>
             </SettingRow>
           ))
         ) : (
           <SettingRow title={t("settings.pairing.empty")} />
         )}
+        {revokeStatus && revokeStatus !== "storage-unavailable" && (
+          <SettingRow
+            title={<span role="status">{t(`settings.pairing.revokeStatus.${revokeStatus}`)}</span>}
+          />
+        )}
       </SettingSection>
+      <Dialog.Root
+        open={revoking !== null}
+        onOpenChange={(open) => {
+          if (!open && !working) dismissRevoke()
+        }}
+      >
+        <Dialog.Content
+          title={t("settings.pairing.revoke")}
+          description={t("settings.pairing.revokeDescription")
+            .replace("{number}", revoking ? deviceNumber(revoking.id) : "")
+            .replace("{name}", () => revoking?.name ?? "")}
+          closeLabel={t("common.close")}
+        >
+          {error && <p role="alert">{t("settings.mobileRelay.status.host-unavailable")}</p>}
+          {revokeStatus === "storage-unavailable" && (
+            <p role="alert">{t("settings.pairing.revokeStatus.storage-unavailable")}</p>
+          )}
+          <Dialog.Footer>
+            <Button
+              size="lg"
+              type="button"
+              variant="ghost"
+              disabled={working}
+              onClick={dismissRevoke}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              size="lg"
+              type="button"
+              variant="solidDanger"
+              disabled={working}
+              onClick={revokeDevice}
+            >
+              {t("settings.pairing.revokeConfirm")}
+            </Button>
+          </Dialog.Footer>
+        </Dialog.Content>
+      </Dialog.Root>
     </>
   )
 }

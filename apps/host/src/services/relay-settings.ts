@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import {
   RELAY_CONNECT_PATH,
   type RelaySettingsView,
@@ -9,7 +10,11 @@ import { probeRelay, type RelayProbe } from "./relay-probe"
 import type { SettingsService } from "./settings"
 
 const key = "relay.connection"
-const savedSchema = z.object({ address: z.string(), sealedToken: z.string().min(1) })
+const savedSchema = z.object({
+  address: z.string(),
+  sealedToken: z.string().min(1),
+  revision: z.uuid().optional(),
+})
 
 export interface RelayCredentialCipher {
   seal(value: string): Promise<string>
@@ -59,6 +64,10 @@ export class RelaySettings {
     return { address: saved?.address ?? null, tokenConfigured: saved !== undefined }
   }
 
+  get revision(): string | undefined {
+    return this.stored()?.revision
+  }
+
   async connectionConfig() {
     const saved = this.stored()
     if (!saved) return undefined
@@ -92,9 +101,16 @@ export class RelaySettings {
       const result = await this.probe(address, token)
       if (result !== "ok") return { status: result }
 
-      const sealedToken =
-        reusable && !replacement ? reusable.sealedToken : await this.cipher.seal(token)
-      this.settings.set(key, { address, sealedToken })
+      if (
+        reusable &&
+        (!replacement ||
+          (await this.cipher.open(reusable.sealedToken).catch(() => undefined)) === token)
+      ) {
+        return { status: "saved", settings: this.view() }
+      }
+
+      const sealedToken = await this.cipher.seal(token)
+      this.settings.set(key, { address, sealedToken, revision: randomUUID() })
       return { status: "saved", settings: this.view() }
     } catch {
       return { status: "storage-unavailable" }

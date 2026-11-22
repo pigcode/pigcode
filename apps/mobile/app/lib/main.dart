@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoDialogAction;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -79,14 +80,23 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
   String? _verification;
   String? _feedback;
   bool _working = false;
+  bool _updatingRelay = false;
 
   Future<void> _choose(
     ComputerProfile computer, {
     PairingInvite? invite,
   }) async {
     if (_working) return;
+    final existing = invite == null
+        ? null
+        : ref
+              .read(computersProvider)
+              .requireValue
+              .where((entry) => entry.computerKey == computer.computerKey)
+              .firstOrNull;
     setState(() {
       _working = true;
+      _updatingRelay = existing != null;
       _verification = null;
       _feedback = null;
       _selected = null;
@@ -101,21 +111,36 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       if (invite == null) {
         opened = await MobileConnection.resume(computer, computers.identity);
       } else {
-        opened = await MobileConnection.pair(
-          invite: invite,
-          identity: computers.identity,
-          deviceName: Platform.isIOS ? 'iPhone' : 'Android 手机',
-          platform: Platform.isIOS ? 'ios' : 'android',
-          showVerificationCode: (code) {
-            if (mounted) setState(() => _verification = code);
-          },
-        );
-        if (mounted) await computers.remember(computer);
+        void showCode(String code) {
+          if (mounted) setState(() => _verification = code);
+        }
+
+        opened = existing == null
+            ? await MobileConnection.pair(
+                invite: invite,
+                identity: computers.identity,
+                deviceName: Platform.isIOS ? 'iPhone' : 'Android 手机',
+                platform: Platform.isIOS ? 'ios' : 'android',
+                showVerificationCode: showCode,
+              )
+            : await MobileConnection.updateRelay(
+                computer: existing,
+                invite: invite,
+                identity: computers.identity,
+                showVerificationCode: showCode,
+              );
+        if (mounted) {
+          await computers.remember(opened.computer);
+          await opened.announceRelaySaved();
+        }
       }
       if (!mounted) return;
       final connected = opened;
       _connection = connected;
-      setState(() => _selected = computer.computerKey);
+      setState(() {
+        _selected = computer.computerKey;
+        if (existing != null) _feedback = '已更新这台电脑的中继配置。';
+      });
       unawaited(
         connected.done.then(
           (_) => _connectionEnded(connected),
@@ -123,7 +148,18 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
         ),
       );
     } on ConnectionFailure catch (failure) {
-      if (mounted) setState(() => _feedback = _message(failure.code));
+      if (mounted) {
+        setState(() {
+          _feedback =
+              existing != null &&
+                  const {
+                    'authentication-failed',
+                    'closed',
+                  }.contains(failure.code)
+              ? '未能确认原配对。若已在电脑撤销，请移除这台电脑再扫码配对。'
+              : _message(failure.code);
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _feedback = '无法完成连接，请重试。');
     } finally {
@@ -158,6 +194,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     'update-desktop' => '请更新这台电脑上的 Pigcode 后重新连接。',
     'incompatible' => '连接协议不兼容，请检查两端和中继的版本。',
     'busy' => '电脑的手机连接已满，请稍后重试。',
+    'computer-key-changed' => '这个二维码对应另一台电脑。',
     'authentication-failed' => '电脑或设备身份验证失败，请检查配对。',
     _ => '连接已关闭。请确认电脑上的配对未取消。',
   };
@@ -174,6 +211,58 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       setState(() => _feedback = _message(failure.code));
     } catch (_) {
       setState(() => _feedback = '这个二维码无法用于 Pigcode 配对。');
+    }
+  }
+
+  Future<void> _forget(ComputerProfile computer) async {
+    final accepted = await showAdaptiveDialog<bool>(
+      context: context,
+      builder: (dialog) {
+        final navigator = Navigator.of(dialog);
+        final ios = Theme.of(dialog).platform == TargetPlatform.iOS;
+        return AlertDialog.adaptive(
+          title: Text('移除「${computer.name}」'),
+          content: const Text('移除手机上保存的连接配置。再次连接时需要扫码配对。'),
+          actions: ios
+              ? [
+                  CupertinoDialogAction(
+                    onPressed: () => navigator.pop(false),
+                    child: const Text('取消'),
+                  ),
+                  CupertinoDialogAction(
+                    isDestructiveAction: true,
+                    onPressed: () => navigator.pop(true),
+                    child: const Text('移除'),
+                  ),
+                ]
+              : [
+                  TextButton(
+                    onPressed: () => navigator.pop(false),
+                    child: const Text('取消'),
+                  ),
+                  TextButton(
+                    onPressed: () => navigator.pop(true),
+                    child: const Text('移除'),
+                  ),
+                ],
+        );
+      },
+    );
+    if (!mounted || accepted != true || _working) return;
+    setState(() => _working = true);
+    try {
+      await ref.read(computersProvider.notifier).forget(computer);
+      if (_selected == computer.computerKey) {
+        final connection = _connection;
+        _connection = null;
+        _selected = null;
+        await connection?.close();
+      }
+      if (mounted) setState(() => _feedback = null);
+    } catch (_) {
+      if (mounted) setState(() => _feedback = '无法移除手机上保存的电脑。');
+    } finally {
+      if (mounted) setState(() => _working = false);
     }
   }
 
@@ -226,6 +315,13 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                   selected: _selected == entry.computerKey,
                   enabled: !_working,
                   onTap: () => unawaited(_choose(entry)),
+                  trailing: IconButton(
+                    tooltip: '移除 ${entry.name}',
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: _working
+                        ? null
+                        : () => unawaited(_forget(entry)),
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -240,7 +336,11 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('核对电脑上显示的数字，在电脑点允许。'),
+                          Text(
+                            _updatingRelay
+                                ? '核对两端数字，在电脑确认更新中继。'
+                                : '核对两端数字，在电脑点允许。',
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             code,
@@ -263,8 +363,15 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                 child: FilledButton.icon(
                   onPressed: _working ? null : _scan,
                   icon: const Icon(Icons.qr_code_scanner),
-                  label: const Text('扫码配对电脑'),
+                  label: Text(entries.isEmpty ? '扫码配对电脑' : '扫码配对或更新'),
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Text(
+                  '本机设备编号 ${ref.read(computersProvider.notifier).deviceNumber}',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
               if (_version.isNotEmpty)
