@@ -103,6 +103,18 @@ it("opens recent runs with an ordered live snapshot and keeps earlier tool detai
       before = page.nextBefore
     }
     expect(seen.size).toBe(71)
+
+    reader.close()
+    const resumed = new MobileTimelineSession(ctx, () => undefined, false, true)
+    try {
+      const fallback = resumed.subscribe({ threadId: thread.id, after: newer.seq + 1 })
+      expect(fallback).not.toHaveProperty("resumed")
+      expect(fallback.page).toMatchObject({ through: newer.seq })
+      const caughtUp = resumed.subscribe({ threadId: thread.id, after: longPage.through })
+      expect(caughtUp).toMatchObject({ resumed: true, page: { events: [{ seq: newer.seq }] } })
+    } finally {
+      resumed.close()
+    }
   } finally {
     reader.close()
     await ctx.fiber.dispose()

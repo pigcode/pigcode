@@ -10,6 +10,7 @@ import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
 import { ThreadFeed } from "./rpc/thread-feed"
 import { attachQuitState } from "./rpc/quit-state"
+import { attachHostActivity } from "./rpc/host-activity"
 import { desktopRelayCipher } from "./services/relay-credential"
 import { MobileConnections } from "./mobile/connections"
 import { RelaySettings } from "./services/relay-settings"
@@ -17,7 +18,7 @@ import { apply as pluginsPlugin } from "./services/plugins"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
 interface ParentPortMessageEvent {
-  data?: { type?: string }
+  data?: { type?: string; reason?: string; suspended?: boolean }
   ports: HostMessagePort[]
 }
 
@@ -35,6 +36,8 @@ if (!parentPort) {
 
 /** 已经创建的应用；退出时要运行它所有服务的清理。 */
 let hostApp: { fiber: { dispose(): Promise<unknown> } } | undefined
+let mobileLifecycle: MobileConnections | undefined
+let suspended = false
 
 /** 页面连接；页面每次加载（包括刷新）main 都会新开一条，换上以后 RPC 服务不变。 */
 const page = new PageTransport()
@@ -56,7 +59,13 @@ function servePage(port: HostMessagePort): void {
 
 parentPort.on("message", (event) => {
   if (event.data?.type === "shutdown") {
+    mobileLifecycle?.announceExit(event.data.reason === "restarting" ? "restarting" : "exited")
     void shutdown()
+    return
+  }
+  if (event.data?.type === "power" && typeof event.data.suspended === "boolean") {
+    suspended = event.data.suspended
+    mobileLifecycle?.setSuspended(suspended)
     return
   }
   if (event.data?.type === "page") {
@@ -127,6 +136,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     const cipher = desktopRelayCipher(new MessagePortTransport(control))
     const relay = new RelaySettings(ctx.settings, cipher)
     const mobile = new MobileConnections(ctx, relay, cipher, feed)
+    mobileLifecycle = mobile
+    mobile.setSuspended(suspended)
     ctx.provide("relaySettings", relay)
     ctx.provide("mobileConnections", mobile)
     ctx.effect(() => () => mobile.dispose())
@@ -137,10 +148,10 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     servePage(waitingPage)
     waitingPage = undefined
   }
-  // 控制端口承载两件事：内置浏览器的动作（agent 的 browser_* 工具经它交给 main 执行），
-  // 以及退出前查询还有多少在跑的工作。
+  // 控制端口承载内置浏览器动作、退出检查和桌面的电源管理。
   if (control) {
     ctx.get("browser")?.attach(control)
     attachQuitState(control, ctx)
+    attachHostActivity(control, ctx)
   }
 }

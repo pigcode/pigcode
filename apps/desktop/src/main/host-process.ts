@@ -14,7 +14,7 @@ export interface HostProcess {
    */
   connectPage(): MessagePortMain
   /** 通知 Host 清理后退出；Host 退出或超时被强制结束后完成。 */
-  stop(): Promise<void>
+  stop(reason?: "exited" | "restarting"): Promise<void>
 }
 
 /**
@@ -84,7 +84,7 @@ export function startHostProcess(entry: string, profileDir: string): HostProcess
       if (!exited) child.postMessage({ type: "page" }, [page.port1])
       return page.port2
     },
-    stop() {
+    stop(reason = "exited") {
       return new Promise((resolve) => {
         if (exited) {
           resolve()
@@ -99,7 +99,7 @@ export function startHostProcess(entry: string, profileDir: string): HostProcess
           clearTimeout(timer)
           resolve()
         })
-        child.postMessage({ type: "shutdown" })
+        child.postMessage({ type: "shutdown", reason })
       })
     },
   }

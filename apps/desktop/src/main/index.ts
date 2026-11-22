@@ -28,7 +28,7 @@ import {
   writePreferences,
   type Preferences,
 } from "./preferences"
-import { setKeepAwake } from "./keep-awake"
+import { monitorPower, setKeepAwake, watchHostActivity } from "./keep-awake"
 import { registerAppearanceIpc } from "./appearance-ipc"
 import { applyLoginShellEnv } from "./shell-env"
 import { createTray, showHiddenHint } from "./tray"
@@ -77,6 +77,7 @@ let unsavedLabels: UnsavedGuardLabels = DEFAULT_UNSAVED_LABELS
 /** 退出流程里停 Host：只停一次，停完才放行 will-quit。 */
 let hostStop: Promise<void> | undefined
 let hostStopped = false
+let restartingForUpdate = false
 /** 托盘只在 macOS 和 Windows 上有；创建一次，之后复用。 */
 let tray: Tray | undefined
 /** 应用偏好；启动时读一次，页面改了立刻写回并生效。 */
@@ -277,6 +278,7 @@ const hosts = createHostSupervisor({
   profileDir,
   quitting: () => quitting,
   onStart(host) {
+    watchHostActivity(host)
     browser.attachControlPort(host.controlPort)
     attachRelayCredentials(host.controlPort, profileDir())
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
@@ -410,6 +412,7 @@ function start(): void {
     registerPluginProtocol(profileDir())
     // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
     await shellEnv
+    monitorPower()
     applyPreferences(readPreferences(preferencesPath()))
     // 上一次下载的安装包没用了（版本已经换了，或者用户没点「打开安装包」）。
     void clearDownloads().catch(() => undefined)
@@ -436,7 +439,7 @@ app.on("will-quit", (event) => {
   const host = hosts.current
   if (!host || hostStopped) return
   event.preventDefault()
-  hostStop ??= host.stop().finally(() => {
+  hostStop ??= host.stop(restartingForUpdate ? "restarting" : "exited").finally(() => {
     hostStopped = true
     // Host 已经不在时 stop 立刻完成，这里还在 will-quit 的处理过程中；此时调用 app.quit 会被 Electron
     // 忽略（它还在退出流程里），之后又因为 preventDefault 取消了退出，应用就再也退不出去。
@@ -469,7 +472,8 @@ function quitNow(): void {
   // 在 before-quit 里 preventDefault 之后，这个处理跑完前直接 app.quit() 会被忽略；
   // 等一轮事件循环再退。更新已经下载好时交给 electron-updater，装完会重新打开应用。
   setImmediate(() => {
-    if (!updates.installIfReady()) app.quit()
+    restartingForUpdate = updates.installIfReady()
+    if (!restartingForUpdate) app.quit()
   })
 }
 

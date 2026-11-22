@@ -10,7 +10,7 @@ import 'run_composer_state.dart';
 import 'request_input.dart';
 import 'timeline_view.dart';
 
-typedef _Selection = (MobileConnection, String);
+typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
 
 typedef _TimelineRead = ({TimelineSnapshot snapshot, Object? problem});
 
@@ -26,8 +26,11 @@ class _TimelineController extends AsyncNotifier<_TimelineRead> {
 
   @override
   Future<_TimelineRead> build() async {
-    final (connection, threadId) = selection;
-    final timeline = await connection.openTimeline(threadId);
+    final (connection, threadId, previous) = selection;
+    final timeline = await connection.openTimeline(
+      threadId,
+      resumeFrom: previous,
+    );
     if (ref.mounted) {
       _timeline = timeline;
       final subscription = timeline.updates.listen((snapshot) {
@@ -76,7 +79,7 @@ class _TimelineController extends AsyncNotifier<_TimelineRead> {
   );
 }
 
-class TimelinePane extends ConsumerWidget {
+class TimelinePane extends ConsumerStatefulWidget {
   const TimelinePane({
     super.key,
     required this.connection,
@@ -89,10 +92,38 @@ class TimelinePane extends ConsumerWidget {
   final bool online;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final provider = _timelineProvider((connection, threadId));
+  ConsumerState<TimelinePane> createState() => _TimelinePaneState();
+}
+
+class _TimelinePaneState extends ConsumerState<TimelinePane> {
+  TimelineSnapshot? _latest;
+  TimelineSnapshot? _resumeFrom;
+
+  @override
+  void didUpdateWidget(covariant TimelinePane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.connection, widget.connection)) {
+      _resumeFrom = _latest;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final connection = widget.connection;
+    final threadId = widget.threadId;
+    final provider = _timelineProvider((connection, threadId, _resumeFrom));
     final selected = ref.watch(provider);
-    return selected.when(
+    final current = selected.value;
+    if (widget.online && current != null) _latest = current.snapshot;
+    final online = widget.online && current != null;
+    final previous = _latest;
+    final visible = online || previous == null
+        ? selected
+        : AsyncData<_TimelineRead>((
+            snapshot: previous,
+            problem: selected.error,
+          ));
+    return visible.when(
       data: (data) {
         final timeline = TimelineView(
           snapshot: data.snapshot,
@@ -100,7 +131,9 @@ class TimelinePane extends ConsumerWidget {
           loadEarlier: () => ref.read(provider.notifier).loadEarlier(),
           content: ref.read(provider.notifier).content,
           problem: data.problem == null ? null : _detail(data.problem!),
-          retry: online ? () => ref.read(provider.notifier).retry() : null,
+          retry: widget.online
+              ? () => ref.read(provider.notifier).retry()
+              : null,
         );
         if (!connection.supportsRunCommands &&
             !connection.supportsRequestCommands) {
@@ -180,7 +213,7 @@ class TimelinePane extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(_detail(error)),
-                if (online && connection.supportsTimeline)
+                if (widget.online && connection.supportsTimeline)
                   TextButton(
                     onPressed: () => ref.read(provider.notifier).retry(),
                     child: const Text('重试'),

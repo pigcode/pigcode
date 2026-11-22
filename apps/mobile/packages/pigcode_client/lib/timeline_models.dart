@@ -4,6 +4,7 @@ abstract final class MobileTimelineMethods {
   static const subscribe = 'thread.subscribe';
   static const unsubscribe = 'thread.unsubscribe';
   static const history = 'thread.history';
+  static const catchUp = 'thread.catchUp';
   static const content = 'thread.content';
   static const live = 'thread.live';
   static const event = 'thread.event';
@@ -31,6 +32,75 @@ final class MobileTimelineThreadParams {
   }
 
   Map<String, Object?> toJson() => {'threadId': threadId};
+}
+
+final class MobileTimelineSubscribeParams {
+  const MobileTimelineSubscribeParams({required this.threadId, this.after});
+  final String threadId;
+  final int? after;
+
+  factory MobileTimelineSubscribeParams.fromJson(Map<String, dynamic> json) {
+    if (json.keys.any((key) => !const {'threadId', 'after'}.contains(key))) {
+      throw const FormatException(
+        'MobileTimelineSubscribeParams contains an unknown field',
+      );
+    }
+    final threadId = json['threadId'] as String;
+    if (threadId.isEmpty) {
+      throw const FormatException('Invalid threadId');
+    }
+    final after = json.containsKey('after') ? json['after'] as int : null;
+    if (after != null && (after < 0 || after > 9007199254740991)) {
+      throw const FormatException('Invalid after');
+    }
+    return MobileTimelineSubscribeParams(threadId: threadId, after: after);
+  }
+
+  Map<String, Object?> toJson() => {'threadId': threadId, 'after': ?after};
+}
+
+final class MobileTimelineCatchUpParams {
+  const MobileTimelineCatchUpParams({
+    required this.threadId,
+    required this.through,
+    required this.after,
+  });
+  final String threadId;
+  final int through;
+  final int after;
+
+  factory MobileTimelineCatchUpParams.fromJson(Map<String, dynamic> json) {
+    if (json.keys.any(
+      (key) => !const {'threadId', 'through', 'after'}.contains(key),
+    )) {
+      throw const FormatException(
+        'MobileTimelineCatchUpParams contains an unknown field',
+      );
+    }
+    final threadId = json['threadId'] as String;
+    if (threadId.isEmpty) {
+      throw const FormatException('Invalid threadId');
+    }
+    final through = json['through'] as int;
+    if (through < 0 || through > 9007199254740991) {
+      throw const FormatException('Invalid through');
+    }
+    final after = json['after'] as int;
+    if (after < 0 || after > 9007199254740991) {
+      throw const FormatException('Invalid after');
+    }
+    return MobileTimelineCatchUpParams(
+      threadId: threadId,
+      through: through,
+      after: after,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'threadId': threadId,
+    'through': through,
+    'after': after,
+  };
 }
 
 final class MobileTimelineHistoryParams {
@@ -508,14 +578,17 @@ final class MobileTimelinePage {
     required this.events,
     required this.through,
     this.nextBefore,
+    this.nextAfter,
   });
   final List<MobileTimelineEvent> events;
   final int through;
   final int? nextBefore;
+  final int? nextAfter;
 
   factory MobileTimelinePage.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {'events', 'through', 'nextBefore'}.contains(key),
+      (key) =>
+          !const {'events', 'through', 'nextBefore', 'nextAfter'}.contains(key),
     )) {
       throw const FormatException(
         'MobileTimelinePage contains an unknown field',
@@ -536,10 +609,17 @@ final class MobileTimelinePage {
     if (nextBefore != null && (nextBefore > 9007199254740991)) {
       throw const FormatException('Invalid nextBefore');
     }
+    final nextAfter = json.containsKey('nextAfter')
+        ? json['nextAfter'] as int
+        : null;
+    if (nextAfter != null && (nextAfter > 9007199254740991)) {
+      throw const FormatException('Invalid nextAfter');
+    }
     return MobileTimelinePage(
       events: events,
       through: through,
       nextBefore: nextBefore,
+      nextAfter: nextAfter,
     );
   }
 
@@ -547,16 +627,24 @@ final class MobileTimelinePage {
     'events': events.map((item) => item.toJson()).toList(),
     'through': through,
     'nextBefore': ?nextBefore,
+    'nextAfter': ?nextAfter,
   };
 }
 
 final class MobileTimelineSubscription {
-  const MobileTimelineSubscription({required this.page, this.live});
+  const MobileTimelineSubscription({
+    required this.page,
+    this.live,
+    this.resumed,
+  });
   final MobileTimelinePage page;
   final MobileActiveRun? live;
+  final bool? resumed;
 
   factory MobileTimelineSubscription.fromJson(Map<String, dynamic> json) {
-    if (json.keys.any((key) => !const {'page', 'live'}.contains(key))) {
+    if (json.keys.any(
+      (key) => !const {'page', 'live', 'resumed'}.contains(key),
+    )) {
       throw const FormatException(
         'MobileTimelineSubscription contains an unknown field',
       );
@@ -567,12 +655,16 @@ final class MobileTimelineSubscription {
     final live = json.containsKey('live')
         ? MobileActiveRun.fromJson(json['live'] as Map<String, dynamic>)
         : null;
-    return MobileTimelineSubscription(page: page, live: live);
+    final resumed = json.containsKey('resumed')
+        ? json['resumed'] as bool
+        : null;
+    return MobileTimelineSubscription(page: page, live: live, resumed: resumed);
   }
 
   Map<String, Object?> toJson() => {
     'page': page.toJson(),
     'live': ?live?.toJson(),
+    'resumed': ?resumed,
   };
 }
 

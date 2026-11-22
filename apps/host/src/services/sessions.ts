@@ -10,6 +10,7 @@ export interface SessionsService {
   /** Commit related writes and return a publisher for the newly committed events. */
   stageEvents(write: () => void): () => void
   read(threadId: string, cursor: number): ThreadEvent[]
+  readAfter(threadId: string, after: number, through: number, limit: number): Iterable<ThreadEvent>
   latestSeq(threadId: string): number
   readBefore(
     threadId: string,
@@ -85,6 +86,9 @@ export const apply: SessionsPlugin = (ctx) => {
     },
     read(threadId, cursor) {
       return ctx.storage.events.read(threadId, cursor)
+    },
+    readAfter(threadId, after, through, limit) {
+      return ctx.storage.events.readAfter(threadId, after, through, limit)
     },
     latestSeq(threadId) {
       return ctx.storage.events.latestSeq(threadId)

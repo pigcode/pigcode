@@ -39,6 +39,7 @@ class MobileConnection {
     this.supportsRequestCommands,
     this.supportsDraftCommands,
     this.supportsQueueCommands,
+    this.supportsTimelineResume,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -52,6 +53,7 @@ class MobileConnection {
   final bool supportsRequestCommands;
   final bool supportsDraftCommands;
   final bool supportsQueueCommands;
+  final bool supportsTimelineResume;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
@@ -75,13 +77,16 @@ class MobileConnection {
     });
   }
 
-  Future<MobileTimeline> openTimeline(String threadId) {
+  Future<MobileTimeline> openTimeline(
+    String threadId, {
+    TimelineSnapshot? resumeFrom,
+  }) {
     if (!supportsTimeline) throw const ConnectionFailure('update-desktop');
     final previous = _timeline;
     if (_selectedThread == threadId && previous != null) return previous;
     _selectedThread = threadId;
     late final Future<MobileTimeline> next;
-    next = _selectTimeline(threadId, previous).catchError((
+    next = _selectTimeline(threadId, previous, resumeFrom).catchError((
       Object error,
       StackTrace stack,
     ) {
@@ -94,6 +99,7 @@ class MobileConnection {
   Future<MobileTimeline> _selectTimeline(
     String threadId,
     Future<MobileTimeline>? previous,
+    TimelineSnapshot? resumeFrom,
   ) async {
     if (previous != null) {
       try {
@@ -102,7 +108,12 @@ class MobileConnection {
         // A failed previous subscription has no timeline to release.
       }
     }
-    return MobileTimeline.open(_rpc, threadId);
+    return MobileTimeline.open(
+      _rpc,
+      threadId,
+      previous: resumeFrom,
+      canResume: supportsTimelineResume,
+    );
   }
 
   Future<void> get done => _link.done;
@@ -228,6 +239,7 @@ class MobileConnection {
           'relay.saveReceipt',
           'sidebar.read',
           'timeline.read',
+          'timeline.resume',
           'run.write',
           'request.write',
           'draft.write',
@@ -274,6 +286,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('request.write'),
         (welcome['features'] as List).contains('draft.write'),
         (welcome['features'] as List).contains('queue.write'),
+        (welcome['features'] as List).contains('timeline.resume'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

@@ -28,10 +28,11 @@ class TimelineSnapshot {
 /// One selected conversation has its own history anchor, event cursor and
 /// transient run revision. None of these belong to the sidebar subscription.
 class MobileTimeline {
-  MobileTimeline._(this._rpc, this.threadId);
+  MobileTimeline._(this._rpc, this.threadId, this._canResume, this._snapshot);
 
   final HostRequests _rpc;
   final String threadId;
+  final bool _canResume;
   final _updates = StreamController<TimelineSnapshot>.broadcast();
   final _buffer = <Map<String, dynamic>>[];
   late final StreamSubscription<Map<String, dynamic>> _subscription;
@@ -48,8 +49,13 @@ class MobileTimeline {
   TimelineSnapshot? get snapshot => _snapshot;
   Stream<TimelineSnapshot> get updates => _updates.stream;
 
-  static Future<MobileTimeline> open(HostRequests rpc, String threadId) async {
-    final timeline = MobileTimeline._(rpc, threadId);
+  static Future<MobileTimeline> open(
+    HostRequests rpc,
+    String threadId, {
+    TimelineSnapshot? previous,
+    bool canResume = false,
+  }) async {
+    final timeline = MobileTimeline._(rpc, threadId, canResume, previous);
     timeline._subscription = rpc.notifications.listen(
       timeline._notification,
       onDone: () => unawaited(timeline._updates.close()),
@@ -67,22 +73,35 @@ class MobileTimeline {
     if (_loading || _closed) return;
     _loading = true;
     _window++;
+    final previous = _snapshot;
     try {
       final result = await _rpc.call(
         MobileTimelineMethods.subscribe,
-        MobileTimelineThreadParams(threadId: threadId).toJson(),
+        MobileTimelineSubscribeParams(
+          threadId: threadId,
+          after: _canResume ? previous?.cursor : null,
+        ).toJson(),
       );
       final view = MobileTimelineSubscription.fromJson(
         result as Map<String, dynamic>,
       );
+      final resumed = view.resumed == true;
+      if (resumed &&
+          (!_canResume ||
+              previous == null ||
+              view.page.through < previous.cursor)) {
+        throw const FormatException('Unexpected continuation of timeline');
+      }
       _replace(
-        TimelineSnapshot(
-          events: view.page.events,
-          through: view.page.through,
-          cursor: view.page.through,
-          nextBefore: view.page.nextBefore,
-          live: view.live,
-        ),
+        resumed
+            ? await _fillGap(previous!, view)
+            : TimelineSnapshot(
+                events: view.page.events,
+                through: view.page.through,
+                cursor: view.page.through,
+                nextBefore: view.page.nextBefore,
+                live: view.live,
+              ),
       );
     } finally {
       _loading = false;
@@ -99,6 +118,56 @@ class MobileTimeline {
     for (final message in queued) {
       _notification(message);
     }
+  }
+
+  Future<TimelineSnapshot> _fillGap(
+    TimelineSnapshot previous,
+    MobileTimelineSubscription view,
+  ) async {
+    final boundary = view.page.through;
+    final events = <int, MobileTimelineEvent>{
+      for (final event in previous.events) event.seq: event,
+    };
+    void applyPage(MobileTimelinePage page) {
+      for (final event in page.events) {
+        if (event.seq > previous.cursor && event.seq <= boundary) {
+          events.putIfAbsent(event.seq, () => event);
+        }
+      }
+    }
+
+    applyPage(view.page);
+    var after = previous.cursor;
+    var next = view.page.nextAfter;
+    while (next != null && !_closed) {
+      if (next <= after || next >= boundary) {
+        throw const FormatException('Timeline cursor did not advance');
+      }
+      after = next;
+      final result = await _rpc.call(
+        MobileTimelineMethods.catchUp,
+        MobileTimelineCatchUpParams(
+          threadId: threadId,
+          after: after,
+          through: boundary,
+        ).toJson(),
+      );
+      final page = MobileTimelinePage.fromJson(result as Map<String, dynamic>);
+      if (page.through != boundary) {
+        throw const FormatException(
+          'Timeline boundary changed during catch-up',
+        );
+      }
+      applyPage(page);
+      next = page.nextAfter;
+    }
+    return TimelineSnapshot(
+      events: events.values.toList()..sort((a, b) => a.seq.compareTo(b.seq)),
+      through: previous.through,
+      cursor: boundary,
+      nextBefore: previous.nextBefore,
+      live: view.live,
+    );
   }
 
   Future<void> loadEarlier() async {

@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/cupertino.dart' show CupertinoDialogAction;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'computer_reconnect.dart';
 import 'computers.dart';
 import 'theme_colors.dart';
 import 'workspace.dart';
@@ -75,8 +78,12 @@ class ComputersPage extends ConsumerStatefulWidget {
   ConsumerState<ComputersPage> createState() => _ComputersPageState();
 }
 
-class _ComputersPageState extends ConsumerState<ComputersPage> {
-  MobileConnection? _connection;
+class _ComputersPageState extends ConsumerState<ComputersPage>
+    with WidgetsBindingObserver {
+  ComputerReconnect? _session;
+  StreamSubscription<List<ConnectivityResult>>? _networks;
+  Set<ConnectivityResult>? _network;
+  late bool _foreground;
   MobileConnection? _browsing;
   bool _workspaceOpen = false;
   String? _selected;
@@ -85,25 +92,86 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
   bool _working = false;
   bool _updatingRelay = false;
 
+  @override
+  void initState() {
+    super.initState();
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _foreground =
+        lifecycle == null ||
+        lifecycle == AppLifecycleState.resumed ||
+        lifecycle == AppLifecycleState.inactive;
+    WidgetsBinding.instance.addObserver(this);
+    final connectivity = Connectivity();
+    _networks = connectivity.onConnectivityChanged.listen((networks) {
+      final next = networks.toSet();
+      final previous = _network;
+      _network = next;
+      if (previous != null && !setEquals(previous, next)) _session?.retry();
+    }, onError: (Object _) {});
+    unawaited(
+      connectivity.checkConnectivity().then<void>((networks) {
+        if (mounted) _network ??= networks.toSet();
+      }, onError: (Object _) {}),
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive) return;
+    _foreground = state == AppLifecycleState.resumed;
+    _session?.setForeground(_foreground);
+  }
+
+  void _select(ComputerProfile computer, {MobileConnection? initial}) {
+    final identity = ref.read(computersProvider.notifier).identity;
+    late final ComputerReconnect session;
+    session = ComputerReconnect(
+      dial: () => MobileConnection.resume(computer, identity),
+      observe: () => RelayStatusWatch.open(computer),
+      onChange: () {
+        if (!mounted || !identical(_session, session)) return;
+        setState(() {
+          final connection = session.connection;
+          if (connection == null) return;
+          if (_browsing == null) _workspaceOpen = true;
+          _browsing = connection;
+        });
+      },
+    );
+    _session?.dispose();
+    setState(() {
+      _session = session;
+      _selected = computer.computerKey;
+      _browsing = null;
+      _workspaceOpen = false;
+      _feedback = null;
+    });
+    session.start(foreground: _foreground, initial: initial);
+  }
+
   Future<void> _choose(
     ComputerProfile computer, {
     PairingInvite? invite,
   }) async {
     if (_working) return;
-    if (invite == null &&
-        _connection != null &&
-        _selected == computer.computerKey) {
-      setState(() => _workspaceOpen = true);
+    if (invite == null) {
+      if (_selected == computer.computerKey) {
+        if (_browsing != null) setState(() => _workspaceOpen = true);
+        if (_session?.connection == null) _session?.retry();
+      } else {
+        _select(computer);
+      }
       return;
     }
-    final existing = invite == null
-        ? null
-        : ref
-              .read(computersProvider)
-              .requireValue
-              .where((entry) => entry.computerKey == computer.computerKey)
-              .firstOrNull;
+
+    final existing = ref
+        .read(computersProvider)
+        .requireValue
+        .where((entry) => entry.computerKey == computer.computerKey)
+        .firstOrNull;
+    _session?.dispose();
     setState(() {
+      _session = null;
       _working = true;
       _workspaceOpen = false;
       _browsing = null;
@@ -112,54 +180,35 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       _feedback = null;
       _selected = null;
     });
-    final previous = _connection;
-    _connection = null;
+
     MobileConnection? opened;
     try {
-      await previous?.close();
-      if (!mounted) return;
       final computers = ref.read(computersProvider.notifier);
-      if (invite == null) {
-        opened = await MobileConnection.resume(computer, computers.identity);
-      } else {
-        void showCode(String code) {
-          if (mounted) setState(() => _verification = code);
-        }
-
-        opened = existing == null
-            ? await MobileConnection.pair(
-                invite: invite,
-                identity: computers.identity,
-                deviceName: Platform.isIOS ? 'iPhone' : 'Android 手机',
-                platform: Platform.isIOS ? 'ios' : 'android',
-                showVerificationCode: showCode,
-              )
-            : await MobileConnection.updateRelay(
-                computer: existing,
-                invite: invite,
-                identity: computers.identity,
-                showVerificationCode: showCode,
-              );
-        if (mounted) {
-          await computers.remember(opened.computer);
-          await opened.announceRelaySaved();
-        }
+      void showCode(String code) {
+        if (mounted) setState(() => _verification = code);
       }
+
+      opened = existing == null
+          ? await MobileConnection.pair(
+              invite: invite,
+              identity: computers.identity,
+              deviceName: Platform.isIOS ? 'iPhone' : 'Android 手机',
+              platform: Platform.isIOS ? 'ios' : 'android',
+              showVerificationCode: showCode,
+            )
+          : await MobileConnection.updateRelay(
+              computer: existing,
+              invite: invite,
+              identity: computers.identity,
+              showVerificationCode: showCode,
+            );
       if (!mounted) return;
-      final connected = opened;
-      _connection = connected;
-      setState(() {
-        _selected = computer.computerKey;
-        _browsing = connected;
-        _workspaceOpen = true;
-        if (existing != null) _feedback = '已更新这台电脑的中继配置。';
-      });
-      unawaited(
-        connected.done.then(
-          (_) => _connectionEnded(connected),
-          onError: (Object _) => _connectionEnded(connected),
-        ),
-      );
+      await computers.remember(opened.computer);
+      await opened.announceRelaySaved();
+      if (!mounted) return;
+      _select(opened.computer, initial: opened);
+      opened = null;
+      if (existing != null) setState(() => _feedback = '已更新这台电脑的中继配置。');
     } on ConnectionFailure catch (failure) {
       if (mounted) {
         setState(() {
@@ -176,9 +225,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     } catch (_) {
       if (mounted) setState(() => _feedback = '无法完成连接，请重试。');
     } finally {
-      if (opened != null && !identical(_connection, opened)) {
-        await opened.close();
-      }
+      await opened?.close();
       if (mounted) {
         setState(() {
           _working = false;
@@ -188,14 +235,33 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
     }
   }
 
-  void _connectionEnded(MobileConnection ended) {
-    if (!mounted || !identical(_connection, ended)) return;
-    unawaited(ended.close());
-    setState(() {
-      _connection = null;
-      _selected = null;
-      _feedback = '电脑连接已断开，请重新连接。';
-    });
+  String _connectionLabel(BuildContext context) {
+    final session = _session;
+    if (session == null) return '连接已断开';
+    if (session.connection != null) return '已连接';
+    final status = session.status;
+    final failure = session.error;
+    final String label;
+    if (failure != null && !const {'closed', 'offline'}.contains(failure)) {
+      label = _message(failure);
+    } else {
+      label = switch (status?.state) {
+        RelayComputerState.sleeping => '电脑正在睡眠',
+        RelayComputerState.exited => '电脑上的 Pigcode 已退出',
+        RelayComputerState.restarting => '电脑上的 Pigcode 正在重启',
+        RelayComputerState.offline => '电脑离线',
+        _ when failure == 'offline' => '电脑离线',
+        _ => session.connecting || failure == null ? '正在连接电脑…' : '正在重新连接电脑…',
+      };
+    }
+    final seen = status?.lastOnlineAt?.toLocal();
+    if (seen == null) return label;
+    final format = MaterialLocalizations.of(context);
+    final time = format.formatTimeOfDay(TimeOfDay.fromDateTime(seen));
+    final stamp = DateUtils.isSameDay(seen, DateTime.now())
+        ? time
+        : '${format.formatShortDate(seen)} $time';
+    return '$label · 最后在线 $stamp';
   }
 
   String _message(String code) => switch (code) {
@@ -267,12 +333,14 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       final cleared = await ref
           .read(computersProvider.notifier)
           .forget(computer);
-      if (_selected == computer.computerKey) {
-        final connection = _connection;
-        _connection = null;
-        _selected = null;
-        _browsing = null;
-        await connection?.close();
+      if (mounted && _selected == computer.computerKey) {
+        _session?.dispose();
+        setState(() {
+          _session = null;
+          _selected = null;
+          _browsing = null;
+          _workspaceOpen = false;
+        });
       }
       if (mounted) {
         setState(() => _feedback = cleared ? null : '电脑已移除，待确认记录将在重新配对时清理。');
@@ -286,15 +354,16 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
 
   @override
   void dispose() {
-    final connection = _connection;
-    _connection = null;
-    if (connection != null) unawaited(connection.close());
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_networks?.cancel());
+    _session?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final computers = ref.watch(computersProvider);
+    final connectionLabel = _connectionLabel(context);
     final manager = Scaffold(
       appBar: AppBar(
         title: const Text('电脑'),
@@ -333,7 +402,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
                   leading: const Icon(Icons.computer_outlined),
                   title: Text(entry.name),
                   subtitle: Text(
-                    _selected == entry.computerKey ? '已连接' : '点按连接',
+                    _selected == entry.computerKey ? connectionLabel : '点按连接',
                   ),
                   selected: _selected == entry.computerKey,
                   enabled: !_working,
@@ -416,8 +485,11 @@ class _ComputersPageState extends ConsumerState<ComputersPage> {
       index: _workspaceOpen ? 0 : 1,
       children: [
         MobileWorkspace(
-          key: ObjectKey(workspace),
+          key: ValueKey(_selected),
           connection: workspace,
+          connected: identical(workspace, _session?.connection),
+          connectionLabel: connectionLabel,
+          reconnect: () => _session?.retry(),
           onComputers: () => setState(() => _workspaceOpen = false),
         ),
         manager,

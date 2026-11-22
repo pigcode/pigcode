@@ -16,6 +16,8 @@ import {
 import {
   mobileTimelineContentParams,
   mobileTimelineHistoryParams,
+  mobileTimelineSubscribeParams,
+  mobileTimelineCatchUpParams,
   mobileTimelineThreadParams,
 } from "@pigcode/contracts"
 import { mobileParams, MobileRequestError } from "./request-error"
@@ -26,6 +28,7 @@ export const mobileTimelineRequests: ReadonlySet<string> = new Set([
   methods.subscribe,
   methods.unsubscribe,
   methods.history,
+  methods.catchUp,
   methods.live,
   methods.content,
 ])
@@ -43,16 +46,20 @@ export class MobileTimelineSession {
     private readonly ctx: Context,
     private readonly send: (message: unknown) => void,
     private readonly includeQueueChanges = false,
+    private readonly canResume = false,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
     switch (request.method) {
       case methods.subscribe:
-        return this.subscribe(mobileParams(mobileTimelineThreadParams, request.params))
+        return this.subscribe(mobileParams(mobileTimelineSubscribeParams, request.params))
       case methods.unsubscribe:
         return this.unsubscribe(mobileParams(mobileTimelineThreadParams, request.params))
       case methods.history:
         return this.history(mobileParams(mobileTimelineHistoryParams, request.params))
+      case methods.catchUp:
+        if (!this.canResume) throw new MobileRequestError("METHOD_NOT_AVAILABLE")
+        return this.catchUp(mobileParams(mobileTimelineCatchUpParams, request.params))
       case methods.live: {
         const { threadId } = mobileParams(mobileTimelineThreadParams, request.params)
         this.requireThread(threadId)
@@ -65,19 +72,17 @@ export class MobileTimelineSession {
     }
   }
 
-  subscribe({ threadId }: { threadId: string }) {
+  subscribe({ threadId, after }: { threadId: string; after?: number | undefined }) {
     this.requireThread(threadId)
     this.close()
     const through = this.ctx.sessions.latestSeq(threadId)
     const live = this.snapshot(threadId)
     const reserve = live ? Buffer.byteLength(JSON.stringify(live)) : 0
-    const page = this.window(
-      threadId,
-      through,
-      through + 1,
-      true,
-      timelinePageBytes - envelopeReserve - reserve,
-    )
+    const budget = timelinePageBytes - envelopeReserve - reserve
+    const resumed = this.canResume && after !== undefined && this.validAfter(threadId, after, through)
+    const page = resumed
+      ? this.forward(threadId, after, through, budget)
+      : this.window(threadId, through, through + 1, true, budget)
     let previousSeq = through
     this.threadId = threadId
     this.stopEvents = this.ctx.sessions.subscribe(threadId, (stored) => {
@@ -118,7 +123,39 @@ export class MobileTimelineSession {
     this.stopProjects = this.ctx.projects.subscribe(() => {
       if (!this.available(threadId)) this.close()
     })
-    return { page, live }
+    return { page, live, ...(resumed ? { resumed: true } : {}) }
+  }
+
+  private validAfter(threadId: string, after: number, through: number): boolean {
+    return after <= through && (after === 0 || this.ctx.sessions.get(threadId, after) !== undefined)
+  }
+
+  private catchUp({ threadId, after, through }: { threadId: string; after: number; through: number }) {
+    this.requireThread(threadId)
+    if (through > this.ctx.sessions.latestSeq(threadId) || !this.validAfter(threadId, after, through)) {
+      throw new MobileRequestError("INVALID_PARAMS")
+    }
+    return this.forward(threadId, after, through, timelinePageBytes - envelopeReserve)
+  }
+
+  private forward(threadId: string, after: number, through: number, budget: number): MobileTimelinePage {
+    const events: MobileTimelineEvent[] = []
+    let scanned = 0
+    let bytes = 0
+    let cursor = after
+    for (const stored of this.ctx.sessions.readAfter(threadId, after, through, maxEvents + 1)) {
+      const event = timelineEvent(stored, this.includeQueueChanges)
+      const size = event ? Buffer.byteLength(JSON.stringify(event)) + 1 : 0
+      if (scanned === maxEvents || bytes + size > budget) {
+        if (cursor === after) throw new MobileRequestError("RESULT_TOO_LARGE")
+        return { events, through, nextAfter: cursor }
+      }
+      if (event) events.push(event)
+      cursor = stored.seq
+      scanned++
+      bytes += size
+    }
+    return { events, through }
   }
 
   history({ threadId, through, before }: { threadId: string; through: number; before: number }) {

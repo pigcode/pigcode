@@ -82,7 +82,7 @@ export function createHostSupervisor(options: HostSupervisorOptions): HostSuperv
     if (options.quitting() || reloading) return
     if (running) {
       reloading = running
-      void running.stop()
+      void running.stop("restarting")
       return
     }
     clearTimeout(restartTimer)

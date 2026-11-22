@@ -92,6 +92,8 @@ pnpm --dir apps/desktop exec playwright test e2e/mobile-device-management.spec.t
 
 测试会验证二维码中的电脑公钥不变、更新失败时手机保留旧配置、两部手机逐台迁移、撤销后 Host 重启仍拒绝该设备，以及撤销最后一部设备后的中继关闭和重新配对。
 
+电脑状态订阅、心跳和重连验收见[手机恢复会话](mobile-recovery.md)。
+
 ## iPhone 经现有云端中继复验
 
 1. 用自己的 Apple Personal Team 给 `apps/mobile/app/ios/Runner.xcworkspace` 的 Runner 签名。应用 ID 固定为 `com.pigcode.mobile`，相同 Team 下可覆盖安装。

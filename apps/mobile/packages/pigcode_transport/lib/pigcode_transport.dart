@@ -154,6 +154,108 @@ class _RelayUpgradeClient implements HttpClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+Future<WebSocket> _openRelaySocket(
+  ComputerProfile computer,
+  HttpClient? client,
+) async {
+  try {
+    final opening = WebSocket.connect(
+      computer.address.toString(),
+      customClient: _RelayUpgradeClient(client ?? _relayHttpClient),
+    );
+    final socket = await opening.timeout(
+      const Duration(seconds: 8),
+      onTimeout: () {
+        unawaited(
+          opening.then<void>(
+            (lateSocket) => lateSocket.close(),
+            onError: (Object _) {},
+          ),
+        );
+        throw const ConnectionFailure('unreachable');
+      },
+    );
+    socket.pingInterval = const Duration(seconds: 25);
+    return socket;
+  } catch (_) {
+    throw const ConnectionFailure('unreachable');
+  }
+}
+
+enum RelayComputerState { online, offline, sleeping, exited, restarting }
+
+class RelayComputerStatus {
+  const RelayComputerStatus(this.state, this.lastOnlineAt);
+
+  final RelayComputerState state;
+  final DateTime? lastOnlineAt;
+
+  factory RelayComputerStatus.fromJson(Map<String, dynamic> json) {
+    if (json['type'] != 'relay.status') {
+      throw ConnectionFailure(switch (json['status']) {
+        'token-rejected' => 'token-rejected',
+        'busy' => 'busy',
+        _ => 'incompatible',
+      });
+    }
+    final state = RelayComputerState.values.byName(json['state'] as String);
+    final millis = json['lastOnlineAt'] as int?;
+    return RelayComputerStatus(
+      state,
+      millis == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true),
+    );
+  }
+}
+
+/// Status observations contain relay metadata. A session still authenticates the Host with Noise.
+class RelayStatusWatch {
+  RelayStatusWatch._(this._inbox, this.initial);
+
+  final _RelayInbox _inbox;
+  final RelayComputerStatus initial;
+
+  static Future<RelayStatusWatch> open(
+    ComputerProfile computer, {
+    HttpClient? client,
+  }) async {
+    final socket = await _openRelaySocket(computer, client);
+    final inbox = _RelayInbox(socket);
+    try {
+      socket.add(
+        jsonEncode({
+          'type': 'relay.watch',
+          'version': relayProtocolVersion,
+          'computerId': await publicKeyFingerprint(
+            _decodeKey(computer.computerKey),
+          ),
+          'token': computer.token,
+        }),
+      );
+      final first = await inbox.next(const Duration(seconds: 8));
+      return RelayStatusWatch._(inbox, _decode(first));
+    } catch (_) {
+      await inbox.close();
+      rethrow;
+    }
+  }
+
+  static RelayComputerStatus _decode(Object frame) =>
+      RelayComputerStatus.fromJson(
+        jsonDecode(frame as String) as Map<String, dynamic>,
+      );
+
+  Stream<RelayComputerStatus> get updates async* {
+    while (true) {
+      final message = await _inbox.next(null);
+      yield _decode(message);
+    }
+  }
+
+  Future<void> close() => _inbox.close();
+}
+
 // Keep the socket listener active while the app has no pending RPC. Pausing it
 // would also pause WebSocket ping, pong and close handling.
 class _RelayInbox {
@@ -221,6 +323,8 @@ class _RelayInbox {
   Future<void> close() async {
     _finish();
     _buffer.clear();
+    // Stop the heartbeat before cancelling the reader that handles the close frame.
+    _socket.pingInterval = null;
     unawaited(_socket.close().then<void>((_) {}, onError: (Object _) {}));
     await _subscription.cancel();
   }
@@ -244,27 +348,7 @@ class SecureLink {
     Map<String, Object> handshake, {
     HttpClient? client,
   }) async {
-    late final WebSocket socket;
-    try {
-      final opening = WebSocket.connect(
-        computer.address.toString(),
-        customClient: _RelayUpgradeClient(client ?? _relayHttpClient),
-      );
-      socket = await opening.timeout(
-        const Duration(seconds: 8),
-        onTimeout: () {
-          unawaited(
-            opening.then<void>(
-              (lateSocket) => lateSocket.close(),
-              onError: (Object _) {},
-            ),
-          );
-          throw const ConnectionFailure('unreachable');
-        },
-      );
-    } catch (_) {
-      throw const ConnectionFailure('unreachable');
-    }
+    final socket = await _openRelaySocket(computer, client);
     final inbox = _RelayInbox(socket);
     try {
       final hostKey = _decodeKey(computer.computerKey);

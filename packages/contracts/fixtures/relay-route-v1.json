@@ -11,8 +11,17 @@
     "computerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "token": "fixture-access"
   },
+  "watch": {
+    "type": "relay.watch",
+    "version": 1,
+    "computerId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "token": "fixture-access"
+  },
   "admitted": { "type": "relay.result", "version": 1, "status": "ok" },
+  "admittedWithHeartbeat": { "type": "relay.result", "version": 1, "status": "ok", "heartbeatSeconds": 25 },
   "offline": { "type": "relay.result", "version": 1, "status": "offline" },
+  "neverOnline": { "type": "relay.status", "state": "offline", "lastOnlineAt": null },
+  "sleeping": { "type": "relay.status", "state": "sleeping", "lastOnlineAt": 1795392000000 },
   "open": { "type": "relay.open", "session": 1 },
   "close": { "type": "relay.close", "session": 1 },
   "ciphertextHex": "00ff0d",

@@ -8,6 +8,7 @@ export const mobileTimelineMethods = {
   subscribe: "thread.subscribe",
   unsubscribe: "thread.unsubscribe",
   history: "thread.history",
+  catchUp: "thread.catchUp",
   content: "thread.content",
   live: "thread.live",
   event: "thread.event",
@@ -19,6 +20,14 @@ const runId = z.string().min(1)
 const sequence = z.int().nonnegative()
 
 export const mobileTimelineThreadParams = z.strictObject({ threadId })
+export const mobileTimelineSubscribeParams = mobileTimelineThreadParams.extend({
+  after: sequence.optional(),
+})
+export const mobileTimelineCatchUpParams = z.strictObject({
+  threadId,
+  through: sequence,
+  after: sequence,
+})
 export const mobileTimelineHistoryParams = z.strictObject({
   threadId,
   through: sequence,
@@ -98,10 +107,12 @@ export const mobileTimelinePage = z.strictObject({
   events: z.array(mobileTimelineEvent),
   through: sequence,
   nextBefore: z.int().positive().optional(),
+  nextAfter: z.int().positive().optional(),
 })
 export const mobileTimelineSubscription = z.strictObject({
   page: mobileTimelinePage,
   live: mobileActiveRun.optional(),
+  resumed: z.boolean().optional(),
 })
 export const mobileTimelineLiveResult = z.strictObject({
   live: mobileActiveRun.optional(),
@@ -136,6 +147,8 @@ export type MobileActiveRun = z.infer<typeof mobileActiveRun>
 
 export const mobileTimelineModels = {
   MobileTimelineThreadParams: mobileTimelineThreadParams,
+  MobileTimelineSubscribeParams: mobileTimelineSubscribeParams,
+  MobileTimelineCatchUpParams: mobileTimelineCatchUpParams,
   MobileTimelineHistoryParams: mobileTimelineHistoryParams,
   MobileTimelineContentParams: mobileTimelineContentParams,
   MobileTimelineContentField: mobileTimelineContentField,

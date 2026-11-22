@@ -17,6 +17,9 @@ Future<void> main() async {
   final identities = <String, NoiseIdentity>{};
   final saved = <String, ComputerProfile>{};
   final active = <String, MobileConnection>{};
+  final snapshots = <(String, String), TimelineSnapshot>{};
+  final statusWatches =
+      <String, (RelayStatusWatch, StreamIterator<RelayComputerStatus>)>{};
 
   try {
     await for (final line
@@ -61,6 +64,49 @@ Future<void> main() async {
               client: client,
             );
             report('ready');
+          case 'watchComputer':
+            final watch = await RelayStatusWatch.open(
+              saved[phone]!,
+              client: client,
+            );
+            statusWatches[phone] = (watch, StreamIterator(watch.updates));
+            report('computerState', {
+              'state': watch.initial.state.name,
+              'lastOnlineAt': watch.initial.lastOnlineAt?.toIso8601String(),
+            });
+          case 'computerState':
+            final (_, states) = statusWatches[phone]!;
+            if (!await states.moveNext().timeout(const Duration(seconds: 12))) {
+              throw StateError('status stream closed');
+            }
+            report('computerState', {
+              'state': states.current.state.name,
+              'lastOnlineAt': states.current.lastOnlineAt?.toIso8601String(),
+            });
+          case 'captureRecovery' || 'resumeRecovery':
+            final threadId = command['threadId'] as String;
+            final key = (phone, threadId);
+            final previous = snapshots[key];
+            final timeline = await active[phone]!.openTimeline(
+              threadId,
+              resumeFrom: previous,
+            );
+            if (command['action'] == 'captureRecovery')
+              await timeline.loadEarlier();
+            final snapshot = timeline.snapshot!;
+            snapshots[key] = snapshot;
+            report('recovery', {
+              'through': snapshot.through,
+              'cursor': snapshot.cursor,
+              'events': snapshot.events.map((event) => event.seq).toList(),
+              'ends': snapshot.events.reversed
+                  .take(2)
+                  .map((event) => event.kind.wire)
+                  .toList(),
+              'lastText': snapshot.events.lastOrNull?.text,
+              'pending': snapshot.live?.pending.length ?? 0,
+              'hasLive': snapshot.live != null,
+            });
           case 'sidebar':
             final sidebar = await active[phone]!.openSidebar();
             final projectName = command['projectName'] as String?;
@@ -290,6 +336,10 @@ Future<void> main() async {
       }
     }
   } finally {
+    for (final (watch, states) in statusWatches.values) {
+      await watch.close();
+      await states.cancel();
+    }
     for (final connection in active.values) {
       await connection.close();
     }

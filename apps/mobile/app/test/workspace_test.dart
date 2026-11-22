@@ -1,8 +1,79 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_mobile/workspace.dart';
 import 'package:pigcode_mobile/sidebar_menu.dart';
+
+class _ReadConnection implements MobileConnection {
+  _ReadConnection(this.sidebar, {this.failFirstRead = false});
+
+  final _Sidebar sidebar;
+  final bool failFirstRead;
+  int reads = 0;
+
+  @override
+  final done = Completer<void>().future;
+  @override
+  String get computerName => '测试电脑';
+  @override
+  bool get supportsSidebar => true;
+  @override
+  bool get supportsDraftCommands => false;
+  @override
+  bool get supportsRunCommands => false;
+  @override
+  bool get supportsRequestCommands => false;
+
+  @override
+  Future<MobileSidebar> openSidebar() async {
+    if (++reads == 1 && failFirstRead) throw TimeoutException('sidebar');
+    return sidebar;
+  }
+
+  @override
+  Future<MobileTimeline> openTimeline(
+    String threadId, {
+    TimelineSnapshot? resumeFrom,
+  }) async => _Timeline();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Sidebar implements MobileSidebar {
+  _Sidebar(this.snapshot);
+
+  @override
+  final SidebarSnapshot snapshot;
+  final changes = StreamController<SidebarSnapshot>.broadcast();
+
+  @override
+  Stream<SidebarSnapshot> get updates => changes.stream;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Timeline implements MobileTimeline {
+  @override
+  final snapshot = TimelineSnapshot(
+    events: [],
+    through: 0,
+    cursor: 0,
+    nextBefore: null,
+    live: null,
+  );
+
+  @override
+  Stream<TimelineSnapshot> get updates => const Stream.empty();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 final snapshot = SidebarSnapshot(
   projects: const [
@@ -114,6 +185,58 @@ void main() {
     expect(menuText('未读'), findsNothing);
     expect(find.textContaining('上次同步'), findsOneWidget);
   });
+
+  testWidgets(
+    'keeps the open session when a reconnect read fails and discards the old sidebar',
+    (tester) async {
+      SidebarSnapshot rename(String title) => SidebarSnapshot(
+        projects: snapshot.projects,
+        threads: [
+          MobileThreadSummary.fromJson({
+            ...snapshot.threads.first.toJson(),
+            'title': title,
+          }),
+        ],
+        syncedAt: snapshot.syncedAt,
+      );
+      final old = _ReadConnection(_Sidebar(snapshot));
+      final resumed = _ReadConnection(
+        _Sidebar(rename('恢复后的会话')),
+        failFirstRead: true,
+      );
+      addTearDown(old.sidebar.changes.close);
+      addTearDown(resumed.sidebar.changes.close);
+      Widget show(_ReadConnection connection) => ProviderScope(
+        child: MaterialApp(
+          home: MobileWorkspace(
+            connection: connection,
+            connected: true,
+            connectionLabel: '已连接',
+            reconnect: () =>
+                throw TestFailure('the transport is already connected'),
+            onComputers: () {},
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(show(old));
+      await tester.pumpAndSettle();
+      expect(find.text('最新会话'), findsWidgets);
+      final timeline = tester.element(find.byType(TimelinePane));
+      await tester.pumpWidget(show(resumed));
+      await tester.pumpAndSettle();
+      expect(find.text('最新会话'), findsWidgets);
+      expect(tester.element(find.byType(TimelinePane)), same(timeline));
+      await tester.tap(find.byTooltip('重试读取会话'));
+      await tester.pumpAndSettle();
+      expect(resumed.reads, 2);
+      expect(find.text('恢复后的会话'), findsWidgets);
+      old.sidebar.changes.add(rename('旧连接的迟到列表'));
+      await tester.pumpAndSettle();
+      expect(find.text('恢复后的会话'), findsWidgets);
+      expect(find.text('旧连接的迟到列表'), findsNothing);
+    },
+  );
 
   testWidgets(
     'keeps the selected session when another session moves to the top',

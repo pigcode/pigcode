@@ -6,7 +6,6 @@ import {
   mobileFeatures,
   mobileHelloSchema,
   mobileProtocolVersion,
-  publicKeySchema,
   type MobilePairingView,
   type MobileRevokeResult,
   type PairedDevice,
@@ -14,14 +13,14 @@ import {
 import type { RelayCredentialCipher, RelaySettings } from "../services/relay-settings"
 import type { Context } from "cordis"
 import type { ThreadFeed } from "../rpc/thread-feed"
-import { acceptNoise, noiseKeyPair, type NoiseKeyPair, type NoiseSession } from "./noise"
+import { acceptNoise, type NoiseKeyPair, type NoiseSession } from "./noise"
+import { loadComputerIdentity } from "./computer-identity"
 import { fingerprint, PairedDevices } from "./paired-devices"
 import { pairingAttemptView, type Attempt } from "./pairing-attempt"
 import { openRelayHost, type RelayHost } from "./relay-host"
 import { serveMobileSidebar } from "./sidebar-rpc"
 
 const validity = 180_000
-const identityKey = "mobile.identity"
 type Status = MobilePairingView["status"]
 
 interface Peer {
@@ -52,6 +51,7 @@ export class MobileConnections {
   private retry: ReturnType<typeof setTimeout> | undefined
   private generation = 0
   private disposed = false
+  private suspended = false
   private unsubscribe: () => void
 
   constructor(
@@ -208,6 +208,21 @@ export class MobileConnections {
     this.disconnect()
   }
 
+  announceExit(state: "exited" | "restarting"): void {
+    this.connection?.announce(state)
+  }
+
+  setSuspended(suspended: boolean): void {
+    if (this.disposed || this.suspended === suspended) return
+    this.suspended = suspended
+    if (suspended) {
+      this.connection?.announce("sleeping")
+      if (this.attempt) this.finish("cancelled", false)
+    }
+    this.disconnect()
+    if (!suspended) this.scheduleReconnect(0)
+  }
+
   private expire(): void {
     if (this.attempt && this.now() >= this.attempt.expiresAt) this.finish("expired")
   }
@@ -227,31 +242,19 @@ export class MobileConnections {
   }
 
   private computerIdentity(): Promise<NoiseKeyPair> {
-    this.identity ??= this.loadIdentity().catch((error: unknown) => {
-      this.identity = undefined
-      throw error
-    })
+    this.identity ??= loadComputerIdentity(this.ctx.settings, this.cipher, this.devices.size > 0)
+      .catch((error: unknown) => {
+        this.identity = undefined
+        throw error
+      })
     return this.identity
-  }
-
-  private async loadIdentity(): Promise<NoiseKeyPair> {
-    const sealed = this.ctx.settings.get(identityKey)
-    if (typeof sealed === "string") {
-      const seed = publicKeySchema.parse(await this.cipher.open(sealed))
-      return noiseKeyPair(Buffer.from(seed, "base64url"))
-    }
-    if (sealed !== undefined || this.devices.size > 0)
-      throw new Error("computer identity unavailable")
-    const identity = noiseKeyPair()
-    this.ctx.settings.set(identityKey, await this.cipher.seal(identity.seed.toString("base64url")))
-    return identity
   }
 
   private ensureRelay(
     identity: NoiseKeyPair,
     config: { address: string; token: string },
   ): Promise<RelayHost> {
-    if (this.disposed) return Promise.reject(new Error("Host has stopped"))
+    if (this.disposed || this.suspended) return Promise.reject(new Error("Host unavailable"))
     if (this.connection) return Promise.resolve(this.connection)
     if (this.opening) return this.opening
     const generation = ++this.generation
@@ -314,7 +317,7 @@ export class MobileConnections {
   }
 
   private scheduleReconnect(delay = 2500): void {
-    if (this.disposed || this.retry || this.devices.size === 0) return
+    if (this.disposed || this.suspended || this.retry || this.devices.size === 0) return
     this.retry = setTimeout(() => {
       this.retry = undefined
       void this.restoreRelay()

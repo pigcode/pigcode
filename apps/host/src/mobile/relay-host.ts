@@ -2,6 +2,7 @@ import {
   RELAY_PROTOCOL_VERSION,
   relayAdmissionSchema,
   relaySessionControlSchema,
+  type RelayHostLifecycle,
 } from "@pigcode/contracts"
 
 interface RelayHostEvents {
@@ -14,6 +15,7 @@ interface RelayHostEvents {
 export interface RelayHost {
   send(session: number, ciphertext: Buffer): void
   closeSession(session: number): void
+  announce(state: RelayHostLifecycle): void
   close(): void
 }
 
@@ -27,17 +29,26 @@ export function openRelayHost(
   socket.binaryType = "arraybuffer"
   return new Promise((resolve, reject) => {
     let state: "joining" | "online" | "closed" = "joining"
+    let heartbeat: ReturnType<typeof setInterval> | undefined
+    let heartbeatMs = 0
+    let pongDeadline: ReturnType<typeof setTimeout> | undefined
     const close = () => {
       if (state === "closed") return
       const online = state === "online"
       state = "closed"
       clearTimeout(timeout)
+      clearInterval(heartbeat)
+      clearTimeout(pongDeadline)
       signal.removeEventListener("abort", close)
       socket.close()
       if (online) events.disconnected()
       else reject(new Error("relay registration failed"))
     }
     const timeout = setTimeout(close, 5_000)
+    const waitForPong = () => {
+      clearTimeout(pongDeadline)
+      pongDeadline = setTimeout(close, 2 * heartbeatMs).unref()
+    }
     const connection: RelayHost = {
       send(session, ciphertext) {
         const frame = Buffer.alloc(4 + ciphertext.length)
@@ -47,6 +58,11 @@ export function openRelayHost(
       },
       closeSession(session) {
         if (state === "online") socket.send(JSON.stringify({ type: "relay.close", session }))
+      },
+      announce(lifecycle) {
+        if (state === "online" && heartbeat && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: "relay.hostState", state: lifecycle }))
+        }
       },
       close,
     }
@@ -58,6 +74,7 @@ export function openRelayHost(
             version: RELAY_PROTOCOL_VERSION,
             computerId,
             token: config.token,
+            statusSupport: true,
           }),
         )
       }
@@ -74,10 +91,23 @@ export function openRelayHost(
           state = "online"
           clearTimeout(timeout)
           signal.removeEventListener("abort", close)
+          if (result.heartbeatSeconds) {
+            heartbeatMs = result.heartbeatSeconds * 1000
+            waitForPong()
+            heartbeat = setInterval(() => {
+              if (socket.readyState !== WebSocket.OPEN) close()
+              else socket.send(JSON.stringify({ type: "relay.ping" }))
+            }, heartbeatMs).unref()
+          }
           resolve(connection)
         } else if (typeof data === "string") {
           if (data.length > 8192) throw new Error("oversized relay control frame")
-          const message = relaySessionControlSchema.parse(JSON.parse(data))
+          const frame = JSON.parse(data) as { type?: string }
+          if (frame.type === "relay.pong" && heartbeatMs > 0) {
+            waitForPong()
+            return
+          }
+          const message = relaySessionControlSchema.parse(frame)
           if (message.type === "relay.open") events.sessionOpened(message.session)
           else events.sessionClosed(message.session)
         } else if (data instanceof ArrayBuffer && data.byteLength > 4 && data.byteLength <= 65539) {

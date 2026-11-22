@@ -123,7 +123,10 @@ export function timelineEvent(
       return {
         ...base,
         kind: "notice",
-        text: preview(text(payload.message) ?? "Agent 提示", 512).text,
+        text: preview(
+          text(payload.message) ?? (payload.key === "host.restarted" ? "电脑上的 Pigcode 重启，运行已中断。" : "Agent 提示"),
+          512,
+        ).text,
       }
     default:
       return undefined

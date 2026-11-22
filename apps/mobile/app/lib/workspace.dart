@@ -79,34 +79,60 @@ class _WorkspaceController extends Notifier<_WorkspaceData> {
   }
 }
 
-class MobileWorkspace extends ConsumerWidget {
+class MobileWorkspace extends ConsumerStatefulWidget {
   const MobileWorkspace({
     super.key,
     required this.connection,
+    required this.connected,
+    required this.connectionLabel,
+    required this.reconnect,
     required this.onComputers,
   });
 
   final MobileConnection connection;
+  final bool connected;
+  final String connectionLabel;
+  final VoidCallback reconnect;
   final VoidCallback onComputers;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final provider = _workspaceProvider(connection);
+  ConsumerState<MobileWorkspace> createState() => _MobileWorkspaceState();
+}
+
+class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
+  SidebarSnapshot? _lastSidebar;
+  MobileConnection? _viewConnection;
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = _workspaceProvider(widget.connection);
     final data = ref.watch(provider);
+    final connected = widget.connected && data.online;
+    final online = connected && data.snapshot != null;
+    if (online) {
+      _lastSidebar = data.snapshot;
+      _viewConnection = widget.connection;
+    }
+    final connection = _viewConnection ?? widget.connection;
     return WorkspaceView(
-      snapshot: data.snapshot,
-      online: data.online,
+      snapshot: _lastSidebar,
+      online: online,
+      connectionLabel: connected && !online
+          ? data.error ?? '正在恢复会话…'
+          : widget.connectionLabel,
       computerName: connection.computerName,
-      error: data.error,
-      onRetry: connection.supportsSidebar
-          ? () => unawaited(ref.read(provider.notifier).refresh())
-          : null,
-      onComputers: onComputers,
+      error: connected ? data.error : null,
+      onRetry: connected
+          ? (widget.connection.supportsSidebar
+                ? () => unawaited(ref.read(provider.notifier).refresh())
+                : null)
+          : widget.reconnect,
+      onComputers: widget.onComputers,
       draft: connection.supportsDraftCommands && connection.supportsTimeline
           ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
               connection: connection,
-              projects: data.snapshot?.projects ?? const [],
-              online: data.online,
+              projects: _lastSidebar?.projects ?? const [],
+              online: online,
               projectId: projectId,
               fallbackProjectId: fallbackProjectId,
               onAccepted: onAccepted,
@@ -129,6 +155,7 @@ class WorkspaceView extends StatefulWidget {
     required this.online,
     required this.computerName,
     required this.onComputers,
+    this.connectionLabel,
     this.error,
     this.onRetry,
     this.timeline,
@@ -138,6 +165,7 @@ class WorkspaceView extends StatefulWidget {
   final SidebarSnapshot? snapshot;
   final bool online;
   final String computerName;
+  final String? connectionLabel;
   final String? error;
   final VoidCallback? onRetry;
   final Widget Function(MobileThreadSummary thread, bool online)? timeline;
@@ -260,7 +288,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         .where((item) => item.id == thread?.projectId)
         .firstOrNull;
     final subtitle = !widget.online
-        ? '电脑连接已断开'
+        ? widget.connectionLabel ?? '电脑连接已断开'
         : project?.name ?? widget.computerName;
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
@@ -411,6 +439,18 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                               ],
                                             ),
                                           ),
+                                          if (!widget.online &&
+                                              widget.error != null &&
+                                              widget.onRetry != null &&
+                                              thread != null)
+                                            IconButton(
+                                              tooltip: '重试读取会话',
+                                              onPressed: widget.onRetry,
+                                              icon: const Icon(
+                                                Icons.refresh,
+                                                size: 20,
+                                              ),
+                                            ),
                                           if (_draftOpen)
                                             IconButton(
                                               tooltip: '返回会话',
@@ -478,7 +518,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   Widget _summary(MobileThreadSummary? thread) {
-    if (widget.error case final error?) {
+    if (widget.error case final error? when thread == null) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -486,7 +526,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(error),
-              if (widget.online && widget.onRetry != null)
+              if (widget.onRetry != null)
                 TextButton(onPressed: widget.onRetry, child: const Text('重试')),
             ],
           ),
@@ -497,7 +537,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       return Center(
         child: widget.online
             ? const CircularProgressIndicator.adaptive()
-            : const Text('电脑连接已断开'),
+            : Text(widget.connectionLabel ?? '电脑连接已断开'),
       );
     }
     if (thread == null) {

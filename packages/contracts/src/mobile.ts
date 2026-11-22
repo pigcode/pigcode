@@ -10,6 +10,7 @@ export const mobileFeatures = [
   "relay.saveReceipt",
   "sidebar.read",
   "timeline.read",
+  "timeline.resume",
   "run.write",
   "request.write",
   "draft.write",
@@ -131,12 +132,18 @@ export const relayRegistrationSchema = z.object({
   version: z.literal(RELAY_PROTOCOL_VERSION),
   computerId: computerIdSchema,
   token: z.string().min(1).max(4096),
+  statusSupport: z.boolean().optional(),
+})
+
+export const relayWatchSchema = relayRegistrationSchema.omit({ statusSupport: true }).extend({
+  type: z.literal("relay.watch"),
 })
 
 export const relayAdmissionSchema = z.object({
   type: z.literal("relay.result"),
   version: z.literal(RELAY_PROTOCOL_VERSION),
   status: z.enum(["ok", "offline", "busy", "token-rejected", "incompatible"]),
+  heartbeatSeconds: z.int().min(1).max(120).optional(),
 })
 
 export const relaySessionControlSchema = z.object({

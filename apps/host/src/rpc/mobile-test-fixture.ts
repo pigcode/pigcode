@@ -49,6 +49,7 @@ export async function startMobileHost(options?: {
   server.start()
 
   return {
+    ctx,
     async call(method: string, params: Record<string, unknown> = {}) {
       const id = randomUUID()
       transport.client.send({ jsonrpc: "2.0", id, method, params })

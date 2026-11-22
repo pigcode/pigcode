@@ -114,7 +114,9 @@ export class MobileSidebarRpc {
       this.receipts,
       "device:" + fingerprint(Buffer.from(session.deviceKey, "base64url")),
     )
-    this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message), canQueue)
+    this.timeline = new MobileTimelineSession(
+      ctx, (message) => transport.send(message), canQueue, session.features.includes("timeline.resume"),
+    )
   }
 
   start(): void {

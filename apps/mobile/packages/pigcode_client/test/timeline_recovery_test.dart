@@ -75,7 +75,81 @@ class _Rpc implements HostRequests {
   });
 }
 
+Map<String, Object?> _event(int seq, String kind) => {
+  'seq': seq,
+  'runId': 'current',
+  'kind': kind,
+  'createdAt': time,
+};
+
+class _ResumedRpc extends _Rpc {
+  @override
+  Future<Object?> call(String method, Map<String, Object?> params) async {
+    if (method == MobileTimelineMethods.subscribe) {
+      expect(params, {'threadId': 'thread', 'after': 20});
+      return {
+        'resumed': true,
+        'page': {
+          'events': [_event(20, 'run.started'), _event(23, 'reasoning')],
+          'through': 31,
+          'nextAfter': 27,
+        },
+      };
+    }
+    if (method == MobileTimelineMethods.catchUp) {
+      expect(params, {'threadId': 'thread', 'after': 27, 'through': 31});
+      void notice(int seq, int previous) => events.add({
+        'method': MobileTimelineMethods.event,
+        'params': {
+          'threadId': 'thread',
+          'previousSeq': previous,
+          'event': _event(seq, 'run.interrupted'),
+        },
+      });
+      notice(31, 27);
+      notice(35, 31);
+      return {
+        'events': [_event(23, 'reasoning'), _event(31, 'run.interrupted')],
+        'through': 31,
+      };
+    }
+    return super.call(method, params);
+  }
+}
+
 void main() {
+  test(
+    'reconnect fills a pinned gap and preserves the loaded history',
+    () async {
+      final oldRpc = _Rpc();
+      final old = await MobileTimeline.open(oldRpc, 'thread');
+      await old.loadEarlier();
+      final before = old.snapshot!;
+      oldRpc.delta(3, '旧连接的迟到响应');
+      await old.close();
+
+      final newRpc = _ResumedRpc();
+      final resumed = await MobileTimeline.open(
+        newRpc,
+        'thread',
+        previous: before,
+        canResume: true,
+      );
+      oldRpc.recovery.complete({'live': oldRpc.run(3, '迟到'), 'through': 20});
+      await Future<void>.delayed(Duration.zero);
+      expect(old.snapshot, same(before));
+      final after = resumed.snapshot!;
+      expect(after.events.map((event) => event.seq), [2, 20, 23, 31, 35]);
+      expect(after.cursor, 35);
+      expect(after.through, before.through);
+      expect(after.nextBefore, before.nextBefore);
+      expect(after.live, isNull);
+      await resumed.close();
+      await oldRpc.events.close();
+      await newRpc.events.close();
+    },
+  );
+
   test(
     'a delta gap refreshes only the active run and replays buffered text',
     () async {
