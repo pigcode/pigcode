@@ -16,6 +16,7 @@ export const mobileFeatures = [
   "draft.write",
   "queue.write",
   "changes.read",
+  "connection.revocation",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -41,7 +42,7 @@ export const deviceHandshakeSchema = z.discriminatedUnion("type", [
     type: z.literal("device.updateRelay"),
     secret: publicKeySchema,
   }),
-  z.object({ type: z.literal("device.connect") }),
+  z.object({ type: z.literal("device.connect"), revocationNotice: z.boolean().optional() }),
 ])
 
 export const mobileHelloSchema = z.object({

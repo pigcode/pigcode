@@ -12,6 +12,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'computer_reconnect.dart';
 import 'computers.dart';
+import 'offline_cache.dart';
 import 'theme_colors.dart';
 import 'workspace.dart';
 
@@ -84,7 +85,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   StreamSubscription<List<ConnectivityResult>>? _networks;
   Set<ConnectivityResult>? _network;
   late bool _foreground;
-  MobileConnection? _browsing;
+  ComputerOfflineCache? _cache;
   bool _workspaceOpen = false;
   String? _selected;
   String? _verification;
@@ -130,20 +131,19 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       observe: () => RelayStatusWatch.open(computer),
       onChange: () {
         if (!mounted || !identical(_session, session)) return;
-        setState(() {
-          final connection = session.connection;
-          if (connection == null) return;
-          if (_browsing == null) _workspaceOpen = true;
-          _browsing = connection;
-        });
+        if (session.error == 'device-revoked') {
+          unawaited(_confirmedRevocation(computer));
+        } else {
+          setState(() {});
+        }
       },
     );
     _session?.dispose();
     setState(() {
       _session = session;
       _selected = computer.computerKey;
-      _browsing = null;
-      _workspaceOpen = false;
+      _cache = ref.read(offlineCacheProvider).open(computer.computerKey);
+      _workspaceOpen = true;
       _feedback = null;
     });
     session.start(foreground: _foreground, initial: initial);
@@ -156,7 +156,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     if (_working) return;
     if (invite == null) {
       if (_selected == computer.computerKey) {
-        if (_browsing != null) setState(() => _workspaceOpen = true);
+        setState(() => _workspaceOpen = true);
         if (_session?.connection == null) _session?.retry();
       } else {
         _select(computer);
@@ -174,7 +174,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _session = null;
       _working = true;
       _workspaceOpen = false;
-      _browsing = null;
+      _cache = null;
       _updatingRelay = existing != null;
       _verification = null;
       _feedback = null;
@@ -233,6 +233,35 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
         });
       }
     }
+  }
+
+  Future<void> _confirmedRevocation(ComputerProfile computer) async {
+    final computers = ref.read(computersProvider.notifier);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _leaveComputer();
+    setState(() {
+      _working = true;
+      _feedback = '电脑已撤销本机配对，请重新扫码。';
+    });
+    try {
+      if (!await computers.forget(computer) && mounted) {
+        setState(() => _feedback = '电脑已撤销配对，本机暂时无法清理全部记录。');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _feedback = '电脑已撤销配对，本机暂时无法移除这台电脑。');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  void _leaveComputer() {
+    _session?.dispose();
+    setState(() {
+      _session = null;
+      _selected = null;
+      _cache = null;
+      _workspaceOpen = false;
+    });
   }
 
   String _connectionLabel(BuildContext context) {
@@ -329,21 +358,13 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     );
     if (!mounted || accepted != true || _working) return;
     setState(() => _working = true);
+    if (_selected == computer.computerKey) _leaveComputer();
     try {
       final cleared = await ref
           .read(computersProvider.notifier)
           .forget(computer);
-      if (mounted && _selected == computer.computerKey) {
-        _session?.dispose();
-        setState(() {
-          _session = null;
-          _selected = null;
-          _browsing = null;
-          _workspaceOpen = false;
-        });
-      }
       if (mounted) {
-        setState(() => _feedback = cleared ? null : '电脑已移除，待确认记录将在重新配对时清理。');
+        setState(() => _feedback = cleared ? null : '电脑已移除，本机暂时无法清理全部记录。');
       }
     } catch (_) {
       if (mounted) setState(() => _feedback = '无法移除手机上保存的电脑。');
@@ -367,7 +388,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     final manager = Scaffold(
       appBar: AppBar(
         title: const Text('电脑'),
-        leading: _browsing != null
+        leading: _selected != null
             ? BackButton(onPressed: () => setState(() => _workspaceOpen = true))
             : null,
       ),
@@ -479,15 +500,20 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
         ),
       ),
     );
-    final workspace = _browsing;
-    if (workspace == null) return manager;
+    final profile = computers.value
+        ?.where((entry) => entry.computerKey == _selected)
+        .firstOrNull;
+    if (profile == null) return manager;
     return IndexedStack(
       index: _workspaceOpen ? 0 : 1,
       children: [
         MobileWorkspace(
           key: ValueKey(_selected),
-          connection: workspace,
-          connected: identical(workspace, _session?.connection),
+          connection: _session?.connection,
+          connected: _session?.connection != null,
+          computer: profile,
+          deviceId: ref.read(computersProvider.notifier).deviceId,
+          cache: _cache,
           connectionLabel: connectionLabel,
           reconnect: () => _session?.retry(),
           onComputers: () => setState(() => _workspaceOpen = false),

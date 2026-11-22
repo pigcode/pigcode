@@ -16,11 +16,11 @@ import type { ThreadFeed } from "../rpc/thread-feed"
 import { acceptNoise, type NoiseKeyPair, type NoiseSession } from "./noise"
 import { loadComputerIdentity } from "./computer-identity"
 import { fingerprint, PairedDevices } from "./paired-devices"
-import { pairingAttemptView, type Attempt } from "./pairing-attempt"
+import { pairingAttemptView, pairingValidityMs, type Attempt } from "./pairing-attempt"
 import { openRelayHost, type RelayHost } from "./relay-host"
 import { serveMobileSidebar } from "./sidebar-rpc"
+import { denyUnpairedDevice, deviceRevokedNotice, revokeDeviceWork, tellRevokedDevice } from "./revocation"
 
-const validity = 180_000
 type Status = MobilePairingView["status"]
 
 interface Peer {
@@ -30,6 +30,7 @@ interface Peer {
   device?: PairedDevice | undefined
   attempt?: Attempt | undefined
   rpc?: ReturnType<typeof serveMobileSidebar>
+  revocationNotice?: boolean
 }
 
 declare module "cordis" {
@@ -91,9 +92,9 @@ export class MobileConnections {
     }
     const attempt: Attempt = {
       id: randomUUID(),
-      expiresAt: this.now() + validity,
+      expiresAt: this.now() + pairingValidityMs,
       secret: randomBytes(32),
-      timer: setTimeout(() => this.expire(), validity).unref(),
+      timer: setTimeout(() => this.expire(), pairingValidityMs).unref(),
       qr: null,
       candidate: null,
     }
@@ -188,16 +189,11 @@ export class MobileConnections {
     for (const [session, peer] of this.peers) {
       if (peer.device?.publicKey !== device.publicKey) continue
       cancelAttempt ||= peer.attempt !== undefined && peer.attempt === this.attempt
+      tellRevokedDevice(peer.revocationNotice, () => this.send(session, peer, deviceRevokedNotice))
       this.dropPeer(session, true)
     }
     if (this.devices.size === 0 || cancelAttempt) this.finish(this.attempt ? "cancelled" : "idle")
-    this.ctx.agents.cancelDeviceQueuedRuns(device.publicKey)
-    try {
-      this.ctx.get("messageQueue")?.revoke(device.publicKey)
-    } catch (error) {
-      // Dispatch still checks the durable authorization before it can start a message.
-      console.error("[host] could not remove messages of revoked device", error)
-    }
+    revokeDeviceWork(this.ctx, device.publicKey)
     return { status: "revoked", pairing: this.view() }
   }
 
@@ -402,7 +398,10 @@ export class MobileConnections {
     const publicKey = handshake.publicKey.toString("base64url")
     const registered = this.devices.find(publicKey)
     if (request.type === "device.connect") {
-      if (!registered) throw new Error("unpaired device")
+      if (!registered) {
+        denyUnpairedDevice(request.revocationNotice, handshake, (message) => this.connection?.send(session, message))
+        return this.dropPeer(session, true)
+      }
       peer.device = registered
       peer.phase = "hello"
     } else {
@@ -473,6 +472,7 @@ export class MobileConnections {
     const device = peer.device && this.devices.find(peer.device.publicKey)
     if (!device) throw new Error("device not authorized")
     const features = mobileFeatures.filter((feature) => hello.features.includes(feature))
+    peer.revocationNotice = features.includes("connection.revocation")
     peer.device = { ...device, lastConnectedAt: this.now() }
     this.devices.save(peer.device)
     peer.rpc = serveMobileSidebar(

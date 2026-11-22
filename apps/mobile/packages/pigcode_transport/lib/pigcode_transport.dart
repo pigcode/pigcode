@@ -380,6 +380,12 @@ class SecureLink {
       socket.add(initiation.message);
       final response = await inbox.next(const Duration(seconds: 8));
       final result = await initiation.finish(response as List<int>);
+      if (handshake['revocationNotice'] == true && result.payload.isNotEmpty) {
+        final notice = _map(utf8.decode(result.payload));
+        if (notice.length == 1 && notice['type'] == 'device.revoked') {
+          throw const ConnectionFailure('device-revoked');
+        }
+      }
       return SecureLink._(socket, inbox, result.session);
     } on ConnectionFailure {
       await inbox.close();
@@ -405,7 +411,14 @@ class SecureLink {
     Duration? timeout = const Duration(seconds: 8),
   }) async {
     try {
-      return _map(utf8.decode(await _receiveMessage(timeout)));
+      final value = _map(utf8.decode(await _receiveMessage(timeout)));
+      if (value.length == 1 && value['type'] == 'device.revoked') {
+        throw const ConnectionFailure('device-revoked');
+      }
+      return value;
+    } on ConnectionFailure {
+      await close();
+      rethrow;
     } catch (_) {
       await close();
       throw const ConnectionFailure('closed');

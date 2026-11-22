@@ -9,6 +9,22 @@ const mobileSecureStorage = FlutterSecureStorage(
 );
 
 final _locks = <String, Future<void>>{};
+final _computerEpochs = <String, int>{};
+
+/// Stops storage work from an obsolete connection after a computer is cleared.
+class ComputerStorageLease {
+  ComputerStorageLease(this.computerKey)
+    : _epoch = _computerEpochs[computerKey] ?? 0;
+
+  final String computerKey;
+  final int _epoch;
+
+  bool get valid => (_computerEpochs[computerKey] ?? 0) == _epoch;
+}
+
+void invalidateComputerStorage(String computerKey) {
+  _computerEpochs[computerKey] = (_computerEpochs[computerKey] ?? 0) + 1;
+}
 
 Future<T> withComputerStorage<T>(
   String computerKey,

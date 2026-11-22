@@ -259,10 +259,10 @@ it.skipIf(!oldAddress || !oldToken || !newAddress || !newToken)(
       expect(await call("mobile.devices.revoke", { deviceId: phoneA.id })).toMatchObject({
         status: "revoked",
       })
-      sendPhone("closed", first)
-      expect(await readPhone()).toEqual({ stage: "closed" })
+      sendPhone("revoked", first)
+      expect(await readPhone()).toEqual({ stage: "revoked", confirmed: true })
       sendPhone("reconnect", first)
-      expect(await readPhone()).toMatchObject({ stage: "failed" })
+      expect(await readPhone()).toMatchObject({ stage: "failed", code: "device-revoked" })
       const revokedUpdate = await openPairing()
       sendPhone("update", first, revokedUpdate.qr)
       expect(await readPhone()).toMatchObject({ stage: "failed" })
@@ -278,15 +278,15 @@ it.skipIf(!oldAddress || !oldToken || !newAddress || !newToken)(
       sendPhone("reconnect", second)
       expect(await readPhone()).toEqual({ stage: "ready" })
       sendPhone("reconnect", first)
-      expect(await readPhone()).toMatchObject({ stage: "failed" })
+      expect(await readPhone()).toMatchObject({ stage: "failed", code: "device-revoked" })
 
       await openPairing()
       expect(await call("mobile.devices.revoke", { deviceId: phoneB.id })).toMatchObject({
         status: "revoked",
         pairing: { attempt: null },
       })
-      sendPhone("closed", second)
-      expect(await readPhone()).toEqual({ stage: "closed" })
+      sendPhone("revoked", second)
+      expect(await readPhone()).toEqual({ stage: "revoked", confirmed: true })
       sendPhone("reconnect", second)
       expect(await readPhone()).toEqual({ stage: "failed", code: "offline" })
       expect((await view()).devices).toEqual([])

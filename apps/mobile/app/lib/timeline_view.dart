@@ -146,7 +146,8 @@ class _TimelineViewState extends State<TimelineView> {
           () => _subtle('已停下'),
         );
       }
-      if (turn.changes != null || turn.files.isNotEmpty) {
+      if ((turn.changes != null && widget.changesCard != null) ||
+          turn.files.isNotEmpty) {
         add(
           'files-$key',
           turn.changes?.seq ?? turn.terminal?.seq ?? turn.firstSeq,

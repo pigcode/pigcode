@@ -14,7 +14,7 @@ final _draftModelsProvider = FutureProvider.autoDispose
       (ref, target) => target.$1.drafts.models(target.$2),
     );
 
-class NewThreadDraft extends ConsumerWidget {
+class NewThreadDraft extends ConsumerStatefulWidget {
   const NewThreadDraft({
     super.key,
     required this.connection,
@@ -23,9 +23,13 @@ class NewThreadDraft extends ConsumerWidget {
     required this.onAccepted,
     this.projectId,
     this.fallbackProjectId,
+    this.computerKey,
+    this.deviceId,
   });
 
-  final MobileConnection connection;
+  final MobileConnection? connection;
+  final String? computerKey;
+  final String? deviceId;
   final String? projectId;
   final String? fallbackProjectId;
   final List<MobileProjectSummary> projects;
@@ -33,14 +37,32 @@ class NewThreadDraft extends ConsumerWidget {
   final ValueChanged<MobileDraftReceipt> onAccepted;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final provider = newThreadDraftProvider((connection, projectId));
+  ConsumerState<NewThreadDraft> createState() => _NewThreadDraftState();
+}
+
+class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
+  late final _entry = DraftEntry(widget.projectId);
+
+  DraftTarget get _target => (
+    connection: widget.connection,
+    computerKey: widget.computerKey ?? widget.connection!.computer.computerKey,
+    deviceId: widget.deviceId ?? widget.connection!.deviceId,
+    entry: _entry,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final target = _target;
+    final link = widget.connection;
+    final online = widget.online;
+    final projects = widget.projects;
+    final provider = newThreadDraftProvider(target);
     final draft = ref.watch(provider);
     ref.listen(provider, (previous, next) {
       final receipt = next.value?.receipt;
       if (receipt != null &&
           receipt.commandId != previous?.value?.receipt?.commandId) {
-        onAccepted(receipt);
+        widget.onAccepted(receipt);
       }
     });
     final view = draft.value;
@@ -56,11 +78,11 @@ class NewThreadDraft extends ConsumerWidget {
     }
 
     final actions = ref.read(provider.notifier);
-    final optionsKey = _draftOptionsProvider(connection);
-    final options = online ? ref.watch(optionsKey) : null;
+    final optionsKey = link == null ? null : _draftOptionsProvider(link);
+    final options = online && optionsKey != null ? ref.watch(optionsKey) : null;
     final form = view.form;
     final currentProject = projects
-        .where((item) => item.id == fallbackProjectId)
+        .where((item) => item.id == widget.fallbackProjectId)
         .firstOrNull;
     final selectedProject =
         form.projectId ?? currentProject?.id ?? projects.firstOrNull?.id;
@@ -74,9 +96,9 @@ class NewThreadDraft extends ConsumerWidget {
     final instance = instances
         .where((item) => item.instanceId == selectedInstance)
         .firstOrNull;
-    final modelsKey = instance == null
+    final modelsKey = instance == null || link == null
         ? null
-        : _draftModelsProvider((connection, instance.instanceId));
+        : _draftModelsProvider((link, instance.instanceId));
     final models = modelsKey == null ? null : ref.watch(modelsKey);
     final modelCatalog = models?.value;
     final selectedModel = form.modelId ?? modelCatalog?.defaultModelId;
@@ -89,18 +111,23 @@ class NewThreadDraft extends ConsumerWidget {
       instanceId: selectedInstance,
       modelId: selectedModel,
       permissionMode: permission,
+      instanceLabel: instance?.label,
+      modelLabel: model?.label,
     );
     final defaultsLoaded =
         form.projectId != displayed.projectId ||
         form.instanceId != displayed.instanceId ||
         form.modelId != displayed.modelId ||
-        form.permissionMode != displayed.permissionMode;
+        form.permissionMode != displayed.permissionMode ||
+        form.instanceLabel != displayed.instanceLabel ||
+        form.modelLabel != displayed.modelLabel;
     if (defaultsLoaded &&
         form.text.isNotEmpty &&
         !view.working &&
         view.notice == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted &&
+        if (mounted &&
+            _target == target &&
             identical(ref.read(provider).value?.form, form)) {
           actions.edit(displayed);
         }
@@ -125,10 +152,27 @@ class NewThreadDraft extends ConsumerWidget {
     Future<void> pick<T>(
       String title,
       List<(T, String)> choices,
-      ValueChanged<T> select,
+      NewThreadForm Function(NewThreadForm form, T choice) select,
     ) async {
       final choice = await _choose(context, title, choices);
-      if (choice != null && context.mounted) select(choice);
+      if (choice == null) return;
+      while (mounted) {
+        final active = _target;
+        final provider = newThreadDraftProvider(active);
+        final NewThreadDraftState view;
+        try {
+          view = await ref.read(provider.future);
+        } catch (_) {
+          if (mounted && active != _target) continue;
+          return;
+        }
+        if (!mounted) return;
+        if (active != _target) continue;
+        ref
+            .read(provider.notifier)
+            .edit(select(ref.read(provider).value?.form ?? view.form, choice));
+        return;
+      }
     }
 
     String instanceLabel(MobileDraftInstance item) =>
@@ -150,21 +194,23 @@ class NewThreadDraft extends ConsumerWidget {
               children: [
                 _DraftChip(
                   icon: Icons.folder_outlined,
-                  label: project?.name ?? '选择项目',
+                  label:
+                      project?.name ??
+                      (form.projectId == null ? '选择项目' : '已选项目'),
                   tooltip: '草稿项目',
                   onTap: !view.working && projects.isNotEmpty
-                      ? () => pick(
-                          '选择项目',
-                          [for (final item in projects) (item.id, item.name)],
-                          (id) =>
-                              actions.edit(displayed.copyWith(projectId: id)),
-                        )
+                      ? () => pick('选择项目', [
+                          for (final item in projects) (item.id, item.name),
+                        ], (current, id) => current.copyWith(projectId: id))
                       : null,
                 ),
                 _DraftChip(
                   icon: Icons.smart_toy_outlined,
                   label: instance == null
-                      ? '选择 Agent 实例'
+                      ? form.instanceLabel ??
+                            (form.instanceId == null
+                                ? '选择 Agent 实例'
+                                : '已选 Agent 实例')
                       : instanceLabel(instance),
                   tooltip: '草稿 Agent 实例',
                   onTap: !view.working && instances.isNotEmpty
@@ -174,20 +220,20 @@ class NewThreadDraft extends ConsumerWidget {
                             for (final item in instances)
                               (item, instanceLabel(item)),
                           ],
-                          (item) {
-                            actions.edit(
-                              displayed.copyWith(
-                                instanceId: item.instanceId,
-                                resetModel: true,
-                              ),
-                            );
-                          },
+                          (current, item) => current.copyWith(
+                            instanceId: item.instanceId,
+                            instanceLabel: item.label,
+                            resetModel: true,
+                          ),
                         )
                       : null,
                 ),
                 _DraftChip(
                   icon: Icons.layers_outlined,
-                  label: model?.label ?? (validModel ? 'Agent 默认模型' : '选择模型'),
+                  label:
+                      model?.label ??
+                      form.modelLabel ??
+                      (validModel ? 'Agent 默认模型' : form.modelId ?? '选择模型'),
                   tooltip: '草稿模型',
                   onTap:
                       !view.working &&
@@ -198,13 +244,20 @@ class NewThreadDraft extends ConsumerWidget {
                             for (final item in modelCatalog!.models)
                               (item.id, item.label),
                           ],
-                          (id) => actions.edit(displayed.copyWith(modelId: id)),
+                          (current, id) => current.copyWith(
+                            modelId: id,
+                            modelLabel: modelCatalog.models
+                                .firstWhere((item) => item.id == id)
+                                .label,
+                          ),
                         )
                       : null,
                 ),
                 _DraftChip(
                   icon: Icons.shield_outlined,
-                  label: validPermission ? _permissionName(permission) : '选择权限',
+                  label: permission == null
+                      ? '选择权限'
+                      : _permissionName(permission),
                   tooltip: '草稿权限',
                   onTap: !view.working && instance != null
                       ? () => pick(
@@ -213,9 +266,8 @@ class NewThreadDraft extends ConsumerWidget {
                             for (final item in instance.permissionModes)
                               (item, _permissionName(item)),
                           ],
-                          (mode) => actions.edit(
-                            displayed.copyWith(permissionMode: mode),
-                          ),
+                          (current, mode) =>
+                              current.copyWith(permissionMode: mode),
                         )
                       : null,
                 ),
@@ -230,7 +282,7 @@ class NewThreadDraft extends ConsumerWidget {
                     models?.hasError == true))
               TextButton(
                 onPressed: () {
-                  ref.invalidate(optionsKey);
+                  if (optionsKey != null) ref.invalidate(optionsKey);
                   if (modelsKey != null) ref.invalidate(modelsKey);
                 },
                 child: const Text('重新读取可用选项'),
@@ -271,6 +323,8 @@ class NewThreadDraft extends ConsumerWidget {
                         projectId: project.id,
                         instanceId: instance.instanceId,
                         modelId: selectedModel,
+                        instanceLabel: displayed.instanceLabel,
+                        modelLabel: displayed.modelLabel,
                         permissionMode: permission,
                       ),
                     )

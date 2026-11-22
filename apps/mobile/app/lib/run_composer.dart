@@ -5,6 +5,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 
 import 'message_queue_panel.dart';
 import 'run_command_journal.dart';
+import 'local_drafts.dart';
 import 'run_composer_state.dart';
 import 'theme_colors.dart';
 
@@ -17,6 +18,7 @@ class RunComposer extends ConsumerStatefulWidget {
     this.stoppableRunId,
     this.queueRevision = 0,
     this.wrapInput,
+    this.draft,
   });
 
   final MobileConnection connection;
@@ -25,17 +27,23 @@ class RunComposer extends ConsumerStatefulWidget {
   final String? stoppableRunId;
   final int queueRevision;
   final Widget Function(Widget)? wrapInput;
+  final TextEditingController? draft;
 
   @override
   ConsumerState<RunComposer> createState() => _RunComposerState();
 }
 
 class _RunComposerState extends ConsumerState<RunComposer> {
-  final _draft = TextEditingController();
+  final _localDraft = TextEditingController();
+  TextEditingController get _draft => widget.draft ?? _localDraft;
+  late final _draftStore = ThreadDraftStorage(
+    widget.connection.computer.computerKey,
+    widget.threadId,
+  );
 
   @override
   void dispose() {
-    _draft.dispose();
+    _localDraft.dispose();
     super.dispose();
   }
 
@@ -83,18 +91,36 @@ class _RunComposerState extends ConsumerState<RunComposer> {
           threadId: widget.threadId,
           revision: widget.queueRevision,
           online: widget.online,
-          onWithdraw: (text) {
-            final original = _draft.text;
-            final restored = original.isEmpty ? text : '$original\n$text';
-            _draft.value = TextEditingValue(
-              text: restored,
-              selection: TextSelection.collapsed(offset: restored.length),
-            );
-          },
+          onWithdraw: _restoreWithdrawal,
+          onWithdrawalAcknowledged: _draftStore.finishWithdrawal,
         ),
         input,
       ],
     );
+  }
+
+  Future<void> _restoreWithdrawal(QueueReceipt receipt) async {
+    final controller = _draft;
+    final original = controller.text;
+    final text = receipt.text!;
+    final restored = await _draftStore.restoreWithdrawal(
+      receipt.commandId,
+      text,
+      fallback: original,
+    );
+    if (!mounted || !identical(controller, _draft)) return;
+    final current = controller.text;
+    if (!restored.appended && current != original) return;
+    final next = current == original
+        ? restored.text
+        : current.isEmpty
+        ? text
+        : '$current\n$text';
+    controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    if (next != restored.text) await _draftStore.save(next, previous: current);
   }
 }
 

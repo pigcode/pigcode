@@ -10,6 +10,9 @@ class _Connection implements MobileConnection {
   bool get closed => _closed.isCompleted;
 
   @override
+  bool revoked = false;
+
+  @override
   Future<void> get done => _closed.future;
 
   @override
@@ -36,6 +39,31 @@ class _Watch implements RelayStatusWatch {
 }
 
 void main() {
+  testWidgets('a confirmed revocation ends the pairing without retrying', (
+    tester,
+  ) async {
+    final connection = _Connection();
+    var dials = 0;
+    final session = ComputerReconnect(
+      dial: () async {
+        dials++;
+        throw const ConnectionFailure('offline');
+      },
+      observe: () async => throw const ConnectionFailure('incompatible'),
+      onChange: () {},
+    );
+    session.start(foreground: true, initial: connection);
+    connection.revoked = true;
+    await connection.close();
+    await tester.pump();
+    expect(session.error, 'device-revoked');
+    session.retry();
+    await tester.pump(const Duration(seconds: 10));
+    expect(session.connection, isNull);
+    expect(dials, 0);
+    session.dispose();
+  });
+
   testWidgets('network switch discards a late dial from the previous network', (
     tester,
   ) async {

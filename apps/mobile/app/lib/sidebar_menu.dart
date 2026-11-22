@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'offline_sync_label.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
 
@@ -195,7 +196,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Text(
-            '上次同步 ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(snapshot.syncedAt))}',
+            offlineSyncLabel(context, snapshot.syncedAt),
             style: theme.textTheme.bodySmall?.copyWith(
               color: colors.secondaryText,
             ),

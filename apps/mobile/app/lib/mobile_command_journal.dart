@@ -17,21 +17,25 @@ class MobileCommandJournal<T extends JournalCommand> {
     String threadId,
     this.decode,
   ) : _computerKey = connection.computer.computerKey,
+      _lease = ComputerStorageLease(connection.computer.computerKey),
       _threadPrefix =
           '${_computerPrefix(connection.computer.computerKey)}${connection.deviceId}.${base64Url.encode(utf8.encode(threadId))}.';
 
   static const _prefix = 'pigcode.mobile.command.v1.';
   final String _computerKey;
+  final ComputerStorageLease _lease;
   final String _threadPrefix;
   final T Function(String slot, Map<String, dynamic> data) decode;
 
   static String _computerPrefix(String computerKey) => '$_prefix$computerKey.';
 
-  static Future<void> clearForComputer(String computerKey) =>
-      withComputerStorage(
-        computerKey,
-        () => deleteSecurePrefix(_computerPrefix(computerKey)),
-      );
+  static Future<void> clearForComputer(String computerKey) {
+    invalidateComputerStorage(computerKey);
+    return withComputerStorage(
+      computerKey,
+      () => deleteSecurePrefix(_computerPrefix(computerKey)),
+    );
+  }
 
   static Future<void> clearOnInstall() => deleteSecurePrefix(_prefix);
 
@@ -43,12 +47,17 @@ class MobileCommandJournal<T extends JournalCommand> {
     return raw == null ? null : _parse(slot, raw);
   }
 
-  Future<T?> read(String slot) =>
-      withComputerStorage(_computerKey, () => _read(slot));
+  Future<T?> read(String slot) => withComputerStorage(_computerKey, () async {
+    if (!_lease.valid) return null;
+    final result = await _read(slot);
+    return _lease.valid ? result : null;
+  });
 
   Future<List<T>> readMatching(String prefix) =>
       withComputerStorage(_computerKey, () async {
+        if (!_lease.valid) return [];
         final entries = await mobileSecureStorage.readAll();
+        if (!_lease.valid) return [];
         return [
           for (final entry in entries.entries)
             if (entry.key.startsWith('$_threadPrefix$prefix'))
@@ -57,7 +66,9 @@ class MobileCommandJournal<T extends JournalCommand> {
       });
 
   Future<T> reserve(T command) => withComputerStorage(_computerKey, () async {
+    if (!_lease.valid) throw StateError('Computer authorization changed');
     final existing = await _read(command.slot);
+    if (!_lease.valid) throw StateError('Computer authorization changed');
     if (existing != null) return existing;
     await mobileSecureStorage.write(
       key: '$_threadPrefix${command.slot}',
@@ -66,13 +77,20 @@ class MobileCommandJournal<T extends JournalCommand> {
     return command;
   });
 
-  Future<void> remove(T command, {required bool Function() mounted}) =>
-      withComputerStorage(_computerKey, () async {
-        final current = await _read(command.slot);
-        if (current?.commandId == command.commandId && mounted()) {
-          await mobileSecureStorage.delete(
-            key: '$_threadPrefix${command.slot}',
-          );
-        }
-      });
+  Future<bool> remove(
+    T command, {
+    required bool Function() mounted,
+    Future<void> Function()? beforeRemove,
+  }) => withComputerStorage(_computerKey, () async {
+    if (!_lease.valid) return false;
+    final current = await _read(command.slot);
+    if (current?.commandId == command.commandId && mounted() && _lease.valid) {
+      final commit = beforeRemove;
+      if (commit != null) await commit();
+      if (!mounted() || !_lease.valid) return false;
+      await mobileSecureStorage.delete(key: '$_threadPrefix${command.slot}');
+      return true;
+    }
+    return false;
+  });
 }

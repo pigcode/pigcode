@@ -59,7 +59,7 @@ class ComputerReconnect {
   }
 
   void retry() {
-    if (_disposed || !_foreground) return;
+    if (_disposed || !_foreground || _error == 'device-revoked') return;
     _reset();
     _terminal = false;
     _retrySeconds = 1;
@@ -125,7 +125,8 @@ class ComputerReconnect {
     void ended() {
       if (!_current(generation) || !identical(_connection, connection)) return;
       _connection = null;
-      _error = 'closed';
+      _error = connection.revoked ? 'device-revoked' : 'closed';
+      _terminal = connection.revoked;
       unawaited(connection.close());
       _onChange();
       _scheduleConnect(generation);

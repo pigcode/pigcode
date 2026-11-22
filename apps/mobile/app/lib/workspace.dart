@@ -6,6 +6,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'new_thread_draft.dart';
+import 'offline_cache.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
@@ -87,9 +88,15 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     required this.connectionLabel,
     required this.reconnect,
     required this.onComputers,
+    this.computer,
+    this.deviceId,
+    this.cache,
   });
 
-  final MobileConnection connection;
+  final MobileConnection? connection;
+  final ComputerProfile? computer;
+  final String? deviceId;
+  final ComputerOfflineCache? cache;
   final bool connected;
   final String connectionLabel;
   final VoidCallback reconnect;
@@ -101,38 +108,87 @@ class MobileWorkspace extends ConsumerStatefulWidget {
 
 class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
   SidebarSnapshot? _lastSidebar;
-  MobileConnection? _viewConnection;
+  bool _loadingCache = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSidebar();
+  }
+
+  @override
+  void didUpdateWidget(covariant MobileWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.cache, widget.cache)) {
+      _lastSidebar = null;
+      _restoreSidebar();
+    }
+  }
+
+  void _restoreSidebar() {
+    final cache = widget.cache;
+    _loadingCache = cache != null;
+    if (cache == null) return;
+    unawaited(
+      cache.readSidebar().catchError((Object _) => null).then((snapshot) {
+        if (!mounted || !identical(widget.cache, cache)) return;
+        setState(() {
+          _lastSidebar ??= snapshot;
+          _loadingCache = false;
+        });
+      }),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final provider = _workspaceProvider(widget.connection);
-    final data = ref.watch(provider);
-    final connected = widget.connected && data.online;
-    final online = connected && data.snapshot != null;
-    if (online) {
-      _lastSidebar = data.snapshot;
-      _viewConnection = widget.connection;
+    final connection = widget.connection;
+    final provider = connection == null ? null : _workspaceProvider(connection);
+    final data = provider == null ? null : ref.watch(provider);
+    final connected = widget.connected && data?.online == true;
+    final online = connected && data?.snapshot != null;
+    if (online) _lastSidebar = data!.snapshot;
+    if (provider != null) {
+      ref.listen(provider, (previous, next) {
+        final snapshot = next.snapshot;
+        final cache = widget.cache;
+        if (snapshot != null &&
+            cache != null &&
+            widget.connected &&
+            next.online &&
+            !identical(snapshot, previous?.snapshot)) {
+          unawaited(cache.saveSidebar(snapshot).catchError((Object _) {}));
+        }
+      });
     }
-    final connection = _viewConnection ?? widget.connection;
+    final draftLink = online && connection?.supportsDraftCommands == true
+        ? connection
+        : null;
+    final computer = widget.computer;
+    final localDrafts = computer != null && widget.deviceId != null;
     return WorkspaceView(
       snapshot: _lastSidebar,
       online: online,
+      loadingCache: _loadingCache,
+      offlineDraftAvailable: localDrafts,
       connectionLabel: connected && !online
-          ? data.error ?? '正在恢复会话…'
+          ? data?.error ?? '正在恢复会话…'
           : widget.connectionLabel,
-      computerName: connection.computerName,
-      error: connected ? data.error : null,
+      computerName: connection?.computerName ?? computer?.name ?? '电脑',
+      error: connected ? data?.error : null,
       onRetry: connected
-          ? (widget.connection.supportsSidebar
+          ? (connection?.supportsSidebar == true && provider != null
                 ? () => unawaited(ref.read(provider.notifier).refresh())
                 : null)
           : widget.reconnect,
       onComputers: widget.onComputers,
-      draft: connection.supportsDraftCommands && connection.supportsTimeline
+      draft: draftLink != null || localDrafts
           ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
-              connection: connection,
+              connection: draftLink,
+              computerKey: computer?.computerKey,
+              deviceId: widget.deviceId,
               projects: _lastSidebar?.projects ?? const [],
-              online: online,
+              online: draftLink != null,
               projectId: projectId,
               fallbackProjectId: fallbackProjectId,
               onAccepted: onAccepted,
@@ -140,9 +196,11 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           : null,
       timeline: (thread, online) => TimelinePane(
         key: ValueKey(thread.id),
-        connection: connection,
+        connection: online ? connection : null,
         threadId: thread.id,
         online: online,
+        cache: widget.cache,
+        computerKey: computer?.computerKey,
       ),
     );
   }
@@ -160,10 +218,14 @@ class WorkspaceView extends StatefulWidget {
     this.onRetry,
     this.timeline,
     this.draft,
+    this.loadingCache = false,
+    this.offlineDraftAvailable = false,
   });
 
   final SidebarSnapshot? snapshot;
   final bool online;
+  final bool loadingCache;
+  final bool offlineDraftAvailable;
   final String computerName;
   final String? connectionLabel;
   final String? error;
@@ -292,7 +354,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         : project?.name ?? widget.computerName;
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
-        widget.draft != null && widget.snapshot?.projects.isNotEmpty == true;
+        widget.draft != null &&
+        (widget.snapshot?.projects.isNotEmpty == true ||
+            widget.offlineDraftAvailable);
 
     return PopScope(
       canPop: !_open && !_draftOpen,
@@ -535,7 +599,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
     if (widget.snapshot == null) {
       return Center(
-        child: widget.online
+        child: widget.online || widget.loadingCache
             ? const CircularProgressIndicator.adaptive()
             : Text(widget.connectionLabel ?? '电脑连接已断开'),
       );

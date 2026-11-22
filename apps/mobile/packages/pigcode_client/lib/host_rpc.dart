@@ -24,7 +24,12 @@ class HostRpc implements HostRequests {
   final SecureLink _link;
   final _pending = <String, Completer<Object?>>{};
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
+  final _done = Completer<void>();
+  bool _revoked = false;
   int _nextId = 0;
+
+  Future<void> get done => _done.future;
+  bool get revoked => _revoked;
 
   @override
   Stream<Map<String, dynamic>> get notifications => _notifications.stream;
@@ -69,15 +74,19 @@ class HostRpc implements HostRequests {
         if (reply == null || reply.isCompleted) continue;
         _resolve(reply, value);
       }
-    } on ConnectionFailure {
+    } on ConnectionFailure catch (failure) {
+      _revoked = failure.code == 'device-revoked';
+    } finally {
       for (final reply in _pending.values) {
         if (!reply.isCompleted) {
-          reply.completeError(const ConnectionFailure('closed'));
+          reply.completeError(
+            ConnectionFailure(_revoked ? 'device-revoked' : 'closed'),
+          );
         }
       }
       _pending.clear();
-    } finally {
       unawaited(_notifications.close());
+      _done.complete();
     }
   }
 

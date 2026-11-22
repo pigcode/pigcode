@@ -78,6 +78,11 @@ const EXEMPT_SECTIONS: ReadonlyArray<{ file: string; start: string; end: string;
 
 /** 同一个词的其他含义。file 缺省表示所有文件；模式带 g，按命中范围判断。 */
 const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: string }> = [
+  {
+    file: "apps/mobile/app/pubspec.yaml",
+    pattern: /\bpath_provider(?=\s*:)/g,
+    reason: "Flutter 读取应用私有目录的依赖包名",
+  },
   ...[
     "packages/agent-antigravity/src/connection.ts",
     "packages/acp-runtime/src/connection.ts",

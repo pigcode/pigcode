@@ -1,5 +1,7 @@
 import type { MobilePairingView } from "@pigcode/contracts"
 
+export const pairingValidityMs = 180_000
+
 type AttemptView = NonNullable<MobilePairingView["attempt"]>
 type Candidate = NonNullable<AttemptView["candidate"]>
 

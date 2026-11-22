@@ -159,16 +159,31 @@ class _QueueActions extends AsyncNotifier<_QueueActionState> {
     }
   }
 
-  Future<void> acknowledge(String commandId) async {
+  Future<bool> acknowledge(
+    String commandId, {
+    Future<void> Function()? beforeRemove,
+  }) async {
     final operation = state.value?.pending;
-    if (operation?.commandId != commandId) return;
+    if (operation?.commandId != commandId) return false;
     try {
-      await _journal.remove(operation!, mounted: () => ref.mounted);
-      if (ref.mounted && state.value?.pending?.commandId == commandId) {
+      final removed = await _journal.remove(
+        operation!,
+        mounted: () => ref.mounted,
+        beforeRemove: beforeRemove,
+      );
+      if (removed &&
+          ref.mounted &&
+          state.value?.pending?.commandId == commandId) {
         state = const AsyncData(_QueueActionState());
       }
+      return removed;
     } catch (_) {
-      _notice('回执已确认，本机记录尚待清理。');
+      if (ref.mounted) {
+        state = AsyncData(
+          _QueueActionState(pending: operation, notice: '暂时无法保存撤回结果，请再次查回执。'),
+        );
+      }
+      return false;
     }
   }
 
@@ -205,13 +220,15 @@ class MessageQueuePanel extends ConsumerStatefulWidget {
     required this.revision,
     required this.online,
     required this.onWithdraw,
+    required this.onWithdrawalAcknowledged,
   });
 
   final MobileConnection connection;
   final String threadId;
   final int revision;
   final bool online;
-  final ValueChanged<String> onWithdraw;
+  final Future<void> Function(QueueReceipt receipt) onWithdraw;
+  final Future<void> Function(String commandId) onWithdrawalAcknowledged;
 
   @override
   ConsumerState<MessageQueuePanel> createState() => _MessageQueuePanelState();
@@ -247,10 +264,22 @@ class _MessageQueuePanelState extends ConsumerState<MessageQueuePanel> {
           receipt.commandId == previous?.value?.receipt?.commandId) {
         return;
       }
-      if (receipt.effect == QueueEffect.withdrawn && receipt.text != null) {
-        widget.onWithdraw(receipt.text!);
-      }
-      unawaited(controller.acknowledge(receipt.commandId));
+      final withdrawn =
+          receipt.effect == QueueEffect.withdrawn && receipt.text != null;
+      final restore = widget.onWithdraw;
+      final finish = widget.onWithdrawalAcknowledged;
+      unawaited(
+        controller
+            .acknowledge(
+              receipt.commandId,
+              beforeRemove: withdrawn ? () => restore(receipt) : null,
+            )
+            .then<void>((removed) async {
+              if (removed && withdrawn) {
+                await finish(receipt.commandId).catchError((Object _) {});
+              }
+            }),
+      );
       ref.invalidate(_snapshotProvider(_target));
     });
     final messages = snapshot?.messages ?? const [];

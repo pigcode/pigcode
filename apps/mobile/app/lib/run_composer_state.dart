@@ -3,6 +3,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
 import 'run_command_journal.dart';
+import 'local_drafts.dart';
 
 typedef ComposerTarget = (MobileConnection connection, String threadId);
 
@@ -35,10 +36,12 @@ final runComposerProvider = AsyncNotifierProvider.autoDispose
 
 class RunComposerController extends AsyncNotifier<RunComposerState> {
   RunComposerController(this.target)
-    : _journal = RunCommandJournal(target.$1, target.$2);
+    : _journal = RunCommandJournal(target.$1, target.$2),
+      _draft = ThreadDraftStorage(target.$1.computer.computerKey, target.$2);
 
   final ComposerTarget target;
   final RunCommandJournal _journal;
+  final ThreadDraftStorage _draft;
   MobileRunCommands get _api => target.$1.runCommands;
 
   @override
@@ -54,7 +57,7 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
         final receipt = await _api.receipt(command.commandId);
         if (receipt != null && command.matches(receipt)) {
           if (!ref.mounted) break;
-          await _journal.remove(command, mounted: () => ref.mounted);
+          await _forgetCommand(command, accepted: true);
           outcomes[method] = RunCommandOutcome(
             command,
             receipt: receipt,
@@ -182,7 +185,7 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
   Future<void> _settle(RunCommandOutcome outcome, {String? notice}) async {
     if (!ref.mounted) return;
     final command = outcome.command;
-    await _journal.remove(command, mounted: () => ref.mounted);
+    await _forgetCommand(command, accepted: outcome.receipt != null);
     if (!ref.mounted) return;
     final pending = {...?state.value?.pending}..remove(command.method);
     final notices = {...?state.value?.notices}..remove(command.method);
@@ -193,6 +196,17 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
       outcomes: {...?state.value?.outcomes, command.method: outcome},
     );
   }
+
+  Future<void> _forgetCommand(
+    PendingRunCommand command, {
+    required bool accepted,
+  }) => _journal.remove(
+    command,
+    mounted: () => ref.mounted,
+    beforeRemove: accepted && command is PendingSend
+        ? () => _draft.clearIfMatches(command.params.text)
+        : null,
+  );
 
   bool _begin(MobileRunMethod method) {
     final current = state.value;

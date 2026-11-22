@@ -181,6 +181,48 @@ void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
   testWidgets(
+    'keeps the selected project and applies a picker result across reconnect',
+    (tester) async {
+      final phone = _Connection(_DraftHost());
+      final online = ValueNotifier(false);
+      addTearDown(online.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: online,
+                builder: (_, connected, _) => NewThreadDraft(
+                  connection: connected ? phone : null,
+                  computerKey: phone.computer.computerKey,
+                  deviceId: phone.deviceId,
+                  projectId: 'one',
+                  projects: _projects,
+                  online: connected,
+                  onAccepted: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _pick(tester, '草稿项目', '次要项目');
+      online.value = true;
+      await tester.pumpAndSettle();
+      expect(find.text('次要项目'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('草稿项目'));
+      await tester.pumpAndSettle();
+      online.value = false;
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, '主项目').last);
+      await tester.pumpAndSettle();
+      expect(find.text('主项目'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'restores text and selected settings after rejection and leaving the draft',
     (tester) async {
       final host = _DraftHost()..reject = true;

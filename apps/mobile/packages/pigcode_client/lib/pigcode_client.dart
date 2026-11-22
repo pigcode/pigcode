@@ -122,7 +122,8 @@ class MobileConnection {
     );
   }
 
-  Future<void> get done => _link.done;
+  Future<void> get done => _rpc.done;
+  bool get revoked => _rpc.revoked;
   Future<void> close() => _link.close();
 
   /// Send only after the app has stored the approved profile. A later resume
@@ -216,7 +217,7 @@ class MobileConnection {
     computer,
     identity,
     client: client,
-    handshake: {'type': 'device.connect'},
+    handshake: {'type': 'device.connect', 'revocationNotice': true},
   );
 
   static Future<MobileConnection> _connect(
@@ -247,6 +248,7 @@ class MobileConnection {
           'timeline.read',
           'timeline.resume',
           'changes.read',
+          'connection.revocation',
           'run.write',
           'request.write',
           'draft.write',

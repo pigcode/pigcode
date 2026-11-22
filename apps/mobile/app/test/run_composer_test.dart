@@ -9,6 +9,7 @@ import 'package:pigcode_client/host_rpc.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_mobile/mobile_command_journal.dart';
 import 'package:pigcode_mobile/run_command_journal.dart';
+import 'package:pigcode_mobile/local_drafts.dart';
 import 'package:pigcode_mobile/run_composer.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
@@ -222,6 +223,7 @@ void main() {
       await other.reserve(savedSend);
       await MobileCommandJournal.clearForComputer(first.computer.computerKey);
       expect(await original.read(savedSend.method), isNull);
+      await expectLater(original.reserve(savedSend), throwsStateError);
       expect(
         (await other.read(savedSend.method))?.commandId,
         savedSend.commandId,
@@ -242,6 +244,11 @@ void main() {
       );
       final connection = _Connection(host);
       final journal = RunCommandJournal(connection, _threadId);
+      final draft = ThreadDraftStorage(
+        connection.computer.computerKey,
+        _threadId,
+      );
+      await draft.save(savedSend.params.text);
       await journal.reserve(savedSend);
       await tester.pumpWidget(_page(connection));
       await tester.pumpAndSettle();
@@ -249,6 +256,7 @@ void main() {
       expect(find.text('已找回发送回执'), findsOneWidget);
       expect(find.text('original-run'), findsOneWidget);
       expect(await journal.read(savedSend.method), isNull);
+      expect(await draft.read(), isEmpty);
     },
   );
 

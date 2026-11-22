@@ -346,6 +346,10 @@ Future<void> main() async {
           case 'closed':
             await active[phone]!.done.timeout(const Duration(seconds: 8));
             report('closed');
+          case 'revoked':
+            final connection = active[phone]!;
+            await connection.done.timeout(const Duration(seconds: 8));
+            report('revoked', {'confirmed': connection.revoked});
           case 'saved':
             report('saved', {'address': saved[phone]!.address.toString()});
           default:

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
+import 'local_drafts.dart';
 import 'mobile_secure_storage.dart';
 
 class NewThreadForm {
@@ -13,6 +14,8 @@ class NewThreadForm {
     this.projectId,
     this.instanceId,
     this.modelId,
+    this.instanceLabel,
+    this.modelLabel,
     this.permissionMode,
   });
 
@@ -20,6 +23,8 @@ class NewThreadForm {
   final String? projectId;
   final String? instanceId;
   final String? modelId;
+  final String? instanceLabel;
+  final String? modelLabel;
   final MobileDraftPermission? permissionMode;
 
   factory NewThreadForm.fromJson(Map<String, dynamic> json) => NewThreadForm(
@@ -27,6 +32,8 @@ class NewThreadForm {
     projectId: json['projectId'] as String?,
     instanceId: json['instanceId'] as String?,
     modelId: json['modelId'] as String?,
+    instanceLabel: json['instanceLabel'] as String?,
+    modelLabel: json['modelLabel'] as String?,
     permissionMode: json['permissionMode'] == null
         ? null
         : MobileDraftPermission.fromWire(json['permissionMode'] as String),
@@ -37,6 +44,8 @@ class NewThreadForm {
     'projectId': projectId,
     'instanceId': instanceId,
     'modelId': modelId,
+    'instanceLabel': instanceLabel,
+    'modelLabel': modelLabel,
     'permissionMode': permissionMode?.wire,
   };
 
@@ -45,6 +54,8 @@ class NewThreadForm {
     String? projectId,
     String? instanceId,
     String? modelId,
+    String? instanceLabel,
+    String? modelLabel,
     MobileDraftPermission? permissionMode,
     bool resetModel = false,
   }) => NewThreadForm(
@@ -52,6 +63,8 @@ class NewThreadForm {
     projectId: projectId ?? this.projectId,
     instanceId: instanceId ?? this.instanceId,
     modelId: resetModel ? null : modelId ?? this.modelId,
+    instanceLabel: instanceLabel ?? this.instanceLabel,
+    modelLabel: resetModel ? null : modelLabel ?? this.modelLabel,
     permissionMode: permissionMode ?? this.permissionMode,
   );
 
@@ -71,41 +84,34 @@ class _DraftRecord {
 
 /// One encrypted slot stores the editable draft and its outstanding command.
 class NewThreadDraftStorage {
-  NewThreadDraftStorage._(MobileConnection connection)
-    : _computerKey = connection.computer.computerKey,
-      _key =
-          '${_computerPrefix(connection.computer.computerKey)}${connection.deviceId}';
+  NewThreadDraftStorage(String computerKey, String deviceId)
+    : _lease = ComputerStorageLease(computerKey),
+      _key = '${_computerPrefix(computerKey)}$deviceId';
 
-  static const _prefix = 'pigcode.mobile.new-thread.v1.';
-  final String _computerKey;
+  final ComputerStorageLease _lease;
   final String _key;
 
-  static String _computerPrefix(String computerKey) => '$_prefix$computerKey.';
-
-  static Future<void> clearForComputer(String computerKey) =>
-      withComputerStorage(
-        computerKey,
-        () => deleteSecurePrefix(_computerPrefix(computerKey)),
-      );
-
-  static Future<void> clearOnInstall() => deleteSecurePrefix(_prefix);
+  static String _computerPrefix(String computerKey) =>
+      '$newThreadDraftPrefix$computerKey.';
 
   Future<_DraftRecord> _read() async {
-    final raw = await mobileSecureStorage.read(key: _key);
+    final raw = _lease.valid ? await mobileSecureStorage.read(key: _key) : null;
     if (raw == null) return const _DraftRecord(NewThreadForm(), null);
     final json = jsonDecode(raw) as Map<String, dynamic>;
     final pending = json['pending'] as Map<String, dynamic>?;
+    final form = json['form'] as Map<String, dynamic>?;
     return _DraftRecord(
-      NewThreadForm.fromJson(json['form'] as Map<String, dynamic>),
+      form == null ? const NewThreadForm() : NewThreadForm.fromJson(form),
       pending == null ? null : MobileDraftCreateParams.fromJson(pending),
     );
   }
 
-  Future<_DraftRecord> _load() => withComputerStorage(_computerKey, _read);
+  Future<_DraftRecord> _load() => withLocalDrafts(_read);
 
   Future<_DraftRecord> _update(_DraftRecord Function(_DraftRecord) update) =>
-      withComputerStorage(_computerKey, () async {
+      withLocalDrafts(() async {
         final current = await _read();
+        if (!_lease.valid) return current;
         final next = update(current);
         if (!identical(current, next)) {
           await mobileSecureStorage.write(
@@ -115,12 +121,40 @@ class NewThreadDraftStorage {
               'pending': next.pending?.toJson(),
             }),
           );
+          if (!identical(current.form, next.form)) {
+            await retainLocalDraft(
+              _key,
+              hasDraft:
+                  next.form.text.isNotEmpty ||
+                  next.form.projectId != null ||
+                  next.form.instanceId != null ||
+                  next.form.modelId != null ||
+                  next.form.permissionMode != null,
+            );
+          }
         }
         return next;
       });
 }
 
-typedef DraftTarget = (MobileConnection connection, String? projectId);
+typedef DraftTarget = ({
+  MobileConnection? connection,
+  String computerKey,
+  String deviceId,
+  DraftEntry entry,
+});
+
+/// A project shortcut applies once when opening the draft, not on reconnect.
+class DraftEntry {
+  DraftEntry(this._project);
+  String? _project;
+
+  String? takeProject() {
+    final project = _project;
+    _project = null;
+    return project;
+  }
+}
 
 class NewThreadDraftState {
   const NewThreadDraftState({
@@ -147,15 +181,15 @@ final newThreadDraftProvider = AsyncNotifierProvider.autoDispose
 
 class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
   NewThreadDraftController(this.target)
-    : _store = NewThreadDraftStorage._(target.$1);
+    : _store = NewThreadDraftStorage(target.computerKey, target.deviceId);
 
   final DraftTarget target;
   final NewThreadDraftStorage _store;
-  MobileDraftCommands get _api => target.$1.drafts;
+  MobileDraftCommands get _api => target.connection!.drafts;
 
   @override
   Future<NewThreadDraftState> build() async {
-    final preferredProject = target.$2;
+    final preferredProject = target.entry.takeProject();
     final draft = preferredProject == null
         ? await _store._load()
         : await _store._update(
@@ -167,7 +201,7 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
                 : current,
           );
     final command = draft.pending;
-    if (command != null && ref.mounted) {
+    if (command != null && target.connection != null && ref.mounted) {
       try {
         final receipt = await _api.receipt(command.commandId);
         if (receipt != null && ref.mounted) {
@@ -190,6 +224,7 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
   }
 
   void edit(NewThreadForm form) {
+    if (!ref.mounted) return;
     final current = state.value;
     if (current == null || current.working) return;
     state = AsyncData(
@@ -209,7 +244,11 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
   }
 
   Future<void> submit(NewThreadForm form) async {
-    if (state.value?.pending != null || !_begin()) return;
+    if (target.connection == null ||
+        state.value?.pending != null ||
+        !_begin()) {
+      return;
+    }
     try {
       final command = MobileDraftCreateParams(
         commandId: const Uuid().v4(),
@@ -242,7 +281,7 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
 
   Future<void> check({bool retry = false}) async {
     final command = state.value?.pending;
-    if (command == null || !_begin()) return;
+    if (target.connection == null || command == null || !_begin()) return;
     try {
       final receipt = await _api.receipt(command.commandId);
       if (receipt != null) {

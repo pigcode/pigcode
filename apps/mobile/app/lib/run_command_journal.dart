@@ -90,5 +90,6 @@ class RunCommandJournal {
   Future<void> remove(
     PendingRunCommand command, {
     required bool Function() mounted,
-  }) => _journal.remove(command, mounted: mounted);
+    Future<void> Function()? beforeRemove,
+  }) => _journal.remove(command, mounted: mounted, beforeRemove: beforeRemove);
 }
