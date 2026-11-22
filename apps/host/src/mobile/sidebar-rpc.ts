@@ -22,30 +22,11 @@ import {
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { fingerprint, type PairedDevices } from "./paired-devices"
+import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
+import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
 const pageByteBudget = 48 * 1024
-
-type ErrorCode =
-  | "METHOD_NOT_AVAILABLE"
-  | "INVALID_PARAMS"
-  | "RESOURCE_NOT_AVAILABLE"
-  | "RESULT_TOO_LARGE"
-  | "COMMAND_FAILED"
-
-const messages: Record<ErrorCode, string> = {
-  METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
-  INVALID_PARAMS: "请求参数无效，请检查手机端版本。",
-  RESOURCE_NOT_AVAILABLE: "电脑上的这个项目已不可用。",
-  RESULT_TOO_LARGE: "此摘要超出手机端可读取的大小。",
-  COMMAND_FAILED: "电脑暂时无法处理此请求。",
-}
-
-class MobileRequestError extends Error {
-  constructor(readonly code: ErrorCode) {
-    super(messages[code])
-  }
-}
 
 interface MobileSession {
   computerKey: Buffer
@@ -94,17 +75,9 @@ function threadSummary(thread: Thread) {
   }
 }
 
-function params<T>(
-  schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } },
-  input: unknown,
-): T {
-  const result = schema.safeParse(input === undefined ? {} : input)
-  if (!result.success) throw new MobileRequestError("INVALID_PARAMS")
-  return result.data
-}
-
-/** Read-only mobile allowlist. It never dispatches through the desktop RPC server. */
+/** Mobile allowlist. It never dispatches through the desktop RPC server. */
 export class MobileSidebarRpc {
+  private readonly timeline: MobileTimelineSession
   private stopMessages: (() => void) | undefined
   private stopSidebar: (() => void) | undefined
   private queued = false
@@ -117,13 +90,16 @@ export class MobileSidebarRpc {
     private readonly transport: HostTransport,
     private readonly devices: PairedDevices,
     private readonly session: MobileSession,
-  ) {}
+  ) {
+    this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message))
+  }
 
   start(): void {
     this.stopMessages = this.transport.onMessage((message) => this.receive(message))
   }
 
   stop(): void {
+    this.timeline.close()
     this.stopMessages?.()
     this.stopSidebar?.()
     this.stopSidebar = undefined
@@ -156,7 +132,7 @@ export class MobileSidebarRpc {
       response = rpcFailureSchema.parse({
         jsonrpc: "2.0",
         id,
-        error: { code, message: messages[code], retryable: code === "COMMAND_FAILED" },
+        error: { code, message: mobileErrorMessages[code], retryable: code === "COMMAND_FAILED" },
       })
     }
     this.transport.send(response)
@@ -171,6 +147,12 @@ export class MobileSidebarRpc {
         deviceId: fingerprint(Buffer.from(this.session.deviceKey, "base64url")),
       })
     }
+    if (
+      this.session.features.includes("timeline.read") &&
+      mobileTimelineRequests.has(request.method)
+    )
+      return this.timeline.dispatch(request)
+
     if (!this.session.features.includes("sidebar.read"))
       throw new MobileRequestError("METHOD_NOT_AVAILABLE")
 

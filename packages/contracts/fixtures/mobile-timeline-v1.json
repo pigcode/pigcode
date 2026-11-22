@@ -1,0 +1,105 @@
+{
+  "events": [
+    {
+      "seq": 1,
+      "runId": "one",
+      "kind": "run.started",
+      "text": "检查项目",
+      "createdAt": "2026-11-22T10:00:00.000Z"
+    },
+    {
+      "seq": 4,
+      "runId": "one",
+      "kind": "reasoning",
+      "text": "查看现状",
+      "createdAt": "2026-11-22T10:00:01.000Z"
+    },
+    {
+      "seq": 7,
+      "runId": "one",
+      "kind": "tool.started",
+      "itemId": "r1",
+      "name": "Read",
+      "text": "说明文档",
+      "createdAt": "2026-11-22T10:00:02.000Z"
+    },
+    {
+      "seq": 10,
+      "runId": "one",
+      "kind": "tool.completed",
+      "itemId": "r1",
+      "name": "Read",
+      "text": "工具输出",
+      "createdAt": "2026-11-22T10:00:03.000Z"
+    },
+    {
+      "seq": 11,
+      "runId": "one",
+      "kind": "message.assistant",
+      "text": "检查完成。",
+      "createdAt": "2026-11-22T10:00:04.000Z"
+    },
+    {
+      "seq": 12,
+      "runId": "one",
+      "kind": "tool.started",
+      "itemId": "plan-last",
+      "name": "update_plan",
+      "text": "更新计划",
+      "createdAt": "2026-11-22T10:00:04.000Z"
+    },
+    {
+      "seq": 13,
+      "runId": "one",
+      "kind": "tool.completed",
+      "itemId": "plan-last",
+      "name": "update_plan",
+      "text": "更新计划",
+      "createdAt": "2026-11-22T10:00:04.000Z"
+    },
+    {
+      "seq": 14,
+      "runId": "one",
+      "kind": "run.completed",
+      "createdAt": "2026-11-22T10:00:05.000Z"
+    },
+    {
+      "seq": 19,
+      "runId": "two",
+      "kind": "run.started",
+      "text": "继续检查",
+      "createdAt": "2026-11-22T10:01:00.000Z"
+    },
+    {
+      "seq": 22,
+      "runId": "two",
+      "kind": "message.assistant",
+      "text": "已完成其中一项。",
+      "createdAt": "2026-11-22T10:01:01.000Z"
+    },
+    {
+      "seq": 23,
+      "runId": "two",
+      "kind": "run.interrupted",
+      "createdAt": "2026-11-22T10:01:02.000Z"
+    }
+  ],
+  "turns": [
+    {
+      "key": "one",
+      "user": "检查项目",
+      "work": ["reasoning", "tool"],
+      "answer": "检查完成。",
+      "status": "completed",
+      "folded": true
+    },
+    {
+      "key": "two",
+      "user": "继续检查",
+      "work": [],
+      "answer": "已完成其中一项。",
+      "status": "interrupted",
+      "folded": false
+    }
+  ]
+}

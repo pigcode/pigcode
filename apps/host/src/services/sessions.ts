@@ -2,12 +2,23 @@
 import type { Context } from "cordis"
 import type { ThreadEvent } from "@pigcode/contracts"
 import type { NewThreadEvent } from "../storage/event-store"
+import { RunStreams, type LiveAgentDelta, type LiveRunRecord, type RunDelta } from "./run-streams"
 
 /** 线程事件的追加、回读与实时订阅入口。 */
 export interface SessionsService {
   append(event: NewThreadEvent): ThreadEvent
   read(threadId: string, cursor: number): ThreadEvent[]
   latestSeq(threadId: string): number
+  readBefore(
+    threadId: string,
+    through: number,
+    before: number,
+    limit: number,
+  ): Iterable<ThreadEvent>
+  get(threadId: string, seq: number): ThreadEvent | undefined
+  emitLive(threadId: string, runId: string, event: LiveAgentDelta): void
+  liveSnapshot(threadId: string): LiveRunRecord | undefined
+  subscribeLive(threadId: string, listener: (event: RunDelta) => void): () => void
   subscribe(threadId: string, listener: (event: ThreadEvent) => void): () => void
   /** 监听所有线程的事件，供 checkpoint 等跨线程服务使用。 */
   subscribeAll(listener: (event: ThreadEvent) => void): () => void
@@ -32,9 +43,11 @@ export interface SessionsPlugin {
 export const apply: SessionsPlugin = (ctx) => {
   const listeners = new Map<string, Set<(event: ThreadEvent) => void>>()
   const globalListeners = new Set<(event: ThreadEvent) => void>()
+  const streams = new RunStreams()
   const service: SessionsService = {
     append(event) {
       const stored = ctx.storage.events.append(event)
+      streams.record(stored)
       // 复制监听器集合，允许回调在广播期间追加事件或取消订阅。
       for (const listener of [...(listeners.get(event.threadId) ?? [])]) listener(stored)
       for (const listener of [...globalListeners]) listener(stored)
@@ -44,8 +57,22 @@ export const apply: SessionsPlugin = (ctx) => {
       return ctx.storage.events.read(threadId, cursor)
     },
     latestSeq(threadId) {
-      const events = ctx.storage.events.read(threadId, 0)
-      return events.at(-1)?.seq ?? 0
+      return ctx.storage.events.latestSeq(threadId)
+    },
+    readBefore(threadId, through, before, limit) {
+      return ctx.storage.events.readBefore(threadId, through, before, limit)
+    },
+    get(threadId, seq) {
+      return ctx.storage.events.get(threadId, seq)
+    },
+    emitLive(threadId, runId, event) {
+      streams.emit(threadId, runId, event)
+    },
+    liveSnapshot(threadId) {
+      return streams.snapshot(threadId)
+    },
+    subscribeLive(threadId, listener) {
+      return streams.subscribe(threadId, listener)
     },
     subscribe(threadId, listener) {
       const set = listeners.get(threadId) ?? new Set()
@@ -67,6 +94,7 @@ export const apply: SessionsPlugin = (ctx) => {
   ctx.effect(() => () => {
     listeners.clear()
     globalListeners.clear()
+    streams.clear()
   })
 }
 

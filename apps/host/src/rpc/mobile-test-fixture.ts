@@ -14,7 +14,12 @@ import { MemoryTransport } from "./memory-transport"
 import { RpcServer } from "./server"
 import { ThreadFeed } from "./thread-feed"
 
-export async function startMobileHost(options?: { settingsPath?: string; now?: () => number }) {
+export async function startMobileHost(options?: {
+  settingsPath?: string
+  now?: () => number
+  prepare?: (ctx: Context) => void
+  onDesktopMessage?: (message: unknown) => void
+}) {
   const ctx = new Context()
   await ctx.plugin(storage, { path: ":memory:" })
   await ctx.plugin(settings, options?.settingsPath ? { path: options.settingsPath } : {})
@@ -22,6 +27,7 @@ export async function startMobileHost(options?: { settingsPath?: string; now?: (
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
   await ctx.plugin(agents)
+  options?.prepare?.(ctx)
   const cipher = {
     seal: async (value: string) =>
       Buffer.from(JSON.stringify([randomUUID(), value])).toString("base64"),
@@ -36,6 +42,7 @@ export async function startMobileHost(options?: { settingsPath?: string; now?: (
 
   const transport = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
   const server = new RpcServer(ctx, transport.host, feed)
+  if (options?.onDesktopMessage) transport.client.onMessage(options.onDesktopMessage)
   server.start()
 
   return {

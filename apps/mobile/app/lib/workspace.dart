@@ -8,6 +8,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
+import 'timeline_pane.dart';
 
 typedef _WorkspaceData = ({
   SidebarSnapshot? snapshot,
@@ -100,6 +101,12 @@ class MobileWorkspace extends ConsumerWidget {
           ? () => unawaited(ref.read(provider.notifier).refresh())
           : null,
       onComputers: onComputers,
+      timeline: (thread, online) => TimelinePane(
+        key: ValueKey(thread.id),
+        connection: connection,
+        threadId: thread.id,
+        online: online,
+      ),
     );
   }
 }
@@ -113,6 +120,7 @@ class WorkspaceView extends StatefulWidget {
     required this.onComputers,
     this.error,
     this.onRetry,
+    this.timeline,
   });
 
   final SidebarSnapshot? snapshot;
@@ -120,6 +128,7 @@ class WorkspaceView extends StatefulWidget {
   final String computerName;
   final String? error;
   final VoidCallback? onRetry;
+  final Widget Function(MobileThreadSummary thread, bool online)? timeline;
   final VoidCallback onComputers;
 
   @override
@@ -383,6 +392,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
     if (thread == null) {
       return const Center(child: Text('没有已打开的会话'));
+    }
+    if (widget.timeline case final build?) {
+      return build(thread, widget.online);
     }
     if (!widget.online) return const SizedBox.shrink();
     final theme = Theme.of(context);

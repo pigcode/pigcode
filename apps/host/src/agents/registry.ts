@@ -128,6 +128,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   /** Agent 事件映射所需的 Host 回调。 */
   const runEventHooks: RunEventHooks = {
     isActive: (run) => activeRuns.get(run.runId) === run,
+    publishLive: (run, event) => ctx.sessions.emitLive(run.threadId, run.runId, event),
     append,
     updateNativeSessionId: (sessionId, nativeSessionId) =>
       agentSessions.updateNativeSessionId(sessionId, nativeSessionId),

@@ -48,6 +48,7 @@ const connection = new Connection({
     }
   },
   onStatus: (status) => store.update({ status }),
+  onLiveSnapshot: (threadId, live) => store.restoreLiveRun(threadId, live),
   onScheduledThread: (thread) => {
     const { threads } = store.getSnapshot()
     if (!threads.some((item) => item.id === thread.id))

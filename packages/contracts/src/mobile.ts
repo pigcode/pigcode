@@ -5,7 +5,12 @@ export const mobileProtocolVersion = 1
 const fingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/)
 export const computerIdSchema = fingerprintSchema
 export const devicePlatformSchema = z.enum(["ios", "android"])
-export const mobileFeatures = ["connection.status", "relay.saveReceipt", "sidebar.read"] as const
+export const mobileFeatures = [
+  "connection.status",
+  "relay.saveReceipt",
+  "sidebar.read",
+  "timeline.read",
+] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
 export const pairingCodeSchema = z.object({

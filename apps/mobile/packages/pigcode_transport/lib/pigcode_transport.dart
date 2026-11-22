@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 
@@ -320,12 +321,48 @@ class SecureLink {
     Duration? timeout = const Duration(seconds: 8),
   }) async {
     try {
-      final frame = await _inbox.next(timeout);
-      final plain = await _noise.decrypt(frame as List<int>);
-      return _map(utf8.decode(plain));
+      return _map(utf8.decode(await _receiveMessage(timeout)));
     } catch (_) {
       await close();
       throw const ConnectionFailure('closed');
+    }
+  }
+
+  Future<Uint8List> _receiveMessage(Duration? timeout) async {
+    final clock = Stopwatch()..start();
+    Future<Uint8List> next() async {
+      final wait = timeout == null ? null : timeout - clock.elapsed;
+      if (wait != null && wait <= Duration.zero) {
+        throw const ConnectionFailure('closed');
+      }
+      return _noise.decrypt(await _inbox.next(wait) as List<int>);
+    }
+
+    var frame = await next();
+    if (frame.isNotEmpty && frame[0] != 0) return frame;
+
+    // Length and offset are inside the Noise ciphertext and covered by its tag.
+    const headerLength = 9;
+    const maxMessageBytes = 256 * 1024 + 1024;
+    final parts = BytesBuilder(copy: false);
+    var expectedLength = 0;
+    while (true) {
+      if (frame.length <= headerLength || frame[0] != 0) {
+        throw const FormatException('Invalid mobile message fragment');
+      }
+      final header = ByteData.sublistView(frame);
+      final length = header.getUint32(1);
+      final offset = header.getUint32(5);
+      if (length > maxMessageBytes ||
+          (expectedLength != 0 && expectedLength != length) ||
+          offset != parts.length ||
+          offset + frame.length - headerLength > length) {
+        throw const FormatException('Invalid mobile message length or offset');
+      }
+      expectedLength = length;
+      parts.add(Uint8List.sublistView(frame, headerLength));
+      if (parts.length == expectedLength) return parts.takeBytes();
+      frame = await next();
     }
   }
 

@@ -17,6 +17,12 @@ import type { HostTransport } from "./transport"
 /** 连接状态；重连时保留 cursor 继续订阅。 */
 export type ConnectionStatus = "connecting" | "connected" | "reconnecting" | "offline"
 
+export interface DesktopLiveRun {
+  text: string
+  reasoning: string
+  tools: Array<{ id: string; text: string }>
+}
+
 /** 连接层向上层转发的回调。 */
 export interface ConnectionHandlers {
   onEvent(event: ThreadEvent): void
@@ -24,6 +30,7 @@ export interface ConnectionHandlers {
   onEvents?(events: ThreadEvent[], threadId: string): void
   onDelta(event: { threadId: string; event: AgentEvent }): void
   onStatus(status: ConnectionStatus): void
+  onLiveSnapshot?(threadId: string, live: DesktopLiveRun | null): void
   onScheduledThread?(thread: Thread): void
   /** Host 推来的会话新记录：状态、未读、标题、更新时间或归档变了，打开没打开都会推。 */
   onThreadChanged?(thread: Thread): void
@@ -34,6 +41,7 @@ export interface ConnectionHandlers {
 interface SubscribeResult {
   cursor?: number
   events: ThreadEvent[]
+  snapshot?: { live?: DesktopLiveRun }
 }
 
 /** 基于 RpcClient 的连接，负责多线程订阅、断线重订阅与事件游标维护。 */
@@ -170,6 +178,7 @@ export class Connection {
     if (!this.subscriptions.has(threadId)) return
     if (this.handlers.onEvents) this.handlers.onEvents(result.events, threadId)
     else for (const event of result.events) this.handlers.onEvent(event)
+    if (result.snapshot) this.handlers.onLiveSnapshot?.(threadId, result.snapshot.live ?? null)
     const lastSeq = result.events.reduce((max, event) => Math.max(max, event.seq), cursor)
     const nextCursor = Math.max(cursor, result.cursor ?? 0, lastSeq)
     // 回放期间可能已经收到新事件，cursor 不能退回去。

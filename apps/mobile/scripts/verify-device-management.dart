@@ -93,6 +93,63 @@ Future<void> main() async {
                   .map((thread) => thread.toJson())
                   .toList(),
             });
+          case 'timeline':
+            final threadId = command['threadId'] as String;
+            final timeline = await active[phone]!.openTimeline(threadId);
+            final expected = command['liveText'] as String?;
+            final answer = command['answer'] as String?;
+            bool matches(TimelineSnapshot snapshot) =>
+                (expected == null || snapshot.live?.text == expected) &&
+                (answer == null ||
+                    (snapshot.live == null &&
+                        snapshot.events.any((item) => item.text == answer)));
+            final first = timeline.snapshot;
+            final view = first != null && matches(first)
+                ? first
+                : await timeline.updates
+                      .firstWhere(matches)
+                      .timeout(const Duration(seconds: 12));
+            report('timeline', {
+              'bytes': utf8
+                  .encode(
+                    jsonEncode(
+                      view.events.map((item) => item.toJson()).toList(),
+                    ),
+                  )
+                  .length,
+              'liveText': view.live?.text,
+              'older': view.nextBefore != null,
+              'hasAnswer':
+                  answer != null &&
+                  view.events.any((item) => item.text == answer),
+            });
+          case 'earlier':
+            final timeline = await active[phone]!.openTimeline(
+              command['threadId'] as String,
+            );
+            await timeline.loadEarlier();
+            report('earlier', {
+              'hasOldRun': timeline.snapshot?.events.any(
+                (item) => item.runId == 'old',
+              ),
+            });
+          case 'timelineContent':
+            final timeline = await active[phone]!.openTimeline(
+              command['threadId'] as String,
+            );
+            final seq = int.parse(command['seq'] as String);
+            var chars = 0;
+            int? offset;
+            do {
+              final part = await timeline.content(
+                seq: seq,
+                field: MobileTimelineContentField.output,
+                offset: offset,
+              );
+              chars += part.text.length;
+              offset = part.nextOffset;
+            } while (offset != null);
+            report('timelineContent', {'chars': chars});
           case 'disconnect':
             await active.remove(phone)?.close();
             report('closed');

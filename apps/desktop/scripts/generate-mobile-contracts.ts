@@ -21,7 +21,7 @@ interface Schema {
 }
 
 const root = new URL("../../../", import.meta.url)
-const file = new URL("apps/mobile/packages/pigcode_client/lib/sidebar_models.dart", root)
+const clientLib = new URL("apps/mobile/packages/pigcode_client/lib/", root)
 const vite = await createServer({
   root: fileURLToPath(root),
   configFile: false,
@@ -36,6 +36,7 @@ function quote(value: string): string {
 
 function dartType(schema: Schema): string {
   if (schema.$ref) return schema.$ref
+  if (schema.type === "array" && schema.items) return "List<" + dartType(schema.items) + ">"
   switch (schema.type) {
     case "string":
       return "String"
@@ -49,14 +50,38 @@ function dartType(schema: Schema): string {
 }
 
 function read(schema: Schema, value: string, models: Record<string, Schema>): string {
+  if (schema.type === "array" && schema.items) {
+    return (
+      dartType(schema) +
+      ".unmodifiable((" +
+      value +
+      " as List<dynamic>).map((item) => " +
+      read(schema.items, "item", models) +
+      "))"
+    )
+  }
   if (!schema.$ref) return value + " as " + dartType(schema)
   if (models[schema.$ref]?.enum) return schema.$ref + ".fromWire(" + value + " as String)"
   return schema.$ref + ".fromJson(" + value + " as Map<String, dynamic>)"
 }
 
-function encode(schema: Schema, value: string, models: Record<string, Schema>): string {
+function encode(
+  schema: Schema,
+  value: string,
+  models: Record<string, Schema>,
+  optional = false,
+): string {
+  if (schema.type === "array" && schema.items) {
+    return (
+      value +
+      (optional ? "?" : "") +
+      ".map((item) => " +
+      encode(schema.items, "item", models) +
+      ").toList()"
+    )
+  }
   if (!schema.$ref) return value
-  return value + (models[schema.$ref]?.enum ? ".wire" : ".toJson()")
+  return value + (optional ? "?" : "") + (models[schema.$ref]?.enum ? ".wire" : ".toJson()")
 }
 
 function validators(field: string, schema: Schema): string[] {
@@ -133,11 +158,13 @@ function objectModel(name: string, schema: Schema, models: Record<string, Schema
   )
   lines.push("  Map<String, Object?> toJson() => {")
   for (const { key, value, required } of fields) {
-    if (!required && value.$ref) {
-      throw new Error("未实现可选引用字段 " + key)
-    }
     lines.push(
-      "    " + quote(key) + ": " + (required ? "" : "?") + encode(value, key, models) + ",",
+      "    " +
+        quote(key) +
+        ": " +
+        (required ? "" : "?") +
+        encode(value, key, models, !required) +
+        ",",
     )
   }
   return [...lines, "  };", "}", ""]
@@ -148,7 +175,9 @@ function model(name: string, schema: Schema, models: Record<string, Schema>): st
     return [
       "enum " + name + " {",
       ...schema.enum.map((value, index, entries) => {
-        const item = value.replace(/-([a-z])/g, (_, character: string) => character.toUpperCase())
+        const item = value.replace(/[.-]([a-z])/g, (_, character: string) =>
+          character.toUpperCase(),
+        )
         return "  " + item + "(" + quote(value) + ")" + (index === entries.length - 1 ? ";" : ",")
       }),
       "",
@@ -177,33 +206,62 @@ function model(name: string, schema: Schema, models: Record<string, Schema>): st
   throw new Error("不支持的手机模型 " + name)
 }
 
-try {
-  const contract = await vite.ssrLoadModule("/packages/contracts/src/mobile-sidebar.ts")
-  const models = contract.mobileSidebarJsonSchemas() as Record<string, Schema>
-  const methods = contract.mobileSidebarMethods as Record<string, string>
+interface ContractFamily {
+  methods: Record<string, string>
+  schemas: Record<string, Schema>
+  fileName: string
+  methodsName: string
+  constants?: string[]
+}
+
+async function generate(family: ContractFamily): Promise<void> {
+  const { methods, schemas, fileName, methodsName, constants = [] } = family
   const lines = [
     "// 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。",
     "",
-    "abstract final class MobileSidebarMethods {",
+    "abstract final class " + methodsName + " {",
     ...Object.entries(methods).map(
       ([name, method]) => "  static const " + name + " = " + quote(method) + ";",
     ),
     "}",
     "",
-    "const mobileSidebarPageSize = " + contract.mobileSidebarPageSize + ";",
+    ...constants,
     "",
   ]
-  for (const [name, schema] of Object.entries(models)) lines.push(...model(name, schema, models))
-  const draft = join(scratch, "sidebar_models.dart")
+  for (const [name, schema] of Object.entries(schemas)) lines.push(...model(name, schema, schemas))
+  const draft = join(scratch, fileName)
+  const file = new URL(fileName, clientLib)
   await writeFile(draft, lines.join("\n"))
   execFileSync("dart", ["format", draft], { stdio: "pipe" })
   const generated = await readFile(draft, "utf8")
   if (process.argv.includes("--check")) {
     if ((await readFile(file, "utf8")) !== generated)
-      throw new Error("Dart 契约与 contracts 不一致")
+      throw new Error(fileName + " 与 contracts 不一致")
   } else {
     await writeFile(file, generated)
   }
+}
+
+try {
+  const sidebar = await vite.ssrLoadModule("/packages/contracts/src/mobile-sidebar.ts")
+  const timeline = await vite.ssrLoadModule("/packages/contracts/src/mobile-timeline.ts")
+  await generate({
+    methods: sidebar.mobileSidebarMethods,
+    schemas: sidebar.mobileSidebarJsonSchemas(),
+    fileName: "sidebar_models.dart",
+    methodsName: "MobileSidebarMethods",
+    constants: ["const mobileSidebarPageSize = " + sidebar.mobileSidebarPageSize + ";"],
+  })
+  await generate({
+    methods: timeline.mobileTimelineMethods,
+    schemas: timeline.mobileTimelineJsonSchemas(),
+    fileName: "timeline_models.dart",
+    methodsName: "MobileTimelineMethods",
+    constants: [
+      "const timelineTextPreviewLength = " + timeline.timelineTextPreviewLength + ";",
+      "const timelineToolPreviewLength = " + timeline.timelineToolPreviewLength + ";",
+    ],
+  })
 } finally {
   await vite.close()
   await rm(scratch, { recursive: true, force: true })

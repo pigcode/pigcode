@@ -39,23 +39,62 @@ export class EventStore {
         `SELECT seq, thread_id, run_id, type, payload_json, schema_version, created_at
          FROM thread_events WHERE thread_id = ? AND seq > ? ORDER BY seq ASC`,
       )
-      .all(threadId, afterSeq) as Array<{
-      seq: number
-      thread_id: string
-      run_id: string | null
-      type: ThreadEvent["type"]
-      payload_json: string
-      schema_version: 1
-      created_at: string
-    }>
-    return rows.map((row) => ({
-      seq: row.seq,
-      threadId: row.thread_id,
-      runId: row.run_id,
-      type: row.type,
-      payload: JSON.parse(row.payload_json) as unknown,
-      schemaVersion: row.schema_version,
-      createdAt: row.created_at,
-    }))
+      .all(threadId, afterSeq) as EventRow[]
+    return rows.map(decodeRow)
+  }
+
+  latestSeq(threadId: string): number {
+    const row = this.db
+      .prepare(`SELECT seq FROM thread_events WHERE thread_id = ? ORDER BY seq DESC LIMIT 1`)
+      .get(threadId) as { seq: number } | undefined
+    return row?.seq ?? 0
+  }
+
+  *readBefore(
+    threadId: string,
+    through: number,
+    before: number,
+    limit: number,
+  ): Iterable<ThreadEvent> {
+    const rows = this.db
+      .prepare(
+        `SELECT seq, thread_id, run_id, type, payload_json, schema_version, created_at
+       FROM thread_events WHERE thread_id = ? AND seq <= ? AND seq < ?
+       ORDER BY seq DESC LIMIT ?`,
+      )
+      .iterate(threadId, through, before, limit) as Iterable<EventRow>
+    for (const row of rows) yield decodeRow(row)
+  }
+
+  get(threadId: string, seq: number): ThreadEvent | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT seq, thread_id, run_id, type, payload_json, schema_version, created_at
+       FROM thread_events WHERE thread_id = ? AND seq = ?`,
+      )
+      .get(threadId, seq) as EventRow | undefined
+    return row ? decodeRow(row) : undefined
+  }
+}
+
+interface EventRow {
+  seq: number
+  thread_id: string
+  run_id: string | null
+  type: ThreadEvent["type"]
+  payload_json: string
+  schema_version: 1
+  created_at: string
+}
+
+function decodeRow(row: EventRow): ThreadEvent {
+  return {
+    seq: row.seq,
+    threadId: row.thread_id,
+    runId: row.run_id,
+    type: row.type,
+    payload: JSON.parse(row.payload_json) as unknown,
+    schemaVersion: row.schema_version,
+    createdAt: row.created_at,
   }
 }

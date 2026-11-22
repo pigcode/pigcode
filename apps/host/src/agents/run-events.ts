@@ -1,6 +1,7 @@
 /** 把 Agent 的规范化事件映射为持久线程事件；delta 只走实时通道。 */
 import type { AgentEvent, ThreadEvent } from "@pigcode/contracts"
 import type { ActiveRun } from "./run-queue"
+import type { LiveAgentDelta } from "../services/run-streams"
 
 /** 事件映射所需的 Host 回调，避免 registry 与映射逻辑互相依赖。 */
 export interface RunEventHooks {
@@ -11,6 +12,7 @@ export interface RunEventHooks {
     type: ThreadEvent["type"],
     payload: unknown,
   ) => void
+  publishLive?: (run: ActiveRun, event: LiveAgentDelta) => void
   updateNativeSessionId: (sessionId: string, nativeSessionId: string) => void
   finish: (
     run: ActiveRun,
@@ -45,6 +47,7 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
       if (event.parentToolUseId === undefined) {
         run.liveText += event.text
         run.emitLive?.(event)
+        hooks.publishLive?.(run, event)
       }
       return
     case "message.completed":
@@ -59,6 +62,7 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
       if (event.parentToolUseId !== undefined) return
       run.reasoningStartedAt ??= Date.now()
       run.emitLive?.(event)
+      hooks.publishLive?.(run, event)
       return
     case "reasoning.completed": {
       if (event.text.trim().length === 0) return
@@ -94,6 +98,7 @@ export function mapAgentEvent(run: ActiveRun, event: AgentEvent, hooks: RunEvent
       return
     case "tool.outputDelta":
       run.emitLive?.(event)
+      hooks.publishLive?.(run, event)
       return
     case "subagent.started":
       hooks.append(run.threadId, run.runId, "subagent.started", {

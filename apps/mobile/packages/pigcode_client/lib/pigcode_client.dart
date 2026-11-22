@@ -4,10 +4,14 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'host_rpc.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
+import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
 export 'sidebar.dart';
 export 'sidebar_models.dart';
+export 'timeline.dart';
+export 'timeline_turns.dart';
+export 'timeline_models.dart';
 
 const mobileProtocolVersion = 1;
 
@@ -18,6 +22,7 @@ class MobileConnection {
     this.computer,
     this._acceptsRelayReceipt,
     this.supportsSidebar,
+    this.supportsTimeline,
   ) : _rpc = HostRpc(_link);
 
   final SecureLink _link;
@@ -25,8 +30,11 @@ class MobileConnection {
   final ComputerProfile computer;
   final bool _acceptsRelayReceipt;
   final bool supportsSidebar;
+  final bool supportsTimeline;
   final HostRpc _rpc;
   Future<MobileSidebar>? _sidebar;
+  Future<MobileTimeline>? _timeline;
+  String? _selectedThread;
 
   Future<MobileSidebar> openSidebar() {
     if (!supportsSidebar) throw const ConnectionFailure('update-desktop');
@@ -37,6 +45,36 @@ class MobileConnection {
       _sidebar = null;
       Error.throwWithStackTrace(error, stack);
     });
+  }
+
+  Future<MobileTimeline> openTimeline(String threadId) {
+    if (!supportsTimeline) throw const ConnectionFailure('update-desktop');
+    final previous = _timeline;
+    if (_selectedThread == threadId && previous != null) return previous;
+    _selectedThread = threadId;
+    late final Future<MobileTimeline> next;
+    next = _selectTimeline(threadId, previous).catchError((
+      Object error,
+      StackTrace stack,
+    ) {
+      if (identical(_timeline, next)) _timeline = null;
+      Error.throwWithStackTrace(error, stack);
+    });
+    return _timeline = next;
+  }
+
+  Future<MobileTimeline> _selectTimeline(
+    String threadId,
+    Future<MobileTimeline>? previous,
+  ) async {
+    if (previous != null) {
+      try {
+        await (await previous).close();
+      } catch (_) {
+        // A failed previous subscription has no timeline to release.
+      }
+    }
+    return MobileTimeline.open(_rpc, threadId);
   }
 
   Future<void> get done => _link.done;
@@ -157,7 +195,12 @@ class MobileConnection {
         'type': 'mobile.hello',
         'minVersion': mobileProtocolVersion,
         'maxVersion': mobileProtocolVersion,
-        'features': ['connection.status', 'relay.saveReceipt', 'sidebar.read'],
+        'features': [
+          'connection.status',
+          'relay.saveReceipt',
+          'sidebar.read',
+          'timeline.read',
+        ],
       });
       final welcome = await link.receive();
       if (welcome['type'] == 'mobile.incompatible') {
@@ -194,6 +237,7 @@ class MobileConnection {
         computer.withRelayRevision(revision),
         (welcome['features'] as List).contains('relay.saveReceipt'),
         (welcome['features'] as List).contains('sidebar.read'),
+        (welcome['features'] as List).contains('timeline.read'),
       );
       if (confirm == null) await connection.announceRelaySaved();
       return connection;

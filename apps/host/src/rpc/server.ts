@@ -18,6 +18,7 @@ import type {
 import { createThread } from "../services/thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
+import { subscribeDesktopThread } from "./desktop-thread-feed"
 import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
 import { forwardTerminal } from "./terminal-notify"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
@@ -102,8 +103,12 @@ export class RpcServer {
       return
     }
     try {
-      const result = await this.dispatch(request.method, request.params)
+      let afterReply: (() => void) | undefined
+      const result = await this.dispatch(request.method, request.params, (callback) => {
+        afterReply = callback
+      })
       this.transport.send(rpcSuccessSchema.parse({ jsonrpc: "2.0", id: request.id, result }))
+      if (afterReply) queueMicrotask(afterReply)
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "unknown error"
       this.transport.send(
@@ -116,7 +121,11 @@ export class RpcServer {
     }
   }
 
-  private async dispatch(method: string, params: unknown): Promise<unknown> {
+  private async dispatch(
+    method: string,
+    params: unknown,
+    onReply: (callback: () => void) => void,
+  ): Promise<unknown> {
     if (!(method in commandSchemas)) throw new Error(`unknown method: ${method}`)
     const command = method as CommandMethod
     const parsed = commandSchemas[command].parse(params)
@@ -181,22 +190,16 @@ export class RpcServer {
         return createThread(this.ctx, parsed as CommandParams<"thread.create">)
       case "thread.subscribe": {
         const value = parsed as { threadId: string; cursor: number }
-        const events = this.ctx.sessions.read(value.threadId, value.cursor)
         this.subscriptions.get(value.threadId)?.()
-        const unsubscribe = this.ctx.sessions.subscribe(value.threadId, (event) => {
-          this.transport.send({ jsonrpc: "2.0", method: "thread.event", params: event })
-        })
-        this.subscriptions.set(value.threadId, unsubscribe)
-        return {
-          snapshot: {
-            thread: this.ctx.threads.get(value.threadId) ?? null,
-            runs: [],
-            items: [],
-            pendingRequests: this.ctx.agents.listPendingRequests(value.threadId),
-          },
-          cursor: events.at(-1)?.seq ?? value.cursor,
-          events,
-        }
+        const subscription = subscribeDesktopThread(
+          this.ctx,
+          value.threadId,
+          value.cursor,
+          (message) => this.transport.send(message),
+        )
+        this.subscriptions.set(value.threadId, subscription.release)
+        onReply(subscription.afterReply)
+        return subscription.result
       }
       case "thread.unsubscribe": {
         const value = parsed as { threadId: string }
@@ -245,6 +248,11 @@ export class RpcServer {
           value.threadId,
           value.text,
           (event) => {
+            if (
+              this.subscriptions.has(value.threadId) &&
+              !(event.type === "tool.outputDelta" && event.parentToolUseId)
+            )
+              return
             this.transport.send({
               jsonrpc: "2.0",
               method: "thread.delta",

@@ -1,3 +1,4 @@
+import { mobileFrames } from "./mobile-frames"
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto"
 import { hostname } from "node:os"
 import {
@@ -345,7 +346,9 @@ export class MobileConnections {
 
   private send(session: number, peer: Peer, message: unknown): void {
     if (!peer.noise || !this.connection) throw new Error("mobile session closed")
-    this.connection.send(session, peer.noise.encrypt(Buffer.from(JSON.stringify(message))))
+    for (const frame of mobileFrames(message)) {
+      this.connection.send(session, peer.noise.encrypt(frame))
+    }
   }
 
   private receive(identity: NoiseKeyPair, session: number, ciphertext: Buffer): void {

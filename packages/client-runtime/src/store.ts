@@ -2,7 +2,7 @@ import { threadPatchFromEvent } from "./thread-patch"
 /** Renderer 的应用状态；组件通过 useSyncExternalStore 订阅。 */
 import { useSyncExternalStore } from "react"
 import type { Project, AgentFeatures, Thread, ThreadEvent, ThreadStatus } from "@pigcode/contracts"
-import type { ConnectionStatus } from "./connection"
+import type { ConnectionStatus, DesktopLiveRun } from "./connection"
 
 /** 单个线程在 Renderer 中的运行状态；取值和 Host 给会话算的状态一样。 */
 export type ThreadViewStatus = ThreadStatus
@@ -363,6 +363,28 @@ export class AppStore {
     this.flushDeltas()
     this.pendingDeltas.set(threadId, text)
     this.flushDeltas()
+  }
+
+  restoreLiveRun(threadId: string, live: DesktopLiveRun | null): void {
+    const previous = this.state.threadStates[threadId]
+    if (!previous) return
+    this.pendingDeltas.delete(threadId)
+    this.pendingOutput.delete(threadId)
+    this.pendingReasoning.delete(threadId)
+    const streamingText = live?.text ?? ""
+    this.update({
+      threadStates: {
+        ...this.state.threadStates,
+        [threadId]: {
+          ...previous,
+          streamingText,
+          liveReasoning: live?.reasoning ?? "",
+          liveOutput: Object.fromEntries(live?.tools.map(({ id, text }) => [id, text]) ?? []),
+        },
+      },
+      streamingText:
+        this.state.activeThreadId === threadId ? streamingText : this.state.streamingText,
+    })
   }
 
   /**

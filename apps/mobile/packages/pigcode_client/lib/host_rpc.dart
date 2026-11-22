@@ -9,9 +9,14 @@ class MobileRpcFailure implements Exception {
   final MobileRpcProblem problem;
 }
 
+abstract interface class HostRequests {
+  Stream<Map<String, dynamic>> get notifications;
+  Future<Object?> call(String method, Map<String, Object?> params);
+}
+
 /// One receiver owns the encrypted link after authentication. Replies remain
 /// associated with their caller even when sidebar notifications arrive between them.
-class HostRpc {
+class HostRpc implements HostRequests {
   HostRpc(this._link) {
     unawaited(_receive());
   }
@@ -21,8 +26,10 @@ class HostRpc {
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   int _nextId = 0;
 
+  @override
   Stream<Map<String, dynamic>> get notifications => _notifications.stream;
 
+  @override
   Future<Object?> call(String method, Map<String, Object?> params) async {
     if (_notifications.isClosed) throw const ConnectionFailure('closed');
     final id = 'phone-${++_nextId}';
