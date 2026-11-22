@@ -143,16 +143,23 @@ final class MobileRunReceipt {
     required this.method,
     required this.threadId,
     required this.runId,
+    this.queuedMessageId,
   });
   final String commandId;
   final MobileRunMethod method;
   final String threadId;
   final String runId;
+  final String? queuedMessageId;
 
   factory MobileRunReceipt.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) =>
-          !const {'commandId', 'method', 'threadId', 'runId'}.contains(key),
+      (key) => !const {
+        'commandId',
+        'method',
+        'threadId',
+        'runId',
+        'queuedMessageId',
+      }.contains(key),
     )) {
       throw const FormatException('MobileRunReceipt contains an unknown field');
     }
@@ -171,11 +178,15 @@ final class MobileRunReceipt {
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
+    final queuedMessageId = json.containsKey('queuedMessageId')
+        ? json['queuedMessageId'] as String
+        : null;
     return MobileRunReceipt(
       commandId: commandId,
       method: method,
       threadId: threadId,
       runId: runId,
+      queuedMessageId: queuedMessageId,
     );
   }
 
@@ -184,6 +195,7 @@ final class MobileRunReceipt {
     'method': method.wire,
     'threadId': threadId,
     'runId': runId,
+    'queuedMessageId': ?queuedMessageId,
   };
 }
 

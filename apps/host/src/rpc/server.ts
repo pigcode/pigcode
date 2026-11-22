@@ -9,17 +9,13 @@ import {
   rpcFailureSchema,
   rpcSuccessSchema,
 } from "@pigcode/contracts"
-import type {
-  CommandMethod,
-  CommandParams,
-  PermissionMode,
-  ReasoningEffort,
-} from "@pigcode/contracts"
+import type { CommandMethod, CommandParams, PermissionMode } from "@pigcode/contracts"
 import { createThread } from "../services/thread-create"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { subscribeDesktopThread } from "./desktop-thread-feed"
 import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
+import { desktopQueueRequests, dispatchDesktopQueue } from "./queued-message-commands"
 import { forwardTerminal } from "./terminal-notify"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
 import { ThreadFeed } from "./thread-feed"
@@ -129,6 +125,26 @@ export class RpcServer {
     if (!(method in commandSchemas)) throw new Error(`unknown method: ${method}`)
     const command = method as CommandMethod
     const parsed = commandSchemas[command].parse(params)
+    if (desktopQueueRequests.has(command)) {
+      return dispatchDesktopQueue(
+        this.ctx,
+        command,
+        parsed,
+        (id) => this.feed.changed(id),
+        (threadId, event) => {
+          if (
+            this.subscriptions.has(threadId) &&
+            !(event.type === "tool.outputDelta" && event.parentToolUseId)
+          )
+            return
+          this.transport.send({
+            jsonrpc: "2.0",
+            method: "thread.delta",
+            params: { threadId, event },
+          })
+        },
+      )
+    }
     if (THREAD_COMMANDS.has(command)) {
       return dispatchThreadCommand(this.ctx, command, parsed, (id) => this.feed.changed(id))
     }
@@ -228,46 +244,6 @@ export class RpcServer {
       case "thread.setPlanMode": {
         const value = parsed as { threadId: string; planMode: boolean }
         return updateThreadModes(this.ctx, value.threadId, { planMode: value.planMode })
-      }
-      case "run.start": {
-        const value = parsed as {
-          threadId: string
-          text: string
-          effort?: ReasoningEffort
-          fast?: boolean
-          ultracode?: boolean
-          instanceId?: string
-          references?: Array<{ kind: "thread"; threadId: string }>
-        }
-        // 在已归档的会话里接着发消息，会话回到侧栏。
-        if (this.ctx.threads.get(value.threadId)?.archivedAt) {
-          this.ctx.threads.unarchive(value.threadId)
-          this.feed.changed(value.threadId)
-        }
-        const { runId } = await this.ctx.agents.startRun(
-          value.threadId,
-          value.text,
-          (event) => {
-            if (
-              this.subscriptions.has(value.threadId) &&
-              !(event.type === "tool.outputDelta" && event.parentToolUseId)
-            )
-              return
-            this.transport.send({
-              jsonrpc: "2.0",
-              method: "thread.delta",
-              params: { threadId: value.threadId, event },
-            })
-          },
-          {
-            ...(value.effort ? { effort: value.effort } : {}),
-            ...(value.fast ? { fast: true } : {}),
-            ...(value.ultracode ? { ultracode: true } : {}),
-            ...(value.instanceId ? { instanceId: value.instanceId } : {}),
-            ...(value.references ? { references: value.references } : {}),
-          },
-        )
-        return { runId }
       }
       case "run.list":
         return { runs: this.ctx.agents.listRuns() }

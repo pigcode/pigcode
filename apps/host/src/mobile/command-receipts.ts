@@ -1,11 +1,21 @@
 import { createHash } from "node:crypto"
-import { mobileDraftReceipt, mobileRequestReceipt, mobileRunReceipt } from "@pigcode/contracts"
+import {
+  mobileDraftReceipt,
+  mobileRequestReceipt,
+  mobileRunReceipt,
+  queueReceipt,
+} from "@pigcode/contracts"
 import type { Context } from "cordis"
 import { z } from "zod"
 import type { ReceiptStore } from "../storage/receipt-store"
 import { MobileRequestError } from "./request-error"
 
-const receiptSchema = z.union([mobileRunReceipt, mobileRequestReceipt, mobileDraftReceipt])
+const receiptSchema = z.union([
+  mobileRunReceipt,
+  mobileRequestReceipt,
+  mobileDraftReceipt,
+  queueReceipt,
+])
 const storedReceipt = z.strictObject({ binding: z.string(), receipt: receiptSchema })
 type Receipt = z.infer<typeof receiptSchema>
 
@@ -28,15 +38,14 @@ export function requireMobileThread(ctx: Context, threadId: string): void {
   }
 }
 
-/** Same receipt namespace for every command submitted by a paired installation. */
-export class MobileCommandReceipts {
+export class CommandReceipts {
   constructor(
     private readonly store: ReceiptStore,
-    private readonly deviceKey: string,
+    private readonly prefix: string,
   ) {}
 
   private key(commandId: string): string {
-    return "mobile:v1:" + this.deviceKey + ":" + commandId
+    return this.prefix + commandId
   }
 
   private read(commandId: string) {
@@ -57,5 +66,11 @@ export class MobileCommandReceipts {
 
   record(receipt: Receipt, binding: string): void {
     this.store.insert(this.key(receipt.commandId), { binding, receipt })
+  }
+}
+
+export class MobileCommandReceipts extends CommandReceipts {
+  constructor(store: ReceiptStore, deviceKey: string) {
+    super(store, "mobile:v1:" + deviceKey + ":")
   }
 }

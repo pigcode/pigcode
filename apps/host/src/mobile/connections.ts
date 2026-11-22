@@ -192,6 +192,12 @@ export class MobileConnections {
     }
     if (this.devices.size === 0 || cancelAttempt) this.finish(this.attempt ? "cancelled" : "idle")
     this.ctx.agents.cancelDeviceQueuedRuns(device.publicKey)
+    try {
+      this.ctx.get("messageQueue")?.revoke(device.publicKey)
+    } catch (error) {
+      // Dispatch still checks the durable authorization before it can start a message.
+      console.error("[host] could not remove messages of revoked device", error)
+    }
     return { status: "revoked", pairing: this.view() }
   }
 

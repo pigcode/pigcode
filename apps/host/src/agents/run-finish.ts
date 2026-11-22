@@ -64,7 +64,7 @@ export function createRunFinisher(deps: FinishDeps) {
     run.approvals.clear()
     if (status === "interrupted") {
       run.controller.abort()
-      void Promise.resolve()
+      run.interruption = Promise.resolve()
         .then(() => run.driver.interrupt(run.session))
         .catch(() => undefined)
     }

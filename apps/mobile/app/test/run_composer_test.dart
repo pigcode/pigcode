@@ -73,6 +73,8 @@ class _Connection implements MobileConnection {
   @override
   final MobileRunCommands runCommands;
   @override
+  bool get supportsQueueCommands => false;
+  @override
   final ComputerProfile computer;
   @override
   String get deviceId => 'fixture-phone';

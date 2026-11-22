@@ -26,6 +26,7 @@ export const mobileRunReceipt = z.strictObject({
   method: mobileRunMethod,
   threadId,
   runId,
+  queuedMessageId: z.string().optional(),
 })
 export const mobileReceiptResult = z.strictObject({ receipt: mobileRunReceipt.optional() })
 

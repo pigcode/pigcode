@@ -31,6 +31,11 @@ export const HOST_ERROR_CODES = [
   /** 删除还有会话在用的 Agent 实例。 */
   "AGENT_INSTANCE_IN_USE",
   "AGENT_INSTANCE_ID_TAKEN",
+  "COMMAND_ID_CONFLICT",
+  "QUEUE_MESSAGE_UNAVAILABLE",
+  "QUEUE_STALE_RUN",
+  "QUEUE_LIMIT",
+  "QUEUE_TEXT_TOO_LONG",
 ] as const
 
 /** 有专门说明的 Host 错误码。 */

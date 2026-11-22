@@ -14,6 +14,7 @@ export interface ActiveRun {
   status: RunStatus
   done: Promise<void>
   resolveDone: () => void
+  interruption?: Promise<void>
   approvals: Set<string>
   /** 已经流给 UI、还没有被 message.completed 持久化的助手文本。 */
   liveText: string
@@ -63,6 +64,12 @@ export interface RunSummary {
   threadId: string
   status: RunStatus
   queuedAt?: string
+}
+
+/** 环境变量里的正整数；没设或不是正数时由调用方采用默认值。 */
+export function envCount(name: string): number | undefined {
+  const value = Number(process.env[name])
+  return Number.isInteger(value) && value > 0 ? value : undefined
 }
 
 /** 有界 FIFO 队列；达到上限时 push 返回 false。 */

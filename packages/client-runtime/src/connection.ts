@@ -118,6 +118,7 @@ export class Connection {
       effort?: ReasoningEffort | null
       fast?: boolean
       ultracode?: boolean
+      commandId?: string
       /** 输入框里 @ 引用的会话（#81）。 */
       references?: ReadonlyArray<{ kind: "thread"; threadId: string }>
     } = {},
@@ -126,6 +127,7 @@ export class Connection {
     await this.client.call("run.start", {
       threadId,
       text,
+      ...(options.commandId ? { commandId: options.commandId } : {}),
       ...(options.effort ? { effort: options.effort } : {}),
       ...(options.fast ? { fast: true } : {}),
       ...(options.ultracode ? { ultracode: true } : {}),

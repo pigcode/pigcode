@@ -147,3 +147,20 @@ export function createExecute(
 
   return execute
 }
+/** Keep the next queued message out of the driver until its previous native turn is cleaned up. */
+export function trackRunExecution(ctx: Context, send: ReturnType<typeof createExecute>) {
+  const executing = new Set<ActiveRun>()
+  return {
+    busy: (threadId: string) => Array.from(executing).some((run) => run.threadId === threadId),
+    execute(run: ActiveRun, input: UserInput): void {
+      executing.add(run)
+      void send(run, input)
+        .finally(async () => {
+          await run.interruption
+          executing.delete(run)
+          ctx.get("messageQueue")?.schedule(run.threadId)
+        })
+        .catch((error) => console.error("[host] agent execution failed", error))
+    },
+  }
+}

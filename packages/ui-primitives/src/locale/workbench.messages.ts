@@ -41,6 +41,11 @@ export const workbenchZhCN = {
   "hostError.GIT_NO_REMOTE": "这个仓库没连到 GitHub。用 git remote add 加一个再试。",
   "hostError.AGENT_INSTANCE_IN_USE": "还有会话在用这个 Agent。先换成别的，再删除。",
   "hostError.AGENT_INSTANCE_ID_TAKEN": "这个 ID 已经有了，换一个",
+  "hostError.COMMAND_ID_CONFLICT": "这个命令编号已用于其他操作",
+  "hostError.QUEUE_MESSAGE_UNAVAILABLE": "这条待发消息已处理或不可用",
+  "hostError.QUEUE_STALE_RUN": "当前运行已变化，请重新查看队列",
+  "hostError.QUEUE_LIMIT": "待发队列已满",
+  "hostError.QUEUE_TEXT_TOO_LONG": "消息太长，无法加入待发队列",
   "hostError.details": "详细信息",
 } as const
 
@@ -88,5 +93,11 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
   "hostError.AGENT_INSTANCE_IN_USE":
     "Threads still use this agent. Switch them to another one first.",
   "hostError.AGENT_INSTANCE_ID_TAKEN": "This ID is taken. Pick another one.",
+  "hostError.COMMAND_ID_CONFLICT": "This command ID belongs to another operation",
+  "hostError.QUEUE_MESSAGE_UNAVAILABLE":
+    "The queued message has already been handled or is unavailable",
+  "hostError.QUEUE_STALE_RUN": "The active run changed. Check the queue again.",
+  "hostError.QUEUE_LIMIT": "The message queue is full",
+  "hostError.QUEUE_TEXT_TOO_LONG": "The message is too long to queue",
   "hostError.details": "Details",
 }

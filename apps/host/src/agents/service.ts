@@ -34,10 +34,17 @@ export interface StartRunResult {
 }
 
 /** run 的可选参数；effort 只作用于本次 run。 */
-export interface MobileRunAdmission {
+export interface RunAdmission {
+  deviceKey?: string
+  authorizationId?: string
+  isAuthorized?: () => boolean
+  runId?: string
+  recordReceipt(runId: string, queuedMessageId?: string): void
+}
+
+export interface MobileRunAdmission extends RunAdmission {
   deviceKey: string
   isAuthorized(): boolean
-  recordReceipt(runId: string): void
 }
 
 export interface DraftRunSelection {
@@ -50,7 +57,7 @@ export interface DraftRunSelection {
 }
 
 export interface StartRunOptions {
-  mobileAdmission?: MobileRunAdmission
+  admission?: RunAdmission
   effort?: ReasoningEffort
   /** 本次 run 用快速模式。 */
   fast?: boolean

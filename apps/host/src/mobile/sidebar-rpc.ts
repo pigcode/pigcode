@@ -24,12 +24,14 @@ import {
   type Thread,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
+import { QueueOperationError } from "../agents/message-queue"
+import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
 import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
-import { MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
+import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
@@ -104,14 +106,15 @@ export class MobileSidebarRpc {
     private readonly session: MobileSession,
   ) {
     this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
-    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts)
+    const canQueue = session.features.includes("queue.write")
+    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts, canQueue)
     this.drafts = new MobileDraftCommands(ctx, devices, session.deviceKey, this.receipts)
     this.requests = new MobileRequestCommands(
       ctx,
       this.receipts,
       "device:" + fingerprint(Buffer.from(session.deviceKey, "base64url")),
     )
-    this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message))
+    this.timeline = new MobileTimelineSession(ctx, (message) => transport.send(message), canQueue)
   }
 
   start(): void {
@@ -155,7 +158,10 @@ export class MobileSidebarRpc {
       const result = await this.dispatch(request)
       response = rpcSuccessSchema.parse({ jsonrpc: "2.0", id, result })
     } catch (error) {
-      const code = error instanceof MobileRequestError ? error.code : "COMMAND_FAILED"
+      const code =
+        error instanceof MobileRequestError || error instanceof QueueOperationError
+          ? error.code
+          : "COMMAND_FAILED"
       if (code === "COMMAND_FAILED") console.error("[host] mobile request failed", error)
       response = rpcFailureSchema.parse({
         jsonrpc: "2.0",
@@ -184,6 +190,7 @@ export class MobileSidebarRpc {
     const canRun = this.session.features.includes("run.write")
     const canRespond = this.session.features.includes("request.write")
     const canDraft = this.session.features.includes("draft.write")
+    const canQueue = this.session.features.includes("queue.write")
     if (canRun && mobileRunCommandRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.commands.dispatch(request)
@@ -196,7 +203,21 @@ export class MobileSidebarRpc {
       this.requirePairedDevice()
       return this.drafts.dispatch(request)
     }
-    if ((canRun || canRespond || canDraft) && request.method === mobileCommandMethods.receipt) {
+    if (canQueue && queueRequestNames.has(request.method)) {
+      this.requirePairedDevice()
+      return dispatchQueuedMessage(
+        this.ctx,
+        this.receipts,
+        request.method,
+        request.params,
+        (threadId) => requireMobileThread(this.ctx, threadId),
+        this.devices.queueSource(this.session.deviceKey),
+      )
+    }
+    if (
+      (canRun || canRespond || canDraft || canQueue) &&
+      request.method === mobileCommandMethods.receipt
+    ) {
       this.requirePairedDevice()
       const { commandId } = params(mobileReceiptParams, request.params)
       const receipt = this.receipts.lookup(commandId)
@@ -204,11 +225,14 @@ export class MobileSidebarRpc {
       const allowed =
         receipt.method === mobileDraftMethods.create
           ? canDraft
-          : mobileRunCommandRequests.has(receipt.method)
-            ? canRun
-            : canRespond
+          : queueRequestNames.has(receipt.method)
+            ? canQueue
+            : mobileRunCommandRequests.has(receipt.method)
+              ? canRun
+              : canRespond
       if (!allowed) return {}
       requireMobileThread(this.ctx, receipt.threadId)
+      if (!canQueue && "queuedMessageId" in receipt) return { receipt: legacyRunReceipt(receipt) }
       return { receipt }
     }
 

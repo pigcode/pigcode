@@ -296,6 +296,29 @@ const MIGRATIONS: Migration[] = [
     ));
   `,
   `ALTER TABLE pending_requests ADD COLUMN resolution_json TEXT;`,
+  `
+  CREATE TABLE queued_messages (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL UNIQUE,
+    text TEXT NOT NULL,
+    options_json TEXT NOT NULL,
+    device_key TEXT,
+    authorization_id TEXT
+  );
+  CREATE INDEX idx_queued_messages_thread ON queued_messages(thread_id, seq);
+  CREATE INDEX idx_queued_messages_device ON queued_messages(device_key);
+
+  CREATE TABLE message_queue_state (
+    thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+    paused INTEGER NOT NULL DEFAULT 0,
+    selected_id TEXT,
+    stop_target_id TEXT,
+    action_device_key TEXT,
+    action_authorization_id TEXT
+  );
+  `,
 ]
 
 /**

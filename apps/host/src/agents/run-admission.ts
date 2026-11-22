@@ -42,11 +42,12 @@ export function prepareRunEntry(
     if (unregister) ctx.effect(() => unregister)
   }
   const mcp = bridge?.sessionMcp(threadId)
-  const source = options.mobileAdmission
+  const source = options.admission
   return {
-    runId: `run_${randomUUID()}`,
+    runId: source?.runId ?? `run_${randomUUID()}`,
     threadId,
-    ...(source ? { sourceDevice: source.deviceKey, isAuthorized: source.isAuthorized } : {}),
+    ...(source?.deviceKey ? { sourceDevice: source.deviceKey } : {}),
+    ...(source?.isAuthorized ? { isAuthorized: source.isAuthorized } : {}),
     driver,
     instanceId,
     input: runInput(text, options),
@@ -82,8 +83,8 @@ export function writeRunAdmission(
 ): void {
   const { runId, threadId, queuedAt } = entry
   const { text } = entry.input
-  const awaitingAgent = queued || options.mobileAdmission !== undefined
-  if (options.mobileAdmission && thread.archivedAt) {
+  const awaitingAgent = queued || options.admission?.deviceKey !== undefined
+  if (options.admission?.deviceKey && thread.archivedAt) {
     ctx.threads.unarchive(threadId)
     append(threadId, null, "thread.updated", { archivedAt: null })
   }
@@ -103,5 +104,5 @@ export function writeRunAdmission(
     ...(references.length > 0 ? { references } : {}),
   })
   if (awaitingAgent) append(threadId, runId, "run.queued", { queuedAt })
-  options.mobileAdmission?.recordReceipt(runId)
+  options.admission?.recordReceipt(runId)
 }

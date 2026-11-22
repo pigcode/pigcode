@@ -10,6 +10,7 @@ import {
 } from "@pigcode/contracts"
 import type { Context } from "cordis"
 import { RunAlreadyActiveError, RunQueueFullError } from "../agents/errors"
+import { QueueOperationError } from "../agents/message-queue"
 import { RunStore } from "../storage/run-store"
 import { commandBinding, requireMobileThread, type MobileCommandReceipts } from "./command-receipts"
 import type { PairedDevices } from "./paired-devices"
@@ -21,6 +22,10 @@ export const mobileRunCommandRequests: ReadonlySet<string> = new Set([
 ])
 const terminal = new Set(["completed", "interrupted", "failed"])
 
+export function legacyRunReceipt({ method, commandId, threadId, runId }: MobileRunReceipt) {
+  return { method, commandId, threadId, runId }
+}
+
 export class MobileRunCommands {
   private readonly runs: RunStore
 
@@ -29,6 +34,7 @@ export class MobileRunCommands {
     private readonly devices: PairedDevices,
     private readonly deviceKey: string,
     private readonly receipts: MobileCommandReceipts,
+    private readonly supportsQueue: boolean,
   ) {
     this.runs = new RunStore(ctx.storage.db)
   }
@@ -52,24 +58,49 @@ export class MobileRunCommands {
     requireMobileThread(this.ctx, threadId)
     const binding = commandBinding(methods.start, threadId, text)
     const previous = this.receipts.existing(commandId, binding, mobileRunReceipt)
-    if (previous) return previous
+    if (previous) return this.supportsQueue ? previous : legacyRunReceipt(previous)
+    if (!this.supportsQueue && !this.ctx.messageQueue.canStartWithoutQueue(threadId)) {
+      throw new MobileRequestError("THREAD_BUSY")
+    }
 
     try {
-      const { runId } = await this.ctx.agents.startRun(threadId, text, undefined, {
-        mobileAdmission: {
+      const source = this.devices.queueSource(this.deviceKey)
+      const options = {
+        admission: {
           deviceKey: this.deviceKey,
+          ...(source ? { authorizationId: source.authorizationId } : {}),
           isAuthorized: this.devices.runAuthorization(this.deviceKey),
-          recordReceipt: (runId) => {
-            this.receipts.record({ commandId, method: methods.start, threadId, runId }, binding)
+          recordReceipt: (runId: string, queuedMessageId?: string) => {
+            this.receipts.record(
+              {
+                commandId,
+                method: methods.start,
+                threadId,
+                runId,
+                ...(queuedMessageId ? { queuedMessageId } : {}),
+              },
+              binding,
+            )
           },
         },
-      })
-      return { commandId, method: methods.start, threadId, runId }
+      }
+      const result = this.supportsQueue
+        ? await this.ctx.messageQueue.submit(threadId, text, options)
+        : await this.ctx.agents.startRun(threadId, text, undefined, options)
+      return (
+        this.receipts.existing(commandId, binding, mobileRunReceipt) ?? {
+          commandId,
+          method: methods.start,
+          threadId,
+          runId: result.runId,
+        }
+      )
     } catch (error) {
       const accepted = this.receipts.existing(commandId, binding, mobileRunReceipt)
-      if (accepted) return accepted
+      if (accepted) return this.supportsQueue ? accepted : legacyRunReceipt(accepted)
       if (error instanceof RunAlreadyActiveError) throw new MobileRequestError("THREAD_BUSY")
       if (error instanceof RunQueueFullError) throw new MobileRequestError("RUN_QUEUE_FULL")
+      if (error instanceof QueueOperationError) throw new MobileRequestError(error.code)
       throw error
     }
   }

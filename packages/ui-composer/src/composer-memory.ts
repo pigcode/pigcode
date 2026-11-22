@@ -49,6 +49,18 @@ const focusRequests = new Set<string>()
 /** 预填的那个输入框已经挂着时，用这个事件让它立刻换上预填的内容。 */
 export const COMPOSER_PREFILL_EVENT = "pigcode:composer-prefill"
 
+/** 撤回待发消息时，将原文补到当前草稿里。 */
+export function appendComposerText(key: string, text: string): void {
+  window.dispatchEvent(new CustomEvent(COMPOSER_TAKE_EVENT, { detail: { key } }))
+  const paragraphs = text.split("\n").map((line) => ({
+    type: "paragraph",
+    content: line ? [{ type: "text", text: line }] : [],
+  }))
+  saveDraft(key, { type: "doc", content: [...(loadDraft(key)?.content ?? []), ...paragraphs] })
+  focusRequests.add(key)
+  window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key } }))
+}
+
 /**
  * 预填某个会话的输入框：文字写进草稿，附件放到输入框上方，光标停在文字末尾。输入框还没挂载时，
  * 打开这个会话时换上；已经挂着时立刻换上。不发送；用户补完再发。「创建插件」与新会话的建议用它。

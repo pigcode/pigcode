@@ -4,6 +4,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'host_rpc.dart';
 import 'draft_commands.dart';
 import 'pending_requests.dart';
+import 'queued_messages.dart';
 import 'run_commands.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
@@ -16,6 +17,8 @@ export 'draft_models.dart';
 export 'run_commands.dart';
 export 'pending_requests.dart';
 export 'request_models.dart';
+export 'queued_messages.dart';
+export 'queue_models.dart';
 export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'timeline.dart';
@@ -35,6 +38,7 @@ class MobileConnection {
     this.supportsRunCommands,
     this.supportsRequestCommands,
     this.supportsDraftCommands,
+    this.supportsQueueCommands,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -47,9 +51,11 @@ class MobileConnection {
   final bool supportsRunCommands;
   final bool supportsRequestCommands;
   final bool supportsDraftCommands;
+  final bool supportsQueueCommands;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
+  late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
     _rpc,
   );
@@ -225,6 +231,7 @@ class MobileConnection {
           'run.write',
           'request.write',
           'draft.write',
+          'queue.write',
         ],
       });
       final welcome = await link.receive();
@@ -266,6 +273,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('run.write'),
         (welcome['features'] as List).contains('request.write'),
         (welcome['features'] as List).contains('draft.write'),
+        (welcome['features'] as List).contains('queue.write'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

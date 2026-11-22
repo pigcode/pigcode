@@ -67,8 +67,9 @@ export interface ComposerProps {
   onSubmit: (text: string, options: ComposerSubmitOptions) => void
   /** 运行中点击停止按钮。 */
   onStop: () => void
-  /** 有 run 进行中时把发送按钮换成停止按钮。 */
+  /** 当前会话正在运行。 */
   running?: boolean
+  allowQueue?: boolean
   /** 禁用输入与发送。 */
   disabled?: boolean
   /** 首页使用更高的输入区。 */
@@ -126,6 +127,7 @@ export function Composer({
   onSubmit,
   onStop,
   running = false,
+  allowQueue = false,
   disabled = false,
   tall = false,
   menuSide = "top",
@@ -192,8 +194,8 @@ export function Composer({
   // 编辑器只创建一次；回调与配置通过 ref 读取最新值。
   const live = {
     onSubmit,
-    running,
     disabled: disabled || invalidPermission,
+    submitBlocked: (running && !allowQueue) || Boolean(form?.submitDisabled),
     form,
     effort,
     fast,
@@ -223,11 +225,10 @@ export function Composer({
   /** 正在翻历史时记录位置；内容被改动后退出翻找。 */
   const historyRef = useRef<{ offset: number; text: string } | null>(null)
 
-  /** 交出文本后清空输入区，下一条消息从空白开始。 */
   function send(): void {
     const editor = editorRef.current
     const current = latest.current
-    if (!editor || current.disabled || current.running || current.form?.submitDisabled) return
+    if (!editor || current.disabled || current.submitBlocked) return
     const text = editorText(editor)
     const { contexts, clear } = contextsRef.current
     if (!text && contexts.length === 0) return
@@ -468,6 +469,7 @@ export function Composer({
       {contextUsage ? <ContextMeter usage={contextUsage} /> : null}
       <ComposerSubmit
         running={running}
+        allowQueue={allowQueue}
         canInterrupt={canInterrupt}
         formLabel={form?.submitLabel}
         disabled={empty || disabled || invalidPermission || Boolean(form?.submitDisabled)}

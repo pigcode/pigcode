@@ -49,11 +49,16 @@ export function eventBody(
   }
 }
 
-export function timelineEvent(event: ThreadEvent): MobileTimelineEvent | undefined {
+export function timelineEvent(
+  event: ThreadEvent,
+  includeQueueChanges = false,
+): MobileTimelineEvent | undefined {
   const payload = record(event.payload)
   if (payload.parentToolUseId) return undefined
   const base = { seq: event.seq, runId: event.runId ?? undefined, createdAt: event.createdAt }
   switch (event.type) {
+    case "queue.changed":
+      return includeQueueChanges ? { ...base, kind: "queue.changed" } : undefined
     case "run.queued":
     case "run.completed":
     case "run.interrupted":

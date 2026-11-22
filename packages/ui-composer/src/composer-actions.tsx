@@ -47,6 +47,7 @@ export function ComposerAttachMenu({
 
 export function ComposerSubmit({
   running,
+  allowQueue = false,
   canInterrupt,
   formLabel,
   disabled,
@@ -54,6 +55,7 @@ export function ComposerSubmit({
   onStop,
 }: {
   running: boolean
+  allowQueue?: boolean
   canInterrupt: boolean
   formLabel: string | undefined
   disabled: boolean
@@ -61,25 +63,36 @@ export function ComposerSubmit({
   onStop: () => void
 }) {
   const { t } = useLocale()
-  if (running && !canInterrupt) return null
-  const label = running ? t("chat.interrupt") : (formLabel ?? t("chat.send"))
+  const sendLabel = formLabel ?? t("chat.send")
   return (
-    <Button
-      variant="plain"
-      className={running ? "send is-stop" : "send"}
-      type="button"
-      data-form-action={formLabel ? "" : undefined}
-      aria-label={label}
-      title={formLabel ? `${label} · ${formatShortcut("Mod+Enter")}` : label}
-      disabled={formLabel ? disabled : undefined}
-      aria-disabled={!running && disabled ? true : undefined}
-      onClick={running ? onStop : onSubmit}
-    >
-      {running ? (
-        <Square className="ic" aria-hidden="true" />
-      ) : (
-        (formLabel ?? <ArrowUp className="ic" aria-hidden="true" />)
-      )}
-    </Button>
+    <>
+      {running && canInterrupt ? (
+        <Button
+          variant="plain"
+          className="send is-stop"
+          type="button"
+          aria-label={t("chat.interrupt")}
+          title={t("chat.interrupt")}
+          onClick={onStop}
+        >
+          <Square className="ic" aria-hidden="true" />
+        </Button>
+      ) : null}
+      {!running || (allowQueue && !disabled) ? (
+        <Button
+          variant="plain"
+          className="send"
+          type="button"
+          data-form-action={formLabel ? "" : undefined}
+          aria-label={sendLabel}
+          title={formLabel ? `${sendLabel} · ${formatShortcut("Mod+Enter")}` : sendLabel}
+          disabled={formLabel ? disabled : undefined}
+          aria-disabled={disabled ? true : undefined}
+          onClick={onSubmit}
+        >
+          {formLabel ?? <ArrowUp className="ic" aria-hidden="true" />}
+        </Button>
+      ) : null}
+    </>
   )
 }

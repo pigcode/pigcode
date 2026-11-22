@@ -20,6 +20,8 @@ import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
 import { runRequestHandlers } from "./run-request-handlers"
+import { QueuedMessages } from "./queued-messages"
+import { submitDesktopMessage } from "./desktop-message-recovery"
 import { NewThreadPage } from "./new-thread-page"
 import { ThreadWorkspaceDetails } from "./thread-workspace-details"
 import { useThreadWorkspaceRoot } from "./use-thread-workspace-root"
@@ -424,11 +426,22 @@ export function ChatViewContainer({
         loading={threadId !== null && !state.threadStates[threadId]?.loaded}
         onStart={(text, options) => {
           if (!threadId) return
-          void deps.connection.startRun(threadId, text, options).catch(fail)
+          void submitDesktopMessage(deps.connection, threadId, text, options, fail)
         }}
         onInterrupt={interrupt}
         onApproval={respondApproval}
         onAnswer={answerQuestion}
+        queuePanel={
+          threadId && !viewChild ? (
+            <QueuedMessages
+              connection={deps.connection}
+              threadId={threadId}
+              events={events}
+              connected={connected}
+              fail={fail}
+            />
+          ) : undefined
+        }
         {...(onOpenFile
           ? {
               onOpenFile: (target: string) => {

@@ -12,7 +12,8 @@ import {
   RunSelectionUnavailableError,
   TooManyActiveRunsError,
 } from "./errors"
-import { RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
+import { envCount, RunQueue, type ActiveRun, type QueuedRun } from "./run-queue"
+import { MessageQueue } from "./message-queue"
 import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
 import { prepareRunEntry, writeRunAdmission } from "./run-admission"
@@ -20,7 +21,7 @@ import { createRunFinisher } from "./run-finish"
 import { createRunRequestResponder } from "./run-requests"
 import type { RunEventHooks } from "./run-events"
 import { disposeSession, switchAgent } from "./switching"
-import { createExecute } from "./run-execute"
+import { createExecute, trackRunExecution } from "./run-execute"
 import { THREAD_ACTIVITY } from "../services/threads"
 import { appendThreadCreated } from "../services/thread-create"
 import { createCliUpdates } from "./cli-updates"
@@ -79,6 +80,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   ): void {
     const createdAt = new Date().toISOString()
     if (THREAD_ACTIVITY.has(type)) ctx.threads.touch(threadId, createdAt, runId)
+    ctx.get("messageQueue")?.onRunEvent(threadId, runId, type)
     ctx.sessions.append({ threadId, runId, type, payload, schemaVersion: 1, createdAt })
   }
 
@@ -138,13 +140,16 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     }
   }
 
-  const execute = createExecute({
+  const execution = trackRunExecution(
     ctx,
-    activeRuns,
-    hooks: runEventHooks,
-    requestApproval: (run, request) => requestApproval(run.threadId, run.runId, request).decision,
-    askQuestions: questions.ask,
-  })
+    createExecute({
+      ctx,
+      activeRuns,
+      hooks: runEventHooks,
+      requestApproval: (run, request) => requestApproval(run.threadId, run.runId, request).decision,
+      askQuestions: questions.ask,
+    }),
+  )
 
   /** launchRun 所需的 Host 闭包；放在 execute 之后以便引用。 */
   const launchDeps: LaunchDeps = {
@@ -154,7 +159,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     activeRuns,
     activeThreads,
     append,
-    execute,
+    execute: execution.execute,
     settingsFor: agents.runtimeSettings,
     instanceContext: (agentId, instanceId) =>
       drivers.get(agentId)?.accountSetup || drivers.get(agentId)?.requiresInstance
@@ -168,6 +173,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       await launchRun(entry, launchDeps)
     } finally {
       starting.delete(entry.runId)
+      ctx.get("messageQueue")?.schedule(entry.threadId)
     }
   }
 
@@ -373,13 +379,13 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
       return startPrepared(prepared, () => {
         const write = () =>
           writeRunAdmission(ctx, runs, thread, prepared.entry, prepared.queued, options, append)
-        if (options.mobileAdmission) return ctx.sessions.stageEvents(write)
+        if (options.admission) return ctx.sessions.stageEvents(write)
         write()
         return () => undefined
       })
     },
     async startDraftRun(selection, text, mobileAdmission) {
-      const options = { mobileAdmission }
+      const options = { admission: mobileAdmission }
       let prepared!: ReturnType<typeof prepare>
       const publish = ctx.sessions.stageEvents(() => {
         const { threadId: id, projectId, agentId, modelId, ...initial } = selection
@@ -428,7 +434,8 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     },
     cancelDeviceQueuedRuns(deviceKey) {
       for (const entry of [...queue.values(), ...starting.values()]) {
-        if (entry.sourceDevice !== deviceKey || activeRuns.has(entry.runId)) continue
+        if (activeRuns.has(entry.runId)) continue
+        if (entry.sourceDevice !== deviceKey && entry.isAuthorized?.() !== false) continue
         entry.controller.abort()
         try {
           interruptRun(entry.runId)
@@ -467,13 +474,18 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   }
 
   ctx.provide("agents", service)
-  ctx.effect(() =>
-    watchClaudeIdleCompaction(
-      ctx,
-      () => activeRuns.size + launching < maxConcurrentRuns && !queue.size,
-    ),
-  )
+  const messages = new MessageQueue(ctx, {
+    idle: (threadId) => !activeThreads.has(threadId) && !execution.busy(threadId),
+    currentRun: (threadId) =>
+      [...activeRuns.values(), ...starting.values(), ...queue.values()].find(
+        (entry) => entry.threadId === threadId && !entry.controller.signal.aborted,
+      )?.runId,
+  })
+  ctx.provide("messageQueue", messages)
+  const canCompact = () => activeRuns.size + launching < maxConcurrentRuns && !queue.size
+  ctx.effect(() => watchClaudeIdleCompaction(ctx, canCompact))
   ctx.effect(() => () => {
+    messages.dispose()
     cliUpdates.dispose()
     // Host 退出时把活跃 run 全部置为 interrupted，再清空等待中的审批。
     interruptAll()
@@ -485,9 +497,3 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
   })
 }
 apply.inject = inject
-
-/** 环境变量里的正整数；没设或不是正数时返回 undefined。 */
-function envCount(name: string): number | undefined {
-  const value = Number(process.env[name])
-  return Number.isInteger(value) && value > 0 ? value : undefined
-}

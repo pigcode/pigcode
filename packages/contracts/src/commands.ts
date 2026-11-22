@@ -25,6 +25,7 @@ import {
 } from "./domain"
 import { DEFAULT_RUNTIME_MODE } from "./runtime-modes"
 import { relayTestAndSaveParamsSchema } from "./relay"
+import { queuedMessageCommands } from "./queued-messages"
 
 export interface GitBranches {
   currentBranch: string | null
@@ -143,6 +144,8 @@ export const commandSchemas = {
   "run.start": z.object({
     threadId: z.string().min(1),
     text: z.string().min(1),
+    commandId: z.uuid().optional(),
+    instanceId: z.string().min(1).optional(),
     /** 本次 run 的思考深度；缺省时用 agent 自己的默认值。 */
     effort: reasoningEffortSchema.optional(),
     /** 本次 run 用快速模式；只对目录里标了 fast 的模型生效，其余 driver 忽略。 */
@@ -153,6 +156,8 @@ export const commandSchemas = {
     references: threadReferencesSchema.optional(),
   }),
   "run.list": z.object({}),
+  ...queuedMessageCommands,
+  "command.receipt": z.object({ commandId: z.uuid() }),
   "run.interrupt": z.object({ threadId: z.string().min(1), runId: z.string().min(1) }),
   "run.respondApproval": z.object({
     threadId: z.string().min(1),

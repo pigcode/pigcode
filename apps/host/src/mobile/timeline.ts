@@ -42,6 +42,7 @@ export class MobileTimelineSession {
   constructor(
     private readonly ctx: Context,
     private readonly send: (message: unknown) => void,
+    private readonly includeQueueChanges = false,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
@@ -80,7 +81,7 @@ export class MobileTimelineSession {
     let previousSeq = through
     this.threadId = threadId
     this.stopEvents = this.ctx.sessions.subscribe(threadId, (stored) => {
-      const event = timelineEvent(stored)
+      const event = timelineEvent(stored, this.includeQueueChanges)
       if (!event) return
       this.send({
         jsonrpc: "2.0",

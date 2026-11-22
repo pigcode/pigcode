@@ -6,6 +6,7 @@ export { ProjectChip, ProjectMenu, type ComposerProject } from "./composer-proje
 export { requestComposerMention, requestComposerThreadMention } from "./composer-mention"
 export { requestComposerContext, type ComposerContext } from "./composer-context"
 export {
+  appendComposerText,
   captureComposerDraft,
   moveComposerDraft,
   prefillComposer,

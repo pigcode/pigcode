@@ -172,6 +172,7 @@ enum MobileTimelineKind {
   runCompleted('run.completed'),
   runFailed('run.failed'),
   runInterrupted('run.interrupted'),
+  queueChanged('queue.changed'),
   messageUser('message.user'),
   messageAssistant('message.assistant'),
   reasoning('reasoning'),

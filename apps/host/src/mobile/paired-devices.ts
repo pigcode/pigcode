@@ -1,9 +1,25 @@
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { pairedDeviceSchema, type MobilePairingView, type PairedDevice } from "@pigcode/contracts"
+import type { QueueDeviceSource } from "../storage/queued-message-store"
 import type { SettingsService } from "../services/settings"
 
 const key = "mobile.devices"
 const recordsSchema = pairedDeviceSchema.array()
+
+function authorizationId(device: PairedDevice): string {
+  return device.authorizationId ?? "legacy"
+}
+
+export function queueSourceAuthorized(
+  settings: SettingsService | undefined,
+  source: QueueDeviceSource,
+): boolean {
+  const records = recordsSchema.safeParse(settings?.get(key))
+  const record = records.success
+    ? records.data.find(({ publicKey }) => publicKey === source.deviceKey)
+    : undefined
+  return record != null && authorizationId(record) === source.authorizationId
+}
 
 export function fingerprint(publicKey: Buffer): string {
   return createHash("sha256").update(publicKey).digest("hex")
@@ -46,9 +62,10 @@ export class PairedDevices {
   }
 
   save(device: PairedDevice): void {
+    const existing = this.find(device.publicKey)
     this.replace([
       ...this.records.filter(({ publicKey }) => publicKey !== device.publicKey),
-      device,
+      { ...device, authorizationId: existing ? existing.authorizationId : randomUUID() },
     ])
   }
 
@@ -61,6 +78,11 @@ export class PairedDevices {
     const permit = this.runAuthorizations.get(publicKey) ?? Symbol()
     this.runAuthorizations.set(publicKey, permit)
     return () => this.runAuthorizations.get(publicKey) === permit && !!this.find(publicKey)
+  }
+
+  queueSource(publicKey: string): QueueDeviceSource | undefined {
+    const device = this.find(publicKey)
+    return device ? { deviceKey: publicKey, authorizationId: authorizationId(device) } : undefined
   }
 
   acknowledgeRelay(publicKey: string, revision: string): void {

@@ -215,6 +215,22 @@ Future<void> main() async {
               command['commandId'] as String,
             );
             report('draftReceipt', {'receipt': receipt?.toJson()});
+          case 'queueSnapshot':
+            final snapshot = await active[phone]!.queue.snapshot(
+              command['threadId'] as String,
+            );
+            report('queue', {'snapshot': snapshot.toJson()});
+          case 'queueAction':
+            final receipt = await active[phone]!.queue.submit(
+              QueueMethod.fromWire(command['method'] as String),
+              command['params'] as Map<String, Object?>,
+            );
+            report('queueReceipt', {'receipt': receipt.toJson()});
+          case 'lookupQueue':
+            final receipt = await active[phone]!.queue.receipt(
+              command['commandId'] as String,
+            );
+            report('queueReceipt', {'receipt': receipt?.toJson()});
           case 'stopCommand':
             final receipt = await active[phone]!.runCommands.interrupt(
               MobileInterruptRunParams(

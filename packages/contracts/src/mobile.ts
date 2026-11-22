@@ -13,6 +13,7 @@ export const mobileFeatures = [
   "run.write",
   "request.write",
   "draft.write",
+  "queue.write",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -55,6 +56,7 @@ export const pairedDeviceSchema = z.object({
   lastConnectedAt: z.number().int().nullable(),
   relayRevision: z.uuid().optional(),
   confirmedRelayRevision: z.uuid().optional(),
+  authorizationId: z.uuid().optional(),
 })
 
 export const mobileRelaySavedSchema = z.object({
@@ -101,7 +103,12 @@ export const mobilePairingViewSchema = z.object({
     .nullable(),
   devices: z.array(
     pairedDeviceSchema
-      .omit({ publicKey: true, relayRevision: true, confirmedRelayRevision: true })
+      .omit({
+        publicKey: true,
+        relayRevision: true,
+        confirmedRelayRevision: true,
+        authorizationId: true,
+      })
       .extend({
         id: fingerprintSchema,
         connected: z.boolean(),

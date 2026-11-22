@@ -150,6 +150,7 @@ class _Draft {
       case MobileTimelineKind.notice:
         notices.add(event);
       case MobileTimelineKind.plan:
+      case MobileTimelineKind.queueChanged:
         break;
     }
   }

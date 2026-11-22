@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'message_queue_panel.dart';
 import 'run_command_journal.dart';
 import 'run_composer_state.dart';
 import 'theme_colors.dart';
@@ -14,12 +15,16 @@ class RunComposer extends ConsumerStatefulWidget {
     required this.threadId,
     required this.online,
     this.stoppableRunId,
+    this.queueRevision = 0,
+    this.wrapInput,
   });
 
   final MobileConnection connection;
   final String threadId;
   final bool online;
   final String? stoppableRunId;
+  final int queueRevision;
+  final Widget Function(Widget)? wrapInput;
 
   @override
   ConsumerState<RunComposer> createState() => _RunComposerState();
@@ -54,10 +59,11 @@ class _RunComposerState extends ConsumerState<RunComposer> {
       }
     });
     final controller = ref.read(provider.notifier);
-    return RunComposerView(
+    final view = RunComposerView(
       draft: _draft,
       online: widget.online,
       stoppableRunId: widget.stoppableRunId,
+      allowQueue: widget.connection.supportsQueueCommands,
       state: commandState.value,
       storageError: commandState.hasError,
       onRetryLoad: () => ref.invalidate(provider),
@@ -65,6 +71,29 @@ class _RunComposerState extends ConsumerState<RunComposer> {
       onStop: controller.stop,
       onCheck: controller.check,
       onRetry: controller.retry,
+    );
+    final input = widget.wrapInput?.call(view) ?? view;
+    if (!widget.connection.supportsQueueCommands) return input;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MessageQueuePanel(
+          connection: widget.connection,
+          threadId: widget.threadId,
+          revision: widget.queueRevision,
+          online: widget.online,
+          onWithdraw: (text) {
+            final original = _draft.text;
+            final restored = original.isEmpty ? text : '$original\n$text';
+            _draft.value = TextEditingValue(
+              text: restored,
+              selection: TextSelection.collapsed(offset: restored.length),
+            );
+          },
+        ),
+        input,
+      ],
     );
   }
 }
@@ -82,11 +111,13 @@ class RunComposerView extends StatelessWidget {
     required this.onCheck,
     required this.onRetry,
     this.stoppableRunId,
+    this.allowQueue = false,
   });
 
   final TextEditingController draft;
   final bool online;
   final String? stoppableRunId;
+  final bool allowQueue;
   final RunComposerState? state;
   final bool storageError;
   final VoidCallback onRetryLoad;
@@ -103,10 +134,36 @@ class RunComposerView extends StatelessWidget {
         : pigcodeLight;
     final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
     final runId = stoppableRunId;
-    final method = runId == null
-        ? MobileRunMethod.runStart
-        : MobileRunMethod.runInterrupt;
-    final label = runId == null ? '发送消息' : '停止本轮运行';
+
+    bool enabled(MobileRunMethod method) =>
+        online &&
+        state != null &&
+        !state!.working.contains(method) &&
+        !state!.pending.containsKey(method);
+
+    Widget action(String label, IconData icon, VoidCallback? onPressed) =>
+        SizedBox.square(
+          dimension: hit,
+          child: IconButton(
+            onPressed: onPressed,
+            tooltip: label,
+            padding: EdgeInsets.zero,
+            icon: DecoratedBox(
+              decoration: BoxDecoration(
+                color: onPressed != null ? colors.primary : colors.selected,
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox.square(
+                dimension: 36,
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: onPressed != null ? colors.onPrimary : colors.muted,
+                ),
+              ),
+            ),
+          ),
+        );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
@@ -176,41 +233,29 @@ class RunComposerView extends StatelessWidget {
                     valueListenable: draft,
                     builder: (context, value, child) {
                       final text = value.text;
-                      final canAct =
-                          online &&
-                          state != null &&
-                          !state!.working.contains(method) &&
-                          !state!.pending.containsKey(method) &&
-                          (runId != null ||
-                              (text.trim().isNotEmpty &&
-                                  text.length <= mobileCommandTextLimit));
-                      return SizedBox.square(
-                        dimension: hit,
-                        child: IconButton(
-                          onPressed: !canAct
-                              ? null
-                              : () => runId == null
-                                    ? onSend(text)
-                                    : onStop(runId),
-                          tooltip: label,
-                          padding: EdgeInsets.zero,
-                          icon: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: canAct ? colors.primary : colors.selected,
-                              shape: BoxShape.circle,
+                      final canSend =
+                          enabled(MobileRunMethod.runStart) &&
+                          text.trim().isNotEmpty &&
+                          text.length <= mobileCommandTextLimit;
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (runId != null)
+                            action(
+                              '停止本轮运行',
+                              Icons.stop_rounded,
+                              enabled(MobileRunMethod.runInterrupt)
+                                  ? () => onStop(runId)
+                                  : null,
                             ),
-                            child: SizedBox.square(
-                              dimension: 36,
-                              child: Icon(
-                                runId == null
-                                    ? Icons.arrow_upward
-                                    : Icons.stop_rounded,
-                                size: 20,
-                                color: canAct ? colors.onPrimary : colors.muted,
-                              ),
+                          if (runId == null ||
+                              (allowQueue && text.trim().isNotEmpty))
+                            action(
+                              '发送消息',
+                              Icons.arrow_upward,
+                              canSend ? () => onSend(text) : null,
                             ),
-                          ),
-                        ),
+                        ],
                       );
                     },
                   ),
@@ -266,7 +311,8 @@ class _PendingRunRow extends StatelessWidget {
     };
     final text = recovered != null
         ? switch (kind) {
-            MobileRunMethod.runStart => '已找回发送回执',
+            MobileRunMethod.runStart =>
+              recovered.queuedMessageId == null ? '已找回发送回执' : '已找回待发回执',
             MobileRunMethod.runInterrupt => '已找回停止回执',
           }
         : state.notices[kind] ?? label;
@@ -280,7 +326,7 @@ class _PendingRunRow extends StatelessWidget {
         ),
         if (recovered != null)
           SelectableText(
-            recovered.runId,
+            recovered.queuedMessageId ?? recovered.runId,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         if (pending case PendingSend(:final params))

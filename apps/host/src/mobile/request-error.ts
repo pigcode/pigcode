@@ -9,6 +9,10 @@ export type MobileErrorCode =
   | "THREAD_BUSY"
   | "RUN_QUEUE_FULL"
   | "DRAFT_SELECTION_UNAVAILABLE"
+  | "QUEUE_MESSAGE_UNAVAILABLE"
+  | "QUEUE_STALE_RUN"
+  | "QUEUE_LIMIT"
+  | "QUEUE_TEXT_TOO_LONG"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -21,6 +25,10 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   THREAD_BUSY: "会话已有运行中的一轮，请等它结束后再发送。",
   RUN_QUEUE_FULL: "电脑的运行队列已满，请稍后发送。",
   DRAFT_SELECTION_UNAVAILABLE: "草稿选中的项目、Agent 实例、模型或权限已不可用。",
+  QUEUE_MESSAGE_UNAVAILABLE: "这条待发消息已处理或不可用。",
+  QUEUE_STALE_RUN: "当前运行已变化，请重新查看队列。",
+  QUEUE_LIMIT: "待发队列已满，请稍后发送。",
+  QUEUE_TEXT_TOO_LONG: "这条消息太长，无法加入待发队列。",
 }
 
 export class MobileRequestError extends Error {

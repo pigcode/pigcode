@@ -326,3 +326,28 @@
   gap: 2px;
   font-size: var(--fs-2xs);
 }
+.queued-messages {
+  display: grid;
+  gap: 0.35em;
+  padding: 0.5em 0.75em;
+  max-height: 12em;
+  overflow: auto;
+  color: var(--fg);
+  background: var(--surface);
+  border-block-end: 1px solid var(--divider);
+}
+
+.queued-message-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.queued-message-text {
+  flex: 1 1 12em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

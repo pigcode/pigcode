@@ -248,6 +248,7 @@ try {
   const commands = await vite.ssrLoadModule("/packages/contracts/src/mobile-commands.ts")
   const requests = await vite.ssrLoadModule("/packages/contracts/src/mobile-requests.ts")
   const drafts = await vite.ssrLoadModule("/packages/contracts/src/mobile-drafts.ts")
+  const queue = await vite.ssrLoadModule("/packages/contracts/src/queued-messages.ts")
   await generate({
     methods: sidebar.mobileSidebarMethods,
     schemas: sidebar.mobileSidebarJsonSchemas(),
@@ -284,6 +285,12 @@ try {
     schemas: drafts.mobileDraftJsonSchemas(),
     fileName: "draft_models.dart",
     methodsName: "MobileDraftMethods",
+  })
+  await generate({
+    methods: queue.queueMethods,
+    schemas: queue.mobileQueueJsonSchemas(),
+    fileName: "queue_models.dart",
+    methodsName: "QueueMethods",
   })
 } finally {
   await vite.close()

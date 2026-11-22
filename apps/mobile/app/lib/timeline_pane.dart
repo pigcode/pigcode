@@ -107,15 +107,7 @@ class TimelinePane extends ConsumerWidget {
           return timeline;
         }
         final runId = _stoppableRun(data.snapshot);
-        final composer = connection.supportsRunCommands
-            ? RunComposer(
-                connection: connection,
-                threadId: threadId,
-                online: online,
-                stoppableRunId: runId,
-              )
-            : const SizedBox.shrink();
-        Widget input = composer;
+        Widget Function(Widget)? wrapInput;
         if (connection.supportsRequestCommands) {
           final runProvider = runComposerProvider((connection, threadId));
           final stopState = connection.supportsRunCommands
@@ -126,7 +118,7 @@ class TimelinePane extends ConsumerWidget {
               stopState != null &&
               !stopState.working.contains(MobileRunMethod.runInterrupt) &&
               !stopState.pending.containsKey(MobileRunMethod.runInterrupt);
-          input = RequestInput(
+          wrapInput = (composer) => RequestInput(
             connection: connection,
             threadId: threadId,
             live: data.snapshot.live,
@@ -137,6 +129,32 @@ class TimelinePane extends ConsumerWidget {
                 : null,
           );
         }
+        final revision =
+            data.snapshot.events.reversed
+                .where(
+                  (event) => const {
+                    MobileTimelineKind.queueChanged,
+                    MobileTimelineKind.runQueued,
+                    MobileTimelineKind.runStarted,
+                    MobileTimelineKind.runCompleted,
+                    MobileTimelineKind.runFailed,
+                    MobileTimelineKind.runInterrupted,
+                  }.contains(event.kind),
+                )
+                .firstOrNull
+                ?.seq ??
+            0;
+        final input = connection.supportsRunCommands
+            ? RunComposer(
+                connection: connection,
+                threadId: threadId,
+                online: online,
+                stoppableRunId: runId,
+                queueRevision: revision,
+                wrapInput: wrapInput,
+              )
+            : wrapInput?.call(const SizedBox.shrink()) ??
+                  const SizedBox.shrink();
         return LayoutBuilder(
           builder: (context, constraints) {
             return Column(

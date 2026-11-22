@@ -77,6 +77,7 @@ export interface ChatViewProps {
   /** 兼容计划接口里的 onSubmit 命名。 */
   onSubmit?: (text: string, options: ComposerSubmitOptions) => void
   onInterrupt?: () => void
+  queuePanel?: ReactNode
   onApproval?: (requestId: string, decision: ApprovalDecision) => void
   /** 当前 agent 的 Agent 功能；未提供时按全部可用处理，保持旧行为。 */
   features?: AgentFeatures | null
@@ -160,6 +161,7 @@ export function ChatView({
   onStart,
   onSubmit,
   onInterrupt,
+  queuePanel,
   onApproval,
   features = null,
   agents = [],
@@ -298,6 +300,7 @@ export function ChatView({
     onSubmit: (text: string, options: ComposerSubmitOptions) => submit?.(text, options),
     onStop: onInterrupt ?? (() => undefined),
     running,
+    allowQueue: queuePanel != null,
     disabled: !thread,
     draftKey: thread?.id ?? null,
     agents,
@@ -429,6 +432,7 @@ export function ChatView({
             ) : null}
           </div>
           <div className="composer-wrap">
+            {queuePanel}
             {subagent ? (
               <div className="subagent-readonly" role="note">
                 <span>{t("chat.subagent.readonly")}</span>

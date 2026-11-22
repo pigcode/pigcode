@@ -40,6 +40,7 @@ const mobileTimelineKind = z.enum([
   "run.completed",
   "run.failed",
   "run.interrupted",
+  "queue.changed",
   "message.user",
   "message.assistant",
   "reasoning",
