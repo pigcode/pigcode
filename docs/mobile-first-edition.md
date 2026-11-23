@@ -62,11 +62,25 @@ flutter pub get --enforce-lockfile
 
 Mobile CI 在同一类 runner 上逐像素比对。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
 
+## 长会话性能回放
+
+从前端仓库根目录运行，选择 `flutter devices` 显示的完整设备 ID。回放包使用独立应用标识，真机复跑沿用同一个标识以复用开发签名。模拟器用 debug 验证流程，真机用 profile 采集性能基线。iPhone 真机使用 Xcode 开发签名。 [Flutter 性能测量](https://docs.flutter.dev/perf/ui-performance) · [长时间线原型 #104](https://github.com/pigcode/monorepo/issues/104#issuecomment-7065565709)
+
+```sh
+replay_report_dir=$(mktemp -d /tmp/pigcode-timeline-profile.XXXXXX)
+PIGCODE_MOBILE_BUILD_NUMBER=17 \
+  PIGCODE_TIMELINE_PROFILE_DEVICE='<设备 ID>' \
+  PIGCODE_TIMELINE_PROFILE_REPORT="$replay_report_dir/timeline.json" \
+  pnpm exec vitest run apps/host/src/rpc/mobile-timeline-profile.test.ts
+```
+
+夹具用生产时间线客户端和 Flutter 界面回放 302 条合成事件，首屏加载 50 条，随后分页补齐历史。流程打开工具详情和全屏 diff，核对上翻时的历史和实时输出是否移动当前文字，回到底部后核对贴底跟随。报告记录设备、构建、首屏耗时和订阅响应字节数、流式更新时的构建及光栅帧耗时分位数、进程峰值 RSS 和视口偏移。首屏计时从读取订阅夹具开始，到当前轮用户消息可见为止。 [Flutter 帧耗时](https://api.flutter.dev/flutter/scheduler/SchedulerBinding/addTimingsCallback.html) · [Dart 进程内存](https://api.dart.dev/dart-io/ProcessInfo-class.html)
+
 ## iPhone 真机验收
 
 1. 用同一 Apple Team 和 `com.pigcode.mobile` 签名覆盖安装。打开 App，核对以前配对的电脑仍在列表并能连接。 [构建和配对](./mobile-pairing.md#iphone-经现有云端中继复验)
 2. 用已有大陆 Go 中继连接电脑。Wi‑Fi 与蜂窝网络各跑一次发送、回复和审批或提问。切网、切后台再回来，并在电脑合盖睡眠和恢复后核对连接提示、历史补齐与能否继续操作。记录 iOS、网络、构建和中继提交。 [云中继试验背景](https://github.com/pigcode/monorepo/issues/103)
-3. 在同一设备以 profile 模式回放固定长会话。记录夹具、首屏时长、帧耗时分位数、峰值内存和首屏数据量。上翻加载历史时确认当前文字位置保留，输出过程中回到底部后确认继续跟随。真机数据用于性能基线。 [Flutter 真机性能测量](https://docs.flutter.dev/perf/ui-performance) · [会话回放验收](./mobile-timeline.md)
+3. 在同一设备运行上面的长会话性能回放，保留 profile 报告和对应提交。再用实际会话检查长输出展开、上翻加载和中文输入手感。 [会话回放验收](./mobile-timeline.md)
 
 ## 2026-11-23 本机验收记录
 

@@ -17,7 +17,7 @@ on:
       - "packages/ui-primitives/src/theme/**"
       - "apps/host/src/mobile/**"
       - "packages/contracts/**"
-      - "scripts/fixtures/mobile_paired_reply.dart"
+      - "scripts/fixtures/*.dart"
       - ".github/workflows/mobile.yml"
   push:
     branches: [main]
@@ -30,7 +30,7 @@ on:
       - "packages/ui-primitives/src/theme/**"
       - "apps/host/src/mobile/**"
       - "packages/contracts/**"
-      - "scripts/fixtures/mobile_paired_reply.dart"
+      - "scripts/fixtures/*.dart"
       - ".github/workflows/mobile.yml"
 
 jobs:
@@ -69,7 +69,7 @@ jobs:
         working-directory: .
         run: node apps/desktop/scripts/generate-mobile-contracts.ts --check
       - run: flutter pub get --enforce-lockfile
-      - run: dart format --output=none --set-exit-if-changed app/lib app/test app/visual packages scripts ../../scripts/fixtures/mobile_paired_reply.dart
+      - run: dart format --output=none --set-exit-if-changed app/lib app/test app/visual packages scripts ../../scripts/fixtures/*.dart
       - run: dart analyze --fatal-infos
       - run: dart test
         working-directory: apps/mobile/packages/pigcode_transport
