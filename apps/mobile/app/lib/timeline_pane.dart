@@ -19,11 +19,11 @@ import 'timeline_view.dart';
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
 
 typedef _TimelineRead = ({TimelineSnapshot snapshot, Object? problem});
-typedef RunChangesShortcut = ({int fileCount, VoidCallback open});
+typedef RunChangesShortcut = ({int fileCount, bool hasMore, VoidCallback open});
 typedef _RunChangesTarget = ({
   MobileConnection connection,
   String runId,
-  int fileCount,
+  int revision,
 });
 
 final _timelineProvider = AsyncNotifierProvider.autoDispose
@@ -133,6 +133,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _draftError = false;
   bool _synced = false;
   _RunChangesTarget? _changesTarget;
+  Future<MobileRunChangesPage>? _shortcutFiles;
   List<MobileTimelineEvent>? _changeEvents;
   MobileConnection? _changeConnection;
   bool _openingChanges = false;
@@ -399,53 +400,87 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     _changeEvents = events;
     _RunChangesTarget? target;
     if (connection?.supportsRunChanges == true && events != null) {
-      final runId = events.reversed
+      final latest = events.reversed
           .where(
             (event) =>
                 event.runId != null &&
                 (event.kind == MobileTimelineKind.changes ||
                     event.kind == MobileTimelineKind.file),
           )
-          .firstOrNull
-          ?.runId;
-      if (runId != null) {
-        final paths = events
-            .where(
-              (event) =>
-                  event.runId == runId && event.kind == MobileTimelineKind.file,
-            )
-            .map((event) => event.name)
-            .whereType<String>()
-            .toSet();
+          .firstOrNull;
+      if (latest != null) {
         target = (
           connection: connection!,
-          runId: runId,
-          fileCount: paths.length,
+          runId: latest.runId!,
+          revision: latest.seq,
         );
       }
     }
     if (_changesTarget == target) return;
     _changesTarget = target;
+    _shortcutFiles = null;
+    _publishRunChanges(target, null);
+    if (target != null) _loadShortcutFiles(target);
+  }
+
+  void _publishRunChanges(
+    _RunChangesTarget? target,
+    MobileRunChangesPage? page,
+  ) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _changesTarget != target) return;
       widget.onRunChangesChanged?.call(
         target == null
             ? null
-            : (fileCount: target.fileCount, open: _openChanges),
+            : (
+                fileCount: page?.files.length ?? 0,
+                hasMore: page?.nextOffset != null,
+                open: _openChanges,
+              ),
       );
     });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
+
+  Future<MobileRunChangesPage> _loadShortcutFiles(_RunChangesTarget target) {
+    if (_shortcutFiles case final request?) return request;
+    final request = _changeLoaders(target.connection, target.runId).files(0);
+    _shortcutFiles = request;
+    unawaited(
+      request.then<void>(
+        (page) {
+          if (mounted &&
+              _changesTarget == target &&
+              identical(_shortcutFiles, request)) {
+            _publishRunChanges(target, page);
+          }
+        },
+        onError: (Object _) {
+          if (identical(_shortcutFiles, request)) _shortcutFiles = null;
+        },
+      ),
+    );
+    return request;
+  }
+
+  bool get _changesVisible =>
+      widget.reading?.visible != false &&
+      ModalRoute.of(context)?.isCurrent != false;
 
   Future<void> _openChanges() async {
     final target = _changesTarget;
-    if (!mounted || target == null || _openingChanges) return;
+    if (!mounted || target == null || _openingChanges || !_changesVisible) {
+      return;
+    }
+    final visit = widget.reading?.visit;
     final loaders = _changeLoaders(target.connection, target.runId);
     _openingChanges = true;
     try {
-      final initial = await loaders.files(0);
+      final initial = await _loadShortcutFiles(target);
       if (!mounted ||
           _changesTarget != target ||
-          ModalRoute.of(context)?.isCurrent == false) {
+          widget.reading?.visit != visit ||
+          !_changesVisible) {
         return;
       }
       await RunDiffScreen.open(
@@ -455,7 +490,10 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         loadDiff: loaders.diff,
       );
     } catch (_) {
-      if (mounted && _changesTarget == target) {
+      if (mounted &&
+          _changesTarget == target &&
+          widget.reading?.visit == visit &&
+          _changesVisible) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('暂时无法读取本轮改动。')));
@@ -498,7 +536,15 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       online: true,
       savedPaths: turn.files,
       checkpointRevision: turn.changes?.seq,
-      loadFiles: loaders.files,
+      loadFiles: (offset) {
+        final target = _changesTarget;
+        if (offset == 0 &&
+            target?.runId == runId &&
+            identical(target?.connection, connection)) {
+          return _loadShortcutFiles(target!);
+        }
+        return loaders.files(offset);
+      },
       loadDiff: loaders.diff,
     );
   }

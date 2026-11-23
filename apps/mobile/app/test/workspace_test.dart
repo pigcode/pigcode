@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_mobile/run_diff_screen.dart';
 import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_mobile/workspace.dart';
 import 'package:pigcode_mobile/sidebar_menu.dart';
+
+import '../visual/mobile_fixture.dart';
 
 class _ReadConnection implements MobileConnection {
   _ReadConnection(this.sidebar, {this.failFirstRead = false});
@@ -173,6 +177,46 @@ Finder menuText(String label) =>
     find.descendant(of: find.byType(SidebarMenu), matching: find.text(label));
 
 void main() {
+  testWidgets('does not open a delayed diff over the sidebar', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final changes = Completer<MobileRunChangesPage>();
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: workspaceFixture(changedFiles: changes.future),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IconButton &&
+            widget.tooltip == '改动' &&
+            widget.onPressed != null,
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('改动'));
+    await tester.tap(find.byTooltip('打开菜单'));
+    await tester.pumpAndSettle();
+    changes.complete(
+      const MobileRunChangesPage(diffAvailable: true, files: []),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(RunDiffScreen), findsNothing);
+    expect(find.byTooltip('搜索会话').hitTestable(), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('改动'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RunDiffScreen), findsOneWidget);
+  });
+
   testWidgets('opens search on demand and clears it when closed', (
     tester,
   ) async {

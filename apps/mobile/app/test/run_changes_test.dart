@@ -7,6 +7,8 @@ void main() {
   testWidgets(
     'opens one run, reads selected patches on demand and switches files',
     (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.7;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final calls = <(String, int)>[];
       const first = 'lib/first.dart';
       const second = 'lib/second.dart';

@@ -106,6 +106,10 @@ void main() {
 
     testWidgets('全屏 diff ${brightness.name}', (tester) async {
       await _openPage(tester, brightness, workspaceFixture());
+      expect(
+        find.descendant(of: find.byTooltip('改动'), matching: find.text('2')),
+        findsOneWidget,
+      );
       await tester.tap(find.byTooltip('改动'));
       await tester.pumpAndSettle();
       expect(find.text('2 个文件'), findsOneWidget);

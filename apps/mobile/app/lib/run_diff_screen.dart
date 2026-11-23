@@ -139,6 +139,10 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       centerTitle: true,
+      toolbarHeight: math.max(
+        kToolbarHeight,
+        MediaQuery.textScalerOf(context).scale(40) + 12,
+      ),
       title: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -147,6 +151,8 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
             _nextFiles == null
                 ? '${_files.length} 个文件'
                 : '已加载 ${_files.length} 个文件',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

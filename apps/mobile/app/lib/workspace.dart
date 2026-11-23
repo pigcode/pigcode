@@ -484,6 +484,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         : subtitle;
     final changes = widget.online ? _runChanges : null;
     final fileCount = changes?.fileCount ?? 0;
+    final countLabel = changes?.hasMore == true ? '$fileCount+' : '$fileCount';
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 58),
@@ -587,7 +588,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                   children: [
                     if (thread != null && !_draftOpen)
                       Semantics(
-                        value: fileCount > 0 ? '$fileCount 个文件' : null,
+                        value: fileCount > 0 ? '$countLabel 个文件' : null,
                         child: IconButton(
                           tooltip: '改动',
                           style: IconButton.styleFrom(
@@ -601,7 +602,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                               if (fileCount > 0) ...[
                                 const SizedBox(width: 3),
                                 Text(
-                                  '$fileCount',
+                                  countLabel,
                                   style: theme.textTheme.labelMedium,
                                 ),
                               ],

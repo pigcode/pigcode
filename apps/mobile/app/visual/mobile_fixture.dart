@@ -98,34 +98,20 @@ TimelineSnapshot _history(MobileTimelinePendingKind? pending, bool running) =>
         const MobileTimelineEvent(
           seq: 5,
           runId: 'review',
-          kind: MobileTimelineKind.file,
-          name: 'lib/connection.dart',
-          createdAt: '2025-06-18T08:30:08Z',
-        ),
-        const MobileTimelineEvent(
-          seq: 6,
-          runId: 'review',
-          kind: MobileTimelineKind.file,
-          name: 'docs/mobile.md',
-          createdAt: '2025-06-18T08:30:08Z',
-        ),
-        const MobileTimelineEvent(
-          seq: 7,
-          runId: 'review',
           kind: MobileTimelineKind.changes,
           createdAt: '2025-06-18T08:30:08Z',
         ),
         if (pending != null || running)
           const MobileTimelineEvent(
-            seq: 8,
+            seq: 6,
             runId: 'next',
             kind: MobileTimelineKind.runStarted,
             text: '继续跑一遍模拟器回归。',
             createdAt: '2025-06-18T08:30:12Z',
           ),
       ],
-      through: pending != null || running ? 8 : 7,
-      cursor: pending != null || running ? 8 : 7,
+      through: pending != null || running ? 6 : 5,
+      cursor: pending != null || running ? 6 : 5,
       nextBefore: null,
       live: pending == null && !running
           ? null
@@ -153,6 +139,7 @@ Widget workspaceFixture({
   bool online = true,
   bool running = false,
   MobileTimelinePendingKind? pending,
+  Future<MobileRunChangesPage>? changedFiles,
 }) {
   final history = _history(pending, running);
   final status = pending != null
@@ -171,7 +158,7 @@ Widget workspaceFixture({
     ],
     syncedAt: _syncedAt,
   );
-  final connection = _FixtureConnection(history, sidebar);
+  final connection = _FixtureConnection(history, sidebar, changedFiles);
   return MobileWorkspace(
     connection: online ? connection : null,
     connected: online,
@@ -208,7 +195,11 @@ const _connectionDiff = MobileRunDiffPage(
 );
 
 class _FixtureConnection implements MobileConnection {
-  _FixtureConnection(this.history, this.sidebar);
+  _FixtureConnection(
+    this.history,
+    this.sidebar,
+    Future<MobileRunChangesPage>? changedFiles,
+  ) : changes = MobileRunChanges(_FixtureHost(changedFiles: changedFiles));
 
   final TimelineSnapshot history;
   final SidebarSnapshot sidebar;
@@ -225,7 +216,7 @@ class _FixtureConnection implements MobileConnection {
   final pendingRequests = MobilePendingRequests(const _FixtureHost());
 
   @override
-  final changes = MobileRunChanges(const _FixtureHost());
+  final MobileRunChanges changes;
 
   @override
   final queue = MobileQueueCommands(const _FixtureHost());
@@ -317,7 +308,9 @@ class _FixtureCache implements ComputerOfflineCache {
 }
 
 class _FixtureHost implements HostRequests {
-  const _FixtureHost();
+  const _FixtureHost({this.changedFiles});
+
+  final Future<MobileRunChangesPage>? changedFiles;
 
   @override
   Stream<Map<String, dynamic>> get notifications => const Stream.empty();
@@ -336,7 +329,10 @@ class _FixtureHost implements HostRequests {
       if (params['threadId'] != 'review' || params['runId'] != 'review') {
         throw StateError('Expected the review run');
       }
-      if (method == MobileRunChangesMethods.list) return _changedFiles.toJson();
+      if (method == MobileRunChangesMethods.list) {
+        final request = changedFiles;
+        return (request == null ? _changedFiles : await request).toJson();
+      }
       return switch (params['path']) {
         'lib/connection.dart' => _connectionDiff.toJson(),
         'docs/mobile.md' => const MobileRunDiffPage(
