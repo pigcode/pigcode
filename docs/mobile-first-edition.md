@@ -64,7 +64,7 @@ Mobile CI 在同一类 runner 上逐像素比对。失败时可下载 `mobile-vi
 
 ## 长会话性能回放
 
-从前端仓库根目录运行，选择 `flutter devices` 显示的完整设备 ID。回放包使用独立应用标识，真机复跑沿用同一个标识以复用开发签名。模拟器用 debug 验证流程，真机用 profile 采集性能基线。iPhone 真机使用 Xcode 开发签名。 [Flutter 性能测量](https://docs.flutter.dev/perf/ui-performance) · [长时间线原型 #104](https://github.com/pigcode/monorepo/issues/104#issuecomment-7065565709)
+从前端仓库根目录运行，选择 `flutter devices` 显示的完整设备 ID。回放包使用独立应用标识，真机复跑沿用同一个标识以复用开发签名。模拟器用 debug 验证流程，真机用 profile 采集性能基线。Mac 有多个 iOS 开发签名时，可先运行 `flutter config --select-ios-signing-settings` 选定要用的签名。 [Flutter 性能测量](https://docs.flutter.dev/perf/ui-performance) · [长时间线原型 #104](https://github.com/pigcode/monorepo/issues/104#issuecomment-7065565709)
 
 ```sh
 replay_report_dir=$(mktemp -d /tmp/pigcode-timeline-profile.XXXXXX)
@@ -74,7 +74,7 @@ PIGCODE_MOBILE_BUILD_NUMBER=17 \
   pnpm exec vitest run apps/host/src/rpc/mobile-timeline-profile.test.ts
 ```
 
-夹具用生产时间线客户端和 Flutter 界面回放 302 条合成事件，首屏加载 50 条，随后分页补齐历史。流程打开工具详情和全屏 diff，核对上翻时的历史和实时输出是否移动当前文字，回到底部后核对贴底跟随。报告记录设备、构建、首屏耗时和订阅响应字节数、流式更新时的构建及光栅帧耗时分位数、进程峰值 RSS 和视口偏移。首屏计时从读取订阅夹具开始，到当前轮用户消息可见为止。 [Flutter 帧耗时](https://api.flutter.dev/flutter/scheduler/SchedulerBinding/addTimingsCallback.html) · [Dart 进程内存](https://api.dart.dev/dart-io/ProcessInfo-class.html)
+夹具用生产时间线客户端和 Flutter 界面回放 302 条合成事件，首屏加载 50 条，随后分页补齐历史。工具详情和全屏 diff 沿用生产页长，测试会点按继续读取。上翻时核对历史和实时输出是否移动当前文字，回到底部后核对贴底跟随。报告关联前端提交、工作区状态、设备和构建，记录首屏耗时、订阅响应字节数、流式更新时的构建及光栅帧耗时分位数、进程峰值 RSS 和视口偏移。首屏计时从读取订阅夹具开始，到当前轮用户消息可见为止。 [Flutter 帧耗时](https://api.flutter.dev/flutter/scheduler/SchedulerBinding/addTimingsCallback.html) · [Dart 进程内存](https://api.dart.dev/dart-io/ProcessInfo-class.html)
 
 ## iPhone 真机验收
 

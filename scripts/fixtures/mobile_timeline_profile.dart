@@ -20,6 +20,9 @@ const _tool = '回放构建日志';
 const _time = '2025-06-18T08:30:00Z';
 const _turns = 60;
 const _pageSize = 50;
+// The mobile Host serves tool text and diff patches in 8,192 UTF-16 units.
+const _textPageSize = 8192;
+const _toolPages = 8;
 const _scrollKey = ValueKey('timeline-scroll');
 const _chunks = 36;
 const _chunkInterval = Duration(milliseconds: 50);
@@ -39,7 +42,7 @@ void main() {
     final opening = Stopwatch()..start();
     final timeline = await MobileTimeline.open(rpc, _threadId);
     addTearDown(timeline.close);
-    await tester.pumpWidget(_screen(timeline, rpc.patch));
+    await tester.pumpWidget(_screen(timeline, rpc));
     final activeUser = find.byKey(const ValueKey('user-$_activeRun'));
     await _waitUntil(
       tester,
@@ -54,9 +57,14 @@ void main() {
 
     await tester.tap(find.text(_tool).hitTestable());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('读取完整内容').hitTestable());
-    await tester.pumpAndSettle();
-    expect(rpc.toolBytesRead, _ReplayHost.toolPageSize);
+    for (var page = 0; page < _toolPages; page++) {
+      final more = find.text(page == 0 ? '读取完整内容' : '继续读取');
+      await tester.ensureVisible(more);
+      await tester.pumpAndSettle();
+      await tester.tap(more.hitTestable());
+      await tester.pumpAndSettle();
+    }
+    expect(rpc.toolBytesRead, _textPageSize * _toolPages);
     expect(find.text('继续读取'), findsOneWidget);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -64,6 +72,23 @@ void main() {
     await tester.tap(find.byTooltip('查看回放差异'));
     await tester.pumpAndSettle();
     expect(find.text('enableReconnect(0);'), findsOneWidget);
+    final moreDiff = find.text('继续读取差异');
+    await tester.scrollUntilVisible(
+      moreDiff,
+      450,
+      scrollable: find.descendant(
+        of: find.byType(RunDiffScreen),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      ),
+    );
+    await tester.tap(moreDiff.hitTestable());
+    await tester.pumpAndSettle();
+    expect(rpc.diffBytesRead, utf8.encode(rpc.patch).length);
+    expect(moreDiff, findsNothing);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
 
@@ -117,7 +142,7 @@ void main() {
       'initialEventCount': rpc.initialEventCount,
       'loadedEventCount': timeline.snapshot!.events.length,
       'toolOutputBytes': rpc.toolBytesRead,
-      'diffBytes': utf8.encode(rpc.patch).length,
+      'diffBytes': rpc.diffBytesRead,
       'streamChunks': _chunks,
       'streamIntervalMs': _chunkInterval.inMilliseconds,
       'streamFrameCount': frames.length,
@@ -134,7 +159,7 @@ void main() {
   });
 }
 
-Widget _screen(MobileTimeline timeline, String patch) => MaterialApp(
+Widget _screen(MobileTimeline timeline, _ReplayHost rpc) => MaterialApp(
   theme: pigcodeTheme(Brightness.light),
   home: Builder(
     builder: (context) => Scaffold(
@@ -152,7 +177,7 @@ Widget _screen(MobileTimeline timeline, String patch) => MaterialApp(
                   MobileRunChangedFile(path: _file, added: 180, removed: 180),
                 ],
               ),
-              loadDiff: (_, _) async => MobileRunDiffPage(text: patch),
+              loadDiff: (_, offset) async => rpc.loadDiff(offset),
             ),
           ),
         ],
@@ -208,7 +233,6 @@ Map<String, int> _percentiles(Iterable<Duration> durations) {
 }
 
 class _ReplayHost implements HostRequests {
-  static const toolPageSize = 64 * 1024;
   final _notifications = StreamController<Map<String, dynamic>>.broadcast(
     sync: true,
   );
@@ -239,6 +263,7 @@ class _ReplayHost implements HostRequests {
   );
 
   int toolBytesRead = 0;
+  int diffBytesRead = 0;
   int get subscriptionBytes => utf8.encode(_subscription).length;
   int _revision = 1;
   int get eventCount => _history.length;
@@ -319,6 +344,20 @@ class _ReplayHost implements HostRequests {
     );
   }
 
+  ({String text, int? nextOffset}) _textPage(String source, int offset) {
+    final end = math.min(offset + _textPageSize, source.length);
+    return (
+      text: source.substring(offset, end),
+      nextOffset: end < source.length ? end : null,
+    );
+  }
+
+  MobileRunDiffPage loadDiff(int offset) {
+    final page = _textPage(patch, offset);
+    diffBytesRead += page.text.length;
+    return MobileRunDiffPage(text: page.text, nextOffset: page.nextOffset);
+  }
+
   @override
   Future<Object?> call(String method, Map<String, Object?> params) async {
     switch (method) {
@@ -331,12 +370,11 @@ class _ReplayHost implements HostRequests {
         ).toJson();
       case MobileTimelineMethods.content:
         final offset = params['offset'] as int? ?? 0;
-        final end = math.min(offset + toolPageSize, _output.length);
-        final text = _output.substring(offset, end);
-        toolBytesRead += text.length;
+        final page = _textPage(_output, offset);
+        toolBytesRead += page.text.length;
         return MobileTimelineContentResult(
-          text: text,
-          nextOffset: end < _output.length ? end : null,
+          text: page.text,
+          nextOffset: page.nextOffset,
         ).toJson();
       case MobileTimelineMethods.unsubscribe:
         return {'ok': true};

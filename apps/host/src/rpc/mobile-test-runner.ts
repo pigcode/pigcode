@@ -30,7 +30,10 @@ export async function runFlutter(args: string[], cwd: string, signal: AbortSigna
       if (signal.aborted) abort()
     })
     signal.throwIfAborted()
-    if (code !== 0) throw new Error(`flutter ${args[0]} failed\n${stdout}\n${stderr}`)
+    // The pinned Flutter CLI can exit zero after an uninstall fails.
+    const uninstallFailed = args.includes("--uninstall-only") &&
+      (stdout.includes("Uninstalling old version failed") || stderr.includes("Uninstalling old version failed"))
+    if (code !== 0 || uninstallFailed) throw new Error(`flutter ${args[0]} failed\n${stdout}\n${stderr}`)
     return stdout
   } finally {
     signal.removeEventListener("abort", abort)

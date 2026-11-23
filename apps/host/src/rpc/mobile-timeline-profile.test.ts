@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
@@ -12,6 +13,9 @@ it.skipIf(!device)(
   "replays a long mobile timeline and records frame and memory measurements",
   async () => {
     const signal = AbortSignal.timeout(540_000)
+    const git = (args: string[]) => execFileSync("git", args, { cwd: mobileDirectory, encoding: "utf8" }).trim()
+    const frontendCommit = git(["rev-parse", "HEAD"])
+    const workingTreeDirty = git(["status", "--porcelain"]).length > 0
     const sdk = JSON.parse(await runFlutter(["--version", "--machine"], mobileDirectory, signal)) as { frameworkVersion: string }
     const required = readFileSync(join(mobileDirectory, ".flutter-version"), "utf8").trim()
     if (sdk.frameworkVersion !== required) {
@@ -52,6 +56,8 @@ it.skipIf(!device)(
       const result = JSON.parse(readFileSync(join(runner, "build/timeline-profile.json"), "utf8"))
       expect(result).toMatchObject({ mode, anchorsPreserved: true, followedLatest: true })
       writeFileSync(report, JSON.stringify({
+        frontendCommit,
+        workingTreeDirty,
         productVersion: version,
         buildNumber,
         flutterVersion: sdk.frameworkVersion,
