@@ -136,6 +136,8 @@ Future<void> main() async {
             final projectName = command['projectName'] as String?;
             final threadId = command['threadId'] as String?;
             final status = command['status'] as String?;
+            final unread = command['unread'] as bool?;
+            final archived = command['archived'] as bool?;
             bool matches(SidebarSnapshot snapshot) {
               final projectMatches =
                   projectName == null ||
@@ -146,7 +148,10 @@ Future<void> main() async {
                   threadId == null ||
                   snapshot.threads.any(
                     (thread) =>
-                        thread.id == threadId && thread.status.wire == status,
+                        thread.id == threadId &&
+                        (status == null || thread.status.wire == status) &&
+                        (unread == null || thread.unread == unread) &&
+                        (archived == null || thread.archived == archived),
                   );
               return projectMatches && threadMatches;
             }
@@ -164,6 +169,35 @@ Future<void> main() async {
                   .map((thread) => thread.toJson())
                   .toList(),
             });
+          case 'sidebarPin':
+            await active[phone]!.sidebarCommands.setPinned(
+              command['threadId'] as String,
+              command['pinned'] as bool,
+            );
+            report('sidebarEdited');
+          case 'sidebarRead':
+            await active[phone]!.sidebarCommands.markRead(
+              command['threadId'] as String,
+              command['read'] as bool,
+            );
+            report('sidebarEdited');
+          case 'sidebarAcknowledgeRead':
+            await active[phone]!.sidebarCommands.acknowledgeRead(
+              command['threadId'] as String,
+              MobileThreadReadTarget.fromJson(
+                command['target'] as Map<String, dynamic>,
+              ),
+            );
+            report('sidebarEdited');
+          case 'sidebarMarkAllRead':
+            await active[phone]!.sidebarCommands.markAllRead();
+            report('sidebarEdited');
+          case 'sidebarArchive':
+            await active[phone]!.sidebarCommands.archive(
+              command['threadId'] as String,
+              command['archived'] as bool,
+            );
+            report('sidebarEdited');
           case 'timeline':
             final threadId = command['threadId'] as String;
             final timeline = await active[phone]!.openTimeline(threadId);

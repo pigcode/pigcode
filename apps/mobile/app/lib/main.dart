@@ -696,6 +696,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           deviceId: ref.read(computersProvider.notifier).deviceId,
           cache: _cache,
           openReminder: _openReminder,
+          presented: _workspaceOpen,
           onVisibleThread: (id) {
             _visibleThreadId = id;
             _syncVisibleThread();

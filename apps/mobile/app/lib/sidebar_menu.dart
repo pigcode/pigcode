@@ -2,12 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'offline_sync_label.dart';
+import 'sidebar_options.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
 
-enum _Filter { all, attention, archived }
+enum _ThreadAction { pin, read, archive }
 
-enum _Sort { recent, title }
+const _timeGroups = ['今天', '昨天', '最近 7 天', '最近 30 天', '更早'];
+
+SidebarCategory _category(MobileThreadSummary thread) =>
+    switch (thread.status) {
+      MobileThreadStatus.waitingApproval => SidebarCategory.attention,
+      MobileThreadStatus.failed => SidebarCategory.error,
+      MobileThreadStatus.running ||
+      MobileThreadStatus.queued => SidebarCategory.working,
+      _ => thread.unread ? SidebarCategory.unread : SidebarCategory.done,
+    };
+
+String _timeGroup(MobileThreadSummary thread, DateTime now) {
+  final date = DateTime.parse(thread.updatedAt).toLocal();
+  final start = DateTime.utc(now.year, now.month, now.day);
+  final day = DateTime.utc(date.year, date.month, date.day);
+  final days = start.difference(day).inDays;
+  if (days <= 0) return _timeGroups[0];
+  if (days == 1) return _timeGroups[1];
+  if (days < 7) return _timeGroups[2];
+  if (days < 30) return _timeGroups[3];
+  return _timeGroups[4];
+}
 
 class SidebarMenu extends StatefulWidget {
   const SidebarMenu({
@@ -20,6 +42,7 @@ class SidebarMenu extends StatefulWidget {
     required this.onComputers,
     required this.focusNode,
     this.onNewThread,
+    this.commands,
   });
 
   final SidebarSnapshot? snapshot;
@@ -30,6 +53,7 @@ class SidebarMenu extends StatefulWidget {
   final VoidCallback onComputers;
   final FocusNode focusNode;
   final ValueChanged<String?>? onNewThread;
+  final MobileSidebarCommands? commands;
 
   @override
   State<SidebarMenu> createState() => _SidebarMenuState();
@@ -38,8 +62,123 @@ class SidebarMenu extends StatefulWidget {
 class _SidebarMenuState extends State<SidebarMenu> {
   final _collapsed = <String>{};
   String _query = '';
-  _Filter _filter = _Filter.all;
-  _Sort _sort = _Sort.recent;
+  SidebarArrangement _arrangement = defaultSidebarArrangement;
+  bool _updating = false;
+
+  bool get _canEdit => widget.online && widget.commands != null && !_updating;
+  bool get _all => _arrangement.filters.length == SidebarCategory.values.length;
+  bool get _attention =>
+      _arrangement.filters.length == 2 &&
+      _arrangement.filters.containsAll({
+        SidebarCategory.attention,
+        SidebarCategory.unread,
+      });
+
+  void _quickFilter({bool archived = false, bool attention = false}) {
+    setState(() {
+      _arrangement = (
+        grouping: _arrangement.grouping,
+        sort: _arrangement.sort,
+        archived: archived,
+        filters: attention
+            ? {SidebarCategory.attention, SidebarCategory.unread}
+            : defaultSidebarArrangement.filters,
+      );
+    });
+  }
+
+  Future<void> _run(Future<void> Function(MobileSidebarCommands) change) async {
+    if (!_canEdit) return;
+    final commands = widget.commands!;
+    setState(() => _updating = true);
+    try {
+      await change(commands);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂时无法更新会话，请重试。')));
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _showActions(MobileThreadSummary thread) async {
+    final action = await showModalBottomSheet<_ThreadAction>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  thread.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (!thread.archived)
+                ListTile(
+                  leading: Icon(
+                    thread.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+                  ),
+                  title: Text(thread.pinned ? '取消置顶' : '置顶'),
+                  onTap: () => Navigator.pop(sheet, _ThreadAction.pin),
+                ),
+              if (thread.readTarget != null)
+                ListTile(
+                  leading: Icon(
+                    thread.unread
+                        ? Icons.mark_email_read_outlined
+                        : Icons.mail_outline,
+                  ),
+                  title: Text(thread.unread ? '标为已读' : '标为未读'),
+                  onTap: () => Navigator.pop(sheet, _ThreadAction.read),
+                ),
+              ListTile(
+                leading: Icon(
+                  thread.archived
+                      ? Icons.unarchive_outlined
+                      : Icons.archive_outlined,
+                ),
+                title: Text(thread.archived ? '取消归档' : '归档'),
+                onTap: () => Navigator.pop(sheet, _ThreadAction.archive),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    await _run(
+      (commands) => switch (action) {
+        _ThreadAction.pin => commands.setPinned(thread.id, !thread.pinned),
+        _ThreadAction.read => commands.markRead(thread.id, thread.unread),
+        _ThreadAction.archive => commands.archive(thread.id, !thread.archived),
+      },
+    );
+  }
+
+  Future<void> _showOptions() async {
+    final unread =
+        widget.snapshot?.threads.any((thread) => thread.unread) ?? false;
+    final markAll = await showSidebarOptions(
+      context,
+      current: _arrangement,
+      canMarkAllRead: _canEdit && unread,
+      onChanged: (arrangement) {
+        if (mounted) setState(() => _arrangement = arrangement);
+      },
+    );
+    if (mounted && markAll == true) {
+      await _run((commands) => commands.markAllRead());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,21 +193,45 @@ class _SidebarMenuState extends State<SidebarMenu> {
     final shown = (snapshot?.threads ?? const <MobileThreadSummary>[]).where((
       thread,
     ) {
-      if (thread.archived != (_filter == _Filter.archived)) return false;
-      if (_filter == _Filter.attention && !needsAttention(thread)) return false;
+      if (thread.archived != _arrangement.archived) return false;
+      if (!_arrangement.archived &&
+          !_arrangement.filters.contains(_category(thread)) &&
+          !(_arrangement.filters.contains(SidebarCategory.unread) &&
+              thread.unread)) {
+        return false;
+      }
       return thread.title.toLowerCase().contains(_query) ||
           (names[thread.projectId] ?? '').toLowerCase().contains(_query);
     }).toList();
-    if (_sort == _Sort.title) {
-      shown.sort(
-        (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
-      );
-    }
-    final pinned = shown.where((thread) => thread.pinned && !thread.archived);
+    shown.sort((a, b) {
+      final rank = switch (_arrangement.sort) {
+        SidebarSort.recent => 0,
+        SidebarSort.title => a.title.toLowerCase().compareTo(
+          b.title.toLowerCase(),
+        ),
+        SidebarSort.status => _category(a).index.compareTo(_category(b).index),
+      };
+      if (rank != 0) return rank;
+      final updated = b.updatedAt.compareTo(a.updatedAt);
+      return updated == 0 ? a.id.compareTo(b.id) : updated;
+    });
+    final pinned = shown
+        .where((thread) => thread.pinned && !thread.archived)
+        .toList();
+    final matchingProjects = shown.map((thread) => thread.projectId).toSet();
     final grouped = <String, List<MobileThreadSummary>>{};
+    final now = DateTime.now();
     for (final thread in shown) {
       if (!thread.pinned || thread.archived) {
-        grouped.putIfAbsent(thread.projectId, () => []).add(thread);
+        final group = switch (_arrangement.grouping) {
+          SidebarGrouping.project => thread.projectId,
+          SidebarGrouping.time => _timeGroup(thread, now),
+          SidebarGrouping.status =>
+            thread.unread && _category(thread) == SidebarCategory.unread
+                ? '需要处理'
+                : sidebarCategoryLabels[_category(thread)]!,
+        };
+        grouped.putIfAbsent(group, () => []).add(thread);
       }
     }
 
@@ -93,6 +256,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => widget.onSelect(thread.id),
+              onLongPress: _canEdit ? () => _showActions(thread) : null,
               child: ConstrainedBox(
                 constraints: BoxConstraints(minHeight: size),
                 child: Padding(
@@ -143,15 +307,10 @@ class _SidebarMenuState extends State<SidebarMenu> {
                 child: Text('Pigcode', style: theme.textTheme.titleLarge),
               ),
             ),
-            PopupMenuButton<_Sort>(
-              tooltip: '会话排序',
-              initialValue: _sort,
-              icon: const Icon(Icons.sort),
-              onSelected: (value) => setState(() => _sort = value),
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: _Sort.recent, child: Text('最近更新')),
-                PopupMenuItem(value: _Sort.title, child: Text('按名称')),
-              ],
+            IconButton(
+              tooltip: '分组和筛选',
+              icon: const Icon(Icons.tune),
+              onPressed: _showOptions,
             ),
           ],
         ),
@@ -179,16 +338,21 @@ class _SidebarMenuState extends State<SidebarMenu> {
         child: Wrap(
           spacing: 6,
           children: [
-            for (final (value, label) in const [
-              (_Filter.all, '全部'),
-              (_Filter.attention, '需要处理'),
-              (_Filter.archived, '已归档'),
-            ])
-              FilterChip(
-                label: Text(label),
-                selected: _filter == value,
-                onSelected: (_) => setState(() => _filter = value),
-              ),
+            FilterChip(
+              label: const Text('全部'),
+              selected: !_arrangement.archived && _all,
+              onSelected: (_) => _quickFilter(),
+            ),
+            FilterChip(
+              label: const Text('需要处理'),
+              selected: !_arrangement.archived && _attention,
+              onSelected: (_) => _quickFilter(attention: true),
+            ),
+            FilterChip(
+              label: const Text('已归档'),
+              selected: _arrangement.archived,
+              onSelected: (_) => _quickFilter(archived: true),
+            ),
           ],
         ),
       ),
@@ -225,69 +389,85 @@ class _SidebarMenuState extends State<SidebarMenu> {
           const ListTile(title: Text('置顶'), dense: true),
           for (final thread in pinned) row(thread),
         ],
-        for (final project in projects)
-          if (grouped.containsKey(project.id) ||
-              (_filter == _Filter.all &&
-                  project.name.toLowerCase().contains(_query))) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() {
-                      if (!_collapsed.remove(project.id)) {
-                        _collapsed.add(project.id);
-                      }
-                    }),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: size),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _collapsed.contains(project.id)
-                                  ? Icons.chevron_right
-                                  : Icons.expand_more,
-                              size: 18,
+        if (_arrangement.grouping == SidebarGrouping.project)
+          for (final project in projects)
+            if (matchingProjects.contains(project.id) ||
+                (!_arrangement.archived &&
+                    _all &&
+                    project.name.toLowerCase().contains(_query))) ...[
+              if (_arrangement.archived)
+                ListTile(title: Text(project.name), dense: true)
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          if (!_collapsed.remove(project.id)) {
+                            _collapsed.add(project.id);
+                          }
+                        }),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(minHeight: size),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 7,
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text(project.name)),
-                          ],
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _collapsed.contains(project.id)
+                                      ? Icons.chevron_right
+                                      : Icons.expand_more,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(project.name)),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    if (widget.onNewThread case final create?)
+                      SizedBox.square(
+                        dimension: size,
+                        child: IconButton(
+                          tooltip: '在${project.name}新建会话',
+                          onPressed: () => create(project.id),
+                          icon: const Icon(Icons.add, size: 20),
+                        ),
+                      ),
+                  ],
                 ),
-                if (widget.onNewThread case final create?)
-                  SizedBox.square(
-                    dimension: size,
-                    child: IconButton(
-                      tooltip: '在${project.name}新建会话',
-                      onPressed: () => create(project.id),
-                      icon: const Icon(Icons.add, size: 20),
-                    ),
-                  ),
-              ],
-            ),
-            if (!_collapsed.contains(project.id) || _query.isNotEmpty)
-              for (final thread
-                  in grouped[project.id] ?? const <MobileThreadSummary>[])
-                row(thread, nested: true),
-          ],
+              if (_arrangement.archived ||
+                  !_collapsed.contains(project.id) ||
+                  _query.isNotEmpty)
+                for (final thread
+                    in grouped[project.id] ?? const <MobileThreadSummary>[])
+                  row(thread, nested: true),
+            ],
+        if (_arrangement.grouping != SidebarGrouping.project)
+          for (final label
+              in _arrangement.grouping == SidebarGrouping.time
+                  ? _timeGroups
+                  : const ['需要处理', '出错', '进行中', '已完成'])
+            if (grouped[label] case final threads?) ...[
+              ListTile(title: Text(label), dense: true),
+              for (final thread in threads) row(thread),
+            ],
         if (snapshot != null && shown.isEmpty)
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
               _query.isNotEmpty
                   ? '没有匹配的会话'
-                  : switch (_filter) {
-                      _Filter.attention => '没有需要处理的会话',
-                      _Filter.archived => '没有已归档的会话',
-                      _Filter.all => '没有会话',
-                    },
+                  : _arrangement.archived
+                  ? '没有已归档的会话'
+                  : _attention
+                  ? '没有需要处理的会话'
+                  : '没有会话',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.secondaryText,
               ),

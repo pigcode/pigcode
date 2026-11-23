@@ -21,12 +21,19 @@ it("counts existing threads as read and moves their update time to the latest ru
   `)
   migrate(db)
   const rows = db
-    .prepare("SELECT id, updated_at, last_run_id, read_at FROM threads ORDER BY id")
-    .all() as Array<{ id: string; updated_at: string; last_run_id: string | null; read_at: string }>
+    .prepare("SELECT id, updated_at, last_run_id, read_at, read_run_id FROM threads ORDER BY id")
+    .all() as Array<{
+      id: string
+      updated_at: string
+      last_run_id: string | null
+      read_at: string
+      read_run_id: string | null
+    }>
   expect(
     rows.map(({ read_at: readAt, ...row }) => ({ ...row, read: readAt > row.updated_at })),
   ).toEqual([
-    { id: "idle", updated_at: "2026-10-02T00:00:00.000Z", last_run_id: null, read: true },
-    { id: "ran", updated_at: "2026-11-03T00:05:00.000Z", last_run_id: "run_2", read: true },
+    { id: "idle", updated_at: "2026-10-02T00:00:00.000Z", last_run_id: null, read: true, read_run_id: null },
+    { id: "ran", updated_at: "2026-11-03T00:05:00.000Z", last_run_id: "run_2", read: true, read_run_id: "run_2" },
   ])
+  db.close()
 })

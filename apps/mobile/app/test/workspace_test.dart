@@ -22,6 +22,8 @@ class _ReadConnection implements MobileConnection {
   @override
   bool get supportsSidebar => true;
   @override
+  bool get supportsSidebarCommands => false;
+  @override
   bool get supportsDraftCommands => false;
   @override
   bool get supportsRunCommands => false;
@@ -128,10 +130,28 @@ final snapshot = SidebarSnapshot(
   syncedAt: DateTime(2026, 11, 22, 20),
 );
 
+class _SidebarCommands implements MobileSidebarCommands {
+  final calls = <Object>[];
+
+  @override
+  Future<void> setPinned(String threadId, bool pinned) async {
+    calls.add((threadId, pinned));
+  }
+
+  @override
+  Future<void> markAllRead() async {
+    calls.add('markAllRead');
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 Widget workspace({
   required bool online,
   SidebarSnapshot? data,
   double textScale = 1,
+  MobileSidebarCommands? commands,
 }) => MaterialApp(
   builder: (context, child) => MediaQuery(
     data: MediaQuery.of(context).copyWith(
@@ -144,6 +164,7 @@ Widget workspace({
     snapshot: data ?? snapshot,
     online: online,
     computerName: '测试电脑',
+    sidebarCommands: commands,
     onComputers: () {},
   ),
 );
@@ -152,6 +173,50 @@ Finder menuText(String label) =>
     find.descendant(of: find.byType(SidebarMenu), matching: find.text(label));
 
 void main() {
+  testWidgets('shows archived sessions even when their project was collapsed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(workspace(online: true));
+    await tester.tap(find.byTooltip('打开菜单'));
+    await tester.pumpAndSettle();
+    await tester.tap(menuText('文档'));
+    await tester.pumpAndSettle();
+    await tester.tap(menuText('已归档'));
+    await tester.pumpAndSettle();
+    expect(menuText('旧会话'), findsOneWidget);
+  });
+
+  testWidgets(
+    'edits sidebar state only online and keeps the pinned group in time grouping',
+    (tester) async {
+      final commands = _SidebarCommands();
+      await tester.pumpWidget(workspace(online: true, commands: commands));
+      await tester.tap(find.byTooltip('打开菜单'));
+      await tester.pumpAndSettle();
+      await tester.longPress(menuText('文档更新'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消置顶'));
+      await tester.pumpAndSettle();
+      expect(commands.calls, [('unread', false)]);
+
+      await tester.tap(find.byTooltip('分组和筛选'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '更新时间').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('全部标为已读'));
+      await tester.pumpAndSettle();
+      expect(commands.calls, [('unread', false), 'markAllRead']);
+      expect(menuText('置顶'), findsOneWidget);
+      expect(menuText('编辑器'), findsNothing);
+
+      await tester.pumpWidget(workspace(online: false, commands: commands));
+      await tester.pumpAndSettle();
+      await tester.longPress(menuText('文档更新'));
+      await tester.pumpAndSettle();
+      expect(find.text('取消置顶'), findsNothing);
+    },
+  );
+
   testWidgets(
     'opens the recent session and filters the pushed sidebar by attention',
     (tester) async {

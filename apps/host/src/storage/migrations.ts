@@ -320,6 +320,16 @@ const MIGRATIONS: Migration[] = [
   );
   `,
   `ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1));`,
+  `
+  ALTER TABLE threads ADD COLUMN read_run_id TEXT;
+  ALTER TABLE threads ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE threads ADD COLUMN manual_unread_run_id TEXT;
+  UPDATE threads SET read_run_id = (
+    SELECT CASE WHEN status IN ('completed', 'failed', 'interrupted')
+      AND completed_at <= threads.read_at THEN id END
+    FROM runs WHERE thread_id = threads.id ORDER BY rowid DESC LIMIT 1
+  );
+  `,
 ]
 
 /**

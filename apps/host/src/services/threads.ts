@@ -7,6 +7,7 @@ import {
   type RunStatus,
   type Thread,
   type ThreadEvent,
+  type ThreadReadTarget,
   type ThreadStatus,
 } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
@@ -21,7 +22,7 @@ export const THREAD_ACTIVITY = new Set<ThreadEvent["type"]>([
 
 /** 会话的行带上最近一次 run 的状态和结束时间；runs 按时间先后插入，rowid 最大的就是最近一次。 */
 const SELECT_THREAD = `
-  SELECT t.*, r.status AS run_status, r.completed_at AS run_completed_at
+  SELECT t.*, r.id AS run_id, r.status AS run_status, r.completed_at AS run_completed_at
   FROM threads t
   LEFT JOIN runs r ON r.rowid = (SELECT MAX(rowid) FROM runs WHERE thread_id = t.id)`
 
@@ -76,8 +77,10 @@ export interface ThreadsService {
   unarchive(threadId: string): Thread | undefined
   /** 标为已读（看过最近一次 run 的结果），或者标回未读。 */
   markRead(threadId: string, read: boolean): Thread | undefined
+  /** 只确认调用方实际看过的结果和版本。 */
+  acknowledgeRead(threadId: string, target: ThreadReadTarget): Thread | undefined
   /** 把所有未读的会话标为已读，返回改过的会话。 */
-  markAllRead(): Thread[]
+  markAllRead(inScope?: (thread: Thread) => boolean): Thread[]
   /** 记录线程最近选择的 Agent/实例/model，切换后下一次 run 生效。 */
   updateSelection(
     threadId: string,
@@ -113,6 +116,10 @@ export interface ThreadsPlugin {
 
 /** 注册 threads 服务；新线程使用平台默认权限，子会话继承主会话的选择。 */
 export const apply: ThreadsPlugin = (ctx) => {
+  const updateReadState = ctx.storage.db.prepare(
+    `UPDATE threads SET read_run_id = ?, read_at = ?, read_revision = read_revision + ?,
+       manual_unread_run_id = COALESCE(?, manual_unread_run_id) WHERE id = ?`,
+  )
   const service: ThreadsService = {
     create(projectId, title, agentId, parentThreadId, initial = {}) {
       const parent = parentThreadId ? service.get(parentThreadId) : undefined
@@ -240,19 +247,30 @@ export const apply: ThreadsPlugin = (ctx) => {
       return service.get(threadId)
     },
     markRead(threadId, read) {
-      ctx.storage.db
-        .prepare(`UPDATE threads SET read_at = ? WHERE id = ?`)
-        .run(read ? new Date().toISOString() : null, threadId)
+      const thread = service.get(threadId)
+      if (!thread?.readTarget) return thread
+      if (read) updateReadState.run(thread.readTarget.runId, new Date().toISOString(), 0, null, threadId)
+      else updateReadState.run(null, null, 1, thread.readTarget.runId, threadId)
       return service.get(threadId)
     },
-    markAllRead() {
-      const unread = service.list().filter((thread) => thread.unread)
-      const now = new Date().toISOString()
-      const mark = ctx.storage.db.prepare(`UPDATE threads SET read_at = ? WHERE id = ?`)
-      ctx.storage.db.transaction(() => {
-        for (const thread of unread) mark.run(now, thread.id)
+    acknowledgeRead(threadId, target) {
+      return ctx.storage.db.transaction(() => {
+        const thread = service.get(threadId)
+        if (!thread?.unread || thread.readTarget?.runId !== target.runId ||
+            thread.readTarget.revision !== target.revision) return thread
+        updateReadState.run(target.runId, new Date().toISOString(), 0, null, threadId)
+        return service.get(threadId)
       })()
-      return unread.map((thread) => ({ ...thread, unread: false }))
+    },
+    markAllRead(inScope = () => true) {
+      return ctx.storage.db.transaction(() => {
+        const now = new Date().toISOString()
+        return service.list().flatMap((thread) => {
+          if (!thread.unread || !thread.readTarget || !inScope(thread)) return []
+          updateReadState.run(thread.readTarget.runId, now, 0, null, thread.id)
+          return [{ ...thread, unread: false }]
+        })
+      })()
     },
     updateSelection(threadId, agentId, modelId, instanceId, modes) {
       ctx.storage.db
@@ -299,7 +317,12 @@ function mapThread(row: unknown): Thread {
   const value = row as Record<string, string | null>
   const runStatus = value.run_status as RunStatus | null
   const endedAt = runStatus && FINISHED.has(runStatus) ? (value.run_completed_at ?? null) : null
-  const readAt = value.read_at ?? null
+  const manualUnread = value.manual_unread_run_id
+    ? { runId: value.manual_unread_run_id, revision: Number(value.read_revision) }
+    : undefined
+  const readTarget = endedAt && value.run_id
+    ? { runId: value.run_id, revision: manualUnread?.runId === value.run_id ? manualUnread.revision : 0 }
+    : undefined
   return {
     id: value.id!,
     projectId: value.project_id!,
@@ -318,6 +341,8 @@ function mapThread(row: unknown): Thread {
     lastRunId: value.last_run_id ?? null,
     parentThreadId: value.parent_thread_id ?? null,
     status: runStatus ? STATUS_OF_RUN[runStatus] : "idle",
-    unread: endedAt !== null && (readAt === null || endedAt > readAt),
+    unread: readTarget !== undefined && value.read_run_id !== readTarget.runId,
+    ...(readTarget ? { readTarget } : {}),
+    ...(manualUnread ? { manualUnread } : {}),
   }
 }

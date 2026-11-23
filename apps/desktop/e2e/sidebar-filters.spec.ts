@@ -59,6 +59,11 @@ test("background results show as unread, sort into the status groups, and archiv
     await expect(page.getByRole("group", { name: "需要处理" })).toContainText("second run")
     await row(page, "long").click()
     await expect(page.getByRole("group", { name: "已完成" })).toContainText("second run")
+    await pickNextMenuItem(app, "标为未读")
+    await row(page, "second run").click({ button: "right" })
+    await expect(row(page, "second run")).toHaveAttribute("data-unread", "")
+    await row(page, "second run").click()
+    await expect(row(page, "second run")).not.toHaveAttribute("data-unread", "")
     await customize(page, /^分组/, "项目")
 
     await pickNextMenuItem(app, "归档")

@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
-import { mobilePairingViewSchema, rpcSuccessSchema } from "@pigcode/contracts"
+import { mobilePairingViewSchema, mobileThreadSummarySchema, rpcSuccessSchema } from "@pigcode/contracts"
 import { Context } from "cordis"
 import { expect, it } from "vitest"
 import { apply as agents } from "../agents/registry"
+import { FAKE_ASK_TEXT } from "../agents/fake"
 import { MobileSidebarRpc } from "../mobile/sidebar-rpc"
 import { PairedDevices } from "../mobile/paired-devices"
 import { apply as projects } from "../services/projects"
@@ -29,11 +30,13 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   const visible = ctx.projects.add("/private/visible", "工作区")
   const deleted = ctx.projects.add("/private/hidden", "已移除")
   const parent = ctx.threads.create(visible.id, "原名称", "fake")
-  ctx.threads.create(visible.id, "子代理运行", "fake", parent.id)
-  ctx.threads.create(deleted.id, "不在侧栏", "fake")
+  const child = ctx.threads.create(visible.id, "子代理运行", "fake", parent.id)
+  const hidden = ctx.threads.create(deleted.id, "不在侧栏", "fake")
   ctx.projects.remove(deleted.id)
 
   const devices = new PairedDevices(ctx.settings)
+  const deviceKey = Buffer.alloc(32, 2).toString("base64url")
+  devices.save({ publicKey: deviceKey, name: "测试手机", platform: "ios", lastConnectedAt: null })
   const feed = new ThreadFeed(ctx)
   const desktop = new MemoryTransport({ skip: ["thread.changed", "project.changed"] })
   const page = new PageTransport()
@@ -47,13 +50,13 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   })
   let request = 0
 
-  function phone() {
+  function phone(writable = false) {
     const transport = new MemoryTransport({ skip: ["sidebar.changed"] })
     const rpc = new MobileSidebarRpc(ctx, feed, transport.host, devices, {
       computerKey: Buffer.alloc(32, 1),
       computerName: "测试电脑",
-      deviceKey: Buffer.alloc(32, 2).toString("base64url"),
-      features: ["sidebar.read", "connection.status"],
+      deviceKey,
+      features: writable ? ["sidebar.read", "sidebar.write", "connection.status"] : ["sidebar.read", "connection.status"],
       relayRevision: () => undefined,
     })
     const changes: unknown[] = []
@@ -72,7 +75,7 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   }
 
   const first = phone()
-  const second = phone()
+  const second = phone(true)
   try {
     expect(await call(first.wire, "project.list")).toMatchObject({
       result: [{ id: visible.id, name: "工作区" }],
@@ -116,6 +119,22 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
 
     await call(first.wire, "sidebar.subscribe")
     await call(second.wire, "sidebar.subscribe")
+    const pin = { threadId: parent.id, pinned: true }
+    expect(await call(first.wire, "thread.setPinned", pin)).toMatchObject({
+      error: { code: "METHOD_NOT_AVAILABLE" },
+    })
+    expect(await call(second.wire, "thread.setPinned", { ...pin, projectId: visible.id })).toMatchObject({
+      error: { code: "INVALID_PARAMS" },
+    })
+    for (const threadId of [child.id, hidden.id]) {
+      expect(await call(second.wire, "thread.setPinned", { threadId, pinned: true })).toMatchObject({
+        error: { code: "RESOURCE_NOT_AVAILABLE" },
+      })
+    }
+    expect(await call(second.wire, "thread.setPinned", pin)).toMatchObject({ result: {} })
+    expect(await call(desktop, "thread.list")).toMatchObject({
+      result: expect.arrayContaining([expect.objectContaining({ id: parent.id, pinned: true })]),
+    })
     await call(desktop, "project.rename", { projectId: visible.id, name: "新项目名" })
     await call(desktop, "thread.rename", { threadId: parent.id, title: "新标题" })
     await expect
@@ -142,8 +161,13 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
     expect(first.changes).toHaveLength(priorFirst)
     expect(await call(second.wire, "thread.list")).toMatchObject({
       result: expect.arrayContaining([
-        expect.objectContaining({ id: parent.id, title: "新标题", archived: true }),
+        expect.objectContaining({ id: parent.id, title: "新标题", archived: true, pinned: false }),
       ]),
+    })
+    expect(await call(second.wire, "thread.unarchive", { threadId: parent.id })).toMatchObject({ result: {} })
+    devices.remove(devices.find(deviceKey)!)
+    expect(await call(second.wire, "thread.setPinned", pin)).toMatchObject({
+      error: { code: "DEVICE_REVOKED" },
     })
   } finally {
     first.rpc.stop()
@@ -172,7 +196,7 @@ it.skipIf(!address || !token)(
     async function call(method: string, params?: Record<string, unknown>) {
       return rpcSuccessSchema.parse(await host.call(method, params)).result
     }
-    function send(phone: string, action: string, extras: Record<string, string> = {}) {
+    function send(phone: string, action: string, extras: Record<string, unknown> = {}) {
       dart.stdin.write(JSON.stringify({ phone, action, ...extras }) + "\n")
     }
     async function receive() {
@@ -234,34 +258,65 @@ it.skipIf(!address || !token)(
       }
 
       await call("project.rename", { projectId: docs.id, name: "已同步文档" })
-      await call("thread.setPinned", { threadId: target.id, pinned: true })
+      send(first, "sidebarPin", { threadId: target.id, pinned: true })
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
       await call("run.start", { threadId: target.id, text: "验证会话摘要" })
+      let firstReadTarget: ReturnType<typeof mobileThreadSummarySchema.parse>["readTarget"]
       for (const phone of [first, second]) {
         send(phone, "sidebar", {
           projectName: "已同步文档",
           threadId: target.id,
           status: "completed",
         })
-        expect(await receive()).toMatchObject({
+        const snapshot = await receive()
+        expect(snapshot).toMatchObject({
           stage: "sidebar",
           projects: expect.arrayContaining([{ id: docs.id, name: "已同步文档" }]),
           threads: expect.arrayContaining([
             expect.objectContaining({ id: target.id, pinned: true, status: "completed", unread: true }),
           ]),
         })
+        if (phone === first) {
+          firstReadTarget = snapshot.threads?.map((row) => mobileThreadSummarySchema.parse(row))
+            .find((thread) => thread.id === target.id)?.readTarget
+        }
       }
+      expect(firstReadTarget).toMatchObject({ runId: expect.any(String), revision: 0 })
+      send(first, "sidebarAcknowledgeRead", { threadId: target.id, target: firstReadTarget })
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
+      expect(await call("thread.list", { projectId: docs.id })).toMatchObject([
+        { id: target.id, unread: false, pinned: true },
+      ])
+      send(second, "sidebarRead", { threadId: target.id, read: false })
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
+      send(first, "sidebarAcknowledgeRead", { threadId: target.id, target: firstReadTarget })
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
+      expect(await call("thread.list", { projectId: docs.id })).toMatchObject([
+        { id: target.id, unread: true, readTarget: { revision: 1 } },
+      ])
 
       send(first, "disconnect")
       expect(await receive()).toEqual({ stage: "closed" })
-      await call("thread.markRead", { threadId: target.id, read: true })
+      const called = host.ctx.threads.create(docs.id, "等你处理", "fake")
+      const pending = await host.ctx.agents.startRun(called.id, FAKE_ASK_TEXT)
+      send(second, "sidebarMarkAllRead")
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
       await call("project.rename", { projectId: docs.id, name: "另一端仍在线" })
-      send(second, "sidebar", { projectName: "另一端仍在线" })
+      send(second, "sidebar", { projectName: "另一端仍在线", threadId: called.id, status: "waiting-approval" })
       expect(await receive()).toMatchObject({
         stage: "sidebar",
         threads: expect.arrayContaining([
           expect.objectContaining({ id: target.id, unread: false }),
+          expect.objectContaining({ id: called.id, status: "waiting-approval" }),
         ]),
       })
+      host.ctx.agents.cancelRun(pending.runId)
+      await pending.done
+      send(second, "sidebarArchive", { threadId: target.id, archived: true })
+      expect(await receive()).toEqual({ stage: "sidebarEdited" })
+      expect(await call("thread.list", { projectId: docs.id })).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: target.id, pinned: false, archivedAt: expect.any(String) }),
+      ]))
     } finally {
       dart.stdin.end()
       dart.kill()

@@ -64,6 +64,11 @@ export class Connection {
     return this.receivedProjects
   }
 
+  /** 随 Host 传输层替换而递增，供在途回执区分连接。 */
+  get connectionRevision(): number {
+    return this.attempts
+  }
+
   /**
    * 绑定新的传输层；已有线程时逐个从各自 cursor 重订阅。
    * 返回这次 attach 是否成为当前连接：false 表示中途被新的 attach 取代，

@@ -16,6 +16,48 @@ class SidebarSnapshot {
   final DateTime syncedAt;
 }
 
+/// Sidebar changes are published by Host on its shared sidebar subscription.
+class MobileSidebarCommands {
+  const MobileSidebarCommands(this._rpc);
+
+  final HostRequests _rpc;
+
+  Future<void> setPinned(String threadId, bool pinned) async {
+    await _rpc.call(MobileSidebarMethods.setPinned, {
+      'threadId': threadId,
+      'pinned': pinned,
+    });
+  }
+
+  Future<void> archive(String threadId, bool archived) async {
+    await _rpc.call(
+      archived ? MobileSidebarMethods.archive : MobileSidebarMethods.unarchive,
+      {'threadId': threadId},
+    );
+  }
+
+  Future<void> markRead(String threadId, bool read) async {
+    await _rpc.call(MobileSidebarMethods.markRead, {
+      'threadId': threadId,
+      'read': read,
+    });
+  }
+
+  Future<void> markAllRead() async {
+    await _rpc.call(MobileSidebarMethods.markAllRead, {});
+  }
+
+  Future<void> acknowledgeRead(
+    String threadId,
+    MobileThreadReadTarget target,
+  ) async {
+    await _rpc.call(MobileSidebarMethods.acknowledgeRead, {
+      'threadId': threadId,
+      ...target.toJson(),
+    });
+  }
+}
+
 /// A sidebar belongs to one authenticated connection. Invalidations arriving
 /// during a paged load cause a fresh load before a newer snapshot is published.
 class MobileSidebar {

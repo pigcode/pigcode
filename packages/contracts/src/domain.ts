@@ -113,6 +113,13 @@ export const threadStatusSchema = z.enum([
   "interrupted",
 ])
 
+/** 端上已看到的结果轮次，以及该会话当前的手动标未读版本。 */
+export const threadReadTargetSchema = z.strictObject({
+  runId: z.string().min(1),
+  revision: z.int().nonnegative(),
+})
+export type ThreadReadTarget = z.infer<typeof threadReadTargetSchema>
+
 /** 线程实体，保存会话级 Agent 与模型的最近选择。 */
 export const threadSchema = z.object({
   id: z.string().min(1),
@@ -138,8 +145,12 @@ export const threadSchema = z.object({
   parentThreadId: z.string().nullable().optional(),
   /** Host 按 runs 与待处理请求算出，不落库；没带时当作 idle。 */
   status: threadStatusSchema.optional(),
-  /** 最近一次 run 结束得比上次打开它晚：结果还没看过。 */
+  /** 最近一轮 run 的结果是否待查看。 */
   unread: z.boolean().optional(),
+  /** 当前可以确认已读的结果。没有已结束的最新 run 时缺省。 */
+  readTarget: threadReadTargetSchema.optional(),
+  /** 最近一次手动标未读的轮次和版本，在会话运行中仍保留。 */
+  manualUnread: threadReadTargetSchema.optional(),
 })
 
 /** 一次运行的生命周期状态。 */

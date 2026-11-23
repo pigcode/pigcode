@@ -25,7 +25,7 @@ import { BrowserHost } from "./browser-host"
 import { AppearanceContext } from "./builtin-settings-pages"
 import { ChatViewContainer, type CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
-import { useDesktopForeground, useDesktopReminderNavigation } from "./desktop-reminder-navigation"
+import { useDesktopReminderNavigation } from "./desktop-reminder-navigation"
 import { UnsavedGuard } from "./unsaved-guard"
 import { PluginsView, SchedulesView } from "./workspace-pages"
 import { useBrowserOpen } from "./use-browser-open"
@@ -56,7 +56,8 @@ const WorkbenchPanel = lazy(() =>
 const TerminalDrawer = lazy(() =>
   import("./terminal-drawer").then((module) => ({ default: module.TerminalDrawer })),
 )
-import { addProject, loadWorkspace, setThreadRead, sidebarActions } from "./workspace-actions"
+import { useThreadReading } from "./thread-reading"
+import { addProject, loadWorkspace, sidebarActions } from "./workspace-actions"
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
@@ -170,17 +171,15 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     )
   }, [state.status, state.activeThreadId, activeAgentId, connection, store])
 
-  // 正在看的会话算已读：切过来时，或者它在眼前跑完时。
-  const foreground = useDesktopForeground()
   const activeTimeline = activeThreadId ? state.threadStates[activeThreadId] : undefined
-  const viewingUnread = inChat && foreground && activeThread?.unread && activeTimeline?.loaded &&
-    activeTimeline.events.some((event) => event.runId === activeThread.lastRunId && (
-      event.type === "run.completed" || event.type === "run.failed" || event.type === "run.interrupted"
-    )) ? activeThread.id : null
-  useEffect(() => {
-    if (state.status !== "connected" || !viewingUnread) return
-    void setThreadRead(connection, store, viewingUnread, true).catch(() => undefined)
-  }, [state.status, viewingUnread, connection, store])
+  useThreadReading(connection, {
+    threadId: inChat && !(rightOpen && rightMaximized) ? activeThreadId : null,
+    connected: state.status === "connected",
+    unread: activeThread?.unread,
+    target: activeThread?.readTarget,
+    manualUnread: activeThread?.manualUnread,
+    timeline: activeTimeline,
+  })
 
   /**
    * 进入新会话草稿（参照 ZCode）：不在 Host 上建会话，第一次发送时才建。草稿落在指定的项目里；

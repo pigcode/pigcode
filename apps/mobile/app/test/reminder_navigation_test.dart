@@ -58,7 +58,7 @@ Widget workspace({
     error: error,
     onRetry: onRetry,
     onVisibleThread: onVisibleThread,
-    timeline: (thread, online, onSynced) {
+    timeline: (thread, online, onSynced, _) {
       captureSyncCallback?.call(onSynced);
       return Text('会话内容 ${thread.id} ${online ? "已同步" : "缓存"}');
     },

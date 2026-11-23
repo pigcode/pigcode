@@ -1,6 +1,7 @@
 import type { Context } from "cordis"
 import type { HostTransport } from "@pigcode/client-runtime/transport"
 import {
+  commandSchemas,
   mobileProjectListParamsSchema,
   mobileProjectListResultSchema,
   mobileCommandMethods,
@@ -12,6 +13,7 @@ import {
   mobileReminderSettingsSchema,
   mobileSidebarChangedSchema,
   mobileSidebarMethods as methods,
+  mobileSidebarWrites,
   mobileSidebarLabelLimit,
   mobileSidebarPageSize,
   mobileSidebarSubscribeParamsSchema,
@@ -26,8 +28,10 @@ import {
   type RpcRequest,
   type Thread,
   type MobileReminderSettings,
+  type MobileSidebarWrite,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
+import { dispatchThreadCommand } from "../rpc/thread-commands"
 import { QueueOperationError } from "../agents/message-queue"
 import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
 import { fingerprint, type PairedDevices } from "./paired-devices"
@@ -41,6 +45,7 @@ import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
 const pageByteBudget = 48 * 1024
+const sidebarWrites = new Set<string>(Object.values(mobileSidebarWrites))
 
 interface MobileSession {
   computerKey: Buffer
@@ -77,7 +82,7 @@ function displayLabel(text: string): string {
   return prefix.replace(/[\uD800-\uDBFF]$/, "") + "…"
 }
 
-function threadSummary(thread: Thread) {
+function threadSummary(thread: Thread, includeReadTarget: boolean) {
   return {
     id: thread.id,
     projectId: thread.projectId,
@@ -87,6 +92,8 @@ function threadSummary(thread: Thread) {
     pinned: thread.pinned === true,
     status: thread.status ?? "idle",
     unread: thread.unread ?? false,
+    ...(includeReadTarget && thread.readTarget ? { readTarget: thread.readTarget } : {}),
+    ...(includeReadTarget && thread.manualUnread ? { manualUnread: thread.manualUnread } : {}),
   }
 }
 
@@ -275,6 +282,9 @@ export class MobileSidebarRpc {
 
     if (!this.session.features.includes("sidebar.read"))
       throw new MobileRequestError("METHOD_NOT_AVAILABLE")
+    if (this.session.features.includes("sidebar.write") && sidebarWrites.has(request.method)) {
+      return this.writeSidebar(request.method as MobileSidebarWrite, request.params)
+    }
 
     switch (request.method) {
       case methods.projectList: {
@@ -314,13 +324,31 @@ export class MobileSidebarRpc {
     return rows
   }
 
+  private writeSidebar(method: MobileSidebarWrite, input: unknown) {
+    this.requirePairedDevice()
+    if (method === methods.markAllRead) {
+      params(commandSchemas[method].strict(), input)
+      const projects = new Set(this.ctx.projects.list().map((project) => project.id))
+      const changed = this.ctx.threads.markAllRead((thread) =>
+        !thread.parentThreadId && projects.has(thread.projectId),
+      )
+      for (const thread of changed) this.feed.changed(thread.id)
+    } else {
+      const parsed = commandSchemas[method].strict().safeParse(input)
+      if (!parsed.success) throw new MobileRequestError("INVALID_PARAMS")
+      requireMobileThread(this.ctx, parsed.data.threadId)
+      dispatchThreadCommand(this.ctx, method, parsed.data, (id) => this.feed.changed(id))
+    }
+    return {}
+  }
+
   private threadRows(projects: Array<{ id: string }>) {
     if (this.cachedThreads) return this.cachedThreads
     const active = new Set(projects.map(({ id }) => id))
     const rows = this.ctx.threads
       .list()
       .filter((thread) => !thread.parentThreadId && active.has(thread.projectId))
-      .map(threadSummary)
+      .map((thread) => threadSummary(thread, this.session.features.includes("sidebar.write")))
     if (this.stopSidebar) this.cachedThreads = rows
     return rows
   }

@@ -20,6 +20,7 @@ import {
   scheduleDraftSchema,
   scheduleExecutionSchema,
   scheduleRuleSchema,
+  threadReadTargetSchema,
   threadReferencesSchema,
   worktreeStartSchema,
 } from "./domain"
@@ -134,6 +135,7 @@ export const commandSchemas = {
   "thread.unarchive": z.object({ threadId: z.string().min(1) }),
   /** 标为已读，或者标回未读；没跑完过 run 的会话标未读没有效果。 */
   "thread.markRead": z.object({ threadId: z.string().min(1), read: z.boolean().default(true) }),
+  "thread.acknowledgeRead": threadReadTargetSchema.extend({ threadId: z.string().min(1) }),
   "thread.markAllRead": z.object({}),
   "thread.switchAgent": threadSwitchAgentParams,
   /** 下一次 run 起生效；运行中的 run 保持启动时的权限。 */

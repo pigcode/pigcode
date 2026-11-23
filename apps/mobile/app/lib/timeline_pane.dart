@@ -12,6 +12,7 @@ import 'run_composer.dart';
 import 'run_composer_state.dart';
 import 'request_input.dart';
 import 'run_changes_card.dart';
+import 'thread_read_receipt.dart';
 import 'timeline_view.dart';
 
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
@@ -92,6 +93,7 @@ class TimelinePane extends ConsumerStatefulWidget {
     this.cache,
     this.computerKey,
     this.onSynced,
+    this.reading,
   });
 
   final MobileConnection? connection;
@@ -100,6 +102,14 @@ class TimelinePane extends ConsumerStatefulWidget {
   final ComputerOfflineCache? cache;
   final String? computerKey;
   final ValueChanged<bool>? onSynced;
+  final ({
+    bool visible,
+    int visit,
+    bool unread,
+    MobileThreadReadTarget? target,
+    MobileThreadReadTarget? manualUnread,
+  })?
+  reading;
 
   @override
   ConsumerState<TimelinePane> createState() => _TimelinePaneState();
@@ -309,7 +319,21 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         ? const SizedBox.shrink()
         : _offlineComposer();
     final syncedAt = _syncedAt;
-    return LayoutBuilder(
+    final reading = widget.reading;
+    final shownResult = synced
+        ? current.snapshot.events.reversed
+              .where(
+                (event) => switch (event.kind) {
+                  MobileTimelineKind.runCompleted ||
+                  MobileTimelineKind.runFailed ||
+                  MobileTimelineKind.runInterrupted => true,
+                  _ => false,
+                },
+              )
+              .firstOrNull
+              ?.runId
+        : null;
+    final content = LayoutBuilder(
       builder: (context, constraints) => Column(
         children: [
           if (!online && syncedAt != null && snapshot != null)
@@ -328,6 +352,22 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
           ),
         ],
       ),
+    );
+    return ThreadReadReceipt(
+      visible:
+          reading?.visible == true &&
+          (ModalRoute.of(context)?.isCurrent ?? true),
+      shownRunId: shownResult,
+      target: reading?.target,
+      manualUnread: reading?.manualUnread,
+      connection: connection,
+      unread: reading?.unread == true,
+      visit: reading?.visit ?? 0,
+      confirm: reading != null && connection?.supportsSidebarCommands == true
+          ? (target) =>
+                connection!.sidebarCommands.acknowledgeRead(threadId, target)
+          : null,
+      child: content,
     );
   }
 

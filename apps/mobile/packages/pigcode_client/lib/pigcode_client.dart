@@ -39,6 +39,7 @@ class MobileConnection {
     this.computer,
     this._acceptsRelayReceipt,
     this.supportsSidebar,
+    this.supportsSidebarCommands,
     this.supportsTimeline,
     this.supportsRunCommands,
     this.supportsRequestCommands,
@@ -56,6 +57,7 @@ class MobileConnection {
   final ComputerProfile computer;
   final bool _acceptsRelayReceipt;
   final bool supportsSidebar;
+  final bool supportsSidebarCommands;
   final bool supportsTimeline;
   final bool supportsRunCommands;
   final bool supportsRequestCommands;
@@ -67,6 +69,9 @@ class MobileConnection {
   final bool _registersApns;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
+  late final MobileSidebarCommands sidebarCommands = MobileSidebarCommands(
+    _rpc,
+  );
   late final MobileRunChanges changes = MobileRunChanges(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
@@ -268,6 +273,7 @@ class MobileConnection {
           'connection.status',
           'relay.saveReceipt',
           'sidebar.read',
+          'sidebar.write',
           'timeline.read',
           'timeline.resume',
           'changes.read',
@@ -315,6 +321,7 @@ class MobileConnection {
         computer.withRelayRevision(revision),
         (welcome['features'] as List).contains('relay.saveReceipt'),
         (welcome['features'] as List).contains('sidebar.read'),
+        (welcome['features'] as List).contains('sidebar.write'),
         (welcome['features'] as List).contains('timeline.read'),
         (welcome['features'] as List).contains('run.write'),
         (welcome['features'] as List).contains('request.write'),

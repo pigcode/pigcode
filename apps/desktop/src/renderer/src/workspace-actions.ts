@@ -181,16 +181,24 @@ async function setThreadPinned(
   replaceThread(store, (await connection.call("thread.setPinned", { threadId, pinned })) as Thread)
 }
 
-/** 标为已读或未读。标已读时先改 store，正在看的会话跑完时侧栏不会闪一下未读。 */
+/** 手动标读即时反馈，Host 返回错误时恢复仍在等待确认的本地记录。 */
 export async function setThreadRead(
   connection: Connection,
   store: AppStore,
   threadId: string,
   read: boolean,
 ): Promise<void> {
-  const current = store.getSnapshot().threads.find((thread) => thread.id === threadId)
-  if (read && current?.unread) replaceThread(store, { ...current, unread: false })
-  replaceThread(store, (await connection.call("thread.markRead", { threadId, read })) as Thread)
+  const findThread = () => store.getSnapshot().threads.find((thread) => thread.id === threadId)
+  const before = findThread()
+  const pending = read && before?.unread ? { ...before, unread: false } : before
+  if (pending && pending !== before) replaceThread(store, pending)
+  try {
+    const latest = (await connection.call("thread.markRead", { threadId, read })) as Thread
+    if (findThread() === pending) replaceThread(store, latest)
+  } catch (error) {
+    if (before && pending !== before && findThread() === pending) replaceThread(store, before)
+    throw error
+  }
 }
 
 /** 侧栏菜单里的「全部标为已读」。 */

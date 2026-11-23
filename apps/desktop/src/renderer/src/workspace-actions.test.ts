@@ -187,6 +187,17 @@ describe("workspace actions", () => {
     ])
   })
 
+  it("restores unread when a manual mark-read loses the connection", async () => {
+    const unread = { ...thread("t1", "p1", "2026-10-20T02:00:00.000Z"), unread: true }
+    const store = storeWith([unread], null)
+    const { connection } = fakeConnection({
+      "thread.markRead": () => { throw new Error("host not connected") },
+    })
+
+    await expect(setThreadRead(connection, store, unread.id, true)).rejects.toThrow("host not connected")
+    expect(store.getSnapshot().threads).toEqual([unread])
+  })
+
   it("adds a project once and keeps projects in creation order when one comes back", async () => {
     const store = new AppStore()
     const restored = { ...project("p0"), createdAt: "2026-10-01T00:00:00.000Z" }

@@ -1,6 +1,12 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
 
 abstract final class MobileSidebarMethods {
+  static const setPinned = 'thread.setPinned';
+  static const archive = 'thread.archive';
+  static const unarchive = 'thread.unarchive';
+  static const markRead = 'thread.markRead';
+  static const markAllRead = 'thread.markAllRead';
+  static const acknowledgeRead = 'thread.acknowledgeRead';
   static const projectList = 'project.list';
   static const threadList = 'thread.list';
   static const subscribe = 'sidebar.subscribe';
@@ -247,6 +253,8 @@ final class MobileThreadSummary {
     required this.projectId,
     required this.title,
     required this.updatedAt,
+    this.readTarget,
+    this.manualUnread,
     required this.archived,
     required this.pinned,
     required this.status,
@@ -256,6 +264,8 @@ final class MobileThreadSummary {
   final String projectId;
   final String title;
   final String updatedAt;
+  final MobileThreadReadTarget? readTarget;
+  final MobileThreadReadTarget? manualUnread;
   final bool archived;
   final bool pinned;
   final MobileThreadStatus status;
@@ -268,6 +278,8 @@ final class MobileThreadSummary {
         'projectId',
         'title',
         'updatedAt',
+        'readTarget',
+        'manualUnread',
         'archived',
         'pinned',
         'status',
@@ -296,6 +308,16 @@ final class MobileThreadSummary {
     ).hasMatch(updatedAt)) {
       throw const FormatException('Invalid updatedAt');
     }
+    final readTarget = json.containsKey('readTarget')
+        ? MobileThreadReadTarget.fromJson(
+            json['readTarget'] as Map<String, dynamic>,
+          )
+        : null;
+    final manualUnread = json.containsKey('manualUnread')
+        ? MobileThreadReadTarget.fromJson(
+            json['manualUnread'] as Map<String, dynamic>,
+          )
+        : null;
     final archived = json['archived'] as bool;
     final pinned = json['pinned'] as bool;
     final status = MobileThreadStatus.fromWire(json['status'] as String);
@@ -305,6 +327,8 @@ final class MobileThreadSummary {
       projectId: projectId,
       title: title,
       updatedAt: updatedAt,
+      readTarget: readTarget,
+      manualUnread: manualUnread,
       archived: archived,
       pinned: pinned,
       status: status,
@@ -317,6 +341,8 @@ final class MobileThreadSummary {
     'projectId': projectId,
     'title': title,
     'updatedAt': updatedAt,
+    'readTarget': ?readTarget?.toJson(),
+    'manualUnread': ?manualUnread?.toJson(),
     'archived': archived,
     'pinned': pinned,
     'status': status.wire,
@@ -342,6 +368,31 @@ enum MobileThreadStatus {
     }
     throw const FormatException('Invalid MobileThreadStatus');
   }
+}
+
+final class MobileThreadReadTarget {
+  const MobileThreadReadTarget({required this.runId, required this.revision});
+  final String runId;
+  final int revision;
+
+  factory MobileThreadReadTarget.fromJson(Map<String, dynamic> json) {
+    if (json.keys.any((key) => !const {'runId', 'revision'}.contains(key))) {
+      throw const FormatException(
+        'MobileThreadReadTarget contains an unknown field',
+      );
+    }
+    final runId = json['runId'] as String;
+    if (runId.isEmpty) {
+      throw const FormatException('Invalid runId');
+    }
+    final revision = json['revision'] as int;
+    if (revision < 0 || revision > 9007199254740991) {
+      throw const FormatException('Invalid revision');
+    }
+    return MobileThreadReadTarget(runId: runId, revision: revision);
+  }
+
+  Map<String, Object?> toJson() => {'runId': runId, 'revision': revision};
 }
 
 typedef MobileProjectList = List<MobileProjectSummary>;

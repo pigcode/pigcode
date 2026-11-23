@@ -93,6 +93,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.cache,
     this.openReminder,
     this.onVisibleThread,
+    this.presented = true,
   });
 
   final MobileConnection? connection;
@@ -101,6 +102,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final ComputerOfflineCache? cache;
   final MobileReminder? openReminder;
   final ValueChanged<String?>? onVisibleThread;
+  final bool presented;
   final bool connected;
   final String connectionLabel;
   final VoidCallback reconnect;
@@ -188,6 +190,10 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
       onComputers: widget.onComputers,
       openReminder: widget.openReminder,
       onVisibleThread: widget.onVisibleThread,
+      presented: widget.presented,
+      sidebarCommands: online && connection?.supportsSidebarCommands == true
+          ? connection!.sidebarCommands
+          : null,
       draft: draftLink != null || localDrafts
           ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
               connection: draftLink,
@@ -200,7 +206,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
               onAccepted: onAccepted,
             )
           : null,
-      timeline: (thread, online, onSynced) => TimelinePane(
+      timeline: (thread, online, onSynced, presentation) => TimelinePane(
         key: ValueKey(thread.id),
         connection: online ? connection : null,
         threadId: thread.id,
@@ -208,6 +214,13 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         cache: widget.cache,
         computerKey: computer?.computerKey,
         onSynced: onSynced,
+        reading: (
+          visible: presentation.visible,
+          visit: presentation.visit,
+          target: thread.readTarget,
+          manualUnread: thread.manualUnread,
+          unread: thread.unread,
+        ),
       ),
     );
   }
@@ -229,6 +242,8 @@ class WorkspaceView extends StatefulWidget {
     this.offlineDraftAvailable = false,
     this.openReminder,
     this.onVisibleThread,
+    this.presented = true,
+    this.sidebarCommands,
   });
 
   final SidebarSnapshot? snapshot;
@@ -237,6 +252,8 @@ class WorkspaceView extends StatefulWidget {
   final bool offlineDraftAvailable;
   final MobileReminder? openReminder;
   final ValueChanged<String?>? onVisibleThread;
+  final bool presented;
+  final MobileSidebarCommands? sidebarCommands;
   final String computerName;
   final String? connectionLabel;
   final String? error;
@@ -245,6 +262,7 @@ class WorkspaceView extends StatefulWidget {
     MobileThreadSummary thread,
     bool online,
     ValueChanged<bool> onSynced,
+    ({bool visible, int visit}) presentation,
   )?
   timeline;
   final Widget Function(
@@ -271,6 +289,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _reminderUnavailable = false;
   String? _visibleThread;
   String? _syncedThread;
+  int _visit = 0;
 
   MobileThreadSummary? get _thread =>
       widget.snapshot?.threads
@@ -292,6 +311,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   @override
   void didUpdateWidget(covariant WorkspaceView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.presented && !oldWidget.presented) _visit++;
     if (!widget.online) _syncedThread = null;
     if (!identical(oldWidget.openReminder, widget.openReminder)) {
       _openNotification(widget.openReminder);
@@ -316,6 +336,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _reminderThread = reminder?.threadId;
     _reminderUnavailable = false;
     if (reminder == null) return;
+    _visit++;
     _selectThread(reminder.threadId);
     _acceptedThread = null;
     _draftOpen = false;
@@ -468,11 +489,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                 selectedId: _draftOpen ? null : thread?.id,
                                 computerName: widget.computerName,
                                 online: widget.online,
+                                commands: widget.sidebarCommands,
                                 focusNode: _menuFocus,
                                 onSelect: (id) {
                                   _reminderThread = null;
                                   _reminderUnavailable = false;
                                   _draftOpen = false;
+                                  _visit++;
                                   _selectThread(id);
                                   _menu(false);
                                 },
@@ -689,11 +712,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       return const Center(child: Text('没有已打开的会话'));
     }
     if (widget.timeline case final build?) {
-      return build(thread, widget.online, (synced) {
-        if (!mounted || _thread?.id != thread.id || _draftOpen) return;
-        final id = synced ? thread.id : null;
-        if (_syncedThread != id) setState(() => _syncedThread = id);
-      });
+      return build(
+        thread,
+        widget.online,
+        (synced) {
+          if (!mounted || _thread?.id != thread.id || _draftOpen) return;
+          final id = synced ? thread.id : null;
+          if (_syncedThread != id) setState(() => _syncedThread = id);
+        },
+        (visible: widget.presented && !_open && !_draftOpen, visit: _visit),
+      );
     }
     if (!widget.online) return const SizedBox.shrink();
     final theme = Theme.of(context);

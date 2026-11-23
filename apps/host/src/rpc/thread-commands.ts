@@ -1,6 +1,6 @@
 /** 会话记录的 RPC 命令；改过的会话由 changed 推给页面。 */
 import type { Context } from "cordis"
-import type { CommandMethod, Thread } from "@pigcode/contracts"
+import type { CommandMethod, Thread, ThreadReadTarget } from "@pigcode/contracts"
 
 export const THREAD_COMMANDS = new Set<CommandMethod>([
   "thread.list",
@@ -9,6 +9,7 @@ export const THREAD_COMMANDS = new Set<CommandMethod>([
   "thread.archive",
   "thread.unarchive",
   "thread.markRead",
+  "thread.acknowledgeRead",
   "thread.markAllRead",
 ])
 
@@ -72,6 +73,12 @@ export function dispatchThreadCommand(
     case "thread.markRead": {
       const value = parsed as { threadId: string; read: boolean }
       const thread = found(ctx.threads.markRead(value.threadId, value.read), value.threadId)
+      changed(thread.id)
+      return thread
+    }
+    case "thread.acknowledgeRead": {
+      const { threadId, ...target } = parsed as ThreadReadTarget & { threadId: string }
+      const thread = found(ctx.threads.acknowledgeRead(threadId, target), threadId)
       changed(thread.id)
       return thread
     }

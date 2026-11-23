@@ -1,9 +1,20 @@
 import { z } from "zod"
-import { projectSchema, threadSchema, threadStatusSchema } from "./domain"
+import { projectSchema, threadReadTargetSchema, threadSchema, threadStatusSchema } from "./domain"
 import { computerIdSchema } from "./mobile"
 import { rpcErrorSchema } from "./protocol"
 
+export const mobileSidebarWrites = {
+  setPinned: "thread.setPinned",
+  archive: "thread.archive",
+  unarchive: "thread.unarchive",
+  markRead: "thread.markRead",
+  markAllRead: "thread.markAllRead",
+  acknowledgeRead: "thread.acknowledgeRead",
+} as const
+export type MobileSidebarWrite = (typeof mobileSidebarWrites)[keyof typeof mobileSidebarWrites]
+
 export const mobileSidebarMethods = {
+  ...mobileSidebarWrites,
   projectList: "project.list",
   threadList: "thread.list",
   subscribe: "sidebar.subscribe",
@@ -40,7 +51,7 @@ export const mobileProjectSummarySchema = projectSchema
   .extend({ name: displayLabel })
   .strict()
 export const mobileThreadSummarySchema = threadSchema
-  .pick({ id: true, projectId: true, title: true, updatedAt: true })
+  .pick({ id: true, projectId: true, title: true, updatedAt: true, readTarget: true, manualUnread: true })
   .extend({
     title: displayLabel,
     archived: z.boolean(),
@@ -69,6 +80,7 @@ export const mobileSidebarModels = {
   MobileProjectSummary: mobileProjectSummarySchema,
   MobileThreadSummary: mobileThreadSummarySchema,
   MobileThreadStatus: threadStatusSchema,
+  MobileThreadReadTarget: threadReadTargetSchema,
   MobileProjectList: mobileProjectListResultSchema,
   MobileThreadList: mobileThreadListResultSchema,
 }
