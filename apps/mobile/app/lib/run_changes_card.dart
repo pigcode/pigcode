@@ -75,22 +75,23 @@ class _RunChangesCardState extends State<RunChangesCard> {
       final theme = Theme.of(context);
       return Card(
         margin: const EdgeInsets.symmetric(vertical: 6),
+        color: theme.colorScheme.surface,
+        shadowColor: theme.colorScheme.outlineVariant,
+        surfaceTintColor: Colors.transparent,
+        elevation: 1,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: theme.colorScheme.outlineVariant),
+          side: BorderSide(color: theme.colorScheme.outlineVariant, width: .5),
         ),
         clipBehavior: Clip.antiAlias,
         child: Tooltip(
           message: '查看本轮改动',
           child: InkWell(
-            onTap: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) => RunDiffScreen(
-                  initial: initial,
-                  loadFiles: widget.online ? widget.loadFiles : null,
-                  loadDiff: widget.online ? widget.loadDiff : null,
-                ),
-              ),
+            onTap: () => RunDiffScreen.open(
+              context,
+              initial: initial,
+              loadFiles: widget.online ? widget.loadFiles : null,
+              loadDiff: widget.online ? widget.loadDiff : null,
             ),
             child: Padding(
               padding: const EdgeInsets.all(12),

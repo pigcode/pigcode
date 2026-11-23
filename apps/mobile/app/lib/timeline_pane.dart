@@ -12,12 +12,19 @@ import 'run_composer.dart';
 import 'run_composer_state.dart';
 import 'request_input.dart';
 import 'run_changes_card.dart';
+import 'run_diff_screen.dart';
 import 'thread_read_receipt.dart';
 import 'timeline_view.dart';
 
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
 
 typedef _TimelineRead = ({TimelineSnapshot snapshot, Object? problem});
+typedef RunChangesShortcut = ({int fileCount, VoidCallback open});
+typedef _RunChangesTarget = ({
+  MobileConnection connection,
+  String runId,
+  int fileCount,
+});
 
 final _timelineProvider = AsyncNotifierProvider.autoDispose
     .family<_TimelineController, _TimelineRead, _Selection>(
@@ -93,6 +100,7 @@ class TimelinePane extends ConsumerStatefulWidget {
     this.cache,
     this.computerKey,
     this.onSynced,
+    this.onRunChangesChanged,
     this.reading,
   });
 
@@ -102,6 +110,7 @@ class TimelinePane extends ConsumerStatefulWidget {
   final ComputerOfflineCache? cache;
   final String? computerKey;
   final ValueChanged<bool>? onSynced;
+  final ValueChanged<RunChangesShortcut?>? onRunChangesChanged;
   final ({
     bool visible,
     int visit,
@@ -123,6 +132,10 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _draftReady = false;
   bool _draftError = false;
   bool _synced = false;
+  _RunChangesTarget? _changesTarget;
+  List<MobileTimelineEvent>? _changeEvents;
+  MobileConnection? _changeConnection;
+  bool _openingChanges = false;
   String _observedText = '';
   ThreadDraftStorage? _draftStore;
   final _text = TextEditingController();
@@ -261,6 +274,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final snapshot = _latest;
     final errors = current?.problem ?? selected?.error;
     final synced = online && errors == null && selected?.isLoading == false;
+    _reportRunChanges(synced ? connection : null, snapshot);
     if (_synced != synced && widget.onSynced != null) {
       _synced = synced;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -371,29 +385,121 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     );
   }
 
-  Widget _changes(MobileConnection connection, TimelineTurn turn) {
-    final runId = turn.runId;
-    if (runId == null) return const SizedBox.shrink();
-    return RunChangesCard(
-      key: ValueKey((connection, runId)),
-      online: true,
-      savedPaths: turn.files,
-      checkpointRevision: turn.changes?.seq,
-      loadFiles: (offset) => connection.changes.list(
+  void _reportRunChanges(
+    MobileConnection? connection,
+    TimelineSnapshot? snapshot,
+  ) {
+    if (widget.onRunChangesChanged == null) return;
+    final events = snapshot?.events;
+    if (identical(_changeConnection, connection) &&
+        identical(_changeEvents, events)) {
+      return;
+    }
+    _changeConnection = connection;
+    _changeEvents = events;
+    _RunChangesTarget? target;
+    if (connection?.supportsRunChanges == true && events != null) {
+      final runId = events.reversed
+          .where(
+            (event) =>
+                event.runId != null &&
+                (event.kind == MobileTimelineKind.changes ||
+                    event.kind == MobileTimelineKind.file),
+          )
+          .firstOrNull
+          ?.runId;
+      if (runId != null) {
+        final paths = events
+            .where(
+              (event) =>
+                  event.runId == runId && event.kind == MobileTimelineKind.file,
+            )
+            .map((event) => event.name)
+            .whereType<String>()
+            .toSet();
+        target = (
+          connection: connection!,
+          runId: runId,
+          fileCount: paths.length,
+        );
+      }
+    }
+    if (_changesTarget == target) return;
+    _changesTarget = target;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _changesTarget != target) return;
+      widget.onRunChangesChanged?.call(
+        target == null
+            ? null
+            : (fileCount: target.fileCount, open: _openChanges),
+      );
+    });
+  }
+
+  Future<void> _openChanges() async {
+    final target = _changesTarget;
+    if (!mounted || target == null || _openingChanges) return;
+    final loaders = _changeLoaders(target.connection, target.runId);
+    _openingChanges = true;
+    try {
+      final initial = await loaders.files(0);
+      if (!mounted ||
+          _changesTarget != target ||
+          ModalRoute.of(context)?.isCurrent == false) {
+        return;
+      }
+      await RunDiffScreen.open(
+        context,
+        initial: initial,
+        loadFiles: loaders.files,
+        loadDiff: loaders.diff,
+      );
+    } catch (_) {
+      if (mounted && _changesTarget == target) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂时无法读取本轮改动。')));
+      }
+    } finally {
+      _openingChanges = false;
+    }
+  }
+
+  ({RunChangeListLoader files, RunPatchLoader diff}) _changeLoaders(
+    MobileConnection connection,
+    String runId,
+  ) {
+    final threadId = widget.threadId;
+    return (
+      files: (offset) => connection.changes.list(
         MobileRunChangesParams(
-          threadId: widget.threadId,
+          threadId: threadId,
           runId: runId,
           offset: offset,
         ),
       ),
-      loadDiff: (path, offset) => connection.changes.diff(
+      diff: (path, offset) => connection.changes.diff(
         MobileRunDiffParams(
-          threadId: widget.threadId,
+          threadId: threadId,
           runId: runId,
           path: path,
           offset: offset,
         ),
       ),
+    );
+  }
+
+  Widget _changes(MobileConnection connection, TimelineTurn turn) {
+    final runId = turn.runId;
+    if (runId == null) return const SizedBox.shrink();
+    final loaders = _changeLoaders(connection, runId);
+    return RunChangesCard(
+      key: ValueKey((connection, runId)),
+      online: true,
+      savedPaths: turn.files,
+      checkpointRevision: turn.changes?.seq,
+      loadFiles: loaders.files,
+      loadDiff: loaders.diff,
     );
   }
 

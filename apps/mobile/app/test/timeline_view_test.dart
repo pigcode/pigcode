@@ -58,6 +58,16 @@ Widget page(List<MobileTimelineEvent> events, {MobileActiveRun? live}) =>
 void main() {
   final scroll = find.byKey(const ValueKey('timeline-scroll'));
 
+  testWidgets('starts a short conversation near the top of the viewport', (
+    tester,
+  ) async {
+    await tester.pumpWidget(page(runs(20, 20)));
+    await tester.pumpAndSettle();
+    final viewport = tester.getRect(scroll);
+    final firstMessage = tester.getRect(find.byKey(const ValueKey('user-r20')));
+    expect(firstMessage.top - viewport.top, inInclusiveRange(0, 48));
+  });
+
   testWidgets('collapses completed work and shows the current activity', (
     tester,
   ) async {

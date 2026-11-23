@@ -22,6 +22,21 @@ class RunDiffScreen extends StatefulWidget {
   final RunChangeListLoader? loadFiles;
   final RunPatchLoader? loadDiff;
 
+  static Future<void> open(
+    BuildContext context, {
+    required MobileRunChangesPage initial,
+    RunChangeListLoader? loadFiles,
+    RunPatchLoader? loadDiff,
+  }) => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => RunDiffScreen(
+        initial: initial,
+        loadFiles: loadFiles,
+        loadDiff: loadDiff,
+      ),
+    ),
+  );
+
   @override
   State<RunDiffScreen> createState() => _RunDiffScreenState();
 }
@@ -123,14 +138,27 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('改动'),
+      centerTitle: true,
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('改动', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            _nextFiles == null
+                ? '${_files.length} 个文件'
+                : '已加载 ${_files.length} 个文件',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
       actions: [
         if (_canRead && _files.isNotEmpty)
-          IconButton(
-            tooltip: _wrap ? '关闭换行' : '开启换行',
-            isSelected: _wrap,
-            icon: const Icon(Icons.wrap_text),
-            onPressed: () => setState(() => _wrap = !_wrap),
+          Tooltip(
+            message: _wrap ? '关闭换行' : '开启换行',
+            child: TextButton(
+              onPressed: () => setState(() => _wrap = !_wrap),
+              child: Text(_wrap ? '不换行' : '换行'),
+            ),
           ),
       ],
     ),
@@ -249,13 +277,28 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
                 ),
                 child: Align(
                   widthFactor: 1,
-                  child: Text(
-                    file.path.split('/').last,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: selected ? color.onPrimary : color.onSurface,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.description_outlined,
+                        size: 16,
+                        color: selected
+                            ? color.onPrimary
+                            : color.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 5),
+                      Flexible(
+                        child: Text(
+                          file.path.split('/').last,
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            color: selected ? color.onPrimary : color.onSurface,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

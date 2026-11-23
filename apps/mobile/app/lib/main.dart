@@ -10,12 +10,12 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'app_theme.dart';
 import 'computer_reconnect.dart';
 import 'computers.dart';
 import 'offline_cache.dart';
 import 'mobile_reminders.dart';
 import 'reminder_settings_page.dart';
-import 'theme_colors.dart';
 import 'workspace.dart';
 
 const _version = String.fromEnvironment('PIGCODE_PRODUCT_VERSION');
@@ -27,49 +27,12 @@ void main() {
 class PigcodeApp extends StatelessWidget {
   const PigcodeApp({super.key});
 
-  ThemeData _theme(Brightness brightness) {
-    final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
-    final scheme = ColorScheme(
-      brightness: brightness,
-      primary: colors.primary,
-      onPrimary: colors.onPrimary,
-      secondary: colors.primary,
-      onSecondary: colors.onPrimary,
-      error: colors.error,
-      onError: colors.onError,
-      surface: colors.surface,
-      onSurface: colors.foreground,
-      onSurfaceVariant: colors.secondaryText,
-      outlineVariant: colors.divider,
-    );
-    final theme = ThemeData(
-      colorScheme: scheme,
-      scaffoldBackgroundColor: colors.background,
-      cardTheme: CardThemeData(color: colors.surface),
-      listTileTheme: ListTileThemeData(selectedTileColor: colors.selected),
-      visualDensity: VisualDensity.standard,
-    );
-    final text = theme.textTheme;
-    const body = TextStyle(
-      fontSize: 15,
-      height: 1.45,
-      fontWeight: FontWeight.w400,
-    );
-    return theme.copyWith(
-      textTheme: text.copyWith(
-        bodyLarge: text.bodyLarge?.merge(body),
-        bodyMedium: text.bodyMedium?.merge(body),
-        labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'Pigcode',
     debugShowCheckedModeBanner: false,
-    theme: _theme(Brightness.light),
-    darkTheme: _theme(Brightness.dark),
+    theme: pigcodeTheme(Brightness.light),
+    darkTheme: pigcodeTheme(Brightness.dark),
     home: const ComputersPage(),
   );
 }
@@ -547,6 +510,16 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     super.dispose();
   }
 
+  Future<void> _openReminderSettings() => Navigator.of(context).push<void>(
+    MaterialPageRoute(
+      builder: (_) => ReminderSettingsPage(
+        bridge: _reminders,
+        settings: _reminderSettings,
+        onChanged: _reminderSettingsChanged,
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final computers = ref.watch(computersProvider);
@@ -558,15 +531,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           IconButton(
             tooltip: '通知设置',
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => Navigator.of(context).push<void>(
-              MaterialPageRoute(
-                builder: (_) => ReminderSettingsPage(
-                  bridge: _reminders,
-                  settings: _reminderSettings,
-                  onChanged: _reminderSettingsChanged,
-                ),
-              ),
-            ),
+            onPressed: _openReminderSettings,
           ),
         ],
         leading: _selected != null
@@ -704,6 +669,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           connectionLabel: connectionLabel,
           reconnect: () => _session?.retry(),
           onComputers: () => _showWorkspace(false),
+          onSettings: _openReminderSettings,
         ),
         manager,
       ],

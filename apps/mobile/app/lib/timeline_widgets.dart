@@ -250,7 +250,8 @@ class _TimelineActivityState extends State<TimelineActivity> {
     final plan = run.totalSteps == null || run.totalSteps == 0
         ? null
         : '${run.finishedSteps ?? 0}/${run.totalSteps}';
-    final elapsed = '${seconds}s';
+    final elapsed =
+        '${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
     final theme = Theme.of(context);
     return Center(
       child: Material(
@@ -278,8 +279,7 @@ class _TimelineActivityState extends State<TimelineActivity> {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
+                  color: theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -305,6 +305,8 @@ class _TimelineActivityState extends State<TimelineActivity> {
                       const SizedBox(width: 8),
                       Text(plan, style: const TextStyle(fontSize: 13)),
                     ],
+                    const SizedBox(width: 6),
+                    const Icon(Icons.keyboard_arrow_up, size: 16),
                   ],
                 ),
               ),

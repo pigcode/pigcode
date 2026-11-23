@@ -195,9 +195,11 @@ class RunComposerView extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
       child: Material(
         color: colors.surface,
+        shadowColor: colors.scrim,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),
-          side: BorderSide(color: colors.divider),
+          side: BorderSide(color: colors.divider, width: .5),
         ),
         elevation: 1,
         child: Padding(
@@ -245,9 +247,12 @@ class RunComposerView extends StatelessWidget {
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
                       style: const TextStyle(fontSize: 16, height: 1.375),
-                      decoration: const InputDecoration(
-                        hintText: '发送消息',
-                        contentPadding: EdgeInsets.symmetric(
+                      decoration: InputDecoration(
+                        hintText: runId != null && allowQueue
+                            ? '运行中 · 发出的消息会排队'
+                            : '发送消息',
+                        hintStyle: TextStyle(color: colors.muted),
+                        contentPadding: const EdgeInsets.symmetric(
                           horizontal: 4,
                           vertical: 12,
                         ),

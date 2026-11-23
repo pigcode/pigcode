@@ -88,6 +88,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     required this.connectionLabel,
     required this.reconnect,
     required this.onComputers,
+    this.onSettings,
     this.computer,
     this.deviceId,
     this.cache,
@@ -107,6 +108,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final String connectionLabel;
   final VoidCallback reconnect;
   final VoidCallback onComputers;
+  final VoidCallback? onSettings;
 
   @override
   ConsumerState<MobileWorkspace> createState() => _MobileWorkspaceState();
@@ -188,6 +190,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 : null)
           : widget.reconnect,
       onComputers: widget.onComputers,
+      onSettings: widget.onSettings,
       openReminder: widget.openReminder,
       onVisibleThread: widget.onVisibleThread,
       presented: widget.presented,
@@ -214,6 +217,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         cache: widget.cache,
         computerKey: computer?.computerKey,
         onSynced: onSynced,
+        onRunChangesChanged: presentation.onRunChangesChanged,
         reading: (
           visible: presentation.visible,
           visit: presentation.visit,
@@ -233,6 +237,7 @@ class WorkspaceView extends StatefulWidget {
     required this.online,
     required this.computerName,
     required this.onComputers,
+    this.onSettings,
     this.connectionLabel,
     this.error,
     this.onRetry,
@@ -262,7 +267,12 @@ class WorkspaceView extends StatefulWidget {
     MobileThreadSummary thread,
     bool online,
     ValueChanged<bool> onSynced,
-    ({bool visible, int visit}) presentation,
+    ({
+      bool visible,
+      int visit,
+      ValueChanged<RunChangesShortcut?> onRunChangesChanged,
+    })
+    presentation,
   )?
   timeline;
   final Widget Function(
@@ -272,6 +282,7 @@ class WorkspaceView extends StatefulWidget {
   )?
   draft;
   final VoidCallback onComputers;
+  final VoidCallback? onSettings;
 
   @override
   State<WorkspaceView> createState() => _WorkspaceViewState();
@@ -289,6 +300,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   bool _reminderUnavailable = false;
   String? _visibleThread;
   String? _syncedThread;
+  RunChangesShortcut? _runChanges;
   int _visit = 0;
 
   MobileThreadSummary? get _thread =>
@@ -312,7 +324,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   void didUpdateWidget(covariant WorkspaceView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.presented && !oldWidget.presented) _visit++;
-    if (!widget.online) _syncedThread = null;
+    if (!widget.online) {
+      _syncedThread = null;
+      _runChanges = null;
+    }
     if (!identical(oldWidget.openReminder, widget.openReminder)) {
       _openNotification(widget.openReminder);
       _selectRecentIfNeeded();
@@ -363,7 +378,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   void _selectThread(String? id) {
-    if (_threadId != id) _syncedThread = null;
+    if (_threadId != id) {
+      _syncedThread = null;
+      _runChanges = null;
+    }
     _threadId = id;
   }
 
@@ -374,6 +392,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _draftOpen = true;
       _draftProject = projectId;
       _syncedThread = null;
+      _runChanges = null;
     });
     if (_open) _menu(false);
   }
@@ -427,6 +446,191 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _menuFocus.dispose();
     _menuButton.dispose();
     super.dispose();
+  }
+
+  Widget _header(
+    BuildContext context,
+    MobileThreadSummary? thread,
+    String subtitle, {
+    required bool canOpenDraft,
+  }) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    final attention =
+        widget.online &&
+        (widget.snapshot?.threads.any(
+              (item) => !item.archived && needsAttention(item),
+            ) ??
+            false);
+    final status = widget.online && !_draftOpen ? thread?.status : null;
+    final statusColor = switch (status) {
+      MobileThreadStatus.waitingApproval => colors.attention,
+      MobileThreadStatus.running || MobileThreadStatus.queued => colors.running,
+      MobileThreadStatus.failed => colors.error,
+      _ => null,
+    };
+    final dotColor = switch (status) {
+      MobileThreadStatus.running || MobileThreadStatus.queued => colors.running,
+      _ when !widget.online => colors.muted,
+      _ => null,
+    };
+    final secondary = _draftOpen && widget.online
+        ? widget.computerName
+        : statusColor != null
+        ? threadStatusText(status!)
+        : subtitle;
+    final changes = widget.online ? _runChanges : null;
+    final fileCount = changes?.fileCount ?? 0;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 58),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Material(
+              color: colors.surface,
+              shadowColor: colors.scrim,
+              elevation: 1,
+              shape: CircleBorder(
+                side: BorderSide(color: colors.divider, width: .5),
+              ),
+              child: SizedBox.square(
+                dimension: hit,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Semantics(
+                      value: attention ? '有待处理会话' : null,
+                      child: IconButton(
+                        focusNode: _menuButton,
+                        onPressed: () => _menu(true),
+                        tooltip: '打开菜单',
+                        icon: const Icon(Icons.menu, size: 20),
+                      ),
+                    ),
+                    if (attention)
+                      Positioned(
+                        right: 9,
+                        top: 9,
+                        child: IgnorePointer(
+                          child: Icon(
+                            Icons.circle,
+                            color: colors.attention,
+                            size: 6,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _draftOpen ? '新会话' : thread?.title ?? '会话',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      if (dotColor != null) ...[
+                        Icon(Icons.circle, size: 6, color: dotColor),
+                        const SizedBox(width: 5),
+                      ],
+                      Flexible(
+                        child: Text(
+                          secondary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: statusColor ?? colors.muted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (!widget.online &&
+                widget.error != null &&
+                widget.onRetry != null &&
+                thread != null)
+              IconButton(
+                tooltip: '重试读取会话',
+                onPressed: widget.onRetry,
+                icon: const Icon(Icons.refresh, size: 20),
+              ),
+            if (thread != null || _draftOpen || canOpenDraft) ...[
+              const SizedBox(width: 10),
+              Material(
+                color: colors.surface,
+                shadowColor: colors.scrim,
+                elevation: 1,
+                shape: StadiumBorder(
+                  side: BorderSide(color: colors.divider, width: .5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (thread != null && !_draftOpen)
+                      Semantics(
+                        value: fileCount > 0 ? '$fileCount 个文件' : null,
+                        child: IconButton(
+                          tooltip: '改动',
+                          style: IconButton.styleFrom(
+                            minimumSize: Size.square(hit),
+                          ),
+                          onPressed: changes?.open,
+                          icon: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.difference_outlined, size: 20),
+                              if (fileCount > 0) ...[
+                                const SizedBox(width: 3),
+                                Text(
+                                  '$fileCount',
+                                  style: theme.textTheme.labelMedium,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (_draftOpen || canOpenDraft)
+                      SizedBox.square(
+                        dimension: hit,
+                        child: IconButton(
+                          tooltip: _draftOpen ? '返回会话' : '新会话',
+                          onPressed: _draftOpen
+                              ? () => setState(() => _draftOpen = false)
+                              : () => _openDraft(null),
+                          icon: Icon(
+                            _draftOpen ? Icons.close : Icons.edit_square,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -500,6 +704,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                   _menu(false);
                                 },
                                 onNewThread: canOpenDraft ? _openDraft : null,
+                                onSettings: widget.onSettings,
                                 onComputers: () {
                                   _menu(false);
                                   widget.onComputers();
@@ -544,101 +749,12 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                               excluding: _open,
                               child: Column(
                                 children: [
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      minHeight: 58,
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 4,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          IconButton(
-                                            focusNode: _menuButton,
-                                            onPressed: () => _menu(true),
-                                            tooltip: '打开菜单',
-                                            icon: const Icon(
-                                              Icons.menu,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  _draftOpen
-                                                      ? '新会话'
-                                                      : thread?.title ?? '会话',
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleMedium
-                                                      ?.copyWith(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                ),
-                                                Text(
-                                                  _draftOpen && widget.online
-                                                      ? widget.computerName
-                                                      : subtitle,
-                                                  style: theme
-                                                      .textTheme
-                                                      .bodySmall
-                                                      ?.copyWith(
-                                                        fontSize: 12,
-                                                        color: colors
-                                                            .secondaryText,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (!widget.online &&
-                                              widget.error != null &&
-                                              widget.onRetry != null &&
-                                              thread != null)
-                                            IconButton(
-                                              tooltip: '重试读取会话',
-                                              onPressed: widget.onRetry,
-                                              icon: const Icon(
-                                                Icons.refresh,
-                                                size: 20,
-                                              ),
-                                            ),
-                                          if (_draftOpen)
-                                            IconButton(
-                                              tooltip: '返回会话',
-                                              onPressed: () => setState(
-                                                () => _draftOpen = false,
-                                              ),
-                                              icon: const Icon(
-                                                Icons.close,
-                                                size: 20,
-                                              ),
-                                            )
-                                          else if (canOpenDraft)
-                                            IconButton(
-                                              tooltip: '新会话',
-                                              onPressed: () => _openDraft(null),
-                                              icon: const Icon(
-                                                Icons.edit_square,
-                                                size: 20,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
+                                  _header(
+                                    context,
+                                    thread,
+                                    subtitle,
+                                    canOpenDraft: canOpenDraft,
                                   ),
-                                  Divider(height: 1, color: colors.divider),
                                   Expanded(
                                     child: _draftOpen && widget.draft != null
                                         ? KeyedSubtree(
@@ -720,7 +836,19 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           final id = synced ? thread.id : null;
           if (_syncedThread != id) setState(() => _syncedThread = id);
         },
-        (visible: widget.presented && !_open && !_draftOpen, visit: _visit),
+        (
+          visible: widget.presented && !_open && !_draftOpen,
+          visit: _visit,
+          onRunChangesChanged: (changes) {
+            if (!mounted ||
+                _thread?.id != thread.id ||
+                _draftOpen ||
+                !widget.online) {
+              return;
+            }
+            if (_runChanges != changes) setState(() => _runChanges = changes);
+          },
+        ),
       );
     }
     if (!widget.online) return const SizedBox.shrink();

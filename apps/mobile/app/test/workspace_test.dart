@@ -173,15 +173,38 @@ Finder menuText(String label) =>
     find.descendant(of: find.byType(SidebarMenu), matching: find.text(label));
 
 void main() {
+  testWidgets('opens search on demand and clears it when closed', (
+    tester,
+  ) async {
+    await tester.pumpWidget(workspace(online: true));
+    await tester.tap(find.byTooltip('打开菜单'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    await tester.tap(find.byTooltip('搜索会话'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '审批');
+    await tester.pumpAndSettle();
+    expect(menuText('审批检查'), findsOneWidget);
+    expect(menuText('文档更新'), findsNothing);
+    await tester.tap(find.byTooltip('关闭搜索'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNothing);
+    expect(menuText('文档更新'), findsOneWidget);
+  });
+
   testWidgets('shows archived sessions even when their project was collapsed', (
     tester,
   ) async {
     await tester.pumpWidget(workspace(online: true));
     await tester.tap(find.byTooltip('打开菜单'));
     await tester.pumpAndSettle();
-    await tester.tap(menuText('文档'));
+    await tester.tap(menuText('文档').last);
     await tester.pumpAndSettle();
-    await tester.tap(menuText('已归档'));
+    await tester.tap(find.byTooltip('分组和筛选'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('只看已归档'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(menuText('旧会话'), findsOneWidget);
   });
@@ -207,7 +230,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(commands.calls, [('unread', false), 'markAllRead']);
       expect(menuText('置顶'), findsOneWidget);
-      expect(menuText('编辑器'), findsNothing);
+      expect(menuText('会话'), findsOneWidget);
+      expect(menuText('项目'), findsNothing);
 
       await tester.pumpWidget(workspace(online: false, commands: commands));
       await tester.pumpAndSettle();
@@ -227,11 +251,17 @@ void main() {
 
       expect(menuText('置顶'), findsOneWidget);
       expect(menuText('等你处理'), findsOneWidget);
-      expect(menuText('未读'), findsOneWidget);
-      expect(menuText('运行中'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('未读')), findsWidgets);
+      expect(find.bySemanticsLabel(RegExp('运行中')), findsWidgets);
       expect(menuText('旧会话'), findsNothing);
 
-      await tester.tap(menuText('需要处理'));
+      await tester.tap(find.byTooltip('分组和筛选'));
+      await tester.pumpAndSettle();
+      for (final label in ['出错', '进行中', '已完成']) {
+        await tester.tap(find.widgetWithText(FilterChip, label));
+        await tester.pumpAndSettle();
+      }
+      await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
       expect(menuText('最新会话'), findsNothing);
       await tester.tap(menuText('审批检查'));
@@ -249,7 +279,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(menuText('审批检查'), findsOneWidget);
     expect(menuText('等你处理'), findsNothing);
-    expect(menuText('未读'), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('未读')), findsNothing);
     expect(find.textContaining('上次同步'), findsOneWidget);
   });
 
@@ -336,6 +366,8 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(workspace(online: true, textScale: 1.7));
       await tester.tap(find.byTooltip('打开菜单'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('搜索会话'));
       await tester.pumpAndSettle();
       final search = find.descendant(
         of: find.byType(SidebarMenu),

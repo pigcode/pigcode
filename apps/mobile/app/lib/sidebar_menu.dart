@@ -42,6 +42,7 @@ class SidebarMenu extends StatefulWidget {
     required this.onComputers,
     required this.focusNode,
     this.onNewThread,
+    this.onSettings,
     this.commands,
   });
 
@@ -53,6 +54,7 @@ class SidebarMenu extends StatefulWidget {
   final VoidCallback onComputers;
   final FocusNode focusNode;
   final ValueChanged<String?>? onNewThread;
+  final VoidCallback? onSettings;
   final MobileSidebarCommands? commands;
 
   @override
@@ -61,6 +63,7 @@ class SidebarMenu extends StatefulWidget {
 
 class _SidebarMenuState extends State<SidebarMenu> {
   final _collapsed = <String>{};
+  bool _searching = false;
   String _query = '';
   SidebarArrangement _arrangement = defaultSidebarArrangement;
   bool _updating = false;
@@ -73,19 +76,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
         SidebarCategory.attention,
         SidebarCategory.unread,
       });
-
-  void _quickFilter({bool archived = false, bool attention = false}) {
-    setState(() {
-      _arrangement = (
-        grouping: _arrangement.grouping,
-        sort: _arrangement.sort,
-        archived: archived,
-        filters: attention
-            ? {SidebarCategory.attention, SidebarCategory.unread}
-            : defaultSidebarArrangement.filters,
-      );
-    });
-  }
 
   Future<void> _run(Future<void> Function(MobileSidebarCommands) change) async {
     if (!_canEdit) return;
@@ -267,24 +257,66 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          thread.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              thread.title,
+                              style: selected
+                                  ? const TextStyle(fontWeight: FontWeight.w500)
+                                  : null,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (names[thread.projectId] case final project?
+                                when !nested)
+                              Text(
+                                project,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colors.muted,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
                       if (marker != null) ...[
                         const SizedBox(width: 8),
-                        if (thread.status == MobileThreadStatus.running) ...[
-                          _RunningDot(color: markerColor),
-                          const SizedBox(width: 5),
-                        ],
-                        Text(
-                          marker,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: markerColor,
+                        if (thread.status == MobileThreadStatus.running)
+                          Semantics(
+                            label: marker,
+                            child: _RunningDot(color: markerColor),
+                          )
+                        else if (marker == '未读')
+                          Semantics(
+                            label: marker,
+                            child: Icon(
+                              Icons.circle,
+                              size: 6,
+                              color: colors.online,
+                            ),
+                          )
+                        else
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: markerColor.withValues(alpha: .12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                marker,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: markerColor,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
                       ],
                     ],
                   ),
@@ -308,54 +340,36 @@ class _SidebarMenuState extends State<SidebarMenu> {
               ),
             ),
             IconButton(
-              tooltip: '分组和筛选',
-              icon: const Icon(Icons.tune),
-              onPressed: _showOptions,
+              tooltip: _searching ? '关闭搜索' : '搜索会话',
+              icon: Icon(_searching ? Icons.close : Icons.search),
+              onPressed: () => setState(() {
+                _searching = !_searching;
+                if (!_searching) _query = '';
+              }),
             ),
           ],
         ),
       ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: TextField(
-          onChanged: (value) =>
-              setState(() => _query = value.trim().toLowerCase()),
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: '搜索项目或会话',
-            prefixIcon: const Icon(Icons.search, size: 20),
-            filled: true,
-            fillColor: colors.surface,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
+      if (_searching)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: TextField(
+            autofocus: true,
+            onChanged: (value) =>
+                setState(() => _query = value.trim().toLowerCase()),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: '搜索项目或会话',
+              prefixIcon: const Icon(Icons.search, size: 20),
+              filled: true,
+              fillColor: colors.surface,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
             ),
           ),
         ),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Wrap(
-          spacing: 6,
-          children: [
-            FilterChip(
-              label: const Text('全部'),
-              selected: !_arrangement.archived && _all,
-              onSelected: (_) => _quickFilter(),
-            ),
-            FilterChip(
-              label: const Text('需要处理'),
-              selected: !_arrangement.archived && _attention,
-              onSelected: (_) => _quickFilter(attention: true),
-            ),
-            FilterChip(
-              label: const Text('已归档'),
-              selected: _arrangement.archived,
-              onSelected: (_) => _quickFilter(archived: true),
-            ),
-          ],
-        ),
-      ),
       if (!widget.online && snapshot != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -371,9 +385,16 @@ class _SidebarMenuState extends State<SidebarMenu> {
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
           child: SizedBox(
             height: 50,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
                 alignment: AlignmentDirectional.centerStart,
+                backgroundColor: colors.surface,
+                foregroundColor: colors.foreground,
+                shadowColor: colors.scrim,
+                elevation: 1,
+                textStyle: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -389,6 +410,33 @@ class _SidebarMenuState extends State<SidebarMenu> {
           const ListTile(title: Text('置顶'), dense: true),
           for (final thread in pinned) row(thread),
         ],
+        Padding(
+          padding: const EdgeInsetsDirectional.only(start: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _arrangement.archived
+                      ? '已归档'
+                      : _arrangement.grouping == SidebarGrouping.project
+                      ? '项目'
+                      : '会话',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.muted,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '分组和筛选',
+                color: !_all || _arrangement.archived
+                    ? colors.running
+                    : colors.muted,
+                icon: const Icon(Icons.tune, size: 20),
+                onPressed: _showOptions,
+              ),
+            ],
+          ),
+        ),
         if (_arrangement.grouping == SidebarGrouping.project)
           for (final project in projects)
             if (matchingProjects.contains(project.id) ||
@@ -418,12 +466,26 @@ class _SidebarMenuState extends State<SidebarMenu> {
                               children: [
                                 Icon(
                                   _collapsed.contains(project.id)
-                                      ? Icons.chevron_right
-                                      : Icons.expand_more,
+                                      ? Icons.folder_outlined
+                                      : Icons.folder_open_outlined,
+                                  color: colors.secondaryText,
                                   size: 18,
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(child: Text(project.name)),
+                                Flexible(
+                                  child: Text(
+                                    project.name,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Icon(
+                                  _collapsed.contains(project.id)
+                                      ? Icons.chevron_right
+                                      : Icons.expand_more,
+                                  color: colors.muted,
+                                  size: 14,
+                                ),
                               ],
                             ),
                           ),
@@ -481,34 +543,74 @@ class _SidebarMenuState extends State<SidebarMenu> {
     ];
     final footer = Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-      child: Semantics(
-        label: '管理电脑',
-        button: true,
-        child: OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 50),
-            backgroundColor: colors.surface,
-            side: BorderSide(color: colors.divider),
-          ),
-          onPressed: widget.onComputers,
-          child: Row(
-            children: [
-              Icon(
-                Icons.circle,
-                size: 8,
-                color: widget.online ? colors.online : colors.muted,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  widget.computerName,
-                  overflow: TextOverflow.ellipsis,
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              label: '管理电脑',
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(0, 50),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 6,
+                  ),
+                  backgroundColor: colors.surface,
+                  foregroundColor: colors.foreground,
+                  shadowColor: colors.scrim,
+                  elevation: 1,
+                ),
+                onPressed: widget.onComputers,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.laptop_outlined,
+                      size: 17,
+                      color: colors.secondaryText,
+                    ),
+                    const SizedBox(width: 7),
+                    Icon(
+                      Icons.circle,
+                      size: 6,
+                      color: widget.online ? colors.online : colors.muted,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        widget.computerName,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.online ? '已连接' : '离线',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.muted,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Text(widget.online ? '已连接' : '离线'),
-            ],
+            ),
           ),
-        ),
+          if (widget.onSettings case final open?) ...[
+            const SizedBox(width: 10),
+            Material(
+              color: colors.surface,
+              shadowColor: colors.scrim,
+              elevation: 1,
+              shape: const CircleBorder(),
+              child: SizedBox.square(
+                dimension: 50,
+                child: IconButton(
+                  tooltip: '设置',
+                  onPressed: open,
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
     return Material(

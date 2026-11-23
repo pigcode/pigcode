@@ -50,14 +50,8 @@ class _TimelineViewState extends State<TimelineView> {
   void initState() {
     super.initState();
     final snapshot = widget.snapshot;
-    final activeId = snapshot.live?.runId;
-    _pivot = activeId == null
-        ? snapshot.through + 1
-        : snapshot.events
-                  .where((event) => event.runId == activeId)
-                  .firstOrNull
-                  ?.seq ??
-              snapshot.through + 1;
+    // Older pages grow before the initial window without moving it.
+    _pivot = snapshot.events.firstOrNull?.seq ?? snapshot.through + 1;
     _turns = timelineTurns(snapshot.events);
     _rebuildRows();
     _follow();
@@ -231,7 +225,10 @@ class _TimelineViewState extends State<TimelineView> {
   @override
   Widget build(BuildContext context) {
     final active = widget.online ? widget.snapshot.live : null;
-    final activitySpace = timelineActivityTouchHeight(context) + 10;
+    final activity = active?.pending.isEmpty == true ? active : null;
+    final activitySpace = activity == null
+        ? 8.0
+        : timelineActivityTouchHeight(context) + 10;
     final hasEarlier = widget.online && widget.snapshot.nextBefore != null;
     return Stack(
       children: [
@@ -251,7 +248,6 @@ class _TimelineViewState extends State<TimelineView> {
             key: const ValueKey('timeline-scroll'),
             controller: _scroll,
             center: _center,
-            anchor: 1,
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               SliverPadding(
@@ -326,17 +322,17 @@ class _TimelineViewState extends State<TimelineView> {
               ),
             ),
           ),
-        if (active != null)
+        if (activity != null)
           Positioned(
             left: 12,
             right: 12,
             bottom: 5,
-            child: TimelineActivity(run: active),
+            child: TimelineActivity(run: activity),
           ),
         if (!_pinned)
           Positioned(
             right: 12,
-            bottom: active == null ? 12 : activitySpace,
+            bottom: activity == null ? 12 : activitySpace,
             child: IconButton.filledTonal(
               tooltip: '回到底部',
               onPressed: () {
@@ -350,27 +346,28 @@ class _TimelineViewState extends State<TimelineView> {
     );
   }
 
-  Widget _user(MobileTimelineEvent event) => Align(
-    alignment: Alignment.centerRight,
-    child: Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
+  Widget _user(MobileTimelineEvent event) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 8),
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      border: Border.all(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        width: .5,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(event.text ?? ''),
-          if (event.truncated == true)
-            TextButton(
-              onPressed: widget.online ? () => _openText(event) : null,
-              child: const Text('查看完整正文'),
-            ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(event.text ?? ''),
+        if (event.truncated == true)
+          TextButton(
+            onPressed: widget.online ? () => _openText(event) : null,
+            child: const Text('查看完整正文'),
+          ),
+      ],
     ),
   );
 

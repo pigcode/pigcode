@@ -149,9 +149,11 @@ class _ActiveRequest extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
       child: Material(
         color: colors.surface,
+        shadowColor: colors.scrim,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: colors.divider),
+          side: BorderSide(color: colors.divider, width: .5),
         ),
         elevation: 1,
         child: Padding(
