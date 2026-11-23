@@ -10,7 +10,8 @@ import {
   type MessageBoxSyncOptions,
   type Tray,
 } from "electron"
-import { join } from "node:path"
+import { preferencesPath, profileDir, resolveAppPath } from "./app-paths"
+import { createDesktopReminders } from "./desktop-reminders"
 import {
   pickFolder,
   pickPath,
@@ -88,15 +89,9 @@ let quitConfirmed = false
 let quitCheck: Promise<void> | undefined
 const browser = setupBrowser(() => mainWindow)
 
-/** 把应用内相对路径解析到 app.getAppPath() 之下。 */
-export function resolveAppPath(...segments: string[]): string {
-  return join(app.getAppPath(), ...segments)
-}
-
-/** 偏好跟着 profile 走：并排的多个 profile 各有各的开关，E2E 也不会写到本机的 userData 里。 */
-function preferencesPath(): string {
-  return join(profileDir(), "preferences.json")
-}
+export { resolveAppPath } from "./app-paths"
+const reminders = createDesktopReminders({ window: () => mainWindow, enabled: () => preferences.desktopReminders,
+  locale: () => app.getLocale(), raise: showWindow })
 
 /**
  * 把偏好落实到系统上。开机自启只对装好的应用设置：开发时把 Electron 自己写进登录项没有意义，
@@ -123,10 +118,6 @@ const updates = createUpdates({
       mainWindow.webContents.send("pigcode:update-state", state)
   },
 })
-
-function profileDir(): string {
-  return process.env.PIGCODE_PROFILE_DIR ?? join(app.getPath("userData"), "profiles", "desktop")
-}
 
 /** 注册主题与窗口控制 IPC；只接受已知的动作和外观值。 */
 function registerNativeBridge(): void {
@@ -281,6 +272,7 @@ const hosts = createHostSupervisor({
     watchHostActivity(host)
     browser.attachControlPort(host.controlPort)
     attachRelayCredentials(host.controlPort, profileDir())
+    reminders.attach(host.controlPort)
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.postMessage("pigcode:port", null, [host.connectPage()])
     }
@@ -322,6 +314,7 @@ function showWindow(): void {
     mainWindow = window
     window.show()
     window.focus()
+    reminders.wake()
   })
 }
 
@@ -380,6 +373,8 @@ export async function createWindow(): Promise<BrowserWindow> {
 // 默认应用名是 package.json 的 name（@pigcode/desktop），userData 因此带 scope；productName 不管这个。
 // 统一成 Pigcode，必须在 ready 之前调用——路径在第一次取用时就算好了。
 app.setName("Pigcode")
+// 与 NSIS 开始菜单快捷方式使用同一个应用 ID，Windows 通知按此 ID 归属。
+if (process.platform === "win32") app.setAppUserModelId("com.pigcode.desktop")
 
 /**
  * 默认 profile 只允许一个实例：两个 Host 同时读写一份数据库与 settings.json 会互相覆盖。

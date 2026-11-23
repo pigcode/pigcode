@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react"
 
 /** 主进程要应用的偏好：开机自启、Dock 图标、自动检查更新，以及打开时保持电脑唤醒。 */
 export interface Preferences {
+  desktopReminders: boolean
   launchAtLogin: boolean
   showInDock: boolean
   autoCheckUpdates: boolean
@@ -21,6 +22,7 @@ function bridge(): PreferencesBridge | undefined {
 }
 
 const DEFAULTS: Preferences = {
+  desktopReminders: true,
   launchAtLogin: false,
   showInDock: true,
   autoCheckUpdates: true,

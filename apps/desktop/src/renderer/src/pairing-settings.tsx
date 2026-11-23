@@ -219,6 +219,11 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
                       new Date(device.lastConnectedAt).toLocaleString(),
                     ),
                 device.needsRelayUpdate ? t("settings.pairing.updatePending") : undefined,
+                t("settings.pairing.pushUnregistered"),
+                device.reminders
+                  ? t("settings.pairing.remindersSynced").replace("{time}", new Date(device.reminders.syncedAt).toLocaleString())
+                  : t("settings.pairing.remindersNotSynced"),
+                device.reminders?.enabled === false ? t("settings.pairing.deviceRemindersOff") : undefined,
               ]
                 .filter(Boolean)
                 .join(" · ")}

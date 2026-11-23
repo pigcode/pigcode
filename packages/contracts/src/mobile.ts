@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { RELAY_PROTOCOL_VERSION } from "./relay"
+import { mobileReminderStatusSchema } from "./mobile-reminders"
 
 export const mobileProtocolVersion = 1
 const fingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/)
@@ -17,6 +18,7 @@ export const mobileFeatures = [
   "queue.write",
   "changes.read",
   "connection.revocation",
+  "reminders.status",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -56,6 +58,7 @@ export const pairedDeviceSchema = z.object({
   publicKey: publicKeySchema,
   name: z.string().min(1).max(80),
   platform: devicePlatformSchema,
+  reminders: mobileReminderStatusSchema.optional(),
   lastConnectedAt: z.number().int().nullable(),
   relayRevision: z.uuid().optional(),
   confirmedRelayRevision: z.uuid().optional(),

@@ -11,6 +11,7 @@ import { RpcServer } from "./rpc/server"
 import { ThreadFeed } from "./rpc/thread-feed"
 import { attachQuitState } from "./rpc/quit-state"
 import { attachHostActivity } from "./rpc/host-activity"
+import { attachHostReminders } from "./rpc/host-reminders"
 import { desktopRelayCipher } from "./services/relay-credential"
 import { MobileConnections } from "./mobile/connections"
 import { RelaySettings } from "./services/relay-settings"
@@ -129,6 +130,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   await ctx.plugins.loadAll()
   // Host 入口加载失败的插件也不加载界面代码；它的错误显示在插件页。
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
+  if (control) attachHostReminders(ctx, (reminder) => control.postMessage({ type: "host.reminder", reminder }))
   // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
   ctx.get("schedules")?.start()
   const feed = new ThreadFeed(ctx)

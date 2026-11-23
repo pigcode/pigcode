@@ -25,6 +25,7 @@ import { BrowserHost } from "./browser-host"
 import { AppearanceContext } from "./builtin-settings-pages"
 import { ChatViewContainer, type CoreDeps } from "./chat-container"
 import { ConnectionBanner } from "./connection-banner"
+import { useDesktopForeground, useDesktopReminderNavigation } from "./desktop-reminder-navigation"
 import { UnsavedGuard } from "./unsaved-guard"
 import { PluginsView, SchedulesView } from "./workspace-pages"
 import { useBrowserOpen } from "./use-browser-open"
@@ -170,7 +171,12 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   }, [state.status, state.activeThreadId, activeAgentId, connection, store])
 
   // 正在看的会话算已读：切过来时，或者它在眼前跑完时。
-  const viewingUnread = inChat && activeThread?.unread === true ? activeThread.id : null
+  const foreground = useDesktopForeground()
+  const activeTimeline = activeThreadId ? state.threadStates[activeThreadId] : undefined
+  const viewingUnread = inChat && foreground && activeThread?.unread && activeTimeline?.loaded &&
+    activeTimeline.events.some((event) => event.runId === activeThread.lastRunId && (
+      event.type === "run.completed" || event.type === "run.failed" || event.type === "run.interrupted"
+    )) ? activeThread.id : null
   useEffect(() => {
     if (state.status !== "connected" || !viewingUnread) return
     void setThreadRead(connection, store, viewingUnread, true).catch(() => undefined)
@@ -200,6 +206,9 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       .openThread(threadId)
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
   }
+
+  useDesktopReminderNavigation({ connection, store }, state.status === "connected", openThread,
+    () => store.update({ error: translate(locale, "reminder.threadUnavailable") }))
 
   /** 沿历史后退或前进；先去掉已经不存在的会话和已经移除的设置页。 */
   function travel(direction: "back" | "forward"): void {
@@ -238,7 +247,7 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const activeProjectName =
     state.projects.find((project) => project.id === (activeThread?.projectId ?? draftProject))
       ?.name ?? ""
-  const activeEvents = activeThreadId ? state.threadStates[activeThreadId]?.events : undefined
+  const activeEvents = activeTimeline?.events
   const activeRevision = useMemo(() => workspaceRevision(activeEvents ?? []), [activeEvents])
 
   function toggleRight(): void {

@@ -15,11 +15,12 @@ test("shows the literal name and device number before revoking one of two same-n
   writeFileSync(
     join(profile, "settings.json"),
     JSON.stringify({
-      "mobile.devices": devices.map((key) => ({
+      "mobile.devices": devices.map((key, index) => ({
         publicKey: key.toString("base64url"),
         name,
         platform: "ios",
         lastConnectedAt: 2000,
+        ...(index === 0 ? { reminders: { enabled: false, permission: "granted", syncedAt: 2000 } } : {}),
       })),
     }),
   )
@@ -37,6 +38,8 @@ test("shows the literal name and device number before revoking one of two same-n
       await expect(page.getByText(name, { exact: true })).toHaveCount(2)
       await expect(page.getByText("未连接", { exact: true })).toHaveCount(2)
       await expect(page.getByText(/iOS.*最近连接/)).toHaveCount(2)
+      await expect(page.getByText(/推送未登记.*提醒设置同步于.*手机提醒已关闭/)).toHaveCount(1)
+      await expect(page.getByText(/推送未登记.*等待手机同步提醒设置/)).toHaveCount(1)
       await individual.click()
       const confirm = page.getByRole("dialog", { name: "撤销配对" })
       await expect(confirm).toContainText(name)

@@ -5,6 +5,7 @@ import 'host_rpc.dart';
 import 'draft_commands.dart';
 import 'pending_requests.dart';
 import 'queued_messages.dart';
+import 'reminder_models.dart';
 import 'run_changes.dart';
 import 'run_commands.dart';
 import 'sidebar.dart';
@@ -22,6 +23,7 @@ export 'pending_requests.dart';
 export 'request_models.dart';
 export 'queued_messages.dart';
 export 'queue_models.dart';
+export 'reminder_models.dart';
 export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'timeline.dart';
@@ -44,6 +46,7 @@ class MobileConnection {
     this.supportsQueueCommands,
     this.supportsTimelineResume,
     this.supportsRunChanges,
+    this._reportsReminderSettings,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -59,6 +62,7 @@ class MobileConnection {
   final bool supportsQueueCommands;
   final bool supportsTimelineResume;
   final bool supportsRunChanges;
+  final bool _reportsReminderSettings;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
   late final MobileRunChanges changes = MobileRunChanges(_rpc);
@@ -124,6 +128,16 @@ class MobileConnection {
 
   Future<void> get done => _rpc.done;
   bool get revoked => _rpc.revoked;
+
+  Future<void> reportReminderSettings(MobileReminderSettings settings) async {
+    if (_reportsReminderSettings) {
+      await _link.send({
+        'type': MobileReminderMethods.report,
+        ...settings.toJson(),
+      });
+    }
+  }
+
   Future<void> close() => _link.close();
 
   /// Send only after the app has stored the approved profile. A later resume
@@ -249,6 +263,7 @@ class MobileConnection {
           'timeline.resume',
           'changes.read',
           'connection.revocation',
+          'reminders.status',
           'run.write',
           'request.write',
           'draft.write',
@@ -297,6 +312,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('queue.write'),
         (welcome['features'] as List).contains('timeline.resume'),
         (welcome['features'] as List).contains('changes.read'),
+        (welcome['features'] as List).contains('reminders.status'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

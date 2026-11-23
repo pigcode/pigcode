@@ -343,6 +343,14 @@ Future<void> main() async {
           case 'disconnect':
             await active.remove(phone)?.close();
             report('closed');
+          case 'reminderSettings':
+            await active[phone]!.reportReminderSettings(
+              const MobileReminderSettings(
+                enabled: false,
+                permission: MobileReminderPermission.granted,
+              ),
+            );
+            report('reminders-reported');
           case 'closed':
             await active[phone]!.done.timeout(const Duration(seconds: 8));
             report('closed');

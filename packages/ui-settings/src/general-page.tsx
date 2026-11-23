@@ -103,6 +103,12 @@ export function GeneralPage({ onShowUpdates }: { onShowUpdates?: (() => void) | 
           </SettingRow>
         ) : null}
       </SettingSection>
+      <SettingSection title={t("settings.general.reminders")}>
+        <SettingRow title={t("settings.general.desktopReminders")} description={t("settings.general.desktopReminders.description")}>
+          <Switch checked={prefs.desktopReminders} onCheckedChange={(checked) => setPreference("desktopReminders", checked)}
+            aria-label={t("settings.general.desktopReminders")} />
+        </SettingRow>
+      </SettingSection>
       <SettingSection title={t("settings.general.updates")}>
         <SettingRow
           title={t("settings.general.autoUpdate")}

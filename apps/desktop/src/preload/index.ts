@@ -16,23 +16,20 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
     ipcRenderer.on("pigcode:update-state", handler)
     return () => ipcRenderer.removeListener("pigcode:update-state", handler)
   },
-  getPreferences: (): Promise<{
-    launchAtLogin: boolean
-    showInDock: boolean
-    autoCheckUpdates: boolean
-    prereleaseUpdates: boolean
-    keepAwake: boolean
-  }> => ipcRenderer.invoke("pigcode:preferences-get"),
+  getPreferences: (): Promise<import("../main/preferences").Preferences> =>
+    ipcRenderer.invoke("pigcode:preferences-get"),
   setPreference: (
-    key: "launchAtLogin" | "showInDock" | "autoCheckUpdates" | "prereleaseUpdates" | "keepAwake",
+    key: import("../main/preferences").PreferenceKey,
     value: boolean,
-  ): Promise<{
-    launchAtLogin: boolean
-    showInDock: boolean
-    autoCheckUpdates: boolean
-    prereleaseUpdates: boolean
-    keepAwake: boolean
-  }> => ipcRenderer.invoke("pigcode:preferences-set", key, value),
+  ): Promise<import("../main/preferences").Preferences> => ipcRenderer.invoke("pigcode:preferences-set", key, value),
+  pendingReminder: (): Promise<unknown> => ipcRenderer.invoke("pigcode:pending-reminder"),
+  finishReminder: (eventId: string): Promise<void> =>
+    ipcRenderer.invoke("pigcode:finish-reminder", eventId),
+  onReminderReady: (listener: () => void): (() => void) => {
+    const signal = () => listener()
+    ipcRenderer.on("pigcode:reminder-ready", signal)
+    return () => ipcRenderer.removeListener("pigcode:reminder-ready", signal)
+  },
   checkForUpdates: (): Promise<{
     status: "up-to-date" | "update-available" | "error"
     version?: string

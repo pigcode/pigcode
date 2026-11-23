@@ -27,6 +27,7 @@ describe("preferences", () => {
     expect(readPreferences(tempPath())).toEqual(DEFAULT_PREFERENCES)
     // 开机自启默认关，Dock 图标默认显示，自动检查开，但默认不接预发布，也不阻止电脑睡眠。
     expect(DEFAULT_PREFERENCES).toEqual({
+      desktopReminders: true,
       launchAtLogin: false,
       showInDock: true,
       autoCheckUpdates: true,
@@ -39,6 +40,7 @@ describe("preferences", () => {
     const path = tempPath()
     writeFileSync(path, JSON.stringify({ launchAtLogin: true, showInDock: "yes" }))
     expect(readPreferences(path)).toEqual({
+      desktopReminders: true,
       launchAtLogin: true,
       showInDock: true,
       autoCheckUpdates: true,
@@ -52,6 +54,7 @@ describe("preferences", () => {
   it("writes what it reads", () => {
     const path = tempPath()
     writePreferences(path, {
+      desktopReminders: false,
       launchAtLogin: true,
       showInDock: false,
       autoCheckUpdates: false,
@@ -59,6 +62,7 @@ describe("preferences", () => {
       keepAwake: true,
     })
     expect(readPreferences(path)).toEqual({
+      desktopReminders: false,
       launchAtLogin: true,
       showInDock: false,
       autoCheckUpdates: false,

@@ -13,6 +13,8 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'computer_reconnect.dart';
 import 'computers.dart';
 import 'offline_cache.dart';
+import 'mobile_reminders.dart';
+import 'reminder_settings_page.dart';
 import 'theme_colors.dart';
 import 'workspace.dart';
 
@@ -92,6 +94,15 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   String? _feedback;
   bool _working = false;
   bool _updatingRelay = false;
+  late final MobileReminderBridge _reminders;
+  MobileReminder? _queuedReminder;
+  MobileReminder? _openReminder;
+  bool _openingReminder = false;
+  final _openedReminders = <(String, String)>{};
+  String? _computerId;
+  String? _visibleThreadId;
+  MobileReminderSettings? _reminderSettings;
+  (MobileConnection, bool, MobileReminderPermission)? _sentSettings;
 
   @override
   void initState() {
@@ -101,6 +112,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
         lifecycle == null ||
         lifecycle == AppLifecycleState.resumed ||
         lifecycle == AppLifecycleState.inactive;
+    _reminders = ref.read(mobileReminderBridgeProvider);
+    _reminders.watchTaps(() => unawaited(_readReminderTap()));
+    unawaited(_readReminderTap());
+    unawaited(_refreshReminderSettings());
     WidgetsBinding.instance.addObserver(this);
     final connectivity = Connectivity();
     _networks = connectivity.onConnectivityChanged.listen((networks) {
@@ -121,9 +136,122 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     if (state == AppLifecycleState.inactive) return;
     _foreground = state == AppLifecycleState.resumed;
     _session?.setForeground(_foreground);
+    _syncVisibleThread();
+    if (_foreground) {
+      unawaited(_readReminderTap());
+      unawaited(_openQueuedReminder());
+      unawaited(_refreshReminderSettings());
+    }
   }
 
-  void _select(ComputerProfile computer, {MobileConnection? initial}) {
+  Future<void> _readReminderTap() async {
+    final reminder = await _reminders.takeTap();
+    if (!mounted ||
+        reminder == null ||
+        !_openedReminders.add((reminder.computerId, reminder.eventId))) {
+      return;
+    }
+    if (_openedReminders.length > 128) {
+      _openedReminders.remove(_openedReminders.first);
+    }
+    _queuedReminder = reminder;
+    await _openQueuedReminder();
+  }
+
+  Future<void> _openQueuedReminder() async {
+    if (!mounted ||
+        _openingReminder ||
+        _working ||
+        !_foreground ||
+        _queuedReminder == null) {
+      return;
+    }
+    _openingReminder = true;
+    try {
+      while (mounted && !_working && _foreground && _queuedReminder != null) {
+        final reminder = _queuedReminder!;
+        final computers = await ref.read(computersProvider.future);
+        final computer = await findReminderComputer(reminder, computers);
+        if (!mounted || _working || !_foreground) return;
+        if (!identical(reminder, _queuedReminder)) continue;
+        _queuedReminder = null;
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        if (computer == null) {
+          _showWorkspace(false);
+          setState(() => _feedback = '这条通知对应的电脑已不在配对列表中。');
+        } else if (_selected == computer.computerKey) {
+          setState(() {
+            if (_visibleThreadId != reminder.threadId) _visibleThreadId = null;
+            _openReminder = reminder;
+          });
+          _showWorkspace(true);
+          final session = _session;
+          if (session != null &&
+              session.connection == null &&
+              !session.connecting) {
+            session.retry();
+          }
+        } else {
+          _select(computer, reminder: reminder);
+        }
+      }
+    } catch (_) {
+      if (mounted) setState(() => _feedback = '暂时无法打开通知里的会话。');
+    } finally {
+      _openingReminder = false;
+    }
+  }
+
+  Future<void> _refreshReminderSettings() async {
+    try {
+      final settings = await _reminders.settings();
+      if (mounted) _reminderSettingsChanged(settings);
+    } catch (_) {
+      // The phone settings page offers a retry.
+    }
+  }
+
+  void _reminderSettingsChanged(MobileReminderSettings settings) {
+    _reminderSettings = settings;
+    _reportReminderSettings();
+  }
+
+  void _reportReminderSettings() {
+    final connection = _session?.connection;
+    final settings = _reminderSettings;
+    if (connection == null || settings == null) return;
+    final report = (connection, settings.enabled, settings.permission);
+    if (_sentSettings == report) return;
+    _sentSettings = report;
+    unawaited(
+      connection.reportReminderSettings(settings).catchError((Object _) {
+        if (_sentSettings == report) _sentSettings = null;
+      }),
+    );
+  }
+
+  void _syncVisibleThread() {
+    final visible = _foreground && _workspaceOpen;
+    unawaited(
+      _reminders
+          .setVisible(
+            visible ? _computerId : null,
+            visible ? _visibleThreadId : null,
+          )
+          .catchError((Object _) {}),
+    );
+  }
+
+  void _showWorkspace(bool open) {
+    setState(() => _workspaceOpen = open);
+    _syncVisibleThread();
+  }
+
+  void _select(
+    ComputerProfile computer, {
+    MobileConnection? initial,
+    MobileReminder? reminder,
+  }) {
     final identity = ref.read(computersProvider.notifier).identity;
     late final ComputerReconnect session;
     session = ComputerReconnect(
@@ -135,6 +263,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           unawaited(_confirmedRevocation(computer));
         } else {
           setState(() {});
+          _reportReminderSettings();
         }
       },
     );
@@ -143,9 +272,20 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _session = session;
       _selected = computer.computerKey;
       _cache = ref.read(offlineCacheProvider).open(computer.computerKey);
+      _openReminder = reminder;
+      _computerId = null;
+      _visibleThreadId = null;
       _workspaceOpen = true;
       _feedback = null;
     });
+    _syncVisibleThread();
+    unawaited(
+      reminderComputerId(computer).then((id) {
+        if (!mounted || !identical(_session, session)) return;
+        _computerId = id;
+        _syncVisibleThread();
+      }),
+    );
     session.start(foreground: _foreground, initial: initial);
   }
 
@@ -156,7 +296,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     if (_working) return;
     if (invite == null) {
       if (_selected == computer.computerKey) {
-        setState(() => _workspaceOpen = true);
+        _showWorkspace(true);
         if (_session?.connection == null) _session?.retry();
       } else {
         _select(computer);
@@ -175,11 +315,15 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _working = true;
       _workspaceOpen = false;
       _cache = null;
+      _openReminder = null;
+      _computerId = null;
+      _visibleThreadId = null;
       _updatingRelay = existing != null;
       _verification = null;
       _feedback = null;
       _selected = null;
     });
+    _syncVisibleThread();
 
     MobileConnection? opened;
     try {
@@ -231,6 +375,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           _working = false;
           _verification = null;
         });
+        unawaited(_openQueuedReminder());
       }
     }
   }
@@ -250,7 +395,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     } catch (_) {
       if (mounted) setState(() => _feedback = '电脑已撤销配对，本机暂时无法移除这台电脑。');
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() => _working = false);
+        unawaited(_openQueuedReminder());
+      }
     }
   }
 
@@ -260,8 +408,12 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _session = null;
       _selected = null;
       _cache = null;
+      _openReminder = null;
+      _computerId = null;
+      _visibleThreadId = null;
       _workspaceOpen = false;
     });
+    _syncVisibleThread();
   }
 
   String _connectionLabel(BuildContext context) {
@@ -369,13 +521,18 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     } catch (_) {
       if (mounted) setState(() => _feedback = '无法移除手机上保存的电脑。');
     } finally {
-      if (mounted) setState(() => _working = false);
+      if (mounted) {
+        setState(() => _working = false);
+        unawaited(_openQueuedReminder());
+      }
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _reminders.watchTaps(null);
+    _reminders.setVisible(null, null).catchError((Object _) {});
     unawaited(_networks?.cancel());
     _session?.dispose();
     super.dispose();
@@ -388,8 +545,22 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     final manager = Scaffold(
       appBar: AppBar(
         title: const Text('电脑'),
+        actions: [
+          IconButton(
+            tooltip: '通知设置',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () => Navigator.of(context).push<void>(
+              MaterialPageRoute(
+                builder: (_) => ReminderSettingsPage(
+                  bridge: _reminders,
+                  onChanged: _reminderSettingsChanged,
+                ),
+              ),
+            ),
+          ),
+        ],
         leading: _selected != null
-            ? BackButton(onPressed: () => setState(() => _workspaceOpen = true))
+            ? BackButton(onPressed: () => _showWorkspace(true))
             : null,
       ),
       body: SafeArea(
@@ -514,9 +685,14 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           computer: profile,
           deviceId: ref.read(computersProvider.notifier).deviceId,
           cache: _cache,
+          openReminder: _openReminder,
+          onVisibleThread: (id) {
+            _visibleThreadId = id;
+            _syncVisibleThread();
+          },
           connectionLabel: connectionLabel,
           reconnect: () => _session?.retry(),
-          onComputers: () => setState(() => _workspaceOpen = false),
+          onComputers: () => _showWorkspace(false),
         ),
         manager,
       ],

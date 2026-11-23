@@ -171,6 +171,14 @@ it.skipIf(!oldAddress || !oldToken || !newAddress || !newToken)(
         { connected: true, needsRelayUpdate: false },
         { connected: true, needsRelayUpdate: false },
       ])
+      const reminderStatus = async () => (await view()).devices.find(({ id }) => id === phoneA.id)?.reminders
+      sendPhone("reminderSettings", first)
+      expect(await readPhone()).toEqual({ stage: "reminders-reported" })
+      await expect.poll(reminderStatus).toMatchObject({
+        enabled: false, permission: "granted", syncedAt: expect.any(Number),
+      })
+      const savedReminderStatus = await reminderStatus()
+      expect((await view()).devices.find(({ id }) => id === phoneB.id)?.reminders).toBeUndefined()
 
       expect(
         await call("relay.testAndSave", { address: oldAddress, token: oldToken }),
@@ -227,6 +235,7 @@ it.skipIf(!oldAddress || !oldToken || !newAddress || !newToken)(
       expect((await view()).devices.find(({ id }) => id === phoneA.id)?.needsRelayUpdate).toBe(true)
       await host.stop()
       host = await startMobileHost({ settingsPath })
+      expect(await reminderStatus()).toEqual(savedReminderStatus)
       const registration = await openPairing()
       await call("mobile.pairing.cancel", { id: registration.id })
       sendPhone("reconnect", first)

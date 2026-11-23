@@ -4,6 +4,9 @@ interface Window {
     platform: string
     systemVersion?: string
     appVersion?(): Promise<string>
+    pendingReminder?(): Promise<unknown>
+    finishReminder?(eventId: string): Promise<void>
+    onReminderReady?(listener: () => void): () => void
     getUpdateState?(): Promise<import("@pigcode/contracts").DesktopUpdateState>
     performUpdate?(): Promise<import("@pigcode/contracts").DesktopUpdateState>
     onUpdateState?(

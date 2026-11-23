@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname } from "node:path"
 
 export interface Preferences {
+  desktopReminders: boolean
   /** 开机自动启动。默认关：应用不该没问过用户就自己常驻。 */
   launchAtLogin: boolean
   /** 在 Dock 中显示；关掉以后只能从菜单栏图标打开窗口。只在 macOS 上有意义。 */
@@ -25,6 +26,7 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
+  desktopReminders: true,
   launchAtLogin: false,
   showInDock: true,
   autoCheckUpdates: true,
@@ -34,6 +36,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
 
 /** 可以改的键；页面传其他键时忽略。 */
 const KEYS = [
+  "desktopReminders",
   "launchAtLogin",
   "showInDock",
   "autoCheckUpdates",

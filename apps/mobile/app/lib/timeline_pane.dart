@@ -91,6 +91,7 @@ class TimelinePane extends ConsumerStatefulWidget {
     required this.online,
     this.cache,
     this.computerKey,
+    this.onSynced,
   });
 
   final MobileConnection? connection;
@@ -98,6 +99,7 @@ class TimelinePane extends ConsumerStatefulWidget {
   final bool online;
   final ComputerOfflineCache? cache;
   final String? computerKey;
+  final ValueChanged<bool>? onSynced;
 
   @override
   ConsumerState<TimelinePane> createState() => _TimelinePaneState();
@@ -110,6 +112,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _historyReady = false;
   bool _draftReady = false;
   bool _draftError = false;
+  bool _synced = false;
   String _observedText = '';
   ThreadDraftStorage? _draftStore;
   final _text = TextEditingController();
@@ -247,6 +250,13 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     if (online) _latest = current.snapshot;
     final snapshot = _latest;
     final errors = current?.problem ?? selected?.error;
+    final synced = online && errors == null && selected?.isLoading == false;
+    if (_synced != synced && widget.onSynced != null) {
+      _synced = synced;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _synced == synced) widget.onSynced?.call(synced);
+      });
+    }
     final retry = provider == null
         ? null
         : () => ref.read(provider.notifier).retry();

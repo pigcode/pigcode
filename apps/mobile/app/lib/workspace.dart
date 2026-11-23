@@ -91,12 +91,16 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.computer,
     this.deviceId,
     this.cache,
+    this.openReminder,
+    this.onVisibleThread,
   });
 
   final MobileConnection? connection;
   final ComputerProfile? computer;
   final String? deviceId;
   final ComputerOfflineCache? cache;
+  final MobileReminder? openReminder;
+  final ValueChanged<String?>? onVisibleThread;
   final bool connected;
   final String connectionLabel;
   final VoidCallback reconnect;
@@ -182,6 +186,8 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 : null)
           : widget.reconnect,
       onComputers: widget.onComputers,
+      openReminder: widget.openReminder,
+      onVisibleThread: widget.onVisibleThread,
       draft: draftLink != null || localDrafts
           ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
               connection: draftLink,
@@ -194,13 +200,14 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
               onAccepted: onAccepted,
             )
           : null,
-      timeline: (thread, online) => TimelinePane(
+      timeline: (thread, online, onSynced) => TimelinePane(
         key: ValueKey(thread.id),
         connection: online ? connection : null,
         threadId: thread.id,
         online: online,
         cache: widget.cache,
         computerKey: computer?.computerKey,
+        onSynced: onSynced,
       ),
     );
   }
@@ -220,17 +227,26 @@ class WorkspaceView extends StatefulWidget {
     this.draft,
     this.loadingCache = false,
     this.offlineDraftAvailable = false,
+    this.openReminder,
+    this.onVisibleThread,
   });
 
   final SidebarSnapshot? snapshot;
   final bool online;
   final bool loadingCache;
   final bool offlineDraftAvailable;
+  final MobileReminder? openReminder;
+  final ValueChanged<String?>? onVisibleThread;
   final String computerName;
   final String? connectionLabel;
   final String? error;
   final VoidCallback? onRetry;
-  final Widget Function(MobileThreadSummary thread, bool online)? timeline;
+  final Widget Function(
+    MobileThreadSummary thread,
+    bool online,
+    ValueChanged<bool> onSynced,
+  )?
+  timeline;
   final Widget Function(
     String? projectId,
     String? fallbackProjectId,
@@ -251,22 +267,36 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _draftProject;
   bool _draftOpen = false;
   bool _open = false;
+  String? _reminderThread;
+  bool _reminderUnavailable = false;
+  String? _visibleThread;
+  String? _syncedThread;
 
   MobileThreadSummary? get _thread =>
       widget.snapshot?.threads
-          .where((item) => item.id == _threadId)
+          .where(
+            (item) =>
+                item.id == _threadId &&
+                (_reminderThread == null || !item.archived),
+          )
           .firstOrNull ??
       (_acceptedThread?.id == _threadId ? _acceptedThread : null);
 
   @override
   void initState() {
     super.initState();
+    _openNotification(widget.openReminder);
     _selectRecentIfNeeded();
   }
 
   @override
   void didUpdateWidget(covariant WorkspaceView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!widget.online) _syncedThread = null;
+    if (!identical(oldWidget.openReminder, widget.openReminder)) {
+      _openNotification(widget.openReminder);
+      _selectRecentIfNeeded();
+    }
     if (oldWidget.snapshot != widget.snapshot) {
       if (widget.snapshot?.threads.any(
             (thread) => thread.id == _acceptedThread?.id,
@@ -276,12 +306,53 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       }
       _selectRecentIfNeeded();
     }
+    if (_reminderThread != null && widget.online) {
+      _reminderUnavailable = _thread == null;
+      if (!_reminderUnavailable) _reminderThread = null;
+    }
+  }
+
+  void _openNotification(MobileReminder? reminder) {
+    _reminderThread = reminder?.threadId;
+    _reminderUnavailable = false;
+    if (reminder == null) return;
+    _selectThread(reminder.threadId);
+    _acceptedThread = null;
+    _draftOpen = false;
+    _open = false;
+    if (widget.online) {
+      _reminderUnavailable = _thread == null;
+      if (!_reminderUnavailable) _reminderThread = null;
+    }
+  }
+
+  void _reportVisible(String? id) {
+    if (_visibleThread == id || widget.onVisibleThread == null) return;
+    _visibleThread = id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _visibleThread == id) widget.onVisibleThread?.call(id);
+    });
+  }
+
+  void _updateVisibleThread() {
+    final id = _thread?.id;
+    _reportVisible(
+      widget.online && !_open && !_draftOpen && _syncedThread == id ? id : null,
+    );
+  }
+
+  void _selectThread(String? id) {
+    if (_threadId != id) _syncedThread = null;
+    _threadId = id;
   }
 
   void _openDraft(String? projectId) {
     setState(() {
+      _reminderThread = null;
+      _reminderUnavailable = false;
       _draftOpen = true;
       _draftProject = projectId;
+      _syncedThread = null;
     });
     if (_open) _menu(false);
   }
@@ -289,7 +360,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   void _acceptDraft(MobileDraftReceipt receipt) {
     setState(() {
       _draftOpen = false;
-      _threadId = receipt.threadId;
+      _selectThread(receipt.threadId);
       // A receipt can arrive before the sidebar publishes the new thread.
       _acceptedThread =
           widget.snapshot?.threads.any(
@@ -311,11 +382,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   void _selectRecentIfNeeded() {
-    if (_thread == null) {
-      _threadId = widget.snapshot?.threads
-          .where((item) => !item.archived)
-          .firstOrNull
-          ?.id;
+    if (_thread == null && _reminderThread == null) {
+      _selectThread(
+        widget.snapshot?.threads
+            .where((item) => !item.archived)
+            .firstOrNull
+            ?.id,
+      );
     }
   }
 
@@ -346,6 +419,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         : const Duration(milliseconds: 320);
     const curve = Cubic(.2, .7, .2, 1);
     final thread = _thread;
+    _updateVisibleThread();
     final project = widget.snapshot?.projects
         .where((item) => item.id == thread?.projectId)
         .firstOrNull;
@@ -396,8 +470,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                 online: widget.online,
                                 focusNode: _menuFocus,
                                 onSelect: (id) {
+                                  _reminderThread = null;
+                                  _reminderUnavailable = false;
                                   _draftOpen = false;
-                                  _threadId = id;
+                                  _selectThread(id);
                                   _menu(false);
                                 },
                                 onNewThread: canOpenDraft ? _openDraft : null,
@@ -597,6 +673,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         ),
       );
     }
+    if (_reminderThread != null && thread == null && !widget.loadingCache) {
+      return Center(
+        child: Text(_reminderUnavailable ? '通知对应的会话已不可用。' : '连接电脑后打开通知里的会话。'),
+      );
+    }
     if (widget.snapshot == null) {
       return Center(
         child: widget.online || widget.loadingCache
@@ -608,7 +689,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       return const Center(child: Text('没有已打开的会话'));
     }
     if (widget.timeline case final build?) {
-      return build(thread, widget.online);
+      return build(thread, widget.online, (synced) {
+        if (!mounted || _thread?.id != thread.id || _draftOpen) return;
+        final id = synced ? thread.id : null;
+        if (_syncedThread != id) setState(() => _syncedThread = id);
+      });
     }
     if (!widget.online) return const SizedBox.shrink();
     final theme = Theme.of(context);

@@ -7,6 +7,7 @@ import {
   mobileDraftMethods,
   mobileReceiptParams,
   mobileRelaySavedSchema,
+  mobileReminderReportSchema,
   mobileSidebarChangedSchema,
   mobileSidebarMethods as methods,
   mobileSidebarLabelLimit,
@@ -142,6 +143,14 @@ export class MobileSidebarRpc {
   }
 
   private receive(message: unknown): void {
+    const notice = mobileReminderReportSchema.safeParse(message)
+    if (notice.success) {
+      if (this.session.features.includes("reminders.status")) {
+        const { enabled, permission } = notice.data
+        this.devices.reportReminders(this.session.deviceKey, { enabled, permission })
+      }
+      return
+    }
     const receipt = mobileRelaySavedSchema.safeParse(message)
     if (receipt.success) {
       if (

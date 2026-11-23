@@ -244,6 +244,7 @@ async function generate(family: ContractFamily): Promise<void> {
 
 try {
   const sidebar = await vite.ssrLoadModule("/packages/contracts/src/mobile-sidebar.ts")
+  const reminders = await vite.ssrLoadModule("/packages/contracts/src/mobile-reminders.ts")
   const timeline = await vite.ssrLoadModule("/packages/contracts/src/mobile-timeline.ts")
   const changes = await vite.ssrLoadModule("/packages/contracts/src/mobile-run-changes.ts")
   const commands = await vite.ssrLoadModule("/packages/contracts/src/mobile-commands.ts")
@@ -256,6 +257,12 @@ try {
     fileName: "sidebar_models.dart",
     methodsName: "MobileSidebarMethods",
     constants: ["const mobileSidebarPageSize = " + sidebar.mobileSidebarPageSize + ";"],
+  })
+  await generate({
+    methods: reminders.mobileReminderMethods,
+    schemas: reminders.mobileReminderJsonSchemas(),
+    fileName: "reminder_models.dart",
+    methodsName: "MobileReminderMethods",
   })
   await generate({
     methods: timeline.mobileTimelineMethods,

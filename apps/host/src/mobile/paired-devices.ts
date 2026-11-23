@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
-import { pairedDeviceSchema, type MobilePairingView, type PairedDevice } from "@pigcode/contracts"
+import { pairedDeviceSchema, type MobilePairingView, type MobileReminderSettings, type PairedDevice } from "@pigcode/contracts"
 import type { QueueDeviceSource } from "../storage/queued-message-store"
 import type { SettingsService } from "../services/settings"
 
@@ -51,14 +51,20 @@ export class PairedDevices {
   }
 
   view(revision: string | undefined, connected: ReadonlySet<string>): MobilePairingView["devices"] {
-    return this.records.map(({ publicKey, name, platform, lastConnectedAt, relayRevision }) => ({
+    return this.records.map(({ publicKey, name, platform, lastConnectedAt, relayRevision, reminders }) => ({
       name,
       platform,
       lastConnectedAt,
       id: deviceId(publicKey),
       connected: connected.has(publicKey),
       needsRelayUpdate: revision !== undefined && revision !== relayRevision,
+      ...(reminders ? { reminders } : {}),
     }))
+  }
+
+  reportReminders(publicKey: string, settings: MobileReminderSettings): void {
+    const device = this.find(publicKey)
+    if (device) this.save({ ...device, reminders: { ...settings, syncedAt: Date.now() } })
   }
 
   save(device: PairedDevice): void {

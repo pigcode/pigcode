@@ -1,0 +1,15 @@
+{
+  "aps": {
+    "alert": {
+      "title": "Pigcode",
+      "body": "等你处理"
+    }
+  },
+  "pigcode": {
+    "version": 1,
+    "eventId": "request:sim-approval",
+    "computerId": "75877bb41d393b5fb8455ce60ecd8dda001d06316496b14dfa7f895656eeca4a",
+    "threadId": "notice-thread",
+    "kind": "approval"
+  }
+}

@@ -17,6 +17,7 @@ export * from "./mobile-sidebar"
 
 export * from "./mobile-timeline"
 export * from "./mobile-run-changes"
+export * from "./mobile-reminders"
 
 export * from "./mobile-commands"
 
