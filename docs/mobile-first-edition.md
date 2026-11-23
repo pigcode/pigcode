@@ -48,6 +48,20 @@ PIGCODE_PACKAGED_APP=/路径/到/Pigcode.app/Contents/MacOS/Pigcode \
   pnpm --dir apps/desktop exec playwright test e2e/packaged.spec.ts
 ```
 
+## 手机截图回归
+
+侧栏、时间线、审批、提问、离线历史、离线侧栏和全屏 diff 各有 iOS 与 Android 的浅色、深色基线，共 28 张。测试使用实际 Flutter 界面组件和固定会话数据，视口为 390×844 逻辑像素，系统边距按测试平台设置。脚本下载并校验固定的 Noto Sans SC，等宽文字使用锁定的 `gpt_markdown` 所带的 JetBrains Mono，图标使用固定 Flutter SDK 的 Material Icons。 [验收方案 #100](https://github.com/pigcode/monorepo/issues/100#issuecomment-7075972281) · [DSH Go 截图设置](https://github.com/ccch1mneyyy/dsh-Go/blob/36f232df1deba9be9730f068b8db80f2a5cbbda7/app/test/shell/golden_harness.dart)
+
+在使用固定 Flutter 版本的 macOS 15 ARM64 环境中，从前端仓库根目录运行。
+
+```sh
+cd apps/mobile
+flutter pub get --enforce-lockfile
+./scripts/test-visual.sh
+```
+
+Mobile CI 在同一类 runner 上逐像素比对。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
+
 ## iPhone 真机验收
 
 1. 用同一 Apple Team 和 `com.pigcode.mobile` 签名覆盖安装。打开 App，核对以前配对的电脑仍在列表并能连接。 [构建和配对](./mobile-pairing.md#iphone-经现有云端中继复验)
@@ -66,4 +80,4 @@ PIGCODE_PACKAGED_APP=/路径/到/Pigcode.app/Contents/MacOS/Pigcode \
 | 桌面回归 | 8 项 Playwright 定向回归通过。macOS ARM64 ad-hoc 签名包的 2 项冒烟通过。 |
 | 本机真实 CLI | Codex `0.171.0` 的 3 项冒烟通过。Claude Code `2.1.330` 的回复用例因本机 OAuth 会话过期而阻塞。 |
 
-真机阶段待记录 iPhone 签名覆盖后的配对留存、大陆云中继下的蜂窝与睡眠恢复、长会话 profile 数据。正式 APNs 送达随 TestFlight 验收，手机固定截图基线和 CI 差异产物仍待补齐。 [首版验收 #127](https://github.com/pigcode/monorepo/issues/127) · [验收方案 #100](https://github.com/pigcode/monorepo/issues/100) · [TestFlight #126](https://github.com/pigcode/monorepo/issues/126)
+真机阶段待记录 iPhone 签名覆盖后的配对留存、大陆云中继下的蜂窝与睡眠恢复、长会话 profile 数据。正式 APNs 送达随 TestFlight 验收。 [首版验收 #127](https://github.com/pigcode/monorepo/issues/127) · [TestFlight #126](https://github.com/pigcode/monorepo/issues/126)

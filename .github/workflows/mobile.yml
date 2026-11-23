@@ -1,6 +1,12 @@
 name: Mobile
 
 on:
+  workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: 生成手机截图候选基线
+        type: boolean
+        default: false
   pull_request:
     paths:
       - "apps/mobile/**"
@@ -63,7 +69,7 @@ jobs:
         working-directory: .
         run: node apps/desktop/scripts/generate-mobile-contracts.ts --check
       - run: flutter pub get --enforce-lockfile
-      - run: dart format --output=none --set-exit-if-changed app/lib app/test packages scripts ../../scripts/fixtures/mobile_paired_reply.dart
+      - run: dart format --output=none --set-exit-if-changed app/lib app/test app/visual packages scripts ../../scripts/fixtures/mobile_paired_reply.dart
       - run: dart analyze --fatal-infos
       - run: dart test
         working-directory: apps/mobile/packages/pigcode_transport
@@ -71,6 +77,27 @@ jobs:
         working-directory: apps/mobile/packages/pigcode_client
       - run: flutter test
         working-directory: apps/mobile/app
+      - if: matrix.target == 'ios' && inputs.update_visual_baselines != true
+        name: 比对手机截图基线
+        id: visual
+        run: ./scripts/test-visual.sh
+      - if: failure() && steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-visual-diffs
+          path: apps/mobile/app/visual/failures/
+          if-no-files-found: ignore
+          retention-days: 7
+      - if: matrix.target == 'ios' && inputs.update_visual_baselines
+        name: 生成手机截图候选基线
+        run: ./scripts/test-visual.sh --update-goldens
+      - if: matrix.target == 'ios' && inputs.update_visual_baselines
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-visual-baselines
+          path: apps/mobile/app/visual/baselines/*.png
+          if-no-files-found: error
+          retention-days: 7
       - if: matrix.target == 'apk'
         run: ./scripts/flutter-app.sh build apk --debug --no-pub
       - if: matrix.target == 'ios'
