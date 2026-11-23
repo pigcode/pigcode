@@ -58,7 +58,7 @@ test("right-clicks route to the text, sidebar and workbench tab menus", async ()
       .poll(async () => (await menus())[2]?.labels.filter(Boolean))
       .toEqual(["查看文件", expect.stringMatching(/^在.+中打开$/), "重命名", "从侧栏移除"])
     await page.locator(".sess").first().click({ button: "right" })
-    await expect.poll(async () => (await menus())[3]?.labels).toEqual(["重命名", "归档"])
+    await expect.poll(async () => (await menus())[3]?.labels).toEqual(["重命名", "置顶", "归档"])
 
     await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
     await page
