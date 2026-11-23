@@ -3,6 +3,9 @@
 import { cleanup, fireEvent, renderHook } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest"
 import type { Project, Thread } from "@pigcode/contracts"
+import { DEFAULT_SIDEBAR_VIEW } from "@pigcode/ui-primitives"
+import { visibleThreads } from "./sidebar-arrangement"
+import { renderSidebar, thread } from "./sidebar.fixtures"
 import { useThreadShortcuts } from "./thread-shortcuts"
 
 afterEach(() => {
@@ -34,8 +37,8 @@ const press = (digit: number) =>
   fireEvent.keyDown(window, { key: String(digit), code: `Digit${digit}`, ctrlKey: true })
 
 it("follows the status sections and the status filter, and leaves the held thread in place", () => {
-  window.localStorage.setItem("pigcode.sidebarGrouping", "status")
   const onOpen = vi.fn()
+  let view = DEFAULT_SIDEBAR_VIEW
   const status = {
     t1: "waiting-approval",
     t2: "running",
@@ -45,11 +48,14 @@ it("follows the status sections and the status filter, and leaves the held threa
   const { rerender } = renderHook((held: string | null) =>
     useThreadShortcuts({
       enabled: true,
-      projects,
-      threads,
-      status,
-      expandedProjects: {},
-      heldThreadId: held,
+      threads: visibleThreads(projects, threads, {
+        grouping: "status",
+        view,
+        status,
+        expandedProjects: {},
+        heldThreadId: held,
+        now: 0,
+      }),
       onOpen,
     }),
   )
@@ -68,8 +74,7 @@ it("follows the status sections and the status filter, and leaves the held threa
   expect(onOpen.mock.calls).toEqual([["t3"], ["t1"]])
 
   onOpen.mockClear()
-  window.localStorage.setItem("pigcode.sidebarView", JSON.stringify({ statusFilter: ["done"] }))
-  window.dispatchEvent(new StorageEvent("storage"))
+  view = { ...DEFAULT_SIDEBAR_VIEW, statusFilter: ["done"] }
   rerender(null)
   press(1)
   expect(onOpen).toHaveBeenCalledExactlyOnceWith("t4")
@@ -80,14 +85,36 @@ it("does nothing while disabled, for example in settings", () => {
   renderHook(() =>
     useThreadShortcuts({
       enabled: false,
-      projects,
       threads,
-      status: {},
-      expandedProjects: {},
-      heldThreadId: null,
       onOpen,
     }),
   )
   press(1)
   expect(onOpen).not.toHaveBeenCalled()
+})
+
+it("uses the displayed shortcut order while the sidebar clock crosses midnight", () => {
+  window.localStorage.setItem("pigcode.sidebarGrouping", "time")
+  window.localStorage.setItem("pigcode.sidebarView", JSON.stringify({ threadOrder: "status" }))
+  const clock = vi.spyOn(Date, "now").mockReturnValue(new Date("2026-11-23T23:59:30").getTime())
+  const onOpenThread = vi.fn()
+  try {
+    const { container } = renderSidebar({
+      threads: [
+        { ...thread("pinned", "p1", "置顶目标", "2026-11-20T10:00:00"), pinned: true },
+        thread("yesterday", "p1", "昨天的会话", "2026-11-22T10:00:00"),
+        thread("waiting", "p1", "等审批的会话", "2026-11-21T10:00:00"),
+      ],
+      threadStatus: { yesterday: "completed", waiting: "waiting-approval" },
+      enableThreadShortcuts: true,
+      onOpenThread,
+    })
+    const titles = Array.from(container.querySelectorAll(".sess .list-row-title"), (row) => row.textContent)
+    expect(titles).toEqual(["置顶目标", "昨天的会话", "等审批的会话"])
+    clock.mockReturnValue(new Date("2026-11-24T00:00:01").getTime())
+    press(2)
+    expect(onOpenThread).toHaveBeenCalledExactlyOnceWith("yesterday")
+  } finally {
+    clock.mockRestore()
+  }
 })

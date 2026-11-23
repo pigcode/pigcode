@@ -75,6 +75,25 @@ describe("workspace actions", () => {
     expect(store.getSnapshot().projects).toEqual([project("current")])
   })
 
+  it("reconciles pins after reconnect while preserving updates pushed during the load", async () => {
+    const first = { ...thread("t1", "p1", "2026-10-20T01:00:00.000Z"), pinned: false }
+    const second = { ...thread("t2", "p1", "2026-10-20T02:00:00.000Z"), pinned: true }
+    const store = storeWith([first, second], null)
+    const { connection } = fakeConnection({
+      "project.list": () => [project("p1")],
+      "thread.list": () => {
+        store.update({ threads: [first, { ...second, pinned: false }] })
+        return [{ ...first, pinned: true }, second]
+      },
+    })
+
+    await loadWorkspace(connection, store)
+    expect(store.getSnapshot().threads).toEqual([
+      { ...first, pinned: true },
+      { ...second, pinned: false },
+    ])
+  })
+
   it("renames a thread with the record the Host returns", async () => {
     const store = storeWith([thread("t1", "p1", "2026-10-20T01:00:00.000Z")], null)
     const renamed = { ...thread("t1", "p1", "2026-10-21T00:00:00.000Z"), title: "Renamed" }

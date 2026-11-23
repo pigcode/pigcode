@@ -25,6 +25,7 @@ import {
   projectOrder,
   sidebarSections,
   threadCategory,
+  visibleThreadsInSections,
   type SidebarSection,
 } from "./sidebar-arrangement"
 import { SidebarMenu } from "./sidebar-menu"
@@ -37,6 +38,7 @@ import {
   type RowAction,
 } from "./sidebar-rows"
 import type { ThreadStatus } from "./thread-status"
+import { useThreadShortcuts } from "./thread-shortcuts"
 import { useToast } from "./toast"
 
 /** 工作区侧栏所需的数据与事件；数据由 store 传入。 */
@@ -63,6 +65,7 @@ export interface WorkspaceSidebarProps {
   /** 会话行右键菜单里的重命名与归档；两个都传时才有菜单。 */
   onRenameThread?: ((threadId: string, title: string) => void) | undefined
   onArchiveThread?: ((threadId: string) => void) | undefined
+  onSetThreadPinned?: ((threadId: string, pinned: boolean) => void) | undefined
   /** 已归档的会话右键菜单里的「取消归档」；不传时没有这一项。 */
   onUnarchiveThread?: ((threadId: string) => void) | undefined
   /** 会话行右键菜单里的「标为已读 / 标为未读」；不传时没有这一项。 */
@@ -78,9 +81,25 @@ export interface WorkspaceSidebarProps {
   heldThreadId?: string | null | undefined
   /** 按住 ⌘/Ctrl 时在前九个会话上显示数字快捷键。 */
   shortcutHints?: boolean
+  /** 使用当前显示的会话顺序处理数字快捷键。 */
+  enableThreadShortcuts?: boolean
   /** 排在列表最后、跟着列表滚动的内容，例如插件的 Panel。 */
   children?: ReactNode
 }
+
+/** 侧栏的会话和项目操作，由外壳转交给工作区侧栏。 */
+export type SidebarActionProps = Pick<
+  WorkspaceSidebarProps,
+  | "onRenameThread"
+  | "onArchiveThread"
+  | "onSetThreadPinned"
+  | "onUnarchiveThread"
+  | "onMarkThreadRead"
+  | "onMarkAllRead"
+  | "onReferenceThread"
+  | "onRenameProject"
+  | "onRemoveProject"
+>
 
 /**
  * 从「需要处理」里打开一个跑完没看的会话，它马上变成已读。看着它的时候先留在原处，换到别的会话再归位，
@@ -139,6 +158,7 @@ export function WorkspaceSidebar({
   activeNav,
   onRenameThread,
   onArchiveThread,
+  onSetThreadPinned,
   onUnarchiveThread,
   onMarkThreadRead,
   onMarkAllRead,
@@ -147,6 +167,7 @@ export function WorkspaceSidebar({
   onRemoveProject,
   heldThreadId = null,
   shortcutHints = false,
+  enableThreadShortcuts = false,
   children,
 }: WorkspaceSidebarProps) {
   const { t } = useLocale()
@@ -168,9 +189,8 @@ export function WorkspaceSidebar({
     heldThreadId,
     now,
   })
-  const order = sections.flatMap((section) =>
-    section.kind === "project" && !section.open ? [] : section.threads,
-  )
+  const order = visibleThreadsInSections(sections)
+  useThreadShortcuts({ enabled: enableThreadShortcuts, threads: order, onOpen: onOpenThread })
   const shortcutIndex = new Map(order.slice(0, 9).map((thread, index) => [thread.id, index + 1]))
   const projectIds = sections.flatMap((section) =>
     section.kind === "project" ? [section.project.id] : [],
@@ -202,6 +222,7 @@ export function WorkspaceSidebar({
           status: threadStatus[thread.id] ?? thread.status ?? "idle",
           active: thread.id === activeThreadId,
           rename: () => setRenamingId(thread.id),
+          setPinned: onSetThreadPinned && ((pinned) => onSetThreadPinned(thread.id, pinned)),
           archive: () => onArchiveThread(thread.id),
           unarchive: onUnarchiveThread && (() => onUnarchiveThread(thread.id)),
           markRead: onMarkThreadRead && ((read) => onMarkThreadRead(thread.id, read)),
@@ -229,7 +250,7 @@ export function WorkspaceSidebar({
     })
   }
 
-  const row = (thread: Thread) => {
+  const row = (thread: Thread, showProject: boolean) => {
     const index = shortcutHints ? shortcutIndex.get(thread.id) : undefined
     const agentId = thread.lastAgentId ?? thread.defaultAgentId
     const instanceId = thread.lastInstanceId ?? agentId
@@ -249,7 +270,7 @@ export function WorkspaceSidebar({
           </span>
         }
         description={
-          grouping !== "project" && view.showProject && projectName ? (
+          showProject && view.showProject && projectName ? (
             <span className="truncate">{projectName}</span>
           ) : undefined
         }
@@ -263,15 +284,23 @@ export function WorkspaceSidebar({
     )
   }
 
-  const sectionLabel = (section: SidebarSection) =>
-    section.kind === "project"
-      ? section.project.name
-      : t(
-          (section.kind === "time"
-            ? `sidebar.bucket.${section.key}`
-            : `sidebar.status.${section.key}`) as MessageKey,
-        )
+  const sectionLabel = (section: SidebarSection) => {
+    switch (section.kind) {
+      case "project":
+        return section.project.name
+      case "pinned":
+        return t("sidebar.pinned")
+      case "time":
+        return t(`sidebar.bucket.${section.key}`)
+      case "status":
+        return t(`sidebar.status.${section.key}`)
+    }
+  }
   const first = sections[0]
+  const pinnedProjects = new Set(
+    first?.kind === "pinned" ? first.threads.map((thread) => thread.projectId) : [],
+  )
+  const firstHeading = grouping === "project" && first?.kind !== "pinned" ? undefined : first
 
   /**
    * 列表最上面的标题行，带「自定义侧栏」和「添加项目」；不按项目分组时它就是第一段的标题。
@@ -377,11 +406,9 @@ export function WorkspaceSidebar({
       </div>
       <SideScroll>
         {header(
-          grouping === "project"
-            ? t("nav.projects")
-            : first
-              ? sectionLabel(first)
-              : t("sidebar.threads"),
+          firstHeading
+            ? sectionLabel(firstHeading)
+            : t(grouping === "project" ? "nav.projects" : "sidebar.threads"),
         )}
         {projects.length === 0 ? (
           <ListRow
@@ -417,10 +444,10 @@ export function WorkspaceSidebar({
                 />
                 {open ? (
                   <div className="proj-sessions">
-                    {section.threads.length === 0 ? (
+                    {section.threads.length === 0 && !pinnedProjects.has(project.id) ? (
                       <EmptyState size="compact" title={t("sidebar.noThreads")} />
                     ) : null}
-                    {section.threads.map(row)}
+                    {section.threads.map((thread) => row(thread, false))}
                   </div>
                 ) : null}
               </div>
@@ -434,7 +461,7 @@ export function WorkspaceSidebar({
                   <span>{label}</span>
                 </div>
               ) : null}
-              {section.threads.map(row)}
+              {section.threads.map((thread) => row(thread, true))}
             </div>
           )
         })}

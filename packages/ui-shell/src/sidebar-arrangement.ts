@@ -31,8 +31,9 @@ export interface SidebarArrangement {
   now: number
 }
 
-/** 侧栏里的一段：一个项目，或者一个时间段、一个状态段。 */
+/** 侧栏里的置顶段与各分组。 */
 export type SidebarSection =
+  | { kind: "pinned"; key: "pinned"; threads: Thread[] }
   | { kind: "project"; key: string; project: Project; open: boolean; threads: Thread[] }
   | { kind: "time"; key: TimeBucket; threads: Thread[] }
   | { kind: "status"; key: StatusBucket; threads: Thread[] }
@@ -208,23 +209,32 @@ export function sidebarSections(
       activityAt(right).localeCompare(activityAt(left)) ||
       left.id.localeCompare(right.id),
   )
+  const pinnedThreads = view.archived ? [] : shown.filter((thread) => thread.pinned)
+  const remaining = pinnedThreads.length > 0 ? shown.filter((thread) => !thread.pinned) : shown
+  const pinned: SidebarSection[] = pinnedThreads.length > 0
+    ? [{ kind: "pinned", key: "pinned", threads: pinnedThreads }]
+    : []
   if (grouping === "time") {
-    return groupInto(shown, TIME_BUCKETS, (thread) =>
+    const groups = groupInto(remaining, TIME_BUCKETS, (thread) =>
       timeBucket(activityAt(thread), arrangement.now),
-    ).map((section) => ({ kind: "time", ...section }))
+    )
+    return [...pinned, ...groups.map((section) => ({ kind: "time" as const, ...section }))]
   }
   if (grouping === "status") {
-    return groupInto(shown, STATUS_BUCKETS, (thread) => statusBucket(category.get(thread.id)!)).map(
-      (section) => ({ kind: "status", ...section }),
+    const groups = groupInto(remaining, STATUS_BUCKETS, (thread) =>
+      statusBucket(category.get(thread.id)!),
     )
+    return [...pinned, ...groups.map((section) => ({ kind: "status" as const, ...section }))]
   }
   const filtering = filtersActive(view)
-  return orderProjects(projects, pool, view).flatMap((project): SidebarSection[] => {
-    const projectThreads = shown.filter((thread) => thread.projectId === project.id)
-    if (filtering && projectThreads.length === 0) return []
+  const matchingProjects = new Set(shown.map((thread) => thread.projectId))
+  const groups = orderProjects(projects, pool, view).flatMap((project): SidebarSection[] => {
+    if (filtering && !matchingProjects.has(project.id)) return []
+    const projectThreads = remaining.filter((thread) => thread.projectId === project.id)
     const open = arrangement.expandedProjects[project.id] ?? true
     return [{ kind: "project", key: project.id, project, open, threads: projectThreads }]
   })
+  return [...pinned, ...groups]
 }
 
 /** 侧栏里从上到下看得见的会话；⌘/Ctrl+数字按这个顺序跳转。 */
@@ -233,7 +243,11 @@ export function visibleThreads(
   threads: readonly Thread[],
   arrangement: SidebarArrangement,
 ): Thread[] {
-  return sidebarSections(projects, threads, arrangement).flatMap((section) =>
+  return visibleThreadsInSections(sidebarSections(projects, threads, arrangement))
+}
+
+export function visibleThreadsInSections(sections: readonly SidebarSection[]): Thread[] {
+  return sections.flatMap((section) =>
     section.kind === "project" && !section.open ? [] : section.threads,
   )
 }

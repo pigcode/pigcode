@@ -234,6 +234,7 @@ it.skipIf(!address || !token)(
       }
 
       await call("project.rename", { projectId: docs.id, name: "已同步文档" })
+      await call("thread.setPinned", { threadId: target.id, pinned: true })
       await call("run.start", { threadId: target.id, text: "验证会话摘要" })
       for (const phone of [first, second]) {
         send(phone, "sidebar", {
@@ -245,7 +246,7 @@ it.skipIf(!address || !token)(
           stage: "sidebar",
           projects: expect.arrayContaining([{ id: docs.id, name: "已同步文档" }]),
           threads: expect.arrayContaining([
-            expect.objectContaining({ id: target.id, status: "completed", unread: true }),
+            expect.objectContaining({ id: target.id, pinned: true, status: "completed", unread: true }),
           ]),
         })
       }

@@ -72,6 +72,35 @@ describe("sidebar arrangement", () => {
     ).toEqual(["t2"])
   })
 
+  it("shows pinned threads once at the top under each grouping and applies the current order and filter", () => {
+    const pool = threads.map((item): Thread => {
+      if (item.id === "old") return { ...item, pinned: true, status: "waiting-approval" }
+      if (item.id === "t1") return { ...item, pinned: true, status: "completed" }
+      if (item.id === "archived" || item.id === "orphan") return { ...item, pinned: true }
+      return item
+    })
+    for (const grouping of ["project", "time", "status"] as const) {
+      const ordered = arrange({ grouping, view: { threadOrder: "updated" } })
+      const sections = sidebarSections(projects, pool, ordered)
+      expect(sections[0]?.kind).toBe("pinned")
+      expect(ids(sections[0]?.threads ?? [])).toEqual(["t1", "old"])
+      expect(ids(sections.slice(1).flatMap((section) => section.threads))).not.toContain("t1")
+      expect(ids(sections.slice(1).flatMap((section) => section.threads))).not.toContain("old")
+    }
+
+    const collapsed = arrange({ expandedProjects: { p1: false }, view: { threadOrder: "status" } })
+    expect(ids(visibleThreads(projects, pool, collapsed))).toEqual(["old", "t1", "t2"])
+    const filtered = arrange({ view: { statusFilter: ["attention"] } })
+    expect(ids(visibleThreads(projects, pool, filtered))).toEqual(["old"])
+    expect(sidebarSections(projects, pool, filtered)).toMatchObject([
+      { kind: "pinned" },
+      { kind: "project", key: "p1", threads: [] },
+    ])
+    const archived = arrange({ view: { archived: true } })
+    expect(sidebarSections(projects, pool, archived).map((section) => section.kind)).toEqual(["project"])
+    expect(ids(visibleThreads(projects, pool, archived))).toEqual(["archived"])
+  })
+
   it("cuts the list into today, yesterday, the last 7 and 30 days and older by local days", () => {
     const sections = sidebarSections(projects, threads, arrange({ grouping: "time" }))
     expect(sections.map((section) => [section.key, ids(section.threads)])).toEqual([

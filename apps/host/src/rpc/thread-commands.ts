@@ -1,10 +1,11 @@
-/** 会话记录的 RPC 命令：列出、改名、归档与取消归档、标为已读；改过的会话交给 changed 推给页面。 */
+/** 会话记录的 RPC 命令；改过的会话由 changed 推给页面。 */
 import type { Context } from "cordis"
 import type { CommandMethod, Thread } from "@pigcode/contracts"
 
 export const THREAD_COMMANDS = new Set<CommandMethod>([
   "thread.list",
   "thread.rename",
+  "thread.setPinned",
   "thread.archive",
   "thread.unarchive",
   "thread.markRead",
@@ -36,6 +37,12 @@ export function dispatchThreadCommand(
         schemaVersion: 1,
         createdAt: new Date().toISOString(),
       })
+      return thread
+    }
+    case "thread.setPinned": {
+      const { threadId, pinned } = parsed as { threadId: string; pinned: boolean }
+      const thread = found(ctx.threads.setPinned(threadId, pinned), threadId)
+      changed(thread.id)
       return thread
     }
     case "thread.archive": {

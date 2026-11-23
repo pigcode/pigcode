@@ -131,6 +131,8 @@ export const threadSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   archivedAt: z.string().datetime().nullable(),
+  /** 置顶由 Host 保存；旧记录缺省时视为未置顶。 */
+  pinned: z.boolean().optional(),
   lastRunId: z.string().nullable(),
   /** 子代理会话所属的主会话；主会话为 null。子代理共用主会话的项目与工作目录，不出现在侧栏。 */
   parentThreadId: z.string().nullable().optional(),

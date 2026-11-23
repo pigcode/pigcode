@@ -1,5 +1,5 @@
 /**
- * 侧栏右键菜单里有什么。会话：重命名、标为已读或未读、在输入框里提到它、归档或取消归档。
+ * 侧栏右键菜单里有什么。会话可重命名、置顶、标读、引用、归档或恢复。
  * 项目照 Cursor 的项目菜单：先打开（查看文件、在文件管理器中打开），再重命名，然后挪动，最后从侧栏移除。
  */
 import type { Thread } from "@pigcode/contracts"
@@ -20,6 +20,7 @@ export function threadMenu(
     status,
     active,
     rename,
+    setPinned,
     archive,
     unarchive,
     markRead,
@@ -30,6 +31,7 @@ export function threadMenu(
     /** 正在看的会话：引用自己没有意义，标未读也马上会变回已读。 */
     active: boolean
     rename: () => void
+    setPinned?: ((pinned: boolean) => void) | undefined
     archive: () => void
     unarchive?: (() => void) | undefined
     markRead?: ((read: boolean) => void) | undefined
@@ -38,6 +40,14 @@ export function threadMenu(
 ): RowAction[] {
   const unread = thread.unread === true
   const menu: RowAction[] = [{ id: "rename", label: t("sidebar.rename"), run: rename }]
+  if (setPinned && thread.archivedAt === null) {
+    const pinned = thread.pinned === true
+    menu.push({
+      id: pinned ? "unpin" : "pin",
+      label: t(pinned ? "sidebar.unpin" : "sidebar.pin"),
+      run: () => setPinned(!pinned),
+    })
+  }
   if (markRead && (unread || (FINISHED.has(status) && !active))) {
     menu.push({
       id: unread ? "mark-read" : "mark-unread",

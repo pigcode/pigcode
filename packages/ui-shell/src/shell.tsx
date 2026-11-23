@@ -23,7 +23,6 @@ import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar } from "./settings-sidebar"
 import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
 import type { ThreadStatus } from "./thread-status"
-import { useThreadShortcuts } from "./thread-shortcuts"
 import { TitleBar } from "./title-bar"
 import { titleBarMenus } from "./title-bar-menus"
 import { WindowControls } from "./window-controls"
@@ -34,26 +33,13 @@ import {
   useModifierHints,
   useNarrowWindow,
 } from "./window-state"
-import { WorkspaceSidebar, useHeldThread, type WorkspaceSidebarProps } from "./workspace-sidebar"
+import { WorkspaceSidebar, useHeldThread, type SidebarActionProps } from "./workspace-sidebar"
 
 /** 顶层视图：聊天、设置、插件与定时任务。 */
 export type ShellView = "chat" | "settings" | "plugins" | "schedules"
 
 /** 没传 threadStatus 时用的同一个空表，快捷键的监听不会每次渲染都重新挂。 */
 const NO_STATUS: Readonly<Record<string, ThreadStatus>> = {}
-
-/** 侧栏右键菜单与「全部标为已读」的回调，原样交给工作区侧栏；说明见 WorkspaceSidebarProps。 */
-type SidebarActionProps = Pick<
-  WorkspaceSidebarProps,
-  | "onRenameThread"
-  | "onArchiveThread"
-  | "onUnarchiveThread"
-  | "onMarkThreadRead"
-  | "onMarkAllRead"
-  | "onReferenceThread"
-  | "onRenameProject"
-  | "onRemoveProject"
->
 
 /** 外壳所需的数据与事件；项目/线程数据由 store 传入。 */
 export interface ShellProps extends SidebarActionProps {
@@ -153,6 +139,7 @@ export function Shell({
   onOpenThread,
   onRenameThread,
   onArchiveThread,
+  onSetThreadPinned,
   onUnarchiveThread,
   onMarkThreadRead,
   onMarkAllRead,
@@ -281,22 +268,13 @@ export function Shell({
     return () => window.removeEventListener("mouseup", onMouseUp)
   }, [onBack, onForward])
 
-  const openFromShortcut = useCallback(
+  const openWorkspaceThread = useCallback(
     (threadId: string) => {
       setDrawerOpen(false)
       onOpenThread(threadId)
     },
     [onOpenThread],
   )
-  useThreadShortcuts({
-    enabled: !inSettings,
-    projects,
-    threads,
-    status: statusOf,
-    expandedProjects: expanded,
-    heldThreadId,
-    onOpen: openFromShortcut,
-  })
 
   /** 宽窗口里收起或展开侧栏；窄窗口里开关抽屉。 */
   function toggleSidebar(): void {
@@ -410,10 +388,7 @@ export function Shell({
             expandedProjects={expanded}
             onAddProject={() => setDialogOpen(true)}
             onToggleProject={toggleProject}
-            onOpenThread={(threadId) => {
-              setDrawerOpen(false)
-              onOpenThread(threadId)
-            }}
+            onOpenThread={openWorkspaceThread}
             onNewThread={(projectId) => {
               setDrawerOpen(false)
               onNewThread(projectId)
@@ -431,6 +406,7 @@ export function Shell({
             activeNav={view === "schedules" || view === "plugins" ? view : undefined}
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}
+            onSetThreadPinned={onSetThreadPinned}
             onUnarchiveThread={onUnarchiveThread}
             onMarkThreadRead={onMarkThreadRead}
             onMarkAllRead={onMarkAllRead}
@@ -439,6 +415,7 @@ export function Shell({
             onRemoveProject={onRemoveProject}
             heldThreadId={heldThreadId}
             shortcutHints={shortcutHints}
+            enableThreadShortcuts
           >
             <SidebarPanels />
           </WorkspaceSidebar>

@@ -47,12 +47,13 @@ function closeThread(connection: Connection, store: AppStore, threadId: string):
 }
 
 /**
- * 首次连上 Host 后读取项目与会话。读取期间新加的项目、新建的会话已经写进 store，
- * 这里合并而不是覆盖，否则它们会从侧栏消失。
+ * 连接或重连时读取项目与会话。优先保留读取期间收到的会话更新和新增记录。
  */
 export async function loadWorkspace(connection: Connection, store: AppStore): Promise<void> {
   const projects = (await connection.call("project.list", {})) as Project[]
+  const beforeThreads = new Map(store.getSnapshot().threads.map((item) => [item.id, item]))
   const threads = (await connection.call("thread.list", {})) as Thread[]
+  const listedThreads = new Map(threads.map((item) => [item.id, item]))
   const current = store.getSnapshot()
   const addedProjects = new Set(current.projects.map((item) => item.id))
   const addedThreads = new Set(current.threads.map((item) => item.id))
@@ -63,7 +64,12 @@ export async function loadWorkspace(connection: Connection, store: AppStore): Pr
           ...current.projects,
           ...projects.filter((item) => !addedProjects.has(item.id)),
         ]),
-    threads: [...current.threads, ...threads.filter((item) => !addedThreads.has(item.id))],
+    threads: [
+      ...current.threads.map((item) => (
+        beforeThreads.get(item.id) === item ? listedThreads.get(item.id) ?? item : item
+      )),
+      ...threads.filter((item) => !addedThreads.has(item.id)),
+    ],
   })
 }
 
@@ -166,6 +172,15 @@ export async function unarchiveThread(
   replaceThread(store, (await connection.call("thread.unarchive", { threadId })) as Thread)
 }
 
+async function setThreadPinned(
+  connection: Connection,
+  store: AppStore,
+  threadId: string,
+  pinned: boolean,
+): Promise<void> {
+  replaceThread(store, (await connection.call("thread.setPinned", { threadId, pinned })) as Thread)
+}
+
 /** 标为已读或未读。标已读时先改 store，正在看的会话跑完时侧栏不会闪一下未读。 */
 export async function setThreadRead(
   connection: Connection,
@@ -205,6 +220,8 @@ export function sidebarActions(
     onArchiveThread: (threadId: string) =>
       run(archiveThread(connection, store, threadId).then(openNext)),
     onUnarchiveThread: (threadId: string) => run(unarchiveThread(connection, store, threadId)),
+    onSetThreadPinned: (threadId: string, pinned: boolean) =>
+      run(setThreadPinned(connection, store, threadId, pinned)),
     onMarkThreadRead: (threadId: string, read: boolean) =>
       run(setThreadRead(connection, store, threadId, read)),
     onMarkAllRead: () => run(markAllThreadsRead(connection, store)),

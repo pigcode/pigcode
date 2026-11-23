@@ -83,3 +83,53 @@ test("background results show as unread, sort into the status groups, and archiv
     await app.close()
   }
 })
+
+test("opens pinned threads first with the sidebar shortcut and clears their pin when archived", async () => {
+  const { app, page } = await openThread("sidebar-pinning")
+  const title = "pin smoke target"
+  const pinned = page.getByRole("group", { name: "置顶", exact: true })
+  try {
+    await send(page, title)
+    await page.locator(".proj-block").filter({ hasText: "pigcode-e2e-sidebar-pinning" })
+      .locator(".proj-add").click()
+    await send(page, "recent smoke thread")
+
+    await pickNextMenuItem(app, "置顶")
+    await row(page, title).click({ button: "right" })
+    await expect(pinned).toContainText(title)
+    await expect(row(page, title)).toHaveCount(1)
+    await page.keyboard.press("ControlOrMeta+1")
+    await expect(page.locator(".msg-user").filter({ hasText: title })).toBeVisible()
+
+    await customize(page, /^分组/, "状态")
+    await expect(page.locator(".side-scroll .side-label > span").first()).toHaveText("置顶")
+    await expect(row(page, title)).toHaveCount(1)
+    await page.keyboard.press("ControlOrMeta+k")
+    await page.getByPlaceholder("搜索或输入命令").fill(title)
+    await expect(page.getByRole("option", { name: new RegExp(title) })).toHaveCount(1)
+    await page.keyboard.press("Escape")
+
+    await pickNextMenuItem(app, "取消置顶")
+    await row(page, title).click({ button: "right" })
+    await expect(pinned).toHaveCount(0)
+    await expect(row(page, title)).toBeVisible()
+    await pickNextMenuItem(app, "置顶")
+    await row(page, title).click({ button: "right" })
+    await expect(pinned).toContainText(title)
+    await pickNextMenuItem(app, "归档")
+    await row(page, title).click({ button: "right" })
+    await expect(pinned).toHaveCount(0)
+    await customize(page, null, "已归档")
+    await expect(row(page, title)).toBeVisible()
+    await expect(pinned).toHaveCount(0)
+    await pickNextMenuItem(app, "取消归档")
+    await row(page, title).click({ button: "right" })
+    await expect(row(page, title)).toHaveCount(0)
+    await customize(page, null, "已归档")
+    await customize(page, /^分组/, "项目")
+    await expect(row(page, title)).toBeVisible()
+    await expect(pinned).toHaveCount(0)
+  } finally {
+    await app.close()
+  }
+})

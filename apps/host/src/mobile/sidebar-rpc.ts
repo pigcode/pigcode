@@ -84,7 +84,7 @@ function threadSummary(thread: Thread) {
     title: displayLabel(thread.title),
     updatedAt: thread.updatedAt,
     archived: thread.archivedAt !== null,
-    pinned: false,
+    pinned: thread.pinned === true,
     status: thread.status ?? "idle",
     unread: thread.unread ?? false,
   }

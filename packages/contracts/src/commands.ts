@@ -128,6 +128,7 @@ export const commandSchemas = {
     threadId: z.string().min(1),
     title: z.string().min(1).max(120),
   }),
+  "thread.setPinned": z.object({ threadId: z.string().min(1), pinned: z.boolean() }),
   "thread.archive": z.object({ threadId: z.string().min(1) }),
   /** 回到侧栏；和它一起归档的子代理一起恢复。 */
   "thread.unarchive": z.object({ threadId: z.string().min(1) }),

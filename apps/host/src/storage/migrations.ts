@@ -319,6 +319,7 @@ const MIGRATIONS: Migration[] = [
     action_authorization_id TEXT
   );
   `,
+  `ALTER TABLE threads ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0 CHECK (pinned IN (0, 1));`,
 ]
 
 /**

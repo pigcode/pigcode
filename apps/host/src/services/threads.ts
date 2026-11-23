@@ -68,6 +68,8 @@ export interface ThreadsService {
   children(threadId: string): Thread[]
   /** 重命名线程；返回更新后的记录。 */
   rename(threadId: string, title: string): Thread | undefined
+  /** 置顶或取消置顶未归档的主会话。 */
+  setPinned(threadId: string, pinned: boolean): Thread | undefined
   /** 归档后线程不再出现在侧栏与命令面板里，事件与记录保留；子代理随主会话一起归档。 */
   archive(threadId: string): Thread | undefined
   /** 取消归档；和主会话同一时刻归档的子代理一起回来。 */
@@ -146,6 +148,7 @@ export const apply: ThreadsPlugin = (ctx) => {
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
+        pinned: false,
         lastRunId: null,
         parentThreadId: parentThreadId ?? null,
         status: "idle",
@@ -206,11 +209,20 @@ export const apply: ThreadsPlugin = (ctx) => {
         .run(title, updatedAt, threadId)
       return service.get(threadId)
     },
+    setPinned(threadId, pinned) {
+      const { changes } = ctx.storage.db
+        .prepare(
+          `UPDATE threads SET pinned = ?
+           WHERE id = ? AND archived_at IS NULL AND parent_thread_id IS NULL`,
+        )
+        .run(Number(pinned), threadId)
+      return changes ? service.get(threadId) : undefined
+    },
     archive(threadId) {
       const now = new Date().toISOString()
       ctx.storage.db
         .prepare(
-          `UPDATE threads SET archived_at = ?
+          `UPDATE threads SET archived_at = ?, pinned = 0
            WHERE (id = ? OR parent_thread_id = ?) AND archived_at IS NULL`,
         )
         .run(now, threadId, threadId)
@@ -302,6 +314,7 @@ function mapThread(row: unknown): Thread {
     createdAt: value.created_at!,
     updatedAt: value.updated_at!,
     archivedAt: value.archived_at ?? null,
+    pinned: Number(value.pinned) === 1,
     lastRunId: value.last_run_id ?? null,
     parentThreadId: value.parent_thread_id ?? null,
     status: runStatus ? STATUS_OF_RUN[runStatus] : "idle",
