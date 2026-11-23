@@ -240,7 +240,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     await dialog.getByLabel("GitHub 仓库、npm 包或文件夹").fill(sourcePlugin(workspace))
     await dialog.getByRole("button", { name: "安装", exact: true }).click()
     if (process.platform === "darwin") {
-      await expect(dialog.getByRole("alert")).toContainText("不带编译器")
+      await expect(dialog.getByRole("alert")).toContainText("请装编译好的版本")
       await page.keyboard.press("Escape")
     }
     // 无论哪种结果，对话框都要给出确定结论，不能一直转圈。

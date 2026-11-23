@@ -215,6 +215,7 @@ class RelayStatusWatch {
 
   final _RelayInbox _inbox;
   final RelayComputerStatus initial;
+  bool _closed = false;
 
   static Future<RelayStatusWatch> open(
     ComputerProfile computer, {
@@ -247,13 +248,20 @@ class RelayStatusWatch {
       );
 
   Stream<RelayComputerStatus> get updates async* {
-    while (true) {
-      final message = await _inbox.next(null);
-      yield _decode(message);
+    try {
+      while (!_closed) {
+        final message = await _inbox.next(null);
+        yield _decode(message);
+      }
+    } on ConnectionFailure catch (failure) {
+      if (!_closed || failure.code != 'closed') rethrow;
     }
   }
 
-  Future<void> close() => _inbox.close();
+  Future<void> close() {
+    _closed = true;
+    return _inbox.close();
+  }
 }
 
 // Keep the socket listener active while the app has no pending RPC. Pausing it

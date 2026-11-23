@@ -15,6 +15,13 @@ import { MemoryTransport } from "./memory-transport"
 import { RpcServer } from "./server"
 import { ThreadFeed } from "./thread-feed"
 
+export const mobileTestCipher = {
+  seal: async (value: string) =>
+    Buffer.from(JSON.stringify([randomUUID(), value])).toString("base64"),
+  open: async (value: string) =>
+    (JSON.parse(Buffer.from(value, "base64").toString()) as [string, string])[1],
+}
+
 export async function startMobileHost(options?: {
   settingsPath?: string
   storagePath?: string
@@ -31,12 +38,7 @@ export async function startMobileHost(options?: {
   await ctx.plugin(sessions)
   await ctx.plugin(agents, options?.agentConfig ?? {})
   options?.prepare?.(ctx)
-  const cipher = {
-    seal: async (value: string) =>
-      Buffer.from(JSON.stringify([randomUUID(), value])).toString("base64"),
-    open: async (value: string) =>
-      (JSON.parse(Buffer.from(value, "base64").toString()) as [string, string])[1],
-  }
+  const cipher = mobileTestCipher
   const relay = new RelaySettings(ctx.settings, cipher)
   const feed = new ThreadFeed(ctx)
   const mobile = new MobileConnections(ctx, relay, cipher, feed, options?.now)
