@@ -8,6 +8,8 @@ import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
+import 'mobile_sheet.dart';
+
 typedef TimelineContentLoader =
     Future<MobileTimelineContentResult> Function({
       int? seq,
@@ -20,8 +22,14 @@ typedef TimelineContentLoader =
 final _highlight = Highlight()..registerLanguages(builtinAllLanguages);
 
 Widget _codeBlock(BuildContext context, String name, String code, bool closed) {
-  final dark = Theme.of(context).brightness == Brightness.dark;
-  const base = TextStyle(fontFamily: 'monospace', fontSize: 12, height: 1.58);
+  final theme = Theme.of(context);
+  final dark = theme.brightness == Brightness.dark;
+  final base = TextStyle(
+    fontFamily: 'monospace',
+    fontSize: 12,
+    height: 1.58,
+    color: theme.colorScheme.onSurface,
+  );
   final language = name.trim().toLowerCase();
   TextSpan? span;
   if (language.isNotEmpty && _highlight.getLanguage(language) != null) {
@@ -37,7 +45,7 @@ Widget _codeBlock(BuildContext context, String name, String code, bool closed) {
     margin: const EdgeInsets.symmetric(vertical: 6),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: theme.colorScheme.surfaceContainerHighest,
       borderRadius: BorderRadius.circular(10),
     ),
     child: SingleChildScrollView(
@@ -47,13 +55,23 @@ Widget _codeBlock(BuildContext context, String name, String code, bool closed) {
   );
 }
 
-Widget _markdown(BuildContext context, String value) => GptMarkdown(
-  value,
-  style: Theme.of(context).textTheme.bodyMedium,
-  codeBuilder: _codeBlock,
-  imageBuilder: (_, _, _, _) => const Text('图片'),
-  onLinkTap: (_, _) {},
-);
+Widget _markdown(BuildContext context, String value) {
+  final theme = Theme.of(context);
+  final colors = theme.colorScheme;
+  return GptMarkdown(
+    value,
+    style: theme.textTheme.bodyMedium,
+    inlineCodeStyle: InlineCodeStyle(
+      color: colors.onSurface,
+      backgroundColor: colors.surfaceContainerHighest,
+      borderColor: colors.outlineVariant,
+      borderWidth: .5,
+    ),
+    codeBuilder: _codeBlock,
+    imageBuilder: (_, _, _, _) => const Text('图片'),
+    onLinkTap: (_, _) {},
+  );
+}
 
 class TimelineAnswer extends StatelessWidget {
   const TimelineAnswer({
@@ -111,25 +129,16 @@ void showTimelineDetails(
   TimelineContentLoader? loader,
 ) {
   unawaited(
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) => FractionallySizedBox(
-        heightFactor: .88,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-          children: [
-            Text(title, style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            for (final section in sections)
-              _DetailSection(section: section, loader: loader),
-          ],
-        ),
+    showMobileSheet<void>(
+      context,
+      title: title,
+      builder: (_) => ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+        children: [
+          for (final section in sections)
+            _DetailSection(section: section, loader: loader),
+        ],
       ),
     ),
   );

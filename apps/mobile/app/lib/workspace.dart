@@ -5,12 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'app_theme.dart';
 import 'new_thread_draft.dart';
 import 'offline_cache.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
 import 'timeline_pane.dart';
+import 'workspace_icon.dart';
 
 typedef _WorkspaceData = ({
   SidebarSnapshot? snapshot,
@@ -198,16 +200,18 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           ? connection!.sidebarCommands
           : null,
       draft: draftLink != null || localDrafts
-          ? (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
-              connection: draftLink,
-              computerKey: computer?.computerKey,
-              deviceId: widget.deviceId,
-              projects: _lastSidebar?.projects ?? const [],
-              online: draftLink != null,
-              projectId: projectId,
-              fallbackProjectId: fallbackProjectId,
-              onAccepted: onAccepted,
-            )
+          ? (projectId, fallbackProjectId, onAccepted, onProjectNameChanged) =>
+                NewThreadDraft(
+                  connection: draftLink,
+                  computerKey: computer?.computerKey,
+                  deviceId: widget.deviceId,
+                  projects: _lastSidebar?.projects ?? const [],
+                  online: draftLink != null,
+                  projectId: projectId,
+                  fallbackProjectId: fallbackProjectId,
+                  onAccepted: onAccepted,
+                  onProjectNameChanged: onProjectNameChanged,
+                )
           : null,
       timeline: (thread, online, onSynced, presentation) => TimelinePane(
         key: ValueKey(thread.id),
@@ -279,6 +283,7 @@ class WorkspaceView extends StatefulWidget {
     String? projectId,
     String? fallbackProjectId,
     ValueChanged<MobileDraftReceipt> onAccepted,
+    ValueChanged<String?> onProjectNameChanged,
   )?
   draft;
   final VoidCallback onComputers;
@@ -294,6 +299,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _threadId;
   MobileThreadSummary? _acceptedThread;
   String? _draftProject;
+  String? _draftProjectName;
   bool _draftOpen = false;
   bool _open = false;
   String? _reminderThread;
@@ -391,6 +397,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _reminderUnavailable = false;
       _draftOpen = true;
       _draftProject = projectId;
+      _draftProjectName = null;
       _syncedThread = null;
       _runChanges = null;
     });
@@ -477,9 +484,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _ when !widget.online => colors.muted,
       _ => null,
     };
-    final secondary = _draftOpen && widget.online
-        ? widget.computerName
-        : statusColor != null
+    final secondary = statusColor != null
         ? threadStatusText(status!)
         : subtitle;
     final changes = widget.online ? _runChanges : null;
@@ -495,7 +500,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             Material(
               color: colors.surface,
               shadowColor: colors.scrim,
-              elevation: 1,
+              surfaceTintColor: Colors.transparent,
+              elevation: .5,
               shape: CircleBorder(
                 side: BorderSide(color: colors.divider, width: .5),
               ),
@@ -510,7 +516,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         focusNode: _menuButton,
                         onPressed: () => _menu(true),
                         tooltip: '打开菜单',
-                        icon: const Icon(Icons.menu, size: 20),
+                        icon: const WorkspaceIcon(WorkspaceGlyph.menu),
                       ),
                     ),
                     if (attention)
@@ -579,7 +585,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               Material(
                 color: colors.surface,
                 shadowColor: colors.scrim,
-                elevation: 1,
+                surfaceTintColor: Colors.transparent,
+                elevation: .5,
                 shape: StadiumBorder(
                   side: BorderSide(color: colors.divider, width: .5),
                 ),
@@ -598,7 +605,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                           icon: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.difference_outlined, size: 20),
+                              const WorkspaceIcon(WorkspaceGlyph.changes),
                               if (fileCount > 0) ...[
                                 const SizedBox(width: 3),
                                 Text(
@@ -618,10 +625,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                           onPressed: _draftOpen
                               ? () => setState(() => _draftOpen = false)
                               : () => _openDraft(null),
-                          icon: Icon(
-                            _draftOpen ? Icons.close : Icons.edit_square,
-                            size: 20,
-                          ),
+                          icon: _draftOpen
+                              ? const Icon(Icons.close, size: 20)
+                              : const WorkspaceIcon(WorkspaceGlyph.compose),
                         ),
                       ),
                   ],
@@ -646,12 +652,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     const curve = Cubic(.2, .7, .2, 1);
     final thread = _thread;
     _updateVisibleThread();
+    final projectId = _draftOpen
+        ? _draftProject ?? thread?.projectId
+        : thread?.projectId;
     final project = widget.snapshot?.projects
-        .where((item) => item.id == thread?.projectId)
+        .where((item) => item.id == projectId)
         .firstOrNull;
     final subtitle = !widget.online
         ? widget.connectionLabel ?? '电脑连接已断开'
-        : project?.name ?? widget.computerName;
+        : (_draftOpen ? _draftProjectName : null) ??
+              project?.name ??
+              widget.computerName;
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
         widget.draft != null &&
@@ -669,8 +680,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         }
       },
       child: Scaffold(
-        backgroundColor: _open ? colors.window : colors.background,
-        body: SafeArea(
+        backgroundColor: colors.window,
+        body: AnnotatedRegion(
+          value: pigcodeSystemOverlay(theme.brightness),
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth * .84;
@@ -689,27 +701,29 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             ignoring: !_open,
                             child: TickerMode(
                               enabled: _open,
-                              child: SidebarMenu(
-                                snapshot: widget.snapshot,
-                                selectedId: _draftOpen ? null : thread?.id,
-                                computerName: widget.computerName,
-                                online: widget.online,
-                                commands: widget.sidebarCommands,
-                                focusNode: _menuFocus,
-                                onSelect: (id) {
-                                  _reminderThread = null;
-                                  _reminderUnavailable = false;
-                                  _draftOpen = false;
-                                  _visit++;
-                                  _selectThread(id);
-                                  _menu(false);
-                                },
-                                onNewThread: canOpenDraft ? _openDraft : null,
-                                onSettings: widget.onSettings,
-                                onComputers: () {
-                                  _menu(false);
-                                  widget.onComputers();
-                                },
+                              child: SafeArea(
+                                child: SidebarMenu(
+                                  snapshot: widget.snapshot,
+                                  selectedId: _draftOpen ? null : thread?.id,
+                                  computerName: widget.computerName,
+                                  online: widget.online,
+                                  commands: widget.sidebarCommands,
+                                  focusNode: _menuFocus,
+                                  onSelect: (id) {
+                                    _reminderThread = null;
+                                    _reminderUnavailable = false;
+                                    _draftOpen = false;
+                                    _visit++;
+                                    _selectThread(id);
+                                    _menu(false);
+                                  },
+                                  onNewThread: canOpenDraft ? _openDraft : null,
+                                  onSettings: widget.onSettings,
+                                  onComputers: () {
+                                    _menu(false);
+                                    widget.onComputers();
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -734,9 +748,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         boxShadow: _open
                             ? [
                                 BoxShadow(
-                                  color: colors.scrim,
-                                  blurRadius: 12,
-                                  offset: const Offset(-3, 0),
+                                  color: colors.scrim.withValues(
+                                    alpha: theme.brightness == Brightness.dark
+                                        ? .30
+                                        : .12,
+                                  ),
+                                  blurRadius: 40,
+                                  offset: const Offset(-10, 0),
                                 ),
                               ]
                             : null,
@@ -748,30 +766,43 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             excluding: _open,
                             child: ExcludeFocus(
                               excluding: _open,
-                              child: Column(
-                                children: [
-                                  _header(
-                                    context,
-                                    thread,
-                                    subtitle,
-                                    canOpenDraft: canOpenDraft,
-                                  ),
-                                  Expanded(
-                                    child: _draftOpen && widget.draft != null
-                                        ? KeyedSubtree(
-                                            key: ValueKey((
-                                              'new-thread',
-                                              _draftProject,
-                                            )),
-                                            child: widget.draft!(
-                                              _draftProject,
-                                              thread?.projectId,
-                                              _acceptDraft,
-                                            ),
-                                          )
-                                        : _summary(thread),
-                                  ),
-                                ],
+                              child: SafeArea(
+                                child: Column(
+                                  children: [
+                                    _header(
+                                      context,
+                                      thread,
+                                      subtitle,
+                                      canOpenDraft: canOpenDraft,
+                                    ),
+                                    Expanded(
+                                      child: _draftOpen && widget.draft != null
+                                          ? KeyedSubtree(
+                                              key: ValueKey((
+                                                'new-thread',
+                                                _draftProject,
+                                              )),
+                                              child: widget.draft!(
+                                                _draftProject,
+                                                thread?.projectId,
+                                                _acceptDraft,
+                                                (name) {
+                                                  if (mounted &&
+                                                      _draftOpen &&
+                                                      _draftProjectName !=
+                                                          name) {
+                                                    setState(
+                                                      () => _draftProjectName =
+                                                          name,
+                                                    );
+                                                  }
+                                                },
+                                              ),
+                                            )
+                                          : _summary(thread),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),

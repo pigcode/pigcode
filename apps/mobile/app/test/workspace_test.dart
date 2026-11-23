@@ -177,6 +177,27 @@ Finder menuText(String label) =>
     find.descendant(of: find.byType(SidebarMenu), matching: find.text(label));
 
 void main() {
+  testWidgets(
+    'pushes the full page while keeping the controls in the safe area',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.padding = const FakeViewPadding(top: 47, bottom: 34);
+      tester.view.viewPadding = tester.view.padding;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(workspace(online: true));
+      final menu = find.byTooltip('打开菜单');
+      expect(tester.getTopLeft(menu).dy, greaterThanOrEqualTo(47));
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      final page = tester.getRect(find.byType(AnimatedPositioned).first);
+      expect(page.left, closeTo(390 * .84, .01));
+      expect(page.top, 0);
+      expect(page.bottom, 844);
+    },
+  );
+
   testWidgets('does not open a delayed diff over the sidebar', (tester) async {
     FlutterSecureStorage.setMockInitialValues({});
     final changes = Completer<MobileRunChangesPage>();

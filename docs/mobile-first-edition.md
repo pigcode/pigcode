@@ -50,7 +50,7 @@ PIGCODE_PACKAGED_APP=/路径/到/Pigcode.app/Contents/MacOS/Pigcode \
 
 ## 手机截图回归
 
-侧栏、时间线、审批、提问、离线历史、离线侧栏和全屏 diff 各有 iOS 与 Android 的浅色、深色基线，共 28 张。测试使用实际 Flutter 界面组件和固定会话数据，视口为 390×844 逻辑像素，系统边距按测试平台设置。脚本下载并校验固定的 Noto Sans SC，等宽文字使用锁定的 `gpt_markdown` 所带的 JetBrains Mono，图标使用固定 Flutter SDK 的 Material Icons。 [验收方案 #100](https://github.com/pigcode/monorepo/issues/100#issuecomment-7075972281) · [DSH Go 截图设置](https://github.com/ccch1mneyyy/dsh-Go/blob/36f232df1deba9be9730f068b8db80f2a5cbbda7/app/test/shell/golden_harness.dart)
+侧栏、时间线、新会话、分组筛选弹层、审批、提问、离线历史、离线侧栏和全屏 diff 各有 iOS 与 Android 的浅色、深色基线，共 36 张。测试使用实际 Flutter 界面组件和固定会话数据，视口为 390×844 逻辑像素，系统边距按测试平台设置。截图保留软阴影。脚本下载并校验固定的 Noto Sans SC，等宽文字使用锁定的 `gpt_markdown` 所带的 JetBrains Mono。 [验收方案 #100](https://github.com/pigcode/monorepo/issues/100#issuecomment-7075972281) · [DSH Go 截图设置](https://github.com/ccch1mneyyy/dsh-Go/blob/36f232df1deba9be9730f068b8db80f2a5cbbda7/app/test/shell/golden_harness.dart)
 
 在使用固定 Flutter 版本的 macOS 15 ARM64 环境中，从前端仓库根目录运行。
 
@@ -60,7 +60,7 @@ flutter pub get --enforce-lockfile
 ./scripts/test-visual.sh
 ```
 
-Mobile CI 在同一类 runner 上逐像素比对。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
+Mobile CI 在同一类 runner 上逐像素比对。为保留软阴影，允许最多 8 个像素各有一个 RGB 色阶的舍入差，图像大小和透明度逐像素匹配。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
 
 ## 长会话性能回放
 

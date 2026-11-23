@@ -158,14 +158,16 @@ Widget _page(_Connection phone) => ProviderScope(
         syncedAt: DateTime.utc(2026, 11, 23),
       ),
       timeline: (thread, _, _, _) => Center(child: Text('已打开 ${thread.id}')),
-      draft: (projectId, fallbackProjectId, onAccepted) => NewThreadDraft(
-        connection: phone,
-        projects: _projects,
-        projectId: projectId,
-        fallbackProjectId: fallbackProjectId,
-        online: true,
-        onAccepted: onAccepted,
-      ),
+      draft: (projectId, fallbackProjectId, onAccepted, onProjectNameChanged) =>
+          NewThreadDraft(
+            connection: phone,
+            projects: _projects,
+            projectId: projectId,
+            fallbackProjectId: fallbackProjectId,
+            online: true,
+            onAccepted: onAccepted,
+            onProjectNameChanged: onProjectNameChanged,
+          ),
     ),
   ),
 );

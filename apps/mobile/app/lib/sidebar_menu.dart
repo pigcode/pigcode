@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'mobile_sheet.dart';
 import 'offline_sync_label.dart';
 import 'sidebar_options.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
+import 'workspace_icon.dart';
 
 enum _ThreadAction { pin, read, archive }
 
@@ -95,52 +97,41 @@ class _SidebarMenuState extends State<SidebarMenu> {
   }
 
   Future<void> _showActions(MobileThreadSummary thread) async {
-    final action = await showModalBottomSheet<_ThreadAction>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (sheet) => SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  thread.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (!thread.archived)
-                ListTile(
-                  leading: Icon(
-                    thread.pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                  ),
-                  title: Text(thread.pinned ? '取消置顶' : '置顶'),
-                  onTap: () => Navigator.pop(sheet, _ThreadAction.pin),
-                ),
-              if (thread.readTarget != null)
-                ListTile(
-                  leading: Icon(
-                    thread.unread
-                        ? Icons.mark_email_read_outlined
-                        : Icons.mail_outline,
-                  ),
-                  title: Text(thread.unread ? '标为已读' : '标为未读'),
-                  onTap: () => Navigator.pop(sheet, _ThreadAction.read),
-                ),
+    final action = await showMobileSheet<_ThreadAction>(
+      context,
+      title: thread.title,
+      builder: (sheet) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (!thread.archived)
               ListTile(
                 leading: Icon(
-                  thread.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
+                  thread.pinned ? Icons.push_pin_outlined : Icons.push_pin,
                 ),
-                title: Text(thread.archived ? '取消归档' : '归档'),
-                onTap: () => Navigator.pop(sheet, _ThreadAction.archive),
+                title: Text(thread.pinned ? '取消置顶' : '置顶'),
+                onTap: () => Navigator.pop(sheet, _ThreadAction.pin),
               ),
-            ],
-          ),
+            if (thread.readTarget != null)
+              ListTile(
+                leading: Icon(
+                  thread.unread
+                      ? Icons.mark_email_read_outlined
+                      : Icons.mail_outline,
+                ),
+                title: Text(thread.unread ? '标为已读' : '标为未读'),
+                onTap: () => Navigator.pop(sheet, _ThreadAction.read),
+              ),
+            ListTile(
+              leading: Icon(
+                thread.archived
+                    ? Icons.unarchive_outlined
+                    : Icons.archive_outlined,
+              ),
+              title: Text(thread.archived ? '取消归档' : '归档'),
+              onTap: () => Navigator.pop(sheet, _ThreadAction.archive),
+            ),
+          ],
         ),
       ),
     );
@@ -400,7 +391,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                 ),
               ),
               onPressed: () => create(null),
-              icon: const Icon(Icons.edit_square, size: 20),
+              icon: const WorkspaceIcon(WorkspaceGlyph.compose),
               label: const Text('新会话'),
             ),
           ),

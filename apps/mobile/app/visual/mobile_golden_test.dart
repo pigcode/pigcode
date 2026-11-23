@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show ImageByteFormat;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -18,10 +19,73 @@ const _platforms = TargetPlatformVariant({
   TargetPlatform.android,
 });
 
+class _VisualTestBinding extends AutomatedTestWidgetsFlutterBinding {
+  // Match the soft shadows rendered on devices rather than painting solid offsets.
+  @override
+  bool get disableShadows => false;
+}
+
+class _VisualGoldenComparator extends LocalFileComparator {
+  _VisualGoldenComparator(super.testFile);
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    try {
+      if (result.passed || await _onlyRoundingNoise(result)) return true;
+      throw FlutterError(await generateFailureOutput(result, golden, basedir));
+    } finally {
+      result.dispose();
+    }
+  }
+
+  Future<bool> _onlyRoundingNoise(ComparisonResult result) async {
+    final expected = result.diffs?['masterImage'];
+    final actual = result.diffs?['testImage'];
+    const maxPixels = 8;
+    if (expected == null ||
+        actual == null ||
+        expected.width != actual.width ||
+        expected.height != actual.height ||
+        (result.diffPercent * expected.width * expected.height).round() >
+            maxPixels) {
+      return false;
+    }
+    final before = await expected.toByteData(format: ImageByteFormat.rawRgba);
+    final after = await actual.toByteData(format: ImageByteFormat.rawRgba);
+    if (before == null || after == null) return false;
+    var pixels = 0;
+    for (var offset = 0; offset < before.lengthInBytes; offset += 4) {
+      if (before.getUint8(offset + 3) != after.getUint8(offset + 3)) {
+        return false;
+      }
+      var changed = false;
+      for (var channel = 0; channel < 3; channel++) {
+        final delta =
+            (before.getUint8(offset + channel) -
+                    after.getUint8(offset + channel))
+                .abs();
+        if (delta > 1) return false;
+        changed = changed || delta > 0;
+      }
+      if (changed && ++pixels > maxPixels) return false;
+    }
+    return true;
+  }
+}
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  _VisualTestBinding();
 
   setUpAll(() async {
+    if (goldenFileComparator case final LocalFileComparator local) {
+      goldenFileComparator = _VisualGoldenComparator(
+        local.basedir.resolve('mobile_golden_test.dart'),
+      );
+    }
     final fontPath = Platform.environment['PIGCODE_MOBILE_GOLDEN_FONT'];
     if (fontPath == null) {
       throw StateError('请通过 apps/mobile/scripts/test-visual.sh 运行截图测试。');
@@ -63,6 +127,35 @@ void main() {
       expect(find.byKey(const ValueKey('run-composer-input')), findsOneWidget);
       expect(find.text('核对会话状态'), findsOneWidget);
       await _matchScreen('timeline', brightness);
+    }, variant: _platforms);
+
+    testWidgets('新会话 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture());
+      await tester.tap(find.byTooltip('新会话'));
+      await tester.pumpAndSettle();
+      expect(find.text('做点什么？'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byTooltip('草稿权限')).dy,
+        tester.getTopLeft(find.byTooltip('草稿项目')).dy,
+      );
+      final input = find.byKey(const ValueKey('first-message-input'));
+      final model = find.byTooltip('草稿模型');
+      expect(
+        tester.getCenter(model).dy,
+        greaterThan(tester.getCenter(input).dy),
+      );
+      await _matchScreen('new-thread', brightness);
+    }, variant: _platforms);
+
+    testWidgets('分组筛选弹层 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture());
+      await tester.tap(find.byTooltip('打开菜单'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('分组和筛选'));
+      await tester.pumpAndSettle();
+      expect(find.text('分组和筛选'), findsOneWidget);
+      expect(find.byTooltip('关闭弹层'), findsOneWidget);
+      await _matchScreen('sidebar-options', brightness);
     }, variant: _platforms);
 
     testWidgets('审批 ${brightness.name}', (tester) async {

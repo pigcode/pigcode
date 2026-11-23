@@ -139,10 +139,7 @@ void main() {
       expect(find.text('已选项目'), findsOneWidget);
       expect(find.text('原来的 Agent'), findsOneWidget);
       expect(find.text('原来的模型'), findsOneWidget);
-      final editor = find.byWidgetPredicate(
-        (widget) =>
-            widget is TextField && widget.decoration?.hintText == '发出第一条消息',
-      );
+      final editor = find.byKey(const ValueKey('first-message-input'));
       expect(tester.widget<TextField>(editor).controller?.text, '还没发出的首条消息');
       await tester.enterText(editor, '离线修改的首条消息');
       await tester.pumpAndSettle();

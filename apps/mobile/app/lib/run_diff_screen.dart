@@ -258,6 +258,21 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
     final selected = index == _selected;
     final theme = Theme.of(context);
     final color = theme.colorScheme;
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final counts = [
+      if ((file.added ?? 0) > 0)
+        TextSpan(
+          text: '+${file.added}',
+          style: TextStyle(color: palette.diffAdded),
+        ),
+      if ((file.removed ?? 0) > 0)
+        TextSpan(
+          text: ' −${file.removed}',
+          style: TextStyle(color: palette.diffRemoved),
+        ),
+    ];
     return Tooltip(
       key: _fileKeys.putIfAbsent(file.path, GlobalKey.new),
       message: file.path,
@@ -275,11 +290,11 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
                 constraints: const BoxConstraints(minWidth: 48, maxWidth: 230),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: selected ? color.primary : color.surface,
+                  color: selected
+                      ? Color.alphaBlend(palette.selected, palette.surface)
+                      : color.surface,
                   borderRadius: BorderRadius.circular(17),
-                  border: Border.all(
-                    color: selected ? color.primary : color.outlineVariant,
-                  ),
+                  border: Border.all(color: color.outlineVariant, width: .5),
                 ),
                 child: Align(
                   widthFactor: 1,
@@ -289,21 +304,33 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
                       Icon(
                         Icons.description_outlined,
                         size: 16,
-                        color: selected
-                            ? color.onPrimary
-                            : color.onSurfaceVariant,
+                        color: palette.running,
                       ),
                       const SizedBox(width: 5),
                       Flexible(
                         child: Text(
                           file.path.split('/').last,
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: selected ? color.onPrimary : color.onSurface,
+                            color: color.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (counts.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 80),
+                          child: Text.rich(
+                            TextSpan(children: counts),
+                            style: theme.textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'mobile_sheet.dart';
+
 enum SidebarGrouping { project, time, status }
 
 enum SidebarSort { recent, status, title }
@@ -35,10 +37,9 @@ Future<bool?> showSidebarOptions(
   required bool canMarkAllRead,
 }) {
   var arrangement = current;
-  return showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  return showMobileSheet<bool>(
+    context,
+    title: '分组和筛选',
     builder: (sheet) => StatefulBuilder(
       builder: (context, setState) {
         void change({
@@ -58,87 +59,84 @@ Future<bool?> showSidebarOptions(
           onChanged(arrangement);
         }
 
-        return SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('分组'),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final (value, label) in const [
-                      (SidebarGrouping.project, '项目'),
-                      (SidebarGrouping.time, '更新时间'),
-                      (SidebarGrouping.status, '状态'),
-                    ])
-                      ChoiceChip(
-                        label: Text(label),
-                        selected: arrangement.grouping == value,
-                        onSelected: (_) => change(grouping: value),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('排序'),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final (value, label) in const [
-                      (SidebarSort.recent, '更新时间'),
-                      (SidebarSort.status, '状态'),
-                      (SidebarSort.title, '按名称'),
-                    ])
-                      ChoiceChip(
-                        label: Text(label),
-                        selected: arrangement.sort == value,
-                        onSelected: (_) => change(sort: value),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text('筛选'),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final category in SidebarCategory.values)
-                      FilterChip(
-                        label: Text(sidebarCategoryLabels[category]!),
-                        selected: arrangement.filters.contains(category),
-                        onSelected: arrangement.archived
-                            ? null
-                            : (selected) {
-                                final next = {...arrangement.filters};
-                                if (selected) {
-                                  next.add(category);
-                                } else {
-                                  next.remove(category);
-                                }
-                                change(
-                                  filters: next.isEmpty
-                                      ? defaultSidebarArrangement.filters
-                                      : next,
-                                );
-                              },
-                      ),
-                  ],
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('只看已归档'),
-                  value: arrangement.archived,
-                  onChanged: (value) => change(archived: value),
-                ),
-                TextButton(
-                  onPressed: canMarkAllRead
-                      ? () => Navigator.pop(sheet, true)
-                      : null,
-                  child: const Text('全部标为已读'),
-                ),
-              ],
-            ),
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('分组'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (value, label) in const [
+                    (SidebarGrouping.project, '项目'),
+                    (SidebarGrouping.time, '更新时间'),
+                    (SidebarGrouping.status, '状态'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: arrangement.grouping == value,
+                      onSelected: (_) => change(grouping: value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('排序'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final (value, label) in const [
+                    (SidebarSort.recent, '更新时间'),
+                    (SidebarSort.status, '状态'),
+                    (SidebarSort.title, '按名称'),
+                  ])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: arrangement.sort == value,
+                      onSelected: (_) => change(sort: value),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Text('筛选'),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final category in SidebarCategory.values)
+                    FilterChip(
+                      label: Text(sidebarCategoryLabels[category]!),
+                      selected: arrangement.filters.contains(category),
+                      onSelected: arrangement.archived
+                          ? null
+                          : (selected) {
+                              final next = {...arrangement.filters};
+                              if (selected) {
+                                next.add(category);
+                              } else {
+                                next.remove(category);
+                              }
+                              change(
+                                filters: next.isEmpty
+                                    ? defaultSidebarArrangement.filters
+                                    : next,
+                              );
+                            },
+                    ),
+                ],
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('只看已归档'),
+                value: arrangement.archived,
+                onChanged: (value) => change(archived: value),
+              ),
+              TextButton(
+                onPressed: canMarkAllRead
+                    ? () => Navigator.pop(sheet, true)
+                    : null,
+                child: const Text('全部标为已读'),
+              ),
+            ],
           ),
         );
       },

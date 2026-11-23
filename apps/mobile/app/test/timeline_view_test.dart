@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_mobile/app_theme.dart';
+import 'package:pigcode_mobile/theme_colors.dart';
 import 'package:pigcode_mobile/timeline_view.dart';
 import 'package:pigcode_mobile/timeline_widgets.dart';
 
@@ -57,6 +60,31 @@ Widget page(List<MobileTimelineEvent> events, {MobileActiveRun? live}) =>
 
 void main() {
   final scroll = find.byKey(const ValueKey('timeline-scroll'));
+
+  testWidgets('uses the dark foreground for inline Markdown code', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: pigcodeTheme(Brightness.dark),
+        home: const Scaffold(
+          body: TimelineAnswer(text: '运行 `flutter test` 复验。'),
+        ),
+      ),
+    );
+    final codeColors = <Color?>[];
+    for (final paragraph
+        in tester.allRenderObjects.whereType<RenderParagraph>()) {
+      paragraph.text.visitChildren((span) {
+        if (span is TextSpan && span.text?.contains('flutter test') == true) {
+          codeColors.add(span.style?.color);
+        }
+        return true;
+      });
+    }
+    expect(codeColors, isNotEmpty);
+    expect(codeColors, everyElement(pigcodeDark.foreground));
+  });
 
   testWidgets('starts a short conversation near the top of the viewport', (
     tester,

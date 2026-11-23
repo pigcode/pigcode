@@ -222,6 +222,9 @@ class _FixtureConnection implements MobileConnection {
   final queue = MobileQueueCommands(const _FixtureHost());
 
   @override
+  final drafts = MobileDraftCommands(const _FixtureHost());
+
+  @override
   final done = Completer<void>().future;
 
   @override
@@ -317,6 +320,29 @@ class _FixtureHost implements HostRequests {
 
   @override
   Future<Object?> call(String method, Map<String, Object?> params) async {
+    if (method == MobileDraftMethods.options) {
+      return const MobileDraftOptions(
+        instances: [
+          MobileDraftInstance(
+            instanceId: 'demo-codex',
+            label: 'Codex',
+            agentName: 'Codex',
+            permissionModes: [
+              MobileDraftPermission.approvalRequired,
+              MobileDraftPermission.autoAcceptEdits,
+            ],
+            defaultPermissionMode: MobileDraftPermission.approvalRequired,
+          ),
+        ],
+        defaultInstanceId: 'demo-codex',
+      ).toJson();
+    }
+    if (method == MobileDraftMethods.models) {
+      return const MobileDraftModels(
+        models: [MobileDraftModel(id: 'demo-default', label: '默认模型')],
+        defaultModelId: 'demo-default',
+      ).toJson();
+    }
     if (method == QueueMethods.get) {
       return QueueSnapshot(
         threadId: params['threadId'] as String,

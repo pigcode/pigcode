@@ -32,6 +32,9 @@ class TimelineView extends StatefulWidget {
 
 typedef _Row = ({String key, int seq, Widget Function() build});
 
+// The timeline gutter and the inner turn padding each contribute 16 pixels.
+const _turnInsets = EdgeInsets.symmetric(horizontal: 32);
+
 class _TimelineViewState extends State<TimelineView> {
   final _scroll = ScrollController();
   final _center = UniqueKey();
@@ -251,7 +254,7 @@ class _TimelineViewState extends State<TimelineView> {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             slivers: [
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: _turnInsets,
                 sliver: SliverList.builder(
                   itemCount: _history.length + (hasEarlier ? 1 : 0),
                   itemBuilder: (context, index) {
@@ -276,7 +279,7 @@ class _TimelineViewState extends State<TimelineView> {
               ),
               SliverToBoxAdapter(key: _center, child: const SizedBox.shrink()),
               SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: _turnInsets,
                 sliver: SliverList.builder(
                   itemCount: _newRows.length,
                   itemBuilder: (context, index) {
@@ -290,7 +293,7 @@ class _TimelineViewState extends State<TimelineView> {
               ),
               if (active != null)
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: _turnInsets,
                   sliver: SliverToBoxAdapter(child: _live(active)),
                 ),
               if (_history.isEmpty && _newRows.isEmpty && active == null)
@@ -347,8 +350,8 @@ class _TimelineViewState extends State<TimelineView> {
   }
 
   Widget _user(MobileTimelineEvent event) => Container(
-    margin: const EdgeInsets.symmetric(vertical: 8),
-    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+    margin: const EdgeInsets.only(top: 56, bottom: 8),
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
       border: Border.all(

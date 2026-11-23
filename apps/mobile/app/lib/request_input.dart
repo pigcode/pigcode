@@ -230,22 +230,67 @@ class _ApprovalForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
     final plan = approval.plan;
+    final touchSize = _touchSize(context);
+    final actions = [
+      if (approval.decisions.contains(MobileApprovalDecision.deny))
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: touchSize,
+            side: BorderSide(color: colors.divider),
+          ),
+          onPressed: enabled
+              ? () => onDecision(MobileApprovalDecision.deny)
+              : null,
+          child: Text(plan == null ? '拒绝' : '继续完善'),
+        ),
+      if (approval.decisions.contains(MobileApprovalDecision.allowOnce))
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: touchSize),
+          onPressed: enabled
+              ? () => onDecision(MobileApprovalDecision.allowOnce)
+              : null,
+          child: Text(plan == null ? '允许一次' : '开始执行'),
+        ),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          plan != null ? '计划待确认' : approval.title ?? approval.toolName,
-          style: theme.textTheme.titleSmall,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.front_hand_outlined, size: 20, color: colors.attention),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                plan != null ? '计划待确认' : approval.title ?? approval.toolName,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
         ),
         if (approval.description case final description?)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: SelectableText(description),
+            child: SelectableText(
+              description,
+              style: TextStyle(color: colors.secondaryText),
+            ),
           ),
         if ((plan ?? approval.detail) case final detail?)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: colors.background,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: SelectableText(
               detail,
               style: plan == null
@@ -253,35 +298,46 @@ class _ApprovalForm extends StatelessWidget {
                   : null,
             ),
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          children: [
-            for (final decision in approval.decisions)
-              if (decision == MobileApprovalDecision.allowOnce)
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    minimumSize: _touchSize(context),
-                  ),
-                  onPressed: enabled ? () => onDecision(decision) : null,
-                  child: Text(plan == null ? '允许一次' : '开始执行'),
-                )
-              else
-                OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: _touchSize(context),
-                  ),
-                  onPressed: enabled ? () => onDecision(decision) : null,
-                  child: Text(
-                    decision == MobileApprovalDecision.allowForSession
-                        ? '本会话允许'
-                        : plan == null
-                        ? '拒绝'
-                        : '继续完善',
-                  ),
-                ),
-          ],
-        ),
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final labelWidth = MediaQuery.textScalerOf(context).scale(64);
+              if (actions.length == 2 &&
+                  constraints.maxWidth < 2 * (labelWidth + 24) + 8) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    actions.first,
+                    const SizedBox(height: 4),
+                    actions.last,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  for (final (index, action) in actions.indexed) ...[
+                    if (index > 0) const SizedBox(width: 8),
+                    Expanded(child: action),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+        if (approval.decisions.contains(MobileApprovalDecision.allowForSession))
+          Center(
+            child: TextButton(
+              style: TextButton.styleFrom(
+                minimumSize: touchSize,
+                foregroundColor: colors.secondaryText,
+              ),
+              onPressed: enabled
+                  ? () => onDecision(MobileApprovalDecision.allowForSession)
+                  : null,
+              child: const Text('本会话允许'),
+            ),
+          ),
       ],
     );
   }
