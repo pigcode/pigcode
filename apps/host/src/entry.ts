@@ -131,8 +131,6 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   // Host 入口加载失败的插件也不加载界面代码；它的错误显示在插件页。
   await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
   if (control) attachHostReminders(ctx, (reminder) => control.postMessage({ type: "host.reminder", reminder }))
-  // 恢复持久化的定时任务；过期的任务在启动后补跑一次。
-  ctx.get("schedules")?.start()
   const feed = new ThreadFeed(ctx)
   if (control) {
     const cipher = desktopRelayCipher(new MessagePortTransport(control))
@@ -144,6 +142,8 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     ctx.provide("mobileConnections", mobile)
     ctx.effect(() => () => mobile.dispose())
   }
+  // 装好提醒订阅后再恢复定时任务，过期任务也使用相同的提醒事件。
+  ctx.get("schedules")?.start()
   rpc = new RpcServer(ctx, page, feed)
   rpc.start()
   if (waitingPage) {

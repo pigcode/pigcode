@@ -17,6 +17,20 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     MobileReminders.shared.attach(engineBridge.applicationRegistrar.messenger())
   }
+
+  override func application(
+    _ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+  ) {
+    MobileReminders.shared.registered(deviceToken)
+    super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
+  }
+
+  override func application(
+    _ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error
+  ) {
+    MobileReminders.shared.registrationFailed()
+    super.application(application, didFailToRegisterForRemoteNotificationsWithError: error)
+  }
 }
 
 final class MobileReminders: NSObject, UNUserNotificationCenterDelegate {
@@ -25,6 +39,21 @@ final class MobileReminders: NSObject, UNUserNotificationCenterDelegate {
   private var pending: [String: Any]?
   private var visible: [String: String] = [:]
   private var channel: FlutterMethodChannel?
+  private var registrationRequested = false
+  private var nextRegistrationAttempt = Date.distantPast
+  private var apns: [String: String]?
+
+  private var apnsEnvironment: String? {
+    #if targetEnvironment(simulator)
+    return nil
+    #else
+    switch Bundle.main.object(forInfoDictionaryKey: "PigcodeAPNSEnvironment") as? String {
+    case "development": return "sandbox"
+    case "production": return "production"
+    default: return nil
+    }
+    #endif
+  }
 
   private var enabled: Bool {
     return UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true
@@ -47,6 +76,7 @@ final class MobileReminders: NSObject, UNUserNotificationCenterDelegate {
           return
         }
         UserDefaults.standard.set(enabled, forKey: self.enabledKey)
+        if !enabled { self.unregister() }
         self.settings(result)
       case "requestPermission":
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
@@ -84,9 +114,51 @@ final class MobileReminders: NSObject, UNUserNotificationCenterDelegate {
         }
       }
       DispatchQueue.main.async {
-        result(["enabled": self.enabled, "permission": permission])
+        if self.enabled && permission == "granted" &&
+          self.apnsEnvironment != nil && !self.registrationRequested &&
+          Date() >= self.nextRegistrationAttempt {
+          self.registrationRequested = true
+          UIApplication.shared.registerForRemoteNotifications()
+        }
+        var settings: [String: Any] = ["enabled": self.enabled, "permission": permission]
+        if let registration = self.apns { settings["apns"] = registration }
+        result(settings)
       }
     }
+  }
+
+  func registered(_ deviceToken: Data) {
+    guard let environment = apnsEnvironment, !deviceToken.isEmpty else { return }
+    if !enabled {
+      unregister()
+      return
+    }
+    let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+    apns = [
+      "token": token, "environment": environment, "observationId": UUID().uuidString.lowercased()
+    ]
+    channel?.invokeMethod("settingsChanged", arguments: nil)
+  }
+
+  func registrationFailed() {
+    registrationRequested = false
+    let retryDelay: TimeInterval = 60
+    let retryAt = Date().addingTimeInterval(retryDelay)
+    nextRegistrationAttempt = retryAt
+    DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) { [weak self] in
+      guard let self = self, self.nextRegistrationAttempt == retryAt,
+        UIApplication.shared.applicationState == .active else { return }
+      self.settings { _ in }
+    }
+  }
+
+  private func unregister() {
+    if apnsEnvironment != nil {
+      UIApplication.shared.unregisterForRemoteNotifications()
+    }
+    registrationRequested = false
+    nextRegistrationAttempt = .distantPast
+    apns = nil
   }
 
   func capture(_ response: UNNotificationResponse) {

@@ -36,7 +36,7 @@ export function noiseKeyPair(seed = randomBytes(32)): NoiseKeyPair {
   return { seed, privateKey, publicKey: encoded.subarray(-32) }
 }
 
-function dh(local: NoiseKeyPair, remote: Buffer): Buffer {
+export function x25519SharedSecret(local: NoiseKeyPair, remote: Buffer): Buffer {
   if (remote.length !== 32) throw new Error("invalid Noise public key")
   const publicKey = createPublicKey({
     key: Buffer.concat([publicPrefix, remote]),
@@ -161,9 +161,9 @@ export function beginNoise(
 ) {
   const state = new Handshake(prologue, hostKey)
   state.mixHash(ephemeral.publicKey)
-  state.mixKey(dh(ephemeral, hostKey))
+  state.mixKey(x25519SharedSecret(ephemeral, hostKey))
   const encryptedIdentity = state.seal(identity.publicKey)
-  state.mixKey(dh(identity, hostKey))
+  state.mixKey(x25519SharedSecret(identity, hostKey))
   const message = Buffer.concat([ephemeral.publicKey, encryptedIdentity, state.seal(payload)])
   let used = false
   return {
@@ -173,8 +173,8 @@ export function beginNoise(
       used = true
       const remote = reply.subarray(0, 32)
       state.mixHash(remote)
-      state.mixKey(dh(ephemeral, remote))
-      state.mixKey(dh(identity, remote))
+      state.mixKey(x25519SharedSecret(ephemeral, remote))
+      state.mixKey(x25519SharedSecret(identity, remote))
       const payload = state.open(reply.subarray(32))
       return { payload, session: state.split(true) }
     },
@@ -190,9 +190,9 @@ export function acceptNoise(
   const state = new Handshake(prologue, identity.publicKey)
   const remote = message.subarray(0, 32)
   state.mixHash(remote)
-  state.mixKey(dh(identity, remote))
+  state.mixKey(x25519SharedSecret(identity, remote))
   const publicKey = state.open(message.subarray(32, 80))
-  state.mixKey(dh(identity, publicKey))
+  state.mixKey(x25519SharedSecret(identity, publicKey))
   const payload = state.open(message.subarray(80))
   let used = false
   return {
@@ -202,8 +202,8 @@ export function acceptNoise(
       if (used) throw new Error("Noise IK already completed")
       used = true
       state.mixHash(ephemeral.publicKey)
-      state.mixKey(dh(ephemeral, remote))
-      state.mixKey(dh(ephemeral, publicKey))
+      state.mixKey(x25519SharedSecret(ephemeral, remote))
+      state.mixKey(x25519SharedSecret(ephemeral, publicKey))
       return {
         message: Buffer.concat([ephemeral.publicKey, state.seal(payload)]),
         session: state.split(false),

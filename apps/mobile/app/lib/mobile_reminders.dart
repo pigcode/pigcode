@@ -14,12 +14,13 @@ class MobileReminderBridge {
 
   static const _channel = MethodChannel('pigcode/mobile-reminders');
 
-  void watchTaps(VoidCallback? received) {
+  void watch({VoidCallback? onTap, VoidCallback? onSettingsChanged}) {
     _channel.setMethodCallHandler(
-      received == null
+      onTap == null && onSettingsChanged == null
           ? null
           : (call) async {
-              if (call.method == 'tapReady') received();
+              if (call.method == 'tapReady') onTap?.call();
+              if (call.method == 'settingsChanged') onSettingsChanged?.call();
             },
     );
   }
@@ -53,6 +54,9 @@ class MobileReminderBridge {
         method,
         arguments,
       ))!;
+      if (data['apns'] case final Map registration) {
+        data['apns'] = Map<String, dynamic>.from(registration);
+      }
       return MobileReminderSettings.fromJson(data);
     } on MissingPluginException {
       return const MobileReminderSettings(

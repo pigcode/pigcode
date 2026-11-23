@@ -101,8 +101,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   final _openedReminders = <(String, String)>{};
   String? _computerId;
   String? _visibleThreadId;
-  MobileReminderSettings? _reminderSettings;
-  (MobileConnection, bool, MobileReminderPermission)? _sentSettings;
+  final _reminderSettings = ValueNotifier<MobileReminderSettings?>(null);
+  (MobileConnection, bool, MobileReminderPermission, String?)? _sentSettings;
 
   @override
   void initState() {
@@ -113,7 +113,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
         lifecycle == AppLifecycleState.resumed ||
         lifecycle == AppLifecycleState.inactive;
     _reminders = ref.read(mobileReminderBridgeProvider);
-    _reminders.watchTaps(() => unawaited(_readReminderTap()));
+    _reminders.watch(
+      onTap: () => unawaited(_readReminderTap()),
+      onSettingsChanged: () => unawaited(_refreshReminderSettings()),
+    );
     unawaited(_readReminderTap());
     unawaited(_refreshReminderSettings());
     WidgetsBinding.instance.addObserver(this);
@@ -212,15 +215,20 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   }
 
   void _reminderSettingsChanged(MobileReminderSettings settings) {
-    _reminderSettings = settings;
+    _reminderSettings.value = settings;
     _reportReminderSettings();
   }
 
   void _reportReminderSettings() {
     final connection = _session?.connection;
-    final settings = _reminderSettings;
+    final settings = _reminderSettings.value;
     if (connection == null || settings == null) return;
-    final report = (connection, settings.enabled, settings.permission);
+    final report = (
+      connection,
+      settings.enabled,
+      settings.permission,
+      settings.apns?.observationId,
+    );
     if (_sentSettings == report) return;
     _sentSettings = report;
     unawaited(
@@ -531,7 +539,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _reminders.watchTaps(null);
+    _reminders.watch();
+    _reminderSettings.dispose();
     _reminders.setVisible(null, null).catchError((Object _) {});
     unawaited(_networks?.cancel());
     _session?.dispose();
@@ -553,6 +562,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
               MaterialPageRoute(
                 builder: (_) => ReminderSettingsPage(
                   bridge: _reminders,
+                  settings: _reminderSettings,
                   onChanged: _reminderSettingsChanged,
                 ),
               ),

@@ -16,7 +16,8 @@ import type { ThreadFeed } from "../rpc/thread-feed"
 import { acceptNoise, type NoiseKeyPair, type NoiseSession } from "./noise"
 import { loadComputerIdentity } from "./computer-identity"
 import { fingerprint, PairedDevices } from "./paired-devices"
-import { pairingAttemptView, pairingValidityMs, type Attempt } from "./pairing-attempt"
+import { pairingAttemptView, pairingQRCode, pairingValidityMs, type Attempt } from "./pairing-attempt"
+import { MobilePushReminders } from "./push-reminders"
 import { openRelayHost, type RelayHost } from "./relay-host"
 import { serveMobileSidebar } from "./sidebar-rpc"
 import { denyUnpairedDevice, deviceRevokedNotice, revokeDeviceWork, tellRevokedDevice } from "./revocation"
@@ -43,6 +44,7 @@ export class MobileConnections {
   private readonly computerName = hostname().split(".")[0]?.slice(0, 80) || "Pigcode"
   private peers = new Map<number, Peer>()
   private readonly devices: PairedDevices
+  private readonly push: MobilePushReminders
   private status: Status = "idle"
   private attempt: Attempt | undefined
   private identity: Promise<NoiseKeyPair> | undefined
@@ -63,6 +65,7 @@ export class MobileConnections {
     private readonly now = Date.now,
   ) {
     this.devices = new PairedDevices(ctx.settings)
+    this.push = new MobilePushReminders(ctx, this.devices, cipher, () => this.connection)
     this.unsubscribe = relay.onConnectionChange(() => {
       this.finish(this.attempt ? "cancelled" : "idle", false)
       this.disconnect()
@@ -110,16 +113,7 @@ export class MobileConnections {
         this.finish("needs-relay")
         return this.view()
       }
-      const qr = JSON.stringify({
-        type: "pigcode.pair",
-        version: 1,
-        address: config.address,
-        token: config.token,
-        computerKey: identity.publicKey.toString("base64url"),
-        computerName: this.computerName,
-        secret: attempt.secret.toString("base64url"),
-        expiresAt: attempt.expiresAt,
-      })
+      const qr = pairingQRCode(attempt, config, identity.publicKey, this.computerName)
       if (Buffer.byteLength(qr) > 2953) {
         this.finish("qr-unavailable")
         return this.view()
@@ -279,6 +273,7 @@ export class MobileConnections {
           if (this.attempt) this.finish("relay-unavailable")
           this.scheduleReconnect()
         },
+        push: this.push.proveIdentity(identity, current),
       },
       registration.signal,
     )
@@ -485,6 +480,7 @@ export class MobileConnections {
         deviceKey: device.publicKey,
         features,
         relayRevision: () => this.relay.revision,
+        configureReminders: (settings) => this.push.report(device.publicKey, settings),
       },
       (message) => this.send(session, peer, message),
     )

@@ -45,7 +45,9 @@ Future<void> main() async {
                     invite: invite,
                     identity: identity,
                     deviceName: phone,
-                    platform: phone == '个人 iPhone' ? 'ios' : 'android',
+                    platform:
+                        command['platform'] as String? ??
+                        (phone == '个人 iPhone' ? 'ios' : 'android'),
                     showVerificationCode: showCode,
                     client: client,
                   );
@@ -345,10 +347,12 @@ Future<void> main() async {
             report('closed');
           case 'reminderSettings':
             await active[phone]!.reportReminderSettings(
-              const MobileReminderSettings(
-                enabled: false,
-                permission: MobileReminderPermission.granted,
-              ),
+              MobileReminderSettings.fromJson({
+                'enabled': command['enabled'] ?? false,
+                'permission': 'granted',
+                if (command['apns'] case final registration?)
+                  'apns': registration,
+              }),
             );
             report('reminders-reported');
           case 'closed':

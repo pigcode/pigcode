@@ -2,6 +2,7 @@
 
 abstract final class MobileReminderMethods {
   static const report = 'mobile.reminder-settings';
+  static const configure = 'mobile.reminders.configure';
 }
 
 enum ReminderKind {
@@ -98,17 +99,77 @@ enum MobileReminderPermission {
   }
 }
 
+enum ApnsEnvironment {
+  sandbox('sandbox'),
+  production('production');
+
+  const ApnsEnvironment(this.wire);
+  final String wire;
+
+  factory ApnsEnvironment.fromWire(String wire) {
+    for (final value in values) {
+      if (value.wire == wire) return value;
+    }
+    throw const FormatException('Invalid ApnsEnvironment');
+  }
+}
+
+final class MobileApnsRegistration {
+  const MobileApnsRegistration({
+    required this.token,
+    required this.environment,
+    required this.observationId,
+  });
+  final String token;
+  final ApnsEnvironment environment;
+  final String observationId;
+
+  factory MobileApnsRegistration.fromJson(Map<String, dynamic> json) {
+    if (json.keys.any(
+      (key) => !const {'token', 'environment', 'observationId'}.contains(key),
+    )) {
+      throw const FormatException(
+        'MobileApnsRegistration contains an unknown field',
+      );
+    }
+    final token = json['token'] as String;
+    if (!RegExp('^(?:[0-9a-f]{2}){1,128}\$').hasMatch(token)) {
+      throw const FormatException('Invalid token');
+    }
+    final environment = ApnsEnvironment.fromWire(json['environment'] as String);
+    final observationId = json['observationId'] as String;
+    if (!RegExp(
+      '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
+    ).hasMatch(observationId)) {
+      throw const FormatException('Invalid observationId');
+    }
+    return MobileApnsRegistration(
+      token: token,
+      environment: environment,
+      observationId: observationId,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'token': token,
+    'environment': environment.wire,
+    'observationId': observationId,
+  };
+}
+
 final class MobileReminderSettings {
   const MobileReminderSettings({
     required this.enabled,
     required this.permission,
+    this.apns,
   });
   final bool enabled;
   final MobileReminderPermission permission;
+  final MobileApnsRegistration? apns;
 
   factory MobileReminderSettings.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {'enabled', 'permission'}.contains(key),
+      (key) => !const {'enabled', 'permission', 'apns'}.contains(key),
     )) {
       throw const FormatException(
         'MobileReminderSettings contains an unknown field',
@@ -118,11 +179,19 @@ final class MobileReminderSettings {
     final permission = MobileReminderPermission.fromWire(
       json['permission'] as String,
     );
-    return MobileReminderSettings(enabled: enabled, permission: permission);
+    final apns = json.containsKey('apns')
+        ? MobileApnsRegistration.fromJson(json['apns'] as Map<String, dynamic>)
+        : null;
+    return MobileReminderSettings(
+      enabled: enabled,
+      permission: permission,
+      apns: apns,
+    );
   }
 
   Map<String, Object?> toJson() => {
     'enabled': enabled,
     'permission': permission.wire,
+    'apns': ?apns?.toJson(),
   };
 }

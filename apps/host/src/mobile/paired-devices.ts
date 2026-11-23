@@ -25,7 +25,7 @@ export function fingerprint(publicKey: Buffer): string {
   return createHash("sha256").update(publicKey).digest("hex")
 }
 
-function deviceId(publicKey: string): string {
+export function pairedDeviceId(publicKey: string): string {
   return fingerprint(Buffer.from(publicKey, "base64url"))
 }
 
@@ -47,24 +47,42 @@ export class PairedDevices {
   }
 
   findById(id: string): PairedDevice | undefined {
-    return this.records.find(({ publicKey }) => deviceId(publicKey) === id)
+    return this.records.find(({ publicKey }) => pairedDeviceId(publicKey) === id)
   }
 
   view(revision: string | undefined, connected: ReadonlySet<string>): MobilePairingView["devices"] {
-    return this.records.map(({ publicKey, name, platform, lastConnectedAt, relayRevision, reminders }) => ({
+    return this.records.map(({ publicKey, name, platform, lastConnectedAt, relayRevision, reminders, apns }) => ({
       name,
       platform,
       lastConnectedAt,
-      id: deviceId(publicKey),
+      id: pairedDeviceId(publicKey),
       connected: connected.has(publicKey),
       needsRelayUpdate: revision !== undefined && revision !== relayRevision,
       ...(reminders ? { reminders } : {}),
+      ...(apns ? { pushRegistered: true } : {}),
     }))
   }
 
-  reportReminders(publicKey: string, settings: MobileReminderSettings): void {
+  reportReminders(
+    publicKey: string,
+    { enabled, permission }: MobileReminderSettings,
+    apns?: PairedDevice["apns"],
+  ): void {
     const device = this.find(publicKey)
-    if (device) this.save({ ...device, reminders: { ...settings, syncedAt: Date.now() } })
+    if (device) {
+      const { apns: savedApns, ...current } = device
+      const target = enabled && permission === "granted" ? apns ?? savedApns : undefined
+      this.save({
+        ...current,
+        ...(target ? { apns: target } : {}),
+        reminders: { enabled, permission, syncedAt: Date.now() },
+      })
+    }
+  }
+
+  reminderTargets(): readonly PairedDevice[] {
+    return this.records.filter((device) => device.apns && device.reminders?.enabled &&
+      device.reminders.permission === "granted")
   }
 
   save(device: PairedDevice): void {

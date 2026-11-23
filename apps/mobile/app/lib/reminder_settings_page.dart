@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
@@ -7,10 +8,12 @@ class ReminderSettingsPage extends StatefulWidget {
   const ReminderSettingsPage({
     super.key,
     required this.bridge,
+    required this.settings,
     required this.onChanged,
   });
 
   final MobileReminderBridge bridge;
+  final ValueListenable<MobileReminderSettings?> settings;
   final ValueChanged<MobileReminderSettings> onChanged;
 
   @override
@@ -19,7 +22,6 @@ class ReminderSettingsPage extends StatefulWidget {
 
 class _ReminderSettingsPageState extends State<ReminderSettingsPage>
     with WidgetsBindingObserver {
-  MobileReminderSettings? _settings;
   bool _working = false;
   bool _failed = false;
 
@@ -59,7 +61,6 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
       final settings = await action();
       if (!mounted) return;
       widget.onChanged(settings);
-      setState(() => _settings = settings);
     } catch (_) {
       if (mounted) setState(() => _failed = true);
     } finally {
@@ -68,9 +69,9 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
   }
 
   @override
-  Widget build(BuildContext context) {
-    final settings = _settings;
-    return Scaffold(
+  Widget build(BuildContext context) => ValueListenableBuilder(
+    valueListenable: widget.settings,
+    builder: (context, settings, _) => Scaffold(
       appBar: AppBar(title: const Text('通知设置')),
       body: SafeArea(
         top: false,
@@ -116,11 +117,18 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
                   ),
                 },
               ),
-              const ListTile(title: Text('推送登记'), subtitle: Text('未登记')),
+              ListTile(
+                title: const Text('推送登记'),
+                subtitle: Text(switch (settings.apns?.environment) {
+                  ApnsEnvironment.production => '已取得正式环境设备令牌',
+                  ApnsEnvironment.sandbox => '已取得开发环境设备令牌',
+                  null => '未登记',
+                }),
+              ),
             ],
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
 }

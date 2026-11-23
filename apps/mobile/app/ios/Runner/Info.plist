@@ -26,6 +26,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>扫描电脑上的 Pigcode 配对二维码。</string>
+	<key>PigcodeAPNSEnvironment</key>
+	<string>$(PIGCODE_APNS_ENVIRONMENT)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

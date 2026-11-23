@@ -1,6 +1,11 @@
 import { z } from "zod"
 import { RELAY_PROTOCOL_VERSION } from "./relay"
-import { mobileReminderStatusSchema } from "./mobile-reminders"
+import {
+  apnsEnvironmentSchema,
+  invalidApnsRegistrationSchema,
+  mobileReminderStatusSchema,
+  savedApnsRegistrationSchema,
+} from "./mobile-reminders"
 
 export const mobileProtocolVersion = 1
 const fingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/)
@@ -19,6 +24,7 @@ export const mobileFeatures = [
   "changes.read",
   "connection.revocation",
   "reminders.status",
+  "reminders.apns",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -59,6 +65,8 @@ export const pairedDeviceSchema = z.object({
   name: z.string().min(1).max(80),
   platform: devicePlatformSchema,
   reminders: mobileReminderStatusSchema.optional(),
+  apns: savedApnsRegistrationSchema.optional(),
+  invalidApns: invalidApnsRegistrationSchema.optional(),
   lastConnectedAt: z.number().int().nullable(),
   relayRevision: z.uuid().optional(),
   confirmedRelayRevision: z.uuid().optional(),
@@ -114,11 +122,14 @@ export const mobilePairingViewSchema = z.object({
         relayRevision: true,
         confirmedRelayRevision: true,
         authorizationId: true,
+        apns: true,
+        invalidApns: true,
       })
       .extend({
         id: fingerprintSchema,
         connected: z.boolean(),
         needsRelayUpdate: z.boolean(),
+        pushRegistered: z.boolean().optional(),
       }),
   ),
 })
@@ -138,9 +149,12 @@ export const relayRegistrationSchema = z.object({
   computerId: computerIdSchema,
   token: z.string().min(1).max(4096),
   statusSupport: z.boolean().optional(),
+  apnsSupport: z.boolean().optional(),
 })
 
-export const relayWatchSchema = relayRegistrationSchema.omit({ statusSupport: true }).extend({
+export const relayWatchSchema = relayRegistrationSchema.omit({
+  statusSupport: true, apnsSupport: true,
+}).extend({
   type: z.literal("relay.watch"),
 })
 
@@ -149,6 +163,8 @@ export const relayAdmissionSchema = z.object({
   version: z.literal(RELAY_PROTOCOL_VERSION),
   status: z.enum(["ok", "offline", "busy", "token-rejected", "incompatible"]),
   heartbeatSeconds: z.int().min(1).max(120).optional(),
+  apnsChallenge: publicKeySchema.optional(),
+  apnsEnvironments: z.array(apnsEnvironmentSchema).max(2).optional(),
 })
 
 export const relaySessionControlSchema = z.object({

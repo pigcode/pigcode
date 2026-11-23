@@ -2,20 +2,39 @@ import {
   RELAY_PROTOCOL_VERSION,
   relayAdmissionSchema,
   relaySessionControlSchema,
+  relayPushInvalidSchema,
+  type ApnsEnvironment,
+  type HostReminder,
+  type MobileApnsRegistration,
   type RelayHostLifecycle,
 } from "@pigcode/contracts"
+import { createHmac } from "node:crypto"
+import { x25519SharedSecret, type NoiseKeyPair } from "./noise"
+
+export interface RelayReminderTarget extends Omit<MobileApnsRegistration, "observationId"> {
+  deviceId: string
+  registrationId: string
+}
+
+export interface RelayPushIdentity {
+  identity: NoiseKeyPair
+  invalidated(deviceId: string, registrationId: string): void
+}
 
 interface RelayHostEvents {
   sessionOpened(session: number): void
   sessionClosed(session: number): void
   received(session: number, ciphertext: Buffer): void
   disconnected(): void
+  push?: RelayPushIdentity
 }
 
 export interface RelayHost {
   send(session: number, ciphertext: Buffer): void
   closeSession(session: number): void
   announce(state: RelayHostLifecycle): void
+  supportsPush(environment: ApnsEnvironment): boolean
+  sendReminder(target: RelayReminderTarget, reminder: HostReminder): void
   close(): void
 }
 
@@ -31,6 +50,7 @@ export function openRelayHost(
     let state: "joining" | "online" | "closed" = "joining"
     let heartbeat: ReturnType<typeof setInterval> | undefined
     let heartbeatMs = 0
+    let push: { publicKey: string; proof: string; environments: ApnsEnvironment[] } | undefined
     let pongDeadline: ReturnType<typeof setTimeout> | undefined
     const close = () => {
       if (state === "closed") return
@@ -64,6 +84,20 @@ export function openRelayHost(
           socket.send(JSON.stringify({ type: "relay.hostState", state: lifecycle }))
         }
       },
+      supportsPush(environment) {
+        return state === "online" && socket.readyState === WebSocket.OPEN &&
+          push?.environments.includes(environment) === true
+      },
+      sendReminder(target, reminder) {
+        if (!push || !connection.supportsPush(target.environment)) return
+        socket.send(JSON.stringify({
+          type: "relay.push",
+          publicKey: push.publicKey,
+          proof: push.proof,
+          target,
+          reminder,
+        }))
+      },
       close,
     }
     socket.addEventListener("open", () => {
@@ -75,6 +109,7 @@ export function openRelayHost(
             computerId,
             token: config.token,
             statusSupport: true,
+            apnsSupport: events.push ? true : undefined,
           }),
         )
       }
@@ -87,6 +122,25 @@ export function openRelayHost(
           if (result.status !== "ok") {
             close()
             return
+          }
+          if (events.push && result.apnsChallenge && result.apnsEnvironments?.length) {
+            const { identity } = events.push
+            const challenge = Buffer.from(result.apnsChallenge, "base64url")
+            try {
+              const secret = x25519SharedSecret(identity, challenge)
+              const proof = createHmac("sha256", secret)
+                .update("pigcode-relay-apns-v1")
+                .update(challenge)
+                .update(identity.publicKey)
+                .digest("base64url")
+              push = {
+                publicKey: identity.publicKey.toString("base64url"),
+                proof,
+                environments: result.apnsEnvironments,
+              }
+            } catch {
+              // A failed push offer does not prevent ordinary session routing.
+            }
           }
           state = "online"
           clearTimeout(timeout)
@@ -105,6 +159,13 @@ export function openRelayHost(
           const frame = JSON.parse(data) as { type?: string }
           if (frame.type === "relay.pong" && heartbeatMs > 0) {
             waitForPong()
+            return
+          }
+          if (frame.type === "relay.push.invalid") {
+            const result = relayPushInvalidSchema.safeParse(frame)
+            if (result.success && push) {
+              events.push?.invalidated(result.data.deviceId, result.data.registrationId)
+            }
             return
           }
           const message = relaySessionControlSchema.parse(frame)

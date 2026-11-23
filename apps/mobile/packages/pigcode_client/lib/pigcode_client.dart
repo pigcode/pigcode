@@ -47,6 +47,7 @@ class MobileConnection {
     this.supportsTimelineResume,
     this.supportsRunChanges,
     this._reportsReminderSettings,
+    this._registersApns,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
@@ -63,6 +64,7 @@ class MobileConnection {
   final bool supportsTimelineResume;
   final bool supportsRunChanges;
   final bool _reportsReminderSettings;
+  final bool _registersApns;
   final String deviceId;
   late final MobileRunCommands runCommands = MobileRunCommands(_rpc);
   late final MobileRunChanges changes = MobileRunChanges(_rpc);
@@ -131,10 +133,17 @@ class MobileConnection {
 
   Future<void> reportReminderSettings(MobileReminderSettings settings) async {
     if (_reportsReminderSettings) {
-      await _link.send({
-        'type': MobileReminderMethods.report,
-        ...settings.toJson(),
-      });
+      final report = settings.toJson();
+      if (settings.apns == null) report.remove('apns');
+      if (_registersApns) {
+        final result = await _rpc.call(MobileReminderMethods.configure, report);
+        if (result is! Map || result['saved'] != true) {
+          throw const ConnectionFailure('reminders-not-saved');
+        }
+        return;
+      }
+      report.remove('apns');
+      await _link.send({'type': MobileReminderMethods.report, ...report});
     }
   }
 
@@ -264,6 +273,7 @@ class MobileConnection {
           'changes.read',
           'connection.revocation',
           'reminders.status',
+          'reminders.apns',
           'run.write',
           'request.write',
           'draft.write',
@@ -313,6 +323,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('timeline.resume'),
         (welcome['features'] as List).contains('changes.read'),
         (welcome['features'] as List).contains('reminders.status'),
+        (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,
       );
       if (confirm == null) await connection.announceRelaySaved();

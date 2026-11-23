@@ -7,7 +7,9 @@ import {
   mobileDraftMethods,
   mobileReceiptParams,
   mobileRelaySavedSchema,
+  mobileReminderMethods,
   mobileReminderReportSchema,
+  mobileReminderSettingsSchema,
   mobileSidebarChangedSchema,
   mobileSidebarMethods as methods,
   mobileSidebarLabelLimit,
@@ -23,6 +25,7 @@ import {
   rpcSuccessSchema,
   type RpcRequest,
   type Thread,
+  type MobileReminderSettings,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { QueueOperationError } from "../agents/message-queue"
@@ -45,6 +48,7 @@ interface MobileSession {
   deviceKey: string
   features: readonly string[]
   relayRevision(): string | undefined
+  configureReminders?(settings: MobileReminderSettings): Promise<boolean>
 }
 
 function page<T>(
@@ -147,7 +151,11 @@ export class MobileSidebarRpc {
     if (notice.success) {
       if (this.session.features.includes("reminders.status")) {
         const { enabled, permission } = notice.data
-        this.devices.reportReminders(this.session.deviceKey, { enabled, permission })
+        if (this.session.configureReminders) {
+          void this.session.configureReminders({ enabled, permission }).catch(() => {
+            console.error("[host] could not store the reminder settings")
+          })
+        } else this.devices.reportReminders(this.session.deviceKey, { enabled, permission })
       }
       return
     }
@@ -191,6 +199,12 @@ export class MobileSidebarRpc {
   }
 
   private dispatch(request: RpcRequest): unknown {
+    if (request.method === mobileReminderMethods.configure &&
+        this.session.features.includes("reminders.apns") && this.session.configureReminders) {
+      this.requirePairedDevice()
+      const settings = params(mobileReminderSettingsSchema, request.params)
+      return this.session.configureReminders(settings).then((saved) => ({ saved }))
+    }
     if (request.method === methods.status && this.session.features.includes("connection.status")) {
       params(mobileStatusParamsSchema, request.params)
       return mobileStatusResultSchema.parse({
