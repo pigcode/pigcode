@@ -77,7 +77,8 @@ Future<bool?> showSidebarOptions(
         final pillHeight = math.max(34.0, textHeight + 12);
         final pillTouchHeight = math.max(touch, pillHeight);
         final pillInset = (pillTouchHeight - pillHeight) / 2;
-        final pillSpacing = math.max(0.0, 8 - 2 * pillInset);
+        // 触区加高后行盒会变大，用负的 runSpacing 让视觉行距仍为 8。
+        final pillSpacing = 8 - 2 * pillInset;
         final actionTouchHeight = math.max(46.0, touch);
         final actionInset = (actionTouchHeight - 46) / 2;
         // 控件间的留白可容纳更大的触区，分组、排序和首行筛选保持原型位置。
@@ -163,7 +164,7 @@ Future<bool?> showSidebarOptions(
                     ),
                 ],
               ),
-              SizedBox(height: 8 - pillInset),
+              SizedBox(height: 8 - pillInset - actionInset),
               _archiveToggle(
                 context,
                 value: arrangement.archived,

@@ -76,12 +76,6 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
     final file = _files[index];
     setState(() => _selected = index);
     if (!_patches.containsKey(file.path)) unawaited(_loadPatch(file));
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final chip = _fileKeys[file.path]?.currentContext;
-      if (mounted && _selected == index && chip != null) {
-        unawaited(Scrollable.ensureVisible(chip, alignment: .5));
-      }
-    });
   }
 
   Future<void> _loadFiles() async {

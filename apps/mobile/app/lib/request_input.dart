@@ -270,16 +270,17 @@ class _ActiveRequest extends ConsumerWidget {
                 if (stopBesideTitle)
                   PositionedDirectional(
                     top: 17 - overhang,
-                    end: 7,
+                    end: 4,
                     child: SizedBox.square(
                       dimension: touch,
                       child: IconButton(
                         tooltip: '停止本轮运行',
                         onPressed: online ? onStop : null,
-                        color: colors.muted,
+                        color: colors.foreground,
+                        // 图标按 24 单位画布绘制，19.2 对应原型的 16。
                         icon: const WorkspaceIcon(
                           WorkspaceGlyph.stop,
-                          size: 16,
+                          size: 19.2,
                         ),
                       ),
                     ),
