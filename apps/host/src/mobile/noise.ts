@@ -1,4 +1,7 @@
-// Noise IK uses Node's X25519, ChaCha20-Poly1305 and SHA-256 primitives.
+// Noise IK uses X25519, ChaCha20-Poly1305 and SHA-256.
+// Electron's Node build lacks the OpenSSL chacha20-poly1305 cipher, so fall
+// back to the pure-JS implementation there with the same wire format.
+import { chacha20poly1305 } from "@noble/ciphers/chacha.js"
 import {
   createCipheriv,
   createDecipheriv,
@@ -76,7 +79,11 @@ class Cipher {
 
   encrypt(plain: Buffer, aad: Buffer = empty): Buffer {
     if (plain.length + tagLength > 65535) throw new Error("oversized Noise message")
-    const cipher = createCipheriv("chacha20-poly1305", this.key, this.nonce(), {
+    const nonce = this.nonce()
+    if (!nativeCipher) {
+      return Buffer.from(chacha20poly1305(this.key, nonce, aad).encrypt(plain))
+    }
+    const cipher = createCipheriv("chacha20-poly1305", this.key, nonce, {
       authTagLength: tagLength,
     })
     cipher.setAAD(aad, { plaintextLength: plain.length })
@@ -85,7 +92,11 @@ class Cipher {
 
   decrypt(bytes: Buffer, aad: Buffer = empty): Buffer {
     if (bytes.length < tagLength || bytes.length > 65535) throw new Error("invalid Noise message")
-    const cipher = createDecipheriv("chacha20-poly1305", this.key, this.nonce(), {
+    const nonce = this.nonce()
+    if (!nativeCipher) {
+      return Buffer.from(chacha20poly1305(this.key, nonce, aad).decrypt(bytes))
+    }
+    const cipher = createDecipheriv("chacha20-poly1305", this.key, nonce, {
       authTagLength: tagLength,
     })
     cipher.setAAD(aad, { plaintextLength: bytes.length - tagLength })
@@ -93,6 +104,18 @@ class Cipher {
     return Buffer.concat([cipher.update(bytes.subarray(0, -tagLength)), cipher.final()])
   }
 }
+
+/** Node/OpenSSL 提供 chacha20-poly1305；Electron 的 BoringSSL 没有。 */
+const nativeCipher = (() => {
+  try {
+    createCipheriv("chacha20-poly1305", Buffer.alloc(32), Buffer.alloc(12), {
+      authTagLength: tagLength,
+    }).destroy()
+    return true
+  } catch {
+    return false
+  }
+})()
 
 export interface NoiseSession {
   readonly verificationCode: string

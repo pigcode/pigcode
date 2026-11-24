@@ -168,6 +168,9 @@ importers:
       '@cordisjs/plugin-loader':
         specifier: 1.0.0-rc.8
         version: 1.0.0-rc.8(cordis@4.0.0-rc.11)
+      '@noble/ciphers':
+        specifier: ^2.4.0
+        version: 2.4.0
       '@pigcode/client-runtime':
         specifier: workspace:*
         version: link:../../packages/client-runtime
@@ -1703,6 +1706,10 @@ packages:
     cpu: [x64]
     os: [linux]
     libc: [glibc]
+
+  '@noble/ciphers@2.4.0':
+    resolution: {integrity: sha512-AnjFn0Jv92laAkvMrghlFZq4qQCIN/4DxFV/eooqtC2YTjB7kBeLMS2T9KJX4Dn+ZVXLOwK0lSgqDtx9gvxtiw==}
+    engines: {node: '>= 20.19.0'}
 
   '@npmcli/fs@2.1.2':
     resolution: {integrity: sha512-yOJKRvohFOaLqipNtwYB9WugyZKhC/DZC4VYPmpaCzDBrA8YpK3qHZ8/HGscMnE4GqbkLNuVcCnxkeQEdGt6LQ==}
@@ -5471,6 +5478,8 @@ snapshots:
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
     optional: true
+
+  '@noble/ciphers@2.4.0': {}
 
   '@npmcli/fs@2.1.2':
     dependencies:
