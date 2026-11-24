@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'app_theme.dart';
 import 'theme_colors.dart';
+import 'workspace_icon.dart';
 
 typedef RunChangeListLoader = Future<MobileRunChangesPage> Function(int offset);
 typedef RunPatchLoader =
@@ -136,101 +138,172 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      centerTitle: true,
-      toolbarHeight: math.max(
-        kToolbarHeight,
-        MediaQuery.textScalerOf(context).scale(40) + 12,
-      ),
-      title: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text('改动', style: Theme.of(context).textTheme.titleMedium),
-          Text(
-            _nextFiles == null
-                ? '${_files.length} 个文件'
-                : '已加载 ${_files.length} 个文件',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-      actions: [
-        if (_canRead && _files.isNotEmpty)
-          Tooltip(
-            message: _wrap ? '关闭换行' : '开启换行',
-            child: TextButton(
-              onPressed: () => setState(() => _wrap = !_wrap),
-              child: Text(_wrap ? '不换行' : '换行'),
-            ),
-          ),
-      ],
-    ),
-    body: SafeArea(
-      top: false,
-      child: _files.isEmpty
-          ? Center(child: Text(_canRead ? '本轮没有文件变更' : _unavailable))
-          : Column(
-              children: [
-                _fileBar(context),
-                const Divider(height: 1),
-                _currentPath(context),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _page,
-                    onPageChanged: _selectedPage,
-                    itemCount: _files.length,
-                    itemBuilder: (context, index) => _fileBody(_files[index]),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final touch = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    final scaler = MediaQuery.textScalerOf(context);
+    final pillHeight = math.max(34.0, scaler.scale(13) * 1.45 + 12);
+    final visualBarHeight = pillHeight + 12;
+    final fileBarHeight = math.max(touch, visualBarHeight);
+    final toolbarHeight = math.max(
+      52.0,
+      (scaler.scale(17) + scaler.scale(12)) * 1.45 + 8,
+    );
+    return Scaffold(
+      backgroundColor: palette.background,
+      appBar: AppBar(
+        centerTitle: true,
+        toolbarHeight: toolbarHeight,
+        titleSpacing: 0,
+        scrolledUnderElevation: 0,
+        systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
+        leadingWidth: 72,
+        leading: Navigator.canPop(context)
+            ? Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: SizedBox.square(
+                  dimension: touch,
+                  child: IconButton(
+                    tooltip: '返回',
+                    onPressed: () => Navigator.maybePop(context),
+                    alignment: AlignmentDirectional.centerStart,
+                    padding: const EdgeInsetsDirectional.only(start: 6),
+                    icon: const RotatedBox(
+                      quarterTurns: 1,
+                      child: WorkspaceIcon(
+                        WorkspaceGlyph.chevronDown,
+                        size: 26,
+                      ),
+                    ),
                   ),
                 ),
-              ],
+              )
+            : null,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '改动',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: 17,
+                fontWeight: FontWeight.w500,
+                height: 1.45,
+                leadingDistribution: TextLeadingDistribution.even,
+              ),
             ),
-    ),
-  );
+            Text(
+              _nextFiles == null
+                  ? '${_files.length} 个文件'
+                  : '已加载 ${_files.length} 个文件',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: palette.muted,
+                fontSize: 12,
+                height: 1.45,
+                leadingDistribution: TextLeadingDistribution.even,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          if (_canRead && _files.isNotEmpty)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: 6),
+              child: Tooltip(
+                message: _wrap ? '关闭换行' : '开启换行',
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: palette.secondaryText,
+                    minimumSize: Size(0, touch),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: 15,
+                      height: 1.45,
+                    ),
+                  ),
+                  onPressed: () => setState(() => _wrap = !_wrap),
+                  child: Text(_wrap ? '不换行' : '换行'),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: _files.isEmpty
+            ? Center(child: Text(_canRead ? '本轮没有文件变更' : _unavailable))
+            : Column(
+                children: [
+                  _fileBar(context, fileBarHeight, pillHeight),
+                  // Android 的额外触区利用路径栏上方的留白。
+                  _currentPath(context, 6 - (fileBarHeight - visualBarHeight)),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _page,
+                      onPageChanged: _selectedPage,
+                      itemCount: _files.length,
+                      itemBuilder: (context, index) =>
+                          _fileBody(_files[index], index),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
 
-  Widget _currentPath(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onHorizontalDragStart: (_) => _pathDrag = 0,
-    onHorizontalDragUpdate: (details) => _pathDrag += details.primaryDelta ?? 0,
-    onHorizontalDragEnd: (_) {
-      if (_pathDrag.abs() < 24) return;
-      final index = _selected + (_pathDrag < 0 ? 1 : -1);
-      if (index >= 0 && index < _files.length) _page.jumpToPage(index);
-    },
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: Text(
-          _files[_selected].path,
-          style: Theme.of(context).textTheme.bodySmall,
+  Widget _currentPath(BuildContext context, double topPadding) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) => _pathDrag = 0,
+      onHorizontalDragUpdate: (details) =>
+          _pathDrag += details.primaryDelta ?? 0,
+      onHorizontalDragEnd: (_) {
+        if (_pathDrag.abs() < 24) return;
+        final index = _selected + (_pathDrag < 0 ? 1 : -1);
+        if (index >= 0 && index < _files.length) _page.jumpToPage(index);
+      },
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: palette.divider)),
+        ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(16, topPadding, 16, 7),
+          child: SizedBox(
+            width: double.infinity,
+            child: Text(
+              _files[_selected].path,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: palette.muted,
+                fontSize: 12,
+                height: 19 / 12,
+                leadingDistribution: TextLeadingDistribution.even,
+              ),
+            ),
+          ),
         ),
       ),
-    ),
-  );
-
-  Widget _fileBar(BuildContext context) {
-    final theme = Theme.of(context);
-    final touchHeight = theme.platform == TargetPlatform.iOS ? 44.0 : 48.0;
-    final pillHeight = math.max(
-      34.0,
-      MediaQuery.textScalerOf(context).scale(14) + 12,
     );
+  }
+
+  Widget _fileBar(BuildContext context, double barHeight, double pillHeight) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           for (var index = 0; index < _files.length; index++) ...[
             if (index != 0) const SizedBox(width: 8),
-            _fileChip(
-              context,
-              index,
-              math.max(touchHeight, pillHeight),
-              pillHeight,
-            ),
+            _fileChip(context, index, barHeight, pillHeight),
           ],
           if (_nextFiles != null && widget.loadFiles != null)
             TextButton(
@@ -257,19 +330,57 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
     final file = _files[index];
     final selected = index == _selected;
     final theme = Theme.of(context);
-    final color = theme.colorScheme;
     final palette = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+    final name = file.path.split('/').last;
+    final extension = name.split('.').last.toLowerCase();
+    final typescript = const {'ts', 'mts', 'cts'}.contains(extension);
+    final isCode =
+        typescript ||
+        const {
+          'js',
+          'mjs',
+          'cjs',
+          'tsx',
+          'jsx',
+          'dart',
+          'py',
+          'swift',
+          'kt',
+          'rs',
+          'go',
+          'java',
+          'c',
+          'h',
+          'cpp',
+          'css',
+          'html',
+          'sql',
+        }.contains(extension);
+    final iconColor = typescript
+        ? theme.brightness == Brightness.dark
+              ? const Color(0xFF6BADFF)
+              : const Color(0xFF2769B7)
+        : palette.timelineFile;
+    final labelStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: palette.foreground,
+      fontSize: 13,
+      fontWeight: FontWeight.w400,
+      height: 1.45,
+      leadingDistribution: TextLeadingDistribution.even,
+    );
     final counts = [
-      if ((file.added ?? 0) > 0)
+      if (file.added != null)
         TextSpan(
           text: '+${file.added}',
           style: TextStyle(color: palette.diffAdded),
         ),
-      if ((file.removed ?? 0) > 0)
+      if (file.added != null && file.removed != null)
+        const WidgetSpan(child: SizedBox(width: 6)),
+      if (file.removed != null)
         TextSpan(
-          text: ' −${file.removed}',
+          text: '−${file.removed}',
           style: TextStyle(color: palette.diffRemoved),
         ),
     ];
@@ -284,54 +395,65 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
           onTap: () => _page.jumpToPage(index),
           child: SizedBox(
             height: height,
-            child: Center(
-              child: Container(
-                height: pillHeight,
-                constraints: const BoxConstraints(minWidth: 48, maxWidth: 230),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? Color.alphaBlend(palette.selected, palette.surface)
-                      : color.surface,
-                  borderRadius: BorderRadius.circular(17),
-                  border: Border.all(color: color.outlineVariant, width: .5),
-                ),
-                child: Align(
-                  widthFactor: 1,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.description_outlined,
-                        size: 16,
-                        color: palette.running,
-                      ),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          file.path.split('/').last,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: color.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  height: pillHeight,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    maxWidth: 230,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? palette.selectedOnBackground
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(17),
+                    border: Border.all(
+                      color: selected ? palette.strongBorder : palette.border,
+                    ),
+                  ),
+                  child: Align(
+                    widthFactor: 1,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 6,
+                      children: [
+                        IconTheme(
+                          data: IconThemeData(color: iconColor),
+                          child: WorkspaceIcon(
+                            isCode
+                                ? WorkspaceGlyph.fileCode
+                                : WorkspaceGlyph.fileText,
+                            size: 18,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                      if (counts.isNotEmpty) ...[
-                        const SizedBox(width: 6),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 80),
-                          child: Text.rich(
-                            TextSpan(children: counts),
-                            style: theme.textTheme.bodySmall,
+                        Flexible(
+                          child: Text(
+                            name,
+                            style: labelStyle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (counts.isNotEmpty)
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 90),
+                            child: Text.rich(
+                              TextSpan(children: counts),
+                              style: labelStyle?.copyWith(
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -342,7 +464,7 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
     );
   }
 
-  Widget _fileBody(MobileRunChangedFile file) {
+  Widget _fileBody(MobileRunChangedFile file, int index) {
     if (!_canRead) return Center(child: Text(_unavailable));
     if (file.binary == true) {
       return const Center(child: Text('二进制文件没有文本差异。'));
@@ -385,6 +507,9 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
       text: patch.text,
       wrap: _wrap,
       footer: footer,
+      swipeHint: _files.length > 1
+          ? '左右滑动切换文件 · ${index + 1}/${_files.length}'
+          : null,
     );
   }
 }
@@ -396,56 +521,69 @@ class _Patch {
   Object? error;
 }
 
-enum _LineKind { header, context, added, removed }
+enum _LineKind { header, gap, context, added, removed }
 
 typedef _Line = ({_LineKind kind, int? number, String text});
 
-final _hunk = RegExp(r'^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@');
+final _hunk = RegExp(r'^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@');
+final _identifierBreak = RegExp(r'[A-Za-z0-9_](?=[A-Za-z0-9_])');
 
 List<_Line> _diffLines(String text) {
   var oldNumber = 0;
   var newNumber = 0;
-  var inHunk = false;
+  var oldLines = 0;
+  var newLines = 0;
+  var hasHunks = false;
   final lines = text.split('\n');
   if (lines.last.isEmpty) lines.removeLast();
   final result = <_Line>[];
-  for (final raw in lines) {
+  for (final line in lines) {
+    final raw = line.endsWith('\r') ? line.substring(0, line.length - 1) : line;
     if (_hunk.firstMatch(raw) case final hunk?) {
+      if (result.isNotEmpty) {
+        result.add((kind: _LineKind.gap, number: null, text: '⋯'));
+      }
       oldNumber = int.parse(hunk.group(1)!);
-      newNumber = int.parse(hunk.group(2)!);
-      inHunk = true;
+      oldLines = int.parse(hunk.group(2) ?? '1');
+      newNumber = int.parse(hunk.group(3)!);
+      newLines = int.parse(hunk.group(4) ?? '1');
+      hasHunks = true;
+      continue;
     }
-    if (inHunk && raw.startsWith('+')) {
+    if (newLines > 0 && raw.startsWith('+')) {
+      newLines--;
       result.add((
         kind: _LineKind.added,
         number: newNumber++,
         text: raw.substring(1),
       ));
-    } else if (inHunk && raw.startsWith('-')) {
+    } else if (oldLines > 0 && raw.startsWith('-')) {
+      oldLines--;
       result.add((
         kind: _LineKind.removed,
         number: oldNumber++,
         text: raw.substring(1),
       ));
-    } else if (inHunk && raw.startsWith(' ')) {
+    } else if (oldLines > 0 && newLines > 0 && raw.startsWith(' ')) {
+      oldLines--;
+      newLines--;
       oldNumber++;
       result.add((
         kind: _LineKind.context,
         number: newNumber++,
         text: raw.substring(1),
       ));
-    } else {
+    } else if (hasHunks && raw.startsWith(r'\ No newline')) {
       result.add((kind: _LineKind.header, number: null, text: raw));
     }
   }
-  return result;
+  return hasHunks
+      ? result
+      : [
+          for (final line in lines)
+            (kind: _LineKind.header, number: null, text: line),
+        ];
 }
-
-const _diffStyle = TextStyle(
-  fontFamily: 'monospace',
-  fontSize: 12,
-  height: 19 / 12,
-);
 
 class _DiffBody extends StatelessWidget {
   const _DiffBody({
@@ -453,48 +591,13 @@ class _DiffBody extends StatelessWidget {
     required this.text,
     required this.wrap,
     this.footer,
+    this.swipeHint,
   });
 
   final String text;
   final bool wrap;
   final Widget? footer;
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = _diffLines(text);
-    final list = ListView.builder(
-      itemCount: lines.length + (footer == null ? 0 : 1),
-      itemBuilder: (context, index) => index == lines.length
-          ? Padding(
-              padding: const EdgeInsets.all(12),
-              child: Center(child: footer),
-            )
-          : _DiffRow(line: lines[index], wrap: wrap),
-    );
-    if (wrap) return list;
-
-    final longest = lines.fold<int>(
-      0,
-      (length, line) => math.max(length, line.text.length),
-    );
-    final width = MediaQuery.textScalerOf(context).scale(12) * longest + 66;
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: SizedBox(
-          width: math.max(constraints.maxWidth, width),
-          child: list,
-        ),
-      ),
-    );
-  }
-}
-
-class _DiffRow extends StatelessWidget {
-  const _DiffRow({required this.line, required this.wrap});
-
-  final _Line line;
-  final bool wrap;
+  final String? swipeHint;
 
   @override
   Widget build(BuildContext context) {
@@ -502,15 +605,96 @@ class _DiffRow extends StatelessWidget {
     final colors = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final (foreground, background, marker) = switch (line.kind) {
-      _LineKind.added => (colors.diffAdded, colors.diffAddedBackground, '+'),
-      _LineKind.removed => (
-        colors.diffRemoved,
-        colors.diffRemovedBackground,
-        '−',
-      ),
-      _LineKind.header => (colors.muted, colors.surface, ''),
-      _LineKind.context => (colors.foreground, colors.background, ''),
+    final style = TextStyle(
+      fontFamily: theme.platform == TargetPlatform.iOS ? 'Menlo' : 'monospace',
+      fontSize: 12,
+      height: 19 / 12,
+      leadingDistribution: TextLeadingDistribution.even,
+      color: colors.foreground,
+    );
+    final lines = _diffLines(text);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tail = <Widget>[
+          if (footer != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Center(child: footer),
+            ),
+          if (swipeHint != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  swipeHint!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.muted,
+                    fontSize: 12,
+                    height: 19 / 12,
+                  ),
+                ),
+              ),
+            ),
+        ];
+        final list = ListView.builder(
+          padding: EdgeInsets.zero,
+          itemCount: lines.length + tail.length,
+          itemBuilder: (context, index) => index < lines.length
+              ? _DiffRow(line: lines[index], wrap: wrap, style: style)
+              : Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    child: tail[index - lines.length],
+                  ),
+                ),
+        );
+        if (wrap) return list;
+        final longest = lines.fold<int>(
+          0,
+          (length, line) => math.max(length, line.text.length),
+        );
+        final width = MediaQuery.textScalerOf(context).scale(12) * longest + 66;
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: math.max(constraints.maxWidth, width),
+            child: list,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DiffRow extends StatelessWidget {
+  const _DiffRow({required this.line, required this.wrap, required this.style});
+
+  final _Line line;
+  final bool wrap;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    if (line.kind == _LineKind.gap) {
+      return ColoredBox(
+        color: colors.panel,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Center(
+            child: Text(line.text, style: style.copyWith(color: colors.faint)),
+          ),
+        ),
+      );
+    }
+    final (background, marker) = switch (line.kind) {
+      _LineKind.added => (colors.diffAddedBackground, '+'),
+      _LineKind.removed => (colors.diffRemovedBackground, '−'),
+      _ => (colors.background, ''),
     };
     return ColoredBox(
       color: background,
@@ -519,32 +703,79 @@ class _DiffRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 38,
-            child: Text(
-              line.number?.toString() ?? '',
-              textAlign: TextAlign.right,
-              style: _diffStyle.copyWith(color: colors.muted),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Text(
+                line.number?.toString() ?? '',
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style.copyWith(color: colors.faint),
+              ),
             ),
           ),
           SizedBox(
             width: 14,
-            child: Text(
-              marker,
-              textAlign: TextAlign.center,
-              style: _diffStyle.copyWith(color: foreground),
-            ),
+            child: Text(marker, style: style.copyWith(color: colors.muted)),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Text(
-                line.text,
-                softWrap: wrap,
-                style: _diffStyle.copyWith(color: foreground),
+              padding: const EdgeInsets.only(right: 14),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final text = wrap
+                      ? _breakLongLine(context, line.text, constraints.maxWidth)
+                      : line.text;
+                  return Text(
+                    text.isEmpty ? ' ' : text,
+                    semanticsLabel: line.text,
+                    softWrap: wrap,
+                    style: line.kind == _LineKind.header
+                        ? style.copyWith(color: colors.muted)
+                        : style,
+                  );
+                },
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  String _breakLongLine(BuildContext context, String text, double width) {
+    final scaler = MediaQuery.textScalerOf(context);
+    if (scaler.scale(12) * text.length <= width) return text;
+    final measure = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+      textScaler: scaler,
+    )..layout();
+    final needsBreaks = measure.width > width;
+    measure.dispose();
+    if (!needsBreaks) return text;
+    // 只给放不下的长标识符增加折行机会，其余文本保持原样，便于查找和复制。
+    return text.splitMapJoin(
+      RegExp(r'\S+'),
+      onMatch: (token) {
+        final value = token[0]!;
+        final tokenMeasure = TextPainter(
+          text: TextSpan(text: value, style: style),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+          textScaler: scaler,
+        )..layout();
+        final tooLong = tokenMeasure.width > width;
+        tokenMeasure.dispose();
+        return tooLong
+            ? value.replaceAllMapped(
+                _identifierBreak,
+                (letter) => '${letter[0]}\u200b',
+              )
+            : value;
+      },
+      onNonMatch: (separator) => separator,
     );
   }
 }

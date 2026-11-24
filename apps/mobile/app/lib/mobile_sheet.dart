@@ -1,60 +1,211 @@
 import 'package:flutter/material.dart';
 
+import 'mobile_surfaces.dart';
+import 'theme_colors.dart';
+import 'workspace_icon.dart';
+
 Future<T?> showMobileSheet<T>(
   BuildContext context, {
   required String title,
-  required WidgetBuilder builder,
-}) => showModalBottomSheet<T>(
-  context: context,
-  isScrollControlled: true,
-  showDragHandle: true,
-  useSafeArea: true,
-  sheetAnimationStyle: MediaQuery.disableAnimationsOf(context)
-      ? AnimationStyle.noAnimation
-      : const AnimationStyle(
-          duration: Duration(milliseconds: 260),
-          reverseDuration: Duration(milliseconds: 200),
-        ),
-  builder: (sheet) => LayoutBuilder(
-    builder: (context, constraints) => ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: constraints.maxHeight * .88),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsetsDirectional.only(start: 20, end: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
+  required WidgetBuilder content,
+}) {
+  final theme = Theme.of(context);
+  final palette = theme.brightness == Brightness.dark
+      ? pigcodeDark
+      : pigcodeLight;
+  final touch = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+  final showHandle =
+      MediaQuery.sizeOf(context).height -
+          MediaQuery.paddingOf(context).vertical -
+          MediaQuery.viewInsetsOf(context).bottom >=
+      200;
+  // 握柄和正文留白为关闭按钮补足平台触区，标题与内容的位置保持对齐。
+  final overhang = showHandle ? (touch - 42) / 2 : 0.0;
+  const radius = BorderRadius.vertical(top: Radius.circular(22));
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: false,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    barrierColor: palette.scrim,
+    barrierLabel: '关闭',
+    elevation: 0,
+    clipBehavior: Clip.none,
+    constraints: BoxConstraints(
+      maxHeight: MediaQuery.sizeOf(context).height * .88,
+    ),
+    sheetAnimationStyle: MediaQuery.disableAnimationsOf(context)
+        ? AnimationStyle.noAnimation
+        : const AnimationStyle(
+            duration: Duration(milliseconds: 260),
+            reverseDuration: Duration(milliseconds: 200),
+          ),
+    builder: (sheet) => DecoratedBox(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: radius,
+        boxShadow: const [mobileSheetShadow],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Material(
+          type: MaterialType.transparency,
+          child: SafeArea(
+            top: false,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final header = Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 20, end: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
                               fontSize: 17,
                               fontWeight: FontWeight.w500,
+                              height: 1.45,
+                              letterSpacing:
+                                  theme.platform == TargetPlatform.iOS
+                                  ? -.24
+                                  : 0,
+                              leadingDistribution: TextLeadingDistribution.even,
+                              locale: const Locale('zh', 'CN'),
                             ),
+                          ),
+                        ),
+                      ),
+                      SizedBox.square(
+                        dimension: touch,
+                        child: IconButton(
+                          tooltip: '关闭弹层',
+                          color: palette.foreground,
+                          padding: const EdgeInsetsDirectional.only(end: 10.5),
+                          alignment: AlignmentDirectional.centerEnd,
+                          onPressed: () => Navigator.pop(sheet),
+                          icon: const WorkspaceIcon(
+                            WorkspaceGlyph.close,
+                            size: 21,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                final scrollHeader = constraints.maxHeight < 180;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (showHandle)
+                      Padding(
+                        padding: EdgeInsets.only(top: 8, bottom: 4 - overhang),
+                        child: SizedBox(
+                          width: 36,
+                          height: 5,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: palette.strongBorder,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (!scrollHeader) header,
+                    Flexible(
+                      child: CustomScrollView(
+                        shrinkWrap: true,
+                        slivers: [
+                          if (scrollHeader) SliverToBoxAdapter(child: header),
+                          SliverPadding(
+                            padding: EdgeInsets.fromLTRB(
+                              20,
+                              6 - overhang,
+                              20,
+                              20,
+                            ),
+                            sliver: content(sheet),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: '关闭弹层',
-                    onPressed: () => Navigator.pop(sheet),
-                    icon: const Icon(Icons.close, size: 20),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class MobileSheetAction extends StatelessWidget {
+  const MobileSheetAction({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.glyph,
+    this.dividerAbove = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final WorkspaceGlyph? glyph;
+  final bool dividerAbove;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 54),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: dividerAbove
+                  ? Border(top: BorderSide(color: palette.divider))
+                  : null,
+            ),
+            child: Padding(
+              padding: EdgeInsets.only(top: dividerAbove ? 1 : 0),
+              child: Row(
+                spacing: 14,
+                children: [
+                  if (glyph case final glyph?)
+                    IconTheme(
+                      data: IconThemeData(color: palette.secondaryText),
+                      child: WorkspaceIcon(glyph),
+                    ),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 16,
+                        height: 1.45,
+                        letterSpacing: theme.platform == TargetPlatform.iOS
+                            ? -.24
+                            : 0,
+                        leadingDistribution: TextLeadingDistribution.even,
+                        locale: const Locale('zh', 'CN'),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            Flexible(child: builder(sheet)),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
-);
+    );
+  }
+}

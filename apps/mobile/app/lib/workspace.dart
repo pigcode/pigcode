@@ -6,6 +6,8 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'mobile_status_dot.dart';
+import 'mobile_surfaces.dart';
 import 'new_thread_draft.dart';
 import 'offline_cache.dart';
 import 'sidebar_menu.dart';
@@ -455,6 +457,32 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     super.dispose();
   }
 
+  Widget _headerControl(
+    BuildContext context,
+    double visualInset,
+    Widget child,
+  ) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          left: visualInset,
+          right: visualInset,
+          top: visualInset,
+          bottom: visualInset,
+          child: DecoratedBox(
+            decoration: mobileRaisedSurface(Theme.of(context).brightness),
+          ),
+        ),
+        Material(
+          type: MaterialType.transparency,
+          shape: const StadiumBorder(),
+          child: child,
+        ),
+      ],
+    );
+  }
+
   Widget _header(
     BuildContext context,
     MobileThreadSummary? thread,
@@ -466,6 +494,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         ? pigcodeDark
         : pigcodeLight;
     final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    final visualInset = (hit - 44) / 2;
     final attention =
         widget.online &&
         (widget.snapshot?.threads.any(
@@ -475,18 +504,21 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final status = widget.online && !_draftOpen ? thread?.status : null;
     final statusColor = switch (status) {
       MobileThreadStatus.waitingApproval => colors.attention,
-      MobileThreadStatus.running || MobileThreadStatus.queued => colors.running,
+      MobileThreadStatus.queued => colors.running,
       MobileThreadStatus.failed => colors.error,
       _ => null,
     };
     final dotColor = switch (status) {
-      MobileThreadStatus.running || MobileThreadStatus.queued => colors.running,
-      _ when !widget.online => colors.muted,
+      MobileThreadStatus.queued => colors.running,
+      _ when !widget.online => colors.faint,
       _ => null,
     };
-    final secondary = statusColor != null
-        ? threadStatusText(status!)
-        : subtitle;
+    final secondary = switch (status) {
+      MobileThreadStatus.waitingApproval => waitingThreadLabel(thread!),
+      MobileThreadStatus.running => '生成中',
+      _ when statusColor != null => threadStatusText(status!),
+      _ => subtitle,
+    };
     final changes = widget.online ? _runChanges : null;
     final fileCount = changes?.fileCount ?? 0;
     final countLabel = changes?.hasMore == true ? '$fileCount+' : '$fileCount';
@@ -494,18 +526,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 58),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: EdgeInsets.symmetric(
+          horizontal: 12 - visualInset,
+          vertical: 6 - visualInset,
+        ),
         child: Row(
           children: [
-            Material(
-              color: colors.surface,
-              shadowColor: colors.scrim,
-              surfaceTintColor: Colors.transparent,
-              elevation: .5,
-              shape: CircleBorder(
-                side: BorderSide(color: colors.divider, width: .5),
-              ),
-              child: SizedBox.square(
+            _headerControl(
+              context,
+              visualInset,
+              SizedBox.square(
                 dimension: hit,
                 child: Stack(
                   fit: StackFit.expand,
@@ -516,18 +546,23 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         focusNode: _menuButton,
                         onPressed: () => _menu(true),
                         tooltip: '打开菜单',
+                        color: colors.foreground,
                         icon: const WorkspaceIcon(WorkspaceGlyph.menu),
                       ),
                     ),
                     if (attention)
                       Positioned(
-                        right: 9,
-                        top: 9,
+                        right: 8 + visualInset,
+                        top: 9 + visualInset,
                         child: IgnorePointer(
-                          child: Icon(
-                            Icons.circle,
-                            color: colors.attention,
-                            size: 6,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: colors.attentionMark,
+                              border: Border.all(color: colors.background),
+                            ),
                           ),
                         ),
                       ),
@@ -535,34 +570,46 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 ),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: 10 - visualInset),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     _draftOpen ? '新会话' : thread?.title ?? '会话',
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
+                      height: 1.45,
+                      leadingDistribution: TextLeadingDistribution.even,
                     ),
                   ),
                   Row(
                     children: [
-                      if (dotColor != null) ...[
-                        Icon(Icons.circle, size: 6, color: dotColor),
+                      if (status == MobileThreadStatus.running) ...[
+                        TickerMode(
+                          enabled: widget.presented && !_open,
+                          child: MobileRunningDotMatrix(
+                            color: colors.statusAccent,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                      ] else if (dotColor != null) ...[
+                        MobileStatusDot(color: dotColor),
                         const SizedBox(width: 5),
                       ],
                       Flexible(
                         child: Text(
                           secondary,
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
                             fontSize: 12,
                             color: statusColor ?? colors.muted,
+                            height: 1.45,
+                            leadingDistribution: TextLeadingDistribution.even,
                           ),
                         ),
                       ),
@@ -581,56 +628,72 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 icon: const Icon(Icons.refresh, size: 20),
               ),
             if (thread != null || _draftOpen || canOpenDraft) ...[
-              const SizedBox(width: 10),
-              Material(
-                color: colors.surface,
-                shadowColor: colors.scrim,
-                surfaceTintColor: Colors.transparent,
-                elevation: .5,
-                shape: StadiumBorder(
-                  side: BorderSide(color: colors.divider, width: .5),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (thread != null && !_draftOpen)
-                      Semantics(
-                        value: fileCount > 0 ? '$countLabel 个文件' : null,
-                        child: IconButton(
-                          tooltip: '改动',
-                          style: IconButton.styleFrom(
-                            minimumSize: Size.square(hit),
-                          ),
-                          onPressed: changes?.open,
-                          icon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const WorkspaceIcon(WorkspaceGlyph.changes),
-                              if (fileCount > 0) ...[
-                                const SizedBox(width: 3),
-                                Text(
-                                  countLabel,
-                                  style: theme.textTheme.labelMedium,
+              SizedBox(width: 10 - visualInset),
+              _headerControl(
+                context,
+                visualInset,
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: thread != null && !_draftOpen && canOpenDraft
+                        ? 1
+                        : 2,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (thread != null && !_draftOpen)
+                        Semantics(
+                          value: fileCount > 0 ? '$countLabel 个文件' : null,
+                          child: IconButton(
+                            tooltip: '改动',
+                            style: IconButton.styleFrom(
+                              minimumSize: Size.square(hit),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: changes?.open,
+                            color: colors.foreground,
+                            disabledColor: colors.faint,
+                            icon: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const WorkspaceIcon(
+                                  WorkspaceGlyph.changes,
+                                  size: 18,
                                 ),
+                                if (fileCount > 0) ...[
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    countLabel,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      fontSize: 13,
+                                      height: 1.45,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
-                      ),
-                    if (_draftOpen || canOpenDraft)
-                      SizedBox.square(
-                        dimension: hit,
-                        child: IconButton(
-                          tooltip: _draftOpen ? '返回会话' : '新会话',
-                          onPressed: _draftOpen
-                              ? () => setState(() => _draftOpen = false)
-                              : () => _openDraft(null),
-                          icon: _draftOpen
-                              ? const Icon(Icons.close, size: 20)
-                              : const WorkspaceIcon(WorkspaceGlyph.compose),
+                      if (_draftOpen || canOpenDraft)
+                        SizedBox.square(
+                          dimension: hit,
+                          child: IconButton(
+                            tooltip: _draftOpen ? '返回会话' : '新会话',
+                            onPressed: _draftOpen
+                                ? () => setState(() => _draftOpen = false)
+                                : () => _openDraft(null),
+                            color: colors.foreground,
+                            icon: const WorkspaceIcon(
+                              WorkspaceGlyph.compose,
+                              size: 18,
+                            ),
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -658,11 +721,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final project = widget.snapshot?.projects
         .where((item) => item.id == projectId)
         .firstOrNull;
+    final projectLabel =
+        (_draftOpen ? _draftProjectName : null) ??
+        project?.name ??
+        widget.computerName;
+    final agentName = _draftOpen ? null : thread?.agentName;
     final subtitle = !widget.online
         ? widget.connectionLabel ?? '电脑连接已断开'
-        : (_draftOpen ? _draftProjectName : null) ??
-              project?.name ??
-              widget.computerName;
+        : agentName == null
+        ? projectLabel
+        : '$projectLabel · $agentName';
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
         widget.draft != null &&
@@ -707,6 +775,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                   selectedId: _draftOpen ? null : thread?.id,
                                   computerName: widget.computerName,
                                   online: widget.online,
+                                  connectionLabel: widget.connectionLabel,
                                   commands: widget.sidebarCommands,
                                   focusNode: _menuFocus,
                                   onSelect: (id) {
@@ -746,17 +815,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         color: colors.background,
                         borderRadius: edge,
                         boxShadow: _open
-                            ? [
-                                BoxShadow(
-                                  color: colors.scrim.withValues(
-                                    alpha: theme.brightness == Brightness.dark
-                                        ? .30
-                                        : .12,
-                                  ),
-                                  blurRadius: 40,
-                                  offset: const Offset(-10, 0),
-                                ),
-                              ]
+                            ? [mobileDrawerShadow(theme.brightness)]
                             : null,
                       ),
                       child: Stack(

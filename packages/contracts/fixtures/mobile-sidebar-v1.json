@@ -14,7 +14,9 @@
         "archived": false,
         "pinned": false,
         "status": "waiting-approval",
-        "unread": true
+        "unread": true,
+        "agentName": "Claude Code",
+        "pendingKind": "approval"
       },
       {
         "id": "th_2",

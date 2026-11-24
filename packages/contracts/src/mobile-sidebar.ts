@@ -1,5 +1,11 @@
 import { z } from "zod"
-import { projectSchema, threadReadTargetSchema, threadSchema, threadStatusSchema } from "./domain"
+import {
+  pendingRequestSchema,
+  projectSchema,
+  threadReadTargetSchema,
+  threadSchema,
+  threadStatusSchema,
+} from "./domain"
 import { computerIdSchema } from "./mobile"
 import { rpcErrorSchema } from "./protocol"
 
@@ -51,15 +57,25 @@ export const mobileProjectSummarySchema = projectSchema
   .extend({ name: displayLabel })
   .strict()
 export const mobileThreadSummarySchema = threadSchema
-  .pick({ id: true, projectId: true, title: true, updatedAt: true, readTarget: true, manualUnread: true })
+  .pick({
+    id: true,
+    projectId: true,
+    title: true,
+    updatedAt: true,
+    readTarget: true,
+    manualUnread: true,
+  })
   .extend({
     title: displayLabel,
     archived: z.boolean(),
     pinned: z.boolean(),
     status: threadStatusSchema,
     unread: z.boolean(),
+    agentName: displayLabel.optional(),
+    pendingKind: pendingRequestSchema.shape.kind.optional(),
   })
   .strict()
+export type MobileThreadSummary = z.infer<typeof mobileThreadSummarySchema>
 
 export const mobileProjectListResultSchema = z.array(mobileProjectSummarySchema)
 export const mobileThreadListResultSchema = z.array(mobileThreadSummarySchema)
@@ -80,6 +96,7 @@ export const mobileSidebarModels = {
   MobileProjectSummary: mobileProjectSummarySchema,
   MobileThreadSummary: mobileThreadSummarySchema,
   MobileThreadStatus: threadStatusSchema,
+  MobileThreadPendingKind: pendingRequestSchema.shape.kind,
   MobileThreadReadTarget: threadReadTargetSchema,
   MobileProjectList: mobileProjectListResultSchema,
   MobileThreadList: mobileThreadListResultSchema,

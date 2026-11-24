@@ -11,23 +11,49 @@ const tokens = {
   background: "--bg",
   window: "--window",
   surface: "--surface",
+  surfaceRaised: "--surface-raised",
+  surfaceSunken: "--surface-sunken",
+  panel: "--panel",
+  field: "--field",
+  switchTrack: "--track",
+  switchOn: "--switch-on",
+  switchThumb: "--knob",
   foreground: "--fg",
   secondaryText: "--fg-2",
   primary: "--primary",
   onPrimary: "--on-primary",
   divider: "--divider",
+  border: "--border",
+  strongBorder: "--border-strong",
+  inputBackground: "--input-bg",
+  inputBorder: "--input-border",
+  timelineUser: "--cv-user-fill",
+  timelineDivider: "--cv-hairline",
+  timelineSubtle: "--cv-subtle",
+  timelineFaint: "--cv-subtlest",
+  timelineFile: "--file-node-fg",
   selected: "--active",
   error: "--bad-text",
+  errorTint: "--bad-soft",
   onError: "--on-bad",
   muted: "--muted",
+  faint: "--faint",
   attention: "--warn-text",
+  attentionTint: "--warn-soft",
+  attentionMark: "--warn",
+  statusAccent: "--accent",
+  readyMark: "--ok",
   running: "--info",
   online: "--ok-text",
   diffAdded: "--diff-add-fg",
-  diffAddedBackground: "--diff-add-bg",
   diffRemoved: "--diff-remove-fg",
-  diffRemovedBackground: "--diff-remove-bg",
   scrim: "--scrim",
+}
+const fills = {
+  selectedOnSurface: ["--surface", "--active"],
+  selectedOnBackground: ["--bg", "--active"],
+  diffAddedBackground: ["--bg", "--diff-add-bg"],
+  diffRemovedBackground: ["--bg", "--diff-remove-bg"],
 }
 
 const bundled = await build({
@@ -56,7 +82,7 @@ try {
   ]
   for (const theme of ["light", "dark"]) {
     const colors = await page.evaluate(
-      ({ theme, tokens }) => {
+      ({ theme, tokens, fills }) => {
         document.documentElement.dataset.theme = theme
         const { documentTokenReader, resolveCssColor } = (
           globalThis as typeof globalThis & {
@@ -64,13 +90,30 @@ try {
           }
         ).PigcodeColors
         const read = documentTokenReader()
-        return Object.entries(tokens).map(([name, token]) => {
+        const colors = Object.entries(tokens).map(([name, token]) => {
           const hex = resolveCssColor(read(token))?.slice(1).toUpperCase()
           if (!hex) throw new Error("无法解析颜色 " + token)
           return [name, hex.length === 8 ? hex.slice(6) + hex.slice(0, 6) : "FF" + hex]
         })
+        const canvas = document.createElement("canvas")
+        canvas.width = canvas.height = 1
+        const pixel = canvas.getContext("2d")
+        if (!pixel) throw new Error("无法合成手机界面的填充颜色")
+        for (const [name, layers] of Object.entries(fills)) {
+          pixel.clearRect(0, 0, 1, 1)
+          for (const token of layers) {
+            pixel.fillStyle = read(token)
+            pixel.fillRect(0, 0, 1, 1)
+          }
+          const rgba = pixel.getImageData(0, 0, 1, 1).data
+          const hex = Array.from(rgba, (channel) => channel.toString(16).padStart(2, "0"))
+            .join("")
+            .toUpperCase()
+          colors.push([name, hex.slice(6) + hex.slice(0, 6)])
+        }
+        return colors
       },
-      { theme, tokens },
+      { theme, tokens, fills },
     )
     chunks.push(theme === "light" ? "const pigcodeLight = (" : "const pigcodeDark = (")
     for (const [key, value] of colors) {

@@ -11,7 +11,15 @@ import 'package:pigcode_mobile/workspace.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 final _input = find.byKey(const ValueKey('first-message-input'));
-final _send = find.widgetWithIcon(IconButton, Icons.arrow_upward);
+final _send = find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == '发送首条消息',
+);
+
+Finder _choiceLabel(String option, String label) =>
+    find.descendant(of: find.byTooltip(option), matching: find.text(label));
+
+Finder _pickerOption(String label) =>
+    find.descendant(of: find.byType(BottomSheet), matching: find.text(label));
 
 const _projects = [
   MobileProjectSummary(id: 'one', name: '主项目'),
@@ -175,7 +183,7 @@ Widget _page(_Connection phone) => ProviderScope(
 Future<void> _pick(WidgetTester tester, String field, String option) async {
   await tester.tap(find.byTooltip(field));
   await tester.pumpAndSettle();
-  await tester.tap(find.widgetWithText(ListTile, option).last);
+  await tester.tap(_pickerOption(option));
   await tester.pumpAndSettle();
 }
 
@@ -218,7 +226,7 @@ void main() {
       await tester.pumpAndSettle();
       online.value = false;
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, '主项目').last);
+      await tester.tap(_pickerOption('主项目'));
       await tester.pumpAndSettle();
       expect(find.text('主项目'), findsOneWidget);
     },
@@ -236,7 +244,7 @@ void main() {
       await tester.tap(find.byTooltip('在次要项目新建会话'));
       await tester.pumpAndSettle();
       expect(host.writes, isEmpty);
-      expect(find.widgetWithText(ActionChip, '次要项目'), findsOneWidget);
+      expect(_choiceLabel('草稿项目', '次要项目'), findsOneWidget);
 
       await _pick(tester, '草稿 Agent 实例', '团队实例 · Fake');
       await _pick(tester, '草稿模型', 'Swift 模型');
@@ -257,9 +265,9 @@ void main() {
       await tester.tap(find.byTooltip('新会话'));
       await tester.pumpAndSettle();
       expect(find.text('保留我的第一条消息'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, '次要项目'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, 'Swift 模型'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, '接受编辑'), findsOneWidget);
+      expect(_choiceLabel('草稿项目', '次要项目'), findsOneWidget);
+      expect(_choiceLabel('草稿模型', 'Swift 模型'), findsOneWidget);
+      expect(_choiceLabel('草稿权限', '接受编辑'), findsOneWidget);
       expect(host.writes, hasLength(1));
 
       host.reject = false;
@@ -272,9 +280,9 @@ void main() {
 
       await tester.tap(find.byTooltip('新会话'));
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ActionChip, '默认实例 · Fake'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, 'Sage 模型'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, '监督审批'), findsOneWidget);
+      expect(_choiceLabel('草稿 Agent 实例', '默认实例 · Fake'), findsOneWidget);
+      expect(_choiceLabel('草稿模型', 'Sage 模型'), findsOneWidget);
+      expect(_choiceLabel('草稿权限', '监督审批'), findsOneWidget);
       expect(find.text('保留我的第一条消息'), findsNothing);
     },
   );
@@ -384,9 +392,9 @@ void main() {
       await tester.tap(find.byTooltip('新会话'));
       await tester.pumpAndSettle();
       expect(find.text('原有草稿'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, '主项目'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, '默认实例 · Fake'), findsOneWidget);
-      expect(find.widgetWithText(ActionChip, 'Sage 模型'), findsOneWidget);
+      expect(_choiceLabel('草稿项目', '主项目'), findsOneWidget);
+      expect(_choiceLabel('草稿 Agent 实例', '默认实例 · Fake'), findsOneWidget);
+      expect(_choiceLabel('草稿模型', 'Sage 模型'), findsOneWidget);
       expect(host.writes, isEmpty);
     },
   );

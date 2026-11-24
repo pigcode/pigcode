@@ -88,6 +88,7 @@ class _Draft {
   final files = <String>{};
   MobileTimelineEvent? changes;
   final _tools = <String, int>{};
+  final _questions = <String, int>{};
   final _requests = <String>{};
   bool _hasQuestionEvents = false;
 
@@ -135,12 +136,21 @@ class _Draft {
         }
       case MobileTimelineKind.questionRequested:
         _hasQuestionEvents = true;
+        if (event.itemId case final id?) _questions[id] = work.length;
         work.add(TimelineWork(TimelineWorkKind.question, event));
         _wait(event.itemId);
       case MobileTimelineKind.approvalRequested:
         _wait(event.itemId);
       case MobileTimelineKind.approvalResolved:
       case MobileTimelineKind.questionAnswered:
+        if (_questions[event.itemId] case final index?
+            when event.kind == MobileTimelineKind.questionAnswered) {
+          work[index] = TimelineWork(
+            TimelineWorkKind.question,
+            work[index].event,
+            result: event,
+          );
+        }
         if (event.text?.isNotEmpty ?? false) {
           notices.add(event);
         }

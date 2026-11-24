@@ -259,6 +259,8 @@ final class MobileThreadSummary {
     required this.pinned,
     required this.status,
     required this.unread,
+    this.agentName,
+    this.pendingKind,
   });
   final String id;
   final String projectId;
@@ -270,6 +272,8 @@ final class MobileThreadSummary {
   final bool pinned;
   final MobileThreadStatus status;
   final bool unread;
+  final String? agentName;
+  final MobileThreadPendingKind? pendingKind;
 
   factory MobileThreadSummary.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -284,6 +288,8 @@ final class MobileThreadSummary {
         'pinned',
         'status',
         'unread',
+        'agentName',
+        'pendingKind',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -322,6 +328,15 @@ final class MobileThreadSummary {
     final pinned = json['pinned'] as bool;
     final status = MobileThreadStatus.fromWire(json['status'] as String);
     final unread = json['unread'] as bool;
+    final agentName = json.containsKey('agentName')
+        ? json['agentName'] as String
+        : null;
+    if (agentName != null && (agentName.isEmpty || agentName.length > 512)) {
+      throw const FormatException('Invalid agentName');
+    }
+    final pendingKind = json.containsKey('pendingKind')
+        ? MobileThreadPendingKind.fromWire(json['pendingKind'] as String)
+        : null;
     return MobileThreadSummary(
       id: id,
       projectId: projectId,
@@ -333,6 +348,8 @@ final class MobileThreadSummary {
       pinned: pinned,
       status: status,
       unread: unread,
+      agentName: agentName,
+      pendingKind: pendingKind,
     );
   }
 
@@ -347,6 +364,8 @@ final class MobileThreadSummary {
     'pinned': pinned,
     'status': status.wire,
     'unread': unread,
+    'agentName': ?agentName,
+    'pendingKind': ?pendingKind?.wire,
   };
 }
 
@@ -367,6 +386,21 @@ enum MobileThreadStatus {
       if (value.wire == wire) return value;
     }
     throw const FormatException('Invalid MobileThreadStatus');
+  }
+}
+
+enum MobileThreadPendingKind {
+  approval('approval'),
+  question('question');
+
+  const MobileThreadPendingKind(this.wire);
+  final String wire;
+
+  factory MobileThreadPendingKind.fromWire(String wire) {
+    for (final value in values) {
+      if (value.wire == wire) return value;
+    }
+    throw const FormatException('Invalid MobileThreadPendingKind');
   }
 }
 

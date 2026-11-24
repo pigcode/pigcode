@@ -15,8 +15,12 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 
 const _threadId = 'selected-thread';
 final _input = find.byKey(const ValueKey('run-composer-input'));
-final _send = find.widgetWithIcon(IconButton, Icons.arrow_upward);
-final _stop = find.widgetWithIcon(IconButton, Icons.stop_rounded);
+final _send = find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == '发送消息',
+);
+final _stop = find.byWidgetPredicate(
+  (widget) => widget is IconButton && widget.tooltip == '停止本轮运行',
+);
 
 class _CommandHost implements HostRequests {
   _CommandHost({

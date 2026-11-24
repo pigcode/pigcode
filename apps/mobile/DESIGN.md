@@ -11,17 +11,19 @@
 
 ## 会话页和菜单
 
-| 组件         | 方案 D 的尺寸和呈现                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 会话顶栏     | 最小高 58，左右内边距 12，组件间距 10。左边是 44 的圆形菜单钮，图标 20。中间标题 16、字重 500，副行 12。右边是 44 高的胶囊，内含「改动」和「新会话」。 |
+| 组件         | 方案 D 的尺寸和呈现                                                                                                                                                        |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 会话顶栏     | 最小高 58，左右内边距 12，组件间距 10。左边是 44 的圆形菜单钮，图标 20。中间标题 16、字重 500，副行 12。右边是 44 高的胶囊，内含「改动」和「新会话」。                     |
 | 会话时间线   | 时间线外缘与每轮内容各留 16 的左右间距，用户消息之前留 56。回答用正文色，过程用次级文字。正常结束后把过程收成「用时 N 秒」的一行，保留最终回答。失败或停止时保持过程展开。 |
-| 侧边菜单     | 宽为页面的 84%。打开时会话页右移同等宽度，左边两角圆角 34，并在左缘投下轻阴影。顶部是品牌名和搜索，随后是 50 高、圆角 16 的「新会话」。                |
-| 会话和项目行 | 原型最小高 44，字号 15，圆角 12。会话行外侧各留 8、内侧各留 12，项目内嵌套行左侧为 40。当前会话用 `--active` 底色。                                    |
-| 菜单底部     | 电脑胶囊和设置圆钮高 50。电脑胶囊用状态点和文字表示连接状态，点开查看连接详情、切换或配对电脑。                                                        |
+| 侧边菜单     | 宽为页面的 84%。打开时会话页右移同等宽度，左边两角圆角 34，并在左缘投下轻阴影。顶部是品牌名和搜索，随后是 50 高、圆角 16 的「新会话」。                                    |
+| 会话和项目行 | 原型最小高 44，字号 15，圆角 12。会话行外侧各留 8、内侧各留 12，项目内嵌套行左侧为 40。当前会话用 `--active` 底色。                                                        |
+| 菜单底部     | 电脑胶囊和设置圆钮高 50。电脑胶囊用状态点和文字表示连接状态，点开查看连接详情、切换或配对电脑。                                                                            |
 
 侧边菜单依次显示「置顶」、项目分组和底部的电脑与设置。置顶会话只在置顶区出现。折叠项目和分组筛选使用原型的入口。长按会话显示置顶、标记已读或未读、归档等操作。
 
-会话行最多显示一个状态标记。出错用红色文字，其余按「等你处理」、运行中、未读的顺序取一个。连接异常时，顶栏副行优先显示连接状态。离线列表显示缓存时间，隐藏会话状态标记。[方案 D 菜单与顶栏样式](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/mobile.css#L1724-L2019) · [离线与缓存规则](https://github.com/pigcode/monorepo/issues/92#issuecomment-7072108758)
+时间线把连续的思考、查阅、执行和修改合成摘要。正文和提问分隔相邻摘要组。展开后可以查看每项工具的参数和输出。执行中的工具优先显示命令说明，审批或提问面板上方保留对应的活动行。[方案 D 的时间线摘要](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/packages/ui-chat/src/summary-groups.ts)
+
+会话行最多显示一个状态标记。出错用红色文字，其余按待处理、运行中、未读的顺序取一个。审批显示「等你确认」，提问显示「等你回答」，旧 Host 缺少请求类别时显示「等你处理」。在线时，普通会话的顶栏副行显示项目和 Agent 名称。连接异常时优先显示连接状态。离线列表显示缓存时间，隐藏会话状态标记。[方案 D 菜单与顶栏样式](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/mobile.css#L1724-L2019) · [离线与缓存规则](https://github.com/pigcode/monorepo/issues/92#issuecomment-7072108758)
 
 ## 输入、待处理和改动
 
@@ -35,24 +37,26 @@
 
 活动条、审批和提问按 Host 状态切换。待发消息在输入区附近显示，保留撤回与「停止当前 run 并发送」操作。队列暂停时显示「继续发送」。改动数据绑定到所选 run，缺少 diff 时保留文件清单和不可用的说明。[方案 D 会话页](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/variant-d.tsx#L150-L208) · [待发队列规则](https://github.com/pigcode/monorepo/issues/93#issuecomment-7073510830) · [按 run 查看改动](https://github.com/pigcode/monorepo/issues/91#issuecomment-7070294711)
 
+全屏 diff 的路径固定在文件胶囊下方。统一补丁按实际行号显示，修改段之间用「⋯」分隔。离线列表在「新会话」下方显示最近的同步时间，离线会话在输入区上方显示缓存时间。[方案 D 全屏 diff 与文件切换](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/common.tsx#L585-L649)
+
 ## 动效
 
 - 侧边菜单推开或收回用 320 ms。内容页的圆角和阴影用相同过渡。底部弹层入场用 260 ms，遮罩淡入用 200 ms，关闭后把焦点还给打开它的控件。缓动为 `cubic-bezier(0.2, 0.7, 0.2, 1)`，与原型一致。
-- 运行中用原型的状态点动效和活动条计时。系统开启减少动态效果时，菜单和弹层直接切换状态，运行中使用静态标记和文字。[菜单动效](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/mobile.css#L1724-L1757) · [Flutter 减少动画设置](https://api.flutter.dev/flutter/widgets/MediaQuery/disableAnimationsOf.html)
+- 运行中显示方案 D 的 3×3 点阵和活动条计时，点阵每 175 ms 切换一帧。系统开启减少动态效果时，菜单和弹层直接切换状态，点阵停在第 3 帧并保留状态文字。[状态点动效](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/packages/ui-primitives/src/styles/indicators.css) · [菜单动效](https://github.com/pigcode/pigcode/blob/3910b67e261cdb0de8abbd475a8af862cbd2a0ec/apps/mobile-prototype/src/mobile.css#L1724-L1757)
 
 ## iOS 和 Android 适配
 
 | 项目           | iOS                                                                                | Android                                                                                      |
 | -------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 点按区域       | 至少 44×44 pt。                                                                    | 至少 48×48 dp。                                                                              |
+| 点按区域       | 至少 44×44 pt。                                                                    | 侧栏会话行至少 44 dp 高，其他控件至少 48×48 dp。                                             |
 | 系统边缘       | 使用实际状态栏和底部 Home 指示区域。全屏 diff 及子页面保留系统返回手势和返回按钮。 | 使用实际状态栏、手势导航或三键导航的安全区。系统返回先收起当前弹层或会话菜单，再返回上一页。 |
 | 键盘与文本选择 | 使用 Flutter 在 iOS 上的键盘、文本选择和编辑菜单行为。                             | 使用 Flutter 在 Android 上的键盘、文本选择和预测返回行为。                                   |
 | 系统控件       | 权限提示由系统呈现，系统对话框使用 Cupertino 适配。                                | 权限提示由系统呈现，系统对话框使用 Material 适配。                                           |
 
-图标大小和胶囊的视觉尺寸沿用原型，实际点击区域按上表放大。标题栏右侧胶囊里的两个操作分别有独立的点击区，扩展后的区域互不重叠。空间不足时保留动作图标和读屏标签。Android 的会话行随点按高度加高。正文、输入和按钮响应系统字体缩放，行和面板随内容增高，操作区保持可达。[Apple 按钮](https://developer.apple.com/design/human-interface-guidelines/buttons) · [Android 点按区域](https://developer.android.com/guide/topics/ui/accessibility/apps#touch-targets)
+图标大小和胶囊的视觉尺寸沿用原型，实际点击区域按上表处理。标题栏右侧胶囊里的两个操作分别有独立的点击区，扩展后的区域互不重叠。空间不足时保留动作图标和读屏标签。侧栏会话行按方案 D 从 44 个逻辑像素起排布，带副标题的行随内容增高。正文、输入和按钮响应系统字体缩放，行和面板随内容增高，操作区保持可达。[Apple 按钮](https://developer.apple.com/design/human-interface-guidelines/buttons) · [Android 点按区域](https://developer.android.com/guide/topics/ui/accessibility/apps#touch-targets)
 
 输入框、活动条和待处理面板随键盘上移，系统键盘遮挡范围与底部安全区各按实际值处理。中文输入法的候选与组词由系统输入控件处理。会话菜单和弹层打开后，读屏焦点进入当前区域，关闭时回到触发入口。连接状态与待处理状态同时提供可读文字。[Flutter 平台适配](https://docs.flutter.dev/ui/adaptive-responsive/platform-adaptations)
 
 ## 视觉验收
 
-用方案 D 对照浅色和深色的会话页、打开的菜单、审批和提问、全屏 diff 与离线列表。两端各检查点按区域、键盘弹出、系统返回、放大字号和减少动态效果。长会话上翻保持当前文字位置，回到底部后恢复跟随输出。[长时间线验证](https://github.com/pigcode/monorepo/issues/104#issuecomment-7065565709) · [手机端验收](https://github.com/pigcode/monorepo/issues/100#issuecomment-7075972281)
+以方案 D 原型为参考，固定视口、像素倍率、主题和会话夹具，逐像素比对 Flutter 内容区。原型与 App 使用同一组系统安全区，只裁去系统栏。记录原型提交、渲染环境和差异像素数，差异计数为零才通过。覆盖浅色和深色的会话页、打开的菜单、新会话、审批和提问、全屏 diff 与离线列表。两端各检查点按区域、键盘弹出、系统返回、放大字号和减少动态效果。长会话上翻保持当前文字位置，回到底部后恢复跟随输出。[长时间线验证](https://github.com/pigcode/monorepo/issues/104#issuecomment-7065565709) · [手机端验收](https://github.com/pigcode/monorepo/issues/100#issuecomment-7075972281)

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_mobile/mobile_sheet.dart';
 import 'package:pigcode_mobile/run_diff_screen.dart';
 import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_mobile/workspace.dart';
@@ -178,6 +179,64 @@ Finder menuText(String label) =>
 
 void main() {
   testWidgets(
+    'keeps sheet actions reachable with a short viewport and large text',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(600, 200);
+      tester.view.padding = const FakeViewPadding(top: 24, bottom: 24);
+      tester.view.viewPadding = tester.view.padding;
+      addTearDown(tester.view.reset);
+      String? action;
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(1.7),
+              disableAnimations: true,
+            ),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: Center(
+              child: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () async {
+                    action = await showMobileSheet<String>(
+                      context,
+                      title: '在放大文字的横屏窗口里查看会话操作的长标题',
+                      content: (sheet) => SliverList.list(
+                        children: [
+                          const ListTile(title: Text('置顶')),
+                          ListTile(
+                            title: const Text('归档'),
+                            onTap: () => Navigator.pop(sheet, 'archive'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  child: const Text('打开会话操作'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开会话操作'));
+      await tester.pumpAndSettle();
+      final archive = find.widgetWithText(ListTile, '归档').hitTestable();
+      await tester.scrollUntilVisible(
+        archive,
+        40,
+        scrollable: find.byType(Scrollable),
+      );
+      await tester.tap(archive);
+      await tester.pumpAndSettle();
+      expect(action, 'archive');
+    },
+  );
+
+  testWidgets(
     'pushes the full page while keeping the controls in the safe area',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -238,6 +297,23 @@ void main() {
     expect(find.byType(RunDiffScreen), findsOneWidget);
   });
 
+  testWidgets('loads the changed-file count after a completed edit', (
+    tester,
+  ) async {
+    FlutterSecureStorage.setMockInitialValues({});
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(home: workspaceFixture(completedEditOnly: true)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: find.byTooltip('改动'), matching: find.text('2')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('opens search on demand and clears it when closed', (
     tester,
   ) async {
@@ -257,6 +333,70 @@ void main() {
     expect(menuText('文档更新'), findsOneWidget);
   });
 
+  testWidgets('keeps the sidebar header and footer visible while rows scroll', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      workspace(
+        online: true,
+        data: SidebarSnapshot(
+          projects: snapshot.projects,
+          threads: [
+            for (var index = 0; index < 24; index++)
+              MobileThreadSummary.fromJson({
+                ...snapshot.threads.first.toJson(),
+                'id': 'sidebar-$index',
+                'title': '侧栏会话 $index',
+                'status': 'completed',
+              }),
+          ],
+          syncedAt: snapshot.syncedAt,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip('打开菜单'));
+    await tester.pumpAndSettle();
+    final list = find.descendant(
+      of: find.byType(SidebarMenu),
+      matching: find.byType(ListView),
+    );
+    final scrollable = find.descendant(
+      of: list,
+      matching: find.byType(Scrollable),
+    );
+    final search = find.byTooltip('搜索会话');
+    final computer = menuText('测试电脑');
+    final searchPosition = tester.getTopLeft(search);
+    final computerPosition = tester.getTopLeft(computer);
+
+    await tester.drag(list, const Offset(0, -300));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.state<ScrollableState>(scrollable).position.pixels,
+      greaterThan(0),
+    );
+    expect(tester.getTopLeft(search), searchPosition);
+    expect(tester.getTopLeft(computer), computerPosition);
+  });
+
+  testWidgets(
+    'uses the Scheme D height for Android conversation rows',
+    (tester) async {
+      await tester.pumpWidget(workspace(online: true));
+      await tester.tap(find.byTooltip('打开菜单'));
+      await tester.pumpAndSettle();
+
+      Finder row(String title) =>
+          find.ancestor(of: menuText(title), matching: find.byType(InkWell));
+
+      expect(tester.getSize(row('最新会话')).height, 44);
+      expect(tester.getSize(row('文档更新')).height, greaterThan(44));
+      expect(tester.getSize(find.byTooltip('分组和筛选')).height, 48);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
   testWidgets('shows archived sessions even when their project was collapsed', (
     tester,
   ) async {
@@ -272,6 +412,14 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(menuText('旧会话'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('分组和筛选'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.text('只看已归档'), const Offset(-60, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('关闭弹层'));
+    await tester.pumpAndSettle();
+    expect(menuText('旧会话'), findsNothing);
   });
 
   testWidgets(
@@ -289,7 +437,14 @@ void main() {
 
       await tester.tap(find.byTooltip('分组和筛选'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, '更新时间').first);
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(BottomSheet),
+              matching: find.text('更新时间'),
+            )
+            .first,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('全部标为已读'));
       await tester.pumpAndSettle();
@@ -323,7 +478,12 @@ void main() {
       await tester.tap(find.byTooltip('分组和筛选'));
       await tester.pumpAndSettle();
       for (final label in ['出错', '进行中', '已完成']) {
-        await tester.tap(find.widgetWithText(FilterChip, label));
+        await tester.tap(
+          find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text(label),
+          ),
+        );
         await tester.pumpAndSettle();
       }
       await tester.binding.handlePopRoute();
@@ -348,6 +508,48 @@ void main() {
     expect(find.textContaining('上次同步'), findsOneWidget);
   });
 
+  testWidgets('shows the agent and distinguishes approvals from questions', (
+    tester,
+  ) async {
+    final data = SidebarSnapshot(
+      projects: snapshot.projects,
+      threads: [
+        MobileThreadSummary.fromJson({
+          ...snapshot.threads[0].toJson(),
+          'status': 'completed',
+          'agentName': 'Claude Code',
+        }),
+        MobileThreadSummary.fromJson({
+          ...snapshot.threads[1].toJson(),
+          'pendingKind': 'approval',
+        }),
+        MobileThreadSummary.fromJson({
+          ...snapshot.threads[1].toJson(),
+          'id': 'question',
+          'title': '选项确认',
+          'pendingKind': 'question',
+        }),
+      ],
+      syncedAt: snapshot.syncedAt,
+    );
+    await tester.pumpWidget(workspace(online: true, data: data));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑器 · Claude Code'), findsOneWidget);
+    await tester.tap(find.byTooltip('打开菜单'));
+    await tester.pumpAndSettle();
+    expect(menuText('等你确认'), findsOneWidget);
+    expect(menuText('等你回答'), findsOneWidget);
+    await tester.tap(menuText('选项确认'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('question')), findsOneWidget);
+    expect(find.text('等你回答').hitTestable(), findsOneWidget);
+
+    await tester.pumpWidget(workspace(online: false, data: data));
+    await tester.pumpAndSettle();
+    expect(find.text('电脑连接已断开'), findsOneWidget);
+    expect(find.text('等你回答'), findsNothing);
+  });
+
   testWidgets(
     'keeps the open session when a reconnect read fails and discards the old sidebar',
     (tester) async {
@@ -370,6 +572,10 @@ void main() {
       addTearDown(resumed.sidebar.changes.close);
       Widget show(_ReadConnection connection) => ProviderScope(
         child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
           home: MobileWorkspace(
             connection: connection,
             connected: true,
@@ -440,8 +646,14 @@ void main() {
       );
       await tester.enterText(search, '空项目');
       await tester.pumpAndSettle();
+      final project = find.descendant(
+        of: find.byType(SidebarMenu),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Text && widget.data == '空项目',
+        ),
+      );
       await tester.scrollUntilVisible(
-        menuText('空项目'),
+        project,
         75,
         scrollable: find
             .descendant(
@@ -450,7 +662,7 @@ void main() {
             )
             .first,
       );
-      expect(menuText('空项目'), findsOneWidget);
+      expect(project, findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

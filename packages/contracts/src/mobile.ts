@@ -16,6 +16,7 @@ export const mobileFeatures = [
   "relay.saveReceipt",
   "sidebar.read",
   "sidebar.write",
+  "sidebar.presentation",
   "timeline.read",
   "timeline.resume",
   "run.write",

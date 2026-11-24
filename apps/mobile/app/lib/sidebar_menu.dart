@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'mobile_sheet.dart';
+import 'mobile_status_dot.dart';
+import 'mobile_surfaces.dart';
 import 'offline_sync_label.dart';
 import 'sidebar_options.dart';
 import 'theme_colors.dart';
@@ -40,6 +42,7 @@ class SidebarMenu extends StatefulWidget {
     required this.selectedId,
     required this.computerName,
     required this.online,
+    this.connectionLabel,
     required this.onSelect,
     required this.onComputers,
     required this.focusNode,
@@ -52,6 +55,7 @@ class SidebarMenu extends StatefulWidget {
   final String? selectedId;
   final String computerName;
   final bool online;
+  final String? connectionLabel;
   final ValueChanged<String> onSelect;
   final VoidCallback onComputers;
   final FocusNode focusNode;
@@ -97,42 +101,41 @@ class _SidebarMenuState extends State<SidebarMenu> {
   }
 
   Future<void> _showActions(MobileThreadSummary thread) async {
+    final items = [
+      if (!thread.archived)
+        (
+          thread.pinned ? WorkspaceGlyph.pinOff : WorkspaceGlyph.pin,
+          thread.pinned ? '取消置顶' : '置顶',
+          _ThreadAction.pin,
+        ),
+      if (thread.readTarget != null)
+        (
+          thread.unread ? WorkspaceGlyph.mailOpen : WorkspaceGlyph.mail,
+          thread.unread ? '标为已读' : '标为未读',
+          _ThreadAction.read,
+        ),
+      (
+        thread.archived
+            ? WorkspaceGlyph.archiveRestore
+            : WorkspaceGlyph.archive,
+        thread.archived ? '取消归档' : '归档',
+        _ThreadAction.archive,
+      ),
+    ];
     final action = await showMobileSheet<_ThreadAction>(
       context,
       title: thread.title,
-      builder: (sheet) => SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!thread.archived)
-              ListTile(
-                leading: Icon(
-                  thread.pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                ),
-                title: Text(thread.pinned ? '取消置顶' : '置顶'),
-                onTap: () => Navigator.pop(sheet, _ThreadAction.pin),
-              ),
-            if (thread.readTarget != null)
-              ListTile(
-                leading: Icon(
-                  thread.unread
-                      ? Icons.mark_email_read_outlined
-                      : Icons.mail_outline,
-                ),
-                title: Text(thread.unread ? '标为已读' : '标为未读'),
-                onTap: () => Navigator.pop(sheet, _ThreadAction.read),
-              ),
-            ListTile(
-              leading: Icon(
-                thread.archived
-                    ? Icons.unarchive_outlined
-                    : Icons.archive_outlined,
-              ),
-              title: Text(thread.archived ? '取消归档' : '归档'),
-              onTap: () => Navigator.pop(sheet, _ThreadAction.archive),
-            ),
-          ],
-        ),
+      content: (sheet) => SliverList.builder(
+        itemCount: items.length,
+        itemBuilder: (_, index) {
+          final (glyph, label, value) = items[index];
+          return MobileSheetAction(
+            glyph: glyph,
+            label: label,
+            dividerAbove: index > 0,
+            onTap: () => Navigator.pop(sheet, value),
+          );
+        },
       ),
     );
     if (action == null || !mounted) return;
@@ -164,10 +167,53 @@ class _SidebarMenuState extends State<SidebarMenu> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isIOS = theme.platform == TargetPlatform.iOS;
+    final isAndroid = theme.platform == TargetPlatform.android;
     final colors = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final size = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    final size = isAndroid ? 48.0 : 44.0;
+    final headerInset = (56 - size) / 2;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final pinnedHeadingTrim = isAndroid
+        ? ((32 - textScaler.scale(13) * 1.45) / 2).clamp(0.0, 6.0)
+        : 0.0;
+
+    // 对齐系统字体的字形基线，点击区域仍由原来的按钮布局决定。
+    Widget alignedLabel(Widget child, Offset offset) =>
+        isIOS ? Transform.translate(offset: offset, child: child) : child;
+
+    TextStyle labelStyle(
+      double fontSize, {
+      Color? color,
+      FontWeight fontWeight = FontWeight.w400,
+      double? letterSpacing,
+    }) => theme.textTheme.bodyMedium!.copyWith(
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      height: 1.45,
+      letterSpacing: letterSpacing ?? (isIOS ? -.24 : 0),
+      leadingDistribution: TextLeadingDistribution.even,
+      locale: const Locale('zh', 'CN'),
+    );
+
+    Widget line(String text, TextStyle style) => SizedBox(
+      height: textScaler.scale(style.fontSize!) * 1.45,
+      child: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          text,
+          style: style,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+
+    final connectionText = widget.online
+        ? '已连接'
+        : widget.connectionLabel?.split(' · ').first ?? '电脑离线';
     final snapshot = widget.snapshot;
     final projects = snapshot?.projects ?? const <MobileProjectSummary>[];
     final names = {for (final project in projects) project.id: project.name};
@@ -226,24 +272,33 @@ class _SidebarMenuState extends State<SidebarMenu> {
         _ => colors.muted,
       };
       final selected = widget.selectedId == thread.id;
-      return Padding(
-        padding: EdgeInsetsDirectional.only(start: nested ? 28 : 0),
-        child: Semantics(
-          selected: selected,
-          button: true,
-          child: Material(
-            color: selected ? colors.selected : Colors.transparent,
+      final titleStyle = TextStyle(
+        fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+        color: thread.archived ? colors.muted : colors.foreground,
+        letterSpacing: isIOS ? -.29 : 0,
+      );
+      return Semantics(
+        selected: selected,
+        button: true,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => widget.onSelect(thread.id),
-              onLongPress: _canEdit ? () => _showActions(thread) : null,
+            onTap: () => widget.onSelect(thread.id),
+            onLongPress: _canEdit ? () => _showActions(thread) : null,
+            child: Ink(
+              decoration: BoxDecoration(
+                color: selected ? colors.selected : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: size),
+                constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 7,
+                  padding: EdgeInsetsDirectional.fromSTEB(
+                    nested ? 40 : 12,
+                    4,
+                    12,
+                    4,
                   ),
                   child: Row(
                     children: [
@@ -252,47 +307,67 @@ class _SidebarMenuState extends State<SidebarMenu> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              thread.title,
-                              style: selected
-                                  ? const TextStyle(fontWeight: FontWeight.w500)
-                                  : null,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            if (nested)
+                              alignedLabel(
+                                Text(
+                                  thread.title,
+                                  style: titleStyle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const Offset(0, -1 / 3),
+                              )
+                            else
+                              line(
+                                thread.title,
+                                labelStyle(15).merge(titleStyle),
+                              ),
                             if (names[thread.projectId] case final project?
                                 when !nested)
-                              Text(
+                              line(
                                 project,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
+                                labelStyle(
+                                  12,
                                   color: colors.muted,
+                                  letterSpacing: isIOS ? -.039 : 0,
                                 ),
                               ),
                           ],
                         ),
                       ),
                       if (marker != null) ...[
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         if (thread.status == MobileThreadStatus.running)
                           Semantics(
                             label: marker,
-                            child: _RunningDot(color: markerColor),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: MobileRunningDotMatrix(
+                                color: colors.statusAccent,
+                              ),
+                            ),
                           )
                         else if (marker == '未读')
                           Semantics(
                             label: marker,
-                            child: Icon(
-                              Icons.circle,
-                              size: 6,
-                              color: colors.online,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: MobileStatusDot(color: colors.readyMark),
                             ),
                           )
                         else
                           DecoratedBox(
                             decoration: BoxDecoration(
-                              color: markerColor.withValues(alpha: .12),
+                              color: switch (thread.status) {
+                                MobileThreadStatus.failed => colors.errorTint,
+                                MobileThreadStatus.waitingApproval =>
+                                  colors.attentionTint,
+                                _ => markerColor.withValues(alpha: .12),
+                              },
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Padding(
@@ -300,10 +375,13 @@ class _SidebarMenuState extends State<SidebarMenu> {
                                 horizontal: 8,
                                 vertical: 2,
                               ),
-                              child: Text(
+                              child: line(
                                 marker,
-                                style: theme.textTheme.bodySmall?.copyWith(
+                                labelStyle(
+                                  12,
                                   color: markerColor,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: isIOS ? -.24 : -.039,
                                 ),
                               ),
                             ),
@@ -319,24 +397,93 @@ class _SidebarMenuState extends State<SidebarMenu> {
       );
     }
 
-    final content = <Widget>[
+    Widget groupLabel(String label, {bool withOptions = false}) => Padding(
+      padding: const EdgeInsetsDirectional.only(start: 12, end: 2),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: withOptions ? 46 : 40 - pinnedHeadingTrim,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  top: withOptions ? 8 : 8 + pinnedHeadingTrim,
+                ),
+                child: withOptions
+                    ? line(label, labelStyle(13, color: colors.muted))
+                    : alignedLabel(
+                        line(label, labelStyle(13, color: colors.muted)),
+                        const Offset(0, 1 / 3),
+                      ),
+              ),
+            ),
+            if (withOptions)
+              SizedBox.square(
+                dimension: size,
+                child: IconButton(
+                  tooltip: '分组和筛选',
+                  color: !_all || _arrangement.archived
+                      ? colors.running
+                      : colors.muted,
+                  padding: EdgeInsetsDirectional.only(
+                    end: 8,
+                    bottom: size == 48 ? 12 : 9,
+                  ),
+                  alignment: AlignmentDirectional.bottomEnd,
+                  icon: const WorkspaceIcon(WorkspaceGlyph.sliders, size: 18),
+                  onPressed: _showOptions,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final header = <Widget>[
       Padding(
-        padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 8, 4),
+        padding: EdgeInsetsDirectional.fromSTEB(
+          20,
+          headerInset + 3,
+          8,
+          headerInset - 3,
+        ),
         child: Row(
           children: [
             Expanded(
               child: Semantics(
                 header: true,
-                child: Text('Pigcode', style: theme.textTheme.titleLarge),
+                child: alignedLabel(
+                  Text(
+                    'Pigcode',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                      letterSpacing: isAndroid ? -.24 : null,
+                      leadingDistribution: TextLeadingDistribution.even,
+                    ),
+                  ),
+                  const Offset(1, -1),
+                ),
               ),
             ),
-            IconButton(
-              tooltip: _searching ? '关闭搜索' : '搜索会话',
-              icon: Icon(_searching ? Icons.close : Icons.search),
-              onPressed: () => setState(() {
-                _searching = !_searching;
-                if (!_searching) _query = '';
-              }),
+            SizedBox.square(
+              dimension: size,
+              child: IconButton(
+                tooltip: _searching ? '关闭搜索' : '搜索会话',
+                padding: EdgeInsetsDirectional.only(
+                  end: _searching ? 12 : 10.5,
+                ),
+                alignment: AlignmentDirectional.centerEnd,
+                icon: _searching
+                    ? const Icon(Icons.close, size: 18)
+                    : const WorkspaceIcon(WorkspaceGlyph.search, size: 21),
+                onPressed: () => setState(() {
+                  _searching = !_searching;
+                  if (!_searching) _query = '';
+                }),
+              ),
             ),
           ],
         ),
@@ -361,72 +508,65 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
           ),
         ),
-      if (!widget.online && snapshot != null)
+      if (widget.onNewThread case final create?)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Text(
-            offlineSyncLabel(context, snapshot.syncedAt),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colors.secondaryText,
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 50),
+            child: DecoratedBox(
+              decoration: mobileRaisedSurface(
+                theme.brightness,
+                radius: const BorderRadius.all(Radius.circular(16)),
+              ),
+              child: TextButton(
+                style: TextButton.styleFrom(
+                  alignment: AlignmentDirectional.centerStart,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  foregroundColor: colors.foreground,
+                  textStyle: labelStyle(16, fontWeight: FontWeight.w500),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                onPressed: () => create(null),
+                child: Row(
+                  children: [
+                    const WorkspaceIcon(WorkspaceGlyph.compose),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: alignedLabel(
+                        const Text('新会话'),
+                        const Offset(0, -2 / 3),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-      if (widget.onNewThread case final create?)
+    ];
+    final content = <Widget>[
+      if (!widget.online && snapshot != null)
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-          child: SizedBox(
-            height: 50,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                alignment: AlignmentDirectional.centerStart,
-                backgroundColor: colors.surface,
-                foregroundColor: colors.foreground,
-                shadowColor: colors.scrim,
-                elevation: 1,
-                textStyle: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              onPressed: () => create(null),
-              icon: const WorkspaceIcon(WorkspaceGlyph.compose),
-              label: const Text('新会话'),
-            ),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+          child: Text(
+            '离线 · ${offlineSyncLabel(snapshot.syncedAt)}',
+            style: labelStyle(12, color: colors.muted),
           ),
         ),
       for (final item in <Widget>[
         if (pinned.isNotEmpty) ...[
-          const ListTile(title: Text('置顶'), dense: true),
+          groupLabel('置顶'),
           for (final thread in pinned) row(thread),
         ],
-        Padding(
-          padding: const EdgeInsetsDirectional.only(start: 12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _arrangement.archived
-                      ? '已归档'
-                      : _arrangement.grouping == SidebarGrouping.project
-                      ? '项目'
-                      : '会话',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.muted,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: '分组和筛选',
-                color: !_all || _arrangement.archived
-                    ? colors.running
-                    : colors.muted,
-                icon: const Icon(Icons.tune, size: 20),
-                onPressed: _showOptions,
-              ),
-            ],
-          ),
+        groupLabel(
+          _arrangement.archived
+              ? '已归档'
+              : _arrangement.grouping == SidebarGrouping.project
+              ? '项目'
+              : '会话',
+          withOptions: true,
         ),
         if (_arrangement.grouping == SidebarGrouping.project)
           for (final project in projects)
@@ -455,27 +595,40 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                  _collapsed.contains(project.id)
-                                      ? Icons.folder_outlined
-                                      : Icons.folder_open_outlined,
-                                  color: colors.secondaryText,
-                                  size: 18,
-                                ),
-                                const SizedBox(width: 8),
-                                Flexible(
-                                  child: Text(
-                                    project.name,
-                                    overflow: TextOverflow.ellipsis,
+                                IconTheme(
+                                  data: IconThemeData(
+                                    color: colors.secondaryText,
+                                  ),
+                                  child: WorkspaceIcon(
+                                    _collapsed.contains(project.id)
+                                        ? WorkspaceGlyph.folder
+                                        : WorkspaceGlyph.folderOpen,
+                                    size: 18,
                                   ),
                                 ),
-                                const SizedBox(width: 5),
-                                Icon(
-                                  _collapsed.contains(project.id)
-                                      ? Icons.chevron_right
-                                      : Icons.expand_more,
-                                  color: colors.muted,
-                                  size: 14,
+                                const SizedBox(width: 10),
+                                Flexible(
+                                  child: alignedLabel(
+                                    Text(
+                                      project.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: labelStyle(15),
+                                    ),
+                                    const Offset(0, -1 / 3),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                IconTheme(
+                                  data: IconThemeData(color: colors.faint),
+                                  child: RotatedBox(
+                                    quarterTurns:
+                                        _collapsed.contains(project.id) ? 3 : 0,
+                                    child: const WorkspaceIcon(
+                                      WorkspaceGlyph.chevronDown,
+                                      size: 14,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -489,7 +642,13 @@ class _SidebarMenuState extends State<SidebarMenu> {
                         child: IconButton(
                           tooltip: '在${project.name}新建会话',
                           onPressed: () => create(project.id),
-                          icon: const Icon(Icons.add, size: 20),
+                          color: colors.muted,
+                          padding: const EdgeInsetsDirectional.only(end: 9),
+                          alignment: AlignmentDirectional.centerEnd,
+                          icon: const WorkspaceIcon(
+                            WorkspaceGlyph.plus,
+                            size: 18,
+                          ),
                         ),
                       ),
                   ],
@@ -539,64 +698,82 @@ class _SidebarMenuState extends State<SidebarMenu> {
           Expanded(
             child: Semantics(
               label: '管理电脑',
-              child: FilledButton(
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 50),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 6,
+              child: DecoratedBox(
+                decoration: mobileRaisedSurface(theme.brightness),
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    foregroundColor: colors.foreground,
+                    textStyle: labelStyle(14),
                   ),
-                  backgroundColor: colors.surface,
-                  foregroundColor: colors.foreground,
-                  shadowColor: colors.scrim,
-                  elevation: 1,
-                ),
-                onPressed: widget.onComputers,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.laptop_outlined,
-                      size: 17,
-                      color: colors.secondaryText,
-                    ),
-                    const SizedBox(width: 7),
-                    Icon(
-                      Icons.circle,
-                      size: 6,
-                      color: widget.online ? colors.online : colors.muted,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        widget.computerName,
-                        overflow: TextOverflow.ellipsis,
+                  onPressed: widget.onComputers,
+                  child: Row(
+                    children: [
+                      IconTheme(
+                        data: IconThemeData(color: colors.secondaryText),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.laptop,
+                          size: 18,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      widget.online ? '已连接' : '离线',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.muted,
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) => Row(
+                            mainAxisSize: MainAxisSize.min,
+                            spacing: 6,
+                            children: [
+                              MobileStatusDot(
+                                color: widget.online
+                                    ? colors.readyMark
+                                    : colors.faint,
+                              ),
+                              Flexible(
+                                child: Text(
+                                  widget.computerName,
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: isAndroid ? .2 : null,
+                                  ),
+                                ),
+                              ),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth * .6,
+                                ),
+                                child: Text(
+                                  connectionText,
+                                  style: TextStyle(color: colors.muted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
           if (widget.onSettings case final open?) ...[
             const SizedBox(width: 10),
-            Material(
-              color: colors.surface,
-              shadowColor: colors.scrim,
-              elevation: 1,
-              shape: const CircleBorder(),
+            DecoratedBox(
+              decoration: mobileRaisedSurface(theme.brightness),
               child: SizedBox.square(
                 dimension: 50,
                 child: IconButton(
                   tooltip: '设置',
                   onPressed: open,
-                  icon: const Icon(Icons.settings_outlined, size: 20),
+                  icon: const WorkspaceIcon(WorkspaceGlyph.settings),
                 ),
               ),
             ),
@@ -610,13 +787,19 @@ class _SidebarMenuState extends State<SidebarMenu> {
         focusNode: widget.focusNode,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxHeight < 160) {
-              return ListView(children: [...content, footer]);
+            if (constraints.maxHeight < 320 || textScaler.scale(22) > 44) {
+              return ListView(children: [...header, ...content, footer]);
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: ListView(children: content)),
+                ...header,
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    children: content,
+                  ),
+                ),
                 footer,
               ],
             );
@@ -625,45 +808,4 @@ class _SidebarMenuState extends State<SidebarMenu> {
       ),
     );
   }
-}
-
-class _RunningDot extends StatefulWidget {
-  const _RunningDot({required this.color});
-  final Color color;
-
-  @override
-  State<_RunningDot> createState() => _RunningDotState();
-}
-
-class _RunningDotState extends State<_RunningDot>
-    with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 720),
-    lowerBound: .42,
-    value: 1,
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _pulse.stop();
-      _pulse.value = 1;
-    } else if (!_pulse.isAnimating) {
-      _pulse.repeat(reverse: true);
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: _pulse,
-    child: Icon(Icons.circle, color: widget.color, size: 6),
-  );
 }

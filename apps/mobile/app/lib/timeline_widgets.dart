@@ -9,6 +9,8 @@ import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
 import 'mobile_sheet.dart';
+import 'theme_colors.dart';
+import 'workspace_icon.dart';
 
 typedef TimelineContentLoader =
     Future<MobileTimelineContentResult> Function({
@@ -58,9 +60,15 @@ Widget _codeBlock(BuildContext context, String name, String code, bool closed) {
 Widget _markdown(BuildContext context, String value) {
   final theme = Theme.of(context);
   final colors = theme.colorScheme;
+  final body = theme.textTheme.bodyMedium;
   return GptMarkdown(
     value,
-    style: theme.textTheme.bodyMedium,
+    style: body?.copyWith(
+      height: 1.6,
+      letterSpacing: theme.platform == TargetPlatform.android
+          ? (body.fontSize ?? 15) * .025
+          : null,
+    ),
     inlineCodeStyle: InlineCodeStyle(
       color: colors.onSurface,
       backgroundColor: colors.surfaceContainerHighest,
@@ -79,15 +87,17 @@ class TimelineAnswer extends StatelessWidget {
     required this.text,
     this.streaming = false,
     this.more,
+    this.padding = const EdgeInsets.symmetric(vertical: 8),
   });
 
   final String text;
   final bool streaming;
   final VoidCallback? more;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
+    padding: padding,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -101,6 +111,131 @@ class TimelineAnswer extends StatelessWidget {
     ),
   );
 }
+
+class TimelineWorkLine extends StatelessWidget {
+  const TimelineWorkLine({
+    super.key,
+    required this.label,
+    this.glyph,
+    this.detail,
+    this.file = false,
+    this.running = false,
+    this.failed = false,
+    this.followed = false,
+    this.touchAbove = false,
+    this.expanded,
+    this.onTap,
+  });
+
+  final String label;
+  final WorkspaceGlyph? glyph;
+  final String? detail;
+  final bool file;
+  final bool running;
+  final bool failed;
+  final bool followed;
+  final bool touchAbove;
+  final bool? expanded;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final foreground = failed
+        ? colors.error
+        : running
+        ? colors.foreground
+        : colors.timelineSubtle;
+    final content = Row(
+      spacing: 8,
+      children: [
+        if (glyph case final glyph?)
+          IconTheme(
+            data: IconThemeData(color: colors.timelineSubtle),
+            child: WorkspaceIcon(glyph, size: 16),
+          ),
+        Flexible(
+          child: Text.rich(
+            TextSpan(
+              text: label,
+              children: [
+                if (detail case final description?
+                    when description.isNotEmpty) ...[
+                  const WidgetSpan(child: SizedBox(width: 8)),
+                  if (file) ...[
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: IconTheme(
+                        data: IconThemeData(color: colors.timelineFile),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.fileText,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                    const WidgetSpan(child: SizedBox(width: 6)),
+                  ],
+                  TextSpan(
+                    text: description,
+                    style: TextStyle(
+                      color: file ? colors.foreground : colors.timelineFaint,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              height: 1.6,
+              color: foreground,
+              leadingDistribution: TextLeadingDistribution.even,
+            ),
+          ),
+        ),
+        if (expanded == true)
+          IconTheme(
+            data: IconThemeData(color: colors.timelineSubtle),
+            child: const WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 14),
+          ),
+      ],
+    );
+    final overhang = timelineWorkTouchOverhang(context);
+    final row = Padding(
+      padding: EdgeInsets.only(
+        top: touchAbove ? overhang : 0,
+        bottom: followed ? 16 : 0,
+      ),
+      child: content,
+    );
+    if (onTap == null) return row;
+    return Semantics(
+      expanded: expanded,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: 40 + overhang),
+            child: Align(
+              alignment: AlignmentDirectional.topStart,
+              heightFactor: 1,
+              child: row,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 原型的活动行高 24，后续行距 16。多出的点按高度可以放进上方留白。
+double timelineWorkTouchOverhang(BuildContext context) =>
+    Theme.of(context).platform == TargetPlatform.android ? 8 : 4;
 
 class TimelineDetails {
   const TimelineDetails({
@@ -132,9 +267,7 @@ void showTimelineDetails(
     showMobileSheet<void>(
       context,
       title: title,
-      builder: (_) => ListView(
-        shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+      content: (_) => SliverList.list(
         children: [
           for (final section in sections)
             _DetailSection(section: section, loader: loader),

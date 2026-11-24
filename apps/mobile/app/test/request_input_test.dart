@@ -22,6 +22,7 @@ final _composer = find.byKey(const ValueKey('message-input'));
 class _RequestHost implements HostRequests {
   final calls = <({String method, Map<String, Object?> params})>[];
   bool loseReply = false;
+  bool singleQuestion = false;
 
   @override
   Stream<Map<String, dynamic>> get notifications => const Stream.empty();
@@ -50,17 +51,18 @@ class _RequestHost implements HostRequests {
               )
             : null,
         questions: requestId == 'question'
-            ? const [
-                MobileQuestion(
-                  question: '覆盖哪些平台？',
-                  options: [
-                    MobileQuestionOption(label: 'iOS'),
-                    MobileQuestionOption(label: 'Android'),
-                  ],
-                  multiSelect: true,
-                  allowCustomAnswer: false,
-                ),
-                MobileQuestion(
+            ? [
+                if (!singleQuestion)
+                  const MobileQuestion(
+                    question: '覆盖哪些平台？',
+                    options: [
+                      MobileQuestionOption(label: 'iOS'),
+                      MobileQuestionOption(label: 'Android'),
+                    ],
+                    multiSelect: true,
+                    allowCustomAnswer: false,
+                  ),
+                const MobileQuestion(
                   question: '如何验收？',
                   options: [MobileQuestionOption(label: '本机')],
                   multiSelect: false,
@@ -115,6 +117,7 @@ Widget _page(
   MobileConnection connection,
   List<MobileTimelinePending> pending, {
   bool online = true,
+  VoidCallback? onStop,
 }) => ProviderScope(
   child: MaterialApp(
     home: Scaffold(
@@ -123,6 +126,7 @@ Widget _page(
           connection: connection,
           threadId: 'thread',
           online: online,
+          onStop: onStop,
           live: MobileActiveRun(
             runId: 'run',
             startedAt: '2026-11-23T01:00:00.000Z',
@@ -147,6 +151,35 @@ Widget _page(
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
+  testWidgets('keeps a single answer editable until it is submitted', (
+    tester,
+  ) async {
+    final host = _RequestHost()..singleQuestion = true;
+    var stopCount = 0;
+    await tester.pumpWidget(
+      _page(_Connection(host), [_question], onStop: () => stopCount++),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('停止本轮运行'));
+    expect(stopCount, 1);
+    final submit = find.widgetWithText(FilledButton, '回答');
+    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
+    await tester.tap(find.text('本机'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
+    expect(
+      host.calls.where((call) => call.method == MobileRequestMethods.answer),
+      isEmpty,
+    );
+    await tester.enterText(find.byKey(const ValueKey('other-answer-0')), '模拟器');
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
+    await tester.pumpAndSettle();
+    expect(host.calls.last.params['answers'], [
+      {'selected': [], 'custom': '模拟器'},
+    ]);
+  });
+
   testWidgets(
     'shows the actual decision and restores the draft after the last request',
     (tester) async {
@@ -162,8 +195,8 @@ void main() {
       expect(find.text('允许验收命令？'), findsOneWidget);
       expect(find.text('echo ready'), findsOneWidget);
       expect(find.text('还有 1 项待处理'), findsOneWidget);
-      expect(find.text('本会话允许'), findsNothing);
-      await tester.tap(find.text('允许一次'));
+      expect(find.text('这个会话里都允许'), findsNothing);
+      await tester.tap(find.text('允许本次'));
       await tester.pumpAndSettle();
       expect(find.text('另一端已处理 · 已拒绝'), findsOneWidget);
       expect(
@@ -230,7 +263,7 @@ void main() {
       final phone = _Connection(host);
       await tester.pumpWidget(_page(phone, [_approval]));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('允许一次'));
+      await tester.tap(find.text('允许本次'));
       await tester.pumpAndSettle();
       final first = host.calls.last;
       expect(first.method, MobileRequestMethods.approve);

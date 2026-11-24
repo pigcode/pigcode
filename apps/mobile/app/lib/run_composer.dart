@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'message_queue_panel.dart';
+import 'mobile_surfaces.dart';
 import 'run_command_journal.dart';
 import 'local_drafts.dart';
 import 'run_composer_state.dart';
 import 'theme_colors.dart';
+import 'workspace_icon.dart';
 
 class RunComposer extends ConsumerStatefulWidget {
   const RunComposer({
@@ -160,6 +162,13 @@ class RunComposerView extends StatelessWidget {
         : pigcodeLight;
     final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
     final runId = stoppableRunId;
+    const diameter = 36.0;
+    const inset = 7.0;
+    final overhang = (hit - diameter) / 2;
+    final composer = mobileComposerSurface(theme.brightness, offline: !online);
+    final disabledFill = online
+        ? colors.selectedOnSurface
+        : Color.alphaBlend(colors.selected, composer.color!);
 
     bool enabled(MobileRunMethod method) =>
         online &&
@@ -167,49 +176,55 @@ class RunComposerView extends StatelessWidget {
         !state!.working.contains(method) &&
         !state!.pending.containsKey(method);
 
-    Widget action(String label, IconData icon, VoidCallback? onPressed) =>
-        SizedBox.square(
-          dimension: hit,
-          child: IconButton(
-            onPressed: onPressed,
-            tooltip: label,
-            padding: EdgeInsets.zero,
-            icon: DecoratedBox(
-              decoration: BoxDecoration(
-                color: onPressed != null ? colors.primary : colors.selected,
-                shape: BoxShape.circle,
-              ),
-              child: SizedBox.square(
-                dimension: 36,
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: onPressed != null ? colors.onPrimary : colors.muted,
+    Widget action(String label, WorkspaceGlyph glyph, VoidCallback? onPressed) {
+      final stop = glyph == WorkspaceGlyph.stop;
+      return SizedBox.square(
+        dimension: hit,
+        child: IconButton(
+          onPressed: onPressed,
+          tooltip: label,
+          padding: EdgeInsets.zero,
+          icon: DecoratedBox(
+            decoration: BoxDecoration(
+              color: onPressed == null
+                  ? disabledFill
+                  : stop
+                  ? colors.foreground
+                  : colors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: SizedBox.square(
+              dimension: diameter,
+              child: Center(
+                child: IconTheme(
+                  data: IconThemeData(
+                    color: onPressed == null
+                        ? colors.faint
+                        : stop
+                        ? colors.background
+                        : colors.onPrimary,
+                  ),
+                  child: WorkspaceIcon(glyph, size: stop ? 13 : 18),
                 ),
               ),
             ),
           ),
-        );
+        ),
+      );
+    }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-      child: Material(
-        color: colors.surface,
-        shadowColor: colors.scrim,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(22),
-          side: BorderSide(color: colors.divider, width: .5),
-        ),
-        elevation: 1,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (storageError)
-                Wrap(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+      child: DecoratedBox(
+        decoration: composer,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (storageError)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                child: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const Text('无法读取发送状态。'),
@@ -219,94 +234,106 @@ class RunComposerView extends StatelessWidget {
                     ),
                   ],
                 ),
-              if (state case final view?)
-                for (final kind in MobileRunMethod.values)
-                  if (view.pending[kind] != null ||
-                      view.notices[kind] != null ||
-                      view.outcomes[kind]?.recovered == true)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-                      child: _PendingRunRow(
-                        kind: kind,
-                        draft: draft,
-                        state: view,
-                        online: online,
-                        onCheck: () => onCheck(kind),
-                        onRetry: () => onRetry(kind),
-                      ),
-                    ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: draft,
-                      key: const ValueKey('run-composer-input'),
-                      minLines: 1,
-                      maxLines: 5,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      style: const TextStyle(fontSize: 16, height: 1.375),
-                      decoration: InputDecoration(
-                        hintText: runId != null && allowQueue
-                            ? '运行中 · 发出的消息会排队'
-                            : '发送消息',
-                        hintStyle: TextStyle(color: colors.muted),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 12,
-                        ),
-                        border: InputBorder.none,
-                      ),
-                    ),
-                  ),
-                  ValueListenableBuilder<TextEditingValue>(
-                    valueListenable: draft,
-                    builder: (context, value, child) {
-                      final text = value.text;
-                      final canSend =
-                          enabled(MobileRunMethod.runStart) &&
-                          text.trim().isNotEmpty &&
-                          text.length <= mobileCommandTextLimit;
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (runId != null)
-                            action(
-                              '停止本轮运行',
-                              Icons.stop_rounded,
-                              enabled(MobileRunMethod.runInterrupt)
-                                  ? () => onStop(runId)
-                                  : null,
-                            ),
-                          if (runId == null ||
-                              (allowQueue && text.trim().isNotEmpty))
-                            action(
-                              '发送消息',
-                              Icons.arrow_upward,
-                              canSend ? () => onSend(text) : null,
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
               ),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: draft,
-                builder: (context, value, child) =>
-                    value.text.length > mobileCommandTextLimit
-                    ? Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
+            if (state case final view?)
+              for (final kind in MobileRunMethod.values)
+                if (view.pending[kind] != null ||
+                    view.notices[kind] != null ||
+                    view.outcomes[kind]?.recovered == true)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+                    child: _PendingRunRow(
+                      kind: kind,
+                      draft: draft,
+                      state: view,
+                      online: online,
+                      onCheck: () => onCheck(kind),
+                      onRetry: () => onRetry(kind),
+                    ),
+                  ),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: draft,
+              child: TextField(
+                controller: draft,
+                key: const ValueKey('run-composer-input'),
+                minLines: 1,
+                maxLines: 5,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                style: mobileComposerTextStyle,
+                decoration: InputDecoration(
+                  hintText: !online
+                      ? '电脑离线，消息发不出去'
+                      : runId != null && allowQueue
+                      ? '生成中 · 发出的消息会排队'
+                      : '回复…',
+                  hintStyle: mobileComposerTextStyle.copyWith(
+                    color: colors.faint,
+                  ),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: inset),
+                  border: InputBorder.none,
+                ),
+              ),
+              builder: (context, value, input) {
+                final text = value.text;
+                final hasText = text.trim().isNotEmpty;
+                final tooLong = text.length > mobileCommandTextLimit;
+                final canSend =
+                    enabled(MobileRunMethod.runStart) && hasText && !tooLong;
+                final actions = <Widget>[
+                  if (runId != null)
+                    action(
+                      '停止本轮运行',
+                      WorkspaceGlyph.stop,
+                      enabled(MobileRunMethod.runInterrupt)
+                          ? () => onStop(runId)
+                          : null,
+                    ),
+                  if (runId == null || (allowQueue && hasText))
+                    action(
+                      '发送消息',
+                      WorkspaceGlyph.arrowUp,
+                      canSend ? () => onSend(text) : null,
+                    ),
+                ];
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Stack(
+                      children: [
+                        Padding(
+                          padding: EdgeInsetsDirectional.fromSTEB(
+                            15,
+                            inset,
+                            inset + diameter + 8 + (actions.length - 1) * hit,
+                            inset,
+                          ),
+                          child: input!,
+                        ),
+                        PositionedDirectional(
+                          end: inset - overhang,
+                          bottom: inset - overhang,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (tooLong)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
                         child: Text(
                           '每条消息最多 $mobileCommandTextLimit 个字符。',
                           style: theme.textTheme.bodySmall,
                         ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

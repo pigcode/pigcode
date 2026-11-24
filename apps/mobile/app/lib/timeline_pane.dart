@@ -15,6 +15,7 @@ import 'run_changes_card.dart';
 import 'run_diff_screen.dart';
 import 'thread_read_receipt.dart';
 import 'timeline_view.dart';
+import 'timeline_work.dart';
 
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
 
@@ -351,15 +352,15 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final content = LayoutBuilder(
       builder: (context, constraints) => Column(
         children: [
+          Expanded(child: timeline),
           if (!online && syncedAt != null && snapshot != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                offlineSyncLabel(context, syncedAt),
+                offlineSyncLabel(syncedAt),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-          Expanded(child: timeline),
           if (_draftError) const Text('暂时无法保存本机草稿。'),
           ConstrainedBox(
             constraints: BoxConstraints(maxHeight: constraints.maxHeight * .6),
@@ -400,14 +401,25 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     _changeEvents = events;
     _RunChangesTarget? target;
     if (connection?.supportsRunChanges == true && events != null) {
-      final latest = events.reversed
-          .where(
-            (event) =>
-                event.runId != null &&
-                (event.kind == MobileTimelineKind.changes ||
-                    event.kind == MobileTimelineKind.file),
-          )
-          .firstOrNull;
+      final runEvents = events.reversed.where((event) => event.runId != null);
+      final latest =
+          runEvents
+              .where(
+                (event) =>
+                    event.kind == MobileTimelineKind.changes ||
+                    event.kind == MobileTimelineKind.file,
+              )
+              .firstOrNull ??
+          // 编辑工具完成后也可以向 Host 读取这个 run 的文件清单。
+          runEvents
+              .where(
+                (event) =>
+                    event.kind == MobileTimelineKind.toolCompleted &&
+                    event.failed != true &&
+                    timelineToolKindForName(event.name) ==
+                        TimelineToolKind.edit,
+              )
+              .firstOrNull;
       if (latest != null) {
         target = (
           connection: connection!,

@@ -29,6 +29,7 @@ import {
   type Thread,
   type MobileReminderSettings,
   type MobileSidebarWrite,
+  type MobileThreadSummary,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { dispatchThreadCommand } from "../rpc/thread-commands"
@@ -82,7 +83,7 @@ function displayLabel(text: string): string {
   return prefix.replace(/[\uD800-\uDBFF]$/, "") + "…"
 }
 
-function threadSummary(thread: Thread, includeReadTarget: boolean) {
+function threadSummary(thread: Thread, includeReadTarget: boolean): MobileThreadSummary {
   return {
     id: thread.id,
     projectId: thread.projectId,
@@ -110,7 +111,7 @@ export class MobileSidebarRpc {
   private stopSidebar: (() => void) | undefined
   private queued = false
   private cachedProjects: Array<{ id: string; name: string }> | undefined
-  private cachedThreads: ReturnType<typeof threadSummary>[] | undefined
+  private cachedThreads: MobileThreadSummary[] | undefined
 
   constructor(
     private readonly ctx: Context,
@@ -345,10 +346,27 @@ export class MobileSidebarRpc {
   private threadRows(projects: Array<{ id: string }>) {
     if (this.cachedThreads) return this.cachedThreads
     const active = new Set(projects.map(({ id }) => id))
+    const includeReadTarget = this.session.features.includes("sidebar.write")
+    const agentNames = this.session.features.includes("sidebar.presentation")
+      ? new Map(this.ctx.agents.list().map(({ id, displayName }) => [id, displayName]))
+      : undefined
     const rows = this.ctx.threads
       .list()
       .filter((thread) => !thread.parentThreadId && active.has(thread.projectId))
-      .map((thread) => threadSummary(thread, this.session.features.includes("sidebar.write")))
+      .map((thread) => {
+        const summary = threadSummary(thread, includeReadTarget)
+        if (!agentNames) return summary
+        const name = agentNames.get(thread.lastAgentId ?? thread.defaultAgentId)?.trim()
+        if (name) summary.agentName = displayLabel(name)
+        if (summary.status === "waiting-approval") {
+          const pending = this.ctx.agents
+            .listPendingRequests(thread.id)
+            .filter(({ runId }) => runId === thread.lastRunId)
+          const kind = pending.find(({ kind }) => kind === "approval")?.kind ?? pending[0]?.kind
+          if (kind) summary.pendingKind = kind
+        }
+        return summary
+      })
     if (this.stopSidebar) this.cachedThreads = rows
     return rows
   }

@@ -5,7 +5,7 @@ import { mobilePairingViewSchema, mobileThreadSummarySchema, rpcSuccessSchema } 
 import { Context } from "cordis"
 import { expect, it } from "vitest"
 import { apply as agents } from "../agents/registry"
-import { FAKE_ASK_TEXT } from "../agents/fake"
+import { FAKE_APPROVAL_TEXT, FAKE_ASK_TEXT, FakeAgentDriver } from "../agents/fake"
 import { MobileSidebarRpc } from "../mobile/sidebar-rpc"
 import { PairedDevices } from "../mobile/paired-devices"
 import { apply as projects } from "../services/projects"
@@ -27,6 +27,7 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   await ctx.plugin(threads)
   await ctx.plugin(sessions)
   await ctx.plugin(agents)
+  ctx.agents.register(new FakeAgentDriver())
   const visible = ctx.projects.add("/private/visible", "工作区")
   const deleted = ctx.projects.add("/private/hidden", "已移除")
   const parent = ctx.threads.create(visible.id, "原名称", "fake")
@@ -50,13 +51,13 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   })
   let request = 0
 
-  function phone(writable = false) {
+  function phone(...features: string[]) {
     const transport = new MemoryTransport({ skip: ["sidebar.changed"] })
     const rpc = new MobileSidebarRpc(ctx, feed, transport.host, devices, {
       computerKey: Buffer.alloc(32, 1),
       computerName: "测试电脑",
       deviceKey,
-      features: writable ? ["sidebar.read", "sidebar.write", "connection.status"] : ["sidebar.read", "connection.status"],
+      features: ["sidebar.read", "connection.status", ...features],
       relayRevision: () => undefined,
     })
     const changes: unknown[] = []
@@ -75,7 +76,7 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
   }
 
   const first = phone()
-  const second = phone(true)
+  const second = phone("sidebar.write", "sidebar.presentation")
   try {
     expect(await call(first.wire, "project.list")).toMatchObject({
       result: [{ id: visible.id, name: "工作区" }],
@@ -95,6 +96,9 @@ it("publishes only mobile summaries and keeps each sidebar subscription independ
         unread: false,
       },
     ])
+    expect(await call(second.wire, "thread.list")).toMatchObject({
+      result: [{ id: parent.id, agentName: "Fake Agent" }],
+    })
     expect(await call(first.wire, "thread.list", { projectId: deleted.id })).toMatchObject({
       error: { code: "RESOURCE_NOT_AVAILABLE" },
     })
@@ -307,11 +311,33 @@ it.skipIf(!address || !token)(
         stage: "sidebar",
         threads: expect.arrayContaining([
           expect.objectContaining({ id: target.id, unread: false }),
-          expect.objectContaining({ id: called.id, status: "waiting-approval" }),
+          expect.objectContaining({
+            id: called.id,
+            status: "waiting-approval",
+            agentName: "Fake Agent",
+            pendingKind: "question",
+          }),
         ]),
       })
       host.ctx.agents.cancelRun(pending.runId)
       await pending.done
+      send(second, "sidebar", { threadId: called.id, status: "interrupted" })
+      const interrupted = (await receive()).threads?.map((row) => mobileThreadSummarySchema.parse(row))
+        .find((row) => row.id === called.id)
+      expect(interrupted?.status).toBe("interrupted")
+      expect(interrupted?.pendingKind).toBeUndefined()
+
+      const checking = host.ctx.threads.create(docs.id, "等你确认", "fake")
+      const approval = await host.ctx.agents.startRun(checking.id, FAKE_APPROVAL_TEXT)
+      send(second, "sidebar", { threadId: checking.id, status: "waiting-approval" })
+      expect(await receive()).toMatchObject({
+        stage: "sidebar",
+        threads: expect.arrayContaining([
+          expect.objectContaining({ id: checking.id, pendingKind: "approval" }),
+        ]),
+      })
+      host.ctx.agents.cancelRun(approval.runId)
+      await approval.done
       send(second, "sidebarArchive", { threadId: target.id, archived: true })
       expect(await receive()).toEqual({ stage: "sidebarEdited" })
       expect(await call("thread.list", { projectId: docs.id })).toEqual(expect.arrayContaining([

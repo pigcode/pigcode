@@ -2,9 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'theme_colors.dart';
 import 'timeline_widgets.dart';
+import 'timeline_work.dart';
+import 'workspace_icon.dart';
 
 class TimelineView extends StatefulWidget {
   const TimelineView({
@@ -39,6 +43,7 @@ class _TimelineViewState extends State<TimelineView> {
   final _scroll = ScrollController();
   final _center = UniqueKey();
   final _expanded = <String>{};
+  final _expandedWork = <int>{};
   late final int _pivot;
   List<TimelineTurn> _turns = const [];
   List<_Row> _history = const [];
@@ -95,24 +100,76 @@ class _TimelineViewState extends State<TimelineView> {
 
     for (final turn in _turns) {
       final key = turn.key;
-      if (turn.user case final user?) {
-        add('user-$key', user.seq, () => _user(user));
+      final completed = turn.status == TimelineTurnStatus.completed;
+      final showDuration = turn.folded || (turn.runId != null && completed);
+      final groups = !turn.folded || _expanded.contains(key)
+          ? groupTimelineWork(turn.work, _pivot)
+          : const <List<TimelineWork>>[];
+      final user = turn.user;
+      final firstGroup = groups.firstOrNull;
+      final workTouchesAbove =
+          !showDuration &&
+          user != null &&
+          groups.length > 1 &&
+          firstGroup != null &&
+          ((user.seq < _pivot) == (firstGroup.first.event.seq < _pivot)) &&
+          (firstGroup.length > 1 ||
+              (firstGroup.first.kind == TimelineWorkKind.tool &&
+                  timelineToolKind(firstGroup.first) !=
+                      TimelineToolKind.other));
+      if (user != null) {
+        add(
+          'user-$key',
+          user.seq,
+          () => _user(user, workTouchesAbove: workTouchesAbove),
+        );
       }
-      if (!turn.folded || _expanded.contains(key)) {
-        for (final item in turn.work) {
-          add(
-            'work-${item.event.seq}',
-            item.event.seq,
-            () => _work(turn, item),
-          );
-        }
-      }
-      if (turn.folded) {
+      if (showDuration) {
         add(
           'summary-$key',
-          turn.terminal?.seq ?? turn.firstSeq,
+          turn.answer?.seq ?? turn.terminal?.seq ?? turn.firstSeq,
           () => _summary(turn),
         );
+      }
+      for (final (index, group) in groups.indexed) {
+        final first = group.first;
+        final seq = first.event.seq;
+        final tail = index == groups.length - 1;
+        final touchAbove = index == 0 && workTouchesAbove;
+        if (group.length == 1) {
+          add(
+            'work-$seq',
+            seq,
+            () => _work(turn, first, followed: !tail, touchAbove: touchAbove),
+          );
+          continue;
+        }
+        add(
+          'work-$seq',
+          seq,
+          () => _workGroup(turn, group, tail: tail, touchAbove: touchAbove),
+        );
+        if (_expandedWork.contains(seq)) {
+          for (final item in group) {
+            add(
+              'work-member-${item.event.seq}',
+              item.event.seq,
+              () => DecoratedBox(
+                decoration: BoxDecoration(
+                  border: BorderDirectional(
+                    start: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 14),
+                  child: _work(turn, item, followed: false, showIcon: false),
+                ),
+              ),
+            );
+          }
+        }
       }
       for (final notice in turn.notices) {
         add(
@@ -151,6 +208,12 @@ class _TimelineViewState extends State<TimelineView> {
           () =>
               widget.changesCard?.call(turn) ?? _subtle(turn.files.join(' · ')),
         );
+      }
+      if (turn.answer case final answer?
+          when completed &&
+              answer.truncated != true &&
+              answer.text?.isNotEmpty == true) {
+        add('copy-$key', answer.seq, () => _copyAnswer(answer.text!));
       }
     }
     _history = history.reversed.toList();
@@ -247,61 +310,70 @@ class _TimelineViewState extends State<TimelineView> {
             }
             return false;
           },
-          child: CustomScrollView(
-            key: const ValueKey('timeline-scroll'),
-            controller: _scroll,
-            center: _center,
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            slivers: [
-              SliverPadding(
-                padding: _turnInsets,
-                sliver: SliverList.builder(
-                  itemCount: _history.length + (hasEarlier ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == _history.length) {
-                      return Column(
-                        children: [
-                          if (_historyError case final message?) Text(message),
-                          TextButton(
-                            onPressed: _loadingEarlier ? null : _earlier,
-                            child: Text(_loadingEarlier ? '正在加载…' : '加载更早的消息'),
-                          ),
-                        ],
-                      );
-                    }
-                    final row = _history[index];
-                    return KeyedSubtree(
-                      key: ValueKey(row.key),
-                      child: row.build(),
-                    );
-                  },
-                ),
-              ),
-              SliverToBoxAdapter(key: _center, child: const SizedBox.shrink()),
-              SliverPadding(
-                padding: _turnInsets,
-                sliver: SliverList.builder(
-                  itemCount: _newRows.length,
-                  itemBuilder: (context, index) {
-                    final row = _newRows[index];
-                    return KeyedSubtree(
-                      key: ValueKey(row.key),
-                      child: row.build(),
-                    );
-                  },
-                ),
-              ),
-              if (active != null)
+          child: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: CustomScrollView(
+              key: const ValueKey('timeline-scroll'),
+              controller: _scroll,
+              center: _center,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              slivers: [
                 SliverPadding(
                   padding: _turnInsets,
-                  sliver: SliverToBoxAdapter(child: _live(active)),
+                  sliver: SliverList.builder(
+                    itemCount: _history.length + (hasEarlier ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _history.length) {
+                        return Column(
+                          children: [
+                            if (_historyError case final message?)
+                              Text(message),
+                            TextButton(
+                              onPressed: _loadingEarlier ? null : _earlier,
+                              child: Text(
+                                _loadingEarlier ? '正在加载…' : '加载更早的消息',
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      final row = _history[index];
+                      return KeyedSubtree(
+                        key: ValueKey(row.key),
+                        child: row.build(),
+                      );
+                    },
+                  ),
                 ),
-              if (_history.isEmpty && _newRows.isEmpty && active == null)
-                const SliverToBoxAdapter(
-                  child: Center(child: Text('这条会话还没有消息。')),
+                SliverToBoxAdapter(
+                  key: _center,
+                  child: const SizedBox.shrink(),
                 ),
-              SliverToBoxAdapter(child: SizedBox(height: activitySpace)),
-            ],
+                SliverPadding(
+                  padding: _turnInsets,
+                  sliver: SliverList.builder(
+                    itemCount: _newRows.length,
+                    itemBuilder: (context, index) {
+                      final row = _newRows[index];
+                      return KeyedSubtree(
+                        key: ValueKey(row.key),
+                        child: row.build(),
+                      );
+                    },
+                  ),
+                ),
+                if (active != null)
+                  SliverPadding(
+                    padding: _turnInsets,
+                    sliver: SliverToBoxAdapter(child: _live(active)),
+                  ),
+                if (_history.isEmpty && _newRows.isEmpty && active == null)
+                  const SliverToBoxAdapter(
+                    child: Center(child: Text('这条会话还没有消息。')),
+                  ),
+                SliverToBoxAdapter(child: SizedBox(height: activitySpace)),
+              ],
+            ),
           ),
         ),
         if (widget.problem case final message?)
@@ -349,33 +421,60 @@ class _TimelineViewState extends State<TimelineView> {
     );
   }
 
-  Widget _user(MobileTimelineEvent event) => Container(
-    margin: const EdgeInsets.only(top: 56, bottom: 8),
-    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      border: Border.all(
-        color: Theme.of(context).colorScheme.outlineVariant,
-        width: .5,
-      ),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(event.text ?? ''),
-        if (event.truncated == true)
-          TextButton(
-            onPressed: widget.online ? () => _openText(event) : null,
-            child: const Text('查看完整正文'),
+  Widget _user(MobileTimelineEvent event, {required bool workTouchesAbove}) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Align(
+      alignment: AlignmentDirectional.centerEnd,
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: 56,
+          bottom:
+              48 - (workTouchesAbove ? timelineWorkTouchOverhang(context) : 0),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.timelineUser,
+            border: Border.all(color: palette.border, width: .5),
+            borderRadius: BorderRadius.circular(12),
           ),
-      ],
-    ),
-  );
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  event.text ?? '',
+                  style: TextStyle(
+                    height: 1.6,
+                    leadingDistribution: TextLeadingDistribution.even,
+                    letterSpacing: theme.platform == TargetPlatform.iOS
+                        ? -.45
+                        : 0,
+                  ),
+                ),
+                if (event.truncated == true)
+                  TextButton(
+                    onPressed: widget.online ? () => _openText(event) : null,
+                    child: const Text('查看完整正文'),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-  Widget _answer(MobileTimelineEvent event) => TimelineAnswer(
+  Widget _answer(
+    MobileTimelineEvent event, {
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(vertical: 8),
+  }) => TimelineAnswer(
     text: event.text ?? '',
+    padding: padding,
     more: widget.online && event.truncated == true
         ? () => _openText(event)
         : null,
@@ -402,31 +501,190 @@ class _TimelineViewState extends State<TimelineView> {
     ),
   );
 
-  Widget _summary(TimelineTurn turn) {
+  String _durationLabel(TimelineTurn turn) {
     final start = DateTime.tryParse(turn.startedAt);
     final end = DateTime.tryParse(turn.terminal?.createdAt ?? '');
-    final seconds = start == null || end == null
-        ? 0
-        : end.difference(start).inSeconds.clamp(0, 999999);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: TextButton.icon(
+    if (start == null || end == null) return '已处理';
+    var remaining = (end.difference(start).inMilliseconds / 1000).round().clamp(
+      1,
+      9999999,
+    );
+    final parts = <String>[];
+    for (final (size, unit) in const [
+      (86400, '天'),
+      (3600, '时'),
+      (60, '分'),
+      (1, '秒'),
+    ]) {
+      final value = remaining ~/ size;
+      remaining %= size;
+      if (value > 0) parts.add('$value $unit');
+      if (parts.length == 2) break;
+    }
+    return '用时 ${parts.join(' ')}';
+  }
+
+  Widget _summary(TimelineTurn turn) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final line = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: palette.timelineDivider)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 9),
+        child: Row(
+          children: [
+            Flexible(
+              child: Text(
+                _durationLabel(turn),
+                style: TextStyle(
+                  color: palette.timelineSubtle,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            if (turn.folded) ...[
+              const SizedBox(width: 8),
+              IconTheme(
+                data: IconThemeData(color: palette.timelineSubtle),
+                child: RotatedBox(
+                  quarterTurns: _expanded.contains(turn.key) ? 0 : 3,
+                  child: const WorkspaceIcon(
+                    WorkspaceGlyph.chevronDown,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    if (!turn.folded) {
+      return Padding(padding: const EdgeInsets.only(bottom: 12), child: line);
+    }
+    final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    return Semantics(
+      expanded: _expanded.contains(turn.key),
+      child: InkWell(
         key: ValueKey('fold-${turn.key}'),
-        onPressed: () => setState(() {
+        onTap: () => setState(() {
           if (!_expanded.remove(turn.key)) _expanded.add(turn.key);
           _rebuildRows();
         }),
-        icon: Icon(
-          _expanded.contains(turn.key) ? Icons.expand_less : Icons.expand_more,
-          size: 16,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: hit),
+          child: Align(
+            alignment: Alignment.topLeft,
+            heightFactor: 1,
+            child: line,
+          ),
         ),
-        label: Text('用时 $seconds 秒'),
       ),
     );
   }
 
-  Widget _work(TimelineTurn turn, TimelineWork item) => switch (item.kind) {
-    TimelineWorkKind.message => _answer(item.event),
+  Widget _copyAnswer(String text) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final hit = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: SizedBox.square(
+        dimension: hit,
+        child: IconButton(
+          tooltip: '复制回答',
+          onPressed: () => Clipboard.setData(ClipboardData(text: text)),
+          padding: const EdgeInsets.only(left: 4, top: 4),
+          alignment: Alignment.topLeft,
+          color: palette.timelineSubtle,
+          icon: const WorkspaceIcon(WorkspaceGlyph.copy, size: 16),
+        ),
+      ),
+    );
+  }
+
+  bool _runIsActive(TimelineTurn turn) =>
+      widget.online &&
+      turn.runId != null &&
+      (turn.status == TimelineTurnStatus.running ||
+          turn.status == TimelineTurnStatus.waiting) &&
+      (widget.snapshot.live?.runId ?? _turns.lastOrNull?.runId) == turn.runId;
+
+  WorkspaceGlyph? _toolGlyph(TimelineToolKind? tool) => switch (tool) {
+    TimelineToolKind.read ||
+    TimelineToolKind.search ||
+    TimelineToolKind.fetch => WorkspaceGlyph.search,
+    TimelineToolKind.edit => WorkspaceGlyph.pencil,
+    TimelineToolKind.command ||
+    TimelineToolKind.browser => WorkspaceGlyph.terminal,
+    _ => null,
+  };
+
+  Widget _workGroup(
+    TimelineTurn turn,
+    List<TimelineWork> group, {
+    required bool tail,
+    required bool touchAbove,
+  }) {
+    final sequence = group.first.event.seq;
+    final expanded = _expandedWork.contains(sequence);
+    final live = widget.snapshot.live;
+    final growing =
+        tail &&
+        _runIsActive(turn) &&
+        (live?.runId != turn.runId || (live?.text.isEmpty ?? true));
+    void toggle() => setState(() {
+      if (!_expandedWork.remove(sequence)) _expandedWork.add(sequence);
+      _rebuildRows();
+    });
+
+    if (!expanded && growing) {
+      final active = group.reversed
+          .where(
+            (item) => item.kind == TimelineWorkKind.tool && item.output == null,
+          )
+          .firstOrNull;
+      final preview = active ?? group.last;
+      if (preview.kind == TimelineWorkKind.tool) {
+        return _tool(
+          turn,
+          preview,
+          followed: !tail,
+          toggleGroup: toggle,
+          expanded: false,
+          touchAbove: touchAbove,
+        );
+      }
+    }
+
+    final summary = summarizeTimelineWork(group, finished: !growing);
+    return TimelineWorkLine(
+      label: summary.label,
+      glyph: _toolGlyph(summary.icon),
+      followed: !tail && !expanded,
+      expanded: expanded,
+      touchAbove: touchAbove,
+      onTap: toggle,
+    );
+  }
+
+  Widget _work(
+    TimelineTurn turn,
+    TimelineWork item, {
+    required bool followed,
+    bool showIcon = true,
+    bool touchAbove = false,
+  }) => switch (item.kind) {
+    TimelineWorkKind.message => _answer(
+      item.event,
+      padding: EdgeInsets.only(bottom: followed ? 16 : 0),
+    ),
     TimelineWorkKind.reasoning => Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -438,11 +696,30 @@ class _TimelineViewState extends State<TimelineView> {
           ),
       ],
     ),
-    TimelineWorkKind.question => _subtle('Agent 提出了问题'),
-    TimelineWorkKind.tool => _tool(turn, item),
+    TimelineWorkKind.question => TimelineWorkLine(
+      label: item.result == null && _runIsActive(turn) ? '正在提问' : '问过了',
+      glyph: showIcon ? WorkspaceGlyph.questionCircle : null,
+      running: item.result == null && _runIsActive(turn),
+      followed: followed,
+    ),
+    TimelineWorkKind.tool => _tool(
+      turn,
+      item,
+      followed: followed,
+      showIcon: showIcon,
+      touchAbove: touchAbove,
+    ),
   };
 
-  Widget _tool(TimelineTurn turn, TimelineWork item) {
+  Widget _tool(
+    TimelineTurn turn,
+    TimelineWork item, {
+    required bool followed,
+    bool showIcon = true,
+    VoidCallback? toggleGroup,
+    bool? expanded,
+    bool touchAbove = false,
+  }) {
     final output = item.output;
     final input = item.input;
     final id = item.event.itemId;
@@ -479,27 +756,63 @@ class _TimelineViewState extends State<TimelineView> {
           truncated: partial.truncated,
         ),
     ];
-    return ListTile(
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(
-        output?.failed == true
-            ? Icons.error_outline
-            : Icons.construction_outlined,
-        size: 18,
+    void openDetails() => showTimelineDetails(
+      context,
+      title,
+      sections,
+      widget.online ? widget.content : null,
+    );
+    final onTap = toggleGroup ?? (sections.isEmpty ? null : openDetails);
+    final tool = timelineToolKind(item);
+    if (tool != TimelineToolKind.other) {
+      final running = output == null && _runIsActive(turn);
+      final stopped = output == null && turn.terminal != null;
+      final action = switch (tool) {
+        TimelineToolKind.read => '读取',
+        TimelineToolKind.search => '搜索',
+        TimelineToolKind.fetch => '抓取',
+        TimelineToolKind.edit =>
+          title.trim().toLowerCase() == 'write' ? '写入' : '编辑',
+        _ => '执行',
+      };
+      return TimelineWorkLine(
+        label: output?.failed == true
+            ? '执行失败'
+            : stopped
+            ? '已停止'
+            : '${running
+                  ? '正在'
+                  : output == null
+                  ? ''
+                  : '已'}$action',
+        glyph: showIcon ? _toolGlyph(tool) : null,
+        detail: timelineToolDetail(item, tool),
+        file: tool == TimelineToolKind.read || tool == TimelineToolKind.edit,
+        running: running,
+        failed: output?.failed == true,
+        followed: followed,
+        expanded: expanded,
+        touchAbove: touchAbove,
+        onTap: onTap,
+      );
+    }
+    return Material(
+      type: MaterialType.transparency,
+      child: ListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(
+          output?.failed == true
+              ? Icons.error_outline
+              : Icons.construction_outlined,
+          size: 18,
+        ),
+        title: Text(title),
+        subtitle: preview == null || preview.isEmpty
+            ? null
+            : Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
+        onTap: onTap,
       ),
-      title: Text(title),
-      subtitle: preview == null || preview.isEmpty
-          ? null
-          : Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
-      onTap: sections.isEmpty
-          ? null
-          : () => showTimelineDetails(
-              context,
-              title,
-              sections,
-              widget.online ? widget.content : null,
-            ),
     );
   }
 

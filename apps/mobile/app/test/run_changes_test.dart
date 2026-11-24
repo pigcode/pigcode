@@ -12,7 +12,10 @@ void main() {
       final calls = <(String, int)>[];
       const first = 'lib/first.dart';
       const second = 'lib/second.dart';
-      const start = '@@ -1 +1,2 @@\n-original\n+甲';
+      const start =
+          'diff --git a/lib/first.dart b/lib/first.dart\n'
+          '--- a/lib/first.dart\n+++ b/lib/first.dart\n'
+          '@@ -1 +1,2 @@\n-original\n+甲';
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -34,7 +37,9 @@ void main() {
                 }
                 return offset == 0
                     ? MobileRunDiffPage(text: start, nextOffset: start.length)
-                    : const MobileRunDiffPage(text: '\n+乙\n');
+                    : const MobileRunDiffPage(
+                        text: '\n+乙\n@@ -10 +11 @@\n-older\n+新行\n',
+                      );
               },
             ),
           ),
@@ -48,10 +53,14 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, [(first, 0)]);
       expect(find.text('甲'), findsOneWidget);
+      expect(find.textContaining('diff --git'), findsNothing);
+      expect(find.textContaining('@@ -1'), findsNothing);
       await tester.tap(find.text('继续读取差异'));
       await tester.pumpAndSettle();
       expect(calls, [(first, 0), (first, start.length)]);
       expect(find.text('乙'), findsOneWidget);
+      expect(find.text('⋯'), findsOneWidget);
+      expect(find.text('11'), findsOneWidget);
       await tester.tap(find.text('second.dart'));
       await tester.pumpAndSettle();
       expect(calls.last, (second, 0));

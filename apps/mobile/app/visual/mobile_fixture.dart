@@ -61,87 +61,101 @@ final _sidebar = SidebarSnapshot(
   syncedAt: _syncedAt,
 );
 
-TimelineSnapshot _history(MobileTimelinePendingKind? pending, bool running) =>
-    TimelineSnapshot(
-      events: [
-        const MobileTimelineEvent(
-          seq: 1,
-          runId: 'review',
-          kind: MobileTimelineKind.runStarted,
-          text: '帮我检查一下手机端的连接提示。',
-          createdAt: '2025-06-18T08:30:00Z',
+TimelineSnapshot _history(
+  MobileTimelinePendingKind? pending,
+  bool running, {
+  required bool completedEditOnly,
+}) => TimelineSnapshot(
+  events: [
+    const MobileTimelineEvent(
+      seq: 1,
+      runId: 'review',
+      kind: MobileTimelineKind.runStarted,
+      text: '帮我检查一下手机端的连接提示。',
+      createdAt: '2025-06-18T08:30:00Z',
+    ),
+    const MobileTimelineEvent(
+      seq: 2,
+      runId: 'review',
+      kind: MobileTimelineKind.reasoning,
+      text: '对照会话页与离线缓存的状态文案。',
+      createdAt: '2025-06-18T08:30:01Z',
+    ),
+    const MobileTimelineEvent(
+      seq: 3,
+      runId: 'review',
+      kind: MobileTimelineKind.messageAssistant,
+      text:
+          '已检查连接提示。\n\n'
+          '- 连接恢复后会刷新侧栏和时间线。\n'
+          '- 离线时会显示上次同步时间，历史仍可查看。\n\n'
+          '可在手机工程运行 `flutter test` 复验。',
+      createdAt: '2025-06-18T08:30:07Z',
+    ),
+    MobileTimelineEvent(
+      seq: 4,
+      runId: 'review',
+      kind: completedEditOnly
+          ? MobileTimelineKind.toolCompleted
+          : MobileTimelineKind.runCompleted,
+      itemId: completedEditOnly ? 'review-edit' : null,
+      name: completedEditOnly ? 'Edit' : null,
+      createdAt: '2025-06-18T08:30:08Z',
+    ),
+    MobileTimelineEvent(
+      seq: 5,
+      runId: 'review',
+      kind: completedEditOnly
+          ? MobileTimelineKind.runCompleted
+          : MobileTimelineKind.changes,
+      createdAt: '2025-06-18T08:30:08Z',
+    ),
+    if (pending != null || running)
+      const MobileTimelineEvent(
+        seq: 6,
+        runId: 'next',
+        kind: MobileTimelineKind.runStarted,
+        text: '继续跑一遍模拟器回归。',
+        createdAt: '2025-06-18T08:30:12Z',
+      ),
+  ],
+  through: pending != null || running ? 6 : 5,
+  cursor: pending != null || running ? 6 : 5,
+  nextBefore: null,
+  live: pending == null && !running
+      ? null
+      : MobileActiveRun(
+          runId: 'next',
+          // The visual fixture starts at 0s on every render.
+          startedAt: '9999-01-01T00:00:00Z',
+          revision: 1,
+          text: running ? '我正在核对会话输出和连接状态。' : '',
+          textTruncated: false,
+          reasoning: '',
+          reasoningTruncated: false,
+          tools: const [],
+          pending: [
+            if (pending != null)
+              MobileTimelinePending(id: pending.name, kind: pending),
+          ],
+          step: '核对会话状态',
+          finishedSteps: 2,
+          totalSteps: 5,
         ),
-        const MobileTimelineEvent(
-          seq: 2,
-          runId: 'review',
-          kind: MobileTimelineKind.reasoning,
-          text: '对照会话页与离线缓存的状态文案。',
-          createdAt: '2025-06-18T08:30:01Z',
-        ),
-        const MobileTimelineEvent(
-          seq: 3,
-          runId: 'review',
-          kind: MobileTimelineKind.messageAssistant,
-          text:
-              '已检查连接提示。\n\n'
-              '- 连接恢复后会刷新侧栏和时间线。\n'
-              '- 离线时会显示上次同步时间，历史仍可查看。\n\n'
-              '可在手机工程运行 `flutter test` 复验。',
-          createdAt: '2025-06-18T08:30:07Z',
-        ),
-        const MobileTimelineEvent(
-          seq: 4,
-          runId: 'review',
-          kind: MobileTimelineKind.runCompleted,
-          createdAt: '2025-06-18T08:30:08Z',
-        ),
-        const MobileTimelineEvent(
-          seq: 5,
-          runId: 'review',
-          kind: MobileTimelineKind.changes,
-          createdAt: '2025-06-18T08:30:08Z',
-        ),
-        if (pending != null || running)
-          const MobileTimelineEvent(
-            seq: 6,
-            runId: 'next',
-            kind: MobileTimelineKind.runStarted,
-            text: '继续跑一遍模拟器回归。',
-            createdAt: '2025-06-18T08:30:12Z',
-          ),
-      ],
-      through: pending != null || running ? 6 : 5,
-      cursor: pending != null || running ? 6 : 5,
-      nextBefore: null,
-      live: pending == null && !running
-          ? null
-          : MobileActiveRun(
-              runId: 'next',
-              // The visual fixture starts at 0s on every render.
-              startedAt: '9999-01-01T00:00:00Z',
-              revision: 1,
-              text: running ? '我正在核对会话输出和连接状态。' : '',
-              textTruncated: false,
-              reasoning: '',
-              reasoningTruncated: false,
-              tools: const [],
-              pending: [
-                if (pending != null)
-                  MobileTimelinePending(id: pending.name, kind: pending),
-              ],
-              step: '核对会话状态',
-              finishedSteps: 2,
-              totalSteps: 5,
-            ),
-    );
+);
 
 Widget workspaceFixture({
   bool online = true,
   bool running = false,
   MobileTimelinePendingKind? pending,
   Future<MobileRunChangesPage>? changedFiles,
+  bool completedEditOnly = false,
 }) {
-  final history = _history(pending, running);
+  final history = _history(
+    pending,
+    running,
+    completedEditOnly: completedEditOnly,
+  );
   final status = pending != null
       ? MobileThreadStatus.waitingApproval
       : running

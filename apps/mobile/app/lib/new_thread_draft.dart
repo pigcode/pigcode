@@ -1,10 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'mobile_sheet.dart';
+import 'mobile_surfaces.dart';
 import 'new_thread_draft_state.dart';
 import 'theme_colors.dart';
+import 'workspace_icon.dart';
 
 final _draftOptionsProvider = FutureProvider.autoDispose
     .family<MobileDraftOptions, MobileConnection>(
@@ -93,7 +97,13 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     final project = projects
         .where((item) => item.id == selectedProject)
         .firstOrNull;
-    final projectName = project?.name;
+    final projectName =
+        project?.name ??
+        (form.projectId == null
+            ? null
+            : online
+            ? '所选项目不可用'
+            : '已选项目');
     if (projectName != _reportedProjectName) {
       _reportedProjectName = projectName;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -194,6 +204,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         : '${item.label} · ${item.agentName}';
 
     final modelPicker = _DraftChip(
+      compact: true,
       label:
           model?.label ??
           form.modelLabel ??
@@ -213,8 +224,13 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           : null,
     );
 
+    final chipHeight = _DraftChip.visualHeight(context, compact: false);
+    final hitSize = Theme.of(context).platform == TargetPlatform.android
+        ? 48.0
+        : 44.0;
+    final chipOverhang = math.max(0.0, hitSize - chipHeight) / 2;
     final dock = SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      padding: EdgeInsets.fromLTRB(12, math.max(0, 6 - chipOverhang), 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -225,10 +241,8 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
               spacing: 8,
               children: [
                 _DraftChip(
-                  icon: Icons.folder_outlined,
-                  label:
-                      project?.name ??
-                      (form.projectId == null ? '选择项目' : '已选项目'),
+                  icon: WorkspaceGlyph.folder,
+                  label: projectName ?? '选择项目',
                   tooltip: '草稿项目',
                   onTap: !view.working && projects.isNotEmpty
                       ? () => pick('选择项目', [
@@ -237,7 +251,6 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
                       : null,
                 ),
                 _DraftChip(
-                  icon: Icons.smart_toy_outlined,
                   label: instance == null
                       ? form.instanceLabel ??
                             (form.instanceId == null
@@ -261,7 +274,6 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
                       : null,
                 ),
                 _DraftChip(
-                  icon: Icons.shield_outlined,
                   label: permission == null
                       ? '选择权限'
                       : _permissionName(permission),
@@ -319,7 +331,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
             ),
           if (form.text.length > mobileCommandTextLimit)
             const _DraftNotice('首条消息超过长度上限，请缩短后发送。'),
-          const SizedBox(height: 4),
+          SizedBox(height: math.max(0, 8 - chipOverhang)),
           _DraftText(
             modelPicker: modelPicker,
             text: form.text,
@@ -360,6 +372,8 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
                               fontSize: 26,
                               fontWeight: FontWeight.w500,
                               letterSpacing: 0,
+                              height: 1.45,
+                              leadingDistribution: TextLeadingDistribution.even,
                             ),
                       )
                     : null,
@@ -391,15 +405,16 @@ Future<T?> _choose<T>(
 ) => showMobileSheet<T>(
   context,
   title: title,
-  builder: (context) => ListView(
-    shrinkWrap: true,
-    children: [
-      for (final (value, label) in choices)
-        ListTile(
-          title: Text(label),
-          onTap: () => Navigator.pop(context, value),
-        ),
-    ],
+  content: (context) => SliverList.builder(
+    itemCount: choices.length,
+    itemBuilder: (_, index) {
+      final (value, label) = choices[index];
+      return MobileSheetAction(
+        label: label,
+        dividerAbove: index > 0,
+        onTap: () => Navigator.pop(context, value),
+      );
+    },
   ),
 );
 
@@ -407,48 +422,111 @@ class _DraftChip extends StatelessWidget {
   const _DraftChip({
     required this.label,
     required this.tooltip,
+    this.compact = false,
     this.icon,
     this.onTap,
   });
 
-  final IconData? icon;
+  final WorkspaceGlyph? icon;
   final String label;
   final String tooltip;
+  final bool compact;
   final VoidCallback? onTap;
+
+  static double visualHeight(BuildContext context, {required bool compact}) =>
+      math.max(
+        compact ? 30 : 34,
+        MediaQuery.textScalerOf(context).scale(compact ? 13 : 14) * 1.45 + 8,
+      );
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final height = visualHeight(context, compact: compact);
+    final hitSize = math.max(
+      height,
+      theme.platform == TargetPlatform.android ? 48.0 : 44.0,
+    );
+    final overhang = (hitSize - height) / 2;
+    final foreground = onTap == null
+        ? colors.onSurfaceVariant.withValues(alpha: .6)
+        : compact
+        ? colors.onSurfaceVariant
+        : colors.onSurface;
     return Tooltip(
       message: tooltip,
-      child: ActionChip(
-        materialTapTargetSize: MaterialTapTargetSize.padded,
-        backgroundColor: colors.surface,
-        shape: const StadiumBorder(),
-        side: icon == null
-            ? BorderSide.none
-            : BorderSide(color: colors.outlineVariant, width: .5),
-        avatar: icon == null ? null : Icon(icon, size: 16),
-        label: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 160),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+      child: Semantics(
+        button: true,
+        enabled: onTap != null,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const StadiumBorder(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: hitSize),
+            child: SizedBox(
+              height: hitSize,
+              child: Align(
+                widthFactor: 1,
+                // 小胶囊的点击区到输入卡片底边为止。
+                alignment: compact && overhang > 7
+                    ? Alignment(0, 1 - 7 / overhang)
+                    : Alignment.center,
+                child: Container(
+                  height: height,
+                  constraints: const BoxConstraints(maxWidth: 200),
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 12),
+                  decoration: BoxDecoration(
+                    color: compact ? Colors.transparent : colors.surface,
+                    borderRadius: BorderRadius.circular(height / 2),
+                    border: Border.all(
+                      color: compact ? Colors.transparent : palette.border,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (icon case final icon?) ...[
+                        IconTheme(
+                          data: IconThemeData(color: palette.muted),
+                          child: WorkspaceIcon(icon, size: 15),
+                        ),
+                        const SizedBox(width: 5),
+                      ],
+                      Flexible(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: compact ? 13 : 14,
+                            letterSpacing: theme.platform == TargetPlatform.iOS
+                                ? (compact ? -.12 : -.2)
+                                : 0,
+                            height: 1.45,
+                            color: foreground,
+                            leadingDistribution: TextLeadingDistribution.even,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      IconTheme(
+                        data: IconThemeData(color: palette.muted),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.chevronDown,
+                          size: 15,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 4),
-              Icon(Icons.expand_more, size: 14, color: colors.onSurfaceVariant),
-            ],
+            ),
           ),
         ),
-        labelStyle: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
-        onPressed: onTap,
       ),
     );
   }
@@ -517,74 +595,83 @@ class _DraftTextState extends State<_DraftText> {
         ? pigcodeDark
         : pigcodeLight;
     final hitSize = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
-    return Material(
-      color: colors.surface,
-      elevation: 1,
-      shadowColor: colors.scrim,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(22),
-        side: BorderSide(color: colors.divider, width: .5),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    key: const ValueKey('first-message-input'),
-                    controller: _controller,
-                    onChanged: widget.onChanged,
-                    readOnly: widget.working,
-                    minLines: 1,
-                    maxLines: 5,
-                    keyboardType: TextInputType.multiline,
-                    style: const TextStyle(fontSize: 16, height: 1.375),
-                    decoration: const InputDecoration(
-                      hintText: '描述要做的事',
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 12,
-                      ),
-                      border: InputBorder.none,
-                    ),
-                  ),
+    final modelHeight = _DraftChip.visualHeight(context, compact: true);
+    final modelTarget = math.max(hitSize, modelHeight);
+    const sendDiameter = 36.0;
+    final sendOverhang = (hitSize - sendDiameter) / 2;
+    return DecoratedBox(
+      decoration: mobileComposerSurface(theme.brightness),
+      child: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              15,
+              7,
+              7 + sendDiameter + 8,
+              7 + modelHeight,
+            ),
+            child: TextField(
+              key: const ValueKey('first-message-input'),
+              controller: _controller,
+              onChanged: widget.onChanged,
+              readOnly: widget.working,
+              minLines: 1,
+              maxLines: 5,
+              keyboardType: TextInputType.multiline,
+              style: mobileComposerTextStyle,
+              decoration: InputDecoration(
+                hintText: '描述要做的事',
+                hintStyle: mobileComposerTextStyle.copyWith(
+                  color: colors.faint,
                 ),
-                SizedBox.square(
-                  dimension: hitSize,
-                  child: IconButton(
-                    onPressed: widget.onSend,
-                    tooltip: '发送首条消息',
-                    padding: EdgeInsets.zero,
-                    icon: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: widget.onSend == null
-                            ? colors.selected
-                            : colors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                      child: SizedBox.square(
-                        dimension: 36,
-                        child: Icon(
-                          Icons.arrow_upward,
-                          size: 20,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 7),
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          PositionedDirectional(
+            top: 7 - sendOverhang,
+            end: 7 - sendOverhang,
+            child: SizedBox.square(
+              dimension: hitSize,
+              child: IconButton(
+                onPressed: widget.onSend,
+                tooltip: '发送首条消息',
+                padding: EdgeInsets.zero,
+                icon: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.onSend == null
+                        ? colors.selectedOnSurface
+                        : colors.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: SizedBox.square(
+                    dimension: sendDiameter,
+                    child: Center(
+                      child: IconTheme(
+                        data: IconThemeData(
                           color: widget.onSend == null
-                              ? colors.muted
+                              ? colors.faint
                               : colors.onPrimary,
+                        ),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.arrowUp,
+                          size: 18,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-            widget.modelPicker,
-          ],
-        ),
+          ),
+          PositionedDirectional(
+            start: 7,
+            bottom: math.max(0, 7 - (modelTarget - modelHeight) / 2),
+            child: widget.modelPicker,
+          ),
+        ],
       ),
     );
   }

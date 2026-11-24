@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_mobile/app_theme.dart';
@@ -61,6 +62,115 @@ Widget page(List<MobileTimelineEvent> events, {MobileActiveRun? live}) =>
 void main() {
   final scroll = find.byKey(const ValueKey('timeline-scroll'));
 
+  testWidgets('opens tool details over a painted workspace surface', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DecoratedBox(
+            decoration: const BoxDecoration(color: Colors.white),
+            child: TimelineView(
+              snapshot: TimelineSnapshot(
+                events: const [
+                  MobileTimelineEvent(
+                    seq: 1,
+                    runId: 'review',
+                    kind: MobileTimelineKind.toolStarted,
+                    itemId: 'read',
+                    name: 'Read',
+                    text: 'docs/mobile.md',
+                    createdAt: '2026-11-22T10:00:00.000Z',
+                  ),
+                ],
+                through: 1,
+                cursor: 1,
+                nextBefore: null,
+                live: null,
+              ),
+              online: true,
+              loadEarlier: () async {},
+              content: ({seq, runId, toolId, required field, offset}) async =>
+                  throw StateError('unexpected read'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('正在读取'));
+    await tester.pumpAndSettle();
+    expect(find.text('参数'), findsOneWidget);
+  });
+
+  testWidgets(
+    'groups tool activity around work messages and keeps details reachable',
+    (tester) async {
+      var sequence = 0;
+      MobileTimelineEvent event(
+        MobileTimelineKind kind, {
+        String? id,
+        String? name,
+        String? text,
+        bool? truncated,
+      }) => MobileTimelineEvent(
+        seq: ++sequence,
+        runId: 'work',
+        kind: kind,
+        itemId: id,
+        name: name,
+        text: text,
+        truncated: truncated,
+        createdAt: '2026-11-22T10:00:00.000Z',
+      );
+      List<MobileTimelineEvent> tool(String id, String name, String input) => [
+        event(MobileTimelineKind.toolStarted, id: id, name: name, text: input),
+        event(MobileTimelineKind.toolCompleted, id: id, name: name),
+      ];
+      await tester.pumpWidget(
+        page([
+          event(MobileTimelineKind.runStarted, text: '整理项目'),
+          event(MobileTimelineKind.reasoning, text: '查阅结构，再修改入口。'),
+          ...tool('read', 'Read', '{"file_path":"docs/mobile.md"}'),
+          ...tool('grep', 'Grep', '{"pattern":"timeline"}'),
+          ...tool('first-edit', 'Edit', '{"file_path":"app/main.dart"}'),
+          event(
+            MobileTimelineKind.toolStarted,
+            id: 'second-edit',
+            name: 'Edit',
+            text: '{"file_path":"app/./main.dart","old_string":"unfinished',
+            truncated: true,
+          ),
+          event(
+            MobileTimelineKind.toolCompleted,
+            id: 'second-edit',
+            name: 'Edit',
+          ),
+          event(MobileTimelineKind.messageAssistant, text: '已更新入口，准备验证。'),
+          event(
+            MobileTimelineKind.toolStarted,
+            id: 'test',
+            name: 'Bash',
+            text: '{"description":"运行验证","command":"flutter test"}',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      final summary = find.text('已查阅 2 项，已修改 1 文件');
+      expect(summary, findsOneWidget);
+      expect(find.textContaining('正在执行'), findsOneWidget);
+      expect(find.textContaining('mobile.md'), findsNothing);
+
+      await tester.tap(summary);
+      await tester.pumpAndSettle();
+      final read = find.textContaining('mobile.md');
+      await tester.ensureVisible(read);
+      await tester.tap(read);
+      await tester.pumpAndSettle();
+      expect(find.text('参数'), findsOneWidget);
+    },
+  );
+
   testWidgets('uses the dark foreground for inline Markdown code', (
     tester,
   ) async {
@@ -86,14 +196,32 @@ void main() {
     expect(codeColors, everyElement(pigcodeDark.foreground));
   });
 
-  testWidgets('starts a short conversation near the top of the viewport', (
+  testWidgets('shows the duration of a completed exchange with no tool work', (
     tester,
   ) async {
-    await tester.pumpWidget(page(runs(20, 20)));
+    final events = runs(
+      20,
+      20,
+    ).where((event) => event.kind != MobileTimelineKind.reasoning).toList();
+    await tester.pumpWidget(page(events));
     await tester.pumpAndSettle();
     final viewport = tester.getRect(scroll);
     final firstMessage = tester.getRect(find.byKey(const ValueKey('user-r20')));
     expect(firstMessage.top - viewport.top, inInclusiveRange(0, 48));
+    expect(find.text('用时 3 秒'), findsOneWidget);
+    final messenger = tester.binding.defaultBinaryMessenger;
+    String? copied;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String;
+      }
+      return null;
+    });
+    addTearDown(() {
+      messenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    await tester.tap(find.byTooltip('复制回答'));
+    expect(copied, '最终回答 20');
   });
 
   testWidgets('collapses completed work and shows the current activity', (

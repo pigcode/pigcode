@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' show ImageByteFormat;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -25,67 +24,10 @@ class _VisualTestBinding extends AutomatedTestWidgetsFlutterBinding {
   bool get disableShadows => false;
 }
 
-class _VisualGoldenComparator extends LocalFileComparator {
-  _VisualGoldenComparator(super.testFile);
-
-  @override
-  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
-    final result = await GoldenFileComparator.compareLists(
-      imageBytes,
-      await getGoldenBytes(golden),
-    );
-    try {
-      if (result.passed || await _onlyRoundingNoise(result)) return true;
-      throw FlutterError(await generateFailureOutput(result, golden, basedir));
-    } finally {
-      result.dispose();
-    }
-  }
-
-  Future<bool> _onlyRoundingNoise(ComparisonResult result) async {
-    final expected = result.diffs?['masterImage'];
-    final actual = result.diffs?['testImage'];
-    const maxPixels = 8;
-    if (expected == null ||
-        actual == null ||
-        expected.width != actual.width ||
-        expected.height != actual.height ||
-        (result.diffPercent * expected.width * expected.height).round() >
-            maxPixels) {
-      return false;
-    }
-    final before = await expected.toByteData(format: ImageByteFormat.rawRgba);
-    final after = await actual.toByteData(format: ImageByteFormat.rawRgba);
-    if (before == null || after == null) return false;
-    var pixels = 0;
-    for (var offset = 0; offset < before.lengthInBytes; offset += 4) {
-      if (before.getUint8(offset + 3) != after.getUint8(offset + 3)) {
-        return false;
-      }
-      var changed = false;
-      for (var channel = 0; channel < 3; channel++) {
-        final delta =
-            (before.getUint8(offset + channel) -
-                    after.getUint8(offset + channel))
-                .abs();
-        if (delta > 1) return false;
-        changed = changed || delta > 0;
-      }
-      if (changed && ++pixels > maxPixels) return false;
-    }
-    return true;
-  }
-}
-
 void main() {
   _VisualTestBinding();
 
   setUpAll(() async {
-    if (goldenFileComparator case final LocalFileComparator local) {
-      goldenFileComparator = _VisualGoldenComparator(
-        local.basedir.resolve('mobile_golden_test.dart'),
-      );
-    }
     final fontPath = Platform.environment['PIGCODE_MOBILE_GOLDEN_FONT'];
     if (fontPath == null) {
       throw StateError('请通过 apps/mobile/scripts/test-visual.sh 运行截图测试。');
@@ -165,7 +107,7 @@ void main() {
         workspaceFixture(pending: MobileTimelinePendingKind.approval),
       );
       expect(find.text('允许运行 Flutter 测试？'), findsOneWidget);
-      expect(find.text('允许一次'), findsOneWidget);
+      expect(find.text('允许本次'), findsOneWidget);
       await _matchScreen('approval', brightness);
     }, variant: _platforms);
 

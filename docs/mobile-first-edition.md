@@ -60,7 +60,7 @@ flutter pub get --enforce-lockfile
 ./scripts/test-visual.sh
 ```
 
-Mobile CI 在同一类 runner 上逐像素比对。为保留软阴影，允许最多 8 个像素各有一个 RGB 色阶的舍入差，图像大小和透明度逐像素匹配。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
+Mobile CI 逐像素比对 Flutter 当前界面与已提交的回归基线，以零像素差异为通过条件。方案 D 原型的对照条件见手机端视觉规范。失败时可下载 `mobile-visual-diffs`，其中含基线、实际截图和两种差异图，保留 7 天。预期界面有改动时运行 `./scripts/test-visual.sh --update-goldens`，或手动运行 Mobile CI 并勾选「生成手机截图候选基线」。候选 PNG 可从 `mobile-visual-baselines` 下载，审核后提交到 `apps/mobile/app/visual/baselines/`。 [手机端视觉规范](../apps/mobile/DESIGN.md#视觉验收) · [Flutter 截图比较器](https://api.flutter.dev/flutter/flutter_test/LocalFileComparator-class.html) · [Mobile CI 配置](../.github/workflows/mobile.yml)
 
 ## 长会话性能回放
 
