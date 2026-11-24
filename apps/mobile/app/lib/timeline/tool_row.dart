@@ -14,6 +14,9 @@ class TimelineToolRow extends StatelessWidget {
     this.status,
     this.running = false,
     this.failed = false,
+    this.detailFaint = false,
+    this.hideDetailWhenExpanded = false,
+    this.onStatusTap,
     this.showIcon = true,
     this.expandable = false,
     this.expanded = false,
@@ -28,6 +31,9 @@ class TimelineToolRow extends StatelessWidget {
   final String? status;
   final bool running;
   final bool failed;
+  final bool detailFaint;
+  final bool hideDetailWhenExpanded;
+  final VoidCallback? onStatusTap;
   final bool showIcon;
   final bool expandable;
   final bool expanded;
@@ -40,7 +46,11 @@ class TimelineToolRow extends StatelessWidget {
         ? pigcodeDark
         : pigcodeLight;
     final actionColor = failed ? colors.error : colors.timelineSubtle;
-    final detailColor = failed ? colors.error : colors.foreground;
+    final detailColor = failed
+        ? colors.error
+        : detailFaint
+        ? colors.timelineFaint
+        : colors.foreground;
     final statusColor = failed ? colors.error : colors.timelineFaint;
     final touch = timelineTouchHeight(context);
 
@@ -65,7 +75,9 @@ class TimelineToolRow extends StatelessWidget {
             TextSpan(
               children: [
                 TextSpan(text: action),
-                if (detail != null && detail!.isNotEmpty) ...[
+                if (detail != null &&
+                    detail!.isNotEmpty &&
+                    !(expanded && hideDetailWhenExpanded)) ...[
                   const TextSpan(text: ' '),
                   TextSpan(
                     text: detail,
@@ -96,14 +108,31 @@ class TimelineToolRow extends StatelessWidget {
         ),
         if (status != null) ...[
           const SizedBox(width: TimelineSpace.x4),
-          Text(
-            status!,
-            style: TimelineType.metaStyle(statusColor).copyWith(
-              decoration: failed ? TextDecoration.underline : null,
-              decorationStyle: TextDecorationStyle.dotted,
-              decorationColor: statusColor,
+          if (onStatusTap != null && failed)
+            InkWell(
+              onTap: onStatusTap,
+              borderRadius: BorderRadius.circular(TimelineRadius.small),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Text(
+                  status!,
+                  style: TimelineType.metaStyle(statusColor).copyWith(
+                    decoration: TextDecoration.underline,
+                    decorationStyle: TextDecorationStyle.dotted,
+                    decorationColor: statusColor,
+                  ),
+                ),
+              ),
+            )
+          else
+            Text(
+              status!,
+              style: TimelineType.metaStyle(statusColor).copyWith(
+                decoration: failed ? TextDecoration.underline : null,
+                decorationStyle: TextDecorationStyle.dotted,
+                decorationColor: statusColor,
+              ),
             ),
-          ),
         ],
         if (expandable) ...[
           const SizedBox(width: TimelineSpace.x2),

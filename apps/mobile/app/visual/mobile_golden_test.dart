@@ -87,8 +87,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.textContaining('运行工作区测试'));
       await tester.pumpAndSettle();
-      expect(find.text('命令'), findsOneWidget);
+      expect(find.textContaining('flutter test'), findsOneWidget);
       await _matchScreen('timeline-tools', brightness);
+    }, variant: _platforms);
+
+    testWidgets('Markdown 表格 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(markdown: true));
+      expect(find.text('文件'), findsOneWidget);
+      await _matchScreen('markdown-table', brightness);
     }, variant: _platforms);
 
     testWidgets('新会话 ${brightness.name}', (tester) async {

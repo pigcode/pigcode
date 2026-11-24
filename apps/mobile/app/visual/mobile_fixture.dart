@@ -252,6 +252,41 @@ TimelineSnapshot _showcaseHistory() => TimelineSnapshot(
   live: null,
 );
 
+TimelineSnapshot _markdownHistory() => TimelineSnapshot(
+  events: [
+    MobileTimelineEvent(
+      seq: 1,
+      runId: 'review',
+      kind: MobileTimelineKind.runStarted,
+      text: '看一下表格样式。',
+      createdAt: '2025-06-18T08:20:00Z',
+    ),
+    MobileTimelineEvent(
+      seq: 2,
+      runId: 'review',
+      kind: MobileTimelineKind.messageAssistant,
+      text:
+          '## 改动\n\n'
+          '| 文件 | 改动 |\n'
+          '| --- | --- |\n'
+          '| `src/format.ts` | 新建，导出 `formatAnswer` |\n'
+          '| `src/index.ts` | 改用 `formatAnswer` |\n'
+          '| `src/format.test.ts` | 新增 2 条测试 |\n',
+      createdAt: '2025-06-18T08:20:05Z',
+    ),
+    MobileTimelineEvent(
+      seq: 3,
+      runId: 'review',
+      kind: MobileTimelineKind.runCompleted,
+      createdAt: '2025-06-18T08:20:06Z',
+    ),
+  ],
+  through: 3,
+  cursor: 3,
+  nextBefore: null,
+  live: null,
+);
+
 Widget workspaceFixture({
   bool online = true,
   bool running = false,
@@ -259,11 +294,14 @@ Widget workspaceFixture({
   Future<MobileRunChangesPage>? changedFiles,
   bool completedEditOnly = false,
   bool showcase = false,
+  bool markdown = false,
 }) {
   final history = showcase
       ? _showcaseHistory()
+      : markdown
+      ? _markdownHistory()
       : _history(pending, running, completedEditOnly: completedEditOnly);
-  final status = showcase
+  final status = showcase || markdown
       ? MobileThreadStatus.completed
       : pending != null
       ? MobileThreadStatus.waitingApproval

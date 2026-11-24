@@ -13,6 +13,7 @@ import 'package:re_highlight/styles/atom-one-light.dart';
 import 'mobile_sheet.dart';
 import 'theme_colors.dart';
 import 'timeline/timeline_tokens.dart';
+import 'timeline/tools/markdown_table.dart';
 import 'workspace_icon.dart';
 
 typedef TimelineContentLoader =
@@ -172,54 +173,106 @@ class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
   }
 }
 
+final _markdownThemes = <Brightness, GptMarkdownThemeData>{};
+
+final _markdownBlocks = [
+  MarkdownBlockComponent(
+    syntax: const TimelineTableSyntax(),
+    builder: timelineTableBlock,
+  ),
+];
+
+GptMarkdownThemeData _markdownTheme(
+  Brightness brightness, {
+  required Color link,
+  required Color hairline,
+}) => _markdownThemes.putIfAbsent(
+  brightness,
+  () => GptMarkdownThemeData(
+    brightness: brightness,
+    h1: const TextStyle(fontSize: 19, height: 1.5, fontWeight: FontWeight.w600),
+    h2: const TextStyle(fontSize: 17, height: 1.5, fontWeight: FontWeight.w600),
+    h3: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w600),
+    h4: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w600),
+    h5: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
+    h6: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w400),
+    linkColor: link,
+    hrLineColor: hairline,
+    hrLinePadding: const EdgeInsets.symmetric(vertical: 20),
+    autoAddDividerLineAfterH1: false,
+    styleSheet: const GptMarkdownStyleSheet(
+      heading: HeadingStyle(padding: EdgeInsets.only(top: 8)),
+    ),
+  ),
+);
+
 Widget _markdown(BuildContext context, String value) {
   final theme = Theme.of(context);
   final colors = theme.colorScheme;
   final body = theme.textTheme.bodyMedium;
-  return GptMarkdown(
-    value,
-    style: body?.copyWith(
-      height: 1.6,
-      letterSpacing: theme.platform == TargetPlatform.android
-          ? (body.fontSize ?? 15) * .025
-          : null,
+  final palette = theme.brightness == Brightness.dark
+      ? pigcodeDark
+      : pigcodeLight;
+  final inlineStyle = InlineCodeStyle(
+    color: colors.onSurface,
+    backgroundColor: colors.surfaceContainerHighest,
+    borderColor: colors.outlineVariant,
+    borderWidth: .5,
+  );
+  return GptMarkdownTheme(
+    gptThemeData: _markdownTheme(
+      theme.brightness,
+      link: palette.link,
+      hairline: palette.timelineBorder,
     ),
-    inlineCodeStyle: InlineCodeStyle(
-      color: colors.onSurface,
-      backgroundColor: colors.surfaceContainerHighest,
-      borderColor: colors.outlineVariant,
-      borderWidth: .5,
-    ),
-    codeBuilder: (context, name, code, closed) =>
-        TimelineCodeBlock(name: name, code: code, closed: closed),
-    checkboxBuilder: (context, checked, content, style) {
-      final palette = theme.brightness == Brightness.dark
-          ? pigcodeDark
-          : pigcodeLight;
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(
-              checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
-              size: 14,
-              color: checked ? palette.readyMark : palette.timelineFaint,
+    child: GptMarkdown(
+      value,
+      style: body?.copyWith(
+        height: 1.6,
+        letterSpacing: theme.platform == TargetPlatform.android
+            ? (body.fontSize ?? 15) * .025
+            : null,
+      ),
+      inlineCodeStyle: inlineStyle,
+      codeBuilder: (context, name, code, closed) =>
+          TimelineCodeBlock(name: name, code: code, closed: closed),
+      tableBuilder: (context, rows, textStyle, config) => TimelineMarkdownTable(
+        data: TimelineTableData.fromCustom(rows),
+        textStyle: textStyle,
+        config: config,
+      ),
+      blockComponents: _markdownBlocks,
+      checkboxBuilder: (context, checked, content, style) {
+        final palette = theme.brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Icon(
+                checked
+                    ? Icons.check_box_rounded
+                    : Icons.check_box_outline_blank,
+                size: 14,
+                color: checked ? palette.readyMark : palette.timelineFaint,
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(child: content),
-        ],
-      );
-    },
-    imageBuilder: (context, url, width, height) =>
-        _MarkdownImage(url: url, width: width, height: height),
-    onLinkTap: (url, title) {
-      Clipboard.setData(ClipboardData(text: url));
-      ScaffoldMessenger.maybeOf(
-        context,
-      )?.showSnackBar(SnackBar(content: Text('已复制链接 $url')));
-    },
+            const SizedBox(width: 6),
+            Expanded(child: content),
+          ],
+        );
+      },
+      imageBuilder: (context, url, width, height) =>
+          _MarkdownImage(url: url, width: width, height: height),
+      onLinkTap: (url, title) {
+        Clipboard.setData(ClipboardData(text: url));
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text('已复制链接 $url')));
+      },
+    ),
   );
 }
 

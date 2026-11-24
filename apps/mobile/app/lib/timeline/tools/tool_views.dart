@@ -7,6 +7,7 @@ import '../../timeline_widgets.dart';
 import '../../timeline_work.dart';
 import '../timeline_tokens.dart';
 import '../tool_row.dart';
+import 'command_card.dart';
 
 /// 单个工具调用的行和展开内容。按工具族选择摘要、图标和详情。
 class TimelineToolView extends StatefulWidget {
@@ -16,6 +17,7 @@ class TimelineToolView extends StatefulWidget {
     required this.ended,
     required this.content,
     this.showIcon = true,
+    this.liveOutput,
     this.onOpenDetails,
   });
 
@@ -23,6 +25,7 @@ class TimelineToolView extends StatefulWidget {
   final bool ended;
   final TimelineContentLoader content;
   final bool showIcon;
+  final String? liveOutput;
   final VoidCallback? onOpenDetails;
 
   @override
@@ -105,6 +108,11 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       status: _status,
       running: running,
       failed: failed,
+      detailFaint: kind == TimelineToolKind.command,
+      hideDetailWhenExpanded:
+          kind == TimelineToolKind.command &&
+          timelineCommandDescription(item) == null,
+      onStatusTap: failed ? _showFailure : null,
       showIcon: widget.showIcon,
       expandable: _expandable,
       expanded: _expanded,
@@ -120,26 +128,22 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         ? pigcodeDark
         : pigcodeLight;
     final input = item.input?.text?.trim();
+    final live = timelineStripAnsi(widget.liveOutput ?? '').trim();
     final output = timelineStripAnsi(timelineToolOutput(item) ?? '').trim();
     final sections = <Widget>[];
     if (kind == TimelineToolKind.command) {
-      final command = timelineCommand(item);
-      if (command != null && command.isNotEmpty) {
-        sections.add(
-          TimelineToolSection(
-            label: '命令',
-            text: command,
-            prefix: r'$',
-            maxHeight: 160,
-          ),
-        );
-      }
-      sections.add(
-        TimelineToolSection(
-          label: '输出',
-          text: output.isEmpty ? (running ? '等待输出…' : '（没有输出）') : output,
-          maxHeight: 240,
-        ),
+      final command = timelineCommand(item) ?? '';
+      final text = running ? live : output;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TimelineCommandCard(command: command, output: text, running: running),
+          if (item.input?.truncated == true || item.output?.truncated == true)
+            TextButton(
+              onPressed: widget.onOpenDetails,
+              child: const Text('查看完整内容'),
+            ),
+        ],
       );
     } else if (kind == TimelineToolKind.edit) {
       final diff = _editDiff();
@@ -185,6 +189,31 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       );
     }
     return TimelineToolDetails(children: sections);
+  }
+
+  void _showFailure() {
+    final output = timelineStripAnsi(
+      widget.liveOutput ?? timelineToolOutput(item) ?? '',
+    ).trim();
+    final lines = output
+        .split('\n')
+        .where((line) => line.trim().isNotEmpty)
+        .take(6)
+        .join('\n');
+    final exit = RegExp(
+      r'(?:exit code|Exit code|退出码)[:： ]+(\d+)',
+    ).firstMatch(output)?.group(1);
+    if (!mounted) return;
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => _FailureSheet(
+        command: timelineCommand(item) ?? '',
+        output: lines,
+        exitCode: exit,
+      ),
+    );
   }
 
   Widget? _editDiff() {
@@ -441,5 +470,105 @@ class _TimelinePlanCardState extends State<TimelinePlanCard> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('已复制计划')));
+  }
+}
+
+class _FailureSheet extends StatefulWidget {
+  const _FailureSheet({
+    required this.command,
+    required this.output,
+    this.exitCode,
+  });
+
+  final String command;
+  final String output;
+  final String? exitCode;
+
+  @override
+  State<_FailureSheet> createState() => _FailureSheetState();
+}
+
+class _FailureSheetState extends State<_FailureSheet> {
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    final text = [
+      if (widget.exitCode != null) '退出码 ${widget.exitCode}',
+      if (widget.output.isNotEmpty) widget.output,
+    ].join('\n');
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) setState(() => _copied = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline, size: 20, color: colors.error),
+                const SizedBox(width: TimelineSpace.x4),
+                Expanded(
+                  child: Text(
+                    '执行失败',
+                    style: TimelineType.contentStyle(
+                      colors.foreground,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _copy,
+                  icon: Icon(
+                    _copied ? Icons.check_rounded : Icons.copy_rounded,
+                    size: TimelineIcon.meta,
+                  ),
+                  label: Text(_copied ? '已复制' : '复制原因'),
+                ),
+              ],
+            ),
+            if (widget.exitCode case final code?)
+              Padding(
+                padding: const EdgeInsets.only(top: TimelineSpace.x2),
+                child: Text(
+                  '退出码 $code',
+                  style: TimelineType.metaStyle(colors.error),
+                ),
+              ),
+            if (widget.output.isNotEmpty) ...[
+              const SizedBox(height: TimelineSpace.x4),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 240),
+                padding: TimelineToolCard.padding,
+                decoration: BoxDecoration(
+                  color: colors.timelinePanel,
+                  border: Border.all(color: colors.timelineBorder),
+                  borderRadius: BorderRadius.circular(TimelineToolCard.radius),
+                ),
+                child: SingleChildScrollView(
+                  child: Text(
+                    widget.output,
+                    style: TimelineType.codeStyle(colors.timelineSubtle),
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: TimelineSpace.x6),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

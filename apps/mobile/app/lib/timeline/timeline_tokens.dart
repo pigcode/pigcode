@@ -107,6 +107,22 @@ abstract final class TimelineControl {
   static const double touchAndroid = 48;
 }
 
+abstract final class TimelineToolCard {
+  /// 桌面 `.tool-card`：padding 12/16、gap 12、r12、1px 边、`--cv-panel` 底。
+  static const EdgeInsets padding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x7,
+    vertical: TimelineSpace.x6,
+  );
+  static const double gap = TimelineSpace.x6;
+  static const double radius = TimelineRadius.panel;
+
+  /// 命令行、输出按 20 的行高排版。
+  static const double line = 20;
+  static const int commandLines = 3;
+  static const int commandExpandedLines = 10;
+  static const int outputLines = 5;
+}
+
 /// 手机端的点按高度：iOS 44，Android 48。
 double timelineTouchHeight(BuildContext context) =>
     Theme.of(context).platform == TargetPlatform.android

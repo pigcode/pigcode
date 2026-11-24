@@ -616,10 +616,20 @@ class _TimelineViewState extends State<TimelineView> {
         ended: turn.terminal != null,
         content: widget.content,
         showIcon: showIcon,
+        liveOutput: _toolLiveOutput(item, turn),
         onOpenDetails: () => _openTool(item, turn),
       ),
     ),
   };
+
+  String? _toolLiveOutput(TimelineWork item, TimelineTurn turn) {
+    final live = widget.snapshot.live;
+    if (live?.runId != turn.runId || item.output != null) return null;
+    return live?.tools
+        .where((tool) => tool.id == item.event.itemId)
+        .firstOrNull
+        ?.text;
+  }
 
   void _openTool(TimelineWork item, TimelineTurn turn) {
     final input = item.input;
