@@ -401,7 +401,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
       padding: const EdgeInsetsDirectional.only(start: 12, end: 2),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          minHeight: withOptions ? 46 : 40 - pinnedHeadingTrim,
+          // 文字按 Android 的字形基线上移留出空间，块高仍按原型保留 40。
+          minHeight: withOptions ? 46 : 40,
         ),
         child: Row(
           children: [
@@ -420,7 +421,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
             if (withOptions)
               SizedBox.square(
-                dimension: size,
+                // 原型的分组标题高 46，图标保持原位置。
+                dimension: size < 46 ? size : 46,
                 child: IconButton(
                   tooltip: '分组和筛选',
                   color: !_all || _arrangement.archived
@@ -428,7 +430,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                       : colors.muted,
                   padding: EdgeInsetsDirectional.only(
                     end: 8,
-                    bottom: size == 48 ? 12 : 9,
+                    bottom: size == 48 ? 10 : 9,
                   ),
                   alignment: AlignmentDirectional.bottomEnd,
                   icon: const WorkspaceIcon(WorkspaceGlyph.sliders, size: 18),
@@ -587,7 +589,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
                           }
                         }),
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: size),
+                          // 原型项目行高 44；Android 的 48 触区由相邻留白承担。
+                          constraints: const BoxConstraints(minHeight: 44),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -638,7 +641,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                     ),
                     if (widget.onNewThread case final create?)
                       SizedBox.square(
-                        dimension: size,
+                        dimension: size < 44 ? size : 44,
                         child: IconButton(
                           tooltip: '在${project.name}新建会话',
                           onPressed: () => create(project.id),

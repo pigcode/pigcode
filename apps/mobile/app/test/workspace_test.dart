@@ -381,7 +381,7 @@ void main() {
   });
 
   testWidgets(
-    'uses the Scheme D height for Android conversation rows',
+    'uses the Scheme D heights for Android sidebar rows and inline buttons',
     (tester) async {
       await tester.pumpWidget(workspace(online: true));
       await tester.tap(find.byTooltip('打开菜单'));
@@ -392,7 +392,9 @@ void main() {
 
       expect(tester.getSize(row('最新会话')).height, 44);
       expect(tester.getSize(row('文档更新')).height, greaterThan(44));
-      expect(tester.getSize(find.byTooltip('分组和筛选')).height, 48);
+      expect(tester.getSize(row('编辑器')).height, 44);
+      // 行内按钮跟随原型的行高，触区与所在行同高，不再单独撑到 48。
+      expect(tester.getSize(find.byTooltip('分组和筛选')).height, 46);
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
