@@ -91,6 +91,35 @@ void main() {
     expect(newConnection.closed, isTrue);
   });
 
+  testWidgets('retry drops the old status until the new watch answers', (
+    tester,
+  ) async {
+    final lastSeen = DateTime.utc(2026, 11, 23);
+    final previous = _Watch(
+      RelayComputerStatus(RelayComputerState.offline, lastSeen),
+    );
+    final next = Completer<RelayStatusWatch>();
+    var watches = 0;
+    final session = ComputerReconnect(
+      dial: () async => _Connection(),
+      observe: () => ++watches == 1 ? Future.value(previous) : next.future,
+      onChange: () {},
+    );
+    session.start(foreground: true);
+    await tester.pump();
+    expect(session.status?.state, RelayComputerState.offline);
+    session.retry();
+    await tester.pump();
+    expect(session.status, isNull);
+    next.complete(
+      _Watch(RelayComputerStatus(RelayComputerState.online, lastSeen)),
+    );
+    await tester.pump();
+    expect(session.status?.state, RelayComputerState.online);
+    session.dispose();
+    await tester.pump();
+  });
+
   testWidgets('Host wake and app foreground each resume the saved connection', (
     tester,
   ) async {

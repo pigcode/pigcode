@@ -82,6 +82,8 @@ class ComputerReconnect {
     final connection = _connection;
     _connection = null;
     _connecting = false;
+    // 后台或网络切换前看到的状态不能带进新连接，否则会误报“电脑离线”。
+    _status = null;
     if (connection != null) unawaited(connection.close());
     _stopWatching();
   }

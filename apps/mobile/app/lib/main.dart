@@ -88,7 +88,13 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       final next = networks.toSet();
       final previous = _network;
       _network = next;
-      if (previous != null && !setEquals(previous, next)) _session?.retry();
+      if (previous == null || setEquals(previous, next)) return;
+      // 网络类型变化时旧连接通常已经失效，交给 socket 自己的关闭回调重连；
+      // 这里只在确实没有连接时重建，避免把还健康的连接反复断掉。
+      final session = _session;
+      if (session != null && session.connection == null && !session.connecting) {
+        session.retry();
+      }
     }, onError: (Object _) {});
     unawaited(
       connectivity.checkConnectivity().then<void>((networks) {
