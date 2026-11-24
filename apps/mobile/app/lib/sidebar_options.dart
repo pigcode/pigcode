@@ -132,7 +132,6 @@ Future<bool?> showSidebarOptions(
                 options: const [
                   (SidebarSort.recent, '更新时间'),
                   (SidebarSort.status, '状态'),
-                  (SidebarSort.title, '按名称'),
                 ],
                 onChange: (value) => change(sort: value),
               ),
