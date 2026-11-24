@@ -148,7 +148,8 @@ void main() {
       await tester.tap(find.byTooltip('改动'));
       await tester.pumpAndSettle();
       expect(find.text('2 个文件'), findsOneWidget);
-      expect(find.textContaining('Computer offline'), findsOneWidget);
+      // 折行会在长标识符间插入零宽空格，读屏标签保留原始行文本。
+      expect(find.bySemanticsLabel(RegExp('Computer offline')), findsOneWidget);
       await _matchScreen('diff', brightness);
     }, variant: _platforms);
   }

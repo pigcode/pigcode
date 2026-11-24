@@ -755,27 +755,10 @@ class _DiffRow extends StatelessWidget {
     final needsBreaks = measure.width > width;
     measure.dispose();
     if (!needsBreaks) return text;
-    // 只给放不下的长标识符增加折行机会，其余文本保持原样，便于查找和复制。
-    return text.splitMapJoin(
-      RegExp(r'\S+'),
-      onMatch: (token) {
-        final value = token[0]!;
-        final tokenMeasure = TextPainter(
-          text: TextSpan(text: value, style: style),
-          maxLines: 1,
-          textDirection: Directionality.of(context),
-          textScaler: scaler,
-        )..layout();
-        final tooLong = tokenMeasure.width > width;
-        tokenMeasure.dispose();
-        return tooLong
-            ? value.replaceAllMapped(
-                _identifierBreak,
-                (letter) => '${letter[0]}\u200b',
-              )
-            : value;
-      },
-      onNonMatch: (separator) => separator,
+    // 给长标识符增加折行机会，标点仍由文本布局处理；读屏用原始文本。
+    return text.replaceAllMapped(
+      _identifierBreak,
+      (letter) => '${letter[0]}\u200b',
     );
   }
 }
