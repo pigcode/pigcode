@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -10,6 +12,7 @@ import 'package:re_highlight/styles/atom-one-light.dart';
 
 import 'mobile_sheet.dart';
 import 'theme_colors.dart';
+import 'timeline/timeline_tokens.dart';
 import 'workspace_icon.dart';
 
 typedef TimelineContentLoader =
@@ -23,38 +26,150 @@ typedef TimelineContentLoader =
 
 final _highlight = Highlight()..registerLanguages(builtinAllLanguages);
 
-Widget _codeBlock(BuildContext context, String name, String code, bool closed) {
-  final theme = Theme.of(context);
-  final dark = theme.brightness == Brightness.dark;
-  final base = TextStyle(
-    fontFamily: 'monospace',
-    fontSize: 12,
-    height: 1.58,
-    color: theme.colorScheme.onSurface,
-  );
+TextSpan? _highlighted(
+  String name,
+  String code,
+  bool closed,
+  Color color,
+  bool dark,
+) {
   final language = name.trim().toLowerCase();
-  TextSpan? span;
-  if (language.isNotEmpty && _highlight.getLanguage(language) != null) {
-    final renderer = TextSpanRenderer(
-      base,
-      dark ? atomOneDarkTheme : atomOneLightTheme,
-    );
-    _highlight.highlight(code: code, language: language).render(renderer);
-    span = renderer.span;
+  if (!closed || language.isEmpty || _highlight.getLanguage(language) == null) {
+    return null;
   }
-  return Container(
-    width: double.infinity,
-    margin: const EdgeInsets.symmetric(vertical: 6),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: theme.colorScheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Text.rich(span ?? TextSpan(text: code, style: base)),
-    ),
+  final base = TimelineType.codeStyle(color);
+  final renderer = TextSpanRenderer(
+    base,
+    dark ? atomOneDarkTheme : atomOneLightTheme,
   );
+  _highlight.highlight(code: code, language: language).render(renderer);
+  return renderer.span;
+}
+
+/// 代码块：语言标题、复制、折行开关；流式未闭合的围栏先不高亮。
+class TimelineCodeBlock extends StatefulWidget {
+  const TimelineCodeBlock({
+    super.key,
+    required this.name,
+    required this.code,
+    required this.closed,
+  });
+
+  final String name;
+  final String code;
+  final bool closed;
+
+  @override
+  State<TimelineCodeBlock> createState() => _TimelineCodeBlockState();
+}
+
+class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
+  bool _wrap = true;
+  bool _copied = false;
+  Timer? _reset;
+
+  @override
+  void dispose() {
+    _reset?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.code));
+    if (!mounted) return;
+    setState(() => _copied = true);
+    _reset?.cancel();
+    _reset = Timer(const Duration(milliseconds: 1500), () {
+      if (mounted) setState(() => _copied = false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final span = _highlighted(
+      widget.name,
+      widget.code,
+      widget.closed,
+      colors.foreground,
+      theme.brightness == Brightness.dark,
+    );
+    final text = Text.rich(
+      span ??
+          TextSpan(
+            text: widget.code,
+            style: TimelineType.codeStyle(colors.foreground),
+          ),
+    );
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x3),
+      decoration: BoxDecoration(
+        color: colors.surfaceSunken,
+        border: Border.all(color: colors.divider),
+        borderRadius: BorderRadius.circular(TimelineRadius.panel),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsetsDirectional.only(
+              start: TimelineSpace.x6,
+              end: TimelineSpace.x2,
+            ),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: colors.divider)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.name.trim().isEmpty ? '代码' : widget.name.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TimelineType.smallStyle(colors.timelineFaint),
+                  ),
+                ),
+                IconButton(
+                  tooltip: _wrap ? '不折行' : '自动换行',
+                  onPressed: () => setState(() => _wrap = !_wrap),
+                  icon: Icon(
+                    Icons.wrap_text,
+                    size: TimelineIcon.meta,
+                    color: _wrap ? colors.foreground : colors.timelineFaint,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: _copied ? '已复制' : '复制代码',
+                  onPressed: _copy,
+                  icon: Icon(
+                    _copied ? Icons.check_rounded : Icons.copy_rounded,
+                    size: TimelineIcon.meta,
+                    color: _copied ? colors.readyMark : colors.timelineFaint,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(TimelineSpace.x6),
+            child: _wrap
+                ? text
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: text,
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Widget _markdown(BuildContext context, String value) {
@@ -75,10 +190,106 @@ Widget _markdown(BuildContext context, String value) {
       borderColor: colors.outlineVariant,
       borderWidth: .5,
     ),
-    codeBuilder: _codeBlock,
-    imageBuilder: (_, _, _, _) => const Text('图片'),
-    onLinkTap: (_, _) {},
+    codeBuilder: (context, name, code, closed) =>
+        TimelineCodeBlock(name: name, code: code, closed: closed),
+    checkboxBuilder: (context, checked, content, style) {
+      final palette = theme.brightness == Brightness.dark
+          ? pigcodeDark
+          : pigcodeLight;
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Icon(
+              checked ? Icons.check_box_rounded : Icons.check_box_outline_blank,
+              size: 14,
+              color: checked ? palette.readyMark : palette.timelineFaint,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(child: content),
+        ],
+      );
+    },
+    imageBuilder: (context, url, width, height) =>
+        _MarkdownImage(url: url, width: width, height: height),
+    onLinkTap: (url, title) {
+      Clipboard.setData(ClipboardData(text: url));
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('已复制链接 $url')));
+    },
   );
+}
+
+/// Markdown 图片：http(s) 直接加载，data:image 解码后显示。
+class _MarkdownImage extends StatelessWidget {
+  const _MarkdownImage({required this.url, this.width, this.height});
+
+  final String url;
+  final double? width;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = switch (url) {
+      _ when url.startsWith('data:image/') => _dataImage(),
+      _ when url.startsWith('http://') || url.startsWith('https://') =>
+        Image.network(
+          url,
+          width: width,
+          height: height,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => _fallback(context),
+          loadingBuilder: (context, child, progress) => progress == null
+              ? child
+              : const SizedBox(
+                  height: 40,
+                  child: Center(
+                    child: SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                ),
+        ),
+      _ => _fallback(context),
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x3),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(TimelineRadius.block),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: image,
+        ),
+      ),
+    );
+  }
+
+  Widget? _dataImage() {
+    final comma = url.indexOf(',');
+    if (comma < 0) return null;
+    try {
+      final bytes = base64Decode(url.substring(comma + 1));
+      return Image.memory(
+        Uint8List.fromList(bytes),
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Widget _fallback(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Text('图片', style: TimelineType.metaStyle(colors.timelineFaint));
+  }
 }
 
 class TimelineAnswer extends StatelessWidget {

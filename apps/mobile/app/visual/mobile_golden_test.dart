@@ -71,6 +71,26 @@ void main() {
       await _matchScreen('timeline', brightness);
     }, variant: _platforms);
 
+    testWidgets('时间线工具 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(showcase: true));
+      await tester.tap(find.text('用时 8 秒'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('已查阅'), findsOneWidget);
+      await _matchScreen('timeline-work', brightness);
+    }, variant: _platforms);
+
+    testWidgets('时间线工具展开 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(showcase: true));
+      await tester.tap(find.text('用时 8 秒'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('已查阅'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('运行工作区测试'));
+      await tester.pumpAndSettle();
+      expect(find.text('命令'), findsOneWidget);
+      await _matchScreen('timeline-tools', brightness);
+    }, variant: _platforms);
+
     testWidgets('新会话 ${brightness.name}', (tester) async {
       await _openPage(tester, brightness, workspaceFixture());
       await tester.tap(find.byTooltip('新会话'));

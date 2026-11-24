@@ -7,16 +7,16 @@ import 'request_submission.dart';
 import 'theme_colors.dart';
 import 'workspace_icon.dart';
 
-typedef _RequestDetailsKey = (
+typedef RequestDetailsKey = (
   MobileConnection,
   String threadId,
   String runId,
   String requestId,
 );
 
-final _requestDetailsProvider = FutureProvider.autoDispose
-    .family<MobileRequestDetails, _RequestDetailsKey>(
-      (ref, _RequestDetailsKey key) => key.$1.pendingRequests.details(
+final requestDetailsProvider = FutureProvider.autoDispose
+    .family<MobileRequestDetails, RequestDetailsKey>(
+      (ref, RequestDetailsKey key) => key.$1.pendingRequests.details(
         MobileRequestTarget(threadId: key.$2, runId: key.$3, requestId: key.$4),
       ),
     );
@@ -131,7 +131,7 @@ class _ActiveRequest extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final provider = _requestDetailsProvider((
+    final provider = requestDetailsProvider((
       connection,
       target.threadId,
       target.runId,
@@ -216,7 +216,7 @@ class _ActiveRequest extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (body?.approval case final approval?)
-                        _ApprovalForm(
+                        RequestApprovalForm(
                           approval: approval,
                           enabled: enabled,
                           reserveStop: stopBesideTitle,
@@ -225,7 +225,7 @@ class _ActiveRequest extends ConsumerWidget {
                           ),
                         )
                       else if (body?.questions case final questions?)
-                        _QuestionForm(
+                        RequestQuestionForm(
                           questions: questions,
                           enabled: enabled,
                           reserveStop: stopBesideTitle,
@@ -294,8 +294,9 @@ class _ActiveRequest extends ConsumerWidget {
   }
 }
 
-class _ApprovalForm extends StatelessWidget {
-  const _ApprovalForm({
+class RequestApprovalForm extends StatelessWidget {
+  const RequestApprovalForm({
+    super.key,
     required this.approval,
     required this.enabled,
     required this.reserveStop,
@@ -495,8 +496,9 @@ class _RequestTitle extends StatelessWidget {
   }
 }
 
-class _QuestionForm extends StatefulWidget {
-  const _QuestionForm({
+class RequestQuestionForm extends StatefulWidget {
+  const RequestQuestionForm({
+    super.key,
     required this.questions,
     required this.enabled,
     required this.reserveStop,
@@ -508,10 +510,10 @@ class _QuestionForm extends StatefulWidget {
   final ValueChanged<List<MobileQuestionAnswer>> onAnswer;
 
   @override
-  State<_QuestionForm> createState() => _QuestionFormState();
+  State<RequestQuestionForm> createState() => RequestQuestionFormState();
 }
 
-class _QuestionFormState extends State<_QuestionForm> {
+class RequestQuestionFormState extends State<RequestQuestionForm> {
   final selected = <int, Set<String>>{};
   final custom = <int, TextEditingController>{};
 

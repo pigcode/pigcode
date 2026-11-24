@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_mobile/app_theme.dart';
 import 'package:pigcode_mobile/theme_colors.dart';
+import 'package:pigcode_mobile/timeline/loading_row.dart';
 import 'package:pigcode_mobile/timeline_view.dart';
 import 'package:pigcode_mobile/timeline_widgets.dart';
 
@@ -42,6 +43,10 @@ List<MobileTimelineEvent> runs(int start, int end) => [
 
 Widget page(List<MobileTimelineEvent> events, {MobileActiveRun? live}) =>
     MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: true),
+        child: child!,
+      ),
       home: Scaffold(
         body: TimelineView(
           snapshot: TimelineSnapshot(
@@ -249,13 +254,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('用时 3 秒'), findsOneWidget);
     expect(find.text('过程 20'), findsNothing);
+    expect(find.text('工作中'), findsOneWidget);
     expect(find.text('正在回答'), findsOneWidget);
-    expect(find.text('1/3'), findsOneWidget);
-    expect(
-      tester.getSize(find.byType(TimelineActivity)).height,
-      greaterThanOrEqualTo(44),
-    );
+    expect(find.text('计划 1/3'), findsOneWidget);
+    expect(find.byType(TimelineLoadingRow), findsOneWidget);
     await tester.tap(find.text('用时 3 秒'));
+    await tester.pumpAndSettle();
+    expect(find.text('过程 20'), findsNothing);
+    await tester.tap(find.text('思考'));
     await tester.pumpAndSettle();
     expect(find.text('过程 20'), findsOneWidget);
   });

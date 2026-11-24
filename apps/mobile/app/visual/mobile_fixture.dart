@@ -118,9 +118,19 @@ TimelineSnapshot _history(
         text: '继续跑一遍模拟器回归。',
         createdAt: '2025-06-18T08:30:12Z',
       ),
+    if (pending != null)
+      MobileTimelineEvent(
+        seq: 7,
+        runId: 'next',
+        kind: pending == MobileTimelinePendingKind.approval
+            ? MobileTimelineKind.approvalRequested
+            : MobileTimelineKind.questionRequested,
+        itemId: pending.name,
+        createdAt: '2025-06-18T08:30:13Z',
+      ),
   ],
-  through: pending != null || running ? 6 : 5,
-  cursor: pending != null || running ? 6 : 5,
+  through: pending != null ? 7 : (running ? 6 : 5),
+  cursor: pending != null ? 7 : (running ? 6 : 5),
   nextBefore: null,
   live: pending == null && !running
       ? null
@@ -144,19 +154,118 @@ TimelineSnapshot _history(
         ),
 );
 
+TimelineSnapshot _showcaseHistory() => TimelineSnapshot(
+  events: const [
+    MobileTimelineEvent(
+      seq: 1,
+      runId: 'review',
+      kind: MobileTimelineKind.runStarted,
+      text: '检查一遍连接提示。',
+      createdAt: '2025-06-18T08:25:00Z',
+    ),
+    MobileTimelineEvent(
+      seq: 2,
+      runId: 'review',
+      kind: MobileTimelineKind.reasoning,
+      text: '先看连接状态和现有的提示文案。',
+      createdAt: '2025-06-18T08:25:01Z',
+    ),
+    MobileTimelineEvent(
+      seq: 3,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'read',
+      name: 'Read',
+      text: '{"file_path":"lib/connection.dart"}',
+      createdAt: '2025-06-18T08:25:02Z',
+    ),
+    MobileTimelineEvent(
+      seq: 4,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'read',
+      name: 'Read',
+      text: '（已读取 120 行）',
+      createdAt: '2025-06-18T08:25:03Z',
+    ),
+    MobileTimelineEvent(
+      seq: 5,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'bash',
+      name: 'Bash',
+      text:
+          '{"command":"flutter test test/workspace_test.dart","description":"运行工作区测试"}',
+      createdAt: '2025-06-18T08:25:04Z',
+    ),
+    MobileTimelineEvent(
+      seq: 6,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'bash',
+      name: 'Bash',
+      text: 'All tests passed!',
+      createdAt: '2025-06-18T08:25:05Z',
+    ),
+    MobileTimelineEvent(
+      seq: 7,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'edit',
+      name: 'Edit',
+      text:
+          '{"file_path":"lib/connection.dart","old_string":"旧的连接提示","new_string":"新的连接提示"}',
+      createdAt: '2025-06-18T08:25:06Z',
+    ),
+    MobileTimelineEvent(
+      seq: 8,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'edit',
+      name: 'Edit',
+      text: '',
+      createdAt: '2025-06-18T08:25:07Z',
+    ),
+    MobileTimelineEvent(
+      seq: 9,
+      runId: 'review',
+      kind: MobileTimelineKind.messageAssistant,
+      text: '连接状态和提示文案都核对完了。',
+      createdAt: '2025-06-18T08:25:08Z',
+    ),
+    MobileTimelineEvent(
+      seq: 10,
+      runId: 'review',
+      kind: MobileTimelineKind.runCompleted,
+      createdAt: '2025-06-18T08:25:08Z',
+    ),
+    MobileTimelineEvent(
+      seq: 11,
+      runId: 'review',
+      kind: MobileTimelineKind.changes,
+      createdAt: '2025-06-18T08:25:08Z',
+    ),
+  ],
+  through: 11,
+  cursor: 11,
+  nextBefore: null,
+  live: null,
+);
+
 Widget workspaceFixture({
   bool online = true,
   bool running = false,
   MobileTimelinePendingKind? pending,
   Future<MobileRunChangesPage>? changedFiles,
   bool completedEditOnly = false,
+  bool showcase = false,
 }) {
-  final history = _history(
-    pending,
-    running,
-    completedEditOnly: completedEditOnly,
-  );
-  final status = pending != null
+  final history = showcase
+      ? _showcaseHistory()
+      : _history(pending, running, completedEditOnly: completedEditOnly);
+  final status = showcase
+      ? MobileThreadStatus.completed
+      : pending != null
       ? MobileThreadStatus.waitingApproval
       : running
       ? MobileThreadStatus.running

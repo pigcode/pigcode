@@ -2,19 +2,52 @@ import 'dart:convert';
 
 import 'package:pigcode_client/pigcode_client.dart';
 
-enum TimelineToolKind { read, search, fetch, edit, command, browser, other }
+enum TimelineToolKind {
+  read,
+  search,
+  fetch,
+  edit,
+  command,
+  browser,
+  mcp,
+  skill,
+  task,
+  plan,
+  ask,
+  other,
+}
 
 TimelineToolKind timelineToolKind(TimelineWork item) =>
     timelineToolKindForName(item.event.name ?? item.output?.name);
+
+/// 连续摘要组只收查阅、执行和修改；计划、提问和未知工具单独成行。
+bool timelineJoinsSummary(TimelineWork item) {
+  if (item.kind == TimelineWorkKind.reasoning) return true;
+  if (item.kind != TimelineWorkKind.tool) return false;
+  return switch (timelineToolKind(item)) {
+    TimelineToolKind.read ||
+    TimelineToolKind.search ||
+    TimelineToolKind.fetch ||
+    TimelineToolKind.edit ||
+    TimelineToolKind.command ||
+    TimelineToolKind.browser ||
+    TimelineToolKind.mcp ||
+    TimelineToolKind.skill ||
+    TimelineToolKind.task => true,
+    TimelineToolKind.plan ||
+    TimelineToolKind.ask ||
+    TimelineToolKind.other => false,
+  };
+}
 
 // 工具分类沿用桌面端 tool-identity.ts 的展示族。
 TimelineToolKind timelineToolKindForName(String? toolName) {
   final name = (toolName ?? '').trim().toLowerCase();
   final parts = name.split('__');
-  final action =
-      parts.length >= 3 && parts.first == 'mcp' && parts[1].isNotEmpty
-      ? parts.skip(2).join('__')
-      : name;
+  final isMcp =
+      parts.length >= 3 && parts.first == 'mcp' && parts[1].isNotEmpty;
+  final action = isMcp ? parts.skip(2).join('__') : name;
+  if (isMcp) return TimelineToolKind.mcp;
   if (action.startsWith('browser_') && action.length > 'browser_'.length) {
     return TimelineToolKind.browser;
   }
@@ -43,6 +76,10 @@ TimelineToolKind timelineToolKindForName(String? toolName) {
     'local_shell' ||
     'run_command' ||
     'terminal' => TimelineToolKind.command,
+    'skill' => TimelineToolKind.skill,
+    'task' || 'taskoutput' || 'taskstop' => TimelineToolKind.task,
+    'exitplanmode' || 'switch_mode' => TimelineToolKind.plan,
+    'askuserquestion' => TimelineToolKind.ask,
     _ => TimelineToolKind.other,
   };
 }
@@ -54,10 +91,7 @@ List<List<TimelineWork>> groupTimelineWork(
   final result = <List<TimelineWork>>[];
   var group = <TimelineWork>[];
   for (final item in items) {
-    final joins =
-        item.kind == TimelineWorkKind.reasoning ||
-        (item.kind == TimelineWorkKind.tool &&
-            timelineToolKind(item) != TimelineToolKind.other);
+    final joins = timelineJoinsSummary(item);
     // 更早的分页从滚动锚点上方插入，已有行留在原来的列表里。
     final crossesAnchor =
         group.isNotEmpty &&
@@ -76,10 +110,8 @@ List<List<TimelineWork>> groupTimelineWork(
   return result;
 }
 
-({String label, TimelineToolKind? icon}) summarizeTimelineWork(
-  List<TimelineWork> items, {
-  required bool finished,
-}) {
+({String label, TimelineToolKind? icon, List<String> files, bool filesOnly})
+summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
   var explored = 0;
   var commands = 0;
   var editsWithoutPath = 0;
@@ -94,14 +126,20 @@ List<List<TimelineWork>> groupTimelineWork(
           TimelineToolKind.search ||
           TimelineToolKind.fetch:
         explored++;
-      case TimelineToolKind.command || TimelineToolKind.browser:
+      case TimelineToolKind.command ||
+          TimelineToolKind.browser ||
+          TimelineToolKind.mcp ||
+          TimelineToolKind.skill ||
+          TimelineToolKind.task:
         commands++;
         browser = browser || tool == TimelineToolKind.browser;
       case TimelineToolKind.edit:
         final paths = _editPaths(_toolInput(item)).map(_canonicalPath).toSet();
         if (paths.isEmpty) editsWithoutPath++;
         changedPaths.addAll(paths);
-      case TimelineToolKind.other:
+      case TimelineToolKind.plan ||
+          TimelineToolKind.ask ||
+          TimelineToolKind.other:
         break;
     }
   }
@@ -123,6 +161,8 @@ List<List<TimelineWork>> groupTimelineWork(
         : explored != 0
         ? TimelineToolKind.read
         : null,
+    files: changedPaths.toList()..sort(),
+    filesOnly: explored == 0 && commands == 0 && changedPaths.isNotEmpty,
   );
 }
 
@@ -145,9 +185,110 @@ String? timelineToolDetail(TimelineWork item, TimelineToolKind kind) {
     TimelineToolKind.search => _field(record, ['pattern', 'query', 'path']),
     TimelineToolKind.fetch ||
     TimelineToolKind.browser => _field(record, ['description', 'url']),
+    TimelineToolKind.mcp => _mcpDetail(item.event.name ?? item.output?.name),
+    TimelineToolKind.skill => _field(record, ['name', 'skill', 'description']),
+    TimelineToolKind.task => _field(record, [
+      'description',
+      'task_id',
+      'taskId',
+      'id',
+    ]),
     _ => null,
   };
 }
+
+/// MCP 工具名 `mcp__server__tool` 拆成「服务 · 工具」。
+({String server, String tool})? timelineMcpIdentity(String? name) {
+  final parts = (name ?? '').trim().split('__');
+  if (parts.length < 3 || parts.first != 'mcp' || parts[1].isEmpty) return null;
+  return (server: parts[1], tool: parts.skip(2).join('__'));
+}
+
+String? _mcpDetail(String? name) {
+  final identity = timelineMcpIdentity(name);
+  if (identity == null) return null;
+  return '${identity.server} · ${identity.tool}';
+}
+
+/// 读取工具输入里的 JSON 对象；截断的预览会尽量补全字段。
+Map<Object?, Object?> timelineToolRecord(TimelineWork item) {
+  final input = _toolInput(item);
+  return input is Map ? input : const {};
+}
+
+/// 命令工具的完整命令文本。
+String? timelineCommand(TimelineWork item) {
+  final record = timelineToolRecord(item);
+  final value = record['command'] ?? record['cmd'];
+  if (value is String && value.trim().isNotEmpty) return value.trim();
+  if (value is List) {
+    final joined = value.whereType<String>().join(' ').trim();
+    if (joined.isNotEmpty) return joined;
+  }
+  final input = _toolInput(item);
+  return input is String && !input.startsWith('{') ? input : null;
+}
+
+/// 命令工具的一行说明，优先用 Agent 给的 description。
+String? timelineCommandDescription(TimelineWork item) =>
+    _field(timelineToolRecord(item), ['description']);
+
+/// 去掉终端输出里的 ANSI 控制序列。
+String timelineStripAnsi(String value) =>
+    value.replaceAll(RegExp('\x1B\\[[0-?]*[ -/]*[@-~]'), '');
+
+/// 编辑类工具的增删行数；无法判断时返回 null。
+({int added, int removed})? timelineEditStats(TimelineWork item) {
+  final input = _toolInput(item);
+  var added = 0;
+  var removed = 0;
+  var found = false;
+  void count(Object? oldValue, Object? newValue) {
+    if (oldValue is String && oldValue.isNotEmpty) {
+      removed += oldValue.split('\n').length;
+      found = true;
+    }
+    if (newValue is String && newValue.isNotEmpty) {
+      added += newValue.split('\n').length;
+      found = true;
+    }
+  }
+
+  if (input is Map) {
+    final edits = input['edits'] ?? input['changes'];
+    if (edits is List) {
+      for (final entry in edits.whereType<Map>()) {
+        count(
+          _field(entry, ['old_string', 'oldString', 'old']),
+          _field(entry, ['new_string', 'newString', 'new']),
+        );
+      }
+    }
+    count(
+      _field(input, ['old_string', 'oldString']),
+      _field(input, ['new_string', 'newString', 'content']),
+    );
+    final patch = input['patch'];
+    if (patch is String && patch.contains('\n')) {
+      var patchFound = false;
+      for (final line in patch.split('\n')) {
+        if (line.startsWith('***') || line.startsWith('@@')) continue;
+        if (line.startsWith('+')) {
+          added++;
+          patchFound = true;
+        } else if (line.startsWith('-')) {
+          removed++;
+          patchFound = true;
+        }
+      }
+      found = found || patchFound;
+    }
+  }
+  return found ? (added: added, removed: removed) : null;
+}
+
+/// 工具输出；没有完成事件时为空。
+String? timelineToolOutput(TimelineWork item) => item.output?.text;
 
 Object? _toolInput(TimelineWork item) {
   final input = item.input;

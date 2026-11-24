@@ -9,11 +9,11 @@ import 'local_drafts.dart';
 import 'offline_cache.dart';
 import 'offline_sync_label.dart';
 import 'run_composer.dart';
-import 'run_composer_state.dart';
-import 'request_input.dart';
 import 'run_changes_card.dart';
 import 'run_diff_screen.dart';
 import 'thread_read_receipt.dart';
+import 'timeline/notice_line.dart';
+import 'timeline/request_card.dart';
 import 'timeline_view.dart';
 import 'timeline_work.dart';
 
@@ -311,6 +311,27 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         changesCard: online && connection?.supportsRunChanges == true
             ? (turn) => _changes(connection!, turn)
             : null,
+        requestCard: online && connection != null
+            ? (turn, request) {
+                final runId = turn.runId;
+                final id = request.itemId;
+                final active = connection;
+                if (runId == null || id == null) {
+                  return TimelineNoticeLine(
+                    text: request.kind == MobileTimelineKind.approvalRequested
+                        ? '有待处理的审批'
+                        : '有待回答的提问',
+                  );
+                }
+                return InlineRequestCard(
+                  connection: active,
+                  threadId: threadId,
+                  runId: runId,
+                  requestId: id,
+                  online: online,
+                );
+              }
+            : null,
       );
     } else if (!_historyReady || (selected?.isLoading ?? false)) {
       timeline = const Center(child: CircularProgressIndicator.adaptive());
@@ -583,54 +604,52 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     if (!_draftReady) return const SizedBox.shrink();
     final threadId = widget.threadId;
     final runId = _stoppableRun(snapshot);
-    Widget Function(Widget)? wrapInput;
-    if (connection.supportsRequestCommands) {
-      final runProvider = runComposerProvider((connection, threadId));
-      final stopState = connection.supportsRunCommands
-          ? ref.watch(runProvider).value
-          : null;
-      final canStop =
-          runId != null &&
-          stopState != null &&
-          !stopState.working.contains(MobileRunMethod.runInterrupt) &&
-          !stopState.pending.containsKey(MobileRunMethod.runInterrupt);
-      wrapInput = (composer) => RequestInput(
+    final Widget composer;
+    if (!connection.supportsRunCommands) {
+      composer = _offlineComposer();
+    } else {
+      final revision =
+          snapshot.events.reversed
+              .where(
+                (event) => const {
+                  MobileTimelineKind.queueChanged,
+                  MobileTimelineKind.runQueued,
+                  MobileTimelineKind.runStarted,
+                  MobileTimelineKind.runCompleted,
+                  MobileTimelineKind.runFailed,
+                  MobileTimelineKind.runInterrupted,
+                }.contains(event.kind),
+              )
+              .firstOrNull
+              ?.seq ??
+          0;
+      composer = RunComposer(
         connection: connection,
         threadId: threadId,
-        live: snapshot.live,
         online: true,
-        composer: composer,
-        onStop: canStop
-            ? () => ref.read(runProvider.notifier).stop(runId)
-            : null,
+        draft: _text,
+        stoppableRunId: runId,
+        queueRevision: revision,
+        wrapInput: (input) => input,
       );
     }
-    if (!connection.supportsRunCommands) {
-      return wrapInput?.call(_offlineComposer()) ?? _offlineComposer();
-    }
-    final revision =
-        snapshot.events.reversed
-            .where(
-              (event) => const {
-                MobileTimelineKind.queueChanged,
-                MobileTimelineKind.runQueued,
-                MobileTimelineKind.runStarted,
-                MobileTimelineKind.runCompleted,
-                MobileTimelineKind.runFailed,
-                MobileTimelineKind.runInterrupted,
-              }.contains(event.kind),
-            )
-            .firstOrNull
-            ?.seq ??
-        0;
-    return RunComposer(
-      connection: connection,
-      threadId: threadId,
-      online: true,
-      draft: _text,
-      stoppableRunId: runId,
-      queueRevision: revision,
-      wrapInput: wrapInput,
+    final waiting =
+        connection.supportsRequestCommands &&
+        (snapshot.live?.pending.isNotEmpty ?? false);
+    if (!waiting) return composer;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: TimelineNoticeLine(
+            text: '上方有等待处理的审批或回答，处理后会自动恢复。',
+            level: TimelineNoticeLevel.info,
+          ),
+        ),
+        composer,
+      ],
     );
   }
 

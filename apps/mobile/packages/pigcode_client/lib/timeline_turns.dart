@@ -36,6 +36,8 @@ class TimelineTurn {
       answer = draft.answer,
       work = List.unmodifiable(draft.work),
       notices = List.unmodifiable(draft.notices),
+      pendingRequests = List.unmodifiable(draft.requestEvents.values),
+      requestHistory = List.unmodifiable(draft.requestHistory),
       files = List.unmodifiable(draft.files),
       changes = draft.changes;
 
@@ -49,10 +51,18 @@ class TimelineTurn {
   final MobileTimelineEvent? answer;
   final List<TimelineWork> work;
   final List<MobileTimelineEvent> notices;
+  final List<MobileTimelineEvent> pendingRequests;
+  final List<MobileTimelineEvent> requestHistory;
   final List<String> files;
   final MobileTimelineEvent? changes;
 
-  bool get folded => status == TimelineTurnStatus.completed && work.isNotEmpty;
+  bool get folded =>
+      status == TimelineTurnStatus.completed &&
+      work.isNotEmpty &&
+      answer != null;
+
+  bool isPendingRequest(String? id) =>
+      id != null && pendingRequests.any((event) => event.itemId == id);
 }
 
 List<TimelineTurn> timelineTurns(List<MobileTimelineEvent> events) {
@@ -85,6 +95,8 @@ class _Draft {
   MobileTimelineEvent? terminal;
   final work = <TimelineWork>[];
   final notices = <MobileTimelineEvent>[];
+  final requestHistory = <MobileTimelineEvent>[];
+  final requestEvents = <String, MobileTimelineEvent>{};
   final files = <String>{};
   MobileTimelineEvent? changes;
   final _tools = <String, int>{};
@@ -109,6 +121,9 @@ class _Draft {
           MobileTimelineKind.runFailed => TimelineTurnStatus.failed,
           _ => TimelineTurnStatus.interrupted,
         };
+        // 运行结束后未处理的请求已经失效，不再显示内联卡。
+        requestEvents.clear();
+        _requests.clear();
       case MobileTimelineKind.messageUser:
         if ((event.text ?? '').isNotEmpty) user = event;
       case MobileTimelineKind.messageAssistant:
@@ -136,10 +151,14 @@ class _Draft {
         }
       case MobileTimelineKind.questionRequested:
         _hasQuestionEvents = true;
-        if (event.itemId case final id?) _questions[id] = work.length;
+        if (event.itemId case final id?) {
+          _questions[id] = work.length;
+          requestEvents[id] = event;
+        }
         work.add(TimelineWork(TimelineWorkKind.question, event));
         _wait(event.itemId);
       case MobileTimelineKind.approvalRequested:
+        if (event.itemId case final id?) requestEvents[id] = event;
         _wait(event.itemId);
       case MobileTimelineKind.approvalResolved:
       case MobileTimelineKind.questionAnswered:
@@ -154,6 +173,8 @@ class _Draft {
         if (event.text?.isNotEmpty ?? false) {
           notices.add(event);
         }
+        if (event.itemId case final id?) requestEvents.remove(id);
+        requestHistory.add(event);
         _requests.remove(event.itemId);
         if (_requests.isEmpty && status == TimelineTurnStatus.waiting) {
           status = TimelineTurnStatus.running;
