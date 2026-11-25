@@ -9,6 +9,7 @@ import 'package:pigcode_mobile/mobile_sheet.dart';
 import 'package:pigcode_mobile/run_diff_screen.dart';
 import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_mobile/workspace.dart';
+import 'package:pigcode_mobile/workspace_icon.dart';
 import 'package:pigcode_mobile/sidebar_menu.dart';
 
 import '../visual/mobile_fixture.dart';
@@ -536,7 +537,12 @@ void main() {
     );
     await tester.pumpWidget(workspace(online: true, data: data));
     await tester.pumpAndSettle();
+    expect(find.text('编辑器 · Claude Code'), findsNothing);
+    await tester.tap(find.byTooltip('会话详情'));
+    await tester.pumpAndSettle();
     expect(find.text('编辑器 · Claude Code'), findsOneWidget);
+    await tester.tap(find.byTooltip('关闭弹层'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('打开菜单'));
     await tester.pumpAndSettle();
     expect(menuText('等你确认'), findsOneWidget);
@@ -666,6 +672,68 @@ void main() {
       );
       expect(project, findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'single-line header opens thread actions sheet, hides empty diff button, and uses close icon on new thread',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(360, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final commands = _SidebarCommands();
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: WorkspaceView(
+            snapshot: snapshot,
+            online: true,
+            computerName: '测试电脑',
+            onComputers: () {},
+            sidebarCommands: commands,
+            draft: (_, _, _, _) => const SizedBox.shrink(),
+            timeline: (thread, _, _, _) => SizedBox(key: ValueKey(thread.id)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 无改动时隐藏 ± 改动按钮，仅保留单圆新会话按钮。
+      expect(find.byTooltip('改动'), findsNothing);
+      expect(find.byTooltip('新会话'), findsOneWidget);
+
+      // 点按单行标题打开会话详情与快捷操作弹层。
+      final titleTap = find.byTooltip('会话详情');
+      expect(tester.getSize(titleTap).height, greaterThanOrEqualTo(44));
+      await tester.tap(titleTap);
+      await tester.pumpAndSettle();
+      expect(find.text('编辑器 · 生成中'), findsOneWidget);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.text('置顶'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(commands.calls, [('newest', true)]);
+
+      // 新会话页右上角使用关闭 × 图标返回会话，且不显示重复副标题。
+      await tester.tap(find.byTooltip('新会话'));
+      await tester.pumpAndSettle();
+      expect(find.text('新会话').hitTestable(), findsOneWidget);
+      final backButton = find.byTooltip('返回会话');
+      expect(backButton, findsOneWidget);
+      final backIcon = tester.widget<WorkspaceIcon>(
+        find.descendant(of: backButton, matching: find.byType(WorkspaceIcon)),
+      );
+      expect(backIcon.glyph, WorkspaceGlyph.close);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(backButton);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('newest')), findsOneWidget);
     },
   );
 }

@@ -6,6 +6,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
 import 'mobile_surfaces.dart';
 import 'new_thread_draft.dart';
@@ -299,15 +300,17 @@ class WorkspaceView extends StatefulWidget {
   State<WorkspaceView> createState() => _WorkspaceViewState();
 }
 
+enum _HeaderThreadAction { pin, read, archive }
+
 class _WorkspaceViewState extends State<WorkspaceView> {
   final _menuFocus = FocusNode();
   final _menuButton = FocusNode();
   String? _threadId;
   MobileThreadSummary? _acceptedThread;
   String? _draftProject;
-  String? _draftProjectName;
   bool _draftOpen = false;
   bool _open = false;
+  bool _updatingThread = false;
   String? _reminderThread;
   bool _reminderUnavailable = false;
   String? _visibleThread;
@@ -403,7 +406,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _reminderUnavailable = false;
       _draftOpen = true;
       _draftProject = projectId;
-      _draftProjectName = null;
       _syncedThread = null;
       _runChanges = null;
     });
@@ -487,10 +489,160 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
   }
 
+  Future<void> _runThreadAction(
+    Future<void> Function(MobileSidebarCommands) change,
+  ) async {
+    final commands = widget.sidebarCommands;
+    if (!widget.online || commands == null || _updatingThread) return;
+    setState(() => _updatingThread = true);
+    try {
+      await change(commands);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂时无法更新会话，请重试。')));
+      }
+    } finally {
+      if (mounted) setState(() => _updatingThread = false);
+    }
+  }
+
+  Future<void> _showThreadSheet(
+    MobileThreadSummary thread, {
+    required String? projectName,
+  }) async {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final canEdit =
+        widget.online && widget.sidebarCommands != null && !_updatingThread;
+    final actions = canEdit
+        ? [
+            if (!thread.archived)
+              (
+                thread.pinned ? WorkspaceGlyph.pinOff : WorkspaceGlyph.pin,
+                thread.pinned ? '取消置顶' : '置顶',
+                _HeaderThreadAction.pin,
+              ),
+            if (thread.readTarget != null)
+              (
+                thread.unread ? WorkspaceGlyph.mailOpen : WorkspaceGlyph.mail,
+                thread.unread ? '标为已读' : '标为未读',
+                _HeaderThreadAction.read,
+              ),
+            (
+              thread.archived
+                  ? WorkspaceGlyph.archiveRestore
+                  : WorkspaceGlyph.archive,
+              thread.archived ? '取消归档' : '归档',
+              _HeaderThreadAction.archive,
+            ),
+          ]
+        : const <(WorkspaceGlyph, String, _HeaderThreadAction)>[];
+    final metaParts = <String>[
+      if (projectName != null && projectName.isNotEmpty) projectName,
+      if (thread.agentName case final agent? when agent.isNotEmpty) agent,
+      if (!widget.online)
+        widget.connectionLabel ?? '电脑连接已断开'
+      else if (thread.status == MobileThreadStatus.waitingApproval)
+        waitingThreadLabel(thread)
+      else if (thread.status == MobileThreadStatus.running)
+        '生成中'
+      else if (thread.status == MobileThreadStatus.queued ||
+          thread.status == MobileThreadStatus.failed)
+        threadStatusText(thread.status),
+    ];
+
+    final action = await showMobileSheet<_HeaderThreadAction>(
+      context,
+      title: thread.title,
+      content: (sheet) => SliverList(
+        delegate: SliverChildListDelegate([
+          if (metaParts.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(bottom: actions.isNotEmpty ? 12 : 0),
+              child: Text(
+                metaParts.join(' · '),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  color: colors.muted,
+                  height: 1.45,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
+              ),
+            ),
+          for (var i = 0; i < actions.length; i++)
+            MobileSheetAction(
+              glyph: actions[i].$1,
+              label: actions[i].$2,
+              dividerAbove: i > 0 || metaParts.isNotEmpty,
+              onTap: () => Navigator.pop(sheet, actions[i].$3),
+            ),
+        ]),
+      ),
+    );
+    if (action == null || !mounted) return;
+    await _runThreadAction(
+      (commands) => switch (action) {
+        _HeaderThreadAction.pin => commands.setPinned(thread.id, !thread.pinned),
+        _HeaderThreadAction.read => commands.markRead(thread.id, thread.unread),
+        _HeaderThreadAction.archive => commands.archive(
+          thread.id,
+          !thread.archived,
+        ),
+      },
+    );
+  }
+
+  Widget _headerStatusBadge(
+    BuildContext context, {
+    required String label,
+    required Color background,
+    required Color foreground,
+    Color? dotColor,
+  }) {
+    final theme = Theme.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 118),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 4,
+            children: [
+              if (dotColor != null) MobileStatusDot(color: dotColor),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: foreground,
+                    height: 1.25,
+                    leadingDistribution: TextLeadingDistribution.even,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _header(
     BuildContext context,
-    MobileThreadSummary? thread,
-    String subtitle, {
+    MobileThreadSummary? thread, {
+    required String? projectName,
     required bool canOpenDraft,
   }) {
     final theme = Theme.of(context);
@@ -506,33 +658,99 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             ) ??
             false);
     final status = widget.online && !_draftOpen ? thread?.status : null;
-    final statusColor = switch (status) {
-      MobileThreadStatus.waitingApproval => colors.attention,
-      MobileThreadStatus.queued => colors.running,
-      MobileThreadStatus.failed => colors.error,
-      _ => null,
-    };
-    final dotColor = switch (status) {
-      MobileThreadStatus.queued => colors.running,
-      _ when !widget.online => colors.faint,
-      _ => null,
-    };
-    final secondary = switch (status) {
-      MobileThreadStatus.waitingApproval => waitingThreadLabel(thread!),
-      MobileThreadStatus.running => '生成中',
-      _ when statusColor != null => threadStatusText(status!),
-      _ => subtitle,
-    };
-    final changes = widget.online ? _runChanges : null;
+    final changes = widget.online && !_draftOpen && thread != null
+        ? _runChanges
+        : null;
     final fileCount = changes?.fileCount ?? 0;
     final countLabel = changes?.hasMore == true ? '$fileCount+' : '$fileCount';
 
+    final Widget? statusBadge;
+    if (!widget.online) {
+      statusBadge = _headerStatusBadge(
+        context,
+        label: widget.connectionLabel ?? '电脑连接已断开',
+        background: colors.field,
+        foreground: colors.muted,
+        dotColor: colors.faint,
+      );
+    } else if (status == MobileThreadStatus.waitingApproval && thread != null) {
+      statusBadge = _headerStatusBadge(
+        context,
+        label: waitingThreadLabel(thread),
+        background: colors.attentionTint,
+        foreground: colors.attention,
+      );
+    } else if (status == MobileThreadStatus.failed) {
+      statusBadge = _headerStatusBadge(
+        context,
+        label: threadStatusText(status!),
+        background: colors.errorTint,
+        foreground: colors.error,
+      );
+    } else if (status == MobileThreadStatus.queued) {
+      statusBadge = _headerStatusBadge(
+        context,
+        label: threadStatusText(status!),
+        background: colors.field,
+        foreground: colors.running,
+        dotColor: colors.running,
+      );
+    } else {
+      statusBadge = null;
+    }
+
+    final titleText = _draftOpen ? '新会话' : thread?.title ?? '会话';
+    final canOpenThreadSheet = !_draftOpen && thread != null;
+    final titleRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (status == MobileThreadStatus.running) ...[
+          Semantics(
+            label: '生成中',
+            child: TickerMode(
+              enabled: widget.presented && !_open,
+              child: MobileRunningDotMatrix(color: colors.statusAccent),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+        Flexible(
+          child: Text(
+            titleText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              height: 1.45,
+              leadingDistribution: TextLeadingDistribution.even,
+            ),
+          ),
+        ),
+        if (canOpenThreadSheet) ...[
+          const SizedBox(width: 4),
+          IconTheme(
+            data: IconThemeData(color: colors.faint),
+            child: const WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 12),
+          ),
+        ],
+        if (statusBadge != null) ...[
+          const SizedBox(width: 6),
+          statusBadge,
+        ],
+      ],
+    );
+
+    final showChanges = changes != null;
+    final showRightAction = _draftOpen || canOpenDraft;
+    final hasRightControl = showChanges || showRightAction;
+
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 58),
+      constraints: const BoxConstraints(minHeight: 54),
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: 12 - visualInset,
-          vertical: 6 - visualInset,
+          vertical: 5 - visualInset,
         ),
         child: Row(
           children: [
@@ -576,51 +794,34 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             ),
             SizedBox(width: 10 - visualInset),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _draftOpen ? '新会话' : thread?.title ?? '会话',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                      height: 1.45,
-                      leadingDistribution: TextLeadingDistribution.even,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      if (status == MobileThreadStatus.running) ...[
-                        TickerMode(
-                          enabled: widget.presented && !_open,
-                          child: MobileRunningDotMatrix(
-                            color: colors.statusAccent,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                      ] else if (dotColor != null) ...[
-                        MobileStatusDot(color: dotColor),
-                        const SizedBox(width: 5),
-                      ],
-                      Flexible(
-                        child: Text(
-                          secondary,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            color: statusColor ?? colors.muted,
-                            height: 1.45,
-                            leadingDistribution: TextLeadingDistribution.even,
+              child: canOpenThreadSheet
+                  ? Tooltip(
+                      message: '会话详情',
+                      child: Semantics(
+                        button: true,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () => _showThreadSheet(
+                              thread,
+                              projectName: projectName,
+                            ),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: hit),
+                              child: Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: titleRow,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    )
+                  : Align(
+                      alignment: AlignmentDirectional.centerStart,
+                      child: titleRow,
+                    ),
             ),
             if (!widget.online &&
                 widget.error != null &&
@@ -631,21 +832,19 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 onPressed: widget.onRetry,
                 icon: const Icon(Icons.refresh, size: 20),
               ),
-            if (thread != null || _draftOpen || canOpenDraft) ...[
+            if (hasRightControl) ...[
               SizedBox(width: 10 - visualInset),
               _headerControl(
                 context,
                 visualInset,
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: thread != null && !_draftOpen && canOpenDraft
-                        ? 1
-                        : 2,
+                    horizontal: showChanges && showRightAction ? 1 : 0,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (thread != null && !_draftOpen)
+                      if (showChanges)
                         Semantics(
                           value: fileCount > 0 ? '$countLabel 个文件' : null,
                           child: IconButton(
@@ -654,7 +853,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                               minimumSize: Size.square(hit),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            onPressed: changes?.open,
+                            onPressed: changes.open,
                             color: colors.foreground,
                             disabledColor: colors.faint,
                             icon: Row(
@@ -681,7 +880,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             ),
                           ),
                         ),
-                      if (_draftOpen || canOpenDraft)
+                      if (showRightAction)
                         SizedBox.square(
                           dimension: hit,
                           child: IconButton(
@@ -690,8 +889,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                 ? () => setState(() => _draftOpen = false)
                                 : () => _openDraft(null),
                             color: colors.foreground,
-                            icon: const WorkspaceIcon(
-                              WorkspaceGlyph.compose,
+                            icon: WorkspaceIcon(
+                              _draftOpen
+                                  ? WorkspaceGlyph.close
+                                  : WorkspaceGlyph.compose,
                               size: 18,
                             ),
                           ),
@@ -719,22 +920,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     const curve = Cubic(.2, .7, .2, 1);
     final thread = _thread;
     _updateVisibleThread();
-    final projectId = _draftOpen
-        ? _draftProject ?? thread?.projectId
-        : thread?.projectId;
     final project = widget.snapshot?.projects
-        .where((item) => item.id == projectId)
+        .where((item) => item.id == thread?.projectId)
         .firstOrNull;
-    final projectLabel =
-        (_draftOpen ? _draftProjectName : null) ??
-        project?.name ??
-        widget.computerName;
-    final agentName = _draftOpen ? null : thread?.agentName;
-    final subtitle = !widget.online
-        ? widget.connectionLabel ?? '电脑连接已断开'
-        : agentName == null
-        ? projectLabel
-        : '$projectLabel · $agentName';
     final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
         widget.draft != null &&
@@ -835,7 +1023,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                     _header(
                                       context,
                                       thread,
-                                      subtitle,
+                                      projectName: project?.name,
                                       canOpenDraft: canOpenDraft,
                                     ),
                                     Expanded(
@@ -849,17 +1037,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                                 _draftProject,
                                                 thread?.projectId,
                                                 _acceptDraft,
-                                                (name) {
-                                                  if (mounted &&
-                                                      _draftOpen &&
-                                                      _draftProjectName !=
-                                                          name) {
-                                                    setState(
-                                                      () => _draftProjectName =
-                                                          name,
-                                                    );
-                                                  }
-                                                },
+                                                (_) {},
                                               ),
                                             )
                                           : _summary(thread),
