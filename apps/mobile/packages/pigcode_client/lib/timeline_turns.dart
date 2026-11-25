@@ -210,6 +210,10 @@ class _Draft {
             'todowrite',
             'todoread',
             'update_plan',
+            'taskcreate',
+            'taskupdate',
+            'tasklist',
+            'taskget',
             'enterplanmode',
           }.contains(name) ||
           (_hasQuestionEvents && name == 'askuserquestion');

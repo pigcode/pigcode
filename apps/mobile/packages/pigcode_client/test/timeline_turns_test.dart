@@ -152,4 +152,67 @@ void main() {
     expect(turns.single.pendingRequests, isEmpty);
     expect(turns.single.isPendingRequest('a1'), isFalse);
   });
+
+  test('hides Claude Code task management tools alongside todos', () {
+    final turns = timelineTurns(const [
+      MobileTimelineEvent(
+        seq: 1,
+        runId: 'r1',
+        kind: MobileTimelineKind.runStarted,
+        text: '追踪任务',
+        createdAt: '2026-11-25T00:00:00Z',
+      ),
+      MobileTimelineEvent(
+        seq: 2,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 't1',
+        name: 'TaskCreate',
+        text: '{}',
+        createdAt: '2026-11-25T00:00:01Z',
+      ),
+      MobileTimelineEvent(
+        seq: 3,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 't2',
+        name: 'TaskUpdate',
+        text: '{}',
+        createdAt: '2026-11-25T00:00:02Z',
+      ),
+      MobileTimelineEvent(
+        seq: 4,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 't3',
+        name: 'TaskList',
+        text: '{}',
+        createdAt: '2026-11-25T00:00:03Z',
+      ),
+      MobileTimelineEvent(
+        seq: 5,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 't4',
+        name: 'TaskGet',
+        text: '{}',
+        createdAt: '2026-11-25T00:00:04Z',
+      ),
+      MobileTimelineEvent(
+        seq: 6,
+        runId: 'r1',
+        kind: MobileTimelineKind.messageAssistant,
+        text: '完成',
+        createdAt: '2026-11-25T00:00:05Z',
+      ),
+      MobileTimelineEvent(
+        seq: 7,
+        runId: 'r1',
+        kind: MobileTimelineKind.runCompleted,
+        createdAt: '2026-11-25T00:00:06Z',
+      ),
+    ]);
+    expect(turns.single.work, isEmpty);
+    expect(turns.single.answer?.text, '完成');
+  });
 }

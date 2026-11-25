@@ -50,12 +50,18 @@ const FAMILY_BY_NAME: Record<string, ToolFamily> = {
   websearch: "search",
   web_search: "search",
   toolsearch: "search",
+  localtoolsearch: "search",
+  lsp: "search",
   webfetch: "web-fetch",
   web_fetch: "web-fetch",
   fetch: "web-fetch",
   todowrite: "todo",
   todoread: "todo",
   update_plan: "todo",
+  taskcreate: "todo",
+  taskupdate: "todo",
+  tasklist: "todo",
+  taskget: "todo",
   askuserquestion: "ask-user-question",
   agent: "agent",
   task: "agent",
@@ -84,6 +90,35 @@ export function mcpParts(name: string): { server: string; tool: string } | null 
 export function browserAction(name: string): string | null {
   const base = mcpParts(name)?.tool ?? name
   return base.startsWith("browser_") ? base.slice("browser_".length) : null
+}
+
+const READ_ONLY_SESSION_TOOLS = new Set([
+  "thread_read",
+  "readsession",
+  "read_session",
+  "listsessions",
+  "list_sessions",
+])
+
+const SESSION_WRITE_TOOLS = new Set([
+  "sendtosession",
+  "send_to_session",
+  "waitsessions",
+  "wait_sessions",
+])
+
+function sessionToolBase(name: string): string {
+  return (mcpParts(name)?.tool ?? name).trim().toLowerCase().replace(/[\s-]+/g, "_")
+}
+
+/** 只读会话读取工具（thread_read / ReadSession / ListSessions），归入摘要组的「查阅」。 */
+export function isReadOnlySessionTool(name: string): boolean {
+  return READ_ONLY_SESSION_TOOLS.has(sessionToolBase(name))
+}
+
+/** 会话写操作或等待工具（SendToSession / WaitSessions），归入摘要组的「执行」。 */
+export function isSessionWriteTool(name: string): boolean {
+  return SESSION_WRITE_TOOLS.has(sessionToolBase(name))
 }
 
 /** 解析工具的展示族。 */

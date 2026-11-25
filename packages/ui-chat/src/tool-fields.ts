@@ -50,7 +50,7 @@ export function readPath(tool: Tool): string | undefined {
 export function searchSummary(tool: Tool): { kind: "find" | "list" | "tools"; text: string } {
   const record = inputRecord(tool)
   const name = tool.name.toLowerCase()
-  if (name === "toolsearch") {
+  if (name === "toolsearch" || name === "localtoolsearch") {
     const query = pick(record, "query") ?? ""
     return {
       kind: "tools",
@@ -66,8 +66,19 @@ export function searchSummary(tool: Tool): { kind: "find" | "list" | "tools"; te
   return {
     kind: "find",
     text:
-      pick(record, "search_query", "searchQuery", "query", "pattern", "path", "url", "prompt") ??
-      "",
+      pick(
+        record,
+        "search_query",
+        "searchQuery",
+        "query",
+        "pattern",
+        "path",
+        "filePath",
+        "file_path",
+        "operation",
+        "url",
+        "prompt",
+      ) ?? "",
   }
 }
 

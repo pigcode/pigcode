@@ -17,27 +17,65 @@ enum TimelineToolKind {
   other,
 }
 
+enum TimelineSummaryCategory { explore, run, change }
+
 TimelineToolKind timelineToolKind(TimelineWork item) =>
     timelineToolKindForName(item.event.name ?? item.output?.name);
 
-/// 连续摘要组只收查阅、执行和修改；计划、提问和未知工具单独成行。
-bool timelineJoinsSummary(TimelineWork item) {
-  if (item.kind == TimelineWorkKind.reasoning) return true;
-  if (item.kind != TimelineWorkKind.tool) return false;
+const _readOnlySessionTools = {
+  'thread_read',
+  'readsession',
+  'read_session',
+  'listsessions',
+  'list_sessions',
+};
+
+const _sessionWriteTools = {
+  'sendtosession',
+  'send_to_session',
+  'waitsessions',
+  'wait_sessions',
+};
+
+String _sessionToolBase(String? toolName) {
+  final raw = (toolName ?? '').trim();
+  final mcp = timelineMcpIdentity(raw);
+  final base = mcp?.tool ?? raw;
+  return base.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+}
+
+bool _isReadOnlySessionTool(String? toolName) =>
+    _readOnlySessionTools.contains(_sessionToolBase(toolName));
+
+bool _isSessionWriteTool(String? toolName) =>
+    _sessionWriteTools.contains(_sessionToolBase(toolName));
+
+/// 工具在摘要组里算哪一类；null 表示它不进组。
+TimelineSummaryCategory? timelineSummaryCategory(TimelineWork item) {
+  if (item.kind != TimelineWorkKind.tool) return null;
+  final name = item.event.name ?? item.output?.name;
+  if (_isReadOnlySessionTool(name)) return TimelineSummaryCategory.explore;
+  if (_isSessionWriteTool(name)) return TimelineSummaryCategory.run;
   return switch (timelineToolKind(item)) {
     TimelineToolKind.read ||
     TimelineToolKind.search ||
-    TimelineToolKind.fetch ||
-    TimelineToolKind.edit ||
+    TimelineToolKind.fetch => TimelineSummaryCategory.explore,
     TimelineToolKind.command ||
     TimelineToolKind.browser ||
     TimelineToolKind.mcp ||
     TimelineToolKind.skill ||
-    TimelineToolKind.task => true,
+    TimelineToolKind.task => TimelineSummaryCategory.run,
+    TimelineToolKind.edit => TimelineSummaryCategory.change,
     TimelineToolKind.plan ||
     TimelineToolKind.ask ||
-    TimelineToolKind.other => false,
+    TimelineToolKind.other => null,
   };
+}
+
+/// 连续摘要组只收思考、查阅、执行和修改；过程正文、计划、提问和未知工具单独成行。
+bool timelineJoinsSummary(TimelineWork item) {
+  if (item.kind == TimelineWorkKind.reasoning) return true;
+  return timelineSummaryCategory(item) != null;
 }
 
 // 工具分类沿用桌面端 tool-identity.ts 的展示族。
@@ -47,10 +85,12 @@ TimelineToolKind timelineToolKindForName(String? toolName) {
   final isMcp =
       parts.length >= 3 && parts.first == 'mcp' && parts[1].isNotEmpty;
   final action = isMcp ? parts.skip(2).join('__') : name;
-  if (isMcp) return TimelineToolKind.mcp;
   if (action.startsWith('browser_') && action.length > 'browser_'.length) {
     return TimelineToolKind.browser;
   }
+  if (isMcp) return TimelineToolKind.mcp;
+  if (_isReadOnlySessionTool(toolName)) return TimelineToolKind.search;
+  if (_isSessionWriteTool(toolName)) return TimelineToolKind.task;
   return switch (name) {
     'read' || 'read_file' || 'view' || 'notebookread' => TimelineToolKind.read,
     'glob' ||
@@ -60,7 +100,9 @@ TimelineToolKind timelineToolKindForName(String? toolName) {
     'find' ||
     'websearch' ||
     'web_search' ||
-    'toolsearch' => TimelineToolKind.search,
+    'toolsearch' ||
+    'localtoolsearch' ||
+    'lsp' => TimelineToolKind.search,
     'webfetch' || 'web_fetch' || 'fetch' => TimelineToolKind.fetch,
     'write' ||
     'edit' ||
@@ -77,7 +119,11 @@ TimelineToolKind timelineToolKindForName(String? toolName) {
     'run_command' ||
     'terminal' => TimelineToolKind.command,
     'skill' => TimelineToolKind.skill,
-    'task' || 'taskoutput' || 'taskstop' => TimelineToolKind.task,
+    'taskoutput' ||
+    'bashoutput' ||
+    'taskstop' ||
+    'killshell' ||
+    'killbash' => TimelineToolKind.task,
     'exitplanmode' || 'switch_mode' => TimelineToolKind.plan,
     'askuserquestion' => TimelineToolKind.ask,
     _ => TimelineToolKind.other,
@@ -121,36 +167,42 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
   var explored = 0;
   var commands = 0;
   var editsWithoutPath = 0;
-  var browser = false;
+  TimelineToolKind? icon;
+  var iconRank = 99;
   final seenPaths = <String>{};
   final changedPaths = <String>[];
   for (final item in items.where(
     (item) => item.kind == TimelineWorkKind.tool,
   )) {
+    final category = timelineSummaryCategory(item);
+    if (category == null) continue;
     final tool = timelineToolKind(item);
-    switch (tool) {
-      case TimelineToolKind.read ||
-          TimelineToolKind.search ||
-          TimelineToolKind.fetch:
+    final rank = tool == TimelineToolKind.browser
+        ? 0
+        : category == TimelineSummaryCategory.change
+        ? 1
+        : category == TimelineSummaryCategory.run
+        ? 2
+        : 3;
+    if (rank < iconRank) {
+      iconRank = rank;
+      icon = category == TimelineSummaryCategory.explore &&
+              tool == TimelineToolKind.mcp
+          ? TimelineToolKind.search
+          : tool;
+    }
+    switch (category) {
+      case TimelineSummaryCategory.explore:
         explored++;
-      case TimelineToolKind.command ||
-          TimelineToolKind.browser ||
-          TimelineToolKind.mcp ||
-          TimelineToolKind.skill ||
-          TimelineToolKind.task:
+      case TimelineSummaryCategory.run:
         commands++;
-        browser = browser || tool == TimelineToolKind.browser;
-      case TimelineToolKind.edit:
+      case TimelineSummaryCategory.change:
         final paths = _editPaths(_toolInput(item)).toList();
         if (paths.isEmpty) editsWithoutPath++;
         for (final path in paths) {
           final canonical = _canonicalPath(path);
           if (seenPaths.add(canonical)) changedPaths.add(path);
         }
-      case TimelineToolKind.plan ||
-          TimelineToolKind.ask ||
-          TimelineToolKind.other:
-        break;
     }
   }
   final tense = finished ? '已' : '';
@@ -168,15 +220,7 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
   return (
     label: labels.isEmpty ? '思考' : labels.join('，'),
     singleFileLabel: filesOnly && changedPaths.length == 1 ? '$tense修改' : null,
-    icon: browser
-        ? TimelineToolKind.browser
-        : changedPaths.isNotEmpty || editsWithoutPath != 0
-        ? TimelineToolKind.edit
-        : commands != 0
-        ? TimelineToolKind.command
-        : explored != 0
-        ? TimelineToolKind.read
-        : null,
+    icon: icon,
     files: changedPaths,
     filesOnly: filesOnly,
   );
@@ -198,7 +242,16 @@ String? timelineToolDetail(TimelineWork item, TimelineToolKind kind) {
     TimelineToolKind.command =>
       _field(record, ['description']) ??
           _command(record['command'] ?? record['cmd'] ?? input),
-    TimelineToolKind.search => _field(record, ['pattern', 'query', 'path']),
+    TimelineToolKind.search => _field(record, [
+      'pattern',
+      'query',
+      'path',
+      'filePath',
+      'file_path',
+      'operation',
+      'sessionId',
+      'threadId',
+    ]),
     TimelineToolKind.fetch ||
     TimelineToolKind.browser => _field(record, ['description', 'url']),
     TimelineToolKind.mcp => _mcpDetail(item.event.name ?? item.output?.name),

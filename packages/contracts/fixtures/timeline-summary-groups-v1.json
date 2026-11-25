@@ -1,0 +1,199 @@
+{
+  "scenarios": [
+    {
+      "name": "hidden-tools-do-not-break-summary-group",
+      "events": [
+        { "seq": 1, "runId": "r1", "kind": "run.started", "text": "整理任务", "createdAt": "2026-11-25T10:00:00.000Z" },
+        { "seq": 2, "runId": "r1", "kind": "tool.started", "itemId": "read-1", "name": "Read", "text": "{\"file_path\":\"README.md\"}", "createdAt": "2026-11-25T10:00:01.000Z" },
+        { "seq": 3, "runId": "r1", "kind": "tool.completed", "itemId": "read-1", "name": "Read", "text": "# Demo", "createdAt": "2026-11-25T10:00:01.000Z" },
+        { "seq": 4, "runId": "r1", "kind": "tool.started", "itemId": "todo-1", "name": "TodoWrite", "text": "{\"todos\":[]}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 5, "runId": "r1", "kind": "tool.completed", "itemId": "todo-1", "name": "TodoWrite", "text": "ok", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 6, "runId": "r1", "kind": "tool.started", "itemId": "tc-1", "name": "TaskCreate", "text": "{\"subject\":\"check\"}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 7, "runId": "r1", "kind": "tool.completed", "itemId": "tc-1", "name": "TaskCreate", "text": "1", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 8, "runId": "r1", "kind": "tool.started", "itemId": "tu-1", "name": "TaskUpdate", "text": "{\"taskId\":\"1\",\"status\":\"in_progress\"}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 9, "runId": "r1", "kind": "tool.completed", "itemId": "tu-1", "name": "TaskUpdate", "text": "ok", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 10, "runId": "r1", "kind": "tool.started", "itemId": "tl-1", "name": "TaskList", "text": "{}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 11, "runId": "r1", "kind": "tool.completed", "itemId": "tl-1", "name": "TaskList", "text": "[]", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 12, "runId": "r1", "kind": "tool.started", "itemId": "tg-1", "name": "TaskGet", "text": "{\"taskId\":\"1\"}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 13, "runId": "r1", "kind": "tool.completed", "itemId": "tg-1", "name": "TaskGet", "text": "{}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 14, "runId": "r1", "kind": "tool.started", "itemId": "ep-1", "name": "EnterPlanMode", "text": "{}", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 15, "runId": "r1", "kind": "tool.completed", "itemId": "ep-1", "name": "EnterPlanMode", "text": "ok", "createdAt": "2026-11-25T10:00:02.000Z" },
+        { "seq": 16, "runId": "r1", "kind": "tool.started", "itemId": "grep-1", "name": "Grep", "text": "{\"pattern\":\"answer\"}", "createdAt": "2026-11-25T10:00:03.000Z" },
+        { "seq": 17, "runId": "r1", "kind": "tool.completed", "itemId": "grep-1", "name": "Grep", "text": "src/a.ts:1", "createdAt": "2026-11-25T10:00:03.000Z" },
+        { "seq": 18, "runId": "r1", "kind": "message.assistant", "text": "完成。", "createdAt": "2026-11-25T10:00:04.000Z" },
+        { "seq": 19, "runId": "r1", "kind": "run.completed", "createdAt": "2026-11-25T10:00:05.000Z" }
+      ],
+      "entries": [
+        {
+          "kind": "group",
+          "items": ["tool:Read", "tool:Grep"],
+          "counts": { "explore": 2, "run": 0, "files": [], "unresolved": 0 },
+          "iconCategory": "explore"
+        }
+      ]
+    },
+    {
+      "name": "claude-toolchain-merges-across-families",
+      "events": [
+        { "seq": 1, "runId": "r2", "kind": "run.started", "text": "全链路排查", "createdAt": "2026-11-25T10:01:00.000Z" },
+        { "seq": 2, "runId": "r2", "kind": "reasoning", "text": "先查代码与历史上下文", "createdAt": "2026-11-25T10:01:01.000Z" },
+        { "seq": 3, "runId": "r2", "kind": "tool.started", "itemId": "t1", "name": "Read", "text": "{\"file_path\":\"src/a.ts\"}", "createdAt": "2026-11-25T10:01:02.000Z" },
+        { "seq": 4, "runId": "r2", "kind": "tool.completed", "itemId": "t1", "name": "Read", "text": "ok", "createdAt": "2026-11-25T10:01:02.000Z" },
+        { "seq": 5, "runId": "r2", "kind": "tool.started", "itemId": "t2", "name": "LSP", "text": "{\"operation\":\"goToDefinition\",\"filePath\":\"src/a.ts\"}", "createdAt": "2026-11-25T10:01:03.000Z" },
+        { "seq": 6, "runId": "r2", "kind": "tool.completed", "itemId": "t2", "name": "LSP", "text": "ok", "createdAt": "2026-11-25T10:01:03.000Z" },
+        { "seq": 7, "runId": "r2", "kind": "tool.started", "itemId": "t3", "name": "ToolSearch", "text": "{\"query\":\"select:mcp__pigcode__thread_read\"}", "createdAt": "2026-11-25T10:01:04.000Z" },
+        { "seq": 8, "runId": "r2", "kind": "tool.completed", "itemId": "t3", "name": "ToolSearch", "text": "ok", "createdAt": "2026-11-25T10:01:04.000Z" },
+        { "seq": 9, "runId": "r2", "kind": "tool.started", "itemId": "t4", "name": "LocalToolSearch", "text": "{\"query\":\"browser\"}", "createdAt": "2026-11-25T10:01:05.000Z" },
+        { "seq": 10, "runId": "r2", "kind": "tool.completed", "itemId": "t4", "name": "LocalToolSearch", "text": "ok", "createdAt": "2026-11-25T10:01:05.000Z" },
+        { "seq": 11, "runId": "r2", "kind": "tool.started", "itemId": "t5", "name": "mcp__pigcode__thread_read", "text": "{\"threadId\":\"prev\"}", "createdAt": "2026-11-25T10:01:06.000Z" },
+        { "seq": 12, "runId": "r2", "kind": "tool.completed", "itemId": "t5", "name": "mcp__pigcode__thread_read", "text": "ok", "createdAt": "2026-11-25T10:01:06.000Z" },
+        { "seq": 13, "runId": "r2", "kind": "tool.started", "itemId": "t6", "name": "ReadSession", "text": "{\"sessionId\":\"s1\"}", "createdAt": "2026-11-25T10:01:07.000Z" },
+        { "seq": 14, "runId": "r2", "kind": "tool.completed", "itemId": "t6", "name": "ReadSession", "text": "ok", "createdAt": "2026-11-25T10:01:07.000Z" },
+        { "seq": 15, "runId": "r2", "kind": "tool.started", "itemId": "t7", "name": "ListSessions", "text": "{}", "createdAt": "2026-11-25T10:01:08.000Z" },
+        { "seq": 16, "runId": "r2", "kind": "tool.completed", "itemId": "t7", "name": "ListSessions", "text": "[]", "createdAt": "2026-11-25T10:01:08.000Z" },
+        { "seq": 17, "runId": "r2", "kind": "tool.started", "itemId": "t8", "name": "Skill", "text": "{\"skill\":\"tdd\"}", "createdAt": "2026-11-25T10:01:09.000Z" },
+        { "seq": 18, "runId": "r2", "kind": "tool.completed", "itemId": "t8", "name": "Skill", "text": "ok", "createdAt": "2026-11-25T10:01:09.000Z" },
+        { "seq": 19, "runId": "r2", "kind": "tool.started", "itemId": "t9", "name": "mcp__context7__query-docs", "text": "{\"topic\":\"hooks\"}", "createdAt": "2026-11-25T10:01:10.000Z" },
+        { "seq": 20, "runId": "r2", "kind": "tool.completed", "itemId": "t9", "name": "mcp__context7__query-docs", "text": "ok", "createdAt": "2026-11-25T10:01:10.000Z" },
+        { "seq": 21, "runId": "r2", "kind": "tool.started", "itemId": "t10", "name": "Bash", "text": "{\"command\":\"pnpm test\"}", "createdAt": "2026-11-25T10:01:11.000Z" },
+        { "seq": 22, "runId": "r2", "kind": "tool.completed", "itemId": "t10", "name": "Bash", "text": "ok", "createdAt": "2026-11-25T10:01:11.000Z" },
+        { "seq": 23, "runId": "r2", "kind": "tool.started", "itemId": "t11", "name": "BashOutput", "text": "{\"bash_id\":\"b1\"}", "createdAt": "2026-11-25T10:01:12.000Z" },
+        { "seq": 24, "runId": "r2", "kind": "tool.completed", "itemId": "t11", "name": "BashOutput", "text": "ok", "createdAt": "2026-11-25T10:01:12.000Z" },
+        { "seq": 25, "runId": "r2", "kind": "tool.started", "itemId": "t12", "name": "TaskOutput", "text": "{\"task_id\":\"bg1\"}", "createdAt": "2026-11-25T10:01:13.000Z" },
+        { "seq": 26, "runId": "r2", "kind": "tool.completed", "itemId": "t12", "name": "TaskOutput", "text": "ok", "createdAt": "2026-11-25T10:01:13.000Z" },
+        { "seq": 27, "runId": "r2", "kind": "tool.started", "itemId": "t13", "name": "KillShell", "text": "{\"shell_id\":\"b1\"}", "createdAt": "2026-11-25T10:01:14.000Z" },
+        { "seq": 28, "runId": "r2", "kind": "tool.completed", "itemId": "t13", "name": "KillShell", "text": "ok", "createdAt": "2026-11-25T10:01:14.000Z" },
+        { "seq": 29, "runId": "r2", "kind": "tool.started", "itemId": "t14", "name": "TaskStop", "text": "{\"task_id\":\"bg1\"}", "createdAt": "2026-11-25T10:01:15.000Z" },
+        { "seq": 30, "runId": "r2", "kind": "tool.completed", "itemId": "t14", "name": "TaskStop", "text": "ok", "createdAt": "2026-11-25T10:01:15.000Z" },
+        { "seq": 31, "runId": "r2", "kind": "tool.started", "itemId": "t15", "name": "SendToSession", "text": "{\"sessionId\":\"s1\"}", "createdAt": "2026-11-25T10:01:16.000Z" },
+        { "seq": 32, "runId": "r2", "kind": "tool.completed", "itemId": "t15", "name": "SendToSession", "text": "ok", "createdAt": "2026-11-25T10:01:16.000Z" },
+        { "seq": 33, "runId": "r2", "kind": "tool.started", "itemId": "t16", "name": "WaitSessions", "text": "{\"sessionIds\":[\"s1\"]}", "createdAt": "2026-11-25T10:01:17.000Z" },
+        { "seq": 34, "runId": "r2", "kind": "tool.completed", "itemId": "t16", "name": "WaitSessions", "text": "ok", "createdAt": "2026-11-25T10:01:17.000Z" },
+        { "seq": 35, "runId": "r2", "kind": "tool.started", "itemId": "t17", "name": "Edit", "text": "{\"file_path\":\"src/a.ts\",\"old_string\":\"1\",\"new_string\":\"2\"}", "createdAt": "2026-11-25T10:01:18.000Z" },
+        { "seq": 36, "runId": "r2", "kind": "tool.completed", "itemId": "t17", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:01:18.000Z" },
+        { "seq": 37, "runId": "r2", "kind": "tool.started", "itemId": "t18", "name": "Write", "text": "{\"file_path\":\"src/b.ts\",\"content\":\"x\\n\"}", "createdAt": "2026-11-25T10:01:19.000Z" },
+        { "seq": 38, "runId": "r2", "kind": "tool.completed", "itemId": "t18", "name": "Write", "text": "ok", "createdAt": "2026-11-25T10:01:19.000Z" },
+        { "seq": 39, "runId": "r2", "kind": "tool.started", "itemId": "t19", "name": "Edit", "text": "{\"file_path\":\"src/./a.ts\",\"old_string\":\"2\",\"new_string\":\"3\"}", "createdAt": "2026-11-25T10:01:20.000Z" },
+        { "seq": 40, "runId": "r2", "kind": "tool.completed", "itemId": "t19", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:01:20.000Z" },
+        { "seq": 41, "runId": "r2", "kind": "tool.started", "itemId": "t20", "name": "mcp__pigcode__browser_click", "text": "{\"ref\":\"e1\"}", "createdAt": "2026-11-25T10:01:21.000Z" },
+        { "seq": 42, "runId": "r2", "kind": "tool.completed", "itemId": "t20", "name": "mcp__pigcode__browser_click", "text": "ok", "createdAt": "2026-11-25T10:01:21.000Z" },
+        { "seq": 43, "runId": "r2", "kind": "message.assistant", "text": "排查完成。", "createdAt": "2026-11-25T10:01:22.000Z" },
+        { "seq": 44, "runId": "r2", "kind": "run.completed", "createdAt": "2026-11-25T10:01:23.000Z" }
+      ],
+      "entries": [
+        {
+          "kind": "group",
+          "items": [
+            "reasoning",
+            "tool:Read",
+            "tool:LSP",
+            "tool:ToolSearch",
+            "tool:LocalToolSearch",
+            "tool:mcp__pigcode__thread_read",
+            "tool:ReadSession",
+            "tool:ListSessions",
+            "tool:Skill",
+            "tool:mcp__context7__query-docs",
+            "tool:Bash",
+            "tool:BashOutput",
+            "tool:TaskOutput",
+            "tool:KillShell",
+            "tool:TaskStop",
+            "tool:SendToSession",
+            "tool:WaitSessions",
+            "tool:Edit",
+            "tool:Write",
+            "tool:Edit",
+            "tool:mcp__pigcode__browser_click"
+          ],
+          "counts": { "explore": 7, "run": 10, "files": ["src/a.ts", "src/b.ts"], "unresolved": 0 },
+          "iconCategory": "browser"
+        }
+      ]
+    },
+    {
+      "name": "boundaries-split-groups-and-singletons-stay-flat",
+      "events": [
+        { "seq": 1, "runId": "r3", "kind": "run.started", "text": "按步骤改", "createdAt": "2026-11-25T10:02:00.000Z" },
+        { "seq": 2, "runId": "r3", "kind": "tool.started", "itemId": "r1", "name": "Read", "text": "{\"file_path\":\"a.ts\"}", "createdAt": "2026-11-25T10:02:01.000Z" },
+        { "seq": 3, "runId": "r3", "kind": "tool.completed", "itemId": "r1", "name": "Read", "text": "ok", "createdAt": "2026-11-25T10:02:01.000Z" },
+        { "seq": 4, "runId": "r3", "kind": "tool.started", "itemId": "g1", "name": "Grep", "text": "{\"pattern\":\"foo\"}", "createdAt": "2026-11-25T10:02:02.000Z" },
+        { "seq": 5, "runId": "r3", "kind": "tool.completed", "itemId": "g1", "name": "Grep", "text": "a.ts:1", "createdAt": "2026-11-25T10:02:02.000Z" },
+        { "seq": 6, "runId": "r3", "kind": "message.assistant", "text": "已定位入口，先给计划。", "createdAt": "2026-11-25T10:02:03.000Z" },
+        { "seq": 7, "runId": "r3", "kind": "tool.started", "itemId": "p1", "name": "ExitPlanMode", "text": "{\"plan\":\"## 计划\"}", "createdAt": "2026-11-25T10:02:04.000Z" },
+        { "seq": 8, "runId": "r3", "kind": "tool.completed", "itemId": "p1", "name": "ExitPlanMode", "text": "approved", "createdAt": "2026-11-25T10:02:04.000Z" },
+        { "seq": 9, "runId": "r3", "kind": "tool.started", "itemId": "e0", "name": "Edit", "text": "{\"file_path\":\"a.ts\",\"old_string\":\"1\",\"new_string\":\"2\"}", "createdAt": "2026-11-25T10:02:05.000Z" },
+        { "seq": 10, "runId": "r3", "kind": "tool.completed", "itemId": "e0", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:02:05.000Z" },
+        { "seq": 11, "runId": "r3", "kind": "question.requested", "itemId": "q1", "text": "继续吗？", "createdAt": "2026-11-25T10:02:06.000Z" },
+        { "seq": 12, "runId": "r3", "kind": "question.answered", "itemId": "q1", "text": "继续", "createdAt": "2026-11-25T10:02:07.000Z" },
+        { "seq": 13, "runId": "r3", "kind": "tool.started", "itemId": "e1", "name": "Edit", "text": "{\"file_path\":\"b.ts\",\"old_string\":\"1\",\"new_string\":\"2\"}", "createdAt": "2026-11-25T10:02:08.000Z" },
+        { "seq": 14, "runId": "r3", "kind": "tool.completed", "itemId": "e1", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:02:08.000Z" },
+        { "seq": 15, "runId": "r3", "kind": "tool.started", "itemId": "e2", "name": "Edit", "text": "{\"file_path\":\"c.ts\",\"old_string\":\"1\",\"new_string\":\"2\"}", "createdAt": "2026-11-25T10:02:09.000Z" },
+        { "seq": 16, "runId": "r3", "kind": "tool.completed", "itemId": "e2", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:02:09.000Z" },
+        { "seq": 17, "runId": "r3", "kind": "tool.started", "itemId": "u1", "name": "Frobnicate", "text": "{}", "createdAt": "2026-11-25T10:02:10.000Z" },
+        { "seq": 18, "runId": "r3", "kind": "tool.completed", "itemId": "u1", "name": "Frobnicate", "text": "ok", "createdAt": "2026-11-25T10:02:10.000Z" },
+        { "seq": 19, "runId": "r3", "kind": "tool.started", "itemId": "b1", "name": "Bash", "text": "{\"command\":\"pnpm lint\"}", "createdAt": "2026-11-25T10:02:11.000Z" },
+        { "seq": 20, "runId": "r3", "kind": "tool.completed", "itemId": "b1", "name": "Bash", "text": "ok", "createdAt": "2026-11-25T10:02:11.000Z" },
+        { "seq": 21, "runId": "r3", "kind": "tool.started", "itemId": "s1", "name": "Skill", "text": "{\"skill\":\"verify\"}", "createdAt": "2026-11-25T10:02:12.000Z" },
+        { "seq": 22, "runId": "r3", "kind": "tool.completed", "itemId": "s1", "name": "Skill", "text": "ok", "createdAt": "2026-11-25T10:02:12.000Z" },
+        { "seq": 23, "runId": "r3", "kind": "message.assistant", "text": "全部完成。", "createdAt": "2026-11-25T10:02:13.000Z" },
+        { "seq": 24, "runId": "r3", "kind": "run.completed", "createdAt": "2026-11-25T10:02:14.000Z" }
+      ],
+      "entries": [
+        {
+          "kind": "group",
+          "items": ["tool:Read", "tool:Grep"],
+          "counts": { "explore": 2, "run": 0, "files": [], "unresolved": 0 },
+          "iconCategory": "explore"
+        },
+        { "kind": "single", "item": "message" },
+        { "kind": "single", "item": "tool:ExitPlanMode" },
+        { "kind": "single", "item": "tool:Edit" },
+        { "kind": "single", "item": "question" },
+        {
+          "kind": "group",
+          "items": ["tool:Edit", "tool:Edit"],
+          "counts": { "explore": 0, "run": 0, "files": ["b.ts", "c.ts"], "unresolved": 0 },
+          "iconCategory": "change"
+        },
+        { "kind": "single", "item": "tool:Frobnicate" },
+        {
+          "kind": "group",
+          "items": ["tool:Bash", "tool:Skill"],
+          "counts": { "explore": 0, "run": 2, "files": [], "unresolved": 0 },
+          "iconCategory": "run"
+        }
+      ]
+    },
+    {
+      "name": "reasoning-only-and-unresolved-edit-groups",
+      "events": [
+        { "seq": 1, "runId": "r4", "kind": "run.started", "text": "分析", "createdAt": "2026-11-25T10:03:00.000Z" },
+        { "seq": 2, "runId": "r4", "kind": "reasoning", "text": "第一段思考", "createdAt": "2026-11-25T10:03:01.000Z" },
+        { "seq": 3, "runId": "r4", "kind": "reasoning", "text": "第二段思考", "createdAt": "2026-11-25T10:03:02.000Z" },
+        { "seq": 4, "runId": "r4", "kind": "message.assistant", "text": "下面做一处编辑。", "createdAt": "2026-11-25T10:03:03.000Z" },
+        { "seq": 5, "runId": "r4", "kind": "tool.started", "itemId": "r1", "name": "Read", "text": "{\"file_path\":\"a.ts\"}", "createdAt": "2026-11-25T10:03:04.000Z" },
+        { "seq": 6, "runId": "r4", "kind": "tool.completed", "itemId": "r1", "name": "Read", "text": "ok", "createdAt": "2026-11-25T10:03:04.000Z" },
+        { "seq": 7, "runId": "r4", "kind": "tool.started", "itemId": "e1", "name": "Edit", "text": "{}", "createdAt": "2026-11-25T10:03:05.000Z" },
+        { "seq": 8, "runId": "r4", "kind": "tool.completed", "itemId": "e1", "name": "Edit", "text": "ok", "createdAt": "2026-11-25T10:03:05.000Z" },
+        { "seq": 9, "runId": "r4", "kind": "message.assistant", "text": "搞定。", "createdAt": "2026-11-25T10:03:06.000Z" },
+        { "seq": 10, "runId": "r4", "kind": "run.completed", "createdAt": "2026-11-25T10:03:07.000Z" }
+      ],
+      "entries": [
+        {
+          "kind": "group",
+          "items": ["reasoning", "reasoning"],
+          "counts": { "explore": 0, "run": 0, "files": [], "unresolved": 0 },
+          "iconCategory": null
+        },
+        { "kind": "single", "item": "message" },
+        {
+          "kind": "group",
+          "items": ["tool:Read", "tool:Edit"],
+          "counts": { "explore": 1, "run": 0, "files": [], "unresolved": 1 },
+          "iconCategory": "change"
+        }
+      ]
+    }
+  ]
+}

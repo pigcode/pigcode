@@ -51,6 +51,12 @@ describe("tool identity", () => {
     expect(toolFamily("WebSearch")).toBe("search")
     expect(toolFamily("WebFetch")).toBe("web-fetch")
     expect(toolFamily("TodoWrite")).toBe("todo")
+    expect(toolFamily("TaskCreate")).toBe("todo")
+    expect(toolFamily("TaskUpdate")).toBe("todo")
+    expect(toolFamily("TaskList")).toBe("todo")
+    expect(toolFamily("TaskGet")).toBe("todo")
+    expect(toolFamily("LSP")).toBe("search")
+    expect(toolFamily("LocalToolSearch")).toBe("search")
     expect(toolFamily("BashOutput")).toBe("task-output")
     expect(toolFamily("KillShell")).toBe("task-stop")
     expect(toolFamily("ExitPlanMode")).toBe("switch-mode")
@@ -68,6 +74,10 @@ describe("tool identity", () => {
   it("hides todos and entering plan mode from the stream", () => {
     expect(isHiddenTool("TodoWrite")).toBe(true)
     expect(isHiddenTool("update_plan")).toBe(true)
+    expect(isHiddenTool("TaskCreate")).toBe(true)
+    expect(isHiddenTool("TaskUpdate")).toBe(true)
+    expect(isHiddenTool("TaskList")).toBe(true)
+    expect(isHiddenTool("TaskGet")).toBe(true)
     expect(isHiddenTool("EnterPlanMode")).toBe(true)
     expect(isHiddenTool("ExitPlanMode")).toBe(false)
   })
@@ -261,7 +271,7 @@ describe("summary groups", () => {
   const edit = (id: string, path: string) =>
     item(tool("Edit", { file_path: path, old_string: "a", new_string: "b" }, { id }))
 
-  it("joins thinking with lookups, commands and edits across kinds; text and other tools break it", () => {
+  it("joins thinking with lookups, commands, MCP/skill/session tools and edits; text, plan and unknown tools break it", () => {
     const entries = groupSummaries([
       thought("t1"),
       item(tool("Read", { file_path: "a" }, { id: "r1" })),
@@ -270,6 +280,7 @@ describe("summary groups", () => {
       message("m1"),
       item(tool("Read", { file_path: "b" }, { id: "r2" })),
       item(tool("mcp__github__create_issue", {}, { id: "mcp" })),
+      item(tool("Frobnicate", {}, { id: "u1" })),
       item(tool("Grep", { pattern: "x" }, { id: "g1" })),
       thought("t2"),
     ])
@@ -277,7 +288,7 @@ describe("summary groups", () => {
       entries.map((entry) =>
         entry.kind === "group" ? `group:${entry.items.map((it) => it.key).join("+")}` : entry.key,
       ),
-    ).toEqual(["group:t1+r1+b1+e1", "m1", "r2", "mcp", "group:g1+t2"])
+    ).toEqual(["group:t1+r1+b1+e1", "m1", "group:r2+mcp", "u1", "group:g1+t2"])
     // 组的 key 跟着第一项，后面接上新的工作时不变。
     expect(entries[0]).toMatchObject({ key: "group-t1" })
   })

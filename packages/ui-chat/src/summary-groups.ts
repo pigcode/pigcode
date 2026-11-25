@@ -1,10 +1,12 @@
 /**
- * 连续摘要组（参照 ZCode 3.18 的「跨类型连续摘要分组」，docs/ui/tool-display-rendering.md）：连续两项
- * 以上的思考、查阅（读文件、搜索、网页抓取）、执行（终端命令、浏览器操作）和修改（写入、编辑、删除
- * 文件）合成一组；正文、子 agent、工作流、提问和其他工具是边界，照常单独显示。思考只显示、不计数。
+ * 连续摘要组（对齐 ZCode 4.0.0 并收拢 Claude Code 工具链，见 pigcode/monorepo#129）：
+ * 连续两项以上的思考、查阅（读文件、搜索、ToolSearch、网页抓取、LSP、只读会话读取）、
+ * 执行（终端命令、浏览器操作、MCP、Skill、后台任务输出/停止、会话写操作）和修改
+ * （写入、编辑、补丁）合成一组；过程正文、子 agent、工作流、计划卡、提问与未知工具是边界，
+ * 照常单独显示。思考只进组、不计数。
  */
 import { fileChanges } from "./file-changes"
-import { toolFamily } from "./tool-identity"
+import { isReadOnlySessionTool, isSessionWriteTool, toolFamily } from "./tool-identity"
 import type { ToolCall } from "./tool-meta"
 import type { WorkItem } from "./turns"
 
@@ -13,9 +15,20 @@ export type SummaryCategory = "explore" | "run" | "change"
 
 /** 工具在摘要组里算哪一类；null 表示它不进组。 */
 export function summaryCategory(tool: ToolCall): SummaryCategory | null {
+  if (isReadOnlySessionTool(tool.name)) return "explore"
+  if (isSessionWriteTool(tool.name)) return "run"
   const family = toolFamily(tool.name)
   if (family === "file-read" || family === "search" || family === "web-fetch") return "explore"
-  if (family === "shell" || family === "browser") return "run"
+  if (
+    family === "shell" ||
+    family === "browser" ||
+    family === "mcp" ||
+    family === "skill" ||
+    family === "task-output" ||
+    family === "task-stop"
+  ) {
+    return "run"
+  }
   if (family === "file-write") return "change"
   return null
 }
