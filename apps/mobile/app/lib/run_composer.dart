@@ -6,8 +6,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'composer/composer_catalog.dart';
+import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
 import 'composer/context_meter.dart';
+import 'composer/mention_editing_controller.dart';
 import 'composer/mobile_composer_card.dart';
 import 'composer/model_picker_sheet.dart';
 import 'composer/model_preferences.dart';
@@ -23,6 +25,9 @@ class RunComposer extends ConsumerStatefulWidget {
     required this.connection,
     required this.threadId,
     required this.online,
+    this.projectId,
+    this.projects = const [],
+    this.threads = const [],
     this.stoppableRunId,
     this.queueRevision = 0,
     this.composer,
@@ -34,6 +39,9 @@ class RunComposer extends ConsumerStatefulWidget {
 
   final MobileConnection connection;
   final String threadId;
+  final String? projectId;
+  final List<MobileProjectSummary> projects;
+  final List<MobileThreadSummary> threads;
   final bool online;
   final String? stoppableRunId;
   final int queueRevision;
@@ -48,7 +56,8 @@ class RunComposer extends ConsumerStatefulWidget {
 }
 
 class _RunComposerState extends ConsumerState<RunComposer> {
-  final _localDraft = TextEditingController();
+  final _localDraft = ComposerTextEditingController();
+  final _focusNode = FocusNode();
   final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
     const ComposerSelectionSnapshot(),
   );
@@ -83,6 +92,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   @override
   void dispose() {
     _localDraft.dispose();
+    _focusNode.dispose();
     _selectionNotifier.dispose();
     super.dispose();
   }
@@ -228,6 +238,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
 
     ResolvedComposerRunOptions runOptions = const ResolvedComposerRunOptions();
     Widget? effectiveTrailing = widget.trailing;
+    MobileDraftInstance? currentInstance;
 
     if (supportsControls && activeComposer != null) {
       final preferences = ref.watch(modelPreferencesProvider);
@@ -236,7 +247,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
       );
       final instances =
           optionsAsync.value?.instances ?? const <MobileDraftInstance>[];
-      final currentInstance = instances
+      currentInstance = instances
           .where((item) => item.instanceId == activeComposer.instanceId)
           .firstOrNull;
       final modelsAsync = ref.watch(
@@ -302,26 +313,79 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         ),
     ];
 
-    final view = RunComposerView(
-      draft: _draft,
+    final view = MobileComposerMentionHost(
+      connection: widget.connection,
       online: widget.online,
-      stoppableRunId: widget.stoppableRunId,
-      allowQueue: widget.connection.supportsQueueCommands,
-      state: commandState.value,
-      storageError: commandState.hasError,
-      onRetryLoad: () => ref.invalidate(provider),
-      onSend: (text) => controller.send(
-        text,
-        effort: runOptions.effort,
-        fast: runOptions.fast,
-        ultracode: runOptions.ultracode,
+      controller: _draft,
+      focusNode: _focusNode,
+      projectId: widget.projectId,
+      threadId: widget.threadId,
+      instanceId: activeComposer?.instanceId,
+      projects: widget.projects,
+      threads: widget.threads,
+      supportsPlanMode:
+          supportsControls &&
+          activeComposer != null &&
+          (activeComposer.supportsPlanMode || activeComposer.planMode),
+      permissionModes: supportsControls
+          ? (currentInstance?.permissionModes ?? const [])
+          : const [],
+      canOpenModelPicker: supportsControls && activeComposer != null,
+      onOpenModelPicker: supportsControls && activeComposer != null
+          ? () => unawaited(_openModelPicker())
+          : null,
+      onTogglePlanMode: supportsControls && activeComposer != null
+          ? () => unawaited(
+              _mutateComposer(
+                () => widget.connection.composer.setPlanMode(
+                  threadId: widget.threadId,
+                  planMode: !activeComposer.planMode,
+                ),
+              ),
+            )
+          : null,
+      onSelectPermissionMode: supportsControls && activeComposer != null
+          ? (mode) => unawaited(
+              _mutateComposer(
+                () => widget.connection.composer.setPermissionMode(
+                  threadId: widget.threadId,
+                  permissionMode: mode,
+                ),
+              ),
+            )
+          : null,
+      externalLeading: widget.leading,
+      builder: (context, leading) => RunComposerView(
+        draft: _draft,
+        focusNode: _focusNode,
+        online: widget.online,
+        stoppableRunId: widget.stoppableRunId,
+        allowQueue: widget.connection.supportsQueueCommands,
+        state: commandState.value,
+        storageError: commandState.hasError,
+        onRetryLoad: () => ref.invalidate(provider),
+        onSend: (text) {
+          final draft = _draft;
+          final references = draft is ComposerTextEditingController
+              ? draft.resolveReferences(text)
+              : const <MobileThreadReference>[];
+          controller.send(
+            text,
+            effort: runOptions.effort,
+            fast: runOptions.fast,
+            ultracode: runOptions.ultracode,
+            references: supportsControls && references.isNotEmpty
+                ? references
+                : null,
+          );
+        },
+        onStop: controller.stop,
+        onCheck: controller.check,
+        onRetry: controller.retry,
+        extraBanners: extraBanners,
+        leading: leading,
+        trailing: effectiveTrailing,
       ),
-      onStop: controller.stop,
-      onCheck: controller.check,
-      onRetry: controller.retry,
-      extraBanners: extraBanners,
-      leading: widget.leading,
-      trailing: effectiveTrailing,
     );
     final input = widget.wrapInput?.call(view) ?? view;
     if (!widget.connection.supportsQueueCommands) return input;
@@ -403,6 +467,7 @@ class RunComposerView extends StatelessWidget {
     required this.onStop,
     required this.onCheck,
     required this.onRetry,
+    this.focusNode,
     this.stoppableRunId,
     this.allowQueue = false,
     this.extraBanners = const [],
@@ -411,6 +476,7 @@ class RunComposerView extends StatelessWidget {
   });
 
   final TextEditingController draft;
+  final FocusNode? focusNode;
   final bool online;
   final String? stoppableRunId;
   final bool allowQueue;
@@ -502,6 +568,7 @@ class RunComposerView extends StatelessWidget {
         ];
         return MobileComposerCard(
           controller: draft,
+          focusNode: focusNode,
           inputKey: const ValueKey('run-composer-input'),
           hintText: hintText,
           offline: !online,

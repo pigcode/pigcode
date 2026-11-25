@@ -155,6 +155,52 @@ abstract final class ComposerSpace {
   static const double dialogGap = TimelineSpace.x5;
   static const double dialogActionGap = TimelineSpace.x4;
 
+  /// 实时联想面板的外边距、内边距、分组标题、条目与标签内边距。
+  static const EdgeInsets suggestionPanelMargin = EdgeInsets.fromLTRB(
+    TimelineSpace.x6,
+    TimelineSpace.x2,
+    TimelineSpace.x6,
+    TimelineSpace.x1,
+  );
+  static const EdgeInsets suggestionPanelPadding = EdgeInsets.all(
+    TimelineSpace.x3,
+  );
+  static const EdgeInsetsDirectional suggestionHeaderPadding =
+      EdgeInsetsDirectional.fromSTEB(
+        TimelineSpace.x4,
+        0,
+        TimelineSpace.x1,
+        0,
+      );
+  static const double suggestionHeaderGap = TimelineSpace.x3;
+  static const EdgeInsets suggestionGroupPadding = EdgeInsets.fromLTRB(
+    TimelineSpace.x4,
+    TimelineSpace.x3,
+    TimelineSpace.x4,
+    TimelineSpace.x2,
+  );
+  static const EdgeInsets suggestionRowPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x4,
+    vertical: TimelineSpace.x3,
+  );
+  static const double suggestionRowGap = TimelineSpace.x4;
+  static const double suggestionTitleGap = TimelineSpace.x3;
+  static const double suggestionSubtitleGap = TimelineSpace.x1;
+  static const EdgeInsets suggestionTagPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x2,
+    vertical: TimelineSpace.x1,
+  );
+  static const EdgeInsets suggestionEmptyPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x6,
+    vertical: TimelineSpace.x7,
+  );
+
+  /// `+` 插入菜单项间距。
+  static const double attachOptionGap = TimelineSpace.x5;
+  static const EdgeInsets attachOptionPadding = EdgeInsets.symmetric(
+    vertical: TimelineSpace.x4,
+  );
+
   /// 底栏外衬：抵消圆形动作按钮透明触区留白，使视觉边缘贴齐 `cardInset`（8px）。
   static EdgeInsetsDirectional toolbarPadding(
     BuildContext context, {
@@ -190,6 +236,11 @@ abstract final class ComposerRadius {
   static const double panel = TimelineRadius.panel;
   static const double full = TimelineRadius.full;
 
+  /// 实时联想面板外框（对齐桌面 `.menu-popup`: `--r-xl` 14px）、条目与角标圆角。
+  static const double suggestionPanel = 14;
+  static const double suggestionRow = TimelineRadius.block;
+  static const double suggestionTag = TimelineRadius.small;
+
   /// Agent 缩写头像圆角占比（对齐桌面 `.entity-avatar`: 28%）。
   static const double avatarRatio = 0.28;
 }
@@ -210,6 +261,21 @@ abstract final class ComposerControl {
   static const double actionDiameter = TimelineControl.lg;
   static const double sendIcon = TimelineIcon.control;
   static const double stopIcon = TimelineIcon.btn;
+
+  /// 工具栏左下角 `+` 圆形插入按钮（视觉圆 32px，触区 >= 44/48px）。
+  static const double attachDiameter = TimelineControl.lg;
+  static const double attachIcon = TimelineIcon.control;
+  static const double attachOptionIcon = TimelineIcon.alert;
+  static const double attachOptionMinHeight = 54;
+
+  /// 实时联想面板尺寸约束（窄屏与键盘弹出时不溢出、不遮挡输入区）。
+  static const double suggestionMaxHeight = 256;
+  static const double suggestionMinHeight = 112;
+  static const double suggestionMaxHeightFactor = 0.34;
+  static const double suggestionIcon = TimelineIcon.meta;
+  static const double suggestionCloseIcon = TimelineIcon.control;
+  static const double suggestionSpinnerSize = TimelineIcon.meta;
+  static const double suggestionSpinnerStroke = 1.5;
 
   /// 选择器胶囊视觉高度与图标尺寸。
   static const double chipVisualHeight = TimelineControl.md;
@@ -384,6 +450,35 @@ abstract final class ComposerType {
   static const double heroFontSize = 26;
   static const double heroHeight = 1.45;
   static const double heroMinViewportHeight = 320;
+
+  /// 实时联想面板与 `+` 插入菜单排版。
+  static TextStyle suggestionTitle(Color color) =>
+      TimelineType.smallStyle(color, weight: FontWeight.w500);
+  static TextStyle suggestionGroup(Color color) =>
+      TimelineType.smallStyle(color);
+  static TextStyle suggestionLabel(Color color) =>
+      TimelineType.metaStyle(color, weight: FontWeight.w500);
+  static TextStyle suggestionHint(Color color) => TextStyle(
+    fontFamily: 'monospace',
+    fontFamilyFallback: TimelineType.monoFallback,
+    fontSize: TimelineType.micro,
+    height: TimelineType.microHeight,
+    color: color,
+  );
+  static TextStyle suggestionDetail(Color color) =>
+      TimelineType.smallStyle(color);
+  static TextStyle suggestionTag(Color color) => TimelineType.microStyle(color);
+  static TextStyle attachOptionTitle(Color color, TargetPlatform platform) =>
+      TextStyle(
+        fontSize: TimelineType.content + 1,
+        height: 1.45,
+        letterSpacing: platform == TargetPlatform.iOS ? -0.24 : 0,
+        color: color,
+        leadingDistribution: TextLeadingDistribution.even,
+        locale: const Locale('zh', 'CN'),
+      );
+  static TextStyle attachOptionMeta(Color color) =>
+      TimelineType.metaMonoStyle(color);
 }
 
 abstract final class ComposerSurface {
@@ -411,6 +506,7 @@ abstract final class ComposerSurface {
   static ({
     Color background,
     Color surface,
+    Color popover,
     Color panel,
     Color field,
     Color surfaceRaised,
@@ -445,6 +541,7 @@ abstract final class ComposerSurface {
     return (
       background: colors.background,
       surface: colors.surface,
+      popover: colors.popover,
       panel: colors.panel,
       field: colors.field,
       surfaceRaised: colors.surfaceRaised,
@@ -551,5 +648,58 @@ abstract final class ComposerSurface {
   static Color actionIcon(Brightness brightness, {required bool enabled}) {
     final colors = palette(brightness);
     return enabled ? colors.background : colors.faint;
+  }
+
+  /// 工具栏左下角 `+` 圆形插入按钮底色与图标色（对齐桌面 `.composer-attach` 灰色圆底）。
+  static Color attachFill(
+    Brightness brightness, {
+    bool offline = false,
+  }) {
+    final colors = palette(brightness);
+    return offline
+        ? Color.alphaBlend(colors.selected, cardFill(brightness, offline: true))
+        : colors.selectedOnSurface;
+  }
+
+  static Color attachIcon(
+    Brightness brightness, {
+    required bool enabled,
+    bool active = false,
+  }) {
+    final colors = palette(brightness);
+    if (!enabled) return colors.faint;
+    return active ? colors.foreground : colors.muted;
+  }
+
+  /// 输入框中 `@文件`、`@会话`、`$` Skill 提及高亮颜色（保持同字号/字重/行高）。
+  static Color mentionHighlight(Brightness brightness) =>
+      accentText(brightness);
+
+  /// 实时联想面板阴影与表面装饰。
+  static List<BoxShadow> suggestionShadow(Brightness brightness) =>
+      brightness == Brightness.dark ? darkShadow : lightShadow;
+
+  static BoxDecoration suggestionPanel(Brightness brightness) {
+    final colors = palette(brightness);
+    return BoxDecoration(
+      color: colors.popover,
+      borderRadius: BorderRadius.circular(ComposerRadius.suggestionPanel),
+      border: Border.all(
+        color: colors.border,
+        width: ComposerBorder.regular,
+      ),
+      boxShadow: suggestionShadow(brightness),
+    );
+  }
+
+  static BoxDecoration suggestionTag(Brightness brightness) {
+    final colors = palette(brightness);
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(ComposerRadius.suggestionTag),
+      border: Border.all(
+        color: colors.border,
+        width: ComposerBorder.regular,
+      ),
+    );
   }
 }

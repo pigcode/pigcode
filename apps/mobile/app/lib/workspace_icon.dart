@@ -40,6 +40,10 @@ enum WorkspaceGlyph {
   shieldAlert,
   check,
   lock,
+  atSign,
+  slash,
+  messagesSquare,
+  dollarSign,
 }
 
 class WorkspaceIcon extends StatelessWidget {
@@ -777,6 +781,74 @@ class _WorkspaceIconPainter extends CustomPainter {
               radius: const Radius.circular(5),
             )
             ..lineTo(17, 11),
+          stroke,
+        );
+      case WorkspaceGlyph.atSign:
+        canvas.drawCircle(const Offset(12, 12), 4, stroke);
+        canvas.drawPath(
+          Path()
+            ..moveTo(16, 8)
+            ..lineTo(16, 13)
+            ..arcToPoint(
+              const Offset(22, 13),
+              radius: const Radius.circular(3),
+              clockwise: false,
+            )
+            ..lineTo(22, 12)
+            ..arcToPoint(
+              const Offset(18, 20),
+              radius: const Radius.circular(10),
+              largeArc: true,
+              clockwise: false,
+            ),
+          stroke,
+        );
+      case WorkspaceGlyph.slash:
+        canvas.drawLine(const Offset(17, 4), const Offset(7, 20), stroke);
+      case WorkspaceGlyph.messagesSquare:
+        const corner = Radius.circular(2);
+        canvas.drawPath(
+          Path()
+            ..moveTo(14, 9)
+            ..arcToPoint(const Offset(12, 11), radius: corner)
+            ..lineTo(6, 11)
+            ..lineTo(2, 15)
+            ..lineTo(2, 4)
+            ..arcToPoint(const Offset(4, 2), radius: corner)
+            ..lineTo(12, 2)
+            ..arcToPoint(const Offset(14, 4), radius: corner)
+            ..close(),
+          stroke,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(18, 9)
+            ..lineTo(20, 9)
+            ..arcToPoint(const Offset(22, 11), radius: corner)
+            ..lineTo(22, 22)
+            ..lineTo(18, 18)
+            ..lineTo(12, 18)
+            ..arcToPoint(const Offset(10, 16), radius: corner)
+            ..lineTo(10, 15),
+          stroke,
+        );
+      case WorkspaceGlyph.dollarSign:
+        canvas.drawLine(const Offset(12, 2), const Offset(12, 22), stroke);
+        canvas.drawPath(
+          Path()
+            ..moveTo(17, 5)
+            ..lineTo(9.5, 5)
+            ..arcToPoint(
+              const Offset(9.5, 12),
+              radius: const Radius.circular(3.5),
+              clockwise: false,
+            )
+            ..lineTo(14.5, 12)
+            ..arcToPoint(
+              const Offset(14.5, 19),
+              radius: const Radius.circular(3.5),
+            )
+            ..lineTo(6, 19),
           stroke,
         );
     }

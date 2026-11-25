@@ -8,6 +8,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_mobile/app_theme.dart';
+import 'package:pigcode_mobile/composer/composer_suggestion_panel.dart';
+import 'package:pigcode_mobile/composer/mobile_composer_card.dart';
+import 'package:pigcode_mobile/composer/model_picker_sheet.dart';
 
 import 'mobile_fixture.dart';
 
@@ -134,14 +137,26 @@ void main() {
       await tester.tap(find.byTooltip('新会话'));
       await tester.pumpAndSettle();
       expect(find.text('做点什么？'), findsOneWidget);
-      expect(
-        tester.getTopLeft(find.byTooltip('草稿权限')).dy,
-        tester.getTopLeft(find.byTooltip('草稿项目')).dy,
-      );
+      expect(find.byKey(MobileComposerCard.frameKey), findsOneWidget);
+      final project = find.byTooltip('草稿项目');
       final input = find.byKey(const ValueKey('first-message-input'));
-      final model = find.byTooltip('草稿模型');
+      final attach = find.byKey(MobileComposerAttachButton.buttonKey);
+      final model = find.byKey(MobileModelPickerChip.chipKey);
+      final send = find.byTooltip('发送首条消息');
+      expect(
+        tester.getCenter(project).dy,
+        lessThan(tester.getCenter(input).dy),
+      );
+      expect(
+        tester.getCenter(attach).dy,
+        greaterThan(tester.getCenter(input).dy),
+      );
       expect(
         tester.getCenter(model).dy,
+        greaterThan(tester.getCenter(input).dy),
+      );
+      expect(
+        tester.getCenter(send).dy,
         greaterThan(tester.getCenter(input).dy),
       );
       await _matchScreen('new-thread', brightness);

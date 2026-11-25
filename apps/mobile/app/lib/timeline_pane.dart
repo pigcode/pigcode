@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'composer/mention_editing_controller.dart';
 import 'local_drafts.dart';
 import 'offline_cache.dart';
 import 'offline_sync_label.dart';
@@ -98,6 +99,9 @@ class TimelinePane extends ConsumerStatefulWidget {
     required this.connection,
     required this.threadId,
     required this.online,
+    this.projectId,
+    this.projects = const [],
+    this.threads = const [],
     this.cache,
     this.computerKey,
     this.onSynced,
@@ -107,6 +111,9 @@ class TimelinePane extends ConsumerStatefulWidget {
 
   final MobileConnection? connection;
   final String threadId;
+  final String? projectId;
+  final List<MobileProjectSummary> projects;
+  final List<MobileThreadSummary> threads;
   final bool online;
   final ComputerOfflineCache? cache;
   final String? computerKey;
@@ -140,7 +147,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _openingChanges = false;
   String _observedText = '';
   ThreadDraftStorage? _draftStore;
-  final _text = TextEditingController();
+  final _text = ComposerTextEditingController();
 
   @override
   void initState() {
@@ -626,6 +633,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       composer = RunComposer(
         connection: connection,
         threadId: threadId,
+        projectId: widget.projectId,
+        projects: widget.projects,
+        threads: widget.threads,
         online: true,
         draft: _text,
         stoppableRunId: runId,

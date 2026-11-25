@@ -11,6 +11,20 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 const _computer = '工作电脑';
 final _syncedAt = DateTime.utc(2025, 6, 18, 8, 31);
 
+const _fixtureComposer = MobileThreadComposerState(
+  instanceId: 'codex',
+  agentId: 'codex',
+  modelId: 'gpt-5.4',
+  permissionMode: MobileDraftPermission.approvalRequired,
+  planMode: false,
+  supportsPlanMode: true,
+  contextUsage: MobileContextUsage(
+    usedTokens: 48000,
+    maxTokens: 200000,
+    autoCompactTokens: 160000,
+  ),
+);
+
 final _sidebar = SidebarSnapshot(
   projects: const [
     MobileProjectSummary(id: 'client', name: '手机端'),
@@ -152,6 +166,7 @@ TimelineSnapshot _history(
           finishedSteps: 2,
           totalSteps: 5,
         ),
+  composer: _fixtureComposer,
 );
 
 TimelineSnapshot _showcaseHistory() => TimelineSnapshot(
@@ -250,6 +265,7 @@ TimelineSnapshot _showcaseHistory() => TimelineSnapshot(
   cursor: 11,
   nextBefore: null,
   live: null,
+  composer: _fixtureComposer,
 );
 
 TimelineSnapshot _markdownHistory() => TimelineSnapshot(
@@ -285,6 +301,7 @@ TimelineSnapshot _markdownHistory() => TimelineSnapshot(
   cursor: 3,
   nextBefore: null,
   live: null,
+  composer: _fixtureComposer,
 );
 
 TimelineSnapshot _richMarkdownHistory() => TimelineSnapshot(
@@ -325,6 +342,7 @@ TimelineSnapshot _richMarkdownHistory() => TimelineSnapshot(
   cursor: 3,
   nextBefore: null,
   live: null,
+  composer: _fixtureComposer,
 );
 
 TimelineSnapshot _statesHistory() => TimelineSnapshot(
@@ -432,6 +450,7 @@ TimelineSnapshot _statesHistory() => TimelineSnapshot(
   cursor: 11,
   nextBefore: null,
   live: null,
+  composer: _fixtureComposer,
 );
 
 Widget workspaceFixture({
@@ -541,6 +560,12 @@ class _FixtureConnection implements MobileConnection {
   final drafts = MobileDraftCommands(const _FixtureHost());
 
   @override
+  final composer = MobileComposerCommands(const _FixtureHost());
+
+  @override
+  final mentions = MobileMentionCommands(const _FixtureHost());
+
+  @override
   final done = Completer<void>().future;
 
   @override
@@ -569,6 +594,12 @@ class _FixtureConnection implements MobileConnection {
 
   @override
   bool get supportsDraftCommands => true;
+
+  @override
+  bool get supportsComposerControls => true;
+
+  @override
+  bool get supportsComposerMentions => true;
 
   @override
   Future<MobileSidebar> openSidebar() async => _FixtureSidebar(sidebar);
@@ -640,23 +671,76 @@ class _FixtureHost implements HostRequests {
       return const MobileDraftOptions(
         instances: [
           MobileDraftInstance(
-            instanceId: 'demo-codex',
+            instanceId: 'codex',
+            agentId: 'codex',
             label: 'Codex',
             agentName: 'Codex',
+            supportsPlanMode: true,
             permissionModes: [
               MobileDraftPermission.approvalRequired,
               MobileDraftPermission.autoAcceptEdits,
+              MobileDraftPermission.auto,
+              MobileDraftPermission.fullAccess,
             ],
             defaultPermissionMode: MobileDraftPermission.approvalRequired,
           ),
         ],
-        defaultInstanceId: 'demo-codex',
+        defaultInstanceId: 'codex',
       ).toJson();
     }
     if (method == MobileDraftMethods.models) {
       return const MobileDraftModels(
-        models: [MobileDraftModel(id: 'demo-default', label: '默认模型')],
-        defaultModelId: 'demo-default',
+        models: [
+          MobileDraftModel(
+            id: 'gpt-5.4',
+            label: 'GPT-5.4',
+            efforts: ['low', 'medium', 'high'],
+            fast: true,
+          ),
+        ],
+        defaultModelId: 'gpt-5.4',
+      ).toJson();
+    }
+    if (method == MobileComposerMethods.switchAgent ||
+        method == MobileComposerMethods.setPermissionMode ||
+        method == MobileComposerMethods.setPlanMode) {
+      return _fixtureComposer.toJson();
+    }
+    if (method == MobileMentionMethods.searchPaths) {
+      return const MobileSearchPathsResult(
+        entries: [
+          MobilePathEntry(
+            path: 'lib/connection.dart',
+            kind: MobilePathEntryKind.file,
+          ),
+          MobilePathEntry(
+            path: 'docs/mobile.md',
+            kind: MobilePathEntryKind.file,
+          ),
+        ],
+        truncated: false,
+      ).toJson();
+    }
+    if (method == MobileMentionMethods.agentCommands) {
+      return const MobileAgentCommandsResult(
+        commands: [
+          MobileAgentCommand(
+            name: 'compact',
+            text: '/compact',
+            kind: MobileAgentCommandKind.command,
+            description: '压缩当前对话上下文',
+            source: MobileAgentCommandSource.builtin,
+          ),
+          MobileAgentCommand(
+            name: 'review',
+            text: r'$review',
+            kind: MobileAgentCommandKind.skill,
+            displayName: '代码审查',
+            shortDescription: '检查当前分支改动',
+            source: MobileAgentCommandSource.project,
+          ),
+        ],
+        truncated: false,
       ).toJson();
     }
     if (method == QueueMethods.get) {

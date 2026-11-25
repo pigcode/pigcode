@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'composer/composer_catalog.dart';
+import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
+import 'composer/mention_editing_controller.dart';
 import 'composer/mobile_composer_card.dart';
 import 'composer/model_picker_sheet.dart';
 import 'composer/model_preferences.dart';
@@ -20,6 +22,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
     required this.projects,
     required this.online,
     required this.onAccepted,
+    this.threads = const [],
     this.projectId,
     this.fallbackProjectId,
     this.onProjectNameChanged,
@@ -35,6 +38,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
   final String? fallbackProjectId;
   final ValueChanged<String?>? onProjectNameChanged;
   final List<MobileProjectSummary> projects;
+  final List<MobileThreadSummary> threads;
   final bool online;
   final ValueChanged<MobileDraftReceipt> onAccepted;
   final Widget? leading;
@@ -46,6 +50,9 @@ class NewThreadDraft extends ConsumerStatefulWidget {
 class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   late final _entry = DraftEntry(widget.projectId);
   String? _reportedProjectName;
+  final _textController = ComposerTextEditingController();
+  final _focusNode = FocusNode();
+  bool _initialTextSynced = false;
   final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
     const ComposerSelectionSnapshot(),
   );
@@ -61,8 +68,18 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
 
   @override
   void dispose() {
+    _textController.dispose();
+    _focusNode.dispose();
     _selectionNotifier.dispose();
     super.dispose();
+  }
+
+  void _syncTextFromForm(String nextText) {
+    if (_textController.text == nextText) return;
+    _textController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextText.length),
+    );
   }
 
   void _scheduleSelectionSync(ComposerSelectionSnapshot snapshot) {
@@ -185,9 +202,15 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     final provider = newThreadDraftProvider(target);
     final draft = ref.watch(provider);
     ref.listen(provider, (previous, next) {
-      final receipt = next.value?.receipt;
+      final nextState = next.value;
+      if (nextState != null) {
+        _initialTextSynced = true;
+        _syncTextFromForm(nextState.form.text);
+      }
+      final receipt = nextState?.receipt;
       if (receipt != null &&
           receipt.commandId != previous?.value?.receipt?.commandId) {
+        _textController.clearThreadReferences();
         widget.onAccepted(receipt);
       }
     });
@@ -201,6 +224,15 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
               )
             : const CircularProgressIndicator.adaptive(),
       );
+    }
+    if (!_initialTextSynced) {
+      _initialTextSynced = true;
+      if (_textController.text != view.form.text) {
+        final targetText = view.form.text;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _syncTextFromForm(targetText);
+        });
+      }
     }
 
     final actions = ref.read(provider.notifier);
@@ -485,33 +517,82 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     ];
 
     final dock = SingleChildScrollView(
-      child: _DraftComposer(
-        header: projectPicker,
-        banners: banners,
-        leading: widget.leading,
-        trailing: trailingControls,
-        text: form.text,
-        offline: !online,
-        working: view.working,
-        onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
-        onSend: allowed
-            ? () => actions.submit(
-                NewThreadForm(
-                  text: form.text,
-                  projectId: project.id,
-                  instanceId: instance.instanceId,
-                  modelId: selectedModel,
-                  instanceLabel: displayed.instanceLabel,
-                  modelLabel: displayed.modelLabel,
-                  permissionMode: permission,
-                  planMode: effectivePlanMode,
+      child: MobileComposerMentionHost(
+        connection: link,
+        online: online,
+        controller: _textController,
+        focusNode: _focusNode,
+        enabled: !view.working,
+        projectId: selectedProject,
+        threadId: null,
+        instanceId: selectedInstance,
+        projects: projects,
+        threads: widget.threads,
+        supportsPlanMode:
+            supportsControls &&
+            (instance?.supportsPlanMode == true || effectivePlanMode),
+        permissionModes: supportsControls
+            ? (instance?.permissionModes ?? const [])
+            : const [],
+        canOpenModelPicker:
+            supportsControls && link != null && !view.working && instances.isNotEmpty,
+        onOpenModelPicker:
+            supportsControls && link != null && !view.working && instances.isNotEmpty
+            ? () => unawaited(_openModelPicker(link))
+            : null,
+        onTogglePlanMode: supportsControls && !view.working
+            ? () => unawaited(
+                _applyDraftEdit(
+                  (current) => current.copyWith(planMode: !effectivePlanMode),
                 ),
-                effort: runOptions.effort,
-                fast: runOptions.fast,
-                ultracode: runOptions.ultracode,
-                planMode: effectivePlanMode ? true : null,
               )
             : null,
+        onSelectPermissionMode: supportsControls && !view.working
+            ? (mode) => unawaited(
+                _applyDraftEdit(
+                  (current) => current.copyWith(permissionMode: mode),
+                ),
+              )
+            : null,
+        onTextChanged: (text) => actions.edit(displayed.copyWith(text: text)),
+        externalLeading: widget.leading,
+        builder: (context, leading) => _DraftComposer(
+          controller: _textController,
+          focusNode: _focusNode,
+          header: projectPicker,
+          banners: banners,
+          leading: leading,
+          trailing: trailingControls,
+          offline: !online,
+          working: view.working,
+          onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
+          onSend: allowed
+              ? () {
+                  final references = _textController.resolveReferences(
+                    form.text,
+                  );
+                  actions.submit(
+                    NewThreadForm(
+                      text: form.text,
+                      projectId: project.id,
+                      instanceId: instance.instanceId,
+                      modelId: selectedModel,
+                      instanceLabel: displayed.instanceLabel,
+                      modelLabel: displayed.modelLabel,
+                      permissionMode: permission,
+                      planMode: effectivePlanMode,
+                    ),
+                    effort: runOptions.effort,
+                    fast: runOptions.fast,
+                    ultracode: runOptions.ultracode,
+                    planMode: effectivePlanMode ? true : null,
+                    references: supportsControls && references.isNotEmpty
+                        ? references
+                        : null,
+                  );
+                }
+              : null,
+        ),
       ),
     );
     return LayoutBuilder(
@@ -581,12 +662,13 @@ class _DraftNotice extends StatelessWidget {
   );
 }
 
-class _DraftComposer extends StatefulWidget {
+class _DraftComposer extends StatelessWidget {
   const _DraftComposer({
+    required this.controller,
+    required this.focusNode,
     required this.header,
     required this.banners,
     required this.trailing,
-    required this.text,
     required this.offline,
     required this.working,
     required this.onChanged,
@@ -594,64 +676,36 @@ class _DraftComposer extends StatefulWidget {
     this.onSend,
   });
 
+  final ComposerTextEditingController controller;
+  final FocusNode focusNode;
   final Widget header;
   final List<Widget> banners;
   final Widget? leading;
   final Widget trailing;
-  final String text;
   final bool offline;
   final bool working;
   final ValueChanged<String> onChanged;
   final VoidCallback? onSend;
 
   @override
-  State<_DraftComposer> createState() => _DraftComposerState();
-}
-
-class _DraftComposerState extends State<_DraftComposer> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.text);
-  }
-
-  @override
-  void didUpdateWidget(covariant _DraftComposer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_controller.text != widget.text) {
-      _controller.value = TextEditingValue(
-        text: widget.text,
-        selection: TextSelection.collapsed(offset: widget.text.length),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) => MobileComposerCard(
-    controller: _controller,
+    controller: controller,
+    focusNode: focusNode,
     inputKey: const ValueKey('first-message-input'),
     hintText: '描述要做的事',
-    header: widget.header,
-    banners: widget.banners,
-    leading: widget.leading,
-    trailing: widget.trailing,
-    offline: widget.offline,
-    readOnly: widget.working,
-    onChanged: widget.onChanged,
+    header: header,
+    banners: banners,
+    leading: leading,
+    trailing: trailing,
+    offline: offline,
+    readOnly: working,
+    onChanged: onChanged,
     actions: [
       MobileComposerActionButton(
         tooltip: '发送首条消息',
         glyph: WorkspaceGlyph.arrowUp,
-        offline: widget.offline,
-        onPressed: widget.onSend,
+        offline: offline,
+        onPressed: onSend,
       ),
     ],
   );
