@@ -13,6 +13,7 @@ class MainActivity : FlutterActivity() {
     private var reminders: MethodChannel? = null
     private var pending: MobileReminder? = null
     private var permissionResult: MethodChannel.Result? = null
+    private var shareReceiver: MobileShareReceiver? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -54,13 +55,23 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        val share = shareReceiver ?: MobileShareReceiver(this).also { shareReceiver = it }
+        share.attach(flutterEngine.dartExecutor.binaryMessenger)
         capture(intent)
+        share.handleIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         capture(intent)
+        shareReceiver?.handleIntent(intent)
+    }
+
+    override fun onDestroy() {
+        shareReceiver?.dispose()
+        shareReceiver = null
+        super.onDestroy()
     }
 
     private fun capture(intent: Intent?) {

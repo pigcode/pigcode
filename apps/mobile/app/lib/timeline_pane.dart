@@ -17,6 +17,7 @@ import 'offline_sync_label.dart';
 import 'run_composer.dart';
 import 'run_changes_card.dart';
 import 'run_diff_screen.dart';
+import 'share/share_receiver.dart';
 import 'thread_read_receipt.dart';
 import 'timeline/notice_line.dart';
 import 'timeline/request_card.dart';
@@ -112,6 +113,7 @@ class TimelinePane extends ConsumerStatefulWidget {
     this.onSynced,
     this.onRunChangesChanged,
     this.reading,
+    this.liveShare,
   });
 
   final MobileConnection? connection;
@@ -132,6 +134,7 @@ class TimelinePane extends ConsumerStatefulWidget {
     MobileThreadReadTarget? manualUnread,
   })?
   reading;
+  final LiveShareInjection? liveShare;
 
   @override
   ConsumerState<TimelinePane> createState() => _TimelinePaneState();
@@ -154,6 +157,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   ThreadDraftStorage? _draftStore;
   ComposerAttachmentsController? _attachments;
   bool _rememberedAttachmentsSupport = false;
+  String? _handledLiveShareId;
   final _text = ComposerTextEditingController();
 
   @override
@@ -203,6 +207,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       _resumeFrom = _latest;
     }
     _attachments?.updateConnection(widget.connection, online: widget.online);
+    _maybeApplyLiveShare();
   }
 
   @override
@@ -235,11 +240,12 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final store = _draftStore;
     if (store == null) {
       _draftReady = true;
+      _maybeApplyLiveShare();
       return;
     }
     unawaited(
       store.readFull().then(
-        (restored) {
+        (restored) async {
           if (!mounted) return;
           setState(() {
             _observedText = restored.text;
@@ -248,13 +254,12 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
             _draftError = false;
           });
           if (restored.attachments.isNotEmpty) {
-            unawaited(
-              _attachments?.restoreFromDraft(
-                restored.attachments,
-                threadId: widget.threadId,
-              ),
+            await _attachments?.restoreFromDraft(
+              restored.attachments,
+              threadId: widget.threadId,
             );
           }
+          if (mounted) _maybeApplyLiveShare();
         },
         onError: (Object _) {
           if (mounted) {
@@ -262,9 +267,32 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
               _draftReady = true;
               _draftError = true;
             });
+            _maybeApplyLiveShare();
           }
         },
       ),
+    );
+  }
+
+  void _maybeApplyLiveShare() {
+    final share = widget.liveShare;
+    if (share == null ||
+        share.forNewThread ||
+        share.threadId != widget.threadId ||
+        share.id == _handledLiveShareId ||
+        !_draftReady) {
+      return;
+    }
+    _handledLiveShareId = share.id;
+    final attachments = _attachments;
+    if (attachments == null) {
+      share.complete();
+      return;
+    }
+    unawaited(
+      attachments
+          .stageSharedImages(share.paths)
+          .whenComplete(share.complete),
     );
   }
 

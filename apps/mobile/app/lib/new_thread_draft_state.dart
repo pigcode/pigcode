@@ -144,6 +144,25 @@ class NewThreadDraftStorage {
 
   Future<_DraftRecord> _load() => withLocalDrafts(_read);
 
+  Future<NewThreadForm> readForm() async => (await _load()).form;
+
+  Future<void> appendAttachments(List<DraftAttachmentRecord> added) async {
+    if (added.isEmpty) return;
+    await _update((current) {
+      final merged = <DraftAttachmentRecord>[
+        ...current.form.attachments,
+        ...added,
+      ];
+      final capped = merged.length > mobileMaxMessageAttachments
+          ? merged.sublist(0, mobileMaxMessageAttachments)
+          : merged;
+      return _DraftRecord(
+        current.form.copyWith(attachments: List.unmodifiable(capped)),
+        current.pending,
+      );
+    });
+  }
+
   Future<_DraftRecord> _update(_DraftRecord Function(_DraftRecord) update) =>
       withLocalDrafts(() async {
         final current = await _read();

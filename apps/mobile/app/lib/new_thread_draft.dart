@@ -18,6 +18,7 @@ import 'composer/model_picker_sheet.dart';
 import 'composer/model_preferences.dart';
 import 'mobile_sheet.dart';
 import 'new_thread_draft_state.dart';
+import 'share/share_receiver.dart';
 import 'workspace_icon.dart';
 
 class NewThreadDraft extends ConsumerStatefulWidget {
@@ -35,6 +36,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
     this.deviceId,
     this.leading,
     this.supportsAttachments,
+    this.liveShare,
   });
 
   final MobileConnection? connection;
@@ -49,6 +51,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
   final ValueChanged<MobileDraftReceipt> onAccepted;
   final Widget? leading;
   final bool? supportsAttachments;
+  final LiveShareInjection? liveShare;
 
   @override
   ConsumerState<NewThreadDraft> createState() => _NewThreadDraftState();
@@ -61,8 +64,10 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   final _focusNode = FocusNode();
   bool _initialTextSynced = false;
   bool _initialAttachmentsSynced = false;
+  bool _initialAttachmentsRestored = false;
   bool _submittingAttachments = false;
   bool _rememberedAttachmentsSupport = false;
+  String? _handledLiveShareId;
   String? _attachmentNotice;
   late ComposerAttachmentsController _attachments;
   late String _attachmentsComputerKey;
@@ -120,9 +125,25 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
       _attachments.dispose();
       _attachmentsComputerKey = nextKey;
       _initialAttachmentsSynced = false;
+      _initialAttachmentsRestored = false;
       _attachments = _createAttachmentsController(nextKey);
     }
     _attachments.updateConnection(widget.connection, online: widget.online);
+    _maybeApplyLiveShare();
+  }
+
+  void _maybeApplyLiveShare() {
+    final share = widget.liveShare;
+    if (share == null ||
+        !share.forNewThread ||
+        share.id == _handledLiveShareId ||
+        !_initialAttachmentsRestored) {
+      return;
+    }
+    _handledLiveShareId = share.id;
+    unawaited(
+      _attachments.stageSharedImages(share.paths).whenComplete(share.complete),
+    );
   }
 
   @override
@@ -404,13 +425,21 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     if (!_initialAttachmentsSynced) {
       _initialAttachmentsSynced = true;
       final savedAttachments = view.form.attachments;
-      if (savedAttachments.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            unawaited(_attachments.restoreFromDraft(savedAttachments));
-          }
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (savedAttachments.isNotEmpty) {
+          unawaited(
+            _attachments.restoreFromDraft(savedAttachments).whenComplete(() {
+              if (!mounted) return;
+              _initialAttachmentsRestored = true;
+              _maybeApplyLiveShare();
+            }),
+          );
+        } else {
+          _initialAttachmentsRestored = true;
+          _maybeApplyLiveShare();
+        }
+      });
     }
 
     final actions = ref.read(provider.notifier);

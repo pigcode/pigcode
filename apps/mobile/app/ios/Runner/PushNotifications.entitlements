@@ -4,5 +4,9 @@
 <dict>
 	<key>aps-environment</key>
 	<string>$(PIGCODE_APNS_ENVIRONMENT)</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(PIGCODE_APP_GROUP)</string>
+	</array>
 </dict>
 </plist>

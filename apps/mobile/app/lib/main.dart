@@ -11,12 +11,35 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'attachments/attachment_cache.dart';
+import 'attachments/composer_attachments_controller.dart';
+import 'attachments/image_compressor.dart';
 import 'computer_reconnect.dart';
 import 'computers.dart';
+import 'local_drafts.dart';
+import 'new_thread_draft_state.dart';
 import 'offline_cache.dart';
 import 'mobile_reminders.dart';
 import 'reminder_settings_page.dart';
+import 'share/share_receiver.dart';
+import 'share/share_target_sheet.dart';
+import 'theme_colors.dart';
 import 'workspace.dart';
+
+typedef ComputerReconnectFactory =
+    ComputerReconnect Function(
+      ComputerProfile computer,
+      NoiseIdentity identity,
+      VoidCallback onChange,
+    );
+
+final computerReconnectFactoryProvider = Provider<ComputerReconnectFactory>(
+  (_) => (computer, identity, onChange) => ComputerReconnect(
+    dial: () => MobileConnection.resume(computer, identity),
+    observe: () => RelayStatusWatch.open(computer),
+    onChange: onChange,
+  ),
+);
 
 const _version = String.fromEnvironment('PIGCODE_PRODUCT_VERSION');
 
@@ -64,6 +87,17 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   final _openedReminders = <(String, String)>{};
   String? _computerId;
   String? _visibleThreadId;
+  SidebarSnapshot? _activeSidebar;
+  String? _activeThreadId;
+  bool _activeDraftOpen = false;
+  ShareNavigationRequest? _openShareTarget;
+  LiveShareInjection? _liveShare;
+  bool _shareSheetOpen = false;
+  bool _stagingShare = false;
+  String? _shareSelectedComputerKey;
+  final _shareSheetRevision = ValueNotifier<int>(0);
+  final _cachedSidebars = <String, SidebarSnapshot?>{};
+  final _loadingCachedSidebars = <String>{};
   final _reminderSettings = ValueNotifier<MobileReminderSettings?>(null);
   (MobileConnection, bool, MobileReminderPermission, String?)? _sentSettings;
 
@@ -82,6 +116,12 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     );
     unawaited(_readReminderTap());
     unawaited(_refreshReminderSettings());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(shareReceiverProvider) != null) {
+        _scheduleShareSheet();
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     final connectivity = Connectivity();
     _networks = connectivity.onConnectivityChanged.listen((networks) {
@@ -113,6 +153,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       unawaited(_readReminderTap());
       unawaited(_openQueuedReminder());
       unawaited(_refreshReminderSettings());
+      unawaited(ref.read(shareReceiverProvider.notifier).checkPending());
     }
   }
 
@@ -224,38 +265,308 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     _syncVisibleThread();
   }
 
+  void _notifyShareSheet() {
+    if (mounted) _shareSheetRevision.value++;
+  }
+
+  void _ensureCachedSidebar(String computerKey) {
+    if (_cachedSidebars.containsKey(computerKey) ||
+        !_loadingCachedSidebars.add(computerKey)) {
+      return;
+    }
+    _notifyShareSheet();
+    final cache = ref.read(offlineCacheProvider).open(computerKey);
+    unawaited(
+      cache.readSidebar().catchError((Object _) => null).then((snapshot) {
+        if (!mounted) return;
+        _loadingCachedSidebars.remove(computerKey);
+        _cachedSidebars[computerKey] = snapshot;
+        _notifyShareSheet();
+      }),
+    );
+  }
+
+  void _scheduleShareSheet() {
+    if (_shareSheetOpen || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _shareSheetOpen) return;
+      if (ref.read(shareReceiverProvider) != null) {
+        unawaited(_presentShareSheet());
+      }
+    });
+  }
+
+  Future<void> _presentShareSheet() async {
+    if (_shareSheetOpen || !mounted) return;
+    _shareSheetOpen = true;
+    final computers = ref.read(computersProvider).value ?? const [];
+    _shareSelectedComputerKey = _selected ?? computers.firstOrNull?.computerKey;
+    if (_shareSelectedComputerKey case final key?) {
+      _ensureCachedSidebar(key);
+      if (_selected == null) {
+        final target = computers
+            .where((entry) => entry.computerKey == key)
+            .firstOrNull;
+        if (target != null) {
+          _select(target, openWorkspace: false);
+        }
+      }
+    }
+    final palette = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    var openPairingAfterClose = false;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: palette.scrim,
+        barrierLabel: '关闭',
+        elevation: 0,
+        builder: (sheetContext) => _ShareSheetModal(
+          revision: _shareSheetRevision,
+          busy: () => _stagingShare,
+          resolveSelectedKey: (entries) {
+            final chosen = _shareSelectedComputerKey;
+            if (chosen != null &&
+                entries.any((entry) => entry.computerKey == chosen)) {
+              return chosen;
+            }
+            if (_selected != null &&
+                entries.any((entry) => entry.computerKey == _selected)) {
+              return _selected;
+            }
+            return entries.firstOrNull?.computerKey;
+          },
+          buildComputerInfo: (computer) {
+            final key = computer.computerKey;
+            if (key == _selected) {
+              final conn = _session?.connection;
+              final snapshot = _activeSidebar ?? _cachedSidebars[key];
+              if (snapshot == null) _ensureCachedSidebar(key);
+              return ShareComputerTargetInfo(
+                computer: computer,
+                connected: conn != null,
+                supportsAttachments: conn == null
+                    ? null
+                    : connectionSupportsAttachments(conn),
+                snapshot: snapshot,
+                activeThreadId: _activeDraftOpen ? null : _activeThreadId,
+                loading: _loadingCachedSidebars.contains(key),
+              );
+            }
+            _ensureCachedSidebar(key);
+            return ShareComputerTargetInfo(
+              computer: computer,
+              connected: false,
+              supportsAttachments: null,
+              snapshot: _cachedSidebars[key],
+              activeThreadId: null,
+              loading: _loadingCachedSidebars.contains(key),
+            );
+          },
+          onSelectComputer: (computer) {
+            _shareSelectedComputerKey = computer.computerKey;
+            _ensureCachedSidebar(computer.computerKey);
+            if (_selected != computer.computerKey) {
+              _select(computer, openWorkspace: _workspaceOpen);
+            }
+            _notifyShareSheet();
+          },
+          onSelectTarget: (batch, selection) =>
+              unawaited(_handleShareTarget(sheetContext, batch, selection)),
+          onPair: () {
+            openPairingAfterClose = true;
+            unawaited(ref.read(shareReceiverProvider.notifier).dismiss());
+            Navigator.of(sheetContext).pop();
+          },
+          onClose: () => Navigator.of(sheetContext).pop(),
+        ),
+      );
+    } finally {
+      _shareSheetOpen = false;
+      _stagingShare = false;
+      if (mounted && ref.read(shareReceiverProvider) != null) {
+        unawaited(ref.read(shareReceiverProvider.notifier).dismiss());
+      }
+    }
+    if (openPairingAfterClose && mounted) {
+      _showWorkspace(false);
+      unawaited(_scan());
+    }
+  }
+
+  Future<void> _handleShareTarget(
+    BuildContext sheetContext,
+    IncomingShareBatch batch,
+    ShareTargetSelection selection,
+  ) async {
+    if (_stagingShare) return;
+    _stagingShare = true;
+    _notifyShareSheet();
+    String? overflowNotice;
+    try {
+      final isLiveExisting =
+          !selection.isNewThread &&
+          _selected == selection.computerKey &&
+          !_activeDraftOpen &&
+          _activeThreadId == selection.threadId;
+      final isLiveDraft =
+          selection.isNewThread &&
+          _selected == selection.computerKey &&
+          _activeDraftOpen;
+
+      if (isLiveExisting || isLiveDraft) {
+        final injection = LiveShareInjection(
+          id: batch.batchId,
+          paths: batch.paths,
+          threadId: selection.threadId,
+          forNewThread: selection.isNewThread,
+        );
+        if (mounted) {
+          setState(() {
+            _liveShare = injection;
+            _workspaceOpen = true;
+          });
+          _syncVisibleThread();
+        }
+        await injection.done.future.timeout(
+          const Duration(seconds: 15),
+          onTimeout: () {},
+        );
+        await ref
+            .read(shareReceiverProvider.notifier)
+            .completeBatch(batch.batchId);
+      } else {
+        final cache = ref.read(attachmentCacheProvider);
+        final compressor = ref.read(imageCompressorProvider);
+        if (selection.isNewThread) {
+          final deviceId = ref.read(computersProvider.notifier).deviceId;
+          final store = NewThreadDraftStorage(
+            selection.computerKey,
+            deviceId,
+            attachmentCache: cache,
+          );
+          final form = await store.readForm();
+          final staged = await stageSharedImagesToDraft(
+            computerKey: selection.computerKey,
+            paths: batch.paths,
+            cache: cache,
+            compressor: compressor,
+            existingCount: form.attachments.length,
+          );
+          if (staged.records.isNotEmpty) {
+            await store.appendAttachments(staged.records);
+          }
+          overflowNotice = staged.error;
+        } else {
+          final store = ThreadDraftStorage(
+            selection.computerKey,
+            selection.threadId!,
+            attachmentCache: cache,
+          );
+          final existing = await store.readFull();
+          final staged = await stageSharedImagesToDraft(
+            computerKey: selection.computerKey,
+            paths: batch.paths,
+            cache: cache,
+            compressor: compressor,
+            existingCount: existing.attachments.length,
+          );
+          if (staged.records.isNotEmpty) {
+            await store.appendAttachments(staged.records);
+          }
+          overflowNotice = staged.error;
+        }
+
+        await ref
+            .read(shareReceiverProvider.notifier)
+            .completeBatch(batch.batchId);
+
+        if (mounted) {
+          final nav = ShareNavigationRequest(
+            id: batch.batchId,
+            threadId: selection.threadId,
+            openDraft: selection.isNewThread,
+          );
+          if (_selected != selection.computerKey) {
+            final entries = ref.read(computersProvider).value ?? const [];
+            final profile = entries
+                .where((entry) => entry.computerKey == selection.computerKey)
+                .firstOrNull;
+            if (profile != null) {
+              _select(profile, shareTarget: nav, openWorkspace: true);
+            }
+          } else {
+            setState(() {
+              _openShareTarget = nav;
+              _workspaceOpen = true;
+            });
+            _syncVisibleThread();
+          }
+        }
+      }
+    } catch (_) {
+      overflowNotice ??= '暂时无法处理分享的图片，请重试。';
+      await ref
+          .read(shareReceiverProvider.notifier)
+          .completeBatch(batch.batchId);
+    } finally {
+      _stagingShare = false;
+      _notifyShareSheet();
+      if (sheetContext.mounted && Navigator.of(sheetContext).canPop()) {
+        Navigator.of(sheetContext).pop();
+      }
+    }
+    if (overflowNotice != null && overflowNotice.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(overflowNotice)));
+    }
+  }
+
   void _select(
     ComputerProfile computer, {
     MobileConnection? initial,
     MobileReminder? reminder,
+    ShareNavigationRequest? shareTarget,
+    bool openWorkspace = true,
   }) {
     final identity = ref.read(computersProvider.notifier).identity;
+    final createReconnect = ref.read(computerReconnectFactoryProvider);
     late final ComputerReconnect session;
-    session = ComputerReconnect(
-      dial: () => MobileConnection.resume(computer, identity),
-      observe: () => RelayStatusWatch.open(computer),
-      onChange: () {
-        if (!mounted || !identical(_session, session)) return;
-        if (session.error == 'device-revoked') {
-          unawaited(_confirmedRevocation(computer));
-        } else {
-          setState(() {});
-          _reportReminderSettings();
-        }
-      },
-    );
+    session = createReconnect(computer, identity, () {
+      if (!mounted || !identical(_session, session)) return;
+      if (session.error == 'device-revoked') {
+        unawaited(_confirmedRevocation(computer));
+      } else {
+        setState(() {});
+        _reportReminderSettings();
+        _notifyShareSheet();
+      }
+    });
     _session?.dispose();
     setState(() {
       _session = session;
       _selected = computer.computerKey;
       _cache = ref.read(offlineCacheProvider).open(computer.computerKey);
       _openReminder = reminder;
+      _openShareTarget = shareTarget;
+      _liveShare = null;
+      _activeSidebar = _cachedSidebars[computer.computerKey];
+      _activeThreadId = shareTarget?.openDraft == true
+          ? null
+          : shareTarget?.threadId;
+      _activeDraftOpen = shareTarget?.openDraft ?? false;
       _computerId = null;
       _visibleThreadId = null;
-      _workspaceOpen = true;
+      _workspaceOpen = openWorkspace;
       _feedback = null;
     });
     _syncVisibleThread();
+    _notifyShareSheet();
     unawaited(
       reminderComputerId(computer).then((id) {
         if (!mounted || !identical(_session, session)) return;
@@ -386,11 +697,17 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _selected = null;
       _cache = null;
       _openReminder = null;
+      _openShareTarget = null;
+      _liveShare = null;
+      _activeSidebar = null;
+      _activeThreadId = null;
+      _activeDraftOpen = false;
       _computerId = null;
       _visibleThreadId = null;
       _workspaceOpen = false;
     });
     _syncVisibleThread();
+    _notifyShareSheet();
   }
 
   String _connectionLabel(BuildContext context) {
@@ -510,6 +827,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     WidgetsBinding.instance.removeObserver(this);
     _reminders.watch();
     _reminderSettings.dispose();
+    _shareSheetRevision.dispose();
     _reminders.setVisible(null, null).catchError((Object _) {});
     unawaited(_networks?.cancel());
     _session?.dispose();
@@ -528,6 +846,9 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<IncomingShareBatch?>(shareReceiverProvider, (previous, next) {
+      if (next != null) _scheduleShareSheet();
+    });
     final computers = ref.watch(computersProvider);
     final connectionLabel = _connectionLabel(context);
     final manager = Scaffold(
@@ -667,10 +988,24 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           deviceId: ref.read(computersProvider.notifier).deviceId,
           cache: _cache,
           openReminder: _openReminder,
+          openShareTarget: _openShareTarget,
+          liveShare: _liveShare,
           presented: _workspaceOpen,
           onVisibleThread: (id) {
             _visibleThreadId = id;
             _syncVisibleThread();
+          },
+          onActiveTargetChanged: (target) {
+            _activeThreadId = target.threadId;
+            _activeDraftOpen = target.draftOpen;
+            _notifyShareSheet();
+          },
+          onSidebarChanged: (snapshot) {
+            _activeSidebar = snapshot;
+            if (_selected case final key?) {
+              _cachedSidebars[key] = snapshot;
+            }
+            _notifyShareSheet();
           },
           connectionLabel: connectionLabel,
           reconnect: () => _session?.retry(),
@@ -724,4 +1059,89 @@ class _ScanPageState extends State<ScanPage> {
       ),
     ),
   );
+}
+
+class _ShareSheetModal extends ConsumerStatefulWidget {
+  const _ShareSheetModal({
+    required this.revision,
+    required this.busy,
+    required this.resolveSelectedKey,
+    required this.buildComputerInfo,
+    required this.onSelectComputer,
+    required this.onSelectTarget,
+    required this.onPair,
+    required this.onClose,
+  });
+
+  final ValueNotifier<int> revision;
+  final bool Function() busy;
+  final String? Function(List<ComputerProfile> computers) resolveSelectedKey;
+  final ShareComputerTargetInfo Function(ComputerProfile computer)
+  buildComputerInfo;
+  final ValueChanged<ComputerProfile> onSelectComputer;
+  final void Function(IncomingShareBatch batch, ShareTargetSelection selection)
+  onSelectTarget;
+  final VoidCallback onPair;
+  final VoidCallback onClose;
+
+  @override
+  ConsumerState<_ShareSheetModal> createState() => _ShareSheetModalState();
+}
+
+class _ShareSheetModalState extends ConsumerState<_ShareSheetModal> {
+  bool _popping = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final batch = ref.watch(shareReceiverProvider);
+    if (batch == null) {
+      if (!_popping) {
+        _popping = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          }
+        });
+      }
+      return const SizedBox.shrink();
+    }
+    final computersAsync = ref.watch(computersProvider);
+    final computers = computersAsync.value ?? const [];
+    return ValueListenableBuilder<int>(
+      valueListenable: widget.revision,
+      builder: (context, _, _) {
+        final selectedKey = widget.resolveSelectedKey(computers);
+        final selectedComputer = selectedKey == null
+            ? null
+            : computers
+                  .where((entry) => entry.computerKey == selectedKey)
+                  .firstOrNull;
+        final info = selectedComputer == null
+            ? null
+            : widget.buildComputerInfo(selectedComputer);
+        final maxHeight = MediaQuery.sizeOf(context).height * .88;
+        return ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: maxHeight > 0 ? maxHeight : double.infinity,
+          ),
+          child: ShareTargetSheet(
+            batch: batch,
+            computers: computers,
+            computersLoading:
+                computersAsync.isLoading && !computersAsync.hasValue,
+            selectedComputerKey: selectedKey,
+            computerInfo: info,
+            busy: widget.busy(),
+            onSelectComputer: widget.onSelectComputer,
+            onRemoveImage: (index) =>
+                ref.read(shareReceiverProvider.notifier).removeImageAt(index),
+            onSelectTarget: (selection) =>
+                widget.onSelectTarget(batch, selection),
+            onPair: widget.onPair,
+            onClose: widget.onClose,
+          ),
+        );
+      },
+    );
+  }
 }

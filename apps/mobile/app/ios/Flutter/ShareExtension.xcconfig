@@ -1,0 +1,13 @@
+// ShareExtension 与 App Group 共享构建配置。
+// 默认开启：iOS 模拟器构建和付费 Apple Developer 真机均会自动编译并嵌入 ShareExtension.appex。
+//
+// 免费个人 Apple ID 安装真机（不支持 App Group / 扩展签名）时，可在未入库的
+// ios/Flutter/LocalSigning.xcconfig 或命令行传入以下覆盖变量关闭 App Group 与扩展嵌入：
+//   PIGCODE_RUNNER_ENTITLEMENTS =
+//   PIGCODE_SHARE_EXTENSION_ENTITLEMENTS =
+//   PIGCODE_DISABLE_SHARE_EXTENSION = 1
+PIGCODE_APP_GROUP = group.com.pigcode.mobile
+PIGCODE_APNS_ENTITLEMENTS = Runner/Runner.entitlements
+PIGCODE_RUNNER_ENTITLEMENTS = $(PIGCODE_APNS_ENTITLEMENTS)
+PIGCODE_SHARE_EXTENSION_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements
+PIGCODE_DISABLE_SHARE_EXTENSION = 0

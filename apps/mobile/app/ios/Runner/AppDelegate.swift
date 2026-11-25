@@ -16,6 +16,18 @@ import UserNotifications
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     MobileReminders.shared.attach(engineBridge.applicationRegistrar.messenger())
+    MobileShareReceiver.shared.attach(engineBridge.applicationRegistrar.messenger())
+  }
+
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    if MobileShareReceiver.shared.handleIncomingURL(url) {
+      return true
+    }
+    return super.application(app, open: url, options: options)
   }
 
   override func application(

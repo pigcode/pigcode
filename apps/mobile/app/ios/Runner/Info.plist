@@ -28,8 +28,23 @@
 	<string>扫描电脑上的 Pigcode 配对二维码，或拍照发送给 Agent。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>选择相册中的图片或截图发送给 Agent。</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.pigcode.mobile</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pigcode</string>
+			</array>
+		</dict>
+	</array>
 	<key>PigcodeAPNSEnvironment</key>
 	<string>$(PIGCODE_APNS_ENVIRONMENT)</string>
+	<key>PigcodeAppGroup</key>
+	<string>$(PIGCODE_APP_GROUP)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

@@ -11,6 +11,7 @@ import 'mobile_status_dot.dart';
 import 'mobile_surfaces.dart';
 import 'new_thread_draft.dart';
 import 'offline_cache.dart';
+import 'share/share_receiver.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
@@ -98,7 +99,11 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.deviceId,
     this.cache,
     this.openReminder,
+    this.openShareTarget,
+    this.liveShare,
     this.onVisibleThread,
+    this.onActiveTargetChanged,
+    this.onSidebarChanged,
     this.presented = true,
   });
 
@@ -107,7 +112,12 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final String? deviceId;
   final ComputerOfflineCache? cache;
   final MobileReminder? openReminder;
+  final ShareNavigationRequest? openShareTarget;
+  final LiveShareInjection? liveShare;
   final ValueChanged<String?>? onVisibleThread;
+  final ValueChanged<({String? threadId, bool draftOpen})>?
+  onActiveTargetChanged;
+  final ValueChanged<SidebarSnapshot?>? onSidebarChanged;
   final bool presented;
   final bool connected;
   final String connectionLabel;
@@ -121,7 +131,22 @@ class MobileWorkspace extends ConsumerStatefulWidget {
 
 class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
   SidebarSnapshot? _lastSidebar;
+  SidebarSnapshot? _reportedSidebar;
   bool _loadingCache = false;
+
+  void _reportSidebarIfChanged() {
+    if (identical(_reportedSidebar, _lastSidebar) ||
+        widget.onSidebarChanged == null) {
+      return;
+    }
+    final snapshot = _lastSidebar;
+    _reportedSidebar = snapshot;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_reportedSidebar, snapshot)) {
+        widget.onSidebarChanged?.call(snapshot);
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -161,6 +186,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     final connected = widget.connected && data?.online == true;
     final online = connected && data?.snapshot != null;
     if (online) _lastSidebar = data!.snapshot;
+    _reportSidebarIfChanged();
     if (provider != null) {
       ref.listen(provider, (previous, next) {
         final snapshot = next.snapshot;
@@ -197,7 +223,9 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
       onComputers: widget.onComputers,
       onSettings: widget.onSettings,
       openReminder: widget.openReminder,
+      openShareTarget: widget.openShareTarget,
       onVisibleThread: widget.onVisibleThread,
+      onActiveTargetChanged: widget.onActiveTargetChanged,
       presented: widget.presented,
       sidebarCommands: online && connection?.supportsSidebarCommands == true
           ? connection!.sidebarCommands
@@ -215,6 +243,9 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                   fallbackProjectId: fallbackProjectId,
                   onAccepted: onAccepted,
                   onProjectNameChanged: onProjectNameChanged,
+                  liveShare: widget.liveShare?.forNewThread == true
+                      ? widget.liveShare
+                      : null,
                 )
           : null,
       timeline: (thread, online, onSynced, presentation) => TimelinePane(
@@ -229,6 +260,12 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         computerKey: computer?.computerKey,
         onSynced: onSynced,
         onRunChangesChanged: presentation.onRunChangesChanged,
+        liveShare:
+            widget.liveShare != null &&
+                !widget.liveShare!.forNewThread &&
+                widget.liveShare!.threadId == thread.id
+            ? widget.liveShare
+            : null,
         reading: (
           visible: presentation.visible,
           visit: presentation.visit,
@@ -257,7 +294,9 @@ class WorkspaceView extends StatefulWidget {
     this.loadingCache = false,
     this.offlineDraftAvailable = false,
     this.openReminder,
+    this.openShareTarget,
     this.onVisibleThread,
+    this.onActiveTargetChanged,
     this.presented = true,
     this.sidebarCommands,
   });
@@ -267,7 +306,10 @@ class WorkspaceView extends StatefulWidget {
   final bool loadingCache;
   final bool offlineDraftAvailable;
   final MobileReminder? openReminder;
+  final ShareNavigationRequest? openShareTarget;
   final ValueChanged<String?>? onVisibleThread;
+  final ValueChanged<({String? threadId, bool draftOpen})>?
+  onActiveTargetChanged;
   final bool presented;
   final MobileSidebarCommands? sidebarCommands;
   final String computerName;
@@ -314,6 +356,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   String? _reminderThread;
   bool _reminderUnavailable = false;
   String? _visibleThread;
+  ({String? threadId, bool draftOpen})? _reportedActiveTarget;
   String? _syncedThread;
   RunChangesShortcut? _runChanges;
   int _visit = 0;
@@ -332,6 +375,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   void initState() {
     super.initState();
     _openNotification(widget.openReminder);
+    _applyShareTarget(widget.openShareTarget);
     _selectRecentIfNeeded();
   }
 
@@ -347,6 +391,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _openNotification(widget.openReminder);
       _selectRecentIfNeeded();
     }
+    if (oldWidget.openShareTarget?.id != widget.openShareTarget?.id) {
+      _applyShareTarget(widget.openShareTarget);
+      _selectRecentIfNeeded();
+    }
     if (oldWidget.snapshot != widget.snapshot) {
       if (widget.snapshot?.threads.any(
             (thread) => thread.id == _acceptedThread?.id,
@@ -359,6 +407,24 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (_reminderThread != null && widget.online) {
       _reminderUnavailable = _thread == null;
       if (!_reminderUnavailable) _reminderThread = null;
+    }
+  }
+
+  void _applyShareTarget(ShareNavigationRequest? request) {
+    if (request == null) return;
+    _reminderThread = null;
+    _reminderUnavailable = false;
+    _open = false;
+    if (request.openDraft) {
+      _draftOpen = true;
+      _draftProject = null;
+      _syncedThread = null;
+      _runChanges = null;
+    } else if (request.threadId case final id?) {
+      _draftOpen = false;
+      _acceptedThread = null;
+      _visit++;
+      _selectThread(id);
     }
   }
 
@@ -390,6 +456,19 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _reportVisible(
       widget.online && !_open && !_draftOpen && _syncedThread == id ? id : null,
     );
+    final activeTarget = (
+      threadId: _draftOpen ? null : (id ?? _threadId),
+      draftOpen: _draftOpen,
+    );
+    if (_reportedActiveTarget != activeTarget &&
+        widget.onActiveTargetChanged != null) {
+      _reportedActiveTarget = activeTarget;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _reportedActiveTarget == activeTarget) {
+          widget.onActiveTargetChanged?.call(activeTarget);
+        }
+      });
+    }
   }
 
   void _selectThread(String? id) {

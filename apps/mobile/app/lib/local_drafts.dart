@@ -206,6 +206,19 @@ class ThreadDraftStorage {
         await _write(_ThreadDraft(old.text, old.withdrawal, attachments));
       });
 
+  Future<void> appendAttachments(List<DraftAttachmentRecord> added) =>
+      withLocalDrafts(() async {
+        if (!_lease.valid || added.isEmpty) return;
+        final old = await _read();
+        final merged = <DraftAttachmentRecord>[...old.attachments, ...added];
+        final capped = merged.length > mobileMaxMessageAttachments
+            ? merged.sublist(0, mobileMaxMessageAttachments)
+            : merged;
+        await _write(
+          _ThreadDraft(old.text, old.withdrawal, List.unmodifiable(capped)),
+        );
+      });
+
   Future<void> clearIfMatches(String text) =>
       clearIfMatchesContent(text);
 
