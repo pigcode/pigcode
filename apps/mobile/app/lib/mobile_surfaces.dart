@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'composer/composer_tokens.dart';
 import 'theme_colors.dart';
 
-const mobileComposerTextStyle = TextStyle(fontSize: 16, height: 1.375);
+const mobileComposerTextStyle = ComposerType.input;
 
 // 在方案 D 的侧栏背景与实际会话行上共同校准 Flutter 的阴影。
 BoxShadow mobileDrawerShadow(Brightness brightness) =>
@@ -29,33 +30,8 @@ const mobileSheetShadow = BoxShadow(
 BoxDecoration mobileComposerSurface(
   Brightness brightness, {
   bool offline = false,
-}) {
-  final dark = brightness == Brightness.dark;
-  final colors = dark ? pigcodeDark : pigcodeLight;
-  return BoxDecoration(
-    color: offline
-        ? Color.alphaBlend(colors.surfaceSunken, colors.background)
-        : colors.surface,
-    borderRadius: BorderRadius.circular(22),
-    border: Border.all(color: colors.strongBorder),
-    // 参数以方案 D 在 3× 视口中的阴影渐变为准。
-    boxShadow: [
-      dark
-          ? const BoxShadow(
-              color: Color(0x1E000000),
-              offset: Offset(0, 1.77),
-              blurRadius: 11.83,
-              spreadRadius: .61,
-            )
-          : const BoxShadow(
-              color: Color(0x0F151515),
-              offset: Offset(0, 2.18),
-              blurRadius: 7.92,
-              spreadRadius: .24,
-            ),
-    ],
-  );
-}
+  bool focused = false,
+}) => ComposerSurface.card(brightness, focused: focused, offline: offline);
 
 BoxDecoration mobileRaisedSurface(
   Brightness brightness, {

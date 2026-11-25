@@ -1,13 +1,11 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'composer/composer_tokens.dart';
+import 'composer/mobile_composer_card.dart';
 import 'mobile_sheet.dart';
-import 'mobile_surfaces.dart';
 import 'new_thread_draft_state.dart';
-import 'theme_colors.dart';
 import 'workspace_icon.dart';
 
 final _draftOptionsProvider = FutureProvider.autoDispose
@@ -203,8 +201,38 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         ? item.agentName
         : '${item.label} · ${item.agentName}';
 
-    final modelPicker = _DraftChip(
-      compact: true,
+    final projectPicker = MobileComposerChip(
+      icon: WorkspaceGlyph.folder,
+      variant: MobileComposerChipVariant.header,
+      label: projectName ?? '选择项目',
+      tooltip: '草稿项目',
+      onTap: !view.working && projects.isNotEmpty
+          ? () => pick('选择项目', [
+              for (final item in projects) (item.id, item.name),
+            ], (current, id) => current.copyWith(projectId: id))
+          : null,
+    );
+
+    final instancePicker = MobileComposerChip(
+      label: instance == null
+          ? form.instanceLabel ??
+                (form.instanceId == null ? '选择 Agent 实例' : '已选 Agent 实例')
+          : instanceLabel(instance),
+      tooltip: '草稿 Agent 实例',
+      onTap: !view.working && instances.isNotEmpty
+          ? () => pick(
+              '选择 Agent 实例',
+              [for (final item in instances) (item, instanceLabel(item))],
+              (current, item) => current.copyWith(
+                instanceId: item.instanceId,
+                instanceLabel: item.label,
+                resetModel: true,
+              ),
+            )
+          : null,
+    );
+
+    final modelPicker = MobileComposerChip(
       label:
           model?.label ??
           form.modelLabel ??
@@ -224,134 +252,89 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           : null,
     );
 
-    final chipHeight = _DraftChip.visualHeight(context, compact: false);
-    final hitSize = Theme.of(context).platform == TargetPlatform.android
-        ? 48.0
-        : 44.0;
-    final chipOverhang = math.max(0.0, hitSize - chipHeight) / 2;
-    final dock = SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(12, math.max(0, 6 - chipOverhang), 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              spacing: 8,
-              children: [
-                _DraftChip(
-                  icon: WorkspaceGlyph.folder,
-                  label: projectName ?? '选择项目',
-                  tooltip: '草稿项目',
-                  onTap: !view.working && projects.isNotEmpty
-                      ? () => pick('选择项目', [
-                          for (final item in projects) (item.id, item.name),
-                        ], (current, id) => current.copyWith(projectId: id))
-                      : null,
-                ),
-                _DraftChip(
-                  label: instance == null
-                      ? form.instanceLabel ??
-                            (form.instanceId == null
-                                ? '选择 Agent 实例'
-                                : '已选 Agent 实例')
-                      : instanceLabel(instance),
-                  tooltip: '草稿 Agent 实例',
-                  onTap: !view.working && instances.isNotEmpty
-                      ? () => pick(
-                          '选择 Agent 实例',
-                          [
-                            for (final item in instances)
-                              (item, instanceLabel(item)),
-                          ],
-                          (current, item) => current.copyWith(
-                            instanceId: item.instanceId,
-                            instanceLabel: item.label,
-                            resetModel: true,
-                          ),
-                        )
-                      : null,
-                ),
-                _DraftChip(
-                  label: permission == null
-                      ? '选择权限'
-                      : _permissionName(permission),
-                  tooltip: '草稿权限',
-                  onTap: !view.working && instance != null
-                      ? () => pick(
-                          '选择权限模式',
-                          [
-                            for (final item in instance.permissionModes)
-                              (item, _permissionName(item)),
-                          ],
-                          (current, mode) =>
-                              current.copyWith(permissionMode: mode),
-                        )
-                      : null,
-                ),
+    final permissionPicker = MobileComposerChip(
+      label: permission == null ? '选择权限' : _permissionName(permission),
+      tooltip: '草稿权限',
+      warning: permission == MobileDraftPermission.fullAccess,
+      onTap: !view.working && instance != null
+          ? () => pick(
+              '选择权限模式',
+              [
+                for (final item in instance.permissionModes)
+                  (item, _permissionName(item)),
               ],
-            ),
+              (current, mode) => current.copyWith(permissionMode: mode),
+            )
+          : null,
+    );
+
+    final banners = <Widget>[
+      if (online && (options?.isLoading == true || models?.isLoading == true))
+        const LinearProgressIndicator(),
+      if (online &&
+          (view.selectionUnavailable ||
+              options?.hasError == true ||
+              models?.hasError == true))
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: TextButton(
+            onPressed: () {
+              if (optionsKey != null) ref.invalidate(optionsKey);
+              if (modelsKey != null) ref.invalidate(modelsKey);
+            },
+            child: const Text('重新读取可用选项'),
           ),
-          if (online &&
-              (options?.isLoading == true || models?.isLoading == true))
-            const LinearProgressIndicator(),
-          if (online &&
-              (view.selectionUnavailable ||
-                  options?.hasError == true ||
-                  models?.hasError == true))
+        ),
+      if (online && options?.value?.instances.isEmpty == true)
+        const Text('电脑上暂无可用的 Agent 实例。'),
+      if (view.notice case final notice?) _DraftNotice(notice),
+      if (view.pending != null)
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('首发结果待确认'),
             TextButton(
-              onPressed: () {
-                if (optionsKey != null) ref.invalidate(optionsKey);
-                if (modelsKey != null) ref.invalidate(modelsKey);
-              },
-              child: const Text('重新读取可用选项'),
+              onPressed: online && !view.working ? () => actions.check() : null,
+              child: const Text('查回执'),
             ),
-          if (online && options?.value?.instances.isEmpty == true)
-            const Text('电脑上暂无可用的 Agent 实例。'),
-          if (view.notice case final notice?) _DraftNotice(notice),
-          if (view.pending != null)
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                const Text('首发结果待确认'),
-                TextButton(
-                  onPressed: online && !view.working
-                      ? () => actions.check()
-                      : null,
-                  child: const Text('查回执'),
-                ),
-                TextButton(
-                  onPressed: online && !view.working
-                      ? () => actions.check(retry: true)
-                      : null,
-                  child: const Text('用原编号重试'),
-                ),
-              ],
+            TextButton(
+              onPressed: online && !view.working
+                  ? () => actions.check(retry: true)
+                  : null,
+              child: const Text('用原编号重试'),
             ),
-          if (form.text.length > mobileCommandTextLimit)
-            const _DraftNotice('首条消息超过长度上限，请缩短后发送。'),
-          SizedBox(height: math.max(0, 8 - chipOverhang)),
-          _DraftText(
-            modelPicker: modelPicker,
-            text: form.text,
-            working: view.working,
-            onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
-            onSend: allowed
-                ? () => actions.submit(
-                    NewThreadForm(
-                      text: form.text,
-                      projectId: project.id,
-                      instanceId: instance.instanceId,
-                      modelId: selectedModel,
-                      instanceLabel: displayed.instanceLabel,
-                      modelLabel: displayed.modelLabel,
-                      permissionMode: permission,
-                    ),
-                  )
-                : null,
-          ),
-        ],
+          ],
+        ),
+      if (form.text.length > mobileCommandTextLimit)
+        const _DraftNotice('首条消息超过长度上限，请缩短后发送。'),
+    ];
+
+    final dock = SingleChildScrollView(
+      child: _DraftComposer(
+        header: projectPicker,
+        banners: banners,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: ComposerSpace.toolbarGap,
+          children: [instancePicker, modelPicker, permissionPicker],
+        ),
+        text: form.text,
+        offline: !online,
+        working: view.working,
+        onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
+        onSend: allowed
+            ? () => actions.submit(
+                NewThreadForm(
+                  text: form.text,
+                  projectId: project.id,
+                  instanceId: instance.instanceId,
+                  modelId: selectedModel,
+                  instanceLabel: displayed.instanceLabel,
+                  modelLabel: displayed.modelLabel,
+                  permissionMode: permission,
+                ),
+              )
+            : null,
       ),
     );
     return LayoutBuilder(
@@ -359,7 +342,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         final showPrompt =
             form.text.trim().isEmpty &&
             MediaQuery.viewInsetsOf(context).bottom == 0 &&
-            constraints.maxHeight >= 320;
+            constraints.maxHeight >= ComposerType.heroMinViewportHeight;
         return Column(
           children: [
             Expanded(
@@ -369,10 +352,10 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
                         '做点什么？',
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(
-                              fontSize: 26,
+                              fontSize: ComposerType.heroFontSize,
                               fontWeight: FontWeight.w500,
                               letterSpacing: 0,
-                              height: 1.45,
+                              height: ComposerType.heroHeight,
                               leadingDistribution: TextLeadingDistribution.even,
                             ),
                       )
@@ -418,151 +401,43 @@ Future<T?> _choose<T>(
   ),
 );
 
-class _DraftChip extends StatelessWidget {
-  const _DraftChip({
-    required this.label,
-    required this.tooltip,
-    this.compact = false,
-    this.icon,
-    this.onTap,
-  });
-
-  final WorkspaceGlyph? icon;
-  final String label;
-  final String tooltip;
-  final bool compact;
-  final VoidCallback? onTap;
-
-  static double visualHeight(BuildContext context, {required bool compact}) =>
-      math.max(
-        compact ? 30 : 34,
-        MediaQuery.textScalerOf(context).scale(compact ? 13 : 14) * 1.45 + 8,
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
-    final palette = theme.brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    final height = visualHeight(context, compact: compact);
-    final hitSize = math.max(
-      height,
-      theme.platform == TargetPlatform.android ? 48.0 : 44.0,
-    );
-    final overhang = (hitSize - height) / 2;
-    final foreground = onTap == null
-        ? colors.onSurfaceVariant.withValues(alpha: .6)
-        : compact
-        ? colors.onSurfaceVariant
-        : colors.onSurface;
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        enabled: onTap != null,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const StadiumBorder(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: hitSize),
-            child: SizedBox(
-              height: hitSize,
-              child: Align(
-                widthFactor: 1,
-                // 小胶囊的点击区到输入卡片底边为止。
-                alignment: compact && overhang > 7
-                    ? Alignment(0, 1 - 7 / overhang)
-                    : Alignment.center,
-                child: Container(
-                  height: height,
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 12),
-                  decoration: BoxDecoration(
-                    color: compact ? Colors.transparent : colors.surface,
-                    borderRadius: BorderRadius.circular(height / 2),
-                    border: Border.all(
-                      color: compact ? Colors.transparent : palette.border,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (icon case final icon?) ...[
-                        IconTheme(
-                          data: IconThemeData(color: palette.muted),
-                          child: WorkspaceIcon(icon, size: 15),
-                        ),
-                        const SizedBox(width: 5),
-                      ],
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: compact ? 13 : 14,
-                            letterSpacing: theme.platform == TargetPlatform.iOS
-                                ? (compact ? -.12 : -.2)
-                                : 0,
-                            height: 1.45,
-                            color: foreground,
-                            leadingDistribution: TextLeadingDistribution.even,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 5),
-                      IconTheme(
-                        data: IconThemeData(color: palette.muted),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.chevronDown,
-                          size: 15,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DraftNotice extends StatelessWidget {
   const _DraftNotice(this.text);
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(4, 2, 4, 6),
-    child: Semantics(liveRegion: true, child: Text(text)),
+  Widget build(BuildContext context) => Semantics(
+    liveRegion: true,
+    child: Text(text, style: Theme.of(context).textTheme.bodySmall),
   );
 }
 
-class _DraftText extends StatefulWidget {
-  const _DraftText({
-    required this.modelPicker,
+class _DraftComposer extends StatefulWidget {
+  const _DraftComposer({
+    required this.header,
+    required this.banners,
+    required this.trailing,
     required this.text,
+    required this.offline,
     required this.working,
     required this.onChanged,
     this.onSend,
   });
 
-  final Widget modelPicker;
+  final Widget header;
+  final List<Widget> banners;
+  final Widget trailing;
   final String text;
+  final bool offline;
   final bool working;
   final ValueChanged<String> onChanged;
   final VoidCallback? onSend;
 
   @override
-  State<_DraftText> createState() => _DraftTextState();
+  State<_DraftComposer> createState() => _DraftComposerState();
 }
 
-class _DraftTextState extends State<_DraftText> {
+class _DraftComposerState extends State<_DraftComposer> {
   late final TextEditingController _controller;
 
   @override
@@ -572,7 +447,7 @@ class _DraftTextState extends State<_DraftText> {
   }
 
   @override
-  void didUpdateWidget(covariant _DraftText oldWidget) {
+  void didUpdateWidget(covariant _DraftComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_controller.text != widget.text) {
       _controller.value = TextEditingValue(
@@ -589,90 +464,23 @@ class _DraftTextState extends State<_DraftText> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    final hitSize = theme.platform == TargetPlatform.android ? 48.0 : 44.0;
-    final modelHeight = _DraftChip.visualHeight(context, compact: true);
-    final modelTarget = math.max(hitSize, modelHeight);
-    const sendDiameter = 36.0;
-    final sendOverhang = (hitSize - sendDiameter) / 2;
-    return DecoratedBox(
-      decoration: mobileComposerSurface(theme.brightness),
-      child: Stack(
-        children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              15,
-              7,
-              7 + sendDiameter + 8,
-              7 + modelHeight,
-            ),
-            child: TextField(
-              key: const ValueKey('first-message-input'),
-              controller: _controller,
-              onChanged: widget.onChanged,
-              readOnly: widget.working,
-              minLines: 1,
-              maxLines: 5,
-              keyboardType: TextInputType.multiline,
-              style: mobileComposerTextStyle,
-              decoration: InputDecoration(
-                hintText: '描述要做的事',
-                hintStyle: mobileComposerTextStyle.copyWith(
-                  color: colors.faint,
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 7),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-          PositionedDirectional(
-            top: 7 - sendOverhang,
-            end: 7 - sendOverhang,
-            child: SizedBox.square(
-              dimension: hitSize,
-              child: IconButton(
-                onPressed: widget.onSend,
-                tooltip: '发送首条消息',
-                padding: EdgeInsets.zero,
-                icon: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.onSend == null
-                        ? colors.selectedOnSurface
-                        : colors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: SizedBox.square(
-                    dimension: sendDiameter,
-                    child: Center(
-                      child: IconTheme(
-                        data: IconThemeData(
-                          color: widget.onSend == null
-                              ? colors.faint
-                              : colors.onPrimary,
-                        ),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.arrowUp,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          PositionedDirectional(
-            start: 7,
-            bottom: math.max(0, 7 - (modelTarget - modelHeight) / 2),
-            child: widget.modelPicker,
-          ),
-        ],
+  Widget build(BuildContext context) => MobileComposerCard(
+    controller: _controller,
+    inputKey: const ValueKey('first-message-input'),
+    hintText: '描述要做的事',
+    header: widget.header,
+    banners: widget.banners,
+    trailing: widget.trailing,
+    offline: widget.offline,
+    readOnly: widget.working,
+    onChanged: widget.onChanged,
+    actions: [
+      MobileComposerActionButton(
+        tooltip: '发送首条消息',
+        glyph: WorkspaceGlyph.arrowUp,
+        offline: widget.offline,
+        onPressed: widget.onSend,
       ),
-    );
-  }
+    ],
+  );
 }
