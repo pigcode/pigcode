@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../attachments/image_compressor.dart';
+import '../mobile_glass.dart';
 import '../mobile_sheet.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
@@ -385,9 +386,12 @@ class MobileComposerSuggestionPanel extends StatelessWidget {
 
     return Padding(
       padding: ComposerSpace.suggestionPanelMargin,
-      child: DecoratedBox(
+      child: MobileGlassSurface(
         key: panelKey,
-        decoration: ComposerSurface.suggestionPanel(brightness),
+        borderRadius: radius,
+        blurSigma: 20,
+        tintOpacity: brightness == Brightness.dark ? 0.76 : 0.84,
+        shadows: ComposerSurface.suggestionShadow(brightness),
         child: ClipRRect(
           borderRadius: radius,
           child: Material(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../app_theme.dart';
+import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
@@ -124,19 +125,21 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
         titleSpacing: 0,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
-        leadingWidth: touch + 8,
+        leadingWidth: touch + 16,
         leading: Align(
           alignment: AlignmentDirectional.centerStart,
-          child: SizedBox.square(
-            dimension: touch,
-            child: IconButton(
-              tooltip: '返回',
-              onPressed: () => Navigator.maybePop(context),
-              alignment: AlignmentDirectional.centerStart,
-              padding: const EdgeInsetsDirectional.only(start: 6),
-              icon: const RotatedBox(
-                quarterTurns: 1,
-                child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 24),
+          child: MobileGlassChromeButton(
+            padding: const EdgeInsetsDirectional.only(start: 10),
+            child: SizedBox.square(
+              dimension: 40,
+              child: IconButton(
+                tooltip: '返回',
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.maybePop(context),
+                icon: const RotatedBox(
+                  quarterTurns: 1,
+                  child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 20),
+                ),
               ),
             ),
           ),
@@ -155,7 +158,7 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
             }
           },
         ),
-        actions: [SizedBox(width: touch + 8)],
+        actions: [SizedBox(width: touch + 16)],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(
@@ -229,15 +232,8 @@ class _WorkbenchSegmentedControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(TimelineRadius.full),
-        border: Border.all(color: colors.border),
-      ),
+    return MobileGlassSurface(
+      blurSigma: 16,
       child: Padding(
         padding: const EdgeInsets.all(3),
         child: Row(

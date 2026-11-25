@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import '../mobile_glass.dart';
 import '../mobile_sheet.dart';
-import '../mobile_surfaces.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'agent_badge_icon.dart';
@@ -297,8 +297,7 @@ Future<bool> showFullAccessConfirmDialog(BuildContext context) async {
   final touch = timelineTouchHeight(context);
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      backgroundColor: colors.surface,
+    builder: (dialogContext) => MobileGlassDialog(
       title: Text(
         '打开完全访问？',
         style: ComposerType.sheetTitle(colors.foreground, theme.platform),
@@ -376,27 +375,17 @@ Future<void> showMobileModelPickerSheet({
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: availableHeight),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: radius,
-              boxShadow: const [mobileSheetShadow],
-            ),
-            child: ClipRRect(
-              borderRadius: radius,
-              child: Material(
-                type: MaterialType.transparency,
-                child: SafeArea(
-                  top: false,
-                  child: _ModelPickerSheetBody(
-                    connection: connection,
-                    selection: selection,
-                    onSelectModel: onSelectModel,
-                    onPermissionMode: onPermissionMode,
-                    onPlanMode: onPlanMode,
-                    onClose: () => Navigator.pop(sheetContext),
-                  ),
-                ),
+          child: MobileGlassSheetSurface(
+            borderRadius: radius,
+            child: SafeArea(
+              top: false,
+              child: _ModelPickerSheetBody(
+                connection: connection,
+                selection: selection,
+                onSelectModel: onSelectModel,
+                onPermissionMode: onPermissionMode,
+                onPlanMode: onPlanMode,
+                onClose: () => Navigator.pop(sheetContext),
               ),
             ),
           ),
@@ -697,17 +686,9 @@ class _ModelPickerSheetBodyState extends ConsumerState<_ModelPickerSheetBody> {
                       ),
                     ),
                   ),
-                  SizedBox.square(
-                    dimension: touch,
-                    child: IconButton(
-                      tooltip: '关闭弹层',
-                      color: colors.foreground,
-                      onPressed: widget.onClose,
-                      icon: const WorkspaceIcon(
-                        WorkspaceGlyph.close,
-                        size: ComposerControl.sheetCloseIcon,
-                      ),
-                    ),
+                  MobileSheetCloseButton(
+                    touchDimension: touch,
+                    onPressed: widget.onClose,
                   ),
                 ],
               ),

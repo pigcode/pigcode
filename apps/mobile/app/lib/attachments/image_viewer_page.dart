@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import '../mobile_glass.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 
@@ -162,34 +163,61 @@ class _ImageViewerPageState extends State<ImageViewerPage> {
                   ),
                   child: Row(
                     children: [
-                      const SizedBox(width: TimelineSpace.x2),
-                      Text(
-                        '${_currentIndex + 1} / ${widget.items.length}',
-                        style: TimelineType.metaStyle(
-                          Colors.white,
-                          weight: FontWeight.w500,
-                        ).copyWith(fontFeatures: TimelineType.tabular),
-                      ),
-                      const SizedBox(width: TimelineSpace.x4),
-                      Expanded(
-                        child: Text(
-                          current.fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TimelineType.metaStyle(Colors.white70),
+                      Flexible(
+                        child: MobileGlassSurface(
+                          blurSigma: 16,
+                          darkOverride: true,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: TimelineSpace.x6,
+                              vertical: TimelineSpace.x3,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${_currentIndex + 1} / ${widget.items.length}',
+                                  style: TimelineType.metaStyle(
+                                    Colors.white,
+                                    weight: FontWeight.w500,
+                                  ).copyWith(
+                                    fontFeatures: TimelineType.tabular,
+                                  ),
+                                ),
+                                if (current.fileName.isNotEmpty) ...[
+                                  const SizedBox(width: TimelineSpace.x4),
+                                  Flexible(
+                                    child: Text(
+                                      current.fileName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TimelineType.metaStyle(
+                                        Colors.white70,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      SizedBox.square(
-                        dimension: touch,
-                        child: IconButton(
-                          key: ImageViewerPage.closeButtonKey,
-                          tooltip: '关闭预览',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const IconTheme(
-                            data: IconThemeData(color: Colors.white),
-                            child: WorkspaceIcon(
-                              WorkspaceGlyph.close,
-                              size: TimelineIcon.alert,
+                      const SizedBox(width: TimelineSpace.x4),
+                      MobileGlassChromeButton(
+                        darkOverride: true,
+                        child: SizedBox.square(
+                          dimension: touch,
+                          child: IconButton(
+                            key: ImageViewerPage.closeButtonKey,
+                            tooltip: '关闭预览',
+                            padding: EdgeInsets.zero,
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const IconTheme(
+                              data: IconThemeData(color: Colors.white),
+                              child: WorkspaceIcon(
+                                WorkspaceGlyph.close,
+                                size: TimelineIcon.alert,
+                              ),
                             ),
                           ),
                         ),

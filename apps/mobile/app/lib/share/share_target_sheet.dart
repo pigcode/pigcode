@@ -6,7 +6,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 
 import '../composer/composer_tokens.dart';
 import '../mobile_status_dot.dart';
-import '../mobile_surfaces.dart';
+import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/relative_time.dart';
 import '../timeline/timeline_tokens.dart';
@@ -160,20 +160,12 @@ class _ShareTargetSheetState extends State<ShareTargetSheet> {
         if (thread.id != currentThread?.id && matchesQuery(thread)) thread,
     ];
 
-    return DecoratedBox(
+    return MobileGlassSheetSurface(
       key: ShareTargetSheet.sheetKey,
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: radius,
-        boxShadow: const [mobileSheetShadow],
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false,
-            child: Column(
+      borderRadius: radius,
+      child: SafeArea(
+        top: false,
+        child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -241,18 +233,11 @@ class _ShareTargetSheetState extends State<ShareTargetSheet> {
                           ],
                         ),
                       ),
-                      SizedBox.square(
-                        dimension: touch,
-                        child: IconButton(
-                          key: ShareTargetSheet.closeButtonKey,
-                          tooltip: '关闭',
-                          color: colors.foreground,
-                          onPressed: widget.busy ? null : widget.onClose,
-                          icon: const WorkspaceIcon(
-                            WorkspaceGlyph.close,
-                            size: 20,
-                          ),
-                        ),
+                      MobileSheetCloseButton(
+                        buttonKey: ShareTargetSheet.closeButtonKey,
+                        tooltip: '关闭',
+                        touchDimension: touch,
+                        onPressed: widget.busy ? null : widget.onClose,
                       ),
                     ],
                   ),
@@ -537,8 +522,6 @@ class _ShareTargetSheetState extends State<ShareTargetSheet> {
               ],
             ),
           ),
-        ),
-      ),
     );
   }
 

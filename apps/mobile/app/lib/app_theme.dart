@@ -55,6 +55,19 @@ ThemeData pigcodeTheme(Brightness brightness) {
     ),
     cardTheme: CardThemeData(color: colors.surface),
     listTileTheme: ListTileThemeData(selectedTileColor: colors.selected),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      elevation: 2,
+      backgroundColor: brightness == Brightness.dark
+          ? const Color(0xF0262628)
+          : const Color(0xF01C1C1E),
+      contentTextStyle: const TextStyle(
+        color: Colors.white,
+        fontSize: 14,
+        height: 1.4,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
     visualDensity: VisualDensity.standard,
   );
   final text = theme.textTheme;

@@ -9,13 +9,13 @@ import 'package:pigcode_client/pigcode_client.dart';
 import '../app_theme.dart';
 import '../attachments/image_viewer_page.dart';
 import '../composer/composer_tokens.dart';
+import '../mobile_glass.dart';
+import '../mobile_sheet.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../timeline_widgets.dart';
 import '../workspace_icon.dart';
 import 'workbench_utils.dart';
-
-enum _FileMoreAction { copyPath, copyContent }
 
 /// 手机端只读文件查看器：
 /// - 支持代码语法高亮（`re_highlight`）、等宽行号、目标行高亮与自动定位、自动换行/横向滚动、文本选择复制；
@@ -457,19 +457,21 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
         titleSpacing: 0,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
-        leadingWidth: touch + 8,
+        leadingWidth: touch + 14,
         leading: Align(
           alignment: AlignmentDirectional.centerStart,
-          child: SizedBox.square(
-            dimension: touch,
-            child: IconButton(
-              tooltip: '返回',
-              onPressed: () => Navigator.maybePop(context),
-              alignment: AlignmentDirectional.centerStart,
-              padding: const EdgeInsetsDirectional.only(start: 6),
-              icon: const RotatedBox(
-                quarterTurns: 1,
-                child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 24),
+          child: MobileGlassChromeButton(
+            padding: const EdgeInsetsDirectional.only(start: 10),
+            child: SizedBox.square(
+              dimension: 40,
+              child: IconButton(
+                tooltip: '返回',
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.maybePop(context),
+                icon: const RotatedBox(
+                  quarterTurns: 1,
+                  child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 20),
+                ),
               ),
             ),
           ),
@@ -503,69 +505,109 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
           ],
         ),
         actions: [
-          if (!_loading && _error == null && _mode == 'text' && _isMarkdown)
-            TextButton(
-              key: MobileFileViewerScreen.markdownToggleKey,
-              style: TextButton.styleFrom(
-                foregroundColor: colors.secondaryText,
-                minimumSize: Size(0, touch),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+          Center(
+            child: MobileGlassChromeButton(
+              padding: const EdgeInsetsDirectional.only(end: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!_loading &&
+                      _error == null &&
+                      _mode == 'text' &&
+                      _isMarkdown)
+                    TextButton(
+                      key: MobileFileViewerScreen.markdownToggleKey,
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.secondaryText,
+                        minimumSize: const Size(0, 40),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                      ),
+                      onPressed: () {
+                        setState(() => _markdownPreview = !_markdownPreview);
+                        if (!_markdownPreview && widget.initialLine != null) {
+                          _scrolledToInitialLine = false;
+                          _scheduleScrollToLine(widget.initialLine!);
+                        }
+                      },
+                      child: Text(_markdownPreview ? '源码' : '预览'),
+                    ),
+                  if (showSourceControls)
+                    SizedBox.square(
+                      dimension: 40,
+                      child: IconButton(
+                        key: MobileFileViewerScreen.wrapToggleKey,
+                        tooltip: _wrap ? '切换为横向滚动' : '切换为自动换行',
+                        padding: EdgeInsets.zero,
+                        onPressed: () => setState(() => _wrap = !_wrap),
+                        color: _wrap
+                            ? ComposerSurface.accent(theme.brightness)
+                            : colors.muted,
+                        icon: const Icon(Icons.wrap_text, size: 19),
+                      ),
+                    ),
+                  if (!_loading &&
+                      _error == null &&
+                      _mode == 'image' &&
+                      _imageData != null)
+                    SizedBox.square(
+                      dimension: 40,
+                      child: IconButton(
+                        key: MobileFileViewerScreen.fullscreenImageKey,
+                        tooltip: '全屏预览',
+                        padding: EdgeInsets.zero,
+                        onPressed: _openFullscreenImage,
+                        color: colors.foreground,
+                        icon: const Icon(Icons.fullscreen_rounded, size: 21),
+                      ),
+                    ),
+                  SizedBox.square(
+                    dimension: 40,
+                    child: IconButton(
+                      key: MobileFileViewerScreen.moreMenuKey,
+                      tooltip: '更多操作',
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        unawaited(
+                          showMobileSheet<void>(
+                            context,
+                            title: title,
+                            content: (sheet) => SliverList.list(
+                              children: [
+                                MobileSheetAction(
+                                  label: '复制路径',
+                                  glyph: WorkspaceGlyph.copy,
+                                  onTap: () {
+                                    Navigator.pop(sheet);
+                                    unawaited(_copyPath());
+                                  },
+                                ),
+                                if (_mode == 'text' &&
+                                    !_loading &&
+                                    _error == null)
+                                  MobileSheetAction(
+                                    label: '复制全文',
+                                    icon: Icons.article_outlined,
+                                    onTap: () {
+                                      Navigator.pop(sheet);
+                                      unawaited(_copyContent());
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      icon: Icon(
+                        Icons.more_horiz,
+                        color: colors.foreground,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              onPressed: () {
-                setState(() => _markdownPreview = !_markdownPreview);
-                if (!_markdownPreview && widget.initialLine != null) {
-                  _scrolledToInitialLine = false;
-                  _scheduleScrollToLine(widget.initialLine!);
-                }
-              },
-              child: Text(_markdownPreview ? '源码' : '预览'),
             ),
-          if (showSourceControls)
-            SizedBox.square(
-              dimension: touch,
-              child: IconButton(
-                key: MobileFileViewerScreen.wrapToggleKey,
-                tooltip: _wrap ? '切换为横向滚动' : '切换为自动换行',
-                onPressed: () => setState(() => _wrap = !_wrap),
-                color: _wrap ? ComposerSurface.accent(theme.brightness) : colors.muted,
-                icon: const Icon(Icons.wrap_text, size: 20),
-              ),
-            ),
-          if (!_loading && _error == null && _mode == 'image' && _imageData != null)
-            SizedBox.square(
-              dimension: touch,
-              child: IconButton(
-                key: MobileFileViewerScreen.fullscreenImageKey,
-                tooltip: '全屏预览',
-                onPressed: _openFullscreenImage,
-                color: colors.foreground,
-                icon: const Icon(Icons.fullscreen_rounded, size: 22),
-              ),
-            ),
-          PopupMenuButton<_FileMoreAction>(
-            key: MobileFileViewerScreen.moreMenuKey,
-            tooltip: '更多操作',
-            icon: Icon(Icons.more_horiz, color: colors.foreground, size: 20),
-            onSelected: (action) {
-              switch (action) {
-                case _FileMoreAction.copyPath:
-                  unawaited(_copyPath());
-                case _FileMoreAction.copyContent:
-                  unawaited(_copyContent());
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem<_FileMoreAction>(
-                value: _FileMoreAction.copyPath,
-                child: Text('复制路径'),
-              ),
-              if (_mode == 'text' && !_loading && _error == null)
-                const PopupMenuItem<_FileMoreAction>(
-                  value: _FileMoreAction.copyContent,
-                  child: Text('复制全文'),
-                ),
-            ],
           ),
         ],
         bottom: PreferredSize(

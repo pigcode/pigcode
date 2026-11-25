@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import '../../mobile_glass.dart';
 import '../../theme_colors.dart';
 import '../../timeline_widgets.dart';
 import '../../timeline_work.dart';
@@ -368,12 +369,16 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     if (!mounted) return;
     showModalBottomSheet<void>(
       context: context,
-      showDragHandle: true,
+      showDragHandle: false,
       isScrollControlled: true,
-      builder: (context) => _FailureSheet(
-        command: timelineCommand(item) ?? '',
-        output: lines,
-        exitCode: exit,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (context) => MobileGlassSheetSurface(
+        child: _FailureSheet(
+          command: timelineCommand(item) ?? '',
+          output: lines,
+          exitCode: exit,
+        ),
       ),
     );
   }
@@ -713,10 +718,11 @@ class _FailureSheetState extends State<_FailureSheet> {
         ? pigcodeDark
         : pigcodeLight;
     return SafeArea(
+      top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           TimelineSpace.x9,
-          0,
+          8,
           TimelineSpace.x9,
           TimelineSpace.x9,
         ),
@@ -724,6 +730,21 @@ class _FailureSheetState extends State<_FailureSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SizedBox(
+                  width: 36,
+                  height: 5,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.strongBorder,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Row(
               children: [
                 Icon(

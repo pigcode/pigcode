@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../app_theme.dart';
 import '../composer/composer_tokens.dart';
+import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workbench/workbench_utils.dart';
@@ -396,7 +397,7 @@ class _MobilePreviewWebViewScreenState
           final colors = Theme.of(dialogContext).brightness == Brightness.dark
               ? pigcodeDark
               : pigcodeLight;
-          return AlertDialog(
+          return MobileGlassDialog(
             title: const Text('即将离开本机预览'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -534,51 +535,53 @@ class _MobilePreviewWebViewScreenState
         titleSpacing: 0,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(brightness),
-        leadingWidth: touch + 8,
+        leadingWidth: touch + 14,
         leading: Align(
           alignment: AlignmentDirectional.centerStart,
-          child: SizedBox.square(
-            dimension: touch,
-            child: IconButton(
-              key: MobilePreviewWebViewScreen.closeButtonKey,
-              tooltip: '关闭预览',
-              onPressed: () => Navigator.maybePop(context),
-              icon: const WorkspaceIcon(WorkspaceGlyph.close, size: 20),
+          child: MobileGlassChromeButton(
+            padding: const EdgeInsetsDirectional.only(start: 10),
+            child: SizedBox.square(
+              dimension: 40,
+              child: IconButton(
+                key: MobilePreviewWebViewScreen.closeButtonKey,
+                tooltip: '关闭预览',
+                padding: EdgeInsets.zero,
+                onPressed: () => Navigator.maybePop(context),
+                icon: const WorkspaceIcon(WorkspaceGlyph.close, size: 18),
+              ),
             ),
           ),
         ),
         title: Padding(
           padding: const EdgeInsetsDirectional.only(end: TimelineSpace.x6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: TimelineSpace.x5,
-              vertical: TimelineSpace.x3,
-            ),
-            decoration: BoxDecoration(
-              color: colors.field,
-              borderRadius: BorderRadius.circular(TimelineRadius.full),
-              border: Border.all(color: colors.border),
-            ),
-            child: Row(
-              spacing: TimelineSpace.x3,
-              children: [
-                IconTheme(
-                  data: IconThemeData(color: colors.muted),
-                  child: const WorkspaceIcon(
-                    WorkspaceGlyph.laptop,
-                    size: TimelineIcon.meta,
+          child: MobileGlassSurface(
+            blurSigma: 16,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: TimelineSpace.x5,
+                vertical: TimelineSpace.x3,
+              ),
+              child: Row(
+                spacing: TimelineSpace.x3,
+                children: [
+                  IconTheme(
+                    data: IconThemeData(color: colors.muted),
+                    child: const WorkspaceIcon(
+                      WorkspaceGlyph.laptop,
+                      size: TimelineIcon.meta,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: Text(
-                    displayAddress,
-                    key: MobilePreviewWebViewScreen.addressTextKey,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TimelineType.metaMonoStyle(colors.foreground),
+                  Expanded(
+                    child: Text(
+                      displayAddress,
+                      key: MobilePreviewWebViewScreen.addressTextKey,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TimelineType.metaMonoStyle(colors.foreground),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -608,63 +611,74 @@ class _MobilePreviewWebViewScreenState
             ),
         ],
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surface,
-          border: Border(top: BorderSide(color: colors.divider)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: SizedBox(
-            height: touch + 4,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                SizedBox.square(
-                  dimension: touch,
-                  child: IconButton(
-                    key: MobilePreviewWebViewScreen.backButtonKey,
-                    tooltip: '后退',
-                    onPressed: _canGoBack ? () => unawaited(_goBack()) : null,
-                    color: colors.foreground,
-                    disabledColor: colors.faint,
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-                  ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: MobileGlassSurface(
+            blurSigma: 20,
+            child: Material(
+              type: MaterialType.transparency,
+              shape: const StadiumBorder(),
+              child: SizedBox(
+                height: touch + 2,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    SizedBox.square(
+                      dimension: touch,
+                      child: IconButton(
+                        key: MobilePreviewWebViewScreen.backButtonKey,
+                        tooltip: '后退',
+                        onPressed:
+                            _canGoBack ? () => unawaited(_goBack()) : null,
+                        color: colors.foreground,
+                        disabledColor: colors.faint,
+                        icon: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: touch,
+                      child: IconButton(
+                        key: MobilePreviewWebViewScreen.forwardButtonKey,
+                        tooltip: '前进',
+                        onPressed: _canGoForward
+                            ? () => unawaited(_goForward())
+                            : null,
+                        color: colors.foreground,
+                        disabledColor: colors.faint,
+                        icon: const Icon(
+                          Icons.arrow_forward_ios_rounded,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: touch,
+                      child: IconButton(
+                        key: MobilePreviewWebViewScreen.reloadButtonKey,
+                        tooltip: '刷新',
+                        onPressed: () => unawaited(_reload()),
+                        color: colors.foreground,
+                        icon: const Icon(Icons.refresh_rounded, size: 21),
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: touch,
+                      child: IconButton(
+                        key: MobilePreviewWebViewScreen.copyUrlButtonKey,
+                        tooltip: '复制地址',
+                        onPressed: () => unawaited(_copyRealAddress()),
+                        color: colors.foreground,
+                        icon: const WorkspaceIcon(WorkspaceGlyph.copy, size: 18),
+                      ),
+                    ),
+                  ],
                 ),
-                SizedBox.square(
-                  dimension: touch,
-                  child: IconButton(
-                    key: MobilePreviewWebViewScreen.forwardButtonKey,
-                    tooltip: '前进',
-                    onPressed: _canGoForward
-                        ? () => unawaited(_goForward())
-                        : null,
-                    color: colors.foreground,
-                    disabledColor: colors.faint,
-                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 18),
-                  ),
-                ),
-                SizedBox.square(
-                  dimension: touch,
-                  child: IconButton(
-                    key: MobilePreviewWebViewScreen.reloadButtonKey,
-                    tooltip: '刷新',
-                    onPressed: () => unawaited(_reload()),
-                    color: colors.foreground,
-                    icon: const Icon(Icons.refresh_rounded, size: 21),
-                  ),
-                ),
-                SizedBox.square(
-                  dimension: touch,
-                  child: IconButton(
-                    key: MobilePreviewWebViewScreen.copyUrlButtonKey,
-                    tooltip: '复制地址',
-                    onPressed: () => unawaited(_copyRealAddress()),
-                    color: colors.foreground,
-                    icon: const WorkspaceIcon(WorkspaceGlyph.copy, size: 18),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

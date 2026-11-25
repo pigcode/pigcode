@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workbench/workbench_utils.dart';
@@ -201,7 +202,7 @@ class _PreviewTabState extends State<PreviewTab> {
     final display = _displayLabelFor(url);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => MobileGlassDialog(
         title: const Text('删除预览记录'),
         content: Text('要从最近预览历史中移除 $display 吗？'),
         actions: [

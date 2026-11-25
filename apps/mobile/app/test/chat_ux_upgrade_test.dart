@@ -423,4 +423,43 @@ void main() {
     expect(find.byType(MobileGlassSurface), findsOneWidget);
     expect(find.byType(UiKitView), findsOneWidget);
   });
+
+  testWidgets(
+    'MobileGlassSheetSurface, MobileGlassChromeButton, and MobileGlassDialog pass expected native shapes',
+    (tester) async {
+      addTearDown(() => MobileNativeGlass.instance.setSupportedForTest(false));
+      MobileNativeGlass.instance.setSupportedForTest(true);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: pigcodeTheme(Brightness.light),
+          home: Scaffold(
+            body: Column(
+              children: [
+                const MobileGlassChromeButton(
+                  child: SizedBox(width: 40, height: 40),
+                ),
+                const MobileGlassSheetSurface(
+                  child: SizedBox(width: 240, height: 80),
+                ),
+                MobileGlassDialog(
+                  title: const Text('确认操作'),
+                  content: const Text('内容说明'),
+                  actions: [
+                    TextButton(onPressed: () {}, child: const Text('取消')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final views = tester.widgetList<UiKitView>(find.byType(UiKitView)).toList();
+      expect(views, hasLength(3));
+      expect((views[0].creationParams as Map)['shape'], 'capsule');
+      expect((views[1].creationParams as Map)['shape'], 'topRounded');
+      expect((views[2].creationParams as Map)['shape'], 'roundedRect');
+    },
+  );
 }

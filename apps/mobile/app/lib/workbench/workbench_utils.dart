@@ -11,6 +11,7 @@ import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
@@ -55,7 +56,7 @@ Future<void> confirmAndOpenExternalUrl(
       final colors = Theme.of(dialogContext).brightness == Brightness.dark
           ? pigcodeDark
           : pigcodeLight;
-      return AlertDialog(
+      return MobileGlassDialog(
         title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,

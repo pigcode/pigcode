@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'mobile_glass.dart';
 import 'mobile_reminders.dart';
 
 class ReminderSettingsPage extends StatefulWidget {
@@ -72,7 +73,22 @@ class _ReminderSettingsPageState extends State<ReminderSettingsPage>
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: widget.settings,
     builder: (context, settings, _) => Scaffold(
-      appBar: AppBar(title: const Text('通知设置')),
+      appBar: AppBar(
+        title: const Text('通知设置'),
+        leadingWidth: 58,
+        leading: Navigator.canPop(context)
+            ? Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: MobileGlassChromeButton(
+                  padding: const EdgeInsetsDirectional.only(start: 10),
+                  child: const SizedBox.square(
+                    dimension: 40,
+                    child: BackButton(),
+                  ),
+                ),
+              )
+            : null,
+      ),
       body: SafeArea(
         top: false,
         child: ListView(

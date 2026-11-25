@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'app_theme.dart';
+import 'mobile_glass.dart';
 import 'theme_colors.dart';
 import 'workspace_icon.dart';
 
@@ -158,18 +159,20 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
         leading: Navigator.canPop(context)
             ? Align(
                 alignment: AlignmentDirectional.centerStart,
-                child: SizedBox.square(
-                  dimension: touch,
-                  child: IconButton(
-                    tooltip: '返回',
-                    onPressed: () => Navigator.maybePop(context),
-                    alignment: AlignmentDirectional.centerStart,
-                    padding: const EdgeInsetsDirectional.only(start: 6),
-                    icon: const RotatedBox(
-                      quarterTurns: 1,
-                      child: WorkspaceIcon(
-                        WorkspaceGlyph.chevronDown,
-                        size: 26,
+                child: MobileGlassChromeButton(
+                  padding: const EdgeInsetsDirectional.only(start: 10),
+                  child: SizedBox.square(
+                    dimension: 40,
+                    child: IconButton(
+                      tooltip: '返回',
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.maybePop(context),
+                      icon: const RotatedBox(
+                        quarterTurns: 1,
+                        child: WorkspaceIcon(
+                          WorkspaceGlyph.chevronDown,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
@@ -205,23 +208,26 @@ class _RunDiffScreenState extends State<RunDiffScreen> {
         ),
         actions: [
           if (_canRead && _files.isNotEmpty)
-            Padding(
-              padding: const EdgeInsetsDirectional.only(end: 6),
-              child: Tooltip(
-                message: _wrap ? '关闭换行' : '开启换行',
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    foregroundColor: palette.secondaryText,
-                    minimumSize: Size(0, touch),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    textStyle: theme.textTheme.bodyMedium?.copyWith(
-                      fontSize: 15,
-                      height: 1.45,
+            Center(
+              child: MobileGlassChromeButton(
+                padding: const EdgeInsetsDirectional.only(end: 10),
+                child: Tooltip(
+                  message: _wrap ? '关闭换行' : '开启换行',
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor: palette.foreground,
+                      minimumSize: const Size(0, 38),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      textStyle: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.45,
+                      ),
                     ),
+                    onPressed: () => setState(() => _wrap = !_wrap),
+                    child: Text(_wrap ? '不换行' : '换行'),
                   ),
-                  onPressed: () => setState(() => _wrap = !_wrap),
-                  child: Text(_wrap ? '不换行' : '换行'),
                 ),
               ),
             ),

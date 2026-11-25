@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/cupertino.dart' show CupertinoDialogAction;
 import 'package:flutter/foundation.dart' show setEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +16,7 @@ import 'attachments/image_compressor.dart';
 import 'computer_reconnect.dart';
 import 'computers.dart';
 import 'local_drafts.dart';
+import 'mobile_glass.dart';
 import 'new_thread_draft_state.dart';
 import 'offline_cache.dart';
 import 'mobile_reminders.dart';
@@ -787,36 +787,30 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   }
 
   Future<void> _forget(ComputerProfile computer) async {
-    final accepted = await showAdaptiveDialog<bool>(
+    final accepted = await showDialog<bool>(
       context: context,
       builder: (dialog) {
         final navigator = Navigator.of(dialog);
-        final ios = Theme.of(dialog).platform == TargetPlatform.iOS;
-        return AlertDialog.adaptive(
+        final palette = Theme.of(dialog).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
           title: Text('移除「${computer.name}」'),
           content: const Text('移除手机上保存的连接配置。再次连接时需要扫码配对。'),
-          actions: ios
-              ? [
-                  CupertinoDialogAction(
-                    onPressed: () => navigator.pop(false),
-                    child: const Text('取消'),
-                  ),
-                  CupertinoDialogAction(
-                    isDestructiveAction: true,
-                    onPressed: () => navigator.pop(true),
-                    child: const Text('移除'),
-                  ),
-                ]
-              : [
-                  TextButton(
-                    onPressed: () => navigator.pop(false),
-                    child: const Text('取消'),
-                  ),
-                  TextButton(
-                    onPressed: () => navigator.pop(true),
-                    child: const Text('移除'),
-                  ),
-                ],
+          actions: [
+            TextButton(
+              onPressed: () => navigator.pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => navigator.pop(true),
+              child: const Text('移除'),
+            ),
+          ],
         );
       },
     );
@@ -873,14 +867,35 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       appBar: AppBar(
         title: const Text('电脑'),
         actions: [
-          IconButton(
-            tooltip: '通知设置',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: _openReminderSettings,
+          Center(
+            child: MobileGlassChromeButton(
+              padding: const EdgeInsetsDirectional.only(end: 10),
+              child: SizedBox.square(
+                dimension: 40,
+                child: IconButton(
+                  tooltip: '通知设置',
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.notifications_outlined, size: 20),
+                  onPressed: _openReminderSettings,
+                ),
+              ),
+            ),
           ),
         ],
+        leadingWidth: _selected != null ? 58 : null,
         leading: _selected != null
-            ? BackButton(onPressed: () => _showWorkspace(true))
+            ? Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: MobileGlassChromeButton(
+                  padding: const EdgeInsetsDirectional.only(start: 10),
+                  child: SizedBox.square(
+                    dimension: 40,
+                    child: BackButton(
+                      onPressed: () => _showWorkspace(true),
+                    ),
+                  ),
+                ),
+              )
             : null,
       ),
       body: SafeArea(
@@ -1054,7 +1069,17 @@ class _ScanPageState extends State<ScanPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('扫描电脑上的二维码')),
+    appBar: AppBar(
+      title: const Text('扫描电脑上的二维码'),
+      leadingWidth: 58,
+      leading: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: MobileGlassChromeButton(
+          padding: const EdgeInsetsDirectional.only(start: 10),
+          child: const SizedBox.square(dimension: 40, child: BackButton()),
+        ),
+      ),
+    ),
     body: SafeArea(
       child: MobileScanner(
         controller: _scanner,

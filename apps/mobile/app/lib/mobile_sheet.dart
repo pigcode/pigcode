@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'mobile_surfaces.dart';
+import 'mobile_glass.dart';
 import 'theme_colors.dart';
 import 'workspace_icon.dart';
 
@@ -41,103 +41,81 @@ Future<T?> showMobileSheet<T>(
             duration: Duration(milliseconds: 260),
             reverseDuration: Duration(milliseconds: 200),
           ),
-    builder: (sheet) => DecoratedBox(
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: radius,
-        boxShadow: const [mobileSheetShadow],
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: Material(
-          type: MaterialType.transparency,
-          child: SafeArea(
-            top: false,
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final header = Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 20, end: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Semantics(
-                          header: true,
-                          child: Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w500,
-                              height: 1.45,
-                              letterSpacing:
-                                  theme.platform == TargetPlatform.iOS
-                                  ? -.24
-                                  : 0,
-                              leadingDistribution: TextLeadingDistribution.even,
-                              locale: const Locale('zh', 'CN'),
-                            ),
-                          ),
+    builder: (sheet) => MobileGlassSheetSurface(
+      borderRadius: radius,
+      child: SafeArea(
+        top: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final header = Padding(
+              padding: const EdgeInsetsDirectional.only(start: 20, end: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w500,
+                          height: 1.45,
+                          letterSpacing:
+                              theme.platform == TargetPlatform.iOS ? -.24 : 0,
+                          leadingDistribution: TextLeadingDistribution.even,
+                          locale: const Locale('zh', 'CN'),
                         ),
                       ),
-                      SizedBox.square(
-                        dimension: touch,
-                        child: IconButton(
-                          tooltip: '关闭弹层',
-                          color: palette.foreground,
-                          padding: const EdgeInsetsDirectional.only(end: 10.5),
-                          alignment: AlignmentDirectional.centerEnd,
-                          onPressed: () => Navigator.pop(sheet),
-                          icon: const WorkspaceIcon(
-                            WorkspaceGlyph.close,
-                            size: 21,
-                          ),
+                    ),
+                  ),
+                  MobileSheetCloseButton(
+                    touchDimension: touch,
+                    onPressed: () => Navigator.pop(sheet),
+                  ),
+                ],
+              ),
+            );
+            final scrollHeader = constraints.maxHeight < 180;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showHandle)
+                  Padding(
+                    padding: EdgeInsets.only(top: 8, bottom: 4 - overhang),
+                    child: SizedBox(
+                      width: 36,
+                      height: 5,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: palette.strongBorder,
+                          borderRadius: BorderRadius.circular(3),
                         ),
+                      ),
+                    ),
+                  ),
+                if (!scrollHeader) header,
+                Flexible(
+                  child: CustomScrollView(
+                    shrinkWrap: true,
+                    slivers: [
+                      if (scrollHeader) SliverToBoxAdapter(child: header),
+                      SliverPadding(
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          6 - overhang,
+                          20,
+                          20,
+                        ),
+                        sliver: content(sheet),
                       ),
                     ],
                   ),
-                );
-                final scrollHeader = constraints.maxHeight < 180;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showHandle)
-                      Padding(
-                        padding: EdgeInsets.only(top: 8, bottom: 4 - overhang),
-                        child: SizedBox(
-                          width: 36,
-                          height: 5,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: palette.strongBorder,
-                              borderRadius: BorderRadius.circular(3),
-                            ),
-                          ),
-                        ),
-                      ),
-                    if (!scrollHeader) header,
-                    Flexible(
-                      child: CustomScrollView(
-                        shrinkWrap: true,
-                        slivers: [
-                          if (scrollHeader) SliverToBoxAdapter(child: header),
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              20,
-                              6 - overhang,
-                              20,
-                              20,
-                            ),
-                            sliver: content(sheet),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     ),

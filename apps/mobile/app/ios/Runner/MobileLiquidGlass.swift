@@ -144,9 +144,17 @@ private final class PigcodeGlassPlatformView: NSObject, FlutterPlatformView {
       let glass = UIGlassEffect(style: styleName == "clear" ? .clear : .regular)
       glass.isInteractive = false
       effectView.effect = glass
-      if shape == "capsule" {
+      switch shape {
+      case "capsule":
         effectView.cornerConfiguration = .capsule()
-      } else {
+      case "topRounded":
+        effectView.cornerConfiguration = .corners(
+          topLeftRadius: .fixed(radius),
+          topRightRadius: .fixed(radius),
+          bottomLeftRadius: nil,
+          bottomRightRadius: nil
+        )
+      default:
         effectView.cornerConfiguration = .corners(radius: .fixed(radius))
       }
       return
@@ -156,9 +164,20 @@ private final class PigcodeGlassPlatformView: NSObject, FlutterPlatformView {
     effectView.effect = UIBlurEffect(style: .systemChromeMaterial)
     effectView.clipsToBounds = true
     effectView.layer.cornerCurve = .continuous
-    effectView.layer.cornerRadius = shape == "capsule"
-      ? max(0, min(containerView.bounds.width, containerView.bounds.height) / 2)
-      : CGFloat(radius)
+    if shape == "topRounded" {
+      effectView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+      effectView.layer.cornerRadius = CGFloat(radius)
+    } else {
+      effectView.layer.maskedCorners = [
+        .layerMinXMinYCorner,
+        .layerMaxXMinYCorner,
+        .layerMinXMaxYCorner,
+        .layerMaxXMaxYCorner,
+      ]
+      effectView.layer.cornerRadius = shape == "capsule"
+        ? max(0, min(containerView.bounds.width, containerView.bounds.height) / 2)
+        : CGFloat(radius)
+    }
   }
 
   func view() -> UIView {

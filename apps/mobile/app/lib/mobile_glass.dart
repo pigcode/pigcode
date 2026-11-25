@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 
+import 'mobile_surfaces.dart';
 import 'theme_colors.dart';
+import 'workspace_icon.dart';
 
 /// iOS 26+ 原生 `UIGlassEffect` 能力探测与实时监听（响应系统「降低透明度」开关变化）。
 class MobileNativeGlass {
@@ -66,6 +68,7 @@ class MobileGlassSurface extends StatefulWidget {
     this.shadows,
     this.borderColorOverride,
     this.tintOpacity,
+    this.darkOverride,
     this.useNativeGlass = true,
     this.clipBehavior = Clip.antiAlias,
   });
@@ -76,6 +79,7 @@ class MobileGlassSurface extends StatefulWidget {
   final List<BoxShadow>? shadows;
   final Color? borderColorOverride;
   final double? tintOpacity;
+  final bool? darkOverride;
   final bool useNativeGlass;
   final Clip clipBehavior;
 
@@ -106,8 +110,17 @@ class MobileGlassSurface extends StatefulWidget {
           ),
         ];
 
-  bool get _isCapsule =>
-      borderRadius.topLeft.x >= 500 && borderRadius.bottomRight.x >= 500;
+  String get _nativeShape {
+    if (borderRadius.topLeft.x >= 500 && borderRadius.bottomRight.x >= 500) {
+      return 'capsule';
+    }
+    if (borderRadius.topLeft.x > 0 &&
+        borderRadius.bottomLeft.x == 0 &&
+        borderRadius.bottomRight.x == 0) {
+      return 'topRounded';
+    }
+    return 'roundedRect';
+  }
 
   @override
   State<MobileGlassSurface> createState() => _MobileGlassSurfaceState();
@@ -122,7 +135,9 @@ class _MobileGlassSurfaceState extends State<MobileGlassSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
+    final brightness = widget.darkOverride == null
+        ? Theme.of(context).brightness
+        : (widget.darkOverride! ? Brightness.dark : Brightness.light);
     final dark = brightness == Brightness.dark;
     final colors = dark ? pigcodeDark : pigcodeLight;
     final highContrast = MediaQuery.highContrastOf(context);
@@ -159,7 +174,7 @@ class _MobileGlassSurfaceState extends State<MobileGlassSurface> {
               Positioned.fill(
                 child: IgnorePointer(
                   child: _NativeLiquidGlassBackdrop(
-                    shape: widget._isCapsule ? 'capsule' : 'roundedRect',
+                    shape: widget._nativeShape,
                     radius: widget.borderRadius.topLeft.x,
                     dark: dark,
                   ),
@@ -429,6 +444,193 @@ class MobileChromeInsets extends InheritedWidget {
   @override
   bool updateShouldNotify(covariant MobileChromeInsets oldWidget) =>
       oldWidget.topInset != topInset;
+}
+
+/// 二级页面顶栏与全屏浮层共用的液态玻璃按钮壳（圆钮或胶囊，保持与主界面顶栏一致的材质与触区）。
+class MobileGlassChromeButton extends StatelessWidget {
+  const MobileGlassChromeButton({
+    super.key,
+    required this.child,
+    this.padding = EdgeInsets.zero,
+    this.blurSigma = 16,
+    this.darkOverride,
+    this.useNativeGlass = true,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double blurSigma;
+  final bool? darkOverride;
+  final bool useNativeGlass;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: MobileGlassSurface(
+      blurSigma: blurSigma,
+      darkOverride: darkOverride,
+      useNativeGlass: useNativeGlass,
+      child: Material(
+        type: MaterialType.transparency,
+        shape: const StadiumBorder(),
+        child: child,
+      ),
+    ),
+  );
+}
+
+/// 底部弹出面板共用的液态玻璃容器（顶角大圆角 + 柔和阴影 + 高可读度半透底层）。
+class MobileGlassSheetSurface extends StatelessWidget {
+  const MobileGlassSheetSurface({
+    super.key,
+    required this.child,
+    this.borderRadius = const BorderRadius.vertical(top: Radius.circular(22)),
+  });
+
+  final Widget child;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return MobileGlassSurface(
+      borderRadius: borderRadius,
+      blurSigma: 24,
+      tintOpacity: dark ? 0.80 : 0.88,
+      shadows: const [mobileSheetShadow],
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: Material(type: MaterialType.transparency, child: child),
+      ),
+    );
+  }
+}
+
+/// 底部弹出面板右上角统一的轻量圆形关闭按钮（避免在玻璃弹层内部叠用双层玻璃）。
+class MobileSheetCloseButton extends StatelessWidget {
+  const MobileSheetCloseButton({
+    super.key,
+    required this.onPressed,
+    this.buttonKey,
+    this.tooltip = '关闭弹层',
+    this.touchDimension,
+  });
+
+  final VoidCallback? onPressed;
+  final Key? buttonKey;
+  final String tooltip;
+  final double? touchDimension;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final touch =
+        touchDimension ?? (theme.platform == TargetPlatform.android ? 48.0 : 44.0);
+    return SizedBox.square(
+      dimension: touch,
+      child: IconButton(
+        key: buttonKey,
+        tooltip: tooltip,
+        color: palette.foreground,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        icon: DecoratedBox(
+          decoration: BoxDecoration(
+            color: palette.field,
+            shape: BoxShape.circle,
+          ),
+          child: const SizedBox.square(
+            dimension: 32,
+            child: Center(
+              child: WorkspaceIcon(WorkspaceGlyph.close, size: 18),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 确认对话框共用的液态玻璃卡片（替代原生不透明 Material AlertDialog，全应用弹窗风格一致）。
+class MobileGlassDialog extends StatelessWidget {
+  const MobileGlassDialog({
+    super.key,
+    required this.title,
+    required this.content,
+    required this.actions,
+  });
+
+  final Widget title;
+  final Widget content;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final palette = dark ? pigcodeDark : pigcodeLight;
+    const radius = BorderRadius.all(Radius.circular(24));
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      elevation: 0,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: MobileGlassSurface(
+          borderRadius: radius,
+          blurSigma: 24,
+          tintOpacity: dark ? 0.84 : 0.90,
+          shadows: const [mobileSheetShadow],
+          child: ClipRRect(
+            borderRadius: radius,
+            child: Material(
+              type: MaterialType.transparency,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DefaultTextStyle.merge(
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: palette.foreground,
+                        height: 1.4,
+                      ),
+                      child: title,
+                    ),
+                    const SizedBox(height: 10),
+                    DefaultTextStyle.merge(
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontSize: 14,
+                        color: palette.secondaryText,
+                        height: 1.5,
+                      ),
+                      child: content,
+                    ),
+                    const SizedBox(height: 18),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      overflowAlignment: OverflowBarAlignment.end,
+                      spacing: 8,
+                      overflowSpacing: 8,
+                      children: actions,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// 底部输入框或侧栏底栏背后的柔和渐变托底：让滚动内容在悬浮卡片下方自然淡出。
