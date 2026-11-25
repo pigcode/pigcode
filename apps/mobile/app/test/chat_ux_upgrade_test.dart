@@ -349,8 +349,11 @@ void main() {
   );
 
   testWidgets(
-    'MobileGlassSurface uses BackdropFilter by default and falls back in high contrast',
+    'MobileGlassSurface uses native UIGlassEffect when supported and falls back cleanly',
     (tester) async {
+      addTearDown(() => MobileNativeGlass.instance.setSupportedForTest(false));
+      MobileNativeGlass.instance.setSupportedForTest(false);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -363,6 +366,12 @@ void main() {
         ),
       );
       expect(find.byType(BackdropFilter), findsOneWidget);
+      expect(find.byType(UiKitView), findsNothing);
+
+      MobileNativeGlass.instance.setSupportedForTest(true);
+      await tester.pump();
+      expect(find.byType(UiKitView), findsOneWidget);
+      expect(find.byType(BackdropFilter), findsNothing);
 
       await tester.pumpWidget(
         const MaterialApp(
@@ -379,6 +388,7 @@ void main() {
         ),
       );
       expect(find.byType(BackdropFilter), findsNothing);
+      expect(find.byType(UiKitView), findsNothing);
     },
   );
 }

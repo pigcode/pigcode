@@ -17,6 +17,9 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     MobileReminders.shared.attach(engineBridge.applicationRegistrar.messenger())
     MobileShareReceiver.shared.attach(engineBridge.applicationRegistrar.messenger())
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "MobileLiquidGlass") {
+      MobileLiquidGlass.shared.attach(to: registrar)
+    }
   }
 
   override func application(

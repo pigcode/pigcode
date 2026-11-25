@@ -175,31 +175,36 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
       skipTraversal: true,
       onFocusChange: _handleFocusChange,
       child: useGlass
-          ? MobileGlassSurface(
-              borderRadius: cardBorderRadius,
-              blurSigma: 22,
-              tintOpacity: brightness == Brightness.dark ? 0.74 : 0.82,
-              borderColorOverride: Colors.transparent,
-              shadows: brightness == Brightness.dark
-                  ? ComposerSurface.darkShadow
-                  : ComposerSurface.lightShadow,
-              child: AnimatedContainer(
-                key: MobileComposerCard.cardKey,
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : TimelineMotion.med,
-                curve: TimelineMotion.ease,
-                decoration: BoxDecoration(
-                  borderRadius: cardBorderRadius,
-                  border: Border.all(
-                    color: ComposerSurface.cardBorder(
-                      brightness,
-                      focused: _focused,
+          ? ValueListenableBuilder<bool>(
+              valueListenable: MobileNativeGlass.instance.supported,
+              builder: (context, nativeGlass, _) => MobileGlassSurface(
+                borderRadius: cardBorderRadius,
+                blurSigma: 16,
+                tintOpacity: brightness == Brightness.dark ? 0.62 : 0.68,
+                borderColorOverride: Colors.transparent,
+                shadows: brightness == Brightness.dark
+                    ? ComposerSurface.darkShadow
+                    : ComposerSurface.lightShadow,
+                child: AnimatedContainer(
+                  key: MobileComposerCard.cardKey,
+                  duration: MediaQuery.disableAnimationsOf(context)
+                      ? Duration.zero
+                      : TimelineMotion.med,
+                  curve: TimelineMotion.ease,
+                  decoration: BoxDecoration(
+                    borderRadius: cardBorderRadius,
+                    border: Border.all(
+                      color: nativeGlass && !_focused
+                          ? Colors.transparent
+                          : ComposerSurface.cardBorder(
+                              brightness,
+                              focused: _focused,
+                            ),
+                      width: ComposerBorder.card,
                     ),
-                    width: ComposerBorder.card,
                   ),
+                  child: innerContent,
                 ),
-                child: innerContent,
               ),
             )
           : AnimatedContainer(
