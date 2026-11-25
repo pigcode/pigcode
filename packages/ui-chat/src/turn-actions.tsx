@@ -23,21 +23,24 @@ export function TurnActions({
   }, [copied])
 
   const label = copied ? t("chat.message.copied") : t("chat.message.copy")
+  if (!text && !at) return null
   return (
     <div className={kind === "user" ? "turn-user-actions" : "turn-actions"}>
-      <button
-        type="button"
-        className="turn-action"
-        aria-label={label}
-        title={label}
-        onClick={() => void copyText(text).then(() => setCopied(true))}
-      >
-        {copied ? (
-          <Check className="ic ic-sm" aria-hidden="true" />
-        ) : (
-          <Copy className="ic ic-sm" aria-hidden="true" />
-        )}
-      </button>
+      {text ? (
+        <button
+          type="button"
+          className="turn-action"
+          aria-label={label}
+          title={label}
+          onClick={() => void copyText(text).then(() => setCopied(true))}
+        >
+          {copied ? (
+            <Check className="ic ic-sm" aria-hidden="true" />
+          ) : (
+            <Copy className="ic ic-sm" aria-hidden="true" />
+          )}
+        </button>
+      ) : null}
       {at ? (
         <time dateTime={at} title={formatDateTime(at, locale)}>
           {formatReplyTime(at, locale)}

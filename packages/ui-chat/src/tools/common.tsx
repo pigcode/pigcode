@@ -1,6 +1,7 @@
 /** 工具行共用的小部件：文件名（悬停看相对路径）、打开文件与子 agent 的入口、状态词与计数文案。 */
 import { createContext, useContext, type MouseEvent } from "react"
 import { FileIcon, useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import type { LightboxImage } from "../image-lightbox"
 import { splitPath } from "../tool-fields"
 import type { ToolCall } from "../tool-meta"
 import type { ToolRowStatus } from "../tool-row"
@@ -16,7 +17,7 @@ export function toolStatusWord(
   return null
 }
 
-/** 时间线里的跳转动作：打开文件、查看改动、打开子 agent 标签；root 是项目目录。 */
+/** 时间线里的跳转与媒体动作：打开文件、查看改动、打开子 agent 标签、读取附件图片与打开灯箱；root 是项目目录。 */
 export interface ConversationActions {
   root?: string | undefined
   onOpenFile?: ((path: string) => void) | undefined
@@ -24,6 +25,12 @@ export interface ConversationActions {
   onOpenSubagent?: ((id: string) => void) | undefined
   /** 打开用户 @ 引用的另一个会话（#81）。 */
   onOpenThread?: ((threadId: string) => void) | undefined
+  /** 按需读取图片附件（thumb / full）的 data URL。 */
+  readAttachment?: ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
+  /** 同步检查内存缓存中是否已有该图片附件的 data URL。 */
+  peekAttachment?: ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
+  /** 打开全屏图片灯箱。 */
+  onOpenLightbox?: ((images: readonly LightboxImage[], index: number) => void) | undefined
 }
 
 export const ConversationActionsContext = createContext<ConversationActions>({})

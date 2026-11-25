@@ -106,19 +106,24 @@ export function TurnNavigator({
   const { t } = useLocale()
   const items = useMemo<NavItem[]>(
     () =>
-      timeline.flatMap((entry) =>
-        entry.kind === "turn" && entry.turn.userText
-          ? [
-              {
-                key: entry.turn.key,
-                user: entry.turn.userText,
-                assistant: entry.turn.answer ? plainPreview(entry.turn.answer) : null,
-                running: !isEnded(entry.turn),
-              },
-            ]
-          : [],
-      ),
-    [timeline],
+      timeline.flatMap((entry) => {
+        if (entry.kind !== "turn") return []
+        const imageCount = entry.turn.userAttachments.length
+        if (!entry.turn.userText && imageCount === 0) return []
+        const fallback =
+          imageCount === 1
+            ? t("chat.images.count.one")
+            : t("chat.images.count.other").replace("{count}", String(imageCount))
+        return [
+          {
+            key: entry.turn.key,
+            user: entry.turn.userText ?? fallback,
+            assistant: entry.turn.answer ? plainPreview(entry.turn.answer) : null,
+            running: !isEnded(entry.turn),
+          },
+        ]
+      }),
+    [timeline, t],
   )
   // 每来一个事件 items 都会重算；只有轮次变了（换会话、发了新消息）才重新订阅滚动。
   const keyList = items.map((item) => item.key).join("\n")

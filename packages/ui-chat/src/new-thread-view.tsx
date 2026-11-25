@@ -20,6 +20,7 @@ import {
   type PermissionMode,
 } from "@pigcode/ui-composer"
 import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
+import { ImageLightbox, type LightboxImage } from "./image-lightbox"
 import { ThreadDetailsBody, ThreadDetailsToggle } from "./thread-details"
 export { ProjectChip } from "@pigcode/ui-composer"
 
@@ -69,6 +70,14 @@ export interface NewThreadViewProps {
   details?: ReactNode
   /** 顶栏右侧的布局按钮。 */
   layoutControls?: ReactNode
+  /** 上传图片附件。 */
+  onUploadImage?: ComposerProps["onUploadImage"]
+  /** 按需读取图片附件（thumb / full）。 */
+  readAttachment?: ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
+  /** 同步检查内存缓存中是否已有对应图片变体的 data URL。 */
+  peekAttachment?: ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
+  /** 当前草稿所选 Agent 是否支持直接看图。 */
+  supportsImages?: boolean | undefined
 }
 
 const SUGGESTIONS: ReadonlyArray<{
@@ -225,11 +234,19 @@ export function NewThreadView({
   focusKey,
   details,
   layoutControls,
+  onUploadImage,
+  readAttachment,
+  peekAttachment,
+  supportsImages,
 }: NewThreadViewProps) {
   const { t } = useLocale()
   const ready = projects.some((project) => project.id === projectId)
   const headRef = useRef<HTMLDivElement>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [lightbox, setLightbox] = useState<{
+    images: readonly LightboxImage[]
+    index: number
+  } | null>(null)
   return (
     <section className="view new-thread-view" aria-label={t("nav.newThread")}>
       <div className="panel-top" ref={headRef}>
@@ -283,10 +300,28 @@ export function NewThreadView({
           {...(threads ? { threads } : {})}
           {...(commands ? { commands } : {})}
           {...(loadAgentCommands ? { loadAgentCommands } : {})}
+          {...(onUploadImage ? { onUploadImage } : {})}
+          {...(readAttachment ? { readImage: readAttachment } : {})}
+          {...(peekAttachment ? { peekImage: peekAttachment } : {})}
+          {...(supportsImages !== undefined ? { supportsImages } : {})}
+          onPreviewImages={(images, index) => setLightbox({ images, index })}
         />
         {workspaceStatus}
         {ready ? <NewThreadSuggestions draftKey={draftKey} disabled={pending} /> : null}
       </NewThreadStage>
+      {lightbox ? (
+        <ImageLightbox
+          images={lightbox.images}
+          initialIndex={lightbox.index}
+          loadFull={
+            readAttachment ? (image) => readAttachment(image.id, "full") : undefined
+          }
+          peekUrl={
+            peekAttachment ? (image, variant) => peekAttachment(image.id, variant) : undefined
+          }
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </section>
   )
 }

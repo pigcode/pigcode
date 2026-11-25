@@ -173,7 +173,9 @@ export async function performDesktopQueueAction(
     ) {
       throw new Error("Unexpected queue receipt")
     }
-    if (result.effect === "withdrawn" && result.text) appendComposerText(threadId, result.text)
+    if (result.effect === "withdrawn" && (result.text || result.attachments?.length)) {
+      appendComposerText(threadId, result.text ?? "", result.attachments)
+    }
     updateActions(actions.filter((item) => item.commandId !== commandId))
   } catch (error) {
     if (definitive(error)) {

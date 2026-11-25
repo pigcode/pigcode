@@ -29,6 +29,7 @@ import {
 } from "@pigcode/ui-composer"
 import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
+import { ImageLightbox, type LightboxImage } from "./image-lightbox"
 import { MessageList } from "./message-list"
 import { ChatLinkContext, type ChatLinkActions } from "./chat-link-actions"
 import { NewThreadHero, NewThreadStage, NewThreadSuggestions, ProjectChip } from "./new-thread-view"
@@ -131,6 +132,12 @@ export interface ChatViewProps {
   liveOutput?: Readonly<Record<string, string>> | undefined
   /** 回答 agent 的提问；容器应调用 run.answerQuestion。 */
   onAnswer?: ((requestId: string, answers: string[]) => void) | undefined
+  /** 上传图片附件；提供时开启输入框图片粘贴、拖放与选图。 */
+  onUploadImage?: ComposerProps["onUploadImage"]
+  /** 按需读取图片附件（thumb / full），返回 data URL。 */
+  readAttachment?: ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
+  /** 同步检查内存缓存中是否已有对应图片变体的 data URL。 */
+  peekAttachment?: ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
 }
 
 /** 根据事件流判断当前 run 是否仍在进行。 */
@@ -189,11 +196,18 @@ export function ChatView({
   empty,
   liveOutput,
   onAnswer,
+  onUploadImage,
+  readAttachment,
+  peekAttachment,
 }: ChatViewProps) {
   const submit = onSubmit ?? onStart
   const { t } = useLocale()
   const threadRef = useRef<HTMLDivElement>(null)
   const [pinned, setPinned] = useState(true)
+  const [lightbox, setLightbox] = useState<{
+    images: readonly LightboxImage[]
+    index: number
+  } | null>(null)
   // Agent 功能为 false 时隐藏对应控件；还没读到 Agent 功能时保持旧行为。
   const canInterrupt = features?.streaming ?? true
   const canApprove = features?.approvals ?? true
@@ -319,6 +333,11 @@ export function ChatView({
     ...(thread && onPlanMode ? { onPlanMode } : {}),
     canInterrupt,
     contextUsage,
+    ...(onUploadImage ? { onUploadImage } : {}),
+    ...(readAttachment ? { readImage: readAttachment } : {}),
+    ...(peekAttachment ? { peekImage: peekAttachment } : {}),
+    ...(features ? { supportsImages: features.images } : {}),
+    onPreviewImages: (images, index) => setLightbox({ images, index }),
   } satisfies ComposerProps
   const shownProject = projectName ?? folderName
 
@@ -411,6 +430,9 @@ export function ChatView({
                     onViewDiff={onViewDiff}
                     onOpenSubagent={onOpenSubagent}
                     onOpenThread={onOpenThread}
+                    readAttachment={readAttachment}
+                    peekAttachment={peekAttachment}
+                    onOpenLightbox={(images, index) => setLightbox({ images, index })}
                     liveOutput={liveOutput}
                     onAnswer={onAnswer}
                   />
@@ -453,6 +475,19 @@ export function ChatView({
           </div>
         </>
       )}
+      {lightbox ? (
+        <ImageLightbox
+          images={lightbox.images}
+          initialIndex={lightbox.index}
+          loadFull={
+            readAttachment ? (image) => readAttachment(image.id, "full") : undefined
+          }
+          peekUrl={
+            peekAttachment ? (image, variant) => peekAttachment(image.id, variant) : undefined
+          }
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </section>
   )
 }

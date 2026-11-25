@@ -137,15 +137,21 @@ function TurnViewImpl({
   const pending = ended
     ? []
     : turn.work.flatMap((item) => (item.kind === "question" && !item.answers ? [item] : []))
+  const hasUser = turn.userText !== null || turn.userAttachments.length > 0
   return (
     <section
       className="turn"
       data-status={turn.status}
       data-turn={turn.key}
-      data-user={turn.userText ? true : undefined}
+      data-user={hasUser ? true : undefined}
     >
-      {turn.userText ? (
-        <UserBubble text={turn.userText} at={turn.userAt} references={turn.userReferences} />
+      {hasUser ? (
+        <UserBubble
+          text={turn.userText ?? ""}
+          at={turn.userAt}
+          references={turn.userReferences}
+          attachments={turn.userAttachments}
+        />
       ) : null}
       {ended && turn.runId !== null ? (
         <WorkHeader

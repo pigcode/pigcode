@@ -118,37 +118,50 @@ export function QueuedMessages({
           </Button>
         ) : null}
       </div>
-      {view?.messages.map((item) => (
-        <div className="queued-message-row" key={item.id}>
-          <div className="queued-message-text" title={item.text}>
-            {item.text}
-          </div>
-          {item.selected ? (
-            <span>{t("chat.queue.selected")}</span>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="plain"
-                disabled={disabled}
-                onClick={() => submit(queueMethods.withdraw, item.id)}
-              >
-                {t("chat.queue.withdraw")}
-              </Button>
-              {view.activeRunId ? (
+      {view?.messages.map((item) => {
+        const imageCount = item.attachments?.length ?? 0
+        const imageBadge =
+          imageCount === 1
+            ? t("chat.queue.imageSingle")
+            : imageCount > 1
+              ? t("chat.queue.imageMultiple").replace("{count}", String(imageCount))
+              : null
+        const title = [imageBadge, item.text].filter(Boolean).join(" ")
+        return (
+          <div className="queued-message-row" key={item.id}>
+            <div className="queued-message-text" title={title}>
+              {imageBadge ? (
+                <span className="queued-message-attachments">{imageBadge}</span>
+              ) : null}
+              {item.text ? <span>{item.text}</span> : null}
+            </div>
+            {item.selected ? (
+              <span>{t("chat.queue.selected")}</span>
+            ) : (
+              <>
                 <Button
                   size="sm"
                   variant="plain"
                   disabled={disabled}
-                  onClick={() => submit(queueMethods.stopAndSend, item.id, view.activeRunId)}
+                  onClick={() => submit(queueMethods.withdraw, item.id)}
                 >
-                  {t("chat.queue.stopAndSend")}
+                  {t("chat.queue.withdraw")}
                 </Button>
-              ) : null}
-            </>
-          )}
-        </div>
-      ))}
+                {view.activeRunId ? (
+                  <Button
+                    size="sm"
+                    variant="plain"
+                    disabled={disabled}
+                    onClick={() => submit(queueMethods.stopAndSend, item.id, view.activeRunId)}
+                  >
+                    {t("chat.queue.stopAndSend")}
+                  </Button>
+                ) : null}
+              </>
+            )}
+          </div>
+        )
+      })}
       {outstanding ? (
         <div className="queued-message-row">
           <span role="status">{t("chat.queue.uncertain")}</span>
@@ -170,28 +183,42 @@ export function QueuedMessages({
           </Button>
         </div>
       ) : null}
-      {sends.map((send) => (
-        <div className="queued-message-row" key={send.commandId}>
-          <span role="status">{t("chat.queue.uncertain")}</span>
-          <div className="queued-message-text">{send.text}</div>
-          <Button
-            size="sm"
-            variant="plain"
-            disabled={!connected}
-            onClick={() => void recoverDesktopSend(connection, send, false, fail)}
-          >
-            {t("chat.queue.check")}
-          </Button>
-          <Button
-            size="sm"
-            variant="plain"
-            disabled={!connected}
-            onClick={() => void recoverDesktopSend(connection, send, true, fail)}
-          >
-            {t("chat.queue.retry")}
-          </Button>
-        </div>
-      ))}
+      {sends.map((send) => {
+        const imageCount = send.options.attachmentIds?.length ?? 0
+        const imageBadge =
+          imageCount === 1
+            ? t("chat.queue.imageSingle")
+            : imageCount > 1
+              ? t("chat.queue.imageMultiple").replace("{count}", String(imageCount))
+              : null
+        return (
+          <div className="queued-message-row" key={send.commandId}>
+            <span role="status">{t("chat.queue.uncertain")}</span>
+            <div className="queued-message-text">
+              {imageBadge ? (
+                <span className="queued-message-attachments">{imageBadge}</span>
+              ) : null}
+              {send.text ? <span>{send.text}</span> : null}
+            </div>
+            <Button
+              size="sm"
+              variant="plain"
+              disabled={!connected}
+              onClick={() => void recoverDesktopSend(connection, send, false, fail)}
+            >
+              {t("chat.queue.check")}
+            </Button>
+            <Button
+              size="sm"
+              variant="plain"
+              disabled={!connected}
+              onClick={() => void recoverDesktopSend(connection, send, true, fail)}
+            >
+              {t("chat.queue.retry")}
+            </Button>
+          </div>
+        )
+      })}
     </section>
   )
 }

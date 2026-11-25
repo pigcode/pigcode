@@ -6,6 +6,16 @@ export { ProjectChip, ProjectMenu, type ComposerProject } from "./composer-proje
 export { requestComposerMention, requestComposerThreadMention } from "./composer-mention"
 export { requestComposerContext, type ComposerContext } from "./composer-context"
 export {
+  COMPOSER_IMAGE_ACCEPT,
+  prefillComposerAttachments,
+  type ComposerAttachmentItem,
+  type ComposerAttachmentUploadInput,
+  type ComposerImagePeeker,
+  type ComposerImageReader,
+  type ComposerImageUploader,
+  type ComposerPreviewImage,
+} from "./composer-attachments"
+export {
   appendComposerText,
   captureComposerDraft,
   moveComposerDraft,

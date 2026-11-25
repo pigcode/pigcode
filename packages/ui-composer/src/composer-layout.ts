@@ -34,17 +34,19 @@ export function useWrapped(editor: Editor | null, enabled: boolean): boolean {
   return wrapped
 }
 
-/** 输入框卡片的类名：草稿里更高，写到第二行时展开，有上下文占用时多一列圆环。 */
+/** 输入框卡片的类名：草稿里更高，写到第二行时展开，有上下文占用时多一列圆环，拖入图片时高亮边框。 */
 export function composerClass(options: {
   tall: boolean
   expanded: boolean
   meter: boolean
+  dragging?: boolean
 }): string {
   return [
     "composer",
     options.tall ? "is-tall" : "",
     options.expanded ? "is-expanded" : "is-compact",
     options.meter ? "has-meter" : "",
+    options.dragging ? "is-drag-over" : "",
   ]
     .filter(Boolean)
     .join(" ")

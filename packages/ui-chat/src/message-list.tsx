@@ -8,6 +8,7 @@ import type { ThreadEvent } from "@pigcode/contracts"
 import { ArrowLeftRight, Waypoints, type LucideIcon } from "lucide-react"
 import { useLocale, type MessageKey } from "@pigcode/ui-primitives"
 import type { ApprovalDecision } from "./approval-card"
+import type { LightboxImage } from "./image-lightbox"
 import { ConversationActionsContext, type ConversationActions } from "./tools"
 import { TurnView } from "./turn-view"
 import { buildTimeline, isEnded, type TimelineEntry } from "./turns"
@@ -31,6 +32,9 @@ export interface MessageListProps {
   onViewDiff?: ((path?: string) => void) | undefined
   onOpenSubagent?: ((id: string) => void) | undefined
   onOpenThread?: ((threadId: string) => void) | undefined
+  readAttachment?: ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
+  peekAttachment?: ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
+  onOpenLightbox?: ((images: readonly LightboxImage[], index: number) => void) | undefined
   /** 运行中命令已经流出的输出，按工具调用 id。 */
   liveOutput?: Readonly<Record<string, string>> | undefined
   onAnswer?: ((requestId: string, answers: string[]) => void) | undefined
@@ -81,6 +85,9 @@ export function MessageList({
   onViewDiff,
   onOpenSubagent,
   onOpenThread,
+  readAttachment,
+  peekAttachment,
+  onOpenLightbox,
   liveOutput,
   onAnswer,
 }: MessageListProps) {
@@ -97,6 +104,9 @@ export function MessageList({
   const viewDiff = useStable(onViewDiff)
   const openSubagent = useStable(onOpenSubagent)
   const openThread = useStable(onOpenThread)
+  const readImage = useStable(readAttachment)
+  const peekImage = useStable(peekAttachment)
+  const openLightbox = useStable(onOpenLightbox)
   const actions = useMemo<ConversationActions>(
     () => ({
       root,
@@ -104,8 +114,11 @@ export function MessageList({
       onViewDiff: viewDiff,
       onOpenSubagent: openSubagent,
       onOpenThread: openThread,
+      readAttachment: readImage,
+      peekAttachment: peekImage,
+      onOpenLightbox: openLightbox,
     }),
-    [root, openFile, viewDiff, openSubagent, openThread],
+    [root, openFile, viewDiff, openSubagent, openThread, readImage, peekImage, openLightbox],
   )
   // 流式文本、思考与命令输出都属于最后一个还没结束的轮；其余轮拿不到它们，不会因此重渲染。
   const openKey = useMemo(() => {

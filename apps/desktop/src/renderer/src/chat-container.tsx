@@ -16,7 +16,11 @@ import {
 import { copyText, useLocale } from "@pigcode/ui-primitives"
 import { ChatView, collectSubagents, type ChatLinkActions } from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
-import type { ComposerCommand, ComposerModelChoice } from "@pigcode/ui-composer"
+import type {
+  ComposerAttachmentUploadInput,
+  ComposerCommand,
+  ComposerModelChoice,
+} from "@pigcode/ui-composer"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
 import { runRequestHandlers } from "./run-request-handlers"
@@ -385,6 +389,35 @@ export function ChatViewContainer({
     [registeredCommands, t],
   )
 
+  const uploadImage = useCallback(
+    (input: ComposerAttachmentUploadInput) =>
+      deps.connection.uploadAttachment({
+        ...input,
+        ...(threadId ? { threadId } : {}),
+      }),
+    [deps.connection, threadId],
+  )
+
+  const readAttachment = useCallback(
+    (attachmentId: string, variant: "thumb" | "full") =>
+      deps.connection.readAttachmentDataUrl({
+        attachmentId,
+        ...(threadId ? { threadId } : {}),
+        variant,
+      }),
+    [deps.connection, threadId],
+  )
+
+  const peekAttachment = useCallback(
+    (attachmentId: string, variant: "thumb" | "full") =>
+      deps.connection.peekAttachmentDataUrl({
+        attachmentId,
+        ...(threadId ? { threadId } : {}),
+        variant,
+      }),
+    [deps.connection, threadId],
+  )
+
   // 没有当前会话就是新会话草稿：发第一条消息时才建会话。
   if (!main) {
     return (
@@ -460,6 +493,9 @@ export function ChatViewContainer({
         {...(onOpenThread ? { onOpenThread } : {})}
         commands={commands}
         loadAgentCommands={loadAgentCommands}
+        onUploadImage={uploadImage}
+        readAttachment={readAttachment}
+        peekAttachment={peekAttachment}
         rightOpen={rightOpen}
         {...(onToggleRight ? { onToggleRight } : {})}
         {...(layoutControls !== undefined ? { layoutControls } : {})}

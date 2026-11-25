@@ -1,9 +1,15 @@
 /** 管理 MessagePort 连接、线程订阅、每线程 cursor 与 RPC 命令。 */
 import {
+  attachmentReadResultSchema,
+  attachmentUploadResultSchema,
   projectSchema,
   scheduleRunChangeSchema,
   threadSchema,
   type AgentEvent,
+  type AttachmentReadResult,
+  type AttachmentReadVariant,
+  type AttachmentUploadParams,
+  type ImageAttachmentRef,
   type ReasoningEffort,
   type Project,
   type ScheduleRunChange,
@@ -11,6 +17,7 @@ import {
   type Thread,
   type ThreadEvent,
 } from "@pigcode/contracts"
+import { AttachmentReadCache } from "./attachments"
 import { RpcClient } from "./rpc-client"
 import type { HostTransport } from "./transport"
 
@@ -56,6 +63,7 @@ export class Connection {
   private readonly terminalExitListeners = new Set<
     (exit: { terminalId: string; exitCode: number }) => void
   >()
+  private readonly attachmentCache = new AttachmentReadCache()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
 
@@ -115,6 +123,71 @@ export class Connection {
     if (this.client) await this.client.call("thread.unsubscribe", { threadId })
   }
 
+  /** 上传单张图片附件到 Host 暂存区，返回轻量附件元数据。 */
+  async uploadAttachment(params: AttachmentUploadParams): Promise<ImageAttachmentRef> {
+    if (!this.client) throw new Error("host not connected")
+    const raw = await this.client.call("attachment.upload", {
+      dataBase64: params.dataBase64,
+      ...(params.fileName ? { fileName: params.fileName } : {}),
+      ...(params.mimeType ? { mimeType: params.mimeType } : {}),
+      ...(params.threadId ? { threadId: params.threadId } : {}),
+    })
+    return attachmentUploadResultSchema.parse(raw).attachment
+  }
+
+  /** 读取图片附件的缩略图或原图；按 `(threadId, attachmentId, variant)` 走轻量内存缓存。 */
+  async readAttachment(params: {
+    attachmentId: string
+    threadId?: string | undefined
+    variant?: AttachmentReadVariant | undefined
+  }): Promise<AttachmentReadResult> {
+    const variant = params.variant ?? "full"
+    const entry = await this.attachmentCache.load(
+      { attachmentId: params.attachmentId, threadId: params.threadId, variant },
+      async () => {
+        if (!this.client) throw new Error("host not connected")
+        const raw = await this.client.call("attachment.read", {
+          attachmentId: params.attachmentId,
+          ...(params.threadId ? { threadId: params.threadId } : {}),
+          variant,
+        })
+        return attachmentReadResultSchema.parse(raw)
+      },
+    )
+    return entry.result
+  }
+
+  /** 读取图片附件并返回可直接放入 `<img src>` 的 data URL（复用同一份内存缓存）。 */
+  async readAttachmentDataUrl(params: {
+    attachmentId: string
+    threadId?: string | undefined
+    variant?: AttachmentReadVariant | undefined
+  }): Promise<string> {
+    const variant = params.variant ?? "full"
+    const entry = await this.attachmentCache.load(
+      { attachmentId: params.attachmentId, threadId: params.threadId, variant },
+      async () => {
+        if (!this.client) throw new Error("host not connected")
+        const raw = await this.client.call("attachment.read", {
+          attachmentId: params.attachmentId,
+          ...(params.threadId ? { threadId: params.threadId } : {}),
+          variant,
+        })
+        return attachmentReadResultSchema.parse(raw)
+      },
+    )
+    return entry.dataUrl
+  }
+
+  /** 同步查看某张图片附件的指定变体是否已在内存缓存中，避免滚动列表重复闪烁。 */
+  peekAttachmentDataUrl(params: {
+    attachmentId: string
+    threadId?: string | undefined
+    variant?: AttachmentReadVariant | undefined
+  }): string | undefined {
+    return this.attachmentCache.peekDataUrl(params)
+  }
+
   /** 在指定线程发送用户消息；effort 是本次 run 的思考深度，fast 与 ultracode 打开对应模式。 */
   async startRun(
     threadId: string,
@@ -126,6 +199,8 @@ export class Connection {
       commandId?: string
       /** 输入框里 @ 引用的会话（#81）。 */
       references?: ReadonlyArray<{ kind: "thread"; threadId: string }>
+      /** 本次发送附带的图片附件 id；有附件时允许 text 为空字符串。 */
+      attachmentIds?: readonly string[]
     } = {},
   ): Promise<void> {
     if (!this.client) throw new Error("host not connected")
@@ -144,6 +219,7 @@ export class Connection {
             })),
           }
         : {}),
+      ...(options.attachmentIds?.length ? { attachmentIds: [...options.attachmentIds] } : {}),
     })
   }
 

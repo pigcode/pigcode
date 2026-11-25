@@ -1,11 +1,28 @@
-import { DEFAULT_RUNTIME_MODE, type AgentExecutionModes } from "@pigcode/contracts"
+import {
+  DEFAULT_RUNTIME_MODE,
+  MAX_MESSAGE_ATTACHMENTS,
+  type AgentExecutionModes,
+} from "@pigcode/contracts"
 import { instancePermissionOptions } from "./permission-options"
 import { composerCommands } from "./composer-commands"
-// 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、agent/模型/思考深度/速度/权限选择，以及发送/停止。
+// 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、图片附件、agent/模型/思考深度/速度/权限选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Image as ImageIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent, type ReactNode } from "react"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ComposerAttachMenu, ComposerSubmit } from "./composer-actions"
+import {
+  COMPOSER_IMAGE_ACCEPT,
+  ComposerAttachmentStrip,
+  extractClipboardImageFiles,
+  extractDroppedFiles,
+  hasDraggedFiles,
+  useComposerAttachments,
+  type ComposerImagePeeker,
+  type ComposerImageReader,
+  type ComposerImageUploader,
+  type ComposerPreviewImage,
+} from "./composer-attachments"
 import { formContent, readComposerDraft, type ComposerForm } from "./composer-form"
 import {
   getComposerKeyAction,
@@ -57,6 +74,8 @@ export interface ComposerSubmitOptions {
   ultracode?: true
   /** @ 引用的会话；没有引用时不出现。 */
   references?: ComposerReference[]
+  /** 随消息发送的图片附件 id；没有附件时不出现。 */
+  attachmentIds?: string[]
   /** 表单保存时保留编辑器文档，供重新编辑。 */
   document?: string
 }
@@ -120,6 +139,16 @@ export interface ComposerProps {
   commands?: readonly ComposerCommand[]
   /** 读一个 Agent 实例的 / 命令与 skill；输入框获得焦点时预取当前实例的，调用方负责缓存。 */
   loadAgentCommands?: AgentCommandLoader | undefined
+  /** 上传图片附件；提供时开启图片粘贴、拖放与 `+` 菜单添加图片。 */
+  onUploadImage?: ComposerImageUploader | undefined
+  /** 按需读取已上传图片的缩略图/原图（用于撤回恢复的草稿图片）。 */
+  readImage?: ComposerImageReader | undefined
+  /** 同步读取内存缓存中的缩略图 URL。 */
+  peekImage?: ComposerImagePeeker | undefined
+  /** 当前 Agent 是否支持直接看图；明确为 false 且有图片时展示降级提示。 */
+  supportsImages?: boolean | undefined
+  /** 点击草稿缩略图打开灯箱核对；不提供时使用内置轻量预览。 */
+  onPreviewImages?: ((images: readonly ComposerPreviewImage[], index: number) => void) | undefined
 }
 
 /** 绘制 TipTap 输入区并保证空内容不可提交。 */
@@ -157,9 +186,17 @@ export function Composer({
   threads,
   commands = [],
   loadAgentCommands,
+  onUploadImage,
+  readImage,
+  peekImage,
+  supportsImages,
+  onPreviewImages,
 }: ComposerProps) {
   const { t, locale } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const dragDepthRef = useRef(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [initialContent] = useState(() => (form ? formContent(form.draft) : null))
   const store = useMemo(() => new SuggestionStore(), [])
   const { effort, fast, ultracode } = useRunPreferences(
@@ -196,6 +233,7 @@ export function Composer({
     onSubmit,
     disabled: disabled || invalidPermission,
     submitBlocked: (running && !allowQueue) || Boolean(form?.submitDisabled),
+    imageUploadEnabled: acceptsExternalContext && Boolean(onUploadImage),
     form,
     effort,
     fast,
@@ -222,6 +260,14 @@ export function Composer({
   )
   const contextsRef = useRef(attached)
   contextsRef.current = attached
+  const imageUploadEnabled = acceptsExternalContext && Boolean(onUploadImage)
+  const imageAttachments = useComposerAttachments({
+    draftKey,
+    disabled: disabled || !imageUploadEnabled,
+    onUploadImage: imageUploadEnabled ? onUploadImage : undefined,
+  })
+  const attachmentsRef = useRef(imageAttachments)
+  attachmentsRef.current = imageAttachments
   /** 正在翻历史时记录位置；内容被改动后退出翻找。 */
   const historyRef = useRef<{ offset: number; text: string } | null>(null)
 
@@ -231,8 +277,16 @@ export function Composer({
     if (!editor || current.disabled || current.submitBlocked) return
     const text = editorText(editor)
     const { contexts, clear } = contextsRef.current
-    if (!text && contexts.length === 0) return
+    const {
+      readyAttachments,
+      uploading,
+      hasError,
+      clear: clearAttachments,
+    } = attachmentsRef.current
+    if (uploading || hasError) return
+    if (!text && contexts.length === 0 && readyAttachments.length === 0) return
     const references = editorReferences(editor)
+    const attachmentIds = readyAttachments.map((item) => item.id)
     const key = draftKeyRef.current
     if (key) saveDraft(key, editor.isEmpty ? null : editor.getJSON())
     current.onSubmit(withContexts(text, contexts), {
@@ -240,6 +294,7 @@ export function Composer({
       ...(current.fast ? { fast: true as const } : {}),
       ...(current.ultracode ? { ultracode: true as const } : {}),
       ...(references.length > 0 ? { references } : {}),
+      ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
       ...(current.form ? { document: JSON.stringify(editor.getJSON()) } : {}),
     })
     if (current.form) return
@@ -247,6 +302,7 @@ export function Composer({
     historyRef.current = null
     editor.commands.clearContent(true)
     clear()
+    clearAttachments()
     if (draftKeyRef.current) saveDraft(draftKeyRef.current, null)
   }
   const sendRef = useRef(send)
@@ -290,8 +346,18 @@ export function Composer({
         "aria-label": latest.current.inputLabel,
         ...(latest.current.form ? { role: "textbox", "aria-multiline": "true" } : {}),
       }),
-      handlePaste: (view, event) =>
-        editorRef.current ? pastePlainText(editorRef.current, view, event) : false,
+      handlePaste: (view, event) => {
+        if (!editorRef.current) return false
+        if (latest.current.imageUploadEnabled && !latest.current.disabled) {
+          const files = extractClipboardImageFiles(event.clipboardData)
+          if (files.length > 0) {
+            event.preventDefault()
+            void attachmentsRef.current.addFiles(files)
+            return true
+          }
+        }
+        return pastePlainText(editorRef.current, view, event)
+      },
       handleKeyDown: (_view, event) => {
         const current = editorRef.current
         if (!current || event.isComposing) return false
@@ -421,9 +487,22 @@ export function Composer({
       editor,
       selector: ({ editor: current }) => Boolean(current && !current.isEmpty),
     }) ?? false
-  const empty = !typed && attached.contexts.length === 0
+  const editorEmpty = !typed && attached.contexts.length === 0
+  const hasContent = typed || attached.contexts.length > 0 || imageAttachments.readyAttachments.length > 0
+  const submitDisabled =
+    !hasContent ||
+    imageAttachments.uploading ||
+    imageAttachments.hasError ||
+    disabled ||
+    invalidPermission ||
+    Boolean(form?.submitDisabled)
   const wrapped = useWrapped(editor, !tall)
-  const expanded = tall || wrapped || attached.contexts.length > 0
+  const expanded =
+    tall ||
+    wrapped ||
+    attached.contexts.length > 0 ||
+    imageAttachments.items.length > 0 ||
+    Boolean(imageAttachments.error)
 
   /** 在光标处插入触发字符，打开对应的建议列表。 */
   function insertTrigger(char: "@" | "/"): void {
@@ -436,16 +515,109 @@ export function Composer({
     editor.chain().focus().insertContent(`${prefix}${char}`).run()
   }
 
+  function handleCardPaste(event: ReactClipboardEvent<HTMLDivElement>): void {
+    if (event.defaultPrevented || !imageUploadEnabled || disabled) return
+    if (event.target instanceof Element && event.target.closest(".tiptap")) return
+    const files = extractClipboardImageFiles(event.clipboardData)
+    if (files.length === 0) return
+    event.preventDefault()
+    void imageAttachments.addFiles(files)
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLDivElement>): void {
+    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
+    event.preventDefault()
+    dragDepthRef.current += 1
+    setDragging(true)
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>): void {
+    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
+    event.preventDefault()
+    try {
+      event.dataTransfer.dropEffect = "copy"
+    } catch {
+      // jsdom 等环境里 dataTransfer 可能是只读 mock。
+    }
+    setDragging(true)
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>): void {
+    if (!imageUploadEnabled || !dragging) return
+    if (
+      event.relatedTarget instanceof Node &&
+      event.currentTarget.contains(event.relatedTarget)
+    ) {
+      return
+    }
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) setDragging(false)
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>): void {
+    dragDepthRef.current = 0
+    setDragging(false)
+    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
+    event.preventDefault()
+    event.stopPropagation()
+    const files = extractDroppedFiles(event.dataTransfer)
+    if (files.length > 0) void imageAttachments.addFiles(files)
+  }
+
   const card = (
-    <div className={composerClass({ tall, expanded, meter: Boolean(contextUsage) })}>
+    <div
+      className={composerClass({ tall, expanded, meter: Boolean(contextUsage), dragging })}
+      onPaste={handleCardPaste}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {dragging ? (
+        <div className="composer-drop-overlay" aria-hidden="true">
+          <ImageIcon className="ic" />
+          <span>{t("composer.image.dropHint")}</span>
+        </div>
+      ) : null}
+      {imageUploadEnabled ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={COMPOSER_IMAGE_ACCEPT}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="sr-only"
+          data-testid="composer-image-input"
+          onChange={(event) => {
+            const files = event.target.files
+            if (files && files.length > 0) void imageAttachments.addFiles(files)
+            event.target.value = ""
+          }}
+        />
+      ) : null}
       <SuggestionPanel store={store} />
+      <ComposerAttachmentStrip
+        items={imageAttachments.items}
+        error={imageAttachments.error}
+        supportsImages={supportsImages}
+        readImage={readImage}
+        peekImage={peekImage}
+        onRemove={imageAttachments.remove}
+        onRetry={imageAttachments.retry}
+        onDismissError={imageAttachments.dismissError}
+        onPreviewImages={onPreviewImages}
+      />
       <ComposerContextChips contexts={attached.contexts} onRemove={attached.remove} />
       <EditorContent editor={editor} className="composer-editor" />
       <ComposerAttachMenu
-        empty={empty}
+        empty={editorEmpty}
         disabled={disabled}
         side={menuSide}
         onTrigger={insertTrigger}
+        onPickImages={imageUploadEnabled ? () => fileInputRef.current?.click() : undefined}
+        imageCount={imageAttachments.items.length}
+        maxImages={MAX_MESSAGE_ATTACHMENTS}
       />
       <ComposerModelControls
         agents={agents}
@@ -472,7 +644,7 @@ export function Composer({
         allowQueue={allowQueue}
         canInterrupt={canInterrupt}
         formLabel={form?.submitLabel}
-        disabled={empty || disabled || invalidPermission || Boolean(form?.submitDisabled)}
+        disabled={submitDisabled}
         onSubmit={() => sendRef.current()}
         onStop={onStop}
       />

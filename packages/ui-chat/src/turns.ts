@@ -3,12 +3,13 @@
  * （思考、工具、过程消息、提问与子 agent）、待处理的审批、工作区之外的最终回答、改过的文件与
  * 结束状态。待办与进入计划模式不进时间线，待办在会话详情里显示。
  */
-import type { ThreadEvent } from "@pigcode/contracts"
+import type { ImageAttachmentRef, ThreadEvent } from "@pigcode/contracts"
 import type { ApprovalRequest } from "./approval-card"
 import {
   approvalFromEvent,
   asRecord,
   asText,
+  attachmentsFromPayload,
   collectAnswers,
   collectResolved,
   collectSubagents,
@@ -55,6 +56,8 @@ export interface Turn {
   userAt: string | null
   /** 用户这条消息 @ 引用的会话（#81）。 */
   userReferences: ReadonlyArray<{ threadId: string; title: string }>
+  /** 用户这条消息附带的图片元数据（纯图消息时 userText 可为 null）。 */
+  userAttachments: readonly ImageAttachmentRef[]
   agentId: string | null
   status: TurnStatus
   startedAt: string | null
@@ -104,6 +107,7 @@ function emptyTurn(key: string, runId: string | null): Turn {
     userText: null,
     userAt: null,
     userReferences: [],
+    userAttachments: [],
     agentId: null,
     status: "completed",
     startedAt: null,
@@ -215,14 +219,18 @@ export function buildTimeline(events: readonly ThreadEvent[], streaming = false)
         break
       }
       case "message.completed": {
+        const role = asText(payload?.role)
         const text = asText(payload?.text)
-        if (!text) break
-        if (asText(payload?.role) === "user") {
-          turn.userText = text
+        if (role === "user") {
+          const attachments = attachmentsFromPayload(payload?.attachments)
+          if (!text && attachments.length === 0) break
+          turn.userText = text ?? null
           turn.userAt = event.createdAt
           turn.userReferences = referencesOf(payload?.references)
+          turn.userAttachments = attachments
           break
         }
+        if (!text) break
         draft.texts.push({ text, at: event.createdAt })
         turn.work.push({ kind: "message", key: `msg-${event.seq}`, text })
         break

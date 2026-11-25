@@ -1,5 +1,10 @@
 /** 把线程事件的 payload 解析成时间线组件需要的结构；字段名兼容各 Agent 的变体。 */
-import { approvalDecisionSchema, type ThreadEvent } from "@pigcode/contracts"
+import {
+  approvalDecisionSchema,
+  imageAttachmentSchema,
+  type ImageAttachmentRef,
+  type ThreadEvent,
+} from "@pigcode/contracts"
 import type { ApprovalDecision, ApprovalRequest } from "./approval-card"
 import type { QuestionRequestView, QuestionView } from "./question-card"
 import type { SubagentCall, SubagentStatus } from "./subagent-card"
@@ -24,6 +29,17 @@ export function asText(value: unknown): string | undefined {
 /** 只接受有限数字字段。 */
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+/** 从用户消息 payload 里解析轻量图片附件元数据，自动跳过格式异常项。 */
+export function attachmentsFromPayload(value: unknown): ImageAttachmentRef[] {
+  if (!Array.isArray(value) || value.length === 0) return []
+  const refs: ImageAttachmentRef[] = []
+  for (const item of value) {
+    const parsed = imageAttachmentSchema.safeParse(item)
+    if (parsed.success) refs.push(parsed.data)
+  }
+  return refs
 }
 
 /** 把任意 payload 值转成可读文本。 */

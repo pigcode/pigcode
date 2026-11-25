@@ -2,6 +2,7 @@
 export * from "./approval-card"
 export * from "./chat-view"
 export * from "./code-block"
+export * from "./image-lightbox"
 export { collectSubagents } from "./event-parsers"
 export type { ChatLinkActions } from "./chat-link-actions"
 export { Markdown } from "./markdown"

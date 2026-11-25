@@ -1,5 +1,5 @@
 /** Composer 工具栏的添加内容与提交动作。 */
-import { ArrowUp, AtSign, Plus, Slash, Square } from "lucide-react"
+import { ArrowUp, AtSign, Image, Plus, Slash, Square } from "lucide-react"
 import { Button, Menu, formatShortcut, useLocale } from "@pigcode/ui-primitives"
 
 export function ComposerAttachMenu({
@@ -7,13 +7,20 @@ export function ComposerAttachMenu({
   disabled,
   side,
   onTrigger,
+  onPickImages,
+  imageCount = 0,
+  maxImages,
 }: {
   empty: boolean
   disabled: boolean
   side: "top" | "bottom"
   onTrigger: (character: "@" | "/") => void
+  onPickImages?: (() => void) | undefined
+  imageCount?: number | undefined
+  maxImages?: number | undefined
 }) {
   const { t } = useLocale()
+  const imageLimitReached = maxImages !== undefined && imageCount >= maxImages
   return (
     <Menu.Root>
       <Menu.Trigger
@@ -28,6 +35,17 @@ export function ComposerAttachMenu({
       <Menu.Portal>
         <Menu.Positioner side={side} align="start" sideOffset={8}>
           <Menu.Popup>
+            {onPickImages ? (
+              <Menu.Item disabled={disabled || imageLimitReached} onClick={onPickImages}>
+                <Image className="ic" aria-hidden="true" />
+                <span className="grow">{t("composer.attach.image")}</span>
+                {maxImages !== undefined && imageCount > 0 ? (
+                  <span className="menu-meta">
+                    {imageCount}/{maxImages}
+                  </span>
+                ) : null}
+              </Menu.Item>
+            ) : null}
             <Menu.Item onClick={() => onTrigger("@")}>
               <AtSign className="ic" aria-hidden="true" />
               <span className="grow">{t("composer.attach.file")}</span>

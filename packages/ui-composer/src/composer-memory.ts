@@ -3,6 +3,14 @@
  * 只保存在本次运行的内存里，切换会话、切到设置页再回来时草稿还在。
  */
 import type { JSONContent } from "@tiptap/react"
+import type { ImageAttachmentRef } from "@pigcode/contracts"
+import {
+  attachmentsFor,
+  moveComposerAttachments,
+  prefillComposerAttachments,
+  resetComposerAttachments,
+  restoreComposerAttachments,
+} from "./composer-attachments"
 import {
   contextsFor,
   moveComposerContexts,
@@ -49,14 +57,21 @@ const focusRequests = new Set<string>()
 /** 预填的那个输入框已经挂着时，用这个事件让它立刻换上预填的内容。 */
 export const COMPOSER_PREFILL_EVENT = "pigcode:composer-prefill"
 
-/** 撤回待发消息时，将原文补到当前草稿里。 */
-export function appendComposerText(key: string, text: string): void {
+/** 撤回待发消息时，将原文与图片附件一并补到当前草稿里。 */
+export function appendComposerText(
+  key: string,
+  text: string,
+  attachments?: readonly ImageAttachmentRef[] | undefined,
+): void {
   window.dispatchEvent(new CustomEvent(COMPOSER_TAKE_EVENT, { detail: { key } }))
-  const paragraphs = text.split("\n").map((line) => ({
-    type: "paragraph",
-    content: line ? [{ type: "text", text: line }] : [],
-  }))
-  saveDraft(key, { type: "doc", content: [...(loadDraft(key)?.content ?? []), ...paragraphs] })
+  if (text) {
+    const paragraphs = text.split("\n").map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : [],
+    }))
+    saveDraft(key, { type: "doc", content: [...(loadDraft(key)?.content ?? []), ...paragraphs] })
+  }
+  if (attachments && attachments.length > 0) prefillComposerAttachments(key, attachments)
   focusRequests.add(key)
   window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key } }))
 }
@@ -67,7 +82,11 @@ export function appendComposerText(key: string, text: string): void {
  */
 export function prefillComposer(
   key: string,
-  draft: { text: string; contexts?: readonly ComposerContext[] | undefined },
+  draft: {
+    text: string
+    contexts?: readonly ComposerContext[] | undefined
+    attachments?: readonly ImageAttachmentRef[] | undefined
+  },
 ): void {
   saveDraft(key, {
     type: "doc",
@@ -76,18 +95,22 @@ export function prefillComposer(
     ],
   })
   if (draft.contexts) prefillComposerContexts(key, draft.contexts)
+  if (draft.attachments) prefillComposerAttachments(key, draft.attachments)
   focusRequests.add(key)
   window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key } }))
 }
 
-/** 保存发送时的文档和附件，失败后可把它们原样放回当前草稿或已建好的会话。 */
+/** 保存发送时的文档、上下文与图片附件，失败后可把它们原样放回当前草稿或已建好的会话。 */
 export function captureComposerDraft(key: string): (target: string) => void {
   const content = loadDraft(key)
   const contexts = contextsFor(key)
+  const attachments = attachmentsFor(key)
   return (target) => {
-    if (loadDraft(target) || contextsFor(target).length > 0) return
+    if (loadDraft(target) || contextsFor(target).length > 0 || attachmentsFor(target).length > 0)
+      return
     saveDraft(target, content)
     if (contexts.length) prefillComposerContexts(target, contexts)
+    if (attachments.length) restoreComposerAttachments(target, attachments)
     focusRequests.add(target)
     window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key: target } }))
   }
@@ -106,8 +129,9 @@ export function moveComposerDraft(from: string, to: string): void {
   const draft = drafts.get(from)
   drafts.delete(from)
   const contexts = moveComposerContexts(from, to)
+  const attachments = moveComposerAttachments(from, to)
   if (draft) drafts.set(to, draft)
-  else if (!contexts) return
+  else if (!contexts && !attachments) return
   focusRequests.add(to)
   if (draft) window.dispatchEvent(new CustomEvent(COMPOSER_PREFILL_EVENT, { detail: { key: to } }))
 }
@@ -129,4 +153,5 @@ export function resetComposerMemory(): void {
   history.length = 0
   focusRequests.clear()
   resetComposerContexts()
+  resetComposerAttachments()
 }

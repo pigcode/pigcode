@@ -3,7 +3,7 @@ import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
  * 新会话草稿页的容器：把项目、agent 与模型、权限接到草稿页；第一次发送时按草稿建会话，再把这条消息发出去。
  * 没发出去时文字放回输入框，不会丢。
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useThreadOptions } from "./thread-options"
 import type { AgentFeatures, GitBranches, WorktreeStart } from "@pigcode/contracts"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
@@ -11,6 +11,7 @@ import { NewThreadView } from "@pigcode/ui-chat"
 import {
   captureComposerDraft,
   type ComposerAgent,
+  type ComposerAttachmentUploadInput,
   type ComposerCommand,
   type ComposerModelCatalog,
   type ComposerSubmitOptions,
@@ -66,6 +67,7 @@ function ProjectDraft({
   agents,
   catalog,
   onLoadModels,
+  featuresByAgent,
   commands,
   focusKey,
   layoutControls,
@@ -106,6 +108,22 @@ function ProjectDraft({
   const instanceId = (chosenGone ? null : options.instanceId) ?? defaultInstanceId
   const modelId = options.instanceId && !chosenGone ? options.modelId : null
   const selectedAgent = agents.find((agent) => agent.id === instanceId)
+  const selectedFeatures = selectedAgent ? featuresByAgent[selectedAgent.agentId] : undefined
+
+  const uploadImage = useCallback(
+    (input: ComposerAttachmentUploadInput) => deps.connection.uploadAttachment(input),
+    [deps.connection],
+  )
+  const readAttachment = useCallback(
+    (attachmentId: string, variant: "thumb" | "full") =>
+      deps.connection.readAttachmentDataUrl({ attachmentId, variant }),
+    [deps.connection],
+  )
+  const peekAttachment = useCallback(
+    (attachmentId: string, variant: "thumb" | "full") =>
+      deps.connection.peekAttachmentDataUrl({ attachmentId, variant }),
+    [deps.connection],
+  )
 
   const loadAgentCommands = useAgentCommandsLoader(
     deps.connection,
@@ -223,6 +241,10 @@ function ProjectDraft({
       threads={threadChoices}
       commands={commands}
       loadAgentCommands={loadAgentCommands}
+      onUploadImage={uploadImage}
+      readAttachment={readAttachment}
+      peekAttachment={peekAttachment}
+      supportsImages={selectedFeatures?.images}
       onSubmit={(text, submitOptions) => void submit(text, submitOptions)}
       pending={pending || switching || needsBase}
       {...(focusKey !== undefined ? { focusKey } : {})}
