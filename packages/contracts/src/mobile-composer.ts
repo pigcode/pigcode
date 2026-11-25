@@ -25,6 +25,7 @@ export const mobileThreadComposerState = z.strictObject({
   permissionMode: runtimeModeSchema,
   planMode: z.boolean(),
   supportsPlanMode: z.boolean(),
+  supportsImages: z.boolean().optional(),
   contextUsage: mobileContextUsage.nullable().optional(),
 })
 

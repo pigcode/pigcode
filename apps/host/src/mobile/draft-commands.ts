@@ -27,27 +27,54 @@ export class MobileDraftCommands {
     private readonly deviceKey: string,
     private readonly receipts: MobileCommandReceipts,
     private readonly supportsComposerControls = false,
+    private readonly supportsAttachments = false,
   ) {}
 
   async dispatch(request: RpcRequest): Promise<unknown> {
     switch (request.method) {
       case methods.options:
         mobileParams(mobileDraftOptionsParams, request.params)
-        return draftOptions(this.ctx, this.supportsComposerControls)
+        return draftOptions(this.ctx, this.supportsComposerControls, this.supportsAttachments)
       case methods.models: {
         const { instanceId } = mobileParams(mobileDraftModelParams, request.params)
-        return (await draftModels(this.ctx, instanceId, this.supportsComposerControls)).catalog
+        return (
+          await draftModels(
+            this.ctx,
+            instanceId,
+            this.supportsComposerControls,
+            this.supportsAttachments,
+          )
+        ).catalog
       }
       case methods.create:
-        return this.create(
-          mobileParams(
-            this.supportsComposerControls ? mobileDraftCreateParams : legacyMobileDraftCreateParams,
-            request.params,
-          ),
-        )
+        return this.create(this.parseCreateParams(request.params))
       default:
         throw new MobileRequestError("METHOD_NOT_AVAILABLE")
     }
+  }
+
+  private parseCreateParams(input: unknown): MobileDraftCreateParams {
+    if (!this.supportsComposerControls && !this.supportsAttachments) {
+      return mobileParams(legacyMobileDraftCreateParams, input)
+    }
+    const parsed = mobileParams(mobileDraftCreateParams, input)
+    if (
+      !this.supportsComposerControls &&
+      (parsed.effort !== undefined ||
+        parsed.fast !== undefined ||
+        parsed.ultracode !== undefined ||
+        parsed.planMode !== undefined ||
+        parsed.references !== undefined)
+    ) {
+      throw new MobileRequestError("INVALID_PARAMS")
+    }
+    if (
+      !this.supportsAttachments &&
+      (parsed.attachmentIds !== undefined || !/\S/.test(parsed.text))
+    ) {
+      throw new MobileRequestError("INVALID_PARAMS")
+    }
+    return parsed
   }
 
   private async create({

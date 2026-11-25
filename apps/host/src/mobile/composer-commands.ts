@@ -28,6 +28,7 @@ export class MobileComposerCommands {
     private readonly ctx: Context,
     private readonly requirePairedDevice: () => void,
     private readonly onChanged: (threadId: string) => void,
+    private readonly includeAttachments = false,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
@@ -70,7 +71,7 @@ export class MobileComposerCommands {
       throw error
     }
     this.onChanged(threadId)
-    const composer = buildThreadComposerState(this.ctx, threadId)
+    const composer = buildThreadComposerState(this.ctx, threadId, undefined, this.includeAttachments)
     if (!composer) throw new MobileRequestError("RESOURCE_NOT_AVAILABLE")
     return composer
   }
@@ -93,7 +94,7 @@ export class MobileComposerCommands {
       throw new MobileRequestError("DRAFT_SELECTION_UNAVAILABLE")
     }
     this.onChanged(threadId)
-    const composer = buildThreadComposerState(this.ctx, threadId)
+    const composer = buildThreadComposerState(this.ctx, threadId, undefined, this.includeAttachments)
     if (!composer) throw new MobileRequestError("RESOURCE_NOT_AVAILABLE")
     return composer
   }
@@ -116,7 +117,7 @@ export class MobileComposerCommands {
       throw new MobileRequestError("DRAFT_SELECTION_UNAVAILABLE")
     }
     this.onChanged(threadId)
-    const composer = buildThreadComposerState(this.ctx, threadId)
+    const composer = buildThreadComposerState(this.ctx, threadId, undefined, this.includeAttachments)
     if (!composer) throw new MobileRequestError("RESOURCE_NOT_AVAILABLE")
     return composer
   }

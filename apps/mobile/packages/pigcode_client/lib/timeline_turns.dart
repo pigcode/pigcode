@@ -133,7 +133,9 @@ class _Draft {
         requestEvents.clear();
         _requests.clear();
       case MobileTimelineKind.messageUser:
-        if ((event.text ?? '').isNotEmpty) user = event;
+        if ((event.text ?? '').isNotEmpty || event.attachments.isNotEmpty) {
+          user = event;
+        }
       case MobileTimelineKind.messageAssistant:
         if ((event.text ?? '').isNotEmpty) {
           work.add(TimelineWork(TimelineWorkKind.message, event));

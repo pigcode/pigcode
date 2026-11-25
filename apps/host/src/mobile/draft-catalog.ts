@@ -8,7 +8,11 @@ import {
 import type { Context } from "cordis"
 import { MobileRequestError } from "./request-error"
 
-function enabledInstances(ctx: Context, includeComposerControls = false) {
+function enabledInstances(
+  ctx: Context,
+  includeComposerControls = false,
+  includeAttachments = false,
+) {
   return ctx.agents.list().flatMap((agent) =>
     ctx.agents.listInstances(agent.id).flatMap((instance) => {
       if (!instance.enabled) return []
@@ -16,6 +20,7 @@ function enabledInstances(ctx: Context, includeComposerControls = false) {
       const permissionModes = executionModes?.permissions ?? runtimeModeSchema.options
       if (!permissionModes.length) return []
       const supportsPlanMode = executionModes?.plan === true
+      const supportsImages = agent.features.images === true
       const visible: MobileDraftInstance = {
         instanceId: instance.instanceId,
         label: instance.label,
@@ -33,6 +38,7 @@ function enabledInstances(ctx: Context, includeComposerControls = false) {
               supportsPlanMode,
             }
           : {}),
+        ...(includeAttachments ? { supportsImages } : {}),
       }
       return [{ agentId: agent.id, supportsPlanMode, visible }]
     }),
@@ -43,12 +49,16 @@ function available(status: { installed: boolean; authenticated: boolean | null }
   return status?.installed === true && status.authenticated !== false
 }
 
-export async function draftOptions(ctx: Context, includeComposerControls = false) {
+export async function draftOptions(
+  ctx: Context,
+  includeComposerControls = false,
+  includeAttachments = false,
+) {
   const [detection, defaultAgent] = await Promise.all([
     ctx.agents.detect(),
     ctx.agents.defaultAgent(),
   ])
-  const instances = enabledInstances(ctx, includeComposerControls)
+  const instances = enabledInstances(ctx, includeComposerControls, includeAttachments)
     .map(({ visible }) => visible)
     .filter(({ instanceId }) => available(detection[instanceId]))
   const preferred = instances.find(({ instanceId }) => instanceId === defaultAgent.instanceId)
@@ -62,9 +72,10 @@ export async function draftModels(
   ctx: Context,
   instanceId: string,
   includeComposerControls = false,
+  includeAttachments = false,
 ) {
   const find = () =>
-    enabledInstances(ctx, includeComposerControls).find(
+    enabledInstances(ctx, includeComposerControls, includeAttachments).find(
       ({ visible }) => visible.instanceId === instanceId,
     )
   const instance = find()

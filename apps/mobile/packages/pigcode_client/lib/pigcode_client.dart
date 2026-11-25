@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:pigcode_transport/pigcode_transport.dart';
 import 'composer_commands.dart';
@@ -12,6 +13,7 @@ import 'run_changes.dart';
 import 'run_commands.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
+import 'src/attachments.dart';
 import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
@@ -32,6 +34,7 @@ export 'queue_models.dart';
 export 'reminder_models.dart';
 export 'sidebar.dart';
 export 'sidebar_models.dart';
+export 'src/attachments.dart';
 export 'timeline.dart';
 export 'timeline_turns.dart';
 export 'timeline_models.dart';
@@ -55,6 +58,7 @@ const mobileClientFeatures = <String>[
   'queue.write',
   'composer.controls',
   'composer.mentions',
+  'composer.attachments',
 ];
 
 class MobileConnection {
@@ -74,6 +78,7 @@ class MobileConnection {
     this.supportsRunChanges,
     this.supportsComposerControls,
     this.supportsComposerMentions,
+    this.supportsAttachments,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -94,6 +99,7 @@ class MobileConnection {
   final bool supportsRunChanges;
   final bool supportsComposerControls;
   final bool supportsComposerMentions;
+  final bool supportsAttachments;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -105,6 +111,10 @@ class MobileConnection {
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
   late final MobileComposerCommands composer = MobileComposerCommands(_rpc);
   late final MobileMentionCommands mentions = MobileMentionCommands(_rpc);
+  late final MobileAttachmentCommands attachments = MobileAttachmentCommands(
+    _rpc,
+    supportsAttachments: supportsAttachments,
+  );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
     _rpc,
@@ -113,6 +123,39 @@ class MobileConnection {
   Future<MobileSidebar>? _sidebar;
   Future<MobileTimeline>? _timeline;
   String? _selectedThread;
+
+  Future<MobileAttachmentRef> uploadAttachment({
+    required Uint8List bytes,
+    required String mimeType,
+    String? fileName,
+    int? width,
+    int? height,
+    void Function(MobileAttachmentUploadProgress)? onProgress,
+    MobileAttachmentCancelToken? cancelToken,
+  }) => attachments.uploadAttachment(
+    bytes: bytes,
+    mimeType: mimeType,
+    fileName: fileName,
+    width: width,
+    height: height,
+    onProgress: onProgress,
+    cancelToken: cancelToken,
+  );
+
+  Future<MobileAttachmentReadData> readAttachmentThumb(
+    String attachmentId, {
+    String? threadId,
+  }) => attachments.readAttachmentThumb(attachmentId, threadId: threadId);
+
+  Future<MobileAttachmentReadData> readAttachmentFull(
+    String attachmentId, {
+    String? threadId,
+    void Function(int received, int total)? onProgress,
+  }) => attachments.readAttachmentFull(
+    attachmentId,
+    threadId: threadId,
+    onProgress: onProgress,
+  );
 
   Future<MobileSidebar> openSidebar() {
     if (!supportsSidebar) throw const ConnectionFailure('update-desktop');
@@ -347,6 +390,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('changes.read'),
         (welcome['features'] as List).contains('composer.controls'),
         (welcome['features'] as List).contains('composer.mentions'),
+        (welcome['features'] as List).contains('composer.attachments'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

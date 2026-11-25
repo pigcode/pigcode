@@ -1,4 +1,7 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
+import 'src/attachments.dart';
+
+typedef MobileQueuedMessage = QueuedMessage;
 
 abstract final class QueueMethods {
   static const get = 'queue.get';
@@ -165,14 +168,16 @@ final class QueuedMessage {
     required this.id,
     required this.text,
     required this.selected,
+    this.attachments = const [],
   });
   final String id;
   final String text;
   final bool selected;
+  final List<MobileAttachmentRef> attachments;
 
   factory QueuedMessage.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {'id', 'text', 'selected'}.contains(key),
+      (key) => !const {'id', 'text', 'selected', 'attachments'}.contains(key),
     )) {
       throw const FormatException('QueuedMessage contains an unknown field');
     }
@@ -182,13 +187,21 @@ final class QueuedMessage {
     }
     final text = json['text'] as String;
     final selected = json['selected'] as bool;
-    return QueuedMessage(id: id, text: text, selected: selected);
+    final attachments = parseMobileAttachmentRefs(json['attachments']);
+    return QueuedMessage(
+      id: id,
+      text: text,
+      selected: selected,
+      attachments: attachments,
+    );
   }
 
   Map<String, Object?> toJson() => {
     'id': id,
     'text': text,
     'selected': selected,
+    if (attachments.isNotEmpty)
+      'attachments': attachments.map((item) => item.toJson()).toList(),
   };
 }
 
@@ -291,6 +304,7 @@ final class QueueReceipt {
     this.runId,
     this.stoppedRunId,
     this.text,
+    this.attachments = const [],
   });
   final String threadId;
   final String commandId;
@@ -300,6 +314,7 @@ final class QueueReceipt {
   final String? runId;
   final String? stoppedRunId;
   final String? text;
+  final List<MobileAttachmentRef> attachments;
 
   factory QueueReceipt.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -312,6 +327,7 @@ final class QueueReceipt {
         'runId',
         'stoppedRunId',
         'text',
+        'attachments',
       }.contains(key),
     )) {
       throw const FormatException('QueueReceipt contains an unknown field');
@@ -346,6 +362,7 @@ final class QueueReceipt {
       throw const FormatException('Invalid stoppedRunId');
     }
     final text = json.containsKey('text') ? json['text'] as String : null;
+    final attachments = parseMobileAttachmentRefs(json['attachments']);
     return QueueReceipt(
       threadId: threadId,
       commandId: commandId,
@@ -355,6 +372,7 @@ final class QueueReceipt {
       runId: runId,
       stoppedRunId: stoppedRunId,
       text: text,
+      attachments: attachments,
     );
   }
 
@@ -367,6 +385,8 @@ final class QueueReceipt {
     'runId': ?runId,
     'stoppedRunId': ?stoppedRunId,
     'text': ?text,
+    if (attachments.isNotEmpty)
+      'attachments': attachments.map((item) => item.toJson()).toList(),
   };
 }
 

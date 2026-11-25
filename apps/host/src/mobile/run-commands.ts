@@ -37,6 +37,7 @@ export class MobileRunCommands {
     private readonly receipts: MobileCommandReceipts,
     private readonly supportsQueue: boolean,
     private readonly supportsComposerControls = false,
+    private readonly supportsAttachments = false,
   ) {
     this.runs = new RunStore(ctx.storage.db)
   }
@@ -44,17 +45,35 @@ export class MobileRunCommands {
   dispatch(request: RpcRequest): unknown {
     switch (request.method) {
       case methods.start:
-        return this.start(
-          mobileParams(
-            this.supportsComposerControls ? mobileStartRunParams : legacyMobileStartRunParams,
-            request.params,
-          ),
-        )
+        return this.start(this.parseStartParams(request.params))
       case methods.interrupt:
         return this.interrupt(mobileParams(mobileInterruptRunParams, request.params))
       default:
         throw new MobileRequestError("METHOD_NOT_AVAILABLE")
     }
+  }
+
+  private parseStartParams(input: unknown): MobileStartRunParams {
+    if (!this.supportsComposerControls && !this.supportsAttachments) {
+      return mobileParams(legacyMobileStartRunParams, input)
+    }
+    const parsed = mobileParams(mobileStartRunParams, input)
+    if (
+      !this.supportsComposerControls &&
+      (parsed.effort !== undefined ||
+        parsed.fast !== undefined ||
+        parsed.ultracode !== undefined ||
+        parsed.references !== undefined)
+    ) {
+      throw new MobileRequestError("INVALID_PARAMS")
+    }
+    if (
+      !this.supportsAttachments &&
+      (parsed.attachmentIds !== undefined || !/\S/.test(parsed.text))
+    ) {
+      throw new MobileRequestError("INVALID_PARAMS")
+    }
+    return parsed
   }
 
   private async start({

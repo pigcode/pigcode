@@ -65,6 +65,7 @@ export function buildThreadComposerState(
   ctx: Context,
   threadId: string,
   contextUsage?: MobileContextUsage | null,
+  includeAttachments = false,
 ): MobileThreadComposerState | undefined {
   const thread = ctx.threads.get(threadId)
   if (!thread) return undefined
@@ -74,6 +75,8 @@ export function buildThreadComposerState(
   const permissionMode = normalizeRuntimeMode(thread.permissionMode, agentId) ?? DEFAULT_RUNTIME_MODE
   const planMode = thread.planMode === true || thread.permissionMode === "plan"
   const supportsPlanMode = modes?.plan === true
+  const supportsImages =
+    ctx.agents.list().find((agent) => agent.id === agentId)?.features.images === true
   const usage =
     contextUsage === undefined ? latestThreadContextUsage(ctx, threadId) : contextUsage
   return mobileThreadComposerState.parse({
@@ -83,6 +86,7 @@ export function buildThreadComposerState(
     permissionMode,
     planMode,
     supportsPlanMode,
+    ...(includeAttachments ? { supportsImages } : {}),
     contextUsage: usage,
   })
 }

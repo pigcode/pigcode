@@ -50,6 +50,7 @@ const instanceOption = z.strictObject({
   agentId: key.optional(),
   accentColor: accentColor.optional(),
   supportsPlanMode: z.boolean().optional(),
+  supportsImages: z.boolean().optional(),
 })
 export const mobileDraftOptions = z.strictObject({
   instances: z.array(instanceOption),

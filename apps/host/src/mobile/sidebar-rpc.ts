@@ -30,6 +30,8 @@ import {
   type MobileReminderSettings,
   type MobileSidebarWrite,
   type MobileThreadSummary,
+  type QueueReceipt,
+  type QueueSnapshot,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { dispatchThreadCommand } from "../rpc/thread-commands"
@@ -37,6 +39,7 @@ import { QueueOperationError } from "../agents/message-queue"
 import { AttachmentError } from "../services/attachments"
 import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
 import { fingerprint, type PairedDevices } from "./paired-devices"
+import { MobileAttachments, mobileAttachmentRequests } from "./attachments"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
 import { MobileComposerCommands, mobileComposerRequests } from "./composer-commands"
 import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
@@ -101,6 +104,18 @@ function threadSummary(thread: Thread, includeReadTarget: boolean): MobileThread
   }
 }
 
+/** 旧客户端未协商 composer.attachments 时剥离待发队列中的 attachments 字段以保持严格解析兼容。 */
+function stripQueueAttachments(value: QueueSnapshot | QueueReceipt): QueueSnapshot | QueueReceipt {
+  if ("messages" in value) {
+    return {
+      ...value,
+      messages: value.messages.map(({ attachments: _attachments, ...rest }) => rest),
+    }
+  }
+  const { attachments: _attachments, ...rest } = value
+  return rest
+}
+
 /** Mobile allowlist. It never dispatches through the desktop RPC server. */
 export class MobileSidebarRpc {
   private readonly commands: MobileRunCommands
@@ -108,6 +123,7 @@ export class MobileSidebarRpc {
   private readonly drafts: MobileDraftCommands
   private readonly composer: MobileComposerCommands
   private readonly mentions: MobileMentionCommands
+  private readonly attachments: MobileAttachments
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -129,6 +145,7 @@ export class MobileSidebarRpc {
     this.changes = new MobileRunChanges(ctx)
     const canQueue = session.features.includes("queue.write")
     const canComposer = session.features.includes("composer.controls")
+    const canAttachments = session.features.includes("composer.attachments")
     this.commands = new MobileRunCommands(
       ctx,
       devices,
@@ -136,6 +153,7 @@ export class MobileSidebarRpc {
       this.receipts,
       canQueue,
       canComposer,
+      canAttachments,
     )
     this.drafts = new MobileDraftCommands(
       ctx,
@@ -143,6 +161,7 @@ export class MobileSidebarRpc {
       session.deviceKey,
       this.receipts,
       canComposer,
+      canAttachments,
     )
     this.requests = new MobileRequestCommands(
       ctx,
@@ -157,6 +176,7 @@ export class MobileSidebarRpc {
       session.features.includes("changes.read"),
       canComposer,
       feed,
+      canAttachments,
     )
     this.composer = new MobileComposerCommands(
       ctx,
@@ -165,8 +185,12 @@ export class MobileSidebarRpc {
         this.feed.changed(threadId)
         this.timeline.notifyComposer(threadId)
       },
+      canAttachments,
     )
     this.mentions = new MobileMentionCommands(ctx, () => this.requirePairedDevice())
+    this.attachments = new MobileAttachments(ctx, session.deviceKey, () =>
+      this.requirePairedDevice(),
+    )
   }
 
   start(): void {
@@ -176,6 +200,7 @@ export class MobileSidebarRpc {
 
   stop(): void {
     this.active = false
+    this.attachments.close()
     this.timeline.close()
     this.stopMessages?.()
     this.stopSidebar?.()
@@ -270,6 +295,11 @@ export class MobileSidebarRpc {
     const canQueue = this.session.features.includes("queue.write")
     const canComposer = this.session.features.includes("composer.controls")
     const canMentions = this.session.features.includes("composer.mentions")
+    const canAttachments = this.session.features.includes("composer.attachments")
+    if (canAttachments && mobileAttachmentRequests.has(request.method)) {
+      this.requirePairedDevice()
+      return this.attachments.dispatch(request)
+    }
     if (canMentions && mobileMentionRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.mentions.dispatch(request)
@@ -297,7 +327,7 @@ export class MobileSidebarRpc {
     }
     if (canQueue && queueRequestNames.has(request.method)) {
       this.requirePairedDevice()
-      return dispatchQueuedMessage(
+      const result = dispatchQueuedMessage(
         this.ctx,
         this.receipts,
         request.method,
@@ -305,6 +335,7 @@ export class MobileSidebarRpc {
         (threadId) => requireMobileThread(this.ctx, threadId),
         this.devices.queueSource(this.session.deviceKey),
       )
+      return canAttachments ? result : stripQueueAttachments(result)
     }
     if (
       (canRun || canRespond || canDraft || canQueue) &&
@@ -325,6 +356,10 @@ export class MobileSidebarRpc {
       if (!allowed) return {}
       requireMobileThread(this.ctx, receipt.threadId)
       if (!canQueue && "queuedMessageId" in receipt) return { receipt: legacyRunReceipt(receipt) }
+      if (!canAttachments && "attachments" in receipt) {
+        const { attachments: _attachments, ...rest } = receipt
+        return { receipt: rest }
+      }
       return { receipt }
     }
 

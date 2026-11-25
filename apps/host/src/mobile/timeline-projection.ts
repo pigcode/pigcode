@@ -61,6 +61,7 @@ export function timelineEvent(
   event: ThreadEvent,
   includeQueueChanges = false,
   includeRunChanges = false,
+  includeAttachments = true,
 ): MobileTimelineEvent | undefined {
   const payload = record(event.payload)
   if (payload.parentToolUseId) return undefined
@@ -87,7 +88,9 @@ export function timelineEvent(
       }
     case "message.completed": {
       const attachments =
-        payload.role === "user" ? attachmentRefs(payload.attachments) : undefined
+        includeAttachments && payload.role === "user"
+          ? attachmentRefs(payload.attachments)
+          : undefined
       return {
         ...base,
         kind: payload.role === "user" ? "message.user" : "message.assistant",

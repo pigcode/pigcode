@@ -1,5 +1,6 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
 import 'composer_models.dart';
+import 'src/attachments.dart';
 
 abstract final class MobileTimelineMethods {
   static const subscribe = 'thread.subscribe';
@@ -282,6 +283,7 @@ final class MobileTimelineEvent {
     this.failed,
     this.finishedSteps,
     this.totalSteps,
+    this.attachments = const [],
   });
   final int seq;
   final String? runId;
@@ -294,6 +296,7 @@ final class MobileTimelineEvent {
   final bool? failed;
   final int? finishedSteps;
   final int? totalSteps;
+  final List<MobileAttachmentRef> attachments;
 
   factory MobileTimelineEvent.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -309,6 +312,7 @@ final class MobileTimelineEvent {
         'failed',
         'finishedSteps',
         'totalSteps',
+        'attachments',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -351,6 +355,7 @@ final class MobileTimelineEvent {
         (totalSteps < 0 || totalSteps > 9007199254740991)) {
       throw const FormatException('Invalid totalSteps');
     }
+    final attachments = parseMobileAttachmentRefs(json['attachments']);
     return MobileTimelineEvent(
       seq: seq,
       runId: runId,
@@ -363,6 +368,7 @@ final class MobileTimelineEvent {
       failed: failed,
       finishedSteps: finishedSteps,
       totalSteps: totalSteps,
+      attachments: attachments,
     );
   }
 
@@ -378,6 +384,8 @@ final class MobileTimelineEvent {
     'failed': ?failed,
     'finishedSteps': ?finishedSteps,
     'totalSteps': ?totalSteps,
+    if (attachments.isNotEmpty)
+      'attachments': attachments.map((item) => item.toJson()).toList(),
   };
 }
 

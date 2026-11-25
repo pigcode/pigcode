@@ -1,5 +1,6 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
 import 'composer_models.dart';
+import 'src/attachments.dart';
 
 abstract final class MobileDraftMethods {
   static const options = 'thread.draftOptions';
@@ -51,12 +52,13 @@ final class MobileDraftCreateParams {
     required this.projectId,
     this.modelId,
     required this.permissionMode,
-    required this.text,
+    this.text = '',
     this.effort,
     this.fast,
     this.ultracode,
     this.planMode,
     this.references,
+    this.attachmentIds,
   });
   final String instanceId;
   final String commandId;
@@ -69,6 +71,7 @@ final class MobileDraftCreateParams {
   final bool? ultracode;
   final bool? planMode;
   final List<MobileThreadReference>? references;
+  final List<String>? attachmentIds;
 
   factory MobileDraftCreateParams.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -84,6 +87,7 @@ final class MobileDraftCreateParams {
         'ultracode',
         'planMode',
         'references',
+        'attachmentIds',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -111,8 +115,11 @@ final class MobileDraftCreateParams {
     final permissionMode = MobileDraftPermission.fromWire(
       json['permissionMode'] as String,
     );
+    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
     final text = json['text'] as String;
-    if (text.isEmpty || text.length > 10000 || !RegExp('\\S').hasMatch(text)) {
+    final hasText = RegExp('\\S').hasMatch(text);
+    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
+    if (text.length > 10000 || (!hasText && !hasAttachments)) {
       throw const FormatException('Invalid text');
     }
     final rawEffort = json['effort'] as String?;
@@ -147,6 +154,7 @@ final class MobileDraftCreateParams {
       ultracode: ultracode,
       planMode: planMode,
       references: references,
+      attachmentIds: attachmentIds,
     );
   }
 
@@ -162,6 +170,7 @@ final class MobileDraftCreateParams {
     'ultracode': ?ultracode,
     'planMode': ?planMode,
     'references': ?references?.map((item) => item.toJson()).toList(),
+    'attachmentIds': ?attachmentIds?.toList(),
   };
 }
 
@@ -175,6 +184,7 @@ final class MobileDraftInstance {
     this.agentId,
     this.accentColor,
     this.supportsPlanMode,
+    this._supportsImages,
   });
   final String instanceId;
   final String label;
@@ -184,6 +194,10 @@ final class MobileDraftInstance {
   final String? agentId;
   final String? accentColor;
   final bool? supportsPlanMode;
+  final bool? _supportsImages;
+
+  /// 旧电脑未下发该字段时默认按支持原生看图处理，避免误提示降级。
+  bool get supportsImages => _supportsImages ?? true;
 
   factory MobileDraftInstance.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -196,6 +210,7 @@ final class MobileDraftInstance {
         'agentId',
         'accentColor',
         'supportsPlanMode',
+        'supportsImages',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -232,6 +247,7 @@ final class MobileDraftInstance {
       throw const FormatException('Invalid accentColor');
     }
     final supportsPlanMode = json['supportsPlanMode'] as bool?;
+    final supportsImages = json['supportsImages'] as bool?;
     return MobileDraftInstance(
       instanceId: instanceId,
       label: label,
@@ -241,6 +257,7 @@ final class MobileDraftInstance {
       agentId: agentId,
       accentColor: accentColor,
       supportsPlanMode: supportsPlanMode,
+      supportsImages: supportsImages,
     );
   }
 
@@ -253,6 +270,7 @@ final class MobileDraftInstance {
     'agentId': ?agentId,
     'accentColor': ?accentColor,
     'supportsPlanMode': ?supportsPlanMode,
+    'supportsImages': ?_supportsImages,
   };
 }
 

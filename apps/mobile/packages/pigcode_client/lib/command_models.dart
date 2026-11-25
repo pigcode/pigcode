@@ -1,5 +1,6 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
 import 'composer_models.dart';
+import 'src/attachments.dart';
 
 abstract final class MobileCommandMethods {
   static const start = 'run.start';
@@ -13,11 +14,12 @@ final class MobileStartRunParams {
   const MobileStartRunParams({
     required this.commandId,
     required this.threadId,
-    required this.text,
+    this.text = '',
     this.effort,
     this.fast,
     this.ultracode,
     this.references,
+    this.attachmentIds,
   });
   final String commandId;
   final String threadId;
@@ -26,6 +28,7 @@ final class MobileStartRunParams {
   final bool? fast;
   final bool? ultracode;
   final List<MobileThreadReference>? references;
+  final List<String>? attachmentIds;
 
   factory MobileStartRunParams.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -37,6 +40,7 @@ final class MobileStartRunParams {
         'fast',
         'ultracode',
         'references',
+        'attachmentIds',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -53,8 +57,11 @@ final class MobileStartRunParams {
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
+    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
     final text = json['text'] as String;
-    if (text.isEmpty || text.length > 10000 || !RegExp('\\S').hasMatch(text)) {
+    final hasText = RegExp('\\S').hasMatch(text);
+    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
+    if (text.length > 10000 || (!hasText && !hasAttachments)) {
       throw const FormatException('Invalid text');
     }
     final rawEffort = json['effort'] as String?;
@@ -84,6 +91,7 @@ final class MobileStartRunParams {
       fast: fast,
       ultracode: ultracode,
       references: references,
+      attachmentIds: attachmentIds,
     );
   }
 
@@ -95,6 +103,7 @@ final class MobileStartRunParams {
     'fast': ?fast,
     'ultracode': ?ultracode,
     'references': ?references?.map((item) => item.toJson()).toList(),
+    'attachmentIds': ?attachmentIds?.toList(),
   };
 }
 

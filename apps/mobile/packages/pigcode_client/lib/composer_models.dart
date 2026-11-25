@@ -65,6 +65,7 @@ final class MobileThreadComposerState {
     required this.permissionMode,
     required this.planMode,
     required this.supportsPlanMode,
+    this._supportsImages,
     this.contextUsage,
   });
 
@@ -74,7 +75,11 @@ final class MobileThreadComposerState {
   final MobileDraftPermission permissionMode;
   final bool planMode;
   final bool supportsPlanMode;
+  final bool? _supportsImages;
   final MobileContextUsage? contextUsage;
+
+  /// 旧电脑未下发该字段时默认按支持原生看图处理，避免误提示降级。
+  bool get supportsImages => _supportsImages ?? true;
 
   factory MobileThreadComposerState.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -85,6 +90,7 @@ final class MobileThreadComposerState {
         'permissionMode',
         'planMode',
         'supportsPlanMode',
+        'supportsImages',
         'contextUsage',
       }.contains(key),
     )) {
@@ -109,6 +115,7 @@ final class MobileThreadComposerState {
     );
     final planMode = json['planMode'] as bool;
     final supportsPlanMode = json['supportsPlanMode'] as bool;
+    final supportsImages = json['supportsImages'] as bool?;
     final rawUsage = json['contextUsage'];
     final contextUsage = rawUsage == null
         ? null
@@ -120,6 +127,7 @@ final class MobileThreadComposerState {
       permissionMode: permissionMode,
       planMode: planMode,
       supportsPlanMode: supportsPlanMode,
+      supportsImages: supportsImages,
       contextUsage: contextUsage,
     );
   }
@@ -131,6 +139,7 @@ final class MobileThreadComposerState {
     'permissionMode': permissionMode.wire,
     'planMode': planMode,
     'supportsPlanMode': supportsPlanMode,
+    'supportsImages': ?_supportsImages,
     'contextUsage': ?contextUsage?.toJson(),
   };
 }

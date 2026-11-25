@@ -62,6 +62,7 @@ export class MobileTimelineSession {
     private readonly includeRunChanges = false,
     private readonly includeComposerControls = false,
     private readonly feed?: ThreadFeed,
+    private readonly includeAttachments = false,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
@@ -96,7 +97,7 @@ export class MobileTimelineSession {
       ? latestThreadContextUsage(this.ctx, threadId)
       : null
     const composer = this.includeComposerControls
-      ? buildThreadComposerState(this.ctx, threadId, contextUsage)
+      ? buildThreadComposerState(this.ctx, threadId, contextUsage, this.includeAttachments)
       : undefined
     const reserve =
       (live ? Buffer.byteLength(JSON.stringify(live)) : 0) +
@@ -111,7 +112,12 @@ export class MobileTimelineSession {
     this.contextUsage = contextUsage
     this.lastComposerJson = composer ? JSON.stringify(composer) : undefined
     this.stopEvents = this.ctx.sessions.subscribe(threadId, (stored) => {
-      const event = timelineEvent(stored, this.includeQueueChanges, this.includeRunChanges)
+      const event = timelineEvent(
+        stored,
+        this.includeQueueChanges,
+        this.includeRunChanges,
+        this.includeAttachments,
+      )
       if (event) {
         this.send({
           jsonrpc: "2.0",
@@ -177,7 +183,12 @@ export class MobileTimelineSession {
 
   private pushComposer(threadId: string): void {
     if (this.threadId !== threadId || !this.available(threadId)) return
-    const composer = buildThreadComposerState(this.ctx, threadId, this.contextUsage)
+    const composer = buildThreadComposerState(
+      this.ctx,
+      threadId,
+      this.contextUsage,
+      this.includeAttachments,
+    )
     if (!composer) return
     const serialized = JSON.stringify(composer)
     if (serialized === this.lastComposerJson) return
@@ -207,7 +218,12 @@ export class MobileTimelineSession {
     let bytes = 0
     let cursor = after
     for (const stored of this.ctx.sessions.readAfter(threadId, after, through, maxEvents + 1)) {
-      const event = timelineEvent(stored, this.includeQueueChanges, this.includeRunChanges)
+      const event = timelineEvent(
+        stored,
+        this.includeQueueChanges,
+        this.includeRunChanges,
+        this.includeAttachments,
+      )
       const size = event ? Buffer.byteLength(JSON.stringify(event)) + 1 : 0
       if (scanned === maxEvents || bytes + size > budget) {
         if (cursor === after) throw new MobileRequestError("RESULT_TOO_LARGE")
@@ -330,7 +346,7 @@ export class MobileTimelineSession {
     const userRuns = new Set<string>()
     let more = false
     for (const stored of this.ctx.sessions.readBefore(threadId, through, before, maxEvents + 1)) {
-      const event = timelineEvent(stored, false, this.includeRunChanges)
+      const event = timelineEvent(stored, false, this.includeRunChanges, this.includeAttachments)
       const key = event?.runId ?? (event ? String(event.seq) : undefined)
       const crossesTurn = key !== undefined && !runs.has(key)
       if (scanned === maxEvents || (crossesTurn && runs.size >= 2 && (opening || messages >= 50))) {

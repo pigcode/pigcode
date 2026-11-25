@@ -1,4 +1,5 @@
 import type { Context } from "cordis"
+import { cleanupDeviceMobileAttachments } from "./attachments"
 import type { acceptNoise } from "./noise"
 
 export const deviceRevokedNotice = { type: "device.revoked" } as const
@@ -28,5 +29,10 @@ export function revokeDeviceWork(ctx: Context, publicKey: string): void {
   } catch (error) {
     // Dispatch still checks durable authorization before starting a message.
     console.error("[host] could not remove messages of revoked device", error)
+  }
+  try {
+    cleanupDeviceMobileAttachments(ctx, publicKey)
+  } catch (error) {
+    console.error("[host] could not remove staging attachments of revoked device", error)
   }
 }
