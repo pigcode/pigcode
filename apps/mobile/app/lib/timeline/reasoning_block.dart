@@ -1,11 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../theme_colors.dart';
 import 'shimmer_text.dart';
 import 'timeline_tokens.dart';
 
+/// 按偏移分片读取完整思考正文的返回页。
+typedef ReasoningContentPage = ({String text, int? nextOffset});
+
+/// 分片加载完整思考正文的回调。
+typedef ReasoningContentLoader =
+    Future<ReasoningContentPage> Function(int? offset);
+
 /// 思考块（桌面 `ReasoningBlock`）：Brain 图标、「正在思考」（扫光 + 尾句渐隐）或「思考」，
-/// 展开后最多 240px 高纯文本并支持流式跟随；独立时带左细线，在摘要组内直接复用组导线。
+/// 展开后最多 240px 高纯文本并支持流式跟随；超长截断时在展开后原地自动续载完整正文；
+/// 独立时带左细线，在摘要组内直接复用组导线。
 class TimelineReasoningBlock extends StatefulWidget {
   const TimelineReasoningBlock({
     super.key,
@@ -16,7 +26,7 @@ class TimelineReasoningBlock extends StatefulWidget {
     this.showIcon = true,
     this.compact = false,
     this.onTap,
-    this.onOpenFull,
+    this.onLoadFull,
   });
 
   final String text;
@@ -26,17 +36,25 @@ class TimelineReasoningBlock extends StatefulWidget {
   final bool showIcon;
   final bool compact;
   final VoidCallback? onTap;
-  final VoidCallback? onOpenFull;
+  final ReasoningContentLoader? onLoadFull;
 
   @override
   State<TimelineReasoningBlock> createState() => _TimelineReasoningBlockState();
 }
 
 class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
+  static const _maxFullPages = 64;
+
   final _scroll = ScrollController();
   bool _expanded = false;
   bool _following = true;
   bool _autoJumping = false;
+  String? _fullText;
+  int? _nextOffset;
+  bool _loadedComplete = false;
+  bool _loadingFull = false;
+  bool _loadFailed = false;
+  int _loadGeneration = 0;
 
   String get _peek {
     final lines = widget.text
@@ -56,11 +74,87 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
   @override
   void didUpdateWidget(TimelineReasoningBlock oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final resetNeeded =
+        oldWidget.streaming != widget.streaming ||
+        (!widget.truncated && oldWidget.truncated) ||
+        (!widget.streaming && oldWidget.text != widget.text);
+    if (resetNeeded) {
+      _loadGeneration++;
+      _fullText = null;
+      _nextOffset = null;
+      _loadedComplete = false;
+      _loadingFull = false;
+      _loadFailed = false;
+    }
+    if (_expanded &&
+        widget.truncated &&
+        widget.onLoadFull != null &&
+        !_loadedComplete &&
+        !_loadingFull &&
+        (!oldWidget.truncated || oldWidget.onLoadFull == null || resetNeeded)) {
+      unawaited(_loadFullContent());
+    }
     if (_expanded &&
         widget.streaming &&
         _following &&
         widget.text != oldWidget.text) {
       _jumpToBottom();
+    }
+  }
+
+  Future<void> _loadFullContent() async {
+    final loader = widget.onLoadFull;
+    if (loader == null || _loadingFull || _loadedComplete) return;
+    final generation = ++_loadGeneration;
+    setState(() {
+      _loadingFull = true;
+      _loadFailed = false;
+    });
+    var buffer = _fullText ?? '';
+    var offset = _nextOffset;
+    var pages = 0;
+    try {
+      while (pages < _maxFullPages) {
+        pages++;
+        final page = await loader(offset);
+        if (!mounted || generation != _loadGeneration) return;
+        buffer += page.text;
+        offset = page.nextOffset;
+        final done = offset == null;
+        setState(() {
+          _fullText = buffer;
+          _nextOffset = offset;
+          if (done) {
+            _loadedComplete = true;
+            _loadingFull = false;
+          }
+        });
+        if (_following && widget.streaming) _jumpToBottom();
+        if (done) return;
+      }
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loadingFull = false);
+      }
+    } catch (_) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _loadingFull = false;
+          _loadFailed = true;
+        });
+      }
+    }
+  }
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      if (widget.truncated &&
+          widget.onLoadFull != null &&
+          !_loadedComplete &&
+          !_loadingFull) {
+        unawaited(_loadFullContent());
+      }
+      if (widget.streaming) _jumpToBottom();
     }
   }
 
@@ -165,15 +259,57 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
       ],
     );
 
+    final displayText = (_fullText ?? widget.text).trim();
     final bodyContent = ConstrainedBox(
       constraints: const BoxConstraints(
         maxHeight: TimelineToolCard.reasoningMaxHeight,
       ),
       child: SingleChildScrollView(
         controller: _scroll,
-        child: Text(
-          widget.text.trim(),
-          style: TimelineType.contentStyle(colors.timelineFaint),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              displayText,
+              style: TimelineType.contentStyle(colors.timelineFaint),
+            ),
+            if (_loadingFull)
+              Padding(
+                padding: const EdgeInsets.only(top: TimelineSpace.x3),
+                child: Text(
+                  '正在加载完整思考…',
+                  style: TimelineType.metaStyle(colors.timelineFaint),
+                ),
+              )
+            else if (_loadFailed)
+              Padding(
+                padding: const EdgeInsets.only(top: TimelineSpace.x3),
+                child: InkWell(
+                  onTap: () => unawaited(_loadFullContent()),
+                  borderRadius: BorderRadius.circular(TimelineRadius.xs),
+                  child: Text(
+                    '完整思考加载失败，点击重试',
+                    style: TimelineType.metaStyle(colors.timelineSubtle)
+                        .copyWith(
+                          decoration: TextDecoration.underline,
+                          decorationStyle: TextDecorationStyle.dotted,
+                          decorationColor: colors.timelineSubtle,
+                        ),
+                  ),
+                ),
+              )
+            else if (widget.truncated &&
+                !_loadedComplete &&
+                widget.onLoadFull == null)
+              Padding(
+                padding: const EdgeInsets.only(top: TimelineSpace.x3),
+                child: Text(
+                  '电脑离线，仅展示预览内容',
+                  style: TimelineType.metaStyle(colors.timelineFaint),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -220,12 +356,7 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
           button: true,
           expanded: widget.onTap != null ? false : _expanded,
           child: InkWell(
-            onTap:
-                widget.onTap ??
-                () {
-                  setState(() => _expanded = !_expanded);
-                  if (_expanded && widget.streaming) _jumpToBottom();
-                },
+            onTap: widget.onTap ?? _toggleExpanded,
             borderRadius: BorderRadius.circular(TimelineRadius.xs),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: minHeight),
@@ -245,18 +376,6 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
           ),
         ),
         if (_expanded) expandedBody,
-        if (widget.truncated)
-          Padding(
-            padding: EdgeInsetsDirectional.only(
-              start: widget.showIcon
-                  ? TimelineIcon.row + TimelineSpace.fieldGap
-                  : 0,
-            ),
-            child: TextButton(
-              onPressed: widget.onOpenFull,
-              child: const Text('查看完整过程'),
-            ),
-          ),
       ],
     );
   }

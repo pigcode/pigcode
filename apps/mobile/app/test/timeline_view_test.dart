@@ -1168,13 +1168,85 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('第一行思考\n核对摘要分组逻辑\n准备继续执行'), findsOneWidget);
-      expect(find.text('查看完整过程'), findsOneWidget);
+      // 不再单独换行渲染「查看完整过程」，展开态自动原地拉取完整内容。
+      expect(find.text('查看完整过程'), findsNothing);
+      expect(find.text('完整工具输出'), findsOneWidget);
+    },
+  );
 
-      // 4. 点按「查看完整过程」可打开完整思考弹层。
-      await tester.tap(find.text('查看完整过程'));
+  testWidgets(
+    'hides truncated reasoning button while collapsed and auto-loads full text inline on expand with retry',
+    (tester) async {
+      var failOnce = true;
+      Future<MobileTimelineContentResult> loader({
+        int? seq,
+        String? runId,
+        String? toolId,
+        required MobileTimelineContentField field,
+        int? offset,
+      }) async {
+        if (failOnce) {
+          failOnce = false;
+          throw Exception('network');
+        }
+        if (offset == null) {
+          return const MobileTimelineContentResult(
+            text: '第一段完整思考\n',
+            nextOffset: 10,
+          );
+        }
+        return const MobileTimelineContentResult(text: '第二段完整思考');
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: TimelineView(
+              snapshot: TimelineSnapshot(
+                events: const [
+                  MobileTimelineEvent(
+                    seq: 1,
+                    runId: 'trunc-run',
+                    kind: MobileTimelineKind.reasoning,
+                    text: '截断预览',
+                    truncated: true,
+                    createdAt: '2026-11-25T10:00:00.000Z',
+                  ),
+                ],
+                through: 1,
+                cursor: 1,
+                nextBefore: null,
+                live: null,
+              ),
+              online: true,
+              loadEarlier: () async {},
+              content: loader,
+            ),
+          ),
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(find.text('完整思考'), findsOneWidget);
+
+      // 1. 收起态干净单行，不出现任何独立按钮。
+      expect(find.text('思考'), findsOneWidget);
+      expect(find.text('查看完整过程'), findsNothing);
+      expect(find.text('截断预览'), findsNothing);
+
+      // 2. 展开后自动拉取失败时在左导线内给出轻量重试入口，点按后分片拼接完整思考。
+      await tester.tap(find.text('思考'));
+      await tester.pumpAndSettle();
+      expect(find.text('截断预览'), findsOneWidget);
+      expect(find.text('完整思考加载失败，点击重试'), findsOneWidget);
+
+      await tester.tap(find.text('完整思考加载失败，点击重试'));
+      await tester.pumpAndSettle();
+      expect(find.text('第一段完整思考\n第二段完整思考'), findsOneWidget);
+      expect(find.text('完整思考加载失败，点击重试'), findsNothing);
+      expect(find.text('查看完整过程'), findsNothing);
     },
   );
 

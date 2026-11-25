@@ -708,15 +708,21 @@ class _TimelineViewState extends State<TimelineView> {
       child: TimelineReasoningBlock(
         text: item.event.text ?? '',
         streaming: item.streaming,
-        truncated: item.event.truncated == true && widget.online,
+        truncated: item.event.truncated == true,
         showIcon: showIcon,
         compact: compact,
-        onOpenFull: item.streaming
-            ? () => _openLiveReasoning(
-                runId: item.event.runId ?? turn.runId,
-                preview: item.event.text ?? '',
+        onLoadFull: widget.online
+            ? (offset) => _loadReasoningChunk(
+                seq: item.streaming ? null : item.event.seq,
+                runId: item.streaming
+                    ? (item.event.runId ?? turn.runId)
+                    : null,
+                field: item.streaming
+                    ? MobileTimelineContentField.reasoning
+                    : MobileTimelineContentField.text,
+                offset: offset,
               )
-            : () => _openText(item.event),
+            : null,
       ),
     ),
     TimelineWorkKind.question => Padding(
@@ -835,16 +841,20 @@ class _TimelineViewState extends State<TimelineView> {
     );
   }
 
-  void _openLiveReasoning({required String? runId, required String preview}) =>
-      showTimelineDetails(context, '完整思考', [
-        TimelineDetails(
-          label: '思考',
-          runId: runId,
-          field: MobileTimelineContentField.reasoning,
-          preview: preview,
-          truncated: true,
-        ),
-      ], widget.online ? widget.content : null);
+  Future<ReasoningContentPage> _loadReasoningChunk({
+    int? seq,
+    String? runId,
+    required MobileTimelineContentField field,
+    int? offset,
+  }) async {
+    final result = await widget.content(
+      seq: seq,
+      runId: runId,
+      field: field,
+      offset: offset,
+    );
+    return (text: result.text, nextOffset: result.nextOffset);
+  }
 
   Widget _live(MobileActiveRun live) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -854,8 +864,13 @@ class _TimelineViewState extends State<TimelineView> {
           text: live.reasoning,
           streaming: true,
           truncated: live.reasoningTruncated,
-          onOpenFull: () =>
-              _openLiveReasoning(runId: live.runId, preview: live.reasoning),
+          onLoadFull: widget.online
+              ? (offset) => _loadReasoningChunk(
+                  runId: live.runId,
+                  field: MobileTimelineContentField.reasoning,
+                  offset: offset,
+                )
+              : null,
         ),
       if (live.text.isNotEmpty)
         TimelineAnswer(
