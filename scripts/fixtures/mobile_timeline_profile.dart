@@ -56,21 +56,46 @@ void main() {
     await _waitUntil(tester, () => position().extentAfter <= 1);
 
     await tester.tap(find.text(_tool).hitTestable());
-    await tester.pumpAndSettle();
+    final openFullDetails = find.text('查看完整内容');
+    await _waitUntil(
+      tester,
+      () => openFullDetails.evaluate().isNotEmpty,
+    );
+    await tester.ensureVisible(openFullDetails);
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
+    await tester.tap(openFullDetails.hitTestable());
+    await _waitUntil(
+      tester,
+      () => find.text('读取完整内容').hitTestable().evaluate().isNotEmpty,
+    );
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
     for (var page = 0; page < _toolPages; page++) {
       final more = find.text(page == 0 ? '读取完整内容' : '继续读取');
       await tester.ensureVisible(more);
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, const Duration(milliseconds: 160));
       await tester.tap(more.hitTestable());
-      await tester.pumpAndSettle();
+      final expectedBytes = _textPageSize * (page + 1);
+      await _waitUntil(tester, () => rpc.toolBytesRead >= expectedBytes);
+      await _pumpFrames(tester, const Duration(milliseconds: 120));
     }
     expect(rpc.toolBytesRead, _textPageSize * _toolPages);
     expect(find.text('继续读取'), findsOneWidget);
     await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
+    await _waitUntil(
+      tester,
+      () => find.byTooltip('查看回放差异').hitTestable().evaluate().isNotEmpty,
+    );
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
+    await tester.tap(find.text(_tool).hitTestable());
+    await _waitUntil(tester, () => openFullDetails.evaluate().isEmpty);
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
 
     await tester.tap(find.byTooltip('查看回放差异'));
-    await tester.pumpAndSettle();
+    await _waitUntil(
+      tester,
+      () => find.text('enableReconnect(0);').evaluate().isNotEmpty,
+    );
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
     expect(find.text('enableReconnect(0);'), findsOneWidget);
     final moreDiff = find.text('继续读取差异');
     await tester.scrollUntilVisible(
@@ -85,35 +110,52 @@ void main() {
         ),
       ),
     );
+    await _pumpFrames(tester, const Duration(milliseconds: 160));
     await tester.tap(moreDiff.hitTestable());
-    await tester.pumpAndSettle();
-    expect(rpc.diffBytesRead, utf8.encode(rpc.patch).length);
+    final expectedDiffBytes = utf8.encode(rpc.patch).length;
+    await _waitUntil(
+      tester,
+      () =>
+          rpc.diffBytesRead >= expectedDiffBytes && moreDiff.evaluate().isEmpty,
+    );
+    await _pumpFrames(tester, const Duration(milliseconds: 120));
+    expect(rpc.diffBytesRead, expectedDiffBytes);
     expect(moreDiff, findsNothing);
     await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
+    await _waitUntil(
+      tester,
+      () =>
+          find.byType(RunDiffScreen).evaluate().isEmpty &&
+          scroll.hitTestable().evaluate().isNotEmpty,
+    );
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
 
     await tester.drag(scroll, const Offset(0, 440));
-    await tester.pumpAndSettle();
     final backToTail = find.byTooltip('回到底部');
+    await _waitUntil(tester, () => backToTail.hitTestable().evaluate().isNotEmpty);
+    await _pumpFrames(tester, const Duration(milliseconds: 450));
     expect(backToTail, findsOneWidget);
     final anchor = _visibleAnchor(tester, scroll);
     final anchorTop = tester.getTopLeft(anchor).dy;
     while (timeline.snapshot!.nextBefore != null) {
       await timeline.loadEarlier();
-      await tester.pumpAndSettle();
+      await _pumpFrames(tester, const Duration(milliseconds: 160));
     }
     expect(timeline.snapshot!.events.length, rpc.eventCount);
     final prependDelta = tester.getTopLeft(anchor).dy - anchorTop;
     expect(prependDelta, closeTo(0, 1));
 
     rpc.append('回放还在继续。');
-    await tester.pumpAndSettle();
+    await _pumpFrames(tester, const Duration(milliseconds: 200));
     final unfollowedDelta = tester.getTopLeft(anchor).dy - anchorTop;
     expect(unfollowedDelta, closeTo(0, 1));
     await tester.tap(backToTail);
-    await tester.pumpAndSettle();
+    await _waitUntil(
+      tester,
+      () => position().extentAfter <= 1 && backToTail.evaluate().isEmpty,
+    );
     // Let the engine deliver the frame timings from the scroll before sampling the replay.
-    await tester.pump(const Duration(milliseconds: 300));
+    await _pumpFrames(tester, const Duration(milliseconds: 350));
 
     final frames = <FrameTiming>[];
     binding.addTimingsCallback(frames.addAll);
@@ -123,7 +165,9 @@ void main() {
         await tester.pump(_chunkInterval);
       }
       await _waitUntil(tester, () => position().extentAfter <= 1);
-      await tester.pump(const Duration(milliseconds: 350));
+      // Flutter 引擎按 ~1s 周期批量回传 FrameTiming（flutter/flutter#64808）。
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await _waitUntil(tester, () => frames.isNotEmpty);
       expect(frames, isNotEmpty);
     } finally {
       binding.removeTimingsCallback(frames.addAll);
@@ -210,6 +254,15 @@ Finder _visibleAnchor(WidgetTester tester, Finder scroll) {
     }
   }
   throw StateError('上翻后没有完整可见的历史消息可作为锚点。');
+}
+
+Future<void> _pumpFrames(WidgetTester tester, Duration total) async {
+  const step = Duration(milliseconds: 16);
+  var elapsed = Duration.zero;
+  while (elapsed < total) {
+    await tester.pump(step);
+    elapsed += step;
+  }
 }
 
 Future<void> _waitUntil(WidgetTester tester, bool Function() ready) async {
