@@ -162,15 +162,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('停止本轮运行'));
     expect(stopCount, 1);
-    final submit = find.widgetWithText(FilledButton, '回答');
-    expect(tester.widget<FilledButton>(submit).onPressed, isNull);
-    await tester.tap(find.text('本机'));
+    final submit = find.text('提交');
+    await tester.tap(submit);
     await tester.pumpAndSettle();
-    expect(tester.widget<FilledButton>(submit).onPressed, isNotNull);
     expect(
       host.calls.where((call) => call.method == MobileRequestMethods.answer),
       isEmpty,
     );
+    await tester.tap(find.text('本机'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const ValueKey('other-answer-0')), '模拟器');
     await tester.pumpAndSettle();
     await tester.tap(submit);
@@ -195,8 +195,8 @@ void main() {
       expect(find.text('允许验收命令？'), findsOneWidget);
       expect(find.text('echo ready'), findsOneWidget);
       expect(find.text('还有 1 项待处理'), findsOneWidget);
-      expect(find.text('这个会话里都允许'), findsNothing);
-      await tester.tap(find.text('允许本次'));
+      expect(find.text('本会话允许'), findsNothing);
+      await tester.tap(find.text('允许一次'));
       await tester.pumpAndSettle();
       expect(find.text('另一端已处理 · 已拒绝'), findsOneWidget);
       expect(
@@ -210,12 +210,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(_composer, findsNothing);
       expect(find.text('允许验收命令？'), findsNothing);
-      expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, '提交回答'))
-            .onPressed,
-        isNull,
-      );
       await tester.tap(find.text('iOS'));
       await tester.tap(find.text('Android'));
       final other = find.byKey(const ValueKey('other-answer-1'));
@@ -227,8 +221,8 @@ void main() {
 
       await tester.enterText(other, '字' * 17000);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('提交回答'));
-      await tester.tap(find.text('提交回答'));
+      await tester.ensureVisible(find.text('提交'));
+      await tester.tap(find.text('提交'));
       await tester.pumpAndSettle();
       expect(find.text('回答太长，请缩短后提交。'), findsOneWidget);
       expect(
@@ -238,8 +232,8 @@ void main() {
 
       await tester.enterText(other, '模拟器');
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('提交回答'));
-      await tester.tap(find.text('提交回答'));
+      await tester.ensureVisible(find.text('提交'));
+      await tester.tap(find.text('提交'));
       await tester.pumpAndSettle();
       expect(host.calls.last.params['answers'], [
         {
@@ -263,15 +257,20 @@ void main() {
       final phone = _Connection(host);
       await tester.pumpWidget(_page(phone, [_approval]));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('允许本次'));
+      await tester.tap(find.text('允许一次'));
       await tester.pumpAndSettle();
       final first = host.calls.last;
       expect(first.method, MobileRequestMethods.approve);
+      final approvals = host.calls
+          .where((call) => call.method == MobileRequestMethods.approve)
+          .length;
+      await tester.tap(find.text('拒绝'));
+      await tester.pumpAndSettle();
       expect(
-        tester
-            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '拒绝'))
-            .onPressed,
-        isNull,
+        host.calls
+            .where((call) => call.method == MobileRequestMethods.approve)
+            .length,
+        approvals,
       );
 
       await tester.pumpWidget(_page(phone, [_approval], online: false));

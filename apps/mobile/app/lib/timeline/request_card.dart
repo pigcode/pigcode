@@ -72,7 +72,6 @@ class InlineRequestCard extends ConsumerWidget {
               RequestApprovalForm(
                 approval: approval,
                 enabled: enabled,
-                reserveStop: false,
                 onDecision: (decision) =>
                     actions.submit(RequestSubmission.approve(target, decision)),
               )
@@ -80,7 +79,6 @@ class InlineRequestCard extends ConsumerWidget {
               RequestQuestionForm(
                 questions: questions,
                 enabled: enabled,
-                reserveStop: false,
                 onAnswer: (answers) =>
                     actions.submit(RequestSubmission.answer(target, answers)),
               ),
@@ -145,14 +143,14 @@ class InlineRequestCard extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
       padding: const EdgeInsets.all(TimelineSpace.x7),
       decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.divider),
+        color: colors.popover,
+        border: Border.all(color: colors.timelineBorder),
         borderRadius: BorderRadius.circular(TimelineRadius.panel),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: .04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: .08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

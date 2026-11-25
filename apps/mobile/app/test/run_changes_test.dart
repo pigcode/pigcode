@@ -47,7 +47,7 @@ void main() {
       );
 
       await tester.pumpAndSettle();
-      expect(find.text(first), findsOneWidget);
+      expect(find.text('first.dart'), findsOneWidget);
       expect(calls, isEmpty);
       await tester.tap(find.byTooltip('查看本轮改动'));
       await tester.pumpAndSettle();
@@ -118,7 +118,7 @@ void main() {
       expect(find.text('+1'), findsNothing);
       checkpoint.value = 42;
       await tester.pumpAndSettle();
-      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('+1'), findsNWidgets(2));
       expect(reads, 2);
     },
   );
@@ -142,7 +142,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('docs/snapshot.md'), findsOneWidget);
+    expect(find.text('snapshot.md'), findsOneWidget);
+    expect(find.text('docs'), findsOneWidget);
     await tester.tap(find.byTooltip('查看本轮改动'));
     await tester.pumpAndSettle();
     expect(find.text('snapshot.md'), findsOneWidget);

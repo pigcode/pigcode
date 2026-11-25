@@ -145,7 +145,7 @@ void main() {
         workspaceFixture(pending: MobileTimelinePendingKind.approval),
       );
       expect(find.text('允许运行 Flutter 测试？'), findsOneWidget);
-      expect(find.text('允许本次'), findsOneWidget);
+      expect(find.text('允许一次'), findsOneWidget);
       await _matchScreen('approval', brightness);
     }, variant: _platforms);
 

@@ -5,6 +5,8 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'request_actions.dart';
 import 'request_submission.dart';
 import 'theme_colors.dart';
+import 'timeline/timeline_tokens.dart';
+import 'timeline_widgets.dart';
 import 'workspace_icon.dart';
 
 typedef RequestDetailsKey = (
@@ -219,7 +221,6 @@ class _ActiveRequest extends ConsumerWidget {
                         RequestApprovalForm(
                           approval: approval,
                           enabled: enabled,
-                          reserveStop: stopBesideTitle,
                           onDecision: (decision) => onSubmit(
                             RequestSubmission.approve(target, decision),
                           ),
@@ -228,7 +229,6 @@ class _ActiveRequest extends ConsumerWidget {
                         RequestQuestionForm(
                           questions: questions,
                           enabled: enabled,
-                          reserveStop: stopBesideTitle,
                           onAnswer: (answers) => onSubmit(
                             RequestSubmission.answer(target, answers),
                           ),
@@ -299,12 +299,11 @@ class RequestApprovalForm extends StatelessWidget {
     super.key,
     required this.approval,
     required this.enabled,
-    required this.reserveStop,
     required this.onDecision,
   });
+
   final MobileApproval approval;
   final bool enabled;
-  final bool reserveStop;
   final ValueChanged<MobileApprovalDecision> onDecision;
 
   @override
@@ -314,183 +313,170 @@ class RequestApprovalForm extends StatelessWidget {
         ? pigcodeDark
         : pigcodeLight;
     final plan = approval.plan;
-    final actionInset = _actionTouchInset(context);
-    final tapTargetSize = actionInset > 0
-        ? MaterialTapTargetSize.padded
-        : MaterialTapTargetSize.shrinkWrap;
-    final actionText = _requestButtonText(theme);
-    final actions = [
-      if (approval.decisions.contains(MobileApprovalDecision.deny))
-        OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            minimumSize: _actionSize,
-            tapTargetSize: tapTargetSize,
-            foregroundColor: colors.foreground,
-            backgroundColor: colors.surfaceRaised,
-            disabledBackgroundColor: Color.alphaBlend(
-              colors.surfaceRaised.withValues(alpha: .45),
-              colors.surface,
-            ),
-            side: BorderSide(color: colors.border, width: .5),
-            textStyle: actionText,
+    final decisions = approval.decisions;
+    final actions = <Widget>[
+      if (plan != null) ...[
+        if (decisions.contains(MobileApprovalDecision.allowOnce))
+          _PermAction(
+            label: '开始做',
+            primary: true,
+            onPressed: enabled
+                ? () => onDecision(MobileApprovalDecision.allowOnce)
+                : null,
           ),
-          onPressed: enabled
-              ? () => onDecision(MobileApprovalDecision.deny)
-              : null,
-          child: Text(plan == null ? '拒绝' : '继续完善'),
-        ),
-      if (approval.decisions.contains(MobileApprovalDecision.allowOnce))
-        FilledButton(
-          style: FilledButton.styleFrom(
-            minimumSize: _actionSize,
-            tapTargetSize: tapTargetSize,
-            textStyle: actionText,
+        if (decisions.contains(MobileApprovalDecision.deny))
+          _PermAction(
+            label: '再改改',
+            onPressed: enabled
+                ? () => onDecision(MobileApprovalDecision.deny)
+                : null,
           ),
-          onPressed: enabled
-              ? () => onDecision(MobileApprovalDecision.allowOnce)
-              : null,
-          child: Text(plan == null ? '允许本次' : '开始执行'),
-        ),
+      ] else ...[
+        if (decisions.contains(MobileApprovalDecision.allowOnce))
+          _PermAction(
+            label: '允许一次',
+            primary: true,
+            onPressed: enabled
+                ? () => onDecision(MobileApprovalDecision.allowOnce)
+                : null,
+          ),
+        if (decisions.contains(MobileApprovalDecision.allowForSession))
+          _PermAction(
+            label: '本会话允许',
+            onPressed: enabled
+                ? () => onDecision(MobileApprovalDecision.allowForSession)
+                : null,
+          ),
+        if (decisions.contains(MobileApprovalDecision.deny))
+          _PermAction(
+            label: '拒绝',
+            onPressed: enabled
+                ? () => onDecision(MobileApprovalDecision.deny)
+                : null,
+          ),
+      ],
     ];
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: TimelineSpace.x6,
       children: [
-        _RequestTitle(
-          glyph: WorkspaceGlyph.hand,
-          label: plan != null ? '计划待确认' : approval.title ?? approval.toolName,
-          reserveStop: reserveStop,
-        ),
-        if (approval.description case final description?)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: SelectableText(
-              description,
-              style: TextStyle(color: colors.secondaryText),
+        Row(
+          children: [
+            Icon(
+              plan != null ? Icons.checklist_rounded : Icons.pan_tool_outlined,
+              size: TimelineIcon.row,
+              color: colors.timelineSubtle,
             ),
-          ),
-        if ((plan ?? approval.detail) case final detail?)
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(top: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: colors.surfaceSunken,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: SelectableText(
-              detail,
-              style: plan == null
-                  ? TextStyle(
-                      fontFamily: theme.platform == TargetPlatform.iOS
-                          ? 'Menlo'
-                          : 'monospace',
-                      fontSize: 13,
-                      height: 1.45,
-                    )
-                  : null,
-            ),
-          ),
-        if (actions.isNotEmpty) ...[
-          SizedBox(height: 12 - actionInset),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final labelWidth = MediaQuery.textScalerOf(context).scale(64);
-              if (actions.length == 2 &&
-                  constraints.maxWidth < 2 * (labelWidth + 24) + 8) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    actions.first,
-                    const SizedBox(height: 4),
-                    actions.last,
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  for (final (index, action) in actions.indexed) ...[
-                    if (index > 0) const SizedBox(width: 10),
-                    Expanded(child: action),
-                  ],
-                ],
-              );
-            },
-          ),
-        ],
-        if (approval.decisions.contains(
-          MobileApprovalDecision.allowForSession,
-        )) ...[
-          SizedBox(height: 24 - _touchSize(context).height / 2),
-          Center(
-            child: TextButton(
-              style: TextButton.styleFrom(
-                minimumSize: _touchSize(context),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                foregroundColor: colors.secondaryText,
-                textStyle: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: 14,
-                  leadingDistribution: TextLeadingDistribution.even,
-                  letterSpacing: theme.platform == TargetPlatform.iOS
-                      ? -.24
-                      : -.039,
+            const SizedBox(width: TimelineSpace.x4),
+            Expanded(
+              child: Text(
+                plan != null
+                    ? '计划写好了，开始做吗？'
+                    : approval.title ?? approval.toolName,
+                style: TimelineType.contentStyle(
+                  colors.foreground,
+                  weight: FontWeight.w500,
                 ),
               ),
-              onPressed: enabled
-                  ? () => onDecision(MobileApprovalDecision.allowForSession)
-                  : null,
-              child: const Text('这个会话里都允许'),
+            ),
+          ],
+        ),
+        if (approval.description case final description?)
+          Text(
+            description,
+            style: TimelineType.contentStyle(colors.timelineSubtle),
+          ),
+        if (plan != null)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 320),
+            child: SingleChildScrollView(
+              child: TimelineAnswer(text: plan, padding: EdgeInsets.zero),
+            ),
+          )
+        else if (approval.detail case final detail?)
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(maxHeight: 200),
+            padding: const EdgeInsets.symmetric(
+              horizontal: TimelineSpace.x6,
+              vertical: TimelineSpace.x4,
+            ),
+            decoration: BoxDecoration(
+              color: colors.timelinePanel,
+              border: Border.all(color: colors.timelineBorder),
+              borderRadius: BorderRadius.circular(TimelineRadius.block),
+            ),
+            child: SingleChildScrollView(
+              child: Text(
+                detail,
+                style: TimelineType.codeStyle(colors.foreground),
+              ),
             ),
           ),
-        ],
+        if (actions.isNotEmpty)
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: TimelineSpace.x3,
+            runSpacing: TimelineSpace.x3,
+            children: actions,
+          ),
       ],
     );
   }
 }
 
-class _RequestTitle extends StatelessWidget {
-  const _RequestTitle({
-    required this.glyph,
+class _PermAction extends StatelessWidget {
+  const _PermAction({
     required this.label,
-    required this.reserveStop,
+    this.primary = false,
+    this.onPressed,
   });
 
-  final WorkspaceGlyph glyph;
   final String label;
-  final bool reserveStop;
+  final bool primary;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    return Padding(
-      padding: EdgeInsetsDirectional.only(
-        end: reserveStop ? _touchSize(context).height - 10 : 0,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 10,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: IconTheme(
-              data: IconThemeData(color: colors.attentionMark),
-              child: WorkspaceIcon(glyph),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              label,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontSize: 17,
-                fontWeight: FontWeight.w500,
-                height: 1.45,
-                leadingDistribution: TextLeadingDistribution.even,
+    final enabled = onPressed != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(TimelineRadius.full),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Opacity(
+            opacity: enabled ? 1 : .45,
+            child: Container(
+              height: TimelineControl.sm,
+              padding: const EdgeInsets.symmetric(horizontal: TimelineSpace.x5),
+              decoration: BoxDecoration(
+                color: primary ? colors.foreground : colors.popover,
+                border: primary
+                    ? null
+                    : Border.all(color: colors.timelineBorder),
+                borderRadius: BorderRadius.circular(TimelineRadius.full),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TimelineType.metaStyle(
+                      primary ? colors.background : colors.foreground,
+                      weight: primary ? FontWeight.w500 : FontWeight.w400,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -501,12 +487,11 @@ class RequestQuestionForm extends StatefulWidget {
     super.key,
     required this.questions,
     required this.enabled,
-    required this.reserveStop,
     required this.onAnswer,
   });
+
   final List<MobileQuestion> questions;
   final bool enabled;
-  final bool reserveStop;
   final ValueChanged<List<MobileQuestionAnswer>> onAnswer;
 
   @override
@@ -552,247 +537,250 @@ class RequestQuestionFormState extends State<RequestQuestionForm> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
     final values = answers;
     final complete = values.every(
       (answer) =>
           answer.selected.isNotEmpty || (answer.custom?.isNotEmpty ?? false),
     );
-    if (widget.questions case [final question] when !question.multiSelect) {
-      return _singleQuestion(context, question, values, complete);
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: TimelineSpace.x6,
       children: [
-        Text('Agent 提问', style: theme.textTheme.titleSmall),
-        for (final (index, question) in widget.questions.indexed) ...[
-          const SizedBox(height: 12),
-          if (question.header case final header?)
-            Text(header, style: theme.textTheme.labelMedium),
-          Text(question.question),
-          if (question.multiSelect)
-            Text('可多选', style: theme.textTheme.bodySmall),
-          for (final option in question.options)
-            Semantics(
-              selected: selected[index]?.contains(option.label) ?? false,
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  minimumSize: _touchSize(context),
-                  alignment: AlignmentDirectional.centerStart,
-                ),
-                onPressed: widget.enabled
-                    ? () => _select(index, option.label, question.multiSelect)
-                    : null,
-                child: Row(
-                  children: [
-                    Icon(
-                      _optionIcon(index, option.label, question.multiSelect),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(option.label),
-                          if (option.description case final description?)
-                            Text(description, style: theme.textTheme.bodySmall),
-                        ],
-                      ),
-                    ),
-                  ],
+        Row(
+          children: [
+            Icon(
+              Icons.question_answer_outlined,
+              size: TimelineIcon.row,
+              color: colors.timelineSubtle,
+            ),
+            const SizedBox(width: TimelineSpace.x4),
+            Expanded(
+              child: Text(
+                'Agent 想问你几件事',
+                style: TimelineType.contentStyle(
+                  colors.foreground,
+                  weight: FontWeight.w500,
                 ),
               ),
             ),
-          if (question.allowCustomAnswer)
-            TextFormField(
-              key: ValueKey('other-answer-$index'),
-              controller: custom.putIfAbsent(index, TextEditingController.new),
-              enabled: widget.enabled,
-              decoration: const InputDecoration(labelText: '其他'),
-              maxLines: 3,
-              minLines: 1,
-              onChanged: (text) => setState(() {
-                if (!question.multiSelect && text.trim().isNotEmpty) {
-                  selected.remove(index);
-                }
-              }),
-            ),
-        ],
-        const SizedBox(height: 8),
-        Align(
-          alignment: AlignmentDirectional.centerEnd,
-          child: FilledButton(
-            style: FilledButton.styleFrom(minimumSize: _touchSize(context)),
-            onPressed: widget.enabled && complete
-                ? () => widget.onAnswer(values)
-                : null,
-            child: const Text('提交回答'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _singleQuestion(
-    BuildContext context,
-    MobileQuestion question,
-    List<MobileQuestionAnswer> values,
-    bool complete,
-  ) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    final actionInset = _actionTouchInset(context);
-    final submit = FilledButton(
-      style: FilledButton.styleFrom(
-        minimumSize: _actionSize,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        tapTargetSize: actionInset > 0
-            ? MaterialTapTargetSize.padded
-            : MaterialTapTargetSize.shrinkWrap,
-        disabledBackgroundColor: Color.alphaBlend(
-          colors.primary.withValues(alpha: .45),
-          colors.surface,
-        ),
-        disabledForegroundColor: Color.alphaBlend(
-          colors.onPrimary.withValues(alpha: .45),
-          colors.surface,
-        ),
-        textStyle: _requestButtonText(theme),
-      ),
-      onPressed: widget.enabled && complete
-          ? () => widget.onAnswer(values)
-          : null,
-      child: const Text('回答'),
-    );
-    final Widget footer;
-    if (question.allowCustomAnswer) {
-      final outline = OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colors.inputBorder),
-      );
-      final input = TextFormField(
-        key: const ValueKey('other-answer-0'),
-        controller: custom.putIfAbsent(0, TextEditingController.new),
-        enabled: widget.enabled,
-        style: const TextStyle(fontSize: 16, height: 1.45),
-        decoration: InputDecoration(
-          hintText: '其他回答…',
-          hintStyle: TextStyle(color: colors.faint),
-          isDense: true,
-          filled: true,
-          fillColor: colors.inputBackground,
-          border: outline,
-          enabledBorder: outline,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 11,
-          ),
-        ),
-        onChanged: (text) => setState(() {
-          if (text.trim().isNotEmpty) selected.remove(0);
-        }),
-      );
-      footer = LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth <
-              MediaQuery.textScalerOf(context).scale(170)) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: 8,
-              children: [input, submit],
-            );
-          }
-          return Row(
-            spacing: 8,
-            children: [
-              Expanded(child: input),
-              submit,
-            ],
-          );
-        },
-      );
-    } else {
-      footer = Align(alignment: AlignmentDirectional.centerEnd, child: submit);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _RequestTitle(
-          glyph: WorkspaceGlyph.question,
-          label: question.question,
-          reserveStop: widget.reserveStop,
-        ),
-        const SizedBox(height: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: 8,
-          children: [
-            for (final option in question.options)
-              _singleOption(context, option),
           ],
         ),
-        SizedBox(height: 12 - actionInset),
-        footer,
+        for (final (index, question) in widget.questions.indexed)
+          _QuestionField(
+            index: index,
+            question: question,
+            enabled: widget.enabled,
+            selected: selected[index] ?? const {},
+            custom: custom.putIfAbsent(index, TextEditingController.new),
+            onSelect: (label) => _select(index, label, question.multiSelect),
+            onOther: (text) => setState(() {
+              if (!question.multiSelect && text.trim().isNotEmpty) {
+                selected.remove(index);
+              }
+            }),
+          ),
+        Wrap(
+          alignment: WrapAlignment.end,
+          children: [
+            _PermAction(
+              label: '提交',
+              primary: true,
+              onPressed: widget.enabled && complete
+                  ? () => widget.onAnswer(values)
+                  : null,
+            ),
+          ],
+        ),
       ],
     );
   }
+}
 
-  Widget _singleOption(BuildContext context, MobileQuestionOption option) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+class _QuestionField extends StatelessWidget {
+  const _QuestionField({
+    required this.index,
+    required this.question,
+    required this.enabled,
+    required this.selected,
+    required this.custom,
+    required this.onSelect,
+    required this.onOther,
+  });
+
+  final int index;
+  final MobileQuestion question;
+  final bool enabled;
+  final Set<String> selected;
+  final TextEditingController custom;
+  final ValueChanged<String> onSelect;
+  final ValueChanged<String> onOther;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final checked = selected[0]?.contains(option.label) ?? false;
-    return Semantics(
-      selected: checked,
-      child: TextButton(
-        style: TextButton.styleFrom(
-          minimumSize: _touchSize(context),
-          alignment: AlignmentDirectional.centerStart,
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
-          foregroundColor: colors.foreground,
-          backgroundColor: checked ? colors.selectedOnSurface : colors.surface,
-          side: BorderSide(color: checked ? colors.primary : colors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        onPressed: widget.enabled
-            ? () => _select(0, option.label, false)
-            : null,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          spacing: 2,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: TimelineSpace.x2,
+      children: [
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: TimelineSpace.x4,
+          runSpacing: TimelineSpace.x1,
           children: [
+            if (question.header case final header?)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: colors.field,
+                  borderRadius: BorderRadius.circular(TimelineRadius.full),
+                ),
+                child: Text(
+                  header,
+                  style: TimelineType.smallStyle(
+                    colors.timelineSubtle,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+              ),
             Text(
-              option.label,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-                height: 1.45,
+              question.question,
+              style: TimelineType.contentStyle(
+                colors.foreground,
+                weight: FontWeight.w500,
               ),
             ),
-            if (option.description case final description?)
-              Text(
-                description,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: 13,
-                  height: 1.45,
-                  color: colors.muted,
-                ),
-              ),
+            if (question.multiSelect)
+              Text('可以多选', style: TimelineType.metaStyle(colors.timelineFaint)),
           ],
+        ),
+        for (final option in question.options)
+          _QuestionOption(
+            label: option.label,
+            description: option.description,
+            multi: question.multiSelect,
+            selected: selected.contains(option.label),
+            enabled: enabled,
+            onTap: () => onSelect(option.label),
+          ),
+        if (question.allowCustomAnswer)
+          TextFormField(
+            key: ValueKey('other-answer-$index'),
+            controller: custom,
+            enabled: enabled,
+            style: TimelineType.contentStyle(colors.foreground),
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: '其他（自己写）',
+              hintStyle: TimelineType.metaStyle(colors.timelineFaint),
+              isDense: true,
+              filled: true,
+              fillColor: colors.inputBackground,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(TimelineRadius.block),
+                borderSide: BorderSide(color: colors.inputBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(TimelineRadius.block),
+                borderSide: BorderSide(color: colors.inputBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(TimelineRadius.block),
+                borderSide: BorderSide(color: colors.strongBorder),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: TimelineSpace.x6,
+                vertical: 11,
+              ),
+            ),
+            onChanged: onOther,
+          ),
+      ],
+    );
+  }
+}
+
+class _QuestionOption extends StatelessWidget {
+  const _QuestionOption({
+    required this.label,
+    required this.description,
+    required this.multi,
+    required this.selected,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final String? description;
+  final bool multi;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(TimelineRadius.block),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 28),
+            padding: const EdgeInsets.symmetric(
+              horizontal: TimelineSpace.x5,
+              vertical: TimelineSpace.x1,
+            ),
+            decoration: BoxDecoration(
+              color: selected ? colors.field : null,
+              borderRadius: BorderRadius.circular(TimelineRadius.block),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  selected
+                      ? (multi
+                            ? Icons.check_box_rounded
+                            : Icons.radio_button_checked)
+                      : (multi
+                            ? Icons.check_box_outline_blank
+                            : Icons.radio_button_unchecked),
+                  size: TimelineIcon.meta,
+                  color: selected ? colors.foreground : colors.timelineSubtle,
+                ),
+                const SizedBox(width: TimelineSpace.x5),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: TimelineType.contentStyle(colors.foreground),
+                      ),
+                      if (description case final detail?)
+                        Text(
+                          detail,
+                          style: TimelineType.metaStyle(colors.timelineSubtle),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
-  }
-
-  IconData _optionIcon(int index, String label, bool multi) {
-    final checked = selected[index]?.contains(label) ?? false;
-    if (multi) return checked ? Icons.check_box : Icons.check_box_outline_blank;
-    return checked ? Icons.radio_button_checked : Icons.radio_button_unchecked;
   }
 }
 
@@ -832,17 +820,6 @@ class _RequestReceiptRow extends StatelessWidget {
 
 Size _touchSize(BuildContext context) =>
     Size(0, Theme.of(context).platform == TargetPlatform.android ? 48 : 44);
-
-TextStyle? _requestButtonText(ThemeData theme) =>
-    theme.textTheme.titleMedium?.copyWith(
-      fontSize: 16,
-      fontWeight: FontWeight.w500,
-      height: 1.45,
-      letterSpacing: theme.platform == TargetPlatform.iOS ? -.24 : -.039,
-      leadingDistribution: TextLeadingDistribution.even,
-    );
-
-const _actionSize = Size(0, 46);
 
 // Android 的触区向按钮上下各延伸 1 dp，用相邻留白容纳。
 double _actionTouchInset(BuildContext context) =>

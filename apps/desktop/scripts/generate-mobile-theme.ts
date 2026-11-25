@@ -31,6 +31,7 @@ const tokens = {
   timelineDivider: "--cv-hairline",
   timelineSubtle: "--cv-subtle",
   timelineFaint: "--cv-subtlest",
+  popover: "--popover",
   timelinePanel: "--cv-panel",
   timelineCard: "--cv-card",
   timelineBorder: "--cv-border",
