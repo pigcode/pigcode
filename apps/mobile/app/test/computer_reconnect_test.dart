@@ -161,4 +161,47 @@ void main() {
     session.dispose();
     await tester.pump();
   });
+
+  testWidgets(
+    'online push arriving during a stale in-flight dial triggers immediate reconnect',
+    (tester) async {
+      final lastSeen = DateTime.utc(2026, 11, 25);
+      final watch = _Watch(
+        RelayComputerStatus(RelayComputerState.offline, lastSeen),
+      );
+      final staleDial = Completer<MobileConnection>();
+      final recovered = _Connection();
+      var dials = 0;
+      final session = ComputerReconnect(
+        dial: () {
+          dials++;
+          if (dials == 1) return staleDial.future;
+          return Future.value(recovered);
+        },
+        observe: () async => watch,
+        onChange: () {},
+      );
+
+      session.start(foreground: true);
+      await tester.pump();
+      expect(session.connecting, isTrue);
+      expect(session.status?.state, RelayComputerState.offline);
+
+      // 电脑在旧拨号尚未返回时上线，中继先推送 online。
+      watch.changes.add(
+        RelayComputerStatus(RelayComputerState.online, lastSeen),
+      );
+      await tester.pump();
+      expect(session.status?.state, RelayComputerState.online);
+
+      // 旧拨号返回过时的 offline，应该立刻触发第二次拨号而无需等待退避计时器。
+      staleDial.completeError(const ConnectionFailure('offline'));
+      await tester.pump();
+      expect(dials, 2);
+      expect(session.connection, same(recovered));
+      expect(session.error, isNull);
+      session.dispose();
+      await tester.pump();
+    },
+  );
 }

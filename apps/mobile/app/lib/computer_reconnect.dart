@@ -24,6 +24,7 @@ class ComputerReconnect {
   bool _foreground = false;
   bool _disposed = false;
   bool _connecting = false;
+  bool _retryImmediately = false;
   bool _terminal = false;
   String? _error;
   RelayComputerStatus? _status;
@@ -82,6 +83,7 @@ class ComputerReconnect {
     final connection = _connection;
     _connection = null;
     _connecting = false;
+    _retryImmediately = false;
     // 后台或网络切换前看到的状态不能带进新连接，否则会误报“电脑离线”。
     _status = null;
     if (connection != null) unawaited(connection.close());
@@ -96,6 +98,7 @@ class ComputerReconnect {
       return;
     }
     _connecting = true;
+    _retryImmediately = false;
     _onChange();
     try {
       final connection = await _dial();
@@ -114,8 +117,16 @@ class ComputerReconnect {
         'busy',
         'closed',
       }.contains(_error);
+      final retryNow = _retryImmediately && !_terminal;
+      _retryImmediately = false;
       _onChange();
-      _scheduleConnect(generation);
+      if (retryNow) {
+        _retrySeconds = 1;
+        _reconnect?.cancel();
+        unawaited(_connect(generation));
+      } else {
+        _scheduleConnect(generation);
+      }
     }
   }
 
@@ -175,14 +186,21 @@ class ComputerReconnect {
 
   void _receiveStatus(int generation, RelayComputerStatus status) {
     if (!_current(generation)) return;
-    final becameOnline =
-        status.state == RelayComputerState.online &&
-        _status?.state != RelayComputerState.online;
+    final wasOnline = _status?.state == RelayComputerState.online;
+    final isOnline = status.state == RelayComputerState.online;
     _status = status;
+    if (isOnline && _error == 'offline') {
+      _error = null;
+    }
     _onChange();
-    if (becameOnline && !_connecting && _connection == null && !_terminal) {
-      _reconnect?.cancel();
-      unawaited(_connect(generation));
+    if (isOnline && _connection == null && !_terminal) {
+      _retrySeconds = 1;
+      if (_connecting) {
+        if (!wasOnline) _retryImmediately = true;
+      } else {
+        _reconnect?.cancel();
+        unawaited(_connect(generation));
+      }
     }
   }
 

@@ -796,13 +796,20 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
     final Widget? statusBadge;
     if (!widget.online) {
-      statusBadge = _headerStatusBadge(
+      final badge = _headerStatusBadge(
         context,
         label: widget.connectionLabel ?? '电脑连接已断开',
         background: colors.field,
         foreground: colors.muted,
         dotColor: colors.faint,
       );
+      statusBadge = widget.onRetry == null
+          ? badge
+          : GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onRetry,
+              child: badge,
+            );
     } else if (status == MobileThreadStatus.waitingApproval && thread != null) {
       statusBadge = _headerStatusBadge(
         context,

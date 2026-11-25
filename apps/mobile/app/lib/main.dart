@@ -130,9 +130,9 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _network = next;
       if (previous == null || setEquals(previous, next)) return;
       // 网络类型变化时旧连接通常已经失效，交给 socket 自己的关闭回调重连；
-      // 这里只在确实没有连接时重建，避免把还健康的连接反复断掉。
+      // 尚未建立连接（包括卡在旧网络上的在途拨号）时立即切到新代重连。
       final session = _session;
-      if (session != null && session.connection == null && !session.connecting) {
+      if (session != null && session.connection == null) {
         session.retry();
       }
     }, onError: (Object _) {});
@@ -721,6 +721,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       label = _message(failure);
     } else {
       label = switch (status?.state) {
+        RelayComputerState.online => '正在连接电脑…',
         RelayComputerState.sleeping => '电脑正在睡眠',
         RelayComputerState.exited => '电脑上的 Pigcode 已退出',
         RelayComputerState.restarting => '电脑上的 Pigcode 正在重启',

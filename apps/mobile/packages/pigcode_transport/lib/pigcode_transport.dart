@@ -398,6 +398,12 @@ class SecureLink {
     } on ConnectionFailure {
       await inbox.close();
       rethrow;
+    } on TimeoutException {
+      await inbox.close();
+      throw const ConnectionFailure('unreachable');
+    } on IOException {
+      await inbox.close();
+      throw const ConnectionFailure('unreachable');
     } catch (_) {
       await inbox.close();
       throw const ConnectionFailure('authentication-failed');
