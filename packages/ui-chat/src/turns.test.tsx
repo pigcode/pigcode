@@ -187,6 +187,82 @@ describe("buildTimeline", () => {
     expect(after[0]?.signature).toBe(before[0]?.signature)
     expect(after[1]?.signature).not.toBe(before[1]?.signature)
   })
+
+  it("marks only the running tool associated with a pending approval and clears it when resolved or ended", () => {
+    // 1. 优先按 toolCallId / callId 精确匹配运行中工具
+    const byIdEvents = [
+      event(1, "run.started", { text: "deploy" }),
+      event(2, "tool.started", { id: "b1", name: "Bash", input: { command: "echo 1" } }),
+      event(3, "tool.started", { id: "b2", name: "Bash", input: { command: "rm -rf dist" } }),
+      event(4, "approval.requested", {
+        id: "req_1",
+        callId: "b1",
+        toolName: "Bash",
+        command: "echo 1",
+      }),
+    ]
+    const [byIdTurn] = onlyTurns(byIdEvents)
+    expect(byIdTurn?.approvals[0]).toMatchObject({
+      id: "req_1",
+      toolCallId: "b1",
+      toolName: "Bash",
+    })
+    expect(byIdTurn?.work).toMatchObject([
+      { kind: "tool", tool: { id: "b1", pendingApproval: true } },
+      { kind: "tool", tool: { id: "b2" } },
+    ])
+    expect(
+      byIdTurn?.work[1]?.kind === "tool" ? byIdTurn.work[1].tool.pendingApproval : undefined,
+    ).toBeUndefined()
+
+    // 2. 缺 toolCallId 时按 toolName / name 匹配最后一个同工具名运行中工具
+    const byNameEvents = [
+      event(1, "run.started", { text: "deploy" }),
+      event(2, "tool.started", { id: "r1", name: "Read", input: { file_path: "a.ts" } }),
+      event(3, "tool.completed", { id: "r1", name: "Read", output: "ok" }),
+      event(4, "tool.started", { id: "b1", name: "Bash", input: { command: "echo 1" } }),
+      event(5, "tool.started", { id: "b2", name: "Bash", input: { command: "rm -rf dist" } }),
+      event(6, "approval.requested", { id: "req_2", name: "Bash", command: "rm -rf dist" }),
+    ]
+    const [byNameTurn] = onlyTurns(byNameEvents)
+    expect(byNameTurn?.work[2]).toMatchObject({
+      kind: "tool",
+      tool: { id: "b2", pendingApproval: true },
+    })
+    expect(
+      byNameTurn?.work[1]?.kind === "tool" ? byNameTurn.work[1].tool.pendingApproval : undefined,
+    ).toBeUndefined()
+
+    // 3. 既无 toolCallId 也无 toolName 且当前仅有唯一运行中工具时也可关联
+    const soleRunningEvents = [
+      event(1, "run.started", { text: "deploy" }),
+      event(2, "tool.started", { id: "r1", name: "Read", input: { file_path: "a.ts" } }),
+      event(3, "tool.completed", { id: "r1", name: "Read", output: "ok" }),
+      event(4, "tool.started", { id: "b1", name: "Bash", input: { command: "./deploy.sh" } }),
+      event(5, "approval.requested", { id: "req_3", title: "Run deploy", command: "./deploy.sh" }),
+    ]
+    const [soleTurn] = onlyTurns(soleRunningEvents)
+    expect(soleTurn?.work[1]).toMatchObject({
+      kind: "tool",
+      tool: { id: "b1", pendingApproval: true },
+    })
+
+    // 4. 审批决议后 pendingApproval 清除；本轮结束后也清除
+    const [resolvedTurn] = onlyTurns([
+      ...soleRunningEvents,
+      event(6, "approval.resolved", { id: "req_3", decision: "allow-once" }),
+    ])
+    expect(
+      resolvedTurn?.work[1]?.kind === "tool"
+        ? resolvedTurn.work[1].tool.pendingApproval
+        : undefined,
+    ).toBeUndefined()
+
+    const [endedTurn] = onlyTurns([...soleRunningEvents, event(6, "run.interrupted", {})])
+    expect(
+      endedTurn?.work[1]?.kind === "tool" ? endedTurn.work[1].tool.pendingApproval : undefined,
+    ).toBeUndefined()
+  })
 })
 
 describe("turn rendering", () => {

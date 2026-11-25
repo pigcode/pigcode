@@ -21,6 +21,8 @@ export interface ToolCall {
   endedAt?: string | undefined
   /** 命令的退出码；Agent 不报告时缺省。 */
   exitCode?: number | undefined
+  /** 该工具正关联未处理的待审批请求；待审批时不进入连续摘要组。 */
+  pendingApproval?: boolean | undefined
 }
 
 const BROWSER_ACTIONS: Record<string, [LucideIcon, MessageKey]> = {
@@ -168,18 +170,34 @@ function unwrapShell(command: string): string {
   return (quoted?.[2] ?? inner).trim()
 }
 
+function commandFromParts(parts: readonly string[]): string {
+  const shell = parts.findIndex((part) => part === "-lc" || part === "-c")
+  if (shell >= 0 && parts[shell + 1] !== undefined) return parts[shell + 1]!.trim()
+  return parts.join(" ").trim()
+}
+
 /** 命令工具执行的完整命令；输入可能是字符串、JSON 里的字符串，或 argv 数组。 */
 export function commandText(input: string | undefined): string | undefined {
   if (!input) return undefined
   const value = parseJson(input)
-  if (!value) return unwrapShell(input)
+  if (!value) {
+    const trimmed = input.trim()
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed: unknown = JSON.parse(trimmed)
+        if (Array.isArray(parsed) && parsed.every((part) => typeof part === "string")) {
+          return commandFromParts(parsed as string[])
+        }
+      } catch {
+        // 不是 JSON 数组时按普通 shell 命令处理。
+      }
+    }
+    return unwrapShell(input)
+  }
   const command = value.command ?? value.cmd
   if (typeof command === "string") return unwrapShell(command)
   if (Array.isArray(command) && command.every((part) => typeof part === "string")) {
-    const parts = command as string[]
-    const shell = parts.findIndex((part) => part === "-lc" || part === "-c")
-    if (shell >= 0 && parts[shell + 1]) return parts[shell + 1]!.trim()
-    return parts.join(" ")
+    return commandFromParts(command as string[])
   }
   return undefined
 }

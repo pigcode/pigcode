@@ -324,4 +324,88 @@ describe("summary groups", () => {
     expect(summaryIconItem([read, bash])?.key).toBe("b1")
     expect(summaryIconItem([thought("t1"), thought("t2")])).toBeUndefined()
   })
+
+  it("filters out running shell tools whose command text is still empty, then restores them once command arrives or status finishes", () => {
+    const read = item(tool("Read", { file_path: "a.ts" }, { id: "r1" }))
+    const grep = item(tool("Grep", { pattern: "foo" }, { id: "g1" }))
+    const emptyRunning = item(tool("Bash", {}, { id: "b-empty", status: "running" }))
+    const whitespaceRunning = item(
+      tool("exec_command", { command: "   \n " }, { id: "b-ws", status: "running" }),
+    )
+    const wrappedEmpty = item(
+      tool("Bash", { command: "bash -lc '   '" }, { id: "b-wrap", status: "running" }),
+    )
+
+    // 只有空命令流式 shell 时不产生任何工作项
+    expect(groupSummaries([emptyRunning, whitespaceRunning, wrappedEmpty])).toEqual([])
+
+    // 夹在查阅之间时不打断摘要组、也不进入组内计数
+    const grouped = groupSummaries([read, emptyRunning, whitespaceRunning, grep])
+    expect(grouped).toHaveLength(1)
+    expect(grouped[0]).toMatchObject({ kind: "group", key: "group-r1" })
+    if (grouped[0]?.kind === "group") {
+      expect(grouped[0].items.map((entry) => entry.key)).toEqual(["r1", "g1"])
+      expect(summaryCounts(grouped[0].items)).toEqual({
+        explore: 2,
+        run: 0,
+        files: [],
+        unresolved: 0,
+      })
+    }
+
+    // 只有一项有效查阅 + 一个空命令流式 shell 时，不应形成 2 项摘要组
+    const singleton = groupSummaries([read, emptyRunning])
+    expect(singleton.map((entry) => entry.key)).toEqual(["r1"])
+
+    // 一旦收到有效命令，或状态变为 completed / failed / stopped，即正常显示并参与分组
+    const withCommand = item(
+      tool("Bash", { command: "pnpm test" }, { id: "b-cmd", status: "running" }),
+    )
+    const completedEmpty = item(tool("Bash", {}, { id: "b-done", status: "completed" }))
+    const failedEmpty = item(tool("Bash", {}, { id: "b-fail", status: "failed" }))
+    const stoppedEmpty = item(tool("Bash", {}, { id: "b-stop", status: "stopped" }))
+    const restored = groupSummaries([read, withCommand, completedEmpty, failedEmpty, stoppedEmpty])
+    expect(restored).toHaveLength(1)
+    expect(restored[0]).toMatchObject({ kind: "group" })
+    if (restored[0]?.kind === "group") {
+      expect(restored[0].items.map((entry) => entry.key)).toEqual([
+        "r1",
+        "b-cmd",
+        "b-done",
+        "b-fail",
+        "b-stop",
+      ])
+    }
+  })
+
+  it("excludes pending-approval tools from summary groups and merges them back once cleared", () => {
+    const read1 = item(tool("Read", { file_path: "a.ts" }, { id: "r1" }))
+    const grep1 = item(tool("Grep", { pattern: "x" }, { id: "g1" }))
+    const bashPending = item(
+      tool(
+        "Bash",
+        { command: "rm -rf dist" },
+        { id: "b1", status: "running", pendingApproval: true },
+      ),
+    )
+    const read2 = item(tool("Read", { file_path: "b.ts" }, { id: "r2" }))
+    const grep2 = item(tool("Grep", { pattern: "y" }, { id: "g2" }))
+
+    const split = groupSummaries([read1, grep1, bashPending, read2, grep2])
+    expect(
+      split.map((entry) =>
+        entry.kind === "group" ? `group:${entry.items.map((it) => it.key).join("+")}` : entry.key,
+      ),
+    ).toEqual(["group:r1+g1", "b1", "group:r2+g2"])
+
+    const bashResolved = item(
+      tool("Bash", { command: "rm -rf dist" }, { id: "b1", status: "running" }),
+    )
+    const merged = groupSummaries([read1, grep1, bashResolved, read2, grep2])
+    expect(
+      merged.map((entry) =>
+        entry.kind === "group" ? `group:${entry.items.map((it) => it.key).join("+")}` : entry.key,
+      ),
+    ).toEqual(["group:r1+g1+b1+r2+g2"])
+  })
 })

@@ -108,8 +108,17 @@ export function collectTools(events: ThreadEvent[]): Map<string, ToolCall> {
 export function approvalFromEvent(event: ThreadEvent): ApprovalRequest | undefined {
   const payload = asRecord(event.payload)
   if (!payload) return undefined
-  const isPlan = payload.toolName === "ExitPlanMode"
-  const plan = isPlan ? asText(asRecord(payload.input)?.plan) : undefined
+  const input = asRecord(payload.input)
+  const toolName = asText(payload.toolName) ?? asText(payload.name) ?? asText(payload.tool)
+  const toolCallId =
+    asText(payload.toolCallId) ??
+    asText(payload.callId) ??
+    asText(payload.toolUseId) ??
+    asText(input?.toolCallId) ??
+    asText(input?.callId) ??
+    asText(input?.itemId)
+  const isPlan = toolName === "ExitPlanMode"
+  const plan = isPlan ? asText(input?.plan) : undefined
   const decisions = approvalDecisionSchema.array().safeParse(payload.decisions)
   return {
     id: asText(payload.id) ?? asText(payload.requestId) ?? `approval-${event.seq}`,
@@ -126,6 +135,8 @@ export function approvalFromEvent(event: ThreadEvent): ApprovalRequest | undefin
         ? { decisions: decisions.data }
         : {}),
     ...(plan ? { plan } : {}),
+    ...(toolCallId ? { toolCallId } : {}),
+    ...(toolName ? { toolName } : {}),
   }
 }
 

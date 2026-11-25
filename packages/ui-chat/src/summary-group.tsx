@@ -7,6 +7,7 @@
 import {
   memo,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -21,12 +22,15 @@ import {
   summaryIconItem,
   type SummaryCounts,
 } from "./summary-groups"
+import { splitPath } from "./tool-fields"
 import { SummaryIconContext, SummaryPreviewContext } from "./tool-row"
 import { FileChip, useConversationActions } from "./tools/common"
 import type { WorkItem } from "./turns"
 
-/** 收起时最多列出几个改过的文件，其余写成 +N。 */
-const SHOWN_FILES = 3
+/** 组头展开箭头的预留宽度（8px 间距 + 12px 箭头 + 余量，参照 ZCode 4.0.0 的 epn）。 */
+const CHEVRON_RESERVE = 24
+/** 读不到计算样式时的默认间距，与 `.summary-group-files` 的 `gap: 8px` 一致。 */
+const DEFAULT_FILES_GAP = 8
 
 type Translate = (key: MessageKey) => string
 
@@ -52,17 +56,158 @@ export function summaryStatistics(t: Translate, counts: SummaryCounts, closed: b
     : t("chat.summaryGroup.reasoning")
 }
 
-/** 只改了文件的组：收起时统计后面跟着文件名；只改了一个文件时直接写「已修改 文件名」。 */
+/** 按给定可用宽度计算最多可放下的文件 chip 数：全放得下不显示 `+N`，否则在预留 `+N` 宽度内放尽量多。 */
+export function fitFileCount(
+  availableWidth: number,
+  labelWidth: number,
+  chipWidths: readonly number[],
+  moreWidthForHidden: (hidden: number) => number,
+  gap: number,
+): number {
+  const total = chipWidths.length
+  if (total <= 1) return total
+
+  let allWidth = labelWidth
+  for (let index = 0; index < total; index += 1) {
+    allWidth += gap + chipWidths[index]!
+  }
+  if (allWidth <= availableWidth) return total
+
+  let used = labelWidth
+  let shown = 0
+  for (let index = 0; index < total - 1; index += 1) {
+    const nextUsed = used + gap + chipWidths[index]!
+    const hidden = total - (index + 1)
+    if (nextUsed + gap + moreWidthForHidden(hidden) > availableWidth) break
+    used = nextUsed
+    shown = index + 1
+  }
+  return shown
+}
+
+function measureWidth(element: HTMLElement): number {
+  const rectWidth = element.getBoundingClientRect().width
+  return rectWidth > 0 ? rectWidth : element.offsetWidth
+}
+
+/** 计算 `.summary-group-files` 的可用宽度；容器本身宽度为 0（如未布局的 jsdom）时返回 null。 */
+function availableFilesWidth(group: HTMLElement, filesEl: HTMLElement): number | null {
+  const groupRect = group.getBoundingClientRect()
+  const filesRect = filesEl.getBoundingClientRect()
+  if (groupRect.width > 0) {
+    return Math.max(0, groupRect.right - filesRect.left - CHEVRON_RESERVE)
+  }
+  const groupWidth = group.offsetWidth || group.clientWidth
+  if (groupWidth <= 0) return null
+  const offset = filesRect.left > groupRect.left ? filesRect.left - groupRect.left : 0
+  return Math.max(0, groupWidth - offset - CHEVRON_RESERVE)
+}
+
+/** 借用不可见的临时测量容器测出标签、全部文件 chip 与 `+N` 的实际宽度，算出能放下的数量。 */
+function measureShownCount(
+  group: HTMLElement,
+  filesEl: HTMLElement,
+  label: string,
+  files: readonly string[],
+): number {
+  if (files.length <= 1) return files.length
+  const available = availableFilesWidth(group, filesEl)
+  if (available === null) return files.length
+
+  const style = window.getComputedStyle(filesEl)
+  const parsedGap = Number.parseFloat(style.columnGap || style.gap)
+  const gap = Number.isFinite(parsedGap) ? parsedGap : DEFAULT_FILES_GAP
+
+  const probe = document.createElement("span")
+  probe.className = "summary-group-measure"
+  probe.setAttribute("aria-hidden", "true")
+
+  const labelEl = document.createElement("span")
+  labelEl.className = "summary-group-label"
+  labelEl.textContent = label
+  probe.append(labelEl)
+
+  const chipEls = files.map((path) => {
+    const chip = document.createElement("span")
+    chip.className = "file-chip"
+    const icon = document.createElement("span")
+    icon.className = "file-icon"
+    const name = document.createElement("span")
+    name.className = "truncate"
+    name.textContent = splitPath(path).name
+    chip.append(icon, name)
+    probe.append(chip)
+    return chip
+  })
+
+  const maxDigits = String(files.length).length
+  const moreByDigits = new Map<number, HTMLSpanElement>()
+  for (let digits = 1; digits <= maxDigits; digits += 1) {
+    const more = document.createElement("span")
+    more.className = "summary-group-more"
+    more.textContent = digits === maxDigits ? `+${files.length}` : `+${"9".repeat(digits)}`
+    probe.append(more)
+    moreByDigits.set(digits, more)
+  }
+
+  group.append(probe)
+  try {
+    const labelWidth = measureWidth(labelEl)
+    const chipWidths = chipEls.map(measureWidth)
+    if (chipWidths.every((width) => width <= 0)) return files.length
+    const moreWidths = new Map<number, number>()
+    for (const [digits, element] of moreByDigits) moreWidths.set(digits, measureWidth(element))
+    return fitFileCount(
+      available,
+      labelWidth,
+      chipWidths,
+      (hidden) => moreWidths.get(String(hidden).length) ?? moreWidths.get(maxDigits) ?? 0,
+      gap,
+    )
+  } finally {
+    probe.remove()
+  }
+}
+
+/** 只改了文件的组：收起时按容器可用宽度动态列出文件名与 +N；只改了一个文件时直接写「已修改 文件名」。 */
 function ChangedFiles({ label, files }: { label: string; files: readonly string[] }) {
-  const shown = files.slice(0, SHOWN_FILES)
+  const filesRef = useRef<HTMLSpanElement>(null)
+  const filesKey = files.join("\0")
+  const paths = useMemo(() => (filesKey ? filesKey.split("\0") : []), [filesKey])
+  const [shownCount, setShownCount] = useState(paths.length)
+
+  useLayoutEffect(() => {
+    if (paths.length <= 1) {
+      setShownCount(paths.length)
+      return
+    }
+    const filesEl = filesRef.current
+    const group = filesEl?.closest<HTMLElement>(".summary-group")
+    if (!filesEl || !group) {
+      setShownCount(paths.length)
+      return
+    }
+    const update = () => {
+      const next = measureShownCount(group, filesEl, label, paths)
+      setShownCount((current) => (current === next ? current : next))
+    }
+    update()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(update)
+    observer.observe(group)
+    return () => observer.disconnect()
+  }, [label, paths])
+
+  const shown = paths.slice(0, Math.min(shownCount, paths.length))
+  const hidden = paths.length - shown.length
   return (
-    <span className="summary-group-files">
+    <span ref={filesRef} className="summary-group-files">
       <span className="summary-group-label">{label}</span>
       {shown.map((path) => (
         <FileChip key={path} path={path} />
       ))}
-      {files.length > shown.length ? (
-        <span className="summary-group-more">+{files.length - shown.length}</span>
+      {shown.length > 0 && hidden > 0 ? (
+        <span className="summary-group-more">+{hidden}</span>
       ) : null}
     </span>
   )

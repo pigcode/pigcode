@@ -18,6 +18,10 @@ export interface ApprovalRequest {
   decisions?: ApprovalDecision[] | undefined
   /** 计划模式交出的计划（Markdown）；有值时按计划审批展示。 */
   plan?: string | undefined
+  /** 触发审批的工具调用 id（事件提供时用于精确关联运行中的工具行）。 */
+  toolCallId?: string | undefined
+  /** 触发审批的工具名（缺 toolCallId 时用于关联同名的运行中工具行）。 */
+  toolName?: string | undefined
 }
 
 const RESOLVED_KEYS = {

@@ -7,14 +7,29 @@
  */
 import { fileChanges } from "./file-changes"
 import { isReadOnlySessionTool, isSessionWriteTool, toolFamily } from "./tool-identity"
-import type { ToolCall } from "./tool-meta"
+import { commandText, type ToolCall } from "./tool-meta"
 import type { WorkItem } from "./turns"
 
 /** 摘要组里的三类工具。 */
 export type SummaryCategory = "explore" | "run" | "change"
 
+/** 运行中且尚未收到有效命令文本的流式 shell 工具：不占工作区行，也不进入摘要组或计数。 */
+export function isEmptyStreamingShell(tool: ToolCall): boolean {
+  if (tool.pendingApproval) return false
+  if (toolFamily(tool.name) !== "shell" || tool.status !== "running") return false
+  const raw =
+    tool.input ??
+    (typeof tool.inputValue === "string"
+      ? tool.inputValue
+      : tool.inputValue === undefined || tool.inputValue === null
+        ? undefined
+        : JSON.stringify(tool.inputValue))
+  return !commandText(raw)?.trim()
+}
+
 /** 工具在摘要组里算哪一类；null 表示它不进组。 */
 export function summaryCategory(tool: ToolCall): SummaryCategory | null {
+  if (tool.pendingApproval) return null
   if (isReadOnlySessionTool(tool.name)) return "explore"
   if (isSessionWriteTool(tool.name)) return "run"
   const family = toolFamily(tool.name)
@@ -35,7 +50,7 @@ export function summaryCategory(tool: ToolCall): SummaryCategory | null {
 
 function joinsSummary(item: WorkItem): boolean {
   if (item.kind === "reasoning") return true
-  return item.kind === "tool" && summaryCategory(item.tool) !== null
+  return item.kind === "tool" && !item.tool.pendingApproval && summaryCategory(item.tool) !== null
 }
 
 /** 工作区里的一项：原样的工作，或者一组连续的摘要。 */
@@ -51,6 +66,7 @@ export function groupSummaries(items: readonly WorkItem[]): WorkEntry[] {
     run = []
   }
   for (const item of items) {
+    if (item.kind === "tool" && isEmptyStreamingShell(item.tool)) continue
     if (joinsSummary(item)) {
       run.push(item)
       continue
@@ -90,7 +106,7 @@ export function summaryCounts(items: readonly WorkItem[], root?: string): Summar
   const counts: SummaryCounts = { explore: 0, run: 0, files: [], unresolved: 0 }
   const seen = new Set<string>()
   for (const item of items) {
-    if (item.kind !== "tool") continue
+    if (item.kind !== "tool" || isEmptyStreamingShell(item.tool)) continue
     const category = summaryCategory(item.tool)
     if (category === "explore") counts.explore += 1
     else if (category === "run") counts.run += 1
@@ -129,7 +145,7 @@ export function summaryIconItem(items: readonly WorkItem[]): WorkItem | undefine
   let chosen: WorkItem | undefined
   let rank = Infinity
   for (const item of items) {
-    if (item.kind !== "tool") continue
+    if (item.kind !== "tool" || isEmptyStreamingShell(item.tool)) continue
     const category = summaryCategory(item.tool)
     if (!category) continue
     const itemRank =

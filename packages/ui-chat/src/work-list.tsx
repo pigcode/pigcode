@@ -106,6 +106,7 @@ export function WorkList({
       ]
     : items
   const entries = groupSummaries(work)
+  if (entries.length === 0) return null
   return (
     <div className={className ? `turn-work ${className}` : "turn-work"}>
       {entries.map((entry, index) =>

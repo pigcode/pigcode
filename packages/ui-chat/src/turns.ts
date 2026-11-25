@@ -354,6 +354,75 @@ function stopUnfinished(item: WorkItem): WorkItem {
   return item
 }
 
+/** 找出与未处理审批关联的运行中工具 id：优先 toolCallId，其次最后一个同名运行中工具，最后唯一运行中工具。 */
+function pendingApprovalToolIds(
+  work: readonly WorkItem[],
+  approvals: readonly ApprovalRequest[],
+): Set<string> {
+  const matched = new Set<string>()
+  const allToolIds = new Set<string>()
+  const running: ToolCall[] = []
+  for (const item of work) {
+    if (item.kind !== "tool") continue
+    allToolIds.add(item.tool.id)
+    if (item.tool.status === "running") running.push(item.tool)
+  }
+  if (running.length === 0) return matched
+  for (const approval of approvals) {
+    if (approval.toolCallId) {
+      const exact = running.find((tool) => tool.id === approval.toolCallId)
+      if (exact) {
+        matched.add(exact.id)
+        continue
+      }
+      // 显式指定的 toolCallId 已在本轮完成/停止时，不误伤其他运行中的工具。
+      if (allToolIds.has(approval.toolCallId)) continue
+    }
+    if (approval.toolName) {
+      const target = approval.toolName.trim().toLowerCase()
+      let chosen: ToolCall | undefined
+      for (let index = running.length - 1; index >= 0; index -= 1) {
+        const candidate = running[index]!
+        if (candidate.name.trim().toLowerCase() === target && !matched.has(candidate.id)) {
+          chosen = candidate
+          break
+        }
+      }
+      if (!chosen) {
+        for (let index = running.length - 1; index >= 0; index -= 1) {
+          const candidate = running[index]!
+          if (candidate.name.trim().toLowerCase() === target) {
+            chosen = candidate
+            break
+          }
+        }
+      }
+      if (chosen) {
+        matched.add(chosen.id)
+        continue
+      }
+    }
+    if (!approval.toolCallId && !approval.toolName && running.length === 1) {
+      matched.add(running[0]!.id)
+    }
+  }
+  return matched
+}
+
+/** 给正在等待审批的工具打上标记，让摘要分组把它排除在外独立显示。 */
+function markPendingApprovals(
+  work: readonly WorkItem[],
+  approvals: readonly ApprovalRequest[],
+): WorkItem[] {
+  const ids = pendingApprovalToolIds(work, approvals)
+  if (ids.size === 0) return work as WorkItem[]
+  return work.map((item) =>
+    item.kind === "tool" && ids.has(item.tool.id)
+      ? { ...item, tool: { ...item.tool, pendingApproval: true } }
+      : item,
+  )
+}
+
 /**
  * 整理一轮：结束后还在运行的工具记为已停止；最后一项若是文字，提出来作为工作区之外的回答；
  * 和提问事件重复的提问工具、结束后才失去意义的审批去掉；改过的文件按路径汇总。
@@ -375,6 +444,7 @@ function finalizeTurn(turn: Turn, draft: Draft): void {
     work = work.slice(0, -1)
   }
   if (ended) turn.approvals = []
+  if (turn.approvals.length > 0) work = markPendingApprovals(work, turn.approvals)
   turn.files = mergeFileChanges(
     work.flatMap((item) =>
       item.kind === "tool" && item.tool.status === "completed" ? fileChanges(item.tool) : [],

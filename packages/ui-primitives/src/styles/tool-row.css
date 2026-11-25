@@ -230,6 +230,7 @@
 
 /* ─── 连续摘要组 ───────────────────────────────────────── */
 .summary-group {
+  position: relative;
   min-width: 0;
   font-family: var(--font-ui);
   font-size: var(--cv-fs);
@@ -270,9 +271,23 @@
 }
 .summary-group-files {
   display: inline-flex;
+  max-width: 100%;
   min-width: 0;
   align-items: center;
   gap: 8px;
+}
+/* 测算收起态能放下多少枚文件 chip 的临时容器：不占位、不影响交互与布局 */
+.summary-group-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 8px;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
 }
 .summary-group-label,
 .summary-group-more {
