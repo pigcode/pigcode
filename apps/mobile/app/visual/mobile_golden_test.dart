@@ -120,7 +120,10 @@ void main() {
       await _openPage(tester, brightness, workspaceFixture(states: true));
       expect(find.byTooltip('展开'), findsOneWidget);
       expect(find.text('已修改 4 文件'), findsOneWidget);
-      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('a.dart'), findsOneWidget);
+      expect(find.text('b.dart'), findsOneWidget);
+      expect(find.text('c.dart'), findsNothing);
+      expect(find.text('+2'), findsOneWidget);
       expect(find.textContaining('MCP 桥'), findsOneWidget);
       expect(find.textContaining('退出码 1'), findsOneWidget);
       await _matchScreen('timeline-states', brightness);

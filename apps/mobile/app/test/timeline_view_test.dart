@@ -403,59 +403,327 @@ void main() {
   );
 
   testWidgets(
-    'renders desktop file chip rules on summary groups (single file, 3 + N, hidden when expanded)',
+    'fits pure-edit summary file chips dynamically by available width without overflow',
     (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: const [
-                TimelineSummaryGroupRow(
-                  label: '已修改 1 文件',
-                  singleFileLabel: '已修改',
-                  icon: null,
-                  files: ['src/app.dart'],
-                  expanded: false,
-                  toggleable: true,
-                ),
-                TimelineSummaryGroupRow(
-                  label: '已修改 4 文件',
-                  icon: null,
-                  files: [
-                    'src/a.dart',
-                    'src/b.dart',
-                    'src/c.dart',
-                    'src/d.dart',
-                  ],
-                  expanded: false,
-                  toggleable: true,
-                ),
-                TimelineSummaryGroupRow(
-                  label: '已修改 2 文件',
-                  icon: null,
-                  files: ['src/e.dart', 'src/f.dart'],
-                  expanded: true,
-                  toggleable: true,
-                ),
-              ],
-            ),
+      const fiveFiles = [
+        'src/a.dart',
+        'src/b.dart',
+        'src/c.dart',
+        'src/d.dart',
+        'src/e.dart',
+      ];
+      const fiveNames = ['a.dart', 'b.dart', 'c.dart', 'd.dart', 'e.dart'];
+
+      Widget wrapWidth(double width, Widget child) => MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(width: width, child: child),
           ),
         ),
       );
+
+      // 1. 单文件保持「已修改 文件名」且展开后仅显示统计文案。
+      await tester.pumpWidget(
+        wrapWidth(
+          320,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              TimelineSummaryGroupRow(
+                label: '已修改 1 文件',
+                singleFileLabel: '已修改',
+                icon: null,
+                files: ['src/app.dart'],
+                expanded: false,
+                toggleable: true,
+              ),
+              TimelineSummaryGroupRow(
+                label: '已修改 2 文件',
+                icon: null,
+                files: ['src/e.dart', 'src/f.dart'],
+                expanded: true,
+                toggleable: true,
+              ),
+            ],
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
       expect(find.text('已修改'), findsOneWidget);
       expect(find.text('app.dart'), findsOneWidget);
       expect(find.text('已修改 1 文件'), findsNothing);
-
-      expect(find.text('已修改 4 文件'), findsOneWidget);
-      expect(find.text('a.dart'), findsOneWidget);
-      expect(find.text('b.dart'), findsOneWidget);
-      expect(find.text('c.dart'), findsOneWidget);
-      expect(find.text('d.dart'), findsNothing);
-      expect(find.text('+1'), findsOneWidget);
-
-      // 展开后只显示统计，不显示文件 chip。
       expect(find.text('已修改 2 文件'), findsOneWidget);
       expect(find.text('e.dart'), findsNothing);
+
+      // 2. 宽容器（如横屏/大屏）可展示全部 5 枚文件 chip，突破旧的 3 枚上限且不出现 +N。
+      await tester.pumpWidget(
+        wrapWidth(
+          780,
+          const TimelineSummaryGroupRow(
+            label: '已修改 5 文件',
+            icon: null,
+            files: fiveFiles,
+            expanded: false,
+            toggleable: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('已修改 5 文件'), findsOneWidget);
+      for (final name in fiveNames) {
+        expect(find.text(name), findsOneWidget);
+      }
+      expect(find.textContaining(RegExp(r'^\+\d+$')), findsNothing);
+      expect(
+        tester.getSize(find.byType(TimelineSummaryGroupRow)).height,
+        lessThanOrEqualTo(TimelineControl.touchAndroid),
+      );
+
+      // 3. 中等与较窄屏幕按可用宽度单行缩减可见 chip 数并匹配 +N，不换行也不溢出。
+      int countShownChips() => fiveNames
+          .where((name) => find.text(name).evaluate().isNotEmpty)
+          .length;
+
+      await tester.pumpWidget(
+        wrapWidth(
+          460,
+          const TimelineSummaryGroupRow(
+            label: '已修改 5 文件',
+            icon: null,
+            files: fiveFiles,
+            expanded: false,
+            toggleable: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final mediumShown = countShownChips();
+      expect(mediumShown, inInclusiveRange(1, 4));
+      expect(find.text('+${5 - mediumShown}'), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(TimelineSummaryGroupRow)).height,
+        lessThanOrEqualTo(TimelineControl.touchAndroid),
+      );
+
+      await tester.pumpWidget(
+        wrapWidth(
+          340,
+          const TimelineSummaryGroupRow(
+            label: '已修改 5 文件',
+            icon: null,
+            files: fiveFiles,
+            expanded: false,
+            toggleable: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      final narrowShown = countShownChips();
+      expect(narrowShown, lessThan(mediumShown));
+      expect(narrowShown, greaterThan(0));
+      expect(find.text('+${5 - narrowShown}'), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(TimelineSummaryGroupRow)).height,
+        lessThanOrEqualTo(TimelineControl.touchAndroid),
+      );
+
+      // 4. 极窄宽度下连 1 枚 chip + +N 也放不下时，仅保留统计文案，不出现冗余 +5 且不溢出。
+      await tester.pumpWidget(
+        wrapWidth(
+          150,
+          const TimelineSummaryGroupRow(
+            label: '已修改 5 文件',
+            icon: null,
+            files: fiveFiles,
+            expanded: false,
+            toggleable: true,
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
+      expect(countShownChips(), 0);
+      expect(find.text('+5'), findsNothing);
+      expect(find.text('已修改 5 文件'), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(TimelineSummaryGroupRow)).height,
+        lessThanOrEqualTo(TimelineControl.touchAndroid),
+      );
+    },
+  );
+
+  testWidgets(
+    'keeps platform touch targets while compacting vertical spacing between adjacent work items',
+    (tester) async {
+      for (final (platform, minTouch) in const [
+        (TargetPlatform.iOS, TimelineControl.touch),
+        (TargetPlatform.android, TimelineControl.touchAndroid),
+      ]) {
+        final events = const [
+          MobileTimelineEvent(
+            seq: 1,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.runStarted,
+            text: '整理模块',
+            createdAt: '2026-11-25T10:00:00.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 2,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'r1',
+            name: 'Read',
+            text: '{"file_path":"lib/a.dart"}',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 3,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'r1',
+            name: 'Read',
+            text: 'ok',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 4,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'g1',
+            name: 'Grep',
+            text: '{"pattern":"workGap"}',
+            createdAt: '2026-11-25T10:00:02.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 5,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'g1',
+            name: 'Grep',
+            text: 'lib/a.dart:1',
+            createdAt: '2026-11-25T10:00:02.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 6,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.messageAssistant,
+            text: '阶段说明正文',
+            createdAt: '2026-11-25T10:00:03.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 7,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'b1',
+            name: 'Bash',
+            text: '{"command":"flutter test"}',
+            createdAt: '2026-11-25T10:00:04.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 8,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.approvalRequested,
+            itemId: 'ap1',
+            name: 'Bash',
+            createdAt: '2026-11-25T10:00:05.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 9,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'r2',
+            name: 'Read',
+            text: '{"file_path":"lib/b.dart"}',
+            createdAt: '2026-11-25T10:00:06.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 10,
+            runId: 'compact-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'r2',
+            name: 'Read',
+            text: 'ok',
+            createdAt: '2026-11-25T10:00:06.000Z',
+          ),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(platform: platform),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                disableAnimations: true,
+                textScaler: TextScaler.noScaling,
+              ),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: TimelineView(
+                key: ValueKey(platform),
+                snapshot: TimelineSnapshot(
+                  events: events,
+                  through: 10,
+                  cursor: 10,
+                  nextBefore: null,
+                  live: null,
+                ),
+                online: true,
+                loadEarlier: () async {},
+                content:
+                    ({seq, runId, toolId, required field, offset}) async =>
+                        const MobileTimelineContentResult(text: ''),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final summaryRow = find.byType(TimelineSummaryGroupRow);
+        final toolRows = find.byType(TimelineToolRow);
+        expect(summaryRow, findsOneWidget);
+        expect(toolRows, findsNWidgets(2));
+
+        // 1. 摘要行与工具行交互触区仍满足 iOS >= 44px / Android >= 48px。
+        final summaryInk = find.descendant(
+          of: summaryRow,
+          matching: find.byType(InkWell),
+        );
+        expect(tester.getSize(summaryInk).height, greaterThanOrEqualTo(minTouch));
+        for (var i = 0; i < 2; i++) {
+          final toolInk = find.descendant(
+            of: toolRows.at(i),
+            matching: find.byType(InkWell),
+          );
+          expect(tester.getSize(toolInk).height, greaterThanOrEqualTo(minTouch));
+        }
+
+        // 2. 相邻两个单行工作项（待审批 Bash -> 独立 Read）之间不叠加 16px 冗余留白：
+        //    两个触区紧挨（间距 0），文字视觉间隔保持在触区最小安全距（iOS 20px / Android 24px）。
+        final firstToolRect = tester.getRect(toolRows.at(0));
+        final secondToolRect = tester.getRect(toolRows.at(1));
+        expect(secondToolRect.top - firstToolRect.bottom, closeTo(0, 0.5));
+
+        // 3. 摘要行 -> 阶段说明正文、阶段说明正文 -> 工具行：抵消单侧触区留白，
+        //    实际视觉文字间隔精确对齐窗口端 workGap (16px)。
+        final summaryTextRect = tester.getRect(find.text('已查阅 2 项'));
+        final messageTextRect = tester.getRect(find.text('阶段说明正文'));
+        final firstToolTextRect = tester.getRect(find.text('正在执行'));
+        expect(
+          messageTextRect.top - summaryTextRect.bottom,
+          closeTo(TimelineSpace.workGap, 1.5),
+        );
+        expect(
+          firstToolTextRect.top - messageTextRect.bottom,
+          closeTo(TimelineSpace.workGap, 1.5),
+        );
+
+        // 4. 展开摘要组后，组头底部已含透明触区，不再叠加 8px 产生过大缝隙。
+        await tester.tap(summaryRow);
+        await tester.pumpAndSettle();
+        final bodyRect = tester.getRect(find.byType(TimelineSummaryGroupBody));
+        final headRect = tester.getRect(summaryRow);
+        expect(bodyRect.top - headRect.bottom, closeTo(0, 0.5));
+      }
     },
   );
 
@@ -976,5 +1244,66 @@ void main() {
     expect(activeSummaryWorkItem([readWork, liveReasoning]), liveReasoning);
     expect(activeSummaryWorkItem([describedBash, liveReasoning]), liveReasoning);
     expect(activeSummaryWorkItem([readWork]), isNull);
+  });
+
+  test('fitSummaryFileCount handles all-fit, partial-fit with +N, and zero-fit widths', () {
+    double moreWidth(int hidden) => hidden >= 10 ? 28.0 : 20.0;
+    const chips = [60.0, 60.0, 60.0, 60.0];
+
+    // 全放得下（100 + 4 * (8 + 60) = 372）时返回全部 4 枚。
+    expect(
+      fitSummaryFileCount(
+        availableWidth: 380,
+        labelWidth: 100,
+        chipWidths: chips,
+        moreWidthForHidden: moreWidth,
+        gap: 8,
+      ),
+      4,
+    );
+    // 刚好放不下全部 4 枚（372 > 340），3 枚 + +1 需要 100 + 3*68 + 28 = 332 <= 340。
+    expect(
+      fitSummaryFileCount(
+        availableWidth: 340,
+        labelWidth: 100,
+        chipWidths: chips,
+        moreWidthForHidden: moreWidth,
+        gap: 8,
+      ),
+      3,
+    );
+    // 只能放下 1 枚 + +3（100 + 68 + 28 = 196 <= 210，2 枚需要 264 > 210）。
+    expect(
+      fitSummaryFileCount(
+        availableWidth: 210,
+        labelWidth: 100,
+        chipWidths: chips,
+        moreWidthForHidden: moreWidth,
+        gap: 8,
+      ),
+      1,
+    );
+    // 连 1 枚 + +3 都放不下时返回 0。
+    expect(
+      fitSummaryFileCount(
+        availableWidth: 180,
+        labelWidth: 100,
+        chipWidths: chips,
+        moreWidthForHidden: moreWidth,
+        gap: 8,
+      ),
+      0,
+    );
+    // 单文件始终返回 1。
+    expect(
+      fitSummaryFileCount(
+        availableWidth: 50,
+        labelWidth: 40,
+        chipWidths: const [80.0],
+        moreWidthForHidden: moreWidth,
+        gap: 8,
+      ),
+      1,
+    );
   });
 }

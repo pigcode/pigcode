@@ -181,9 +181,14 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
     // 摘要组内部（!showIcon）：不重复画左导线，顶部只留 4px（`.summary-group-list .reasoning-body`）。
     final expandedBody = widget.showIcon
         ? Padding(
-            padding: const EdgeInsetsDirectional.only(
+            padding: EdgeInsetsDirectional.only(
               start: TimelineSpace.guideIndent,
-              top: TimelineSpace.reasoningBodyTop,
+              top: timelineExpandedBodyTopGap(
+                context,
+                targetGap: TimelineSpace.reasoningBodyTop,
+                compact: widget.compact,
+              ),
+              bottom: widget.compact ? 0 : timelineRowTouchOverhang(context),
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(

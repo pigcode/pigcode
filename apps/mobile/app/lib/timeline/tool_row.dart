@@ -202,7 +202,13 @@ class TimelineToolRow extends StatelessWidget {
           header,
         if (expanded && child != null)
           Padding(
-            padding: const EdgeInsets.only(top: TimelineSpace.x4),
+            padding: EdgeInsets.only(
+              top: timelineExpandedBodyTopGap(
+                context,
+                targetGap: TimelineSpace.x4,
+                compact: compact,
+              ),
+            ),
             child: child,
           ),
       ],

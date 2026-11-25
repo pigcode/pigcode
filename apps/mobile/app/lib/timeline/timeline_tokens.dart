@@ -7,6 +7,7 @@ abstract final class TimelineType {
   /// 会话正文、工具行、工作折叠头（`--cv-fs`: 15px / line-height 1.6 = 24px）。
   static const double content = 15;
   static const double contentHeight = 24 / 15;
+  static const double lineHeight = content * contentHeight;
 
   /// Markdown 标题字号（`--cv-fs-xl` 19、`--cv-fs-lg` 17、`--cv-fs` 15，行高 1.5）。
   static const double heading1 = 19;
@@ -274,15 +275,14 @@ abstract final class TimelineShadow {
 }
 
 abstract final class TimelineSummary {
-  /// `SHOWN_FILES` = 3。
-  static const int shownFiles = 3;
+  /// 纯修改收起态动态测算文件 chip 宽度的安全余量（1px），避免浮点取整触发行尾溢出。
+  static const double measureTolerance = TimelineBorder.regular;
 
   /// `.summary-group-body`: `max-height: calc(16lh + 15 * 8px)` = 16 * 24 + 15 * 8 = 504。
   static const int maxLines = 16;
   static const double itemGap = TimelineSpace.x4;
   static const double maxBodyHeight =
-      maxLines * (TimelineType.content * TimelineType.contentHeight) +
-      (maxLines - 1) * itemGap;
+      maxLines * TimelineType.lineHeight + (maxLines - 1) * itemGap;
 
   /// `.summary-group-body[data-edges]` 上下淡出 24px。
   static const double fadeEdge = TimelineSpace.x9;
@@ -386,8 +386,6 @@ abstract final class TimelineMarkdown {
   /// 无序列表圆点直径（0.3 × 15 = 4.5）与首行垂直对齐偏移。
   static const double listBulletSize = 4.5;
   static const double listBulletTopOffset = 9.5;
-  static const double rowIconTopOffset = 4.5;
-  static const double rowChevronTopOffset = 6;
 
   /// `.msg-ai`: `letter-spacing: 0.025em`。
   static const double letterSpacingFactor = 0.025;
@@ -416,3 +414,40 @@ double timelineTouchHeight(BuildContext context) =>
     Theme.of(context).platform == TargetPlatform.android
     ? TimelineControl.touchAndroid
     : TimelineControl.touch;
+
+/// 手机端单行可点工作项在 24px 行高外上下各多出的透明触区留白：
+/// 默认缩放下 iOS 为 10px，Android 为 12px；大字号超过触区高度时退化为 0。
+double timelineRowTouchOverhang(BuildContext context) {
+  final line = MediaQuery.textScalerOf(context).scale(TimelineType.lineHeight);
+  final extra = (timelineTouchHeight(context) - line) / 2;
+  return extra > 0 ? extra : 0;
+}
+
+/// 相邻两个工作项之间应额外补齐的垂直间距：
+/// 在保留 iOS 44px / Android 48px 最小触区的前提下，抵消上下已有的透明触区留白，
+/// 使视觉间隔贴齐窗口端 16px（`TimelineSpace.workGap`）节奏。
+double timelineWorkItemGap(
+  BuildContext context, {
+  required bool prevHasBottomOverhang,
+  required bool nextHasTopOverhang,
+  double targetGap = TimelineSpace.workGap,
+}) {
+  final overhang = timelineRowTouchOverhang(context);
+  final consumed =
+      (prevHasBottomOverhang ? overhang : 0) +
+      (nextHasTopOverhang ? overhang : 0);
+  final remaining = targetGap - consumed;
+  return remaining > 0 ? remaining : 0;
+}
+
+/// 单行可展开工作项（摘要组、独立工具行、独立思考）展开正文顶部应补齐的间距：
+/// 抵消头部行底部已有的透明触区留白，使正文紧贴头部对齐窗口端间距。
+double timelineExpandedBodyTopGap(
+  BuildContext context, {
+  required double targetGap,
+  bool compact = false,
+}) {
+  if (compact) return targetGap;
+  final remaining = targetGap - timelineRowTouchOverhang(context);
+  return remaining > 0 ? remaining : 0;
+}

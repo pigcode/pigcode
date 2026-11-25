@@ -337,7 +337,7 @@ TimelineSnapshot _statesHistory() => TimelineSnapshot(
           '帮我逐项核对以下内容，重点看 @lib/timeline/user_bubble.dart 的长消息折叠与遮罩：\n'
           '1. 用户气泡超过 120px 后自动折叠并从 70% 开始向下渐隐。\n'
           '2. 折叠态底部居中放 28×24 胶囊按钮，展开后不盖住正文。\n'
-          '3. 只改文件的摘要组收起时列出最多 3 个文件名与 +N。\n'
+          '3. 只改文件的摘要组收起时按可用宽度单行展示文件名与 +N。\n'
           '4. 提示行按 info/warning/error 分级底色，失败块用错误浅底。',
       createdAt: '2025-06-18T08:22:00Z',
     ),

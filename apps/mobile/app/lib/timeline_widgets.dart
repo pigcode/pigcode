@@ -599,8 +599,6 @@ class TimelineWorkLine extends StatelessWidget {
     this.file = false,
     this.running = false,
     this.failed = false,
-    this.followed = false,
-    this.touchAbove = false,
     this.expanded,
     this.onTap,
   });
@@ -611,8 +609,6 @@ class TimelineWorkLine extends StatelessWidget {
   final bool file;
   final bool running;
   final bool failed;
-  final bool followed;
-  final bool touchAbove;
   final bool? expanded;
   final VoidCallback? onTap;
 
@@ -681,28 +677,20 @@ class TimelineWorkLine extends StatelessWidget {
           ),
       ],
     );
-    final overhang = timelineWorkTouchOverhang(context);
-    final row = Padding(
-      padding: EdgeInsets.only(
-        top: touchAbove ? overhang : 0,
-        bottom: followed ? 16 : 0,
-      ),
-      child: content,
-    );
-    if (onTap == null) return row;
+    if (onTap == null) return content;
     return Semantics(
       expanded: expanded,
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(TimelineRadius.xs),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: 40 + overhang),
+            constraints: BoxConstraints(minHeight: timelineTouchHeight(context)),
             child: Align(
-              alignment: AlignmentDirectional.topStart,
+              alignment: AlignmentDirectional.centerStart,
               heightFactor: 1,
-              child: row,
+              child: content,
             ),
           ),
         ),
@@ -710,10 +698,6 @@ class TimelineWorkLine extends StatelessWidget {
     );
   }
 }
-
-// 原型的活动行高 24，后续行距 16。多出的点按高度可以放进上方留白。
-double timelineWorkTouchOverhang(BuildContext context) =>
-    Theme.of(context).platform == TargetPlatform.android ? 8 : 4;
 
 class TimelineDetails {
   const TimelineDetails({

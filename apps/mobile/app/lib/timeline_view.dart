@@ -161,13 +161,9 @@ class _TimelineViewState extends State<TimelineView> {
       final workTouchesAbove =
           !showHeader &&
           user != null &&
-          groups.length > 1 &&
           firstGroup != null &&
           ((user.seq < _pivot) == (firstGroup.first.event.seq < _pivot)) &&
-          (firstGroup.length > 1 ||
-              (firstGroup.first.kind == TimelineWorkKind.tool &&
-                  timelineToolKind(firstGroup.first) !=
-                      TimelineToolKind.other));
+          _groupHasTopOverhang(firstGroup);
       if (user != null) {
         add(
           'user-$key',
@@ -195,20 +191,35 @@ class _TimelineViewState extends State<TimelineView> {
       for (final (index, group) in groups.indexed) {
         final first = group.first;
         final seq = first.event.seq;
-        final tail = index == groups.length - 1;
-        final touchAbove = index == 0 && workTouchesAbove;
+        final nextGroup = index + 1 < groups.length ? groups[index + 1] : null;
+        final tail = nextGroup == null;
+        final prevBottomOverhang = _groupHasBottomOverhang(group);
+        final nextTopOverhang =
+            nextGroup != null && _groupHasTopOverhang(nextGroup);
+        double bottomGapFor(BuildContext context) => tail
+            ? 0
+            : timelineWorkItemGap(
+                context,
+                prevHasBottomOverhang: prevBottomOverhang,
+                nextHasTopOverhang: nextTopOverhang,
+              );
         if (group.length == 1) {
           add(
             first.streaming ? 'live-reasoning-$key' : 'work-$seq',
             seq,
-            () => _work(turn, first, followed: !tail, touchAbove: touchAbove),
+            () => _work(turn, first, bottomGap: bottomGapFor(context)),
           );
           continue;
         }
         add(
           'work-$seq',
           seq,
-          () => _workGroup(turn, group, tail: tail, touchAbove: touchAbove),
+          () => _workGroup(
+            turn,
+            group,
+            tail: tail,
+            bottomGap: bottomGapFor(context),
+          ),
         );
       }
       for (final request in turn.pendingRequests) {
@@ -528,7 +539,7 @@ class _TimelineViewState extends State<TimelineView> {
         top: TimelineSpace.turnTop,
         bottom:
             TimelineSpace.userBottomGap -
-            (workTouchesAbove ? timelineWorkTouchOverhang(context) : 0),
+            (workTouchesAbove ? timelineRowTouchOverhang(context) : 0),
       ),
       child: TimelineUserBubble(
         text: event.text ?? '',
@@ -590,11 +601,28 @@ class _TimelineViewState extends State<TimelineView> {
     _ => null,
   };
 
+  bool _groupHasTopOverhang(List<TimelineWork> group) {
+    if (group.length > 1) return true;
+    final item = group.single;
+    return switch (item.kind) {
+      TimelineWorkKind.reasoning => true,
+      TimelineWorkKind.tool => timelineToolKind(item) != TimelineToolKind.plan,
+      TimelineWorkKind.message || TimelineWorkKind.question => false,
+    };
+  }
+
+  bool _groupHasBottomOverhang(List<TimelineWork> group) {
+    if (group.length > 1) {
+      return !_expandedWork.contains(group.first.event.seq);
+    }
+    return _groupHasTopOverhang(group);
+  }
+
   Widget _workGroup(
     TimelineTurn turn,
     List<TimelineWork> group, {
     required bool tail,
-    required bool touchAbove,
+    required double bottomGap,
   }) {
     final sequence = group.first.event.seq;
     final expanded = _expandedWork.contains(sequence);
@@ -612,17 +640,14 @@ class _TimelineViewState extends State<TimelineView> {
     if (!expanded && growing) {
       final preview = active ?? group.last;
       if (preview.kind == TimelineWorkKind.tool) {
-        return _toolPreviewLine(
-          turn,
-          preview,
-          followed: !tail,
-          toggle: toggle,
-          touchAbove: touchAbove,
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomGap),
+          child: _toolPreviewLine(turn, preview, toggle: toggle),
         );
       }
       if (preview.kind == TimelineWorkKind.reasoning) {
         return Padding(
-          padding: EdgeInsets.only(bottom: tail ? 0 : TimelineSpace.workGap),
+          padding: EdgeInsets.only(bottom: bottomGap),
           child: TimelineReasoningBlock(
             text: preview.event.text ?? '',
             streaming: preview.streaming,
@@ -635,7 +660,7 @@ class _TimelineViewState extends State<TimelineView> {
 
     final summary = summarizeTimelineWork(group, finished: !growing);
     return Padding(
-      padding: EdgeInsets.only(bottom: tail ? 0 : TimelineSpace.workGap),
+      padding: EdgeInsets.only(bottom: bottomGap),
       child: TimelineSummaryGroup(
         label: summary.label,
         singleFileLabel: summary.singleFileLabel,
@@ -657,7 +682,6 @@ class _TimelineViewState extends State<TimelineView> {
                     child: _work(
                       turn,
                       item,
-                      followed: false,
                       showIcon: false,
                       compact: true,
                     ),
@@ -671,17 +695,16 @@ class _TimelineViewState extends State<TimelineView> {
   Widget _work(
     TimelineTurn turn,
     TimelineWork item, {
-    required bool followed,
+    double bottomGap = 0,
     bool showIcon = true,
     bool compact = false,
-    bool touchAbove = false,
   }) => switch (item.kind) {
     TimelineWorkKind.message => _answer(
       item.event,
-      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
+      padding: EdgeInsets.only(bottom: bottomGap),
     ),
     TimelineWorkKind.reasoning => Padding(
-      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
+      padding: EdgeInsets.only(bottom: bottomGap),
       child: TimelineReasoningBlock(
         text: item.event.text ?? '',
         streaming: item.streaming,
@@ -696,14 +719,16 @@ class _TimelineViewState extends State<TimelineView> {
             : () => _openText(item.event),
       ),
     ),
-    TimelineWorkKind.question => TimelineWorkLine(
-      label: item.result == null && _runIsActive(turn) ? '正在提问' : '问过了',
-      glyph: showIcon ? WorkspaceGlyph.questionCircle : null,
-      running: item.result == null && _runIsActive(turn),
-      followed: followed,
+    TimelineWorkKind.question => Padding(
+      padding: EdgeInsets.only(bottom: bottomGap),
+      child: TimelineWorkLine(
+        label: item.result == null && _runIsActive(turn) ? '正在提问' : '问过了',
+        glyph: showIcon ? WorkspaceGlyph.questionCircle : null,
+        running: item.result == null && _runIsActive(turn),
+      ),
     ),
     TimelineWorkKind.tool => Padding(
-      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
+      padding: EdgeInsets.only(bottom: bottomGap),
       child: TimelineToolView(
         item: item,
         ended: turn.terminal != null,
@@ -773,10 +798,8 @@ class _TimelineViewState extends State<TimelineView> {
   Widget _toolPreviewLine(
     TimelineTurn turn,
     TimelineWork item, {
-    required bool followed,
     required VoidCallback toggle,
     bool showIcon = true,
-    bool touchAbove = false,
   }) {
     final output = item.output;
     final tool = timelineToolKind(item);
@@ -808,8 +831,6 @@ class _TimelineViewState extends State<TimelineView> {
       file: tool == TimelineToolKind.read || tool == TimelineToolKind.edit,
       running: running,
       failed: output?.failed == true,
-      followed: followed,
-      touchAbove: touchAbove,
       onTap: toggle,
     );
   }
