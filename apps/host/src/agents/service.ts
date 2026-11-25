@@ -54,7 +54,13 @@ export interface DraftRunSelection {
   instanceId: string
   modelId: string | null
   permissionMode: RuntimeMode
+  planMode?: boolean | undefined
 }
+
+export type DraftRunOptions = Pick<
+  StartRunOptions,
+  "effort" | "fast" | "ultracode" | "references"
+>
 
 export interface StartRunOptions {
   admission?: RunAdmission
@@ -171,6 +177,7 @@ export interface AgentsService {
     selection: DraftRunSelection,
     text: string,
     admission: MobileRunAdmission,
+    options?: DraftRunOptions,
   ): Promise<StartRunResult>
   requestApproval(threadId: string, runId: string, request: ApprovalRequest): ApprovalHandle
   respondApproval(

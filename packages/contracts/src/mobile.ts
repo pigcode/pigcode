@@ -27,6 +27,7 @@ export const mobileFeatures = [
   "connection.revocation",
   "reminders.status",
   "reminders.apns",
+  "composer.controls",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

@@ -1,4 +1,5 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
+import 'composer_models.dart';
 
 abstract final class MobileTimelineMethods {
   static const subscribe = 'thread.subscribe';
@@ -637,14 +638,16 @@ final class MobileTimelineSubscription {
     required this.page,
     this.live,
     this.resumed,
+    this.composer,
   });
   final MobileTimelinePage page;
   final MobileActiveRun? live;
   final bool? resumed;
+  final MobileThreadComposerState? composer;
 
   factory MobileTimelineSubscription.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {'page', 'live', 'resumed'}.contains(key),
+      (key) => !const {'page', 'live', 'resumed', 'composer'}.contains(key),
     )) {
       throw const FormatException(
         'MobileTimelineSubscription contains an unknown field',
@@ -653,19 +656,30 @@ final class MobileTimelineSubscription {
     final page = MobileTimelinePage.fromJson(
       json['page'] as Map<String, dynamic>,
     );
-    final live = json.containsKey('live')
-        ? MobileActiveRun.fromJson(json['live'] as Map<String, dynamic>)
-        : null;
-    final resumed = json.containsKey('resumed')
-        ? json['resumed'] as bool
-        : null;
-    return MobileTimelineSubscription(page: page, live: live, resumed: resumed);
+    final rawLive = json['live'];
+    final live = rawLive == null
+        ? null
+        : MobileActiveRun.fromJson(rawLive as Map<String, dynamic>);
+    final resumed = json['resumed'] as bool?;
+    final rawComposer = json['composer'];
+    final composer = rawComposer == null
+        ? null
+        : MobileThreadComposerState.fromJson(
+            rawComposer as Map<String, dynamic>,
+          );
+    return MobileTimelineSubscription(
+      page: page,
+      live: live,
+      resumed: resumed,
+      composer: composer,
+    );
   }
 
   Map<String, Object?> toJson() => {
     'page': page.toJson(),
     'live': ?live?.toJson(),
     'resumed': ?resumed,
+    'composer': ?composer?.toJson(),
   };
 }
 

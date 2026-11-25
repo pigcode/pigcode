@@ -320,7 +320,7 @@ it("projects approval.requested toolName or name onto MobileTimelineEvent.name",
     threadId: "t1",
     runId: "r1",
     type: "approval.requested" as const,
-    schemaVersion: 1,
+    schemaVersion: 1 as const,
     createdAt: "2026-11-25T10:00:00.000Z",
   }
 

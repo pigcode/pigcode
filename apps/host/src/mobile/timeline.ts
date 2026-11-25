@@ -1,6 +1,8 @@
 import type { Context } from "cordis"
 import {
   mobileActiveRun,
+  mobileComposerChangedNotice,
+  mobileComposerMethods,
   mobileRunDelta,
   mobileTimelineMethods as methods,
   mobileTimelineNotice,
@@ -8,6 +10,7 @@ import {
   timelinePageBytes,
   timelineTextPreviewLength,
   timelineToolPreviewLength,
+  type MobileContextUsage,
   type MobileTimelineContentParams,
   type MobileTimelineEvent,
   type MobileTimelinePage,
@@ -20,8 +23,14 @@ import {
   mobileTimelineCatchUpParams,
   mobileTimelineThreadParams,
 } from "@pigcode/contracts"
+import type { ThreadFeed } from "../rpc/thread-feed"
 import { mobileParams, MobileRequestError } from "./request-error"
 import { mobileThreadAvailable, requireMobileThread } from "./command-receipts"
+import {
+  applyContextUsageEvent,
+  buildThreadComposerState,
+  latestThreadContextUsage,
+} from "./composer-state"
 import { eventBody, preview, timelineEvent } from "./timeline-projection"
 
 export const mobileTimelineRequests: ReadonlySet<string> = new Set([
@@ -41,6 +50,9 @@ export class MobileTimelineSession {
   private stopEvents: (() => void) | undefined
   private stopLive: (() => void) | undefined
   private stopProjects: (() => void) | undefined
+  private stopFeed: (() => void) | undefined
+  private contextUsage: MobileContextUsage | null = null
+  private lastComposerJson: string | undefined
 
   constructor(
     private readonly ctx: Context,
@@ -48,6 +60,8 @@ export class MobileTimelineSession {
     private readonly includeQueueChanges = false,
     private readonly canResume = false,
     private readonly includeRunChanges = false,
+    private readonly includeComposerControls = false,
+    private readonly feed?: ThreadFeed,
   ) {}
 
   dispatch(request: RpcRequest): unknown {
@@ -78,7 +92,15 @@ export class MobileTimelineSession {
     this.close()
     const through = this.ctx.sessions.latestSeq(threadId)
     const live = this.snapshot(threadId)
-    const reserve = live ? Buffer.byteLength(JSON.stringify(live)) : 0
+    const contextUsage = this.includeComposerControls
+      ? latestThreadContextUsage(this.ctx, threadId)
+      : null
+    const composer = this.includeComposerControls
+      ? buildThreadComposerState(this.ctx, threadId, contextUsage)
+      : undefined
+    const reserve =
+      (live ? Buffer.byteLength(JSON.stringify(live)) : 0) +
+      (composer ? Buffer.byteLength(JSON.stringify(composer)) : 0)
     const budget = timelinePageBytes - envelopeReserve - reserve
     const resumed = this.canResume && after !== undefined && this.validAfter(threadId, after, through)
     const page = resumed
@@ -86,15 +108,25 @@ export class MobileTimelineSession {
       : this.window(threadId, through, through + 1, true, budget)
     let previousSeq = through
     this.threadId = threadId
+    this.contextUsage = contextUsage
+    this.lastComposerJson = composer ? JSON.stringify(composer) : undefined
     this.stopEvents = this.ctx.sessions.subscribe(threadId, (stored) => {
       const event = timelineEvent(stored, this.includeQueueChanges, this.includeRunChanges)
-      if (!event) return
-      this.send({
-        jsonrpc: "2.0",
-        method: methods.event,
-        params: mobileTimelineNotice.parse({ threadId, previousSeq, event }),
-      })
-      previousSeq = event.seq
+      if (event) {
+        this.send({
+          jsonrpc: "2.0",
+          method: methods.event,
+          params: mobileTimelineNotice.parse({ threadId, previousSeq, event }),
+        })
+        previousSeq = event.seq
+      }
+      if (this.includeComposerControls) {
+        const update = applyContextUsageEvent(this.contextUsage, stored)
+        this.contextUsage = update.usage
+        if (update.changed || stored.type === "thread.updated") {
+          this.pushComposer(threadId)
+        }
+      }
     })
     this.stopLive = this.ctx.sessions.subscribeLive(threadId, (change) => {
       const event = change.event
@@ -124,7 +156,37 @@ export class MobileTimelineSession {
     this.stopProjects = this.ctx.projects.subscribe(() => {
       if (!this.available(threadId)) this.close()
     })
-    return { page, live, ...(resumed ? { resumed: true } : {}) }
+    if (this.includeComposerControls && this.feed) {
+      this.stopFeed = this.feed.subscribe((thread) => {
+        if (thread.id === threadId) this.pushComposer(threadId)
+      })
+    }
+    return {
+      page,
+      live,
+      ...(resumed ? { resumed: true } : {}),
+      ...(composer ? { composer } : {}),
+    }
+  }
+
+  notifyComposer(threadId: string): void {
+    if (this.includeComposerControls && this.threadId === threadId) {
+      this.pushComposer(threadId)
+    }
+  }
+
+  private pushComposer(threadId: string): void {
+    if (this.threadId !== threadId || !this.available(threadId)) return
+    const composer = buildThreadComposerState(this.ctx, threadId, this.contextUsage)
+    if (!composer) return
+    const serialized = JSON.stringify(composer)
+    if (serialized === this.lastComposerJson) return
+    this.lastComposerJson = serialized
+    this.send({
+      jsonrpc: "2.0",
+      method: mobileComposerMethods.composerChanged,
+      params: mobileComposerChangedNotice.parse({ threadId, composer }),
+    })
   }
 
   private validAfter(threadId: string, after: number, through: number): boolean {
@@ -210,8 +272,11 @@ export class MobileTimelineSession {
     this.stopEvents?.()
     this.stopLive?.()
     this.stopProjects?.()
-    this.stopEvents = this.stopLive = this.stopProjects = undefined
+    this.stopFeed?.()
+    this.stopEvents = this.stopLive = this.stopProjects = this.stopFeed = undefined
     this.threadId = undefined
+    this.contextUsage = null
+    this.lastComposerJson = undefined
   }
 
   private available(threadId: string): boolean {

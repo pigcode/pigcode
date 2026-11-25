@@ -384,17 +384,21 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
         return () => undefined
       })
     },
-    async startDraftRun(selection, text, mobileAdmission) {
-      const options = { admission: mobileAdmission }
+    async startDraftRun(selection, text, mobileAdmission, runOptions = {}) {
+      const options: StartRunOptions = { ...runOptions, admission: mobileAdmission }
       let prepared!: ReturnType<typeof prepare>
       const publish = ctx.sessions.stageEvents(() => {
         const { threadId: id, projectId, agentId, modelId, ...initial } = selection
-        if (
-          !agents
-            .instances(agentId)
-            .some(({ instanceId, enabled }) => enabled && instanceId === initial.instanceId)
-        ) {
+        const matched = agents
+          .instances(agentId)
+          .find(({ instanceId, enabled }) => enabled && instanceId === initial.instanceId)
+        if (!matched) {
           throw new RunSelectionUnavailableError(`instance is unavailable: ${initial.instanceId}`)
+        }
+        const driver = drivers.get(agentId)
+        const modes = driver ? modesOf(driver, agents.instanceContext(matched)) : null
+        if (initial.planMode === true && !modes?.plan) {
+          throw new RunSelectionUnavailableError(`plan mode is unavailable: ${initial.instanceId}`)
         }
         const thread = ctx.threads.create(projectId, "新会话", agentId, undefined, {
           id,

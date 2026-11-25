@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'composer_models.dart';
 import 'host_rpc.dart';
 import 'timeline_models.dart';
 
@@ -10,19 +11,29 @@ class TimelineSnapshot {
     required this.cursor,
     required this.nextBefore,
     required this.live,
+    this.composer,
   }) : events = List.unmodifiable(events);
 
   TimelineSnapshot._withLive(TimelineSnapshot previous, this.live)
     : events = previous.events,
       through = previous.through,
       cursor = previous.cursor,
-      nextBefore = previous.nextBefore;
+      nextBefore = previous.nextBefore,
+      composer = previous.composer;
+
+  TimelineSnapshot._withComposer(TimelineSnapshot previous, this.composer)
+    : events = previous.events,
+      through = previous.through,
+      cursor = previous.cursor,
+      nextBefore = previous.nextBefore,
+      live = previous.live;
 
   final List<MobileTimelineEvent> events;
   final int through;
   final int cursor;
   final int? nextBefore;
   final MobileActiveRun? live;
+  final MobileThreadComposerState? composer;
 }
 
 /// One selected conversation has its own history anchor, event cursor and
@@ -101,6 +112,7 @@ class MobileTimeline {
                 cursor: view.page.through,
                 nextBefore: view.page.nextBefore,
                 live: view.live,
+                composer: view.composer,
               ),
       );
     } finally {
@@ -167,6 +179,7 @@ class MobileTimeline {
       cursor: boundary,
       nextBefore: previous.nextBefore,
       live: view.live,
+      composer: view.composer ?? previous.composer,
     );
   }
 
@@ -205,6 +218,7 @@ class MobileTimeline {
           cursor: current.cursor,
           nextBefore: page.nextBefore,
           live: current.live,
+          composer: current.composer,
         ),
       );
     } finally {
@@ -237,7 +251,8 @@ class MobileTimeline {
     final method = message['method'];
     if (_closed ||
         (method != MobileTimelineMethods.event &&
-            method != MobileTimelineMethods.delta)) {
+            method != MobileTimelineMethods.delta &&
+            method != MobileComposerMethods.composerChanged)) {
       return;
     }
     final params = message['params'];
@@ -269,8 +284,12 @@ class MobileTimeline {
             cursor: notice.event.seq,
             nextBefore: current.nextBefore,
             live: _applyEvent(current.live, notice.event),
+            composer: current.composer,
           ),
         );
+      } else if (method == MobileComposerMethods.composerChanged) {
+        final notice = MobileComposerChangedNotice.fromJson(params);
+        _replace(TimelineSnapshot._withComposer(current, notice.composer));
       } else {
         final delta = MobileRunDelta.fromJson(params);
         if (_recoveringLive) {

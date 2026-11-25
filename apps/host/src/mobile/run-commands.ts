@@ -1,4 +1,5 @@
 import {
+  legacyMobileStartRunParams,
   mobileCommandMethods as methods,
   mobileInterruptRunParams,
   mobileRunReceipt,
@@ -35,6 +36,7 @@ export class MobileRunCommands {
     private readonly deviceKey: string,
     private readonly receipts: MobileCommandReceipts,
     private readonly supportsQueue: boolean,
+    private readonly supportsComposerControls = false,
   ) {
     this.runs = new RunStore(ctx.storage.db)
   }
@@ -42,7 +44,12 @@ export class MobileRunCommands {
   dispatch(request: RpcRequest): unknown {
     switch (request.method) {
       case methods.start:
-        return this.start(mobileParams(mobileStartRunParams, request.params))
+        return this.start(
+          mobileParams(
+            this.supportsComposerControls ? mobileStartRunParams : legacyMobileStartRunParams,
+            request.params,
+          ),
+        )
       case methods.interrupt:
         return this.interrupt(mobileParams(mobileInterruptRunParams, request.params))
       default:
@@ -54,9 +61,24 @@ export class MobileRunCommands {
     commandId,
     threadId,
     text,
+    effort,
+    fast,
+    ultracode,
+    references,
   }: MobileStartRunParams): Promise<MobileRunReceipt> {
     requireMobileThread(this.ctx, threadId)
-    const binding = commandBinding(methods.start, threadId, text)
+    if (references) {
+      for (const reference of references) requireMobileThread(this.ctx, reference.threadId)
+    }
+    const extras: Record<string, unknown> = {}
+    if (effort !== undefined) extras.effort = effort
+    if (fast !== undefined) extras.fast = fast
+    if (ultracode !== undefined) extras.ultracode = ultracode
+    if (references !== undefined) extras.references = references
+    const binding =
+      Object.keys(extras).length > 0
+        ? commandBinding(methods.start, threadId, text, extras)
+        : commandBinding(methods.start, threadId, text)
     const previous = this.receipts.existing(commandId, binding, mobileRunReceipt)
     if (previous) return this.supportsQueue ? previous : legacyRunReceipt(previous)
     if (!this.supportsQueue && !this.ctx.messageQueue.canStartWithoutQueue(threadId)) {
@@ -66,6 +88,17 @@ export class MobileRunCommands {
     try {
       const source = this.devices.queueSource(this.deviceKey)
       const options = {
+        ...(effort ? { effort } : {}),
+        ...(fast ? { fast: true } : {}),
+        ...(ultracode ? { ultracode: true } : {}),
+        ...(references && references.length > 0
+          ? {
+              references: references.map(({ kind, threadId: refThreadId }) => ({
+                kind,
+                threadId: refThreadId,
+              })),
+            }
+          : {}),
         admission: {
           deviceKey: this.deviceKey,
           ...(source ? { authorizationId: source.authorizationId } : {}),

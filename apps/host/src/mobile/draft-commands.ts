@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto"
 import {
+  legacyMobileDraftCreateParams,
   mobileDraftCreateParams,
   mobileDraftMethods as methods,
   mobileDraftModelParams,
@@ -7,6 +8,7 @@ import {
   mobileDraftReceipt,
   type MobileDraftCreateParams,
   type MobileDraftReceipt,
+  type MobileThreadReference,
   type RpcRequest,
 } from "@pigcode/contracts"
 import type { Context } from "cordis"
@@ -24,19 +26,25 @@ export class MobileDraftCommands {
     private readonly devices: PairedDevices,
     private readonly deviceKey: string,
     private readonly receipts: MobileCommandReceipts,
+    private readonly supportsComposerControls = false,
   ) {}
 
   async dispatch(request: RpcRequest): Promise<unknown> {
     switch (request.method) {
       case methods.options:
         mobileParams(mobileDraftOptionsParams, request.params)
-        return draftOptions(this.ctx)
+        return draftOptions(this.ctx, this.supportsComposerControls)
       case methods.models: {
         const { instanceId } = mobileParams(mobileDraftModelParams, request.params)
-        return (await draftModels(this.ctx, instanceId)).catalog
+        return (await draftModels(this.ctx, instanceId, this.supportsComposerControls)).catalog
       }
       case methods.create:
-        return this.create(mobileParams(mobileDraftCreateParams, request.params))
+        return this.create(
+          mobileParams(
+            this.supportsComposerControls ? mobileDraftCreateParams : legacyMobileDraftCreateParams,
+            request.params,
+          ),
+        )
       default:
         throw new MobileRequestError("METHOD_NOT_AVAILABLE")
     }
@@ -49,16 +57,38 @@ export class MobileDraftCommands {
     modelId,
     permissionMode,
     text,
+    effort,
+    fast,
+    ultracode,
+    planMode,
+    references,
   }: MobileDraftCreateParams): Promise<MobileDraftReceipt> {
     const permit = this.devices.runAuthorization(this.deviceKey)
-    const binding = commandBinding(
-      methods.create,
-      projectId,
-      instanceId,
-      modelId ?? null,
-      permissionMode,
-      text,
-    )
+    const extras: Record<string, unknown> = {}
+    if (effort !== undefined) extras.effort = effort
+    if (fast !== undefined) extras.fast = fast
+    if (ultracode !== undefined) extras.ultracode = ultracode
+    if (planMode !== undefined) extras.planMode = planMode
+    if (references !== undefined) extras.references = references
+    const binding =
+      Object.keys(extras).length > 0
+        ? commandBinding(
+            methods.create,
+            projectId,
+            instanceId,
+            modelId ?? null,
+            permissionMode,
+            text,
+            extras,
+          )
+        : commandBinding(
+            methods.create,
+            projectId,
+            instanceId,
+            modelId ?? null,
+            permissionMode,
+            text,
+          )
     const acceptExisting = () => {
       if (!permit()) throw new MobileRequestError("DEVICE_REVOKED")
       const receipt = this.receipts.existing(commandId, binding, mobileDraftReceipt)
@@ -70,13 +100,20 @@ export class MobileDraftCommands {
 
     try {
       this.requireProject(projectId)
-      const { instance, catalog } = await draftModels(this.ctx, instanceId)
+      this.requireReferences(references)
+      const { instance, catalog } = await draftModels(
+        this.ctx,
+        instanceId,
+        this.supportsComposerControls,
+      )
       const committedWhileLoading = acceptExisting()
       if (committedWhileLoading) return committedWhileLoading
       this.requireProject(projectId)
+      this.requireReferences(references)
       if (
         !instance.visible.permissionModes.includes(permissionMode) ||
-        (modelId !== undefined && !catalog.models.some(({ id }) => id === modelId))
+        (modelId !== undefined && !catalog.models.some(({ id }) => id === modelId)) ||
+        (planMode === true && !instance.supportsPlanMode)
       ) {
         throw new MobileRequestError("DRAFT_SELECTION_UNAVAILABLE")
       }
@@ -91,6 +128,7 @@ export class MobileDraftCommands {
           agentId: instance.agentId,
           modelId: modelId ?? catalog.defaultModelId ?? null,
           permissionMode,
+          ...(planMode !== undefined ? { planMode } : {}),
         },
         text,
         {
@@ -108,6 +146,19 @@ export class MobileDraftCommands {
             }
             this.receipts.record(receipt, binding)
           },
+        },
+        {
+          ...(effort ? { effort } : {}),
+          ...(fast ? { fast: true } : {}),
+          ...(ultracode ? { ultracode: true } : {}),
+          ...(references && references.length > 0
+            ? {
+                references: references.map(({ kind, threadId: refThreadId }) => ({
+                  kind,
+                  threadId: refThreadId,
+                })),
+              }
+            : {}),
         },
       )
       if (!receipt) throw new Error("missing accepted draft receipt")
@@ -127,5 +178,10 @@ export class MobileDraftCommands {
     if (!this.ctx.projects.list().some(({ id }) => id === projectId)) {
       throw new MobileRequestError("DRAFT_SELECTION_UNAVAILABLE")
     }
+  }
+
+  private requireReferences(references?: readonly MobileThreadReference[]): void {
+    if (!references) return
+    for (const reference of references) requireMobileThread(this.ctx, reference.threadId)
   }
 }

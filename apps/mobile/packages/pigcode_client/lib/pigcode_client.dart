@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:pigcode_transport/pigcode_transport.dart';
+import 'composer_commands.dart';
 import 'host_rpc.dart';
 import 'draft_commands.dart';
 import 'pending_requests.dart';
@@ -14,6 +15,8 @@ import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
 export 'command_models.dart';
+export 'composer_commands.dart';
+export 'composer_models.dart';
 export 'draft_commands.dart';
 export 'draft_models.dart';
 export 'run_change_models.dart';
@@ -47,6 +50,7 @@ class MobileConnection {
     this.supportsQueueCommands,
     this.supportsTimelineResume,
     this.supportsRunChanges,
+    this.supportsComposerControls,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -65,6 +69,7 @@ class MobileConnection {
   final bool supportsQueueCommands;
   final bool supportsTimelineResume;
   final bool supportsRunChanges;
+  final bool supportsComposerControls;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -74,6 +79,7 @@ class MobileConnection {
   );
   late final MobileRunChanges changes = MobileRunChanges(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
+  late final MobileComposerCommands composer = MobileComposerCommands(_rpc);
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
     _rpc,
@@ -285,6 +291,7 @@ class MobileConnection {
           'request.write',
           'draft.write',
           'queue.write',
+          'composer.controls',
         ],
       });
       final welcome = await link.receive();
@@ -330,6 +337,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('queue.write'),
         (welcome['features'] as List).contains('timeline.resume'),
         (welcome['features'] as List).contains('changes.read'),
+        (welcome['features'] as List).contains('composer.controls'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

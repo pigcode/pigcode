@@ -8,15 +8,14 @@ import {
 import type { Context } from "cordis"
 import { MobileRequestError } from "./request-error"
 
-function enabledInstances(ctx: Context) {
+function enabledInstances(ctx: Context, includeComposerControls = false) {
   return ctx.agents.list().flatMap((agent) =>
     ctx.agents.listInstances(agent.id).flatMap((instance) => {
       if (!instance.enabled) return []
-      const permissionModes =
-        instance.executionModes?.permissions ??
-        agent.executionModes?.permissions ??
-        runtimeModeSchema.options
+      const executionModes = instance.executionModes ?? agent.executionModes
+      const permissionModes = executionModes?.permissions ?? runtimeModeSchema.options
       if (!permissionModes.length) return []
+      const supportsPlanMode = executionModes?.plan === true
       const visible: MobileDraftInstance = {
         instanceId: instance.instanceId,
         label: instance.label,
@@ -25,8 +24,17 @@ function enabledInstances(ctx: Context) {
         defaultPermissionMode: permissionModes.includes(DEFAULT_RUNTIME_MODE)
           ? DEFAULT_RUNTIME_MODE
           : permissionModes[0]!,
+        ...(includeComposerControls
+          ? {
+              agentId: agent.id,
+              ...(instance.accentColor
+                ? { accentColor: instance.accentColor.toLowerCase() }
+                : {}),
+              supportsPlanMode,
+            }
+          : {}),
       }
-      return [{ agentId: agent.id, visible }]
+      return [{ agentId: agent.id, supportsPlanMode, visible }]
     }),
   )
 }
@@ -35,12 +43,12 @@ function available(status: { installed: boolean; authenticated: boolean | null }
   return status?.installed === true && status.authenticated !== false
 }
 
-export async function draftOptions(ctx: Context) {
+export async function draftOptions(ctx: Context, includeComposerControls = false) {
   const [detection, defaultAgent] = await Promise.all([
     ctx.agents.detect(),
     ctx.agents.defaultAgent(),
   ])
-  const instances = enabledInstances(ctx)
+  const instances = enabledInstances(ctx, includeComposerControls)
     .map(({ visible }) => visible)
     .filter(({ instanceId }) => available(detection[instanceId]))
   const preferred = instances.find(({ instanceId }) => instanceId === defaultAgent.instanceId)
@@ -50,8 +58,15 @@ export async function draftOptions(ctx: Context) {
   })
 }
 
-export async function draftModels(ctx: Context, instanceId: string) {
-  const find = () => enabledInstances(ctx).find(({ visible }) => visible.instanceId === instanceId)
+export async function draftModels(
+  ctx: Context,
+  instanceId: string,
+  includeComposerControls = false,
+) {
+  const find = () =>
+    enabledInstances(ctx, includeComposerControls).find(
+      ({ visible }) => visible.instanceId === instanceId,
+    )
   const instance = find()
   if (!instance) throw new MobileRequestError("DRAFT_SELECTION_UNAVAILABLE")
   const detection = await ctx.agents.detect({ instanceId })
@@ -66,7 +81,17 @@ export async function draftModels(ctx: Context, instanceId: string) {
   return {
     instance: current,
     catalog: mobileDraftModels.parse({
-      models: models.map(({ id, displayName }) => ({ id, label: displayName })),
+      models: models.map(({ id, displayName, efforts, fast, ultracode }) => ({
+        id,
+        label: displayName,
+        ...(includeComposerControls
+          ? {
+              efforts: [...efforts],
+              fast: fast === true,
+              ultracode: ultracode === true,
+            }
+          : {}),
+      })),
       defaultModelId: (models.find(({ isDefault }) => isDefault) ?? models[0])?.id,
     }),
   }

@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { reasoningEffortSchema } from "./domain"
+import { mobileThreadReference, mobileThreadReferences } from "./mobile-composer"
 
 export const mobileCommandMethods = {
   start: "run.start",
@@ -12,10 +14,16 @@ const commandId = z.uuid()
 const threadId = z.string().min(1)
 const runId = z.string().min(1)
 
-export const mobileStartRunParams = z.strictObject({
+export const legacyMobileStartRunParams = z.strictObject({
   commandId,
   threadId,
   text: z.string().min(1).max(mobileCommandTextLimit).regex(/\S/),
+})
+export const mobileStartRunParams = legacyMobileStartRunParams.extend({
+  effort: reasoningEffortSchema.optional(),
+  fast: z.boolean().optional(),
+  ultracode: z.boolean().optional(),
+  references: mobileThreadReferences.optional(),
 })
 export const mobileInterruptRunParams = z.strictObject({ commandId, threadId, runId })
 export const mobileReceiptParams = z.strictObject({ commandId })
@@ -35,6 +43,7 @@ export type MobileInterruptRunParams = z.infer<typeof mobileInterruptRunParams>
 export type MobileRunReceipt = z.infer<typeof mobileRunReceipt>
 
 const models = {
+  MobileThreadReference: mobileThreadReference,
   MobileStartRunParams: mobileStartRunParams,
   MobileInterruptRunParams: mobileInterruptRunParams,
   MobileReceiptParams: mobileReceiptParams,

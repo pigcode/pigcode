@@ -37,6 +37,7 @@ import { QueueOperationError } from "../agents/message-queue"
 import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
+import { MobileComposerCommands, mobileComposerRequests } from "./composer-commands"
 import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
@@ -103,6 +104,7 @@ export class MobileSidebarRpc {
   private readonly commands: MobileRunCommands
   private readonly requests: MobileRequestCommands
   private readonly drafts: MobileDraftCommands
+  private readonly composer: MobileComposerCommands
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -123,8 +125,22 @@ export class MobileSidebarRpc {
     this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
     this.changes = new MobileRunChanges(ctx)
     const canQueue = session.features.includes("queue.write")
-    this.commands = new MobileRunCommands(ctx, devices, session.deviceKey, this.receipts, canQueue)
-    this.drafts = new MobileDraftCommands(ctx, devices, session.deviceKey, this.receipts)
+    const canComposer = session.features.includes("composer.controls")
+    this.commands = new MobileRunCommands(
+      ctx,
+      devices,
+      session.deviceKey,
+      this.receipts,
+      canQueue,
+      canComposer,
+    )
+    this.drafts = new MobileDraftCommands(
+      ctx,
+      devices,
+      session.deviceKey,
+      this.receipts,
+      canComposer,
+    )
     this.requests = new MobileRequestCommands(
       ctx,
       this.receipts,
@@ -136,6 +152,16 @@ export class MobileSidebarRpc {
       canQueue,
       session.features.includes("timeline.resume"),
       session.features.includes("changes.read"),
+      canComposer,
+      feed,
+    )
+    this.composer = new MobileComposerCommands(
+      ctx,
+      () => this.requirePairedDevice(),
+      (threadId) => {
+        this.feed.changed(threadId)
+        this.timeline.notifyComposer(threadId)
+      },
     )
   }
 
@@ -236,6 +262,11 @@ export class MobileSidebarRpc {
     const canRespond = this.session.features.includes("request.write")
     const canDraft = this.session.features.includes("draft.write")
     const canQueue = this.session.features.includes("queue.write")
+    const canComposer = this.session.features.includes("composer.controls")
+    if (canComposer && mobileComposerRequests.has(request.method)) {
+      this.requirePairedDevice()
+      return this.composer.dispatch(request)
+    }
     if (canRun && mobileRunCommandRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.commands.dispatch(request)
@@ -244,7 +275,12 @@ export class MobileSidebarRpc {
       this.requirePairedDevice()
       return this.requests.dispatch(request)
     }
-    if (canDraft && mobileDraftRequests.has(request.method)) {
+    if (
+      (canDraft && mobileDraftRequests.has(request.method)) ||
+      (canComposer &&
+        (request.method === mobileDraftMethods.options ||
+          request.method === mobileDraftMethods.models))
+    ) {
       this.requirePairedDevice()
       return this.drafts.dispatch(request)
     }

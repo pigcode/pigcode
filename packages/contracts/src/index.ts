@@ -24,5 +24,6 @@ export * from "./mobile-commands"
 export * from "./mobile-requests"
 
 export * from "./mobile-drafts"
+export * from "./mobile-composer"
 
 export * from "./queued-messages"

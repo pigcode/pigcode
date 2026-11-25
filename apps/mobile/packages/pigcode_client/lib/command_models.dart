@@ -1,4 +1,5 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
+import 'composer_models.dart';
 
 abstract final class MobileCommandMethods {
   static const start = 'run.start';
@@ -13,14 +14,30 @@ final class MobileStartRunParams {
     required this.commandId,
     required this.threadId,
     required this.text,
+    this.effort,
+    this.fast,
+    this.ultracode,
+    this.references,
   });
   final String commandId;
   final String threadId;
   final String text;
+  final String? effort;
+  final bool? fast;
+  final bool? ultracode;
+  final List<MobileThreadReference>? references;
 
   factory MobileStartRunParams.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {'commandId', 'threadId', 'text'}.contains(key),
+      (key) => !const {
+        'commandId',
+        'threadId',
+        'text',
+        'effort',
+        'fast',
+        'ultracode',
+        'references',
+      }.contains(key),
     )) {
       throw const FormatException(
         'MobileStartRunParams contains an unknown field',
@@ -40,10 +57,33 @@ final class MobileStartRunParams {
     if (text.isEmpty || text.length > 10000 || !RegExp('\\S').hasMatch(text)) {
       throw const FormatException('Invalid text');
     }
+    final rawEffort = json['effort'] as String?;
+    final effort = rawEffort?.trim();
+    if (effort != null && (effort.isEmpty || effort.length > 64)) {
+      throw const FormatException('Invalid effort');
+    }
+    final fast = json['fast'] as bool?;
+    final ultracode = json['ultracode'] as bool?;
+    final rawReferences = json['references'];
+    final references = rawReferences == null
+        ? null
+        : List<MobileThreadReference>.unmodifiable(
+            (rawReferences as List<dynamic>).map(
+              (item) =>
+                  MobileThreadReference.fromJson(item as Map<String, dynamic>),
+            ),
+          );
+    if (references != null && references.length > 10) {
+      throw const FormatException('Invalid references');
+    }
     return MobileStartRunParams(
       commandId: commandId,
       threadId: threadId,
       text: text,
+      effort: effort,
+      fast: fast,
+      ultracode: ultracode,
+      references: references,
     );
   }
 
@@ -51,6 +91,10 @@ final class MobileStartRunParams {
     'commandId': commandId,
     'threadId': threadId,
     'text': text,
+    'effort': ?effort,
+    'fast': ?fast,
+    'ultracode': ?ultracode,
+    'references': ?references?.map((item) => item.toJson()).toList(),
   };
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { mobileThreadComposerState } from "./mobile-composer"
 
 export const timelinePageBytes = 256 * 1024
 export const timelineToolPreviewLength = 512
@@ -114,6 +115,7 @@ export const mobileTimelineSubscription = z.strictObject({
   page: mobileTimelinePage,
   live: mobileActiveRun.optional(),
   resumed: z.boolean().optional(),
+  composer: mobileThreadComposerState.optional(),
 })
 export const mobileTimelineLiveResult = z.strictObject({
   live: mobileActiveRun.optional(),
@@ -143,6 +145,7 @@ export const mobileRunDelta = z.strictObject({
 
 export type MobileTimelineEvent = z.infer<typeof mobileTimelineEvent>
 export type MobileTimelinePage = z.infer<typeof mobileTimelinePage>
+export type MobileTimelineSubscription = z.infer<typeof mobileTimelineSubscription>
 export type MobileTimelineContentParams = z.infer<typeof mobileTimelineContentParams>
 export type MobileActiveRun = z.infer<typeof mobileActiveRun>
 

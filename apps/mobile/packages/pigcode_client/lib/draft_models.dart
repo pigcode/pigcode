@@ -1,4 +1,5 @@
 // 由 generate-mobile-contracts.ts 从 Zod 的 JSON Schema 生成。
+import 'composer_models.dart';
 
 abstract final class MobileDraftMethods {
   static const options = 'thread.draftOptions';
@@ -51,6 +52,11 @@ final class MobileDraftCreateParams {
     this.modelId,
     required this.permissionMode,
     required this.text,
+    this.effort,
+    this.fast,
+    this.ultracode,
+    this.planMode,
+    this.references,
   });
   final String instanceId;
   final String commandId;
@@ -58,6 +64,11 @@ final class MobileDraftCreateParams {
   final String? modelId;
   final MobileDraftPermission permissionMode;
   final String text;
+  final String? effort;
+  final bool? fast;
+  final bool? ultracode;
+  final bool? planMode;
+  final List<MobileThreadReference>? references;
 
   factory MobileDraftCreateParams.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -68,6 +79,11 @@ final class MobileDraftCreateParams {
         'modelId',
         'permissionMode',
         'text',
+        'effort',
+        'fast',
+        'ultracode',
+        'planMode',
+        'references',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -88,9 +104,7 @@ final class MobileDraftCreateParams {
     if (projectId.isEmpty) {
       throw const FormatException('Invalid projectId');
     }
-    final modelId = json.containsKey('modelId')
-        ? json['modelId'] as String
-        : null;
+    final modelId = json['modelId'] as String?;
     if (modelId != null && (modelId.isEmpty)) {
       throw const FormatException('Invalid modelId');
     }
@@ -101,6 +115,26 @@ final class MobileDraftCreateParams {
     if (text.isEmpty || text.length > 10000 || !RegExp('\\S').hasMatch(text)) {
       throw const FormatException('Invalid text');
     }
+    final rawEffort = json['effort'] as String?;
+    final effort = rawEffort?.trim();
+    if (effort != null && (effort.isEmpty || effort.length > 64)) {
+      throw const FormatException('Invalid effort');
+    }
+    final fast = json['fast'] as bool?;
+    final ultracode = json['ultracode'] as bool?;
+    final planMode = json['planMode'] as bool?;
+    final rawReferences = json['references'];
+    final references = rawReferences == null
+        ? null
+        : List<MobileThreadReference>.unmodifiable(
+            (rawReferences as List<dynamic>).map(
+              (item) =>
+                  MobileThreadReference.fromJson(item as Map<String, dynamic>),
+            ),
+          );
+    if (references != null && references.length > 10) {
+      throw const FormatException('Invalid references');
+    }
     return MobileDraftCreateParams(
       instanceId: instanceId,
       commandId: commandId,
@@ -108,6 +142,11 @@ final class MobileDraftCreateParams {
       modelId: modelId,
       permissionMode: permissionMode,
       text: text,
+      effort: effort,
+      fast: fast,
+      ultracode: ultracode,
+      planMode: planMode,
+      references: references,
     );
   }
 
@@ -118,6 +157,11 @@ final class MobileDraftCreateParams {
     'modelId': ?modelId,
     'permissionMode': permissionMode.wire,
     'text': text,
+    'effort': ?effort,
+    'fast': ?fast,
+    'ultracode': ?ultracode,
+    'planMode': ?planMode,
+    'references': ?references?.map((item) => item.toJson()).toList(),
   };
 }
 
@@ -128,12 +172,18 @@ final class MobileDraftInstance {
     required this.agentName,
     required this.permissionModes,
     required this.defaultPermissionMode,
+    this.agentId,
+    this.accentColor,
+    this.supportsPlanMode,
   });
   final String instanceId;
   final String label;
   final String agentName;
   final List<MobileDraftPermission> permissionModes;
   final MobileDraftPermission defaultPermissionMode;
+  final String? agentId;
+  final String? accentColor;
+  final bool? supportsPlanMode;
 
   factory MobileDraftInstance.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -143,6 +193,9 @@ final class MobileDraftInstance {
         'agentName',
         'permissionModes',
         'defaultPermissionMode',
+        'agentId',
+        'accentColor',
+        'supportsPlanMode',
       }.contains(key),
     )) {
       throw const FormatException(
@@ -169,12 +222,25 @@ final class MobileDraftInstance {
     final defaultPermissionMode = MobileDraftPermission.fromWire(
       json['defaultPermissionMode'] as String,
     );
+    final agentId = json['agentId'] as String?;
+    if (agentId != null && agentId.isEmpty) {
+      throw const FormatException('Invalid agentId');
+    }
+    final accentColor = json['accentColor'] as String?;
+    if (accentColor != null &&
+        !RegExp(r'^#[\da-fA-F]{6}$').hasMatch(accentColor)) {
+      throw const FormatException('Invalid accentColor');
+    }
+    final supportsPlanMode = json['supportsPlanMode'] as bool?;
     return MobileDraftInstance(
       instanceId: instanceId,
       label: label,
       agentName: agentName,
       permissionModes: permissionModes,
       defaultPermissionMode: defaultPermissionMode,
+      agentId: agentId,
+      accentColor: accentColor,
+      supportsPlanMode: supportsPlanMode,
     );
   }
 
@@ -184,6 +250,9 @@ final class MobileDraftInstance {
     'agentName': agentName,
     'permissionModes': permissionModes.map((item) => item.wire).toList(),
     'defaultPermissionMode': defaultPermissionMode.wire,
+    'agentId': ?agentId,
+    'accentColor': ?accentColor,
+    'supportsPlanMode': ?supportsPlanMode,
   };
 }
 
@@ -224,12 +293,29 @@ final class MobileDraftOptions {
 }
 
 final class MobileDraftModel {
-  const MobileDraftModel({required this.id, required this.label});
+  const MobileDraftModel({
+    required this.id,
+    required this.label,
+    this.efforts,
+    this.fast,
+    this.ultracode,
+  });
   final String id;
   final String label;
+  final List<String>? efforts;
+  final bool? fast;
+  final bool? ultracode;
 
   factory MobileDraftModel.fromJson(Map<String, dynamic> json) {
-    if (json.keys.any((key) => !const {'id', 'label'}.contains(key))) {
+    if (json.keys.any(
+      (key) => !const {
+        'id',
+        'label',
+        'efforts',
+        'fast',
+        'ultracode',
+      }.contains(key),
+    )) {
       throw const FormatException('MobileDraftModel contains an unknown field');
     }
     final id = json['id'] as String;
@@ -240,10 +326,36 @@ final class MobileDraftModel {
     if (label.isEmpty) {
       throw const FormatException('Invalid label');
     }
-    return MobileDraftModel(id: id, label: label);
+    final rawEfforts = json['efforts'];
+    final efforts = rawEfforts == null
+        ? null
+        : List<String>.unmodifiable(
+            (rawEfforts as List<dynamic>).map((item) {
+              final value = (item as String).trim();
+              if (value.isEmpty || value.length > 64) {
+                throw const FormatException('Invalid efforts');
+              }
+              return value;
+            }),
+          );
+    final fast = json['fast'] as bool?;
+    final ultracode = json['ultracode'] as bool?;
+    return MobileDraftModel(
+      id: id,
+      label: label,
+      efforts: efforts,
+      fast: fast,
+      ultracode: ultracode,
+    );
   }
 
-  Map<String, Object?> toJson() => {'id': id, 'label': label};
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'label': label,
+    'efforts': ?efforts?.toList(),
+    'fast': ?fast,
+    'ultracode': ?ultracode,
+  };
 }
 
 final class MobileDraftModels {
