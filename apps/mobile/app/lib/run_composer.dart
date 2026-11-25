@@ -1,12 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'composer/composer_catalog.dart';
+import 'composer/composer_tokens.dart';
+import 'composer/context_meter.dart';
 import 'composer/mobile_composer_card.dart';
+import 'composer/model_picker_sheet.dart';
+import 'composer/model_preferences.dart';
+import 'local_drafts.dart';
 import 'message_queue_panel.dart';
 import 'run_command_journal.dart';
-import 'local_drafts.dart';
 import 'run_composer_state.dart';
 import 'workspace_icon.dart';
 
@@ -18,6 +25,7 @@ class RunComposer extends ConsumerStatefulWidget {
     required this.online,
     this.stoppableRunId,
     this.queueRevision = 0,
+    this.composer,
     this.wrapInput,
     this.draft,
     this.leading,
@@ -29,6 +37,7 @@ class RunComposer extends ConsumerStatefulWidget {
   final bool online;
   final String? stoppableRunId;
   final int queueRevision;
+  final MobileThreadComposerState? composer;
   final Widget Function(Widget)? wrapInput;
   final TextEditingController? draft;
   final Widget? leading;
@@ -40,16 +49,157 @@ class RunComposer extends ConsumerStatefulWidget {
 
 class _RunComposerState extends ConsumerState<RunComposer> {
   final _localDraft = TextEditingController();
+  final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
+    const ComposerSelectionSnapshot(),
+  );
+  MobileThreadComposerState? _composerOverride;
+  String? _composerNotice;
+  bool _updatingComposer = false;
+  ComposerSelectionSnapshot _latestSelection =
+      const ComposerSelectionSnapshot();
+
   TextEditingController get _draft => widget.draft ?? _localDraft;
   late final _draftStore = ThreadDraftStorage(
     widget.connection.computer.computerKey,
     widget.threadId,
   );
 
+  MobileThreadComposerState? get _composer =>
+      _composerOverride ?? widget.composer;
+
+  @override
+  void didUpdateWidget(covariant RunComposer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.threadId != widget.threadId ||
+        !identical(oldWidget.connection, widget.connection)) {
+      _composerOverride = null;
+      _composerNotice = null;
+      _updatingComposer = false;
+    } else if (!identical(oldWidget.composer, widget.composer)) {
+      _composerOverride = null;
+    }
+  }
+
   @override
   void dispose() {
     _localDraft.dispose();
+    _selectionNotifier.dispose();
     super.dispose();
+  }
+
+  void _scheduleSelectionSync(ComposerSelectionSnapshot snapshot) {
+    _latestSelection = snapshot;
+    if (_selectionNotifier.value == snapshot) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _selectionNotifier.value != _latestSelection) {
+        _selectionNotifier.value = _latestSelection;
+      }
+    });
+  }
+
+  String _composerErrorMessage(Object error) {
+    if (error is MobileRpcFailure) {
+      return error.problem.message;
+    }
+    return '暂时无法更新运行设置，请重试。';
+  }
+
+  Future<void> _mutateComposer(
+    Future<MobileThreadComposerState> Function() request,
+  ) async {
+    if (!mounted || _updatingComposer || !widget.online) return;
+    final connection = widget.connection;
+    final threadId = widget.threadId;
+    setState(() {
+      _updatingComposer = true;
+      _composerNotice = null;
+    });
+    _selectionNotifier.value = _buildSnapshotFromState(
+      composer: _composer,
+      busy: true,
+      notice: null,
+    );
+    try {
+      final updated = await request();
+      if (!mounted ||
+          widget.threadId != threadId ||
+          !identical(widget.connection, connection)) {
+        return;
+      }
+      setState(() {
+        _composerOverride = updated;
+        _composerNotice = null;
+        _updatingComposer = false;
+      });
+      _selectionNotifier.value = _buildSnapshotFromState(
+        composer: updated,
+        busy: false,
+        notice: null,
+      );
+    } catch (error) {
+      if (!mounted ||
+          widget.threadId != threadId ||
+          !identical(widget.connection, connection)) {
+        return;
+      }
+      final message = _composerErrorMessage(error);
+      setState(() {
+        _composerNotice = message;
+        _updatingComposer = false;
+      });
+      _selectionNotifier.value = _buildSnapshotFromState(
+        composer: _composer,
+        busy: false,
+        notice: message,
+      );
+    }
+  }
+
+  ComposerSelectionSnapshot _buildSnapshotFromState({
+    required MobileThreadComposerState? composer,
+    required bool busy,
+    required String? notice,
+  }) => ComposerSelectionSnapshot(
+    instanceId: composer?.instanceId,
+    agentId: composer?.agentId,
+    modelId: composer?.modelId,
+    permissionMode: composer?.permissionMode,
+    planMode: composer?.planMode ?? false,
+    supportsPlanMode: composer?.supportsPlanMode ?? false,
+    locked: widget.stoppableRunId != null,
+    notice: notice,
+    busy: busy,
+  );
+
+  Future<void> _openModelPicker() async {
+    if (!widget.online || !connectionSupportsComposerControls(widget.connection)) {
+      return;
+    }
+    _selectionNotifier.value = _latestSelection;
+    await showMobileModelPickerSheet(
+      context: context,
+      connection: widget.connection,
+      selection: _selectionNotifier,
+      onSelectModel: (instance, model) => _mutateComposer(
+        () => widget.connection.composer.switchAgent(
+          threadId: widget.threadId,
+          instanceId: instance.instanceId,
+          modelId: model.id,
+        ),
+      ),
+      onPermissionMode: (mode) => _mutateComposer(
+        () => widget.connection.composer.setPermissionMode(
+          threadId: widget.threadId,
+          permissionMode: mode,
+        ),
+      ),
+      onPlanMode: (enabled) => _mutateComposer(
+        () => widget.connection.composer.setPlanMode(
+          threadId: widget.threadId,
+          planMode: enabled,
+        ),
+      ),
+    );
   }
 
   @override
@@ -72,6 +222,86 @@ class _RunComposerState extends ConsumerState<RunComposer> {
       }
     });
     final controller = ref.read(provider.notifier);
+    final supportsControls =
+        widget.online && connectionSupportsComposerControls(widget.connection);
+    final activeComposer = _composer;
+
+    ResolvedComposerRunOptions runOptions = const ResolvedComposerRunOptions();
+    Widget? effectiveTrailing = widget.trailing;
+
+    if (supportsControls && activeComposer != null) {
+      final preferences = ref.watch(modelPreferencesProvider);
+      final optionsAsync = ref.watch(
+        composerDraftOptionsProvider(widget.connection),
+      );
+      final instances =
+          optionsAsync.value?.instances ?? const <MobileDraftInstance>[];
+      final currentInstance = instances
+          .where((item) => item.instanceId == activeComposer.instanceId)
+          .firstOrNull;
+      final modelsAsync = ref.watch(
+        composerDraftModelsProvider((
+          widget.connection,
+          activeComposer.instanceId,
+        )),
+      );
+      final currentModel = resolveDraftModel(
+        modelsAsync.value,
+        activeComposer.modelId,
+      );
+      runOptions = resolveComposerRunOptions(
+        supportsComposerControls: true,
+        instanceId: activeComposer.instanceId,
+        model: currentModel,
+        preferences: preferences,
+      );
+      _scheduleSelectionSync(
+        _buildSnapshotFromState(
+          composer: activeComposer,
+          busy: _updatingComposer,
+          notice: _composerNotice,
+        ),
+      );
+      if (effectiveTrailing == null) {
+        final instanceLabel =
+            currentInstance?.label ?? activeComposer.agentId;
+        final modelLabel =
+            currentModel?.label ??
+            activeComposer.modelId ??
+            currentInstance?.label ??
+            '选择模型';
+        effectiveTrailing = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MobileModelPickerChip(
+              agentId: currentInstance?.agentId ?? activeComposer.agentId,
+              instanceId: activeComposer.instanceId,
+              accentColor: currentInstance?.accentColor,
+              instanceLabel: instanceLabel,
+              modelLabel: modelLabel,
+              effort: runOptions.effort,
+              fast: runOptions.fast == true,
+              ultracode: runOptions.ultracode == true,
+              planMode: activeComposer.planMode,
+              permissionMode: activeComposer.permissionMode,
+              defaultPermissionMode: currentInstance?.defaultPermissionMode,
+              onTap: _openModelPicker,
+            ),
+            if (activeComposer.contextUsage case final usage?)
+              MobileContextMeter(usage: usage),
+          ],
+        );
+      }
+    }
+
+    final extraBanners = <Widget>[
+      if (_composerNotice case final notice? when notice.isNotEmpty)
+        _ComposerInlineNotice(
+          text: notice,
+          onDismiss: () => setState(() => _composerNotice = null),
+        ),
+    ];
+
     final view = RunComposerView(
       draft: _draft,
       online: widget.online,
@@ -80,12 +310,18 @@ class _RunComposerState extends ConsumerState<RunComposer> {
       state: commandState.value,
       storageError: commandState.hasError,
       onRetryLoad: () => ref.invalidate(provider),
-      onSend: controller.send,
+      onSend: (text) => controller.send(
+        text,
+        effort: runOptions.effort,
+        fast: runOptions.fast,
+        ultracode: runOptions.ultracode,
+      ),
       onStop: controller.stop,
       onCheck: controller.check,
       onRetry: controller.retry,
+      extraBanners: extraBanners,
       leading: widget.leading,
-      trailing: widget.trailing,
+      trailing: effectiveTrailing,
     );
     final input = widget.wrapInput?.call(view) ?? view;
     if (!widget.connection.supportsQueueCommands) return input;
@@ -131,6 +367,30 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   }
 }
 
+class _ComposerInlineNotice extends StatelessWidget {
+  const _ComposerInlineNotice({required this.text, required this.onDismiss});
+
+  final String text;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = ComposerSurface.palette(Theme.of(context).brightness);
+    return Semantics(
+      liveRegion: true,
+      child: Row(
+        spacing: ComposerSpace.chipGap,
+        children: [
+          Expanded(
+            child: Text(text, style: ComposerType.notice(colors.error)),
+          ),
+          TextButton(onPressed: onDismiss, child: const Text('知道了')),
+        ],
+      ),
+    );
+  }
+}
+
 class RunComposerView extends StatelessWidget {
   const RunComposerView({
     super.key,
@@ -145,6 +405,7 @@ class RunComposerView extends StatelessWidget {
     required this.onRetry,
     this.stoppableRunId,
     this.allowQueue = false,
+    this.extraBanners = const [],
     this.leading,
     this.trailing,
   });
@@ -160,6 +421,7 @@ class RunComposerView extends StatelessWidget {
   final ValueChanged<String> onStop;
   final ValueChanged<MobileRunMethod> onCheck;
   final ValueChanged<MobileRunMethod> onRetry;
+  final List<Widget> extraBanners;
   final Widget? leading;
   final Widget? trailing;
 
@@ -175,6 +437,7 @@ class RunComposerView extends StatelessWidget {
         !state!.pending.containsKey(method);
 
     final statusBanners = <Widget>[
+      ...extraBanners,
       if (storageError)
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,

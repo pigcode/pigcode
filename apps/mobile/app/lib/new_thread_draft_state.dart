@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
+import 'composer/composer_catalog.dart';
 import 'local_drafts.dart';
 import 'mobile_secure_storage.dart';
 
@@ -17,6 +18,7 @@ class NewThreadForm {
     this.instanceLabel,
     this.modelLabel,
     this.permissionMode,
+    this.planMode = false,
   });
 
   final String text;
@@ -26,6 +28,7 @@ class NewThreadForm {
   final String? instanceLabel;
   final String? modelLabel;
   final MobileDraftPermission? permissionMode;
+  final bool planMode;
 
   factory NewThreadForm.fromJson(Map<String, dynamic> json) => NewThreadForm(
     text: json['text'] as String,
@@ -37,6 +40,7 @@ class NewThreadForm {
     permissionMode: json['permissionMode'] == null
         ? null
         : MobileDraftPermission.fromWire(json['permissionMode'] as String),
+    planMode: json['planMode'] as bool? ?? false,
   );
 
   Map<String, Object?> toJson() => {
@@ -47,6 +51,7 @@ class NewThreadForm {
     'instanceLabel': instanceLabel,
     'modelLabel': modelLabel,
     'permissionMode': permissionMode?.wire,
+    'planMode': planMode,
   };
 
   NewThreadForm copyWith({
@@ -57,6 +62,7 @@ class NewThreadForm {
     String? instanceLabel,
     String? modelLabel,
     MobileDraftPermission? permissionMode,
+    bool? planMode,
     bool resetModel = false,
   }) => NewThreadForm(
     text: text ?? this.text,
@@ -66,6 +72,7 @@ class NewThreadForm {
     instanceLabel: instanceLabel ?? this.instanceLabel,
     modelLabel: resetModel ? null : modelLabel ?? this.modelLabel,
     permissionMode: permissionMode ?? this.permissionMode,
+    planMode: planMode ?? this.planMode,
   );
 
   bool matches(MobileDraftCreateParams command) =>
@@ -73,7 +80,8 @@ class NewThreadForm {
       projectId == command.projectId &&
       instanceId == command.instanceId &&
       modelId == command.modelId &&
-      permissionMode == command.permissionMode;
+      permissionMode == command.permissionMode &&
+      planMode == (command.planMode ?? false);
 }
 
 class _DraftRecord {
@@ -129,7 +137,8 @@ class NewThreadDraftStorage {
                   next.form.projectId != null ||
                   next.form.instanceId != null ||
                   next.form.modelId != null ||
-                  next.form.permissionMode != null,
+                  next.form.permissionMode != null ||
+                  next.form.planMode,
             );
           }
         }
@@ -243,13 +252,23 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
     }
   }
 
-  Future<void> submit(NewThreadForm form) async {
+  Future<void> submit(
+    NewThreadForm form, {
+    String? effort,
+    bool? fast,
+    bool? ultracode,
+    bool? planMode,
+    List<MobileThreadReference>? references,
+  }) async {
     if (target.connection == null ||
         state.value?.pending != null ||
         !_begin()) {
       return;
     }
     try {
+      final supported = connectionSupportsComposerControls(target.connection);
+      final normalizedEffort = effort?.trim();
+      final effectivePlanMode = supported && (planMode ?? form.planMode);
       final command = MobileDraftCreateParams(
         commandId: const Uuid().v4(),
         projectId: form.projectId!,
@@ -257,6 +276,18 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
         modelId: form.modelId,
         permissionMode: form.permissionMode!,
         text: form.text,
+        effort: supported &&
+                normalizedEffort != null &&
+                normalizedEffort.isNotEmpty
+            ? normalizedEffort
+            : null,
+        fast: supported && fast == true ? true : null,
+        ultracode: supported && ultracode == true ? true : null,
+        planMode: effectivePlanMode ? true : null,
+        references:
+            supported && references != null && references.isNotEmpty
+                ? references
+                : null,
       );
       final retained = await _store._update(
         (draft) => draft.pending == null ? _DraftRecord(form, command) : draft,

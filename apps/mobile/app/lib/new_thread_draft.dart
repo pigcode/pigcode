@@ -1,21 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'composer/composer_catalog.dart';
 import 'composer/composer_tokens.dart';
 import 'composer/mobile_composer_card.dart';
+import 'composer/model_picker_sheet.dart';
+import 'composer/model_preferences.dart';
 import 'mobile_sheet.dart';
 import 'new_thread_draft_state.dart';
 import 'workspace_icon.dart';
-
-final _draftOptionsProvider = FutureProvider.autoDispose
-    .family<MobileDraftOptions, MobileConnection>(
-      (ref, connection) => connection.drafts.options(),
-    );
-final _draftModelsProvider = FutureProvider.autoDispose
-    .family<MobileDraftModels, (MobileConnection, String)>(
-      (ref, target) => target.$1.drafts.models(target.$2),
-    );
 
 class NewThreadDraft extends ConsumerStatefulWidget {
   const NewThreadDraft({
@@ -29,6 +25,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
     this.onProjectNameChanged,
     this.computerKey,
     this.deviceId,
+    this.leading,
   });
 
   final MobileConnection? connection;
@@ -40,6 +37,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
   final List<MobileProjectSummary> projects;
   final bool online;
   final ValueChanged<MobileDraftReceipt> onAccepted;
+  final Widget? leading;
 
   @override
   ConsumerState<NewThreadDraft> createState() => _NewThreadDraftState();
@@ -48,6 +46,11 @@ class NewThreadDraft extends ConsumerStatefulWidget {
 class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   late final _entry = DraftEntry(widget.projectId);
   String? _reportedProjectName;
+  final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
+    const ComposerSelectionSnapshot(),
+  );
+  ComposerSelectionSnapshot _latestSelection =
+      const ComposerSelectionSnapshot();
 
   DraftTarget get _target => (
     connection: widget.connection,
@@ -57,11 +60,128 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   );
 
   @override
+  void dispose() {
+    _selectionNotifier.dispose();
+    super.dispose();
+  }
+
+  void _scheduleSelectionSync(ComposerSelectionSnapshot snapshot) {
+    _latestSelection = snapshot;
+    if (_selectionNotifier.value == snapshot) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _selectionNotifier.value != _latestSelection) {
+        _selectionNotifier.value = _latestSelection;
+      }
+    });
+  }
+
+  Future<void> _applyDraftEdit(
+    NewThreadForm Function(NewThreadForm current) update,
+  ) async {
+    while (mounted) {
+      final active = _target;
+      final provider = newThreadDraftProvider(active);
+      final NewThreadDraftState view;
+      try {
+        view = await ref.read(provider.future);
+      } catch (_) {
+        if (mounted && active != _target) continue;
+        return;
+      }
+      if (!mounted) return;
+      if (active != _target) continue;
+      final current = ref.read(provider).value?.form ?? view.form;
+      ref.read(provider.notifier).edit(update(current));
+      return;
+    }
+  }
+
+  Future<void> _openModelPicker(MobileConnection connection) async {
+    _selectionNotifier.value = _latestSelection;
+    await showMobileModelPickerSheet(
+      context: context,
+      connection: connection,
+      selection: _selectionNotifier,
+      onSelectModel: (nextInstance, nextModel) async {
+        await _applyDraftEdit((current) {
+          final currentPermission = current.permissionMode;
+          final nextPermission =
+              currentPermission != null &&
+                  nextInstance.permissionModes.contains(currentPermission)
+              ? currentPermission
+              : nextInstance.defaultPermissionMode;
+          final nextPlanMode = nextInstance.supportsPlanMode == true
+              ? current.planMode
+              : false;
+          final nextForm = current.copyWith(
+            instanceId: nextInstance.instanceId,
+            instanceLabel: nextInstance.label,
+            modelId: nextModel.id,
+            modelLabel: nextModel.label,
+            permissionMode: nextPermission,
+            planMode: nextPlanMode,
+          );
+          _selectionNotifier.value = ComposerSelectionSnapshot(
+            instanceId: nextInstance.instanceId,
+            agentId: nextInstance.agentId ?? nextInstance.instanceId,
+            modelId: nextModel.id,
+            permissionMode: nextPermission,
+            planMode: nextPlanMode,
+            supportsPlanMode: nextInstance.supportsPlanMode == true,
+            locked: _latestSelection.locked,
+            instanceLabel: nextInstance.label,
+            modelLabel: nextModel.label,
+          );
+          return nextForm;
+        });
+      },
+      onPermissionMode: (mode) async {
+        await _applyDraftEdit((current) {
+          final nextForm = current.copyWith(permissionMode: mode);
+          final base = _selectionNotifier.value;
+          _selectionNotifier.value = ComposerSelectionSnapshot(
+            instanceId: base.instanceId,
+            agentId: base.agentId,
+            modelId: base.modelId,
+            permissionMode: mode,
+            planMode: base.planMode,
+            supportsPlanMode: base.supportsPlanMode,
+            locked: base.locked,
+            instanceLabel: base.instanceLabel,
+            modelLabel: base.modelLabel,
+          );
+          return nextForm;
+        });
+      },
+      onPlanMode: (enabled) async {
+        await _applyDraftEdit((current) {
+          final nextForm = current.copyWith(planMode: enabled);
+          final base = _selectionNotifier.value;
+          _selectionNotifier.value = ComposerSelectionSnapshot(
+            instanceId: base.instanceId,
+            agentId: base.agentId,
+            modelId: base.modelId,
+            permissionMode: base.permissionMode,
+            planMode: enabled,
+            supportsPlanMode: base.supportsPlanMode,
+            locked: base.locked,
+            instanceLabel: base.instanceLabel,
+            modelLabel: base.modelLabel,
+          );
+          return nextForm;
+        });
+      },
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final target = _target;
     final link = widget.connection;
     final online = widget.online;
     final projects = widget.projects;
+    final supportsControls =
+        online && connectionSupportsComposerControls(link);
     final provider = newThreadDraftProvider(target);
     final draft = ref.watch(provider);
     ref.listen(provider, (previous, next) {
@@ -84,7 +204,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     }
 
     final actions = ref.read(provider.notifier);
-    final optionsKey = link == null ? null : _draftOptionsProvider(link);
+    final optionsKey = link == null ? null : composerDraftOptionsProvider(link);
     final options = online && optionsKey != null ? ref.watch(optionsKey) : null;
     final form = view.form;
     final currentProject = projects
@@ -119,19 +239,26 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         .firstOrNull;
     final modelsKey = instance == null || link == null
         ? null
-        : _draftModelsProvider((link, instance.instanceId));
+        : composerDraftModelsProvider((link, instance.instanceId));
     final models = modelsKey == null ? null : ref.watch(modelsKey);
     final modelCatalog = models?.value;
     final selectedModel = form.modelId ?? modelCatalog?.defaultModelId;
     final model = modelCatalog?.models
         .where((item) => item.id == selectedModel)
         .firstOrNull;
+    final resolvedModel = resolveDraftModel(modelCatalog, selectedModel);
     final permission = form.permissionMode ?? instance?.defaultPermissionMode;
+    final planModeUnsupported =
+        instance != null && instance.supportsPlanMode != true;
+    final effectivePlanMode =
+        supportsControls && !planModeUnsupported && form.planMode;
+    final persistedPlanMode = planModeUnsupported ? false : form.planMode;
     final displayed = form.copyWith(
       projectId: selectedProject,
       instanceId: selectedInstance,
       modelId: selectedModel,
       permissionMode: permission,
+      planMode: persistedPlanMode,
       instanceLabel: instance?.label,
       modelLabel: model?.label,
     );
@@ -140,10 +267,11 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         form.instanceId != displayed.instanceId ||
         form.modelId != displayed.modelId ||
         form.permissionMode != displayed.permissionMode ||
+        form.planMode != displayed.planMode ||
         form.instanceLabel != displayed.instanceLabel ||
         form.modelLabel != displayed.modelLabel;
     if (defaultsLoaded &&
-        form.text.isNotEmpty &&
+        (form.text.isNotEmpty || (planModeUnsupported && form.planMode)) &&
         !view.working &&
         view.notice == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -170,6 +298,31 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         form.text.trim().isNotEmpty &&
         form.text.length <= mobileCommandTextLimit;
 
+    final preferences = supportsControls
+        ? ref.watch(modelPreferencesProvider)
+        : ModelPreferences.empty;
+    final runOptions = resolveComposerRunOptions(
+      supportsComposerControls: supportsControls,
+      instanceId: instance?.instanceId,
+      model: resolvedModel,
+      preferences: preferences,
+    );
+    if (supportsControls) {
+      _scheduleSelectionSync(
+        ComposerSelectionSnapshot(
+          instanceId: selectedInstance,
+          agentId: instance?.agentId ?? selectedInstance,
+          modelId: resolvedModel?.id ?? selectedModel,
+          permissionMode: permission,
+          planMode: effectivePlanMode,
+          supportsPlanMode: instance?.supportsPlanMode == true,
+          locked: view.working,
+          instanceLabel: instance?.label ?? form.instanceLabel,
+          modelLabel: resolvedModel?.label ?? form.modelLabel,
+        ),
+      );
+    }
+
     Future<void> pick<T>(
       String title,
       List<(T, String)> choices,
@@ -177,23 +330,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     ) async {
       final choice = await _choose(context, title, choices);
       if (choice == null) return;
-      while (mounted) {
-        final active = _target;
-        final provider = newThreadDraftProvider(active);
-        final NewThreadDraftState view;
-        try {
-          view = await ref.read(provider.future);
-        } catch (_) {
-          if (mounted && active != _target) continue;
-          return;
-        }
-        if (!mounted) return;
-        if (active != _target) continue;
-        ref
-            .read(provider.notifier)
-            .edit(select(ref.read(provider).value?.form ?? view.form, choice));
-        return;
-      }
+      await _applyDraftEdit((current) => select(current, choice));
     }
 
     String instanceLabel(MobileDraftInstance item) =>
@@ -213,60 +350,98 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           : null,
     );
 
-    final instancePicker = MobileComposerChip(
-      label: instance == null
-          ? form.instanceLabel ??
-                (form.instanceId == null ? '选择 Agent 实例' : '已选 Agent 实例')
-          : instanceLabel(instance),
-      tooltip: '草稿 Agent 实例',
-      onTap: !view.working && instances.isNotEmpty
-          ? () => pick(
-              '选择 Agent 实例',
-              [for (final item in instances) (item, instanceLabel(item))],
-              (current, item) => current.copyWith(
-                instanceId: item.instanceId,
-                instanceLabel: item.label,
-                resetModel: true,
-              ),
-            )
-          : null,
-    );
-
-    final modelPicker = MobileComposerChip(
-      label:
-          model?.label ??
+    final Widget trailingControls;
+    if (supportsControls && link != null) {
+      final modelLabel =
+          resolvedModel?.label ??
           form.modelLabel ??
-          (validModel ? 'Agent 默认模型' : form.modelId ?? '选择模型'),
-      tooltip: '草稿模型',
-      onTap: !view.working && (modelCatalog?.models.isNotEmpty ?? false)
-          ? () => pick(
-              '选择模型',
-              [for (final item in modelCatalog!.models) (item.id, item.label)],
-              (current, id) => current.copyWith(
-                modelId: id,
-                modelLabel: modelCatalog.models
-                    .firstWhere((item) => item.id == id)
-                    .label,
-              ),
-            )
-          : null,
-    );
+          instance?.label ??
+          form.instanceLabel ??
+          (validModel ? 'Agent 默认模型' : form.modelId ?? '选择模型');
+      trailingControls = MobileModelPickerChip(
+        agentId: instance?.agentId ?? selectedInstance,
+        instanceId: selectedInstance,
+        accentColor: instance?.accentColor,
+        instanceLabel: instance?.label ?? form.instanceLabel,
+        modelLabel: modelLabel,
+        effort: runOptions.effort,
+        fast: runOptions.fast == true,
+        ultracode: runOptions.ultracode == true,
+        planMode: effectivePlanMode,
+        permissionMode: permission,
+        defaultPermissionMode: instance?.defaultPermissionMode,
+        onTap: !view.working && instances.isNotEmpty
+            ? () => unawaited(_openModelPicker(link))
+            : null,
+      );
+    } else {
+      final instancePicker = MobileComposerChip(
+        label: instance == null
+            ? form.instanceLabel ??
+                  (form.instanceId == null ? '选择 Agent 实例' : '已选 Agent 实例')
+            : instanceLabel(instance),
+        tooltip: '草稿 Agent 实例',
+        onTap: !view.working && instances.isNotEmpty
+            ? () => pick(
+                '选择 Agent 实例',
+                [for (final item in instances) (item, instanceLabel(item))],
+                (current, item) => current.copyWith(
+                  instanceId: item.instanceId,
+                  instanceLabel: item.label,
+                  planMode: false,
+                  resetModel: true,
+                ),
+              )
+            : null,
+      );
 
-    final permissionPicker = MobileComposerChip(
-      label: permission == null ? '选择权限' : _permissionName(permission),
-      tooltip: '草稿权限',
-      warning: permission == MobileDraftPermission.fullAccess,
-      onTap: !view.working && instance != null
-          ? () => pick(
-              '选择权限模式',
-              [
-                for (final item in instance.permissionModes)
-                  (item, _permissionName(item)),
-              ],
-              (current, mode) => current.copyWith(permissionMode: mode),
-            )
-          : null,
-    );
+      final modelPicker = MobileComposerChip(
+        label:
+            model?.label ??
+            form.modelLabel ??
+            (validModel ? 'Agent 默认模型' : form.modelId ?? '选择模型'),
+        tooltip: '草稿模型',
+        onTap: !view.working && (modelCatalog?.models.isNotEmpty ?? false)
+            ? () => pick(
+                '选择模型',
+                [
+                  for (final item in modelCatalog!.models)
+                    (item.id, item.label),
+                ],
+                (current, id) => current.copyWith(
+                  modelId: id,
+                  modelLabel: modelCatalog.models
+                      .firstWhere((item) => item.id == id)
+                      .label,
+                ),
+              )
+            : null,
+      );
+
+      final permissionPicker = MobileComposerChip(
+        label: permission == null
+            ? '选择权限'
+            : composerPermissionLabel(permission),
+        tooltip: '草稿权限',
+        warning: permission == MobileDraftPermission.fullAccess,
+        onTap: !view.working && instance != null
+            ? () => pick(
+                '选择权限模式',
+                [
+                  for (final item in instance.permissionModes)
+                    (item, composerPermissionLabel(item)),
+                ],
+                (current, mode) => current.copyWith(permissionMode: mode),
+              )
+            : null,
+      );
+
+      trailingControls = Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: ComposerSpace.toolbarGap,
+        children: [instancePicker, modelPicker, permissionPicker],
+      );
+    }
 
     final banners = <Widget>[
       if (online && (options?.isLoading == true || models?.isLoading == true))
@@ -313,11 +488,8 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
       child: _DraftComposer(
         header: projectPicker,
         banners: banners,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          spacing: ComposerSpace.toolbarGap,
-          children: [instancePicker, modelPicker, permissionPicker],
-        ),
+        leading: widget.leading,
+        trailing: trailingControls,
         text: form.text,
         offline: !online,
         working: view.working,
@@ -332,7 +504,12 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
                   instanceLabel: displayed.instanceLabel,
                   modelLabel: displayed.modelLabel,
                   permissionMode: permission,
+                  planMode: effectivePlanMode,
                 ),
+                effort: runOptions.effort,
+                fast: runOptions.fast,
+                ultracode: runOptions.ultracode,
+                planMode: effectivePlanMode ? true : null,
               )
             : null,
       ),
@@ -372,14 +549,6 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     );
   }
 }
-
-String _permissionName(MobileDraftPermission permission) =>
-    switch (permission) {
-      MobileDraftPermission.approvalRequired => '监督审批',
-      MobileDraftPermission.autoAcceptEdits => '接受编辑',
-      MobileDraftPermission.auto => '自动审批',
-      MobileDraftPermission.fullAccess => '完全访问',
-    };
 
 Future<T?> _choose<T>(
   BuildContext context,
@@ -421,11 +590,13 @@ class _DraftComposer extends StatefulWidget {
     required this.offline,
     required this.working,
     required this.onChanged,
+    this.leading,
     this.onSend,
   });
 
   final Widget header;
   final List<Widget> banners;
+  final Widget? leading;
   final Widget trailing;
   final String text;
   final bool offline;
@@ -470,6 +641,7 @@ class _DraftComposerState extends State<_DraftComposer> {
     hintText: '描述要做的事',
     header: widget.header,
     banners: widget.banners,
+    leading: widget.leading,
     trailing: widget.trailing,
     offline: widget.offline,
     readOnly: widget.working,

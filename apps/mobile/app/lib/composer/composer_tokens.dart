@@ -6,7 +6,7 @@ import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 
 /// 手机端输入框的间距、圆角、描边、控件尺寸、排版与表面样式 token。
-/// 视觉基线对齐桌面端 `packages/ui-primitives/src/styles/{composer-input,chips,tokens}.css`，
+/// 视觉基线对齐桌面端 `packages/ui-primitives/src/styles/{composer-input,composer,composer-plan,chips,indicators,tokens}.css`，
 /// 触区复用 `timelineTouchHeight(context)`，保证 iOS >= 44px、Android >= 48px。
 abstract final class ComposerSpace {
   /// 输入框卡片外层留白（12 / 6 / 12 / 8）。
@@ -58,10 +58,102 @@ abstract final class ComposerSpace {
   static const double chipHeaderHorizontal = TimelineSpace.x4;
   static const double chipToolbarHorizontal = TimelineSpace.x3;
   static const double chipGap = TimelineSpace.x2;
+  static const double modelChipGap = TimelineSpace.x3;
+  static const double modelChipBadgePadding = TimelineSpace.x1;
 
   /// 选择器文字宽度上限：顶部项目条 260（桌面 `.draft-project`），底栏胶囊 200。
   static const double headerChipMaxWidth = 260;
   static const double toolbarChipMaxWidth = 200;
+  static const double modelChipMaxWidth = 208;
+
+  /// 模型底部弹层通用内边距与间距。
+  static const EdgeInsets sheetHandlePadding = EdgeInsets.only(
+    top: TimelineSpace.x4,
+    bottom: TimelineSpace.x2,
+  );
+  static const EdgeInsetsDirectional sheetHeaderPadding =
+      EdgeInsetsDirectional.fromSTEB(
+        TimelineSpace.x7,
+        0,
+        TimelineSpace.x2,
+        0,
+      );
+  static const EdgeInsets railPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x6,
+    vertical: TimelineSpace.x2,
+  );
+  static const double railGap = TimelineSpace.x2;
+  static const EdgeInsets railTabPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x5,
+    vertical: TimelineSpace.x3,
+  );
+  static const double railTabGap = TimelineSpace.x3;
+  static const EdgeInsets railSeparatorMargin = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x2,
+  );
+  static const EdgeInsets searchPadding = EdgeInsets.fromLTRB(
+    TimelineSpace.x6,
+    TimelineSpace.x3,
+    TimelineSpace.x6,
+    TimelineSpace.x3,
+  );
+  static const EdgeInsets searchFieldPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x5,
+    vertical: TimelineSpace.x3,
+  );
+  static const double searchGap = TimelineSpace.x4;
+  static const EdgeInsets listPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x4,
+    vertical: TimelineSpace.x2,
+  );
+  static const EdgeInsetsDirectional modelRowPadding =
+      EdgeInsetsDirectional.fromSTEB(
+        TimelineSpace.x5,
+        TimelineSpace.x3,
+        TimelineSpace.x2,
+        TimelineSpace.x3,
+      );
+  static const double modelRowGap = TimelineSpace.x2;
+  static const double modelRowTitleGap = TimelineSpace.x2;
+  static const EdgeInsets emptyStatePadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x8,
+    vertical: TimelineSpace.x9,
+  );
+  static const double emptyStateGap = TimelineSpace.x4;
+  static const EdgeInsets lockedBannerPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x7,
+    vertical: TimelineSpace.x4,
+  );
+  static const double lockedBannerGap = TimelineSpace.x4;
+  static const EdgeInsets footerPadding = EdgeInsets.fromLTRB(
+    TimelineSpace.x6,
+    TimelineSpace.x3,
+    TimelineSpace.x6,
+    TimelineSpace.x4,
+  );
+  static const double footerRowGap = TimelineSpace.x2;
+  static const double footerControlGap = TimelineSpace.x2;
+  static const double effortRowGap = TimelineSpace.x4;
+  static const EdgeInsets planTogglePadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x4,
+  );
+  static const EdgeInsets permissionButtonPadding = EdgeInsets.symmetric(
+    horizontal: TimelineSpace.x4,
+  );
+  static const EdgeInsets permissionRowPadding = EdgeInsets.symmetric(
+    vertical: TimelineSpace.x4,
+  );
+  static const double permissionRowGap = TimelineSpace.x5;
+  static const double permissionTextGap = TimelineSpace.x1;
+
+  /// 上下文占用详情弹层间距。
+  static const double contextDetailGap = TimelineSpace.x5;
+  static const double contextDetailRowGap = TimelineSpace.x3;
+  static const EdgeInsets contextCardPadding = EdgeInsets.all(TimelineSpace.x6);
+
+  /// 确认弹窗间距。
+  static const double dialogGap = TimelineSpace.x5;
+  static const double dialogActionGap = TimelineSpace.x4;
 
   /// 底栏外衬：抵消圆形动作按钮透明触区留白，使视觉边缘贴齐 `cardInset`（8px）。
   static EdgeInsetsDirectional toolbarPadding(
@@ -86,15 +178,31 @@ abstract final class ComposerRadius {
   static const double card = 20;
   static const double frame = card;
 
+  /// 弹层顶部圆角（对齐 `mobile_sheet.dart` / `TimelineRadius.sheet`）。
+  static const double sheet = TimelineRadius.sheet;
+  static const double sheetHandle = 3;
+
   /// 底栏控件用胶囊圆角（`--r-full`），顶部项目条用小圆角（`--r-sm`）。
   static const double chip = TimelineRadius.full;
   static const double headerChip = TimelineRadius.small;
+  static const double chipBadge = TimelineRadius.xs;
+  static const double block = TimelineRadius.block;
+  static const double panel = TimelineRadius.panel;
+  static const double full = TimelineRadius.full;
+
+  /// Agent 缩写头像圆角占比（对齐桌面 `.entity-avatar`: 28%）。
+  static const double avatarRatio = 0.28;
 }
 
 abstract final class ComposerBorder {
-  /// 抬起卡片 1px 细边；浅灰外框 0.5px `--hair` 细边。
+  /// 抬起卡片 1px 细边；浅灰外框与内部分隔线 0.5px `--hair` 细边。
   static const double card = TimelineBorder.regular;
   static const double frame = TimelineBorder.hair;
+  static const double hairline = TimelineBorder.hair;
+  static const double regular = TimelineBorder.regular;
+  static const double indicator = 1.5;
+  static const double meterStroke = 2;
+  static const double effortDefaultRing = 1.5;
 }
 
 abstract final class ComposerControl {
@@ -108,6 +216,65 @@ abstract final class ComposerControl {
   static const double chipIcon = TimelineIcon.meta;
   static const double chipCaret = TimelineIcon.btn;
   static const double chipTextPadding = TimelineSpace.x4;
+  static const double modelChipSwitchIcon = TimelineIcon.badge;
+  static const double modelChipModeIcon = TimelineIcon.badge;
+
+  /// Agent 图标尺寸（对齐桌面 `--agent-icon-*`）。
+  static const double agentIconSm = TimelineIcon.meta;
+  static const double agentIconMd = TimelineIcon.control;
+  static const double agentIconLg = TimelineIcon.alert;
+  static const double agentAccentDot = 7;
+  static const double agentAccentOffset = -1;
+  static const double agentBadgeSize = 11;
+  static const double agentBadgeOffset = -3;
+  static const double agentBadgePadding = TimelineSpace.x1;
+  static const double agentBadgeFontSize = 7;
+  static const double agentAvatarFontRatio = 0.42;
+
+  /// 上下文占用圆环（对齐桌面 `context-meter.tsx`: viewBox 16、r=6、stroke=2）。
+  static const double contextMeterCanvas = TimelineIcon.control;
+  static const double contextMeterRadius = 6;
+  static const double contextProgressBarHeight = 6;
+
+  /// 模型底部弹层尺寸。
+  static const double sheetHandleWidth = 36;
+  static const double sheetHandleHeight = 5;
+  static const double sheetCloseIcon = 21;
+  static const double pickerMaxHeightFactor = 0.85;
+  static const double pickerMinListHeight = 140;
+  static const double pickerRailHeight = 36;
+  static const double pickerRailSepWidth = 1;
+  static const double pickerRailSepHeight = 20;
+  static const double pickerCurrentDot = 7;
+  static const double pickerSearchIcon = TimelineIcon.control;
+  static const double pickerRowMinHeight = 52;
+  static const double pickerRowFastIcon = 12;
+  static const double pickerRowCheckIcon = TimelineIcon.meta;
+  static const double pickerRowStarIcon = TimelineIcon.control;
+  static const double pickerLockIcon = TimelineIcon.meta;
+  static const double pickerSpinnerSize = 18;
+  static const double pickerSpinnerStroke = 2;
+
+  /// 底部运行参数栏控件尺寸。
+  static const double switchVisualSize = TimelineControl.lg;
+  static const double switchIcon = TimelineIcon.control;
+  static const double effortTrackHeight = 14;
+  static const double effortThumbDiameter = 18;
+  static const double effortDotDiameter = 4;
+  static const double effortDefaultRingDiameter = 6;
+  static const double effortValueMinWidth = 36;
+  static const double planToggleVisualHeight = TimelineControl.lg;
+  static const double planToggleIcon = TimelineIcon.meta;
+  static const double permissionButtonVisualHeight = TimelineControl.lg;
+  static const double permissionButtonIcon = TimelineIcon.meta;
+  static const double permissionButtonMaxWidth = 148;
+  static const double permissionRowMinHeight = 54;
+  static const double permissionRowIcon = 18;
+
+  /// 禁用态透明度（对齐桌面 `0.5`）。
+  static const double disabledOpacity = 0.5;
+  static const double lockedRowOpacity = 0.6;
+  static const double effortOnDotOpacity = 0.6;
 
   /// 多行输入行数范围。
   static const int minLines = 1;
@@ -136,6 +303,83 @@ abstract final class ComposerType {
   /// 选择器胶囊文字（对齐桌面 `.chip-btn`: `--fs-md` 13px / `--lh-md` 18px）。
   static TextStyle chip(Color color) => TimelineType.metaStyle(color);
 
+  /// 综合模型胶囊里的模型名与思考深度/计划短标记。
+  static TextStyle modelChipName(Color color) =>
+      TimelineType.metaStyle(color, weight: FontWeight.w500);
+  static TextStyle modelChipMeta(Color color) => TimelineType.smallStyle(color);
+
+  /// 底部弹层标题。
+  static TextStyle sheetTitle(Color color, TargetPlatform platform) =>
+      TextStyle(
+        fontSize: TimelineType.heading2,
+        fontWeight: FontWeight.w500,
+        height: 1.45,
+        letterSpacing: platform == TargetPlatform.iOS ? -0.24 : 0,
+        color: color,
+        leadingDistribution: TextLeadingDistribution.even,
+        locale: const Locale('zh', 'CN'),
+      );
+
+  /// 实例栏页签文字。
+  static TextStyle railLabel(Color color, {bool selected = false}) =>
+      TimelineType.metaStyle(
+        color,
+        weight: selected ? FontWeight.w500 : FontWeight.w400,
+      );
+
+  /// 模型搜索输入框文字。
+  static TextStyle searchInput(Color color) => TextStyle(
+    fontSize: TimelineType.content,
+    height: TimelineType.metaHeight,
+    color: color,
+  );
+
+  /// 模型列表主/副标题。
+  static TextStyle modelRowTitle(Color color, {bool current = false}) =>
+      TimelineType.contentStyle(
+        color,
+        weight: current ? FontWeight.w500 : FontWeight.w400,
+        height: TimelineType.metaHeight,
+      );
+  static TextStyle modelRowSubtitle(Color color) =>
+      TimelineType.smallStyle(color);
+
+  /// 锁定提示与错误提示。
+  static TextStyle notice(Color color) => TimelineType.smallStyle(color);
+
+  /// 底栏参数标签与数值。
+  static TextStyle footerLabel(Color color) => TimelineType.smallStyle(color);
+  static TextStyle footerValue(Color color, {bool emphasized = false}) =>
+      TimelineType.smallStyle(
+        color,
+        weight: emphasized ? FontWeight.w500 : FontWeight.w400,
+      );
+
+  /// 权限列表主/副标题。
+  static TextStyle permissionTitle(Color color, {bool emphasized = false}) =>
+      TimelineType.contentStyle(
+        color,
+        weight: emphasized ? FontWeight.w500 : FontWeight.w400,
+        height: TimelineType.noticeHeight,
+      );
+  static TextStyle permissionDescription(Color color) =>
+      TimelineType.smallStyle(color);
+
+  /// 上下文占用详情排版。
+  static TextStyle contextHeadline(Color color) => TextStyle(
+    fontSize: TimelineType.heading3,
+    height: TimelineType.headingHeight,
+    fontWeight: FontWeight.w500,
+    color: color,
+    fontFeatures: TimelineType.tabular,
+  );
+  static TextStyle contextDetail(Color color) => TextStyle(
+    fontSize: TimelineType.meta,
+    height: TimelineType.noticeHeight,
+    color: color,
+    fontFeatures: TimelineType.tabular,
+  );
+
   /// 新会话问候标题字样与显示高度阈值。
   static const double heroFontSize = 26;
   static const double heroHeight = 1.45;
@@ -151,44 +395,111 @@ abstract final class ComposerSurface {
   static const List<BoxShadow> darkShadow = [
     BoxShadow(color: Color(0x4D000000), offset: Offset(0, 8), blurRadius: 24),
   ];
+  static const List<BoxShadow> knobShadow = [
+    BoxShadow(color: Color(0x0F000000), spreadRadius: 0.5),
+    BoxShadow(color: Color(0x33000000), offset: Offset(0, 1), blurRadius: 3),
+  ];
+
+  /// 桌面 `--favorite` 与 `--brand-claude`。
+  static const Color favorite = Color(0xFFE5A00D);
+  static const Color brandClaude = Color(0xFFD97757);
+  static const Color brandAntigravityBlue = Color(0xFF4285F4);
+  static const Color brandAntigravityRed = Color(0xFFEA4335);
+  static const Color brandAntigravityYellow = Color(0xFFFBBC05);
+  static const Color brandAntigravityGreen = Color(0xFF34A853);
 
   static ({
     Color background,
+    Color surface,
+    Color panel,
     Color field,
     Color surfaceRaised,
     Color surfaceSunken,
+    Color switchTrack,
+    Color switchThumb,
     Color foreground,
     Color secondaryText,
+    Color onPrimary,
     Color divider,
     Color border,
     Color strongBorder,
+    Color inputBackground,
+    Color inputBorder,
+    Color hover,
     Color selected,
     Color selectedOnSurface,
     Color muted,
     Color faint,
     Color attention,
     Color attentionTint,
+    Color attentionMark,
+    Color error,
+    Color errorTint,
+    Color onError,
+    Color readyMark,
+    Color running,
+    Color scrim,
   })
   palette(Brightness brightness) {
     final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
     return (
       background: colors.background,
+      surface: colors.surface,
+      panel: colors.panel,
       field: colors.field,
       surfaceRaised: colors.surfaceRaised,
       surfaceSunken: colors.surfaceSunken,
+      switchTrack: colors.switchTrack,
+      switchThumb: colors.switchThumb,
       foreground: colors.foreground,
       secondaryText: colors.secondaryText,
+      onPrimary: colors.onPrimary,
       divider: colors.divider,
       border: colors.border,
       strongBorder: colors.strongBorder,
+      inputBackground: colors.inputBackground,
+      inputBorder: colors.inputBorder,
+      hover: colors.hover,
       selected: colors.selected,
       selectedOnSurface: colors.selectedOnSurface,
       muted: colors.muted,
       faint: colors.faint,
       attention: colors.attention,
       attentionTint: colors.attentionTint,
+      attentionMark: colors.attentionMark,
+      error: colors.error,
+      errorTint: colors.errorTint,
+      onError: colors.onError,
+      readyMark: colors.readyMark,
+      running: colors.running,
+      scrim: colors.scrim,
     );
   }
+
+  /// 强调色（用于思考深度滑块填充、Ultracode 激活态、当前模型勾选、非默认权限徽标）。
+  static Color accent(Brightness brightness) => palette(brightness).running;
+
+  static Color accentSoft(Brightness brightness) => accent(
+    brightness,
+  ).withValues(alpha: brightness == Brightness.dark ? 0.16 : 0.10);
+
+  static Color accentSoftStrong(Brightness brightness) => accent(
+    brightness,
+  ).withValues(alpha: brightness == Brightness.dark ? 0.24 : 0.15);
+
+  static Color accentText(Brightness brightness) => brightness == Brightness.dark
+      ? const Color(0xFF8FB8F8)
+      : const Color(0xFF1A62C6);
+
+  /// 上下文占用圆环三档颜色：常规 muted、>=80% 偏高 attention、>=95% 满载 danger。
+  static Color contextRingTrack(Brightness brightness) =>
+      palette(brightness).strongBorder;
+  static Color contextRingOk(Brightness brightness) =>
+      palette(brightness).muted;
+  static Color contextRingHigh(Brightness brightness) =>
+      palette(brightness).attentionMark;
+  static Color contextRingFull(Brightness brightness) =>
+      palette(brightness).error;
 
   static Color cardFill(Brightness brightness, {bool offline = false}) {
     final colors = palette(brightness);

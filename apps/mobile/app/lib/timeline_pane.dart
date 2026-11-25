@@ -630,6 +630,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         draft: _text,
         stoppableRunId: runId,
         queueRevision: revision,
+        composer: snapshot.composer,
         wrapInput: (input) => input,
       );
     }

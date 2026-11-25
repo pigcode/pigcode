@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
+import 'composer/composer_catalog.dart';
 import 'run_command_journal.dart';
 import 'local_drafts.dart';
 
@@ -78,15 +79,36 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     );
   }
 
-  Future<void> send(String text) => _submit(
-    PendingSend(
-      MobileStartRunParams(
-        commandId: const Uuid().v4(),
-        threadId: target.$2,
-        text: text,
+  Future<void> send(
+    String text, {
+    String? effort,
+    bool? fast,
+    bool? ultracode,
+    List<MobileThreadReference>? references,
+  }) {
+    final supported = connectionSupportsComposerControls(target.$1);
+    final normalizedEffort = effort?.trim();
+    return _submit(
+      PendingSend(
+        MobileStartRunParams(
+          commandId: const Uuid().v4(),
+          threadId: target.$2,
+          text: text,
+          effort: supported &&
+                  normalizedEffort != null &&
+                  normalizedEffort.isNotEmpty
+              ? normalizedEffort
+              : null,
+          fast: supported && fast == true ? true : null,
+          ultracode: supported && ultracode == true ? true : null,
+          references:
+              supported && references != null && references.isNotEmpty
+                  ? references
+                  : null,
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Future<void> stop(String runId) => _submit(
     PendingStop(

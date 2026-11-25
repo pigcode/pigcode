@@ -29,6 +29,17 @@ enum WorkspaceGlyph {
   archiveRestore,
   pencil,
   terminal,
+  star,
+  starFilled,
+  zap,
+  zapFilled,
+  workflow,
+  listChecks,
+  bot,
+  sparkles,
+  shieldAlert,
+  check,
+  lock,
 }
 
 class WorkspaceIcon extends StatelessWidget {
@@ -630,6 +641,144 @@ class _WorkspaceIconPainter extends CustomPainter {
           stroke,
         );
         canvas.drawLine(const Offset(12, 17), const Offset(12.01, 17), stroke);
+      case WorkspaceGlyph.star || WorkspaceGlyph.starFilled:
+        final starPath = Path()
+          ..moveTo(12, 2.5)
+          ..lineTo(14.92, 8.42)
+          ..lineTo(21.45, 9.37)
+          ..lineTo(16.72, 13.98)
+          ..lineTo(17.84, 20.48)
+          ..lineTo(12, 17.41)
+          ..lineTo(6.16, 20.48)
+          ..lineTo(7.28, 13.98)
+          ..lineTo(2.55, 9.37)
+          ..lineTo(9.08, 8.42)
+          ..close();
+        if (glyph == WorkspaceGlyph.starFilled) {
+          canvas.drawPath(starPath, Paint()..color = color);
+        } else {
+          canvas.drawPath(starPath, stroke);
+        }
+      case WorkspaceGlyph.zap || WorkspaceGlyph.zapFilled:
+        final zapPath = Path()
+          ..moveTo(13, 2)
+          ..lineTo(4, 14)
+          ..lineTo(11, 14)
+          ..lineTo(10, 22)
+          ..lineTo(20, 10)
+          ..lineTo(13, 10)
+          ..close();
+        if (glyph == WorkspaceGlyph.zapFilled) {
+          canvas.drawPath(zapPath, Paint()..color = color);
+        } else {
+          canvas.drawPath(zapPath, stroke);
+        }
+      case WorkspaceGlyph.workflow:
+        const boxRadius = Radius.circular(2);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(const Rect.fromLTWH(3, 3, 8, 8), boxRadius),
+          stroke,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(const Rect.fromLTWH(13, 13, 8, 8), boxRadius),
+          stroke,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(7, 11)
+            ..lineTo(7, 15)
+            ..arcToPoint(
+              const Offset(9, 17),
+              radius: boxRadius,
+              clockwise: false,
+            )
+            ..lineTo(13, 17),
+          stroke,
+        );
+      case WorkspaceGlyph.listChecks:
+        canvas.drawPath(
+          Path()
+            ..moveTo(3, 7)
+            ..lineTo(5, 9)
+            ..lineTo(9, 5)
+            ..moveTo(3, 17)
+            ..lineTo(5, 19)
+            ..lineTo(9, 15),
+          stroke,
+        );
+        canvas.drawLine(const Offset(13, 7), const Offset(21, 7), stroke);
+        canvas.drawLine(const Offset(13, 12), const Offset(21, 12), stroke);
+        canvas.drawLine(const Offset(13, 17), const Offset(21, 17), stroke);
+      case WorkspaceGlyph.bot:
+        canvas.drawLine(const Offset(12, 8), const Offset(12, 4), stroke);
+        canvas.drawLine(const Offset(8, 4), const Offset(12, 4), stroke);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(4, 8, 16, 12),
+            const Radius.circular(2),
+          ),
+          stroke,
+        );
+        canvas.drawLine(const Offset(2, 14), const Offset(4, 14), stroke);
+        canvas.drawLine(const Offset(20, 14), const Offset(22, 14), stroke);
+        canvas.drawLine(const Offset(9, 13), const Offset(9, 15), stroke);
+        canvas.drawLine(const Offset(15, 13), const Offset(15, 15), stroke);
+      case WorkspaceGlyph.sparkles:
+        canvas.drawPath(
+          Path()
+            ..moveTo(11, 3)
+            ..quadraticBezierTo(11, 10, 18, 10)
+            ..quadraticBezierTo(11, 10, 11, 17)
+            ..quadraticBezierTo(11, 10, 4, 10)
+            ..quadraticBezierTo(11, 10, 11, 3)
+            ..close(),
+          stroke,
+        );
+        canvas.drawLine(const Offset(19, 15), const Offset(19, 21), stroke);
+        canvas.drawLine(const Offset(16, 18), const Offset(22, 18), stroke);
+        canvas.drawLine(const Offset(5, 18), const Offset(5, 20), stroke);
+        canvas.drawLine(const Offset(4, 19), const Offset(6, 19), stroke);
+      case WorkspaceGlyph.shieldAlert:
+        canvas.drawPath(
+          Path()
+            ..moveTo(12, 2.5)
+            ..lineTo(19, 5.5)
+            ..lineTo(19, 11.5)
+            ..cubicTo(19, 16.5, 15.8, 19.9, 12, 21.5)
+            ..cubicTo(8.2, 19.9, 5, 16.5, 5, 11.5)
+            ..lineTo(5, 5.5)
+            ..close(),
+          stroke,
+        );
+        canvas.drawLine(const Offset(12, 8.5), const Offset(12, 12.5), stroke);
+        canvas.drawLine(const Offset(12, 16), const Offset(12.01, 16), stroke);
+      case WorkspaceGlyph.check:
+        canvas.drawPath(
+          Path()
+            ..moveTo(5, 12.5)
+            ..lineTo(9.5, 17)
+            ..lineTo(19, 7.5),
+          stroke,
+        );
+      case WorkspaceGlyph.lock:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(4, 11, 16, 10),
+            const Radius.circular(2),
+          ),
+          stroke,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(7, 11)
+            ..lineTo(7, 7)
+            ..arcToPoint(
+              const Offset(17, 7),
+              radius: const Radius.circular(5),
+            )
+            ..lineTo(17, 11),
+          stroke,
+        );
     }
     canvas.restore();
   }
