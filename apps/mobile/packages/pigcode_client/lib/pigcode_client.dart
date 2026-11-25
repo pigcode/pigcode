@@ -4,6 +4,7 @@ import 'package:pigcode_transport/pigcode_transport.dart';
 import 'composer_commands.dart';
 import 'host_rpc.dart';
 import 'draft_commands.dart';
+import 'mention_commands.dart';
 import 'pending_requests.dart';
 import 'queued_messages.dart';
 import 'reminder_models.dart';
@@ -19,6 +20,8 @@ export 'composer_commands.dart';
 export 'composer_models.dart';
 export 'draft_commands.dart';
 export 'draft_models.dart';
+export 'mention_commands.dart';
+export 'mention_models.dart';
 export 'run_change_models.dart';
 export 'run_changes.dart';
 export 'run_commands.dart';
@@ -34,6 +37,25 @@ export 'timeline_turns.dart';
 export 'timeline_models.dart';
 
 const mobileProtocolVersion = 1;
+const mobileClientFeatures = <String>[
+  'connection.status',
+  'relay.saveReceipt',
+  'sidebar.read',
+  'sidebar.write',
+  'sidebar.presentation',
+  'timeline.read',
+  'timeline.resume',
+  'changes.read',
+  'connection.revocation',
+  'reminders.status',
+  'reminders.apns',
+  'run.write',
+  'request.write',
+  'draft.write',
+  'queue.write',
+  'composer.controls',
+  'composer.mentions',
+];
 
 class MobileConnection {
   MobileConnection._(
@@ -51,6 +73,7 @@ class MobileConnection {
     this.supportsTimelineResume,
     this.supportsRunChanges,
     this.supportsComposerControls,
+    this.supportsComposerMentions,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -70,6 +93,7 @@ class MobileConnection {
   final bool supportsTimelineResume;
   final bool supportsRunChanges;
   final bool supportsComposerControls;
+  final bool supportsComposerMentions;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -80,6 +104,7 @@ class MobileConnection {
   late final MobileRunChanges changes = MobileRunChanges(_rpc);
   late final MobileDraftCommands drafts = MobileDraftCommands(_rpc);
   late final MobileComposerCommands composer = MobileComposerCommands(_rpc);
+  late final MobileMentionCommands mentions = MobileMentionCommands(_rpc);
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
     _rpc,
@@ -275,24 +300,7 @@ class MobileConnection {
         'type': 'mobile.hello',
         'minVersion': mobileProtocolVersion,
         'maxVersion': mobileProtocolVersion,
-        'features': [
-          'connection.status',
-          'relay.saveReceipt',
-          'sidebar.read',
-          'sidebar.write',
-          'sidebar.presentation',
-          'timeline.read',
-          'timeline.resume',
-          'changes.read',
-          'connection.revocation',
-          'reminders.status',
-          'reminders.apns',
-          'run.write',
-          'request.write',
-          'draft.write',
-          'queue.write',
-          'composer.controls',
-        ],
+        'features': mobileClientFeatures,
       });
       final welcome = await link.receive();
       if (welcome['type'] == 'mobile.incompatible') {
@@ -338,6 +346,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('timeline.resume'),
         (welcome['features'] as List).contains('changes.read'),
         (welcome['features'] as List).contains('composer.controls'),
+        (welcome['features'] as List).contains('composer.mentions'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

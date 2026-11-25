@@ -39,6 +39,7 @@ import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
 import { MobileComposerCommands, mobileComposerRequests } from "./composer-commands"
 import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
+import { MobileMentionCommands, mobileMentionRequests } from "./mentions"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
@@ -105,6 +106,7 @@ export class MobileSidebarRpc {
   private readonly requests: MobileRequestCommands
   private readonly drafts: MobileDraftCommands
   private readonly composer: MobileComposerCommands
+  private readonly mentions: MobileMentionCommands
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -163,6 +165,7 @@ export class MobileSidebarRpc {
         this.timeline.notifyComposer(threadId)
       },
     )
+    this.mentions = new MobileMentionCommands(ctx, () => this.requirePairedDevice())
   }
 
   start(): void {
@@ -263,6 +266,11 @@ export class MobileSidebarRpc {
     const canDraft = this.session.features.includes("draft.write")
     const canQueue = this.session.features.includes("queue.write")
     const canComposer = this.session.features.includes("composer.controls")
+    const canMentions = this.session.features.includes("composer.mentions")
+    if (canMentions && mobileMentionRequests.has(request.method)) {
+      this.requirePairedDevice()
+      return this.mentions.dispatch(request)
+    }
     if (canComposer && mobileComposerRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.composer.dispatch(request)

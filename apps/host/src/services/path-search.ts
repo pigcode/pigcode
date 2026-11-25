@@ -78,12 +78,18 @@ function directoriesOf(files: readonly string[]): string[] {
   return [...directories]
 }
 
-/** 在文件与目录里搜索，按得分排序，最多返回 limit 条。 */
+/** 在文件与目录里搜索，按得分排序，最多返回 limit 条；空查询返回排序后的前 limit 个文件。 */
 export function searchPaths(
   files: readonly string[],
   query: string,
   limit = 200,
 ): PathSearchResult {
+  if (query.trim().length === 0) {
+    return {
+      entries: files.slice(0, limit).map((path) => ({ path, kind: "file" as const })),
+      truncated: files.length > limit,
+    }
+  }
   const scored: Array<{ match: PathMatch; score: number }> = []
   for (const path of files) {
     const score = scorePath(path, query)
