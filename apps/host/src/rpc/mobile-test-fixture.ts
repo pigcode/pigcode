@@ -6,6 +6,7 @@ import type { AgentRunConfig } from "../agents/driver"
 import { apply as agents } from "../agents/registry"
 import { MobileConnections } from "../mobile/connections"
 import { apply as attachments } from "../services/attachments"
+import { apply as mobilePreview } from "../services/mobile-preview"
 import { apply as projects } from "../services/projects"
 import { RelaySettings } from "../services/relay-settings"
 import { apply as sessions } from "../services/sessions"
@@ -35,6 +36,7 @@ export async function startMobileHost(options?: {
   await ctx.plugin(storage, { path: options?.storagePath ?? ":memory:" })
   await ctx.plugin(attachments)
   await ctx.plugin(settings, options?.settingsPath ? { path: options.settingsPath } : {})
+  await ctx.plugin(mobilePreview)
   await ctx.plugin(projects)
   await ctx.plugin(threads)
   await ctx.plugin(sessions)

@@ -5,6 +5,8 @@ plugins:
     name: "@pigcode/host/services/attachments"
   - id: core.settings
     name: "@pigcode/host/services/settings"
+  - id: core.mobile-preview
+    name: "@pigcode/host/services/mobile-preview"
   - id: core.projects
     name: "@pigcode/host/services/projects"
   - id: core.threads

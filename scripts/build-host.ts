@@ -54,6 +54,7 @@ const coreEntries: Record<string, string> = {
   storage: join(root, "apps/host/src/services/storage.ts"),
   attachments: join(root, "apps/host/src/services/attachments.ts"),
   settings: join(root, "apps/host/src/services/settings.ts"),
+  "mobile-preview": join(root, "apps/host/src/services/mobile-preview.ts"),
   projects: join(root, "apps/host/src/services/projects.ts"),
   threads: join(root, "apps/host/src/services/threads.ts"),
   sessions: join(root, "apps/host/src/services/sessions.ts"),

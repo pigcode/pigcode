@@ -154,9 +154,10 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     servePage(waitingPage)
     waitingPage = undefined
   }
-  // 控制端口承载内置浏览器动作、退出检查和桌面的电源管理。
+  // 控制端口承载内置浏览器动作、退出检查、本机预览地址同步和桌面的电源管理。
   if (control) {
     ctx.get("browser")?.attach(control)
+    ctx.get("mobilePreview")?.attach(control)
     attachQuitState(control, ctx)
     attachHostActivity(control, ctx)
   }

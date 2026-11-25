@@ -60,6 +60,12 @@ const { FakeBrowserWindow } = vi.hoisted(() => {
         ((window: FakeBrowserWindow) => void) | undefined
       listener?.(window)
     }
+
+    emitDidNavigate(url: string): void {
+      const listener = this.listeners.get("did-navigate") as
+        ((event: unknown, url: string) => void) | undefined
+      listener?.({}, url)
+    }
   }
 
   class FakeBrowserWindow {
@@ -100,9 +106,16 @@ const { FakeBrowserWindow } = vi.hoisted(() => {
 
 vi.mock("electron", () => ({ BrowserWindow: FakeBrowserWindow }))
 
-const { closePreview, isAllowedPreviewUrl, openPreview } = await import("./preview")
+const {
+  closePreview,
+  getActivePreviewUrls,
+  isAllowedPreviewUrl,
+  onPreviewUrlsChanged,
+  openPreview,
+} = await import("./preview")
 
 beforeEach(() => {
+  closePreview()
   FakeBrowserWindow.instances.length = 0
 })
 
@@ -217,5 +230,50 @@ describe("openPreview", () => {
     closePreview()
 
     expect(FakeBrowserWindow.instances.every((window) => window.closed)).toBe(true)
+  })
+
+  it("tracks deduplicated active loopback URLs and notifies listeners on open, navigate, and close", () => {
+    const snapshots: string[][] = []
+    const unsubscribe = onPreviewUrlsChanged((urls) => snapshots.push(urls))
+
+    try {
+      const first = openPreview("http://localhost:3000")
+      const second = openPreview("http://localhost:3000/")
+      const third = openPreview("http://127.0.0.1:5173/app")
+
+      expect(getActivePreviewUrls()).toEqual([
+        "http://localhost:3000/",
+        "http://127.0.0.1:5173/app",
+      ])
+
+      FakeBrowserWindow.instances[2]?.webContents.emitDidNavigate("http://127.0.0.1:5173/settings")
+      expect(getActivePreviewUrls()).toEqual([
+        "http://localhost:3000/",
+        "http://127.0.0.1:5173/settings",
+      ])
+
+      closePreview(first.id)
+      // Duplicate URL still held by `second`, so list remains unchanged.
+      expect(getActivePreviewUrls()).toEqual([
+        "http://localhost:3000/",
+        "http://127.0.0.1:5173/settings",
+      ])
+
+      closePreview(second.id)
+      expect(getActivePreviewUrls()).toEqual(["http://127.0.0.1:5173/settings"])
+
+      closePreview(third.id)
+      expect(getActivePreviewUrls()).toEqual([])
+
+      expect(snapshots).toEqual([
+        ["http://localhost:3000/"],
+        ["http://localhost:3000/", "http://127.0.0.1:5173/app"],
+        ["http://localhost:3000/", "http://127.0.0.1:5173/settings"],
+        ["http://127.0.0.1:5173/settings"],
+        [],
+      ])
+    } finally {
+      unsubscribe()
+    }
   })
 })

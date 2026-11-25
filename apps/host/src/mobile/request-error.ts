@@ -19,6 +19,12 @@ export type MobileErrorCode =
   | "ATTACHMENT_FORBIDDEN"
   | "ATTACHMENT_LIMIT_EXCEEDED"
   | "ATTACHMENT_HASH_MISMATCH"
+  | "PREVIEW_DISABLED"
+  | "PREVIEW_URL_NOT_ALLOWED"
+  | "PREVIEW_UNREACHABLE"
+  | "PREVIEW_TIMEOUT"
+  | "PREVIEW_TOO_LARGE"
+  | "PREVIEW_STREAM_NOT_FOUND"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -41,6 +47,12 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   ATTACHMENT_FORBIDDEN: "无权访问此图片附件。",
   ATTACHMENT_LIMIT_EXCEEDED: "单条消息最多附带 6 张图片。",
   ATTACHMENT_HASH_MISMATCH: "图片校验失败，请重新上传。",
+  PREVIEW_DISABLED: "电脑端未开启手机本机预览。",
+  PREVIEW_URL_NOT_ALLOWED: "仅允许访问电脑本机 localhost HTTP/HTTPS 预览地址。",
+  PREVIEW_UNREACHABLE: "无法连接电脑本机预览服务，请确认服务已启动。",
+  PREVIEW_TIMEOUT: "本机预览请求超时。",
+  PREVIEW_TOO_LARGE: "预览响应或请求超出大小上限。",
+  PREVIEW_STREAM_NOT_FOUND: "预览数据流已过期或关闭。",
 }
 
 export class MobileRequestError extends Error {

@@ -1,5 +1,6 @@
 import type { Context } from "cordis"
 import { cleanupDeviceMobileAttachments } from "./attachments"
+import { cleanupDeviceMobilePreviews } from "./preview"
 import type { acceptNoise } from "./noise"
 
 export const deviceRevokedNotice = { type: "device.revoked" } as const
@@ -34,5 +35,10 @@ export function revokeDeviceWork(ctx: Context, publicKey: string): void {
     cleanupDeviceMobileAttachments(ctx, publicKey)
   } catch (error) {
     console.error("[host] could not remove staging attachments of revoked device", error)
+  }
+  try {
+    cleanupDeviceMobilePreviews(ctx, publicKey)
+  } catch (error) {
+    console.error("[host] could not clean up preview streams of revoked device", error)
   }
 }

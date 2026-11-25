@@ -177,6 +177,20 @@ export class RpcServer {
         return this.ctx.mobileConnections.revoke(
           (parsed as CommandParams<"mobile.devices.revoke">).deviceId,
         )
+      case "mobile.preview.getSettings":
+        return (
+          this.ctx.get("mobilePreview")?.getSettings() ?? {
+            enabled: this.ctx.settings.get("mobile.preview.enabled") !== false,
+            desktopUrls: [],
+          }
+        )
+      case "mobile.preview.setEnabled": {
+        const { enabled } = parsed as CommandParams<"mobile.preview.setEnabled">
+        const preview = this.ctx.get("mobilePreview")
+        if (preview) return preview.setEnabled(enabled)
+        this.ctx.settings.set("mobile.preview.enabled", enabled)
+        return { enabled, desktopUrls: [] }
+      }
       case "project.list":
         return this.ctx.projects.list()
       case "project.add": {

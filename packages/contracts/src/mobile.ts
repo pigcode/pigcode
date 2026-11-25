@@ -31,6 +31,7 @@ export const mobileFeatures = [
   "composer.mentions",
   "composer.attachments",
   "workbench.read",
+  "preview.tunnel",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

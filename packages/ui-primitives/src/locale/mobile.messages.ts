@@ -60,6 +60,11 @@ export const mobileZhCN = {
   "settings.mobileRelay.status.storage-unavailable": "系统凭据存储不可用，配置未保存。",
   "settings.mobileRelay.status.busy": "已有中继测试正在进行。",
   "settings.mobileRelay.status.host-unavailable": "无法读取或更新中继配置，请检查本机 Host 连接。",
+  "settings.mobilePreview.title": "本机预览",
+  "settings.mobilePreview.enabled": "允许已配对手机预览本机服务",
+  "settings.mobilePreview.description":
+    "允许已配对的手机通过端到端加密通道预览这台电脑上的 localhost 开发页面。",
+  "settings.mobilePreview.error": "无法读取或更新本机预览设置，请检查本机 Host 连接。",
 }
 
 export const mobileEnUS = {
@@ -134,4 +139,10 @@ export const mobileEnUS = {
   "settings.mobileRelay.status.busy": "A relay test is already in progress.",
   "settings.mobileRelay.status.host-unavailable":
     "Couldn't read or update relay settings. Check the local Host connection.",
+  "settings.mobilePreview.title": "Local Preview",
+  "settings.mobilePreview.enabled": "Allow paired phones to preview local servers",
+  "settings.mobilePreview.description":
+    "Allow paired phones to preview localhost dev pages running on this computer over the end-to-end encrypted connection.",
+  "settings.mobilePreview.error":
+    "Couldn't read or update local preview settings. Check the local Host connection.",
 }

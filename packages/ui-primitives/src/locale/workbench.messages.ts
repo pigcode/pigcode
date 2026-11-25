@@ -52,6 +52,12 @@ export const workbenchZhCN = {
   "hostError.ATTACHMENT_FORBIDDEN": "无权访问此图片附件",
   "hostError.ATTACHMENT_LIMIT_EXCEEDED": "单条消息最多附带 6 张图片",
   "hostError.ATTACHMENT_HASH_MISMATCH": "图片校验失败，请重新上传",
+  "hostError.PREVIEW_DISABLED": "电脑端未开启手机本机预览",
+  "hostError.PREVIEW_URL_NOT_ALLOWED": "仅允许访问电脑本机 localhost HTTP/HTTPS 预览地址",
+  "hostError.PREVIEW_UNREACHABLE": "无法连接电脑本机预览服务，请确认服务已启动",
+  "hostError.PREVIEW_TIMEOUT": "本机预览请求超时",
+  "hostError.PREVIEW_TOO_LARGE": "预览响应或请求超出大小上限",
+  "hostError.PREVIEW_STREAM_NOT_FOUND": "预览数据流已过期或关闭",
   "hostError.details": "详细信息",
 } as const
 
@@ -111,5 +117,13 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
   "hostError.ATTACHMENT_FORBIDDEN": "You do not have access to this image attachment",
   "hostError.ATTACHMENT_LIMIT_EXCEEDED": "You can attach at most 6 images per message",
   "hostError.ATTACHMENT_HASH_MISMATCH": "Image checksum mismatch. Upload it again.",
+  "hostError.PREVIEW_DISABLED": "Local preview from phone is turned off on this computer",
+  "hostError.PREVIEW_URL_NOT_ALLOWED":
+    "Only localhost HTTP/HTTPS preview URLs on this computer are allowed",
+  "hostError.PREVIEW_UNREACHABLE":
+    "Could not connect to the local preview server. Make sure it is running.",
+  "hostError.PREVIEW_TIMEOUT": "The local preview request timed out",
+  "hostError.PREVIEW_TOO_LARGE": "The preview request or response exceeds the size limit",
+  "hostError.PREVIEW_STREAM_NOT_FOUND": "The preview stream has expired or been closed",
   "hostError.details": "Details",
 }

@@ -14,6 +14,7 @@ import 'run_commands.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
 import 'src/attachments.dart';
+import 'src/preview.dart';
 import 'src/workbench.dart';
 import 'timeline.dart';
 
@@ -36,6 +37,7 @@ export 'reminder_models.dart';
 export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'src/attachments.dart';
+export 'src/preview.dart';
 export 'src/workbench.dart';
 export 'timeline.dart';
 export 'timeline_turns.dart';
@@ -62,6 +64,7 @@ const mobileClientFeatures = <String>[
   'composer.mentions',
   'composer.attachments',
   'workbench.read',
+  'preview.tunnel',
 ];
 
 class MobileConnection {
@@ -83,6 +86,7 @@ class MobileConnection {
     this.supportsComposerMentions,
     this.supportsAttachments,
     this.supportsWorkbenchRead,
+    this.supportsPreviewTunnel,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -105,6 +109,7 @@ class MobileConnection {
   final bool supportsComposerMentions;
   final bool supportsAttachments;
   final bool supportsWorkbenchRead;
+  final bool supportsPreviewTunnel;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -123,6 +128,10 @@ class MobileConnection {
   late final MobileWorkbenchCommands workbench = MobileWorkbenchCommands(
     _rpc,
     supportsWorkbenchRead: supportsWorkbenchRead,
+  );
+  late final MobilePreviewCommands preview = MobilePreviewCommands(
+    _rpc,
+    supportsPreviewTunnel: supportsPreviewTunnel,
   );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -220,6 +229,41 @@ class MobileConnection {
 
   Future<MobilePrStatusResult> getPrStatus({required String threadId}) =>
       workbench.getPrStatus(threadId: threadId);
+
+  Future<MobilePreviewStatus> getPreviewStatus({String? threadId}) =>
+      preview.getStatus(threadId: threadId);
+
+  Future<MobilePreviewFetchResponse> fetchPreview({
+    required String url,
+    String method = 'GET',
+    Map<String, String>? headers,
+    Uint8List? bodyBytes,
+    String? requestId,
+  }) => preview.fetch(
+    url: url,
+    method: method,
+    headers: headers,
+    bodyBytes: bodyBytes,
+    requestId: requestId,
+  );
+
+  Future<MobilePreviewBodyChunk> readPreviewBody({
+    required String bodyStreamId,
+    required int offset,
+    int? length,
+  }) => preview.readBody(
+    bodyStreamId: bodyStreamId,
+    offset: offset,
+    length: length,
+  );
+
+  Future<void> closePreviewBody(String bodyStreamId) =>
+      preview.closeBody(bodyStreamId);
+
+  Stream<Uint8List> streamPreviewBody(
+    String bodyStreamId, {
+    int chunkBytes = mobilePreviewChunkBytes,
+  }) => preview.streamBody(bodyStreamId, chunkBytes: chunkBytes);
 
   Future<MobileSidebar> openSidebar() {
     if (!supportsSidebar) throw const ConnectionFailure('update-desktop');
@@ -456,6 +500,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('composer.mentions'),
         (welcome['features'] as List).contains('composer.attachments'),
         (welcome['features'] as List).contains('workbench.read'),
+        (welcome['features'] as List).contains('preview.tunnel'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

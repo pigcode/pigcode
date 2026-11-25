@@ -2,11 +2,19 @@ import { useEffect, useRef, useState } from "react"
 import QRCode from "qrcode"
 import {
   mobilePairingViewSchema,
+  mobilePreviewSettingsSchema,
   mobileRevokeResultSchema,
   type MobilePairingView,
   type MobileRevokeResult,
 } from "@pigcode/contracts"
-import { Button, Dialog, SettingRow, SettingSection, useLocale } from "@pigcode/ui-primitives"
+import {
+  Button,
+  Dialog,
+  SettingRow,
+  SettingSection,
+  Switch,
+  useLocale,
+} from "@pigcode/ui-primitives"
 import type { CoreDeps } from "./chat-container"
 
 function deviceNumber(id: string): string {
@@ -22,6 +30,9 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
   const [revoking, setRevoking] = useState<MobilePairingView["devices"][number] | null>(null)
   const [revokeStatus, setRevokeStatus] = useState<MobileRevokeResult["status"]>()
   const [qr, setQr] = useState<{ value: string; data: string | null }>()
+  const [previewEnabled, setPreviewEnabled] = useState<boolean | null>(null)
+  const [previewSaving, setPreviewSaving] = useState(false)
+  const [previewError, setPreviewError] = useState(false)
   const attemptId = useRef<string | null>(null)
   const mounted = useRef(false)
   const revision = useRef(0)
@@ -58,6 +69,44 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
       if (id) void connection.call("mobile.pairing.cancel", { id }).catch(() => {})
     }
   }, [connection])
+
+  useEffect(() => {
+    let active = true
+    void connection.call("mobile.preview.getSettings", {}).then(
+      (response) => {
+        if (!active) return
+        const parsed = mobilePreviewSettingsSchema.safeParse(response)
+        if (parsed.success) {
+          setPreviewEnabled(parsed.data.enabled)
+          setPreviewError(false)
+        } else {
+          setPreviewError(true)
+        }
+      },
+      () => {
+        if (active) setPreviewError(true)
+      },
+    )
+    return () => {
+      active = false
+    }
+  }, [connection])
+
+  async function togglePreviewEnabled(next: boolean) {
+    if (previewSaving) return
+    setPreviewSaving(true)
+    setPreviewError(false)
+    try {
+      const response = mobilePreviewSettingsSchema.parse(
+        await connection.call("mobile.preview.setEnabled", { enabled: next }),
+      )
+      if (mounted.current) setPreviewEnabled(response.enabled)
+    } catch {
+      if (mounted.current) setPreviewError(true)
+    } finally {
+      if (mounted.current) setPreviewSaving(false)
+    }
+  }
 
   const qrValue = view?.attempt?.qr
   useEffect(() => {
@@ -255,6 +304,22 @@ export function PairingSettings({ deps, relayReady }: { deps: CoreDeps; relayRea
           <SettingRow
             title={<span role="status">{t(`settings.pairing.revokeStatus.${revokeStatus}`)}</span>}
           />
+        )}
+      </SettingSection>
+      <SettingSection title={t("settings.mobilePreview.title")}>
+        <SettingRow
+          title={t("settings.mobilePreview.enabled")}
+          description={t("settings.mobilePreview.description")}
+        >
+          <Switch
+            checked={previewEnabled ?? true}
+            disabled={previewEnabled === null || previewSaving}
+            aria-label={t("settings.mobilePreview.enabled")}
+            onCheckedChange={(checked) => void togglePreviewEnabled(checked)}
+          />
+        </SettingRow>
+        {previewError && (
+          <SettingRow title={<span role="alert">{t("settings.mobilePreview.error")}</span>} />
         )}
       </SettingSection>
       <Dialog.Root

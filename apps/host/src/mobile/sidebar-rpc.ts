@@ -49,6 +49,7 @@ import { mobileErrorMessages, mobileParams as params, MobileRequestError } from 
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
+import { MobilePreview, mobilePreviewRequests } from "./preview"
 import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
@@ -126,6 +127,7 @@ export class MobileSidebarRpc {
   private readonly mentions: MobileMentionCommands
   private readonly attachments: MobileAttachments
   private readonly workbench: MobileWorkbench
+  private readonly preview: MobilePreview
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -194,6 +196,7 @@ export class MobileSidebarRpc {
       this.requirePairedDevice(),
     )
     this.workbench = new MobileWorkbench(ctx, () => this.requirePairedDevice())
+    this.preview = new MobilePreview(ctx, session.deviceKey, () => this.requirePairedDevice())
   }
 
   start(): void {
@@ -204,6 +207,7 @@ export class MobileSidebarRpc {
   stop(): void {
     this.active = false
     this.attachments.close()
+    this.preview.close()
     this.timeline.close()
     this.stopMessages?.()
     this.stopSidebar?.()
@@ -298,6 +302,14 @@ export class MobileSidebarRpc {
     ) {
       this.requirePairedDevice()
       return this.workbench.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("preview.tunnel") &&
+      mobilePreviewRequests.has(request.method)
+    ) {
+      this.requirePairedDevice()
+      return this.preview.dispatch(request)
     }
 
     const canRun = this.session.features.includes("run.write")

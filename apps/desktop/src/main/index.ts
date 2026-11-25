@@ -61,7 +61,13 @@ import {
 } from "./open-in"
 import { setupBrowser } from "./browser-host"
 import { registerAppProtocol, registerPluginProtocol, registerPrivilegedSchemes } from "./protocol"
-import { closePreview, isAllowedPreviewUrl, openPreview } from "./preview"
+import {
+  closePreview,
+  getActivePreviewUrls,
+  isAllowedPreviewUrl,
+  onPreviewUrlsChanged,
+  openPreview,
+} from "./preview"
 import {
   DEFAULT_UNSAVED_LABELS,
   confirmDiscard,
@@ -264,6 +270,19 @@ function showHostFailure(count: number, fatal: string | null): void {
   else void dialog.showMessageBox(options)
 }
 
+/** 把桌面当前打开的本机预览窗口 URL 列表实时同步给 Host。 */
+function syncDesktopPreviewUrls(
+  port: { postMessage(message: unknown): void } | undefined,
+  urls: string[] = getActivePreviewUrls(),
+): void {
+  if (!port) return
+  try {
+    port.postMessage({ type: "desktop.previewUrls", urls })
+  } catch {
+    // Host 正在重启或端口已关闭时忽略；新 Host 启动后会在 onStart 重新同步。
+  }
+}
+
 /** Host 的启动与重启。每个新 Host 起来后把控制端口交给浏览器面板；页面已经打开时给页面开一条新连接。 */
 const hosts = createHostSupervisor({
   entry: resolveAppPath("out/host/index.mjs"),
@@ -275,11 +294,16 @@ const hosts = createHostSupervisor({
     attachRelayCredentials(host.controlPort, profileDir())
     attachAttachmentThumbnails(host.controlPort)
     reminders.attach(host.controlPort)
+    syncDesktopPreviewUrls(host.controlPort)
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.postMessage("pigcode:port", null, [host.connectPage()])
     }
   },
   onGiveUp: showHostFailure,
+})
+
+onPreviewUrlsChanged((urls) => {
+  syncDesktopPreviewUrls(hosts.controlPort, urls)
 })
 
 /** 托盘：隐藏窗口以后从这里找回窗口或退出。Linux 没有托盘（关窗口直接退出）。 */

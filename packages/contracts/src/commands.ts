@@ -4,6 +4,10 @@ import {
   mobilePairingParamsSchema,
   mobileRevokeParamsSchema,
 } from "./mobile"
+import {
+  mobilePreviewGetSettingsParams,
+  mobilePreviewSetEnabledParams,
+} from "./mobile-preview"
 import { z } from "zod"
 import {
   acpRegistryAgentIdSchema,
@@ -99,6 +103,8 @@ export const commandSchemas = {
   "mobile.pairing.cancel": mobilePairingParamsSchema,
   "mobile.pairing.confirm": mobileConfirmParamsSchema,
   "mobile.devices.revoke": mobileRevokeParamsSchema,
+  "mobile.preview.getSettings": mobilePreviewGetSettingsParams,
+  "mobile.preview.setEnabled": mobilePreviewSetEnabledParams,
   "project.add": z.object({
     rootPath: z.string().min(1),
     /** 展示名；缺省时取文件夹名。 */
