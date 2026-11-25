@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../theme_colors.dart';
 import '../timeline_work.dart';
+import '../workbench/workbench_utils.dart';
 import 'shimmer_text.dart';
 import 'timeline_tokens.dart';
 
@@ -32,6 +35,7 @@ class TimelineSummaryGroup extends StatelessWidget {
     required this.toggleable,
     this.shimmer = false,
     this.onToggle,
+    this.onOpenFile,
     this.children = const [],
   });
 
@@ -43,6 +47,7 @@ class TimelineSummaryGroup extends StatelessWidget {
   final bool toggleable;
   final bool shimmer;
   final VoidCallback? onToggle;
+  final TimelineOpenFileCallback? onOpenFile;
   final List<Widget> children;
 
   @override
@@ -60,6 +65,7 @@ class TimelineSummaryGroup extends StatelessWidget {
           toggleable: toggleable,
           shimmer: shimmer,
           onToggle: onToggle,
+          onOpenFile: onOpenFile,
         ),
         if (expanded && children.isNotEmpty)
           TimelineSummaryGroupBody(children: children),
@@ -132,6 +138,7 @@ class TimelineSummaryGroupRow extends StatelessWidget {
     required this.toggleable,
     this.shimmer = false,
     this.onToggle,
+    this.onOpenFile,
   });
 
   final String label;
@@ -142,6 +149,7 @@ class TimelineSummaryGroupRow extends StatelessWidget {
   final bool toggleable;
   final bool shimmer;
   final VoidCallback? onToggle;
+  final TimelineOpenFileCallback? onOpenFile;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +180,12 @@ class TimelineSummaryGroupRow extends StatelessWidget {
           );
 
     Widget buildFiles(BuildContext context, BoxConstraints constraints) {
+      VoidCallback? openChip(String path) {
+        final open = onOpenFile;
+        if (open == null || path.trim().isEmpty) return null;
+        return () => unawaited(open(path));
+      }
+
       if (files.length == 1) {
         return Row(
           mainAxisSize: MainAxisSize.min,
@@ -179,7 +193,13 @@ class TimelineSummaryGroupRow extends StatelessWidget {
           children: [
             labelWidget,
             const SizedBox(width: TimelineSpace.fieldGap),
-            Flexible(child: _FileChip(path: files.first, truncate: true)),
+            Flexible(
+              child: _FileChip(
+                path: files.first,
+                truncate: true,
+                onTap: openChip(files.first),
+              ),
+            ),
           ],
         );
       }
@@ -242,7 +262,7 @@ class TimelineSummaryGroupRow extends StatelessWidget {
           labelWidget,
           for (final path in files.take(shownCount)) ...[
             const SizedBox(width: TimelineSpace.fieldGap),
-            _FileChip(path: path),
+            _FileChip(path: path, onTap: openChip(path)),
           ],
           if (extraFiles > 0) ...[
             const SizedBox(width: TimelineSpace.fieldGap),
@@ -508,10 +528,11 @@ class _TimelineSummaryGroupBodyState extends State<TimelineSummaryGroupBody> {
 
 /// 桌面 `.file-chip`：正文色 15/24、15px 文件图标、gap 6px，只写文件名。
 class _FileChip extends StatelessWidget {
-  const _FileChip({required this.path, this.truncate = false});
+  const _FileChip({required this.path, this.truncate = false, this.onTap});
 
   final String path;
   final bool truncate;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -526,7 +547,7 @@ class _FileChip extends StatelessWidget {
       overflow: truncate ? TextOverflow.ellipsis : TextOverflow.clip,
       style: TimelineType.contentStyle(colors.foreground),
     );
-    return Row(
+    final row = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
@@ -537,6 +558,16 @@ class _FileChip extends StatelessWidget {
         const SizedBox(width: TimelineSpace.x3),
         if (truncate) Flexible(child: text) else text,
       ],
+    );
+    if (onTap == null) return row;
+    return Semantics(
+      button: true,
+      label: '查看文件 $name',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: row,
+      ),
     );
   }
 }

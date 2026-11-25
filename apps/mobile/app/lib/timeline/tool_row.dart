@@ -20,6 +20,7 @@ class TimelineToolRow extends StatelessWidget {
     this.failed = false,
     this.detailTone = TimelineDetailTone.primary,
     this.detailIsFile = false,
+    this.onDetailTap,
     this.hideDetailWhenExpanded = false,
     this.onStatusTap,
     this.showIcon = true,
@@ -39,6 +40,7 @@ class TimelineToolRow extends StatelessWidget {
   final bool failed;
   final TimelineDetailTone detailTone;
   final bool detailIsFile;
+  final VoidCallback? onDetailTap;
   final bool hideDetailWhenExpanded;
   final VoidCallback? onStatusTap;
   final bool showIcon;
@@ -100,27 +102,9 @@ class TimelineToolRow extends StatelessWidget {
                 const SizedBox(width: TimelineSpace.fieldGap),
                 Flexible(
                   child: detailIsFile
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.insert_drive_file_outlined,
-                              size: TimelineIcon.row,
-                              color: failed
-                                  ? colors.error
-                                  : colors.timelineSubtle,
-                            ),
-                            const SizedBox(width: TimelineSpace.x3),
-                            Flexible(
-                              child: Text(
-                                detail!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TimelineType.contentStyle(detailColor),
-                              ),
-                            ),
-                          ],
+                      ? _buildFileDetail(
+                          failed ? colors.error : colors.timelineSubtle,
+                          detailColor,
                         )
                       : Text(
                           detail!,
@@ -237,6 +221,39 @@ class TimelineToolRow extends StatelessWidget {
             child: child,
           ),
       ],
+    );
+  }
+
+  Widget _buildFileDetail(Color iconColor, Color detailColor) {
+    final chip = Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.insert_drive_file_outlined,
+          size: TimelineIcon.row,
+          color: iconColor,
+        ),
+        const SizedBox(width: TimelineSpace.x3),
+        Flexible(
+          child: Text(
+            detail!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TimelineType.contentStyle(detailColor),
+          ),
+        ),
+      ],
+    );
+    if (onDetailTap == null) return chip;
+    return Semantics(
+      button: true,
+      label: '查看文件 ${detail!}',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onDetailTap,
+        child: chip,
+      ),
     );
   }
 }

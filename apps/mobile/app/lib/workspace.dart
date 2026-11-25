@@ -16,6 +16,8 @@ import 'sidebar_menu.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
 import 'timeline_pane.dart';
+import 'workbench/mobile_workbench_screen.dart';
+import 'workbench/workbench_utils.dart';
 import 'workspace_icon.dart';
 
 typedef _WorkspaceData = ({
@@ -203,6 +205,8 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     final draftLink = online && connection?.supportsDraftCommands == true
         ? connection
         : null;
+    final canOpenWorkbench =
+        online && connectionSupportsWorkbenchRead(connection);
     final computer = widget.computer;
     final localDrafts = computer != null && widget.deviceId != null;
     return WorkspaceView(
@@ -222,6 +226,20 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           : widget.reconnect,
       onComputers: widget.onComputers,
       onSettings: widget.onSettings,
+      onOpenWorkbench: canOpenWorkbench
+          ? (context, thread) {
+              final active = connection;
+              if (active == null) return;
+              unawaited(
+                MobileWorkbenchScreen.open(
+                  context,
+                  connection: active,
+                  threadId: thread.id,
+                  title: thread.title,
+                ),
+              );
+            }
+          : null,
       openReminder: widget.openReminder,
       openShareTarget: widget.openShareTarget,
       onVisibleThread: widget.onVisibleThread,
@@ -299,6 +317,7 @@ class WorkspaceView extends StatefulWidget {
     this.onActiveTargetChanged,
     this.presented = true,
     this.sidebarCommands,
+    this.onOpenWorkbench,
   });
 
   final SidebarSnapshot? snapshot;
@@ -312,6 +331,8 @@ class WorkspaceView extends StatefulWidget {
   onActiveTargetChanged;
   final bool presented;
   final MobileSidebarCommands? sidebarCommands;
+  final void Function(BuildContext context, MobileThreadSummary thread)?
+  onOpenWorkbench;
   final String computerName;
   final String? connectionLabel;
   final String? error;
@@ -821,8 +842,17 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
 
     final showChanges = changes != null;
+    final showWorkbench =
+        widget.online &&
+        !_draftOpen &&
+        thread != null &&
+        widget.onOpenWorkbench != null;
     final showRightAction = _draftOpen || canOpenDraft;
-    final hasRightControl = showChanges || showRightAction;
+    final rightActionCount =
+        (showChanges ? 1 : 0) +
+        (showWorkbench ? 1 : 0) +
+        (showRightAction ? 1 : 0);
+    final hasRightControl = rightActionCount > 0;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 54),
@@ -918,7 +948,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 visualInset,
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: showChanges && showRightAction ? 1 : 0,
+                    horizontal: rightActionCount > 1 ? 1 : 0,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -956,6 +986,25 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                   ),
                                 ],
                               ],
+                            ),
+                          ),
+                        ),
+                      if (showWorkbench)
+                        SizedBox.square(
+                          dimension: hit,
+                          child: IconButton(
+                            key: const ValueKey('workspace-workbench-button'),
+                            tooltip: '工作台',
+                            style: IconButton.styleFrom(
+                              minimumSize: Size.square(hit),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () =>
+                                widget.onOpenWorkbench!(context, thread),
+                            color: colors.foreground,
+                            icon: const WorkspaceIcon(
+                              WorkspaceGlyph.folder,
+                              size: 18,
                             ),
                           ),
                         ),

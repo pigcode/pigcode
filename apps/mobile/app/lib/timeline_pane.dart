@@ -23,6 +23,9 @@ import 'timeline/notice_line.dart';
 import 'timeline/request_card.dart';
 import 'timeline_view.dart';
 import 'timeline_work.dart';
+import 'workbench/file_viewer_screen.dart';
+import 'workbench/mobile_workbench_screen.dart';
+import 'workbench/workbench_utils.dart';
 
 typedef _Selection = (MobileConnection, String, TimelineSnapshot?);
 
@@ -388,6 +391,12 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         peekAttachmentThumb: _peekAttachmentThumb,
         loadAttachmentThumb: _loadAttachmentThumb,
         loadAttachmentFull: _loadAttachmentFull,
+        onOpenFile:
+            online &&
+                connection != null &&
+                connectionSupportsWorkbenchRead(connection)
+            ? (path, {line}) => _openWorkbenchFile(connection, path, line: line)
+            : null,
         changesCard: online && connection?.supportsRunChanges == true
             ? (turn) => _changes(connection!, turn)
             : null,
@@ -870,6 +879,42 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       }
     }
     return null;
+  }
+
+  Future<void> _openWorkbenchFile(
+    MobileConnection connection,
+    String rawPath, {
+    int? line,
+  }) async {
+    if (!mounted) return;
+    final parsed = parseFileReference(rawPath);
+    final path = parsed.path;
+    final targetLine = line ?? parsed.line;
+    if (path.isEmpty) return;
+    if (path.length > mobileWorkbenchPathMax) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('文件路径过长，暂不支持预览。')),
+      );
+      return;
+    }
+    if (path.endsWith('/')) {
+      final dir = path.substring(0, path.length - 1);
+      await MobileWorkbenchScreen.open(
+        context,
+        connection: connection,
+        threadId: widget.threadId,
+        initialTab: MobileWorkbenchTab.files,
+        initialDirectory: dir,
+      );
+      return;
+    }
+    await MobileFileViewerScreen.open(
+      context,
+      connection: connection,
+      threadId: widget.threadId,
+      path: path,
+      initialLine: targetLine,
+    );
   }
 
   String _detail(Object error) => switch (error) {

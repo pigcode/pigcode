@@ -292,6 +292,35 @@ String? timelineToolDetail(TimelineWork item, TimelineToolKind kind) {
   };
 }
 
+/// 读取/编辑/写入类工具对应的原始文件路径（保留完整路径供只读文件查看器使用）。
+String? timelineToolFilePath(TimelineWork item, TimelineToolKind kind) {
+  final input = _toolInput(item);
+  final record = input is Map ? input : const {};
+  final raw = switch (kind) {
+    TimelineToolKind.read =>
+      _pathIn(record) ??
+          (input is String && !input.startsWith('{') ? input.trim() : null),
+    TimelineToolKind.edit => _editPaths(input).firstOrNull,
+    _ => null,
+  };
+  if (raw == null) return null;
+  final trimmed = raw.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+/// 读取类工具参数中的起始行号（若存在且为正整数）。
+int? timelineToolFileLine(TimelineWork item, TimelineToolKind kind) {
+  if (kind != TimelineToolKind.read) return null;
+  final record = timelineToolRecord(item);
+  final raw =
+      record['line'] ??
+      record['start_line'] ??
+      record['startLine'] ??
+      record['offset'];
+  if (raw is int && raw > 0) return raw;
+  return null;
+}
+
 /// MCP 工具名 `mcp__server__tool` 拆成「服务 · 工具」。
 ({String server, String tool})? timelineMcpIdentity(String? name) {
   final parts = (name ?? '').trim().split('__');

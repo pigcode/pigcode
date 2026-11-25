@@ -79,8 +79,13 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
       final path = trailing == null
           ? raw
           : raw.substring(0, raw.length - trailing.length);
-      if (path.isEmpty ||
-          !(path.contains('/') || RegExp(r'\.[\w-]+$').hasMatch(path))) {
+      final pathWithoutLine = path.replaceFirst(
+        RegExp(r'(?::\d+(?::\d+)?|#L\d+(?:-L?\d+)?)$'),
+        '',
+      );
+      if (pathWithoutLine.isEmpty ||
+          !(pathWithoutLine.contains('/') ||
+              RegExp(r'\.[\w-]+$').hasMatch(pathWithoutLine))) {
         tokens.add(_MentionToken.plain(text.substring(start, match.end)));
       } else {
         tokens.add(_MentionToken.file(path));

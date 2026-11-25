@@ -603,6 +603,7 @@ class TimelineWorkLine extends StatelessWidget {
     this.failed = false,
     this.expanded,
     this.onTap,
+    this.onFileTap,
   });
 
   final String label;
@@ -613,6 +614,7 @@ class TimelineWorkLine extends StatelessWidget {
   final bool failed;
   final bool? expanded;
   final VoidCallback? onTap;
+  final VoidCallback? onFileTap;
 
   @override
   Widget build(BuildContext context) {
@@ -641,25 +643,63 @@ class TimelineWorkLine extends StatelessWidget {
                 if (detail case final description?
                     when description.isNotEmpty) ...[
                   const WidgetSpan(child: SizedBox(width: 8)),
-                  if (file) ...[
+                  if (file && onFileTap != null)
                     WidgetSpan(
                       alignment: PlaceholderAlignment.middle,
-                      child: IconTheme(
-                        data: IconThemeData(color: colors.timelineFile),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.fileText,
-                          size: 16,
+                      child: Semantics(
+                        button: true,
+                        label: '查看文件 $description',
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onFileTap,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconTheme(
+                                data: IconThemeData(color: colors.timelineFile),
+                                child: const WorkspaceIcon(
+                                  WorkspaceGlyph.fileText,
+                                  size: 16,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                description,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  height: 1.6,
+                                  color: colors.foreground,
+                                  leadingDistribution:
+                                      TextLeadingDistribution.even,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                    )
+                  else ...[
+                    if (file) ...[
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: IconTheme(
+                          data: IconThemeData(color: colors.timelineFile),
+                          child: const WorkspaceIcon(
+                            WorkspaceGlyph.fileText,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                      const WidgetSpan(child: SizedBox(width: 6)),
+                    ],
+                    TextSpan(
+                      text: description,
+                      style: TextStyle(
+                        color: file ? colors.foreground : colors.timelineFaint,
+                      ),
                     ),
-                    const WidgetSpan(child: SizedBox(width: 6)),
                   ],
-                  TextSpan(
-                    text: description,
-                    style: TextStyle(
-                      color: file ? colors.foreground : colors.timelineFaint,
-                    ),
-                  ),
                 ],
               ],
             ),

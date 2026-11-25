@@ -17,6 +17,7 @@ import 'timeline/user_bubble.dart';
 import 'timeline/work_header.dart';
 import 'timeline_widgets.dart';
 import 'timeline_work.dart';
+import 'workbench/workbench_utils.dart';
 import 'workspace_icon.dart';
 
 class TimelineView extends StatefulWidget {
@@ -33,6 +34,7 @@ class TimelineView extends StatefulWidget {
     this.peekAttachmentThumb,
     this.loadAttachmentThumb,
     this.loadAttachmentFull,
+    this.onOpenFile,
   });
 
   final TimelineSnapshot snapshot;
@@ -47,6 +49,7 @@ class TimelineView extends StatefulWidget {
   final AttachmentThumbPeeker? peekAttachmentThumb;
   final AttachmentBytesLoader? loadAttachmentThumb;
   final AttachmentBytesLoader? loadAttachmentFull;
+  final TimelineOpenFileCallback? onOpenFile;
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -553,6 +556,12 @@ class _TimelineViewState extends State<TimelineView> {
         createdAt: event.createdAt,
         truncated: event.truncated == true,
         onOpenFull: widget.online ? () => _openText(event) : null,
+        onMention: widget.onOpenFile == null
+            ? null
+            : (rawPath) {
+                final parsed = parseFileReference(rawPath);
+                return widget.onOpenFile!(parsed.path, line: parsed.line);
+              },
         attachments: event.attachments,
         peekAttachmentThumb: widget.peekAttachmentThumb,
         loadAttachmentThumb: widget.loadAttachmentThumb,
@@ -681,6 +690,7 @@ class _TimelineViewState extends State<TimelineView> {
         toggleable: true,
         shimmer: growing && active == null,
         onToggle: toggle,
+        onOpenFile: widget.onOpenFile,
         children: expanded
             ? [
                 for (final item in group)
@@ -755,6 +765,7 @@ class _TimelineViewState extends State<TimelineView> {
         compact: compact,
         liveOutput: _toolLiveOutput(item, turn),
         onOpenDetails: () => _openTool(item, turn),
+        onOpenFile: widget.onOpenFile,
       ),
     ),
   };
@@ -834,6 +845,10 @@ class _TimelineViewState extends State<TimelineView> {
       TimelineToolKind.task => '处理',
       _ => '执行',
     };
+    final isFile = tool == TimelineToolKind.read || tool == TimelineToolKind.edit;
+    final filePath = isFile ? timelineToolFilePath(item, tool) : null;
+    final fileLine = isFile ? timelineToolFileLine(item, tool) : null;
+    final openFile = widget.onOpenFile;
     return TimelineWorkLine(
       label: output?.failed == true
           ? '执行失败'
@@ -846,10 +861,13 @@ class _TimelineViewState extends State<TimelineView> {
                 : '已'}$action',
       glyph: showIcon ? _toolGlyph(tool) : null,
       detail: timelineToolDetail(item, tool),
-      file: tool == TimelineToolKind.read || tool == TimelineToolKind.edit,
+      file: isFile,
       running: running,
       failed: output?.failed == true,
       onTap: toggle,
+      onFileTap: openFile != null && filePath != null
+          ? () => unawaited(openFile(filePath, line: fileLine))
+          : null,
     );
   }
 

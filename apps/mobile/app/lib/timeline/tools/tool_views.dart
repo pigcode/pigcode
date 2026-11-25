@@ -8,6 +8,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import '../../theme_colors.dart';
 import '../../timeline_widgets.dart';
 import '../../timeline_work.dart';
+import '../../workbench/workbench_utils.dart';
 import '../timeline_tokens.dart';
 import '../tool_row.dart';
 import 'command_card.dart';
@@ -25,6 +26,7 @@ class TimelineToolView extends StatefulWidget {
     this.compact = false,
     this.liveOutput,
     this.onOpenDetails,
+    this.onOpenFile,
   });
 
   final TimelineWork item;
@@ -35,6 +37,7 @@ class TimelineToolView extends StatefulWidget {
   final bool compact;
   final String? liveOutput;
   final VoidCallback? onOpenDetails;
+  final TimelineOpenFileCallback? onOpenFile;
 
   @override
   State<TimelineToolView> createState() => _TimelineToolViewState();
@@ -203,14 +206,22 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     if (kind == TimelineToolKind.plan) {
       return TimelinePlanCard(item: item, content: widget.content);
     }
+    final detailIsFile =
+        (kind == TimelineToolKind.read || kind == TimelineToolKind.edit) &&
+        detail != null &&
+        detail.isNotEmpty;
+    final filePath = detailIsFile ? timelineToolFilePath(item, kind) : null;
+    final fileLine = detailIsFile ? timelineToolFileLine(item, kind) : null;
+    final openFile = widget.onOpenFile;
+    final openFileTap = openFile != null && filePath != null
+        ? () => unawaited(openFile(filePath, line: fileLine))
+        : null;
     return TimelineToolRow(
       icon: _icon,
       action: _action,
       detail: detail,
-      detailIsFile:
-          (kind == TimelineToolKind.read || kind == TimelineToolKind.edit) &&
-          detail != null &&
-          detail.isNotEmpty,
+      detailIsFile: detailIsFile,
+      onDetailTap: openFileTap,
       diff: _diff,
       status: _status,
       running: running,
@@ -230,7 +241,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       expandable: _expandable,
       expanded: _expanded,
       onTap: _nonExpandableReadOnly
-          ? null
+          ? (kind == TimelineToolKind.read ? openFileTap : null)
           : _expandable
           ? _toggleExpanded
           : widget.onOpenDetails,
