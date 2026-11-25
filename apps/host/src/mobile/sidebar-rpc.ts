@@ -51,6 +51,7 @@ import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 import { MobilePreview, mobilePreviewRequests } from "./preview"
 import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
+import { MobileWorkbenchWrite, mobileWorkbenchWriteRequests } from "./workbench-write"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
 const pageByteBudget = 48 * 1024
@@ -127,6 +128,7 @@ export class MobileSidebarRpc {
   private readonly mentions: MobileMentionCommands
   private readonly attachments: MobileAttachments
   private readonly workbench: MobileWorkbench
+  private readonly workbenchWrite: MobileWorkbenchWrite
   private readonly preview: MobilePreview
   private readonly receipts: MobileCommandReceipts
   private active = false
@@ -196,6 +198,9 @@ export class MobileSidebarRpc {
       this.requirePairedDevice(),
     )
     this.workbench = new MobileWorkbench(ctx, () => this.requirePairedDevice())
+    this.workbenchWrite = new MobileWorkbenchWrite(ctx, session.deviceKey, () =>
+      this.requirePairedDevice(),
+    )
     this.preview = new MobilePreview(ctx, session.deviceKey, () => this.requirePairedDevice())
   }
 
@@ -207,6 +212,7 @@ export class MobileSidebarRpc {
   stop(): void {
     this.active = false
     this.attachments.close()
+    this.workbenchWrite.close()
     this.preview.close()
     this.timeline.close()
     this.stopMessages?.()
@@ -302,6 +308,14 @@ export class MobileSidebarRpc {
     ) {
       this.requirePairedDevice()
       return this.workbench.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("workbench.write") &&
+      mobileWorkbenchWriteRequests.has(request.method)
+    ) {
+      this.requirePairedDevice()
+      return this.workbenchWrite.dispatch(request)
     }
 
     if (

@@ -408,6 +408,20 @@ export class RpcServer {
           eol: value.eol,
         })
       }
+      case "workspace.createFile": {
+        const value = parsed as CommandParams<"workspace.createFile">
+        return this.ctx.workspace.createFile(scopeOf(value), value.path, value.text)
+      }
+      case "workspace.renamePath": {
+        const value = parsed as CommandParams<"workspace.renamePath">
+        return this.ctx.workspace.renamePath(scopeOf(value), value.oldPath, value.newPath)
+      }
+      case "workspace.deletePath": {
+        const value = parsed as CommandParams<"workspace.deletePath">
+        return this.ctx.workspace.deletePath(scopeOf(value), value.path, {
+          recursive: value.recursive,
+        })
+      }
       case "workspace.search": {
         const value = parsed as CommandParams<"workspace.search">
         return this.ctx.workspace.search(scopeOf(value), value.query, value.glob)
@@ -437,8 +451,27 @@ export class RpcServer {
           title: value.title,
           ...(value.body === undefined ? {} : { body: value.body }),
           ...(value.base === undefined ? {} : { base: value.base }),
+          ...(value.draft === undefined ? {} : { draft: value.draft }),
         })
       }
+      case "pr.comment": {
+        const value = parsed as CommandParams<"pr.comment">
+        await this.ctx.github.comment(scopeOf(value), value.body)
+        return { ok: true }
+      }
+      case "pr.merge": {
+        const value = parsed as CommandParams<"pr.merge">
+        return this.ctx.github.merge(scopeOf(value), {
+          method: value.method,
+          ...(value.deleteBranch === undefined ? {} : { deleteBranch: value.deleteBranch }),
+        })
+      }
+      case "pr.ready":
+        return this.ctx.github.ready(scopeOf(parsed as CommandParams<"pr.ready">))
+      case "pr.close":
+        return this.ctx.github.close(scopeOf(parsed as CommandParams<"pr.close">))
+      case "pr.reopen":
+        return this.ctx.github.reopen(scopeOf(parsed as CommandParams<"pr.reopen">))
       case "schedule.list":
         return this.ctx.schedules.list()
       case "schedule.create":

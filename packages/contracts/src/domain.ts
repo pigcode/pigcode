@@ -243,6 +243,7 @@ export const pullRequestInfoSchema = z.object({
   title: z.string(),
   headRefName: z.string().min(1),
   baseRefName: z.string().min(1),
+  isDraft: z.boolean().optional(),
 })
 
 /** 自定义重复「每 N 个单位」里 N 的上限。 */

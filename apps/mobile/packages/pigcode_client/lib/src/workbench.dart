@@ -234,6 +234,7 @@ final class MobileFileChunk {
     this.width,
     this.height,
     this.nextOffset,
+    this.mtimeMs,
   });
 
   final String path;
@@ -249,6 +250,7 @@ final class MobileFileChunk {
   final int? width;
   final int? height;
   final int? nextOffset;
+  final double? mtimeMs;
 
   factory MobileFileChunk.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
@@ -266,6 +268,7 @@ final class MobileFileChunk {
         'width',
         'height',
         'nextOffset',
+        'mtimeMs',
       }.contains(key),
     )) {
       throw const FormatException('MobileFileChunk contains an unknown field');
@@ -319,6 +322,16 @@ final class MobileFileChunk {
     if (nextOffset != null && (nextOffset < 0 || nextOffset > _maxSafeInt)) {
       throw const FormatException('Invalid nextOffset');
     }
+    final double? mtimeMs;
+    if (!json.containsKey('mtimeMs')) {
+      mtimeMs = null;
+    } else {
+      final rawMtime = json['mtimeMs'];
+      if (rawMtime is! num || !rawMtime.isFinite || rawMtime < 0) {
+        throw const FormatException('Invalid mtimeMs');
+      }
+      mtimeMs = rawMtime.toDouble();
+    }
     return MobileFileChunk(
       path: path,
       mode: mode,
@@ -333,6 +346,7 @@ final class MobileFileChunk {
       width: width,
       height: height,
       nextOffset: nextOffset,
+      mtimeMs: mtimeMs,
     );
   }
 
@@ -350,6 +364,7 @@ final class MobileFileChunk {
     'width': ?width,
     'height': ?height,
     'nextOffset': ?nextOffset,
+    'mtimeMs': ?mtimeMs,
   };
 
   @override
@@ -368,7 +383,8 @@ final class MobileFileChunk {
           dataBase64 == other.dataBase64 &&
           width == other.width &&
           height == other.height &&
-          nextOffset == other.nextOffset;
+          nextOffset == other.nextOffset &&
+          mtimeMs == other.mtimeMs;
 
   @override
   int get hashCode => Object.hash(
@@ -385,6 +401,7 @@ final class MobileFileChunk {
     width,
     height,
     nextOffset,
+    mtimeMs,
   );
 }
 

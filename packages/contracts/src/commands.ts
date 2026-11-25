@@ -309,6 +309,21 @@ export const commandSchemas = {
     expectedMtimeMs: z.number().nonnegative().optional(),
     eol: z.enum(["lf", "crlf"]).optional(),
   }),
+  /** 新建文件；目标已存在时拒绝覆盖。 */
+  "workspace.createFile": scoped({
+    path: z.string().min(1),
+    text: z.string().max(5 * 1024 * 1024).optional(),
+  }),
+  /** 重命名或移动工作区内的文件或目录。 */
+  "workspace.renamePath": scoped({
+    oldPath: z.string().min(1),
+    newPath: z.string().min(1),
+  }),
+  /** 删除工作区内的文件或目录；非空目录需显式传 recursive: true。 */
+  "workspace.deletePath": scoped({
+    path: z.string().min(1),
+    recursive: z.boolean().optional(),
+  }),
   "workspace.search": scoped({
     query: z.string().min(1),
     glob: z.string().optional(),
@@ -326,7 +341,18 @@ export const commandSchemas = {
     title: z.string().min(1),
     body: z.string().optional(),
     base: z.string().min(1).optional(),
+    draft: z.boolean().optional(),
   }),
+  "pr.comment": scoped({
+    body: z.string().trim().min(1),
+  }),
+  "pr.merge": scoped({
+    method: z.enum(["merge", "squash", "rebase"]),
+    deleteBranch: z.boolean().optional(),
+  }),
+  "pr.ready": scoped({}),
+  "pr.close": scoped({}),
+  "pr.reopen": scoped({}),
   "schedule.list": z.object({}),
   "schedule.create": z.object({
     projectId: z.string().min(1),

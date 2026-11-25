@@ -75,6 +75,7 @@ export const mobileWorkspaceReadFileResult = z.strictObject({
   width: z.int().positive().optional(),
   height: z.int().positive().optional(),
   nextOffset: z.int().nonnegative().optional(),
+  mtimeMs: z.number().nonnegative().optional(),
 })
 
 export const mobileWorkspaceSearchParams = z.strictObject({

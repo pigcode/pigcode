@@ -20,10 +20,13 @@ const exec = promisify(execFile)
 /** gh 输出上限；PR JSON 很小，统一设置避免意外缓冲。 */
 const MAX_BUFFER = 8 * 1024 * 1024
 
-/** `gh pr view/create --json` 请求的字段，顺序与解析后的展示一致。 */
-export const PR_JSON_FIELDS = "number,url,state,title,headRefName,baseRefName"
+/** 旧版 gh 兼容回退的基础字段集（不含 isDraft）。 */
+export const PR_BASE_JSON_FIELDS = "number,url,state,title,headRefName,baseRefName"
 
-/** 手机端只读工作台请求的扩展 PR 字段；旧版 gh 不支持时回退到 PR_JSON_FIELDS。 */
+/** `gh pr view/create --json` 请求的字段，顺序与解析后的展示一致。 */
+export const PR_JSON_FIELDS = `${PR_BASE_JSON_FIELDS},isDraft`
+
+/** 手机端工作台请求的扩展 PR 字段；旧版 gh 不支持时逐级回退到 PR_JSON_FIELDS / PR_BASE_JSON_FIELDS。 */
 export const PR_DETAILED_JSON_FIELDS =
   "number,url,state,title,headRefName,baseRefName,isDraft,additions,deletions,changedFiles,reviewDecision,statusCheckRollup,updatedAt"
 
@@ -87,11 +90,18 @@ export class GhCommandError extends Error {
   }
 }
 
-/** 创建 PR 的输入；body/base 省略时使用 gh 的默认值。 */
+/** 创建 PR 的输入；body/base/draft 省略时使用 gh 的默认值。 */
 export interface CreatePullRequestInput {
   title: string
   body?: string
   base?: string
+  draft?: boolean
+}
+
+/** 合并 PR 的输入。 */
+export interface MergePullRequestInput {
+  method: "merge" | "squash" | "rebase"
+  deleteBranch?: boolean
 }
 
 /** 工作台使用的 GitHub PR 操作。 */
@@ -99,7 +109,13 @@ export interface GithubServiceInterface {
   /** scope 是会话 id，或者新会话草稿的项目（看项目根目录的当前分支）。 */
   status(scope: WorkspaceScope): Promise<PullRequestInfo | null>
   detailedStatus(scope: WorkspaceScope): Promise<MobilePrStatusResult>
+  detailedStatusByRef(scope: WorkspaceScope, prRef: string): Promise<MobilePrStatusResult>
   create(scope: WorkspaceScope, input: CreatePullRequestInput): Promise<PullRequestInfo>
+  comment(scope: WorkspaceScope, body: string): Promise<void>
+  merge(scope: WorkspaceScope, input: MergePullRequestInput): Promise<PullRequestInfo>
+  ready(scope: WorkspaceScope): Promise<PullRequestInfo>
+  close(scope: WorkspaceScope): Promise<PullRequestInfo>
+  reopen(scope: WorkspaceScope): Promise<PullRequestInfo>
 }
 
 declare module "cordis" {
@@ -145,8 +161,7 @@ export class GithubService implements GithubServiceInterface {
     if (branch === null) return null
 
     try {
-      const output = await this.invoke(["pr", "view", branch, "--json", PR_JSON_FIELDS], cwd)
-      return parsePullRequest(output)
+      return await this.viewPullRequest(cwd, branch)
     } catch (error) {
       if (isNoPullRequest(error)) return null
       throw error
@@ -154,8 +169,8 @@ export class GithubService implements GithubServiceInterface {
   }
 
   /**
-   * 手机端只读工作台使用的结构化 PR 状态：区分非 git 仓库、无远端、gh 未安装/未登录与无 PR，
-   * 并汇总 CI 检查状态；旧版 gh 不支持扩展字段时优雅回退到基础字段。
+   * 手机端工作台使用的结构化 PR 状态：区分非 git 仓库、无远端、gh 未安装/未登录与无 PR，
+   * 并汇总 CI 检查状态；旧版 gh 不支持扩展字段时逐级优雅回退。
    */
   async detailedStatus(scope: WorkspaceScope): Promise<MobilePrStatusResult> {
     const cwd = this.cwdOf(scope)
@@ -169,18 +184,8 @@ export class GithubService implements GithubServiceInterface {
     if (branch === null) return { status: "no-pr", branch: null }
 
     try {
-      let output: string
-      try {
-        output = await this.invoke(["pr", "view", branch, "--json", PR_DETAILED_JSON_FIELDS], cwd)
-      } catch (error) {
-        if (!isUnknownJsonFieldError(error)) throw error
-        output = await this.invoke(["pr", "view", branch, "--json", PR_JSON_FIELDS], cwd)
-      }
-      return mobilePrStatusResult.parse({
-        status: "ok",
-        branch,
-        pr: parseDetailedPullRequest(output),
-      })
+      const pr = await this.viewDetailedPullRequest(cwd, branch)
+      return mobilePrStatusResult.parse({ status: "ok", branch, pr })
     } catch (error) {
       if (error instanceof GhNotAvailableError) return { status: "gh-unavailable", branch }
       if (error instanceof GhNotAuthenticatedError) return { status: "gh-unauthenticated", branch }
@@ -189,6 +194,14 @@ export class GithubService implements GithubServiceInterface {
       if (isNoPullRequest(error)) return { status: "no-pr", branch }
       throw error
     }
+  }
+
+  /** 按 PR 编号或分支名查询结构化 PR 状态（写操作后按编号刷新，即使分支已删除仍可查到）。 */
+  async detailedStatusByRef(scope: WorkspaceScope, prRef: string): Promise<MobilePrStatusResult> {
+    const cwd = this.cwdOf(scope)
+    const pr = await this.viewDetailedPullRequest(cwd, prRef)
+    const branch = (await this.branchOf(cwd).catch(() => null)) ?? pr.headRefName
+    return mobilePrStatusResult.parse({ status: "ok", branch, pr })
   }
 
   /** 从当前分支创建 PR；body 省略时显式传空字符串，保持参数稳定。 */
@@ -200,11 +213,110 @@ export class GithubService implements GithubServiceInterface {
     const branch = await this.branchOf(cwd)
     if (branch === null) throw new Error("cannot create a pull request from a detached HEAD")
 
-    const args = ["pr", "create", "--head", branch, "--title", title]
+    const baseArgs = ["pr", "create", "--head", branch, "--title", title]
     const base = input.base?.trim()
-    if (base !== undefined && base.length > 0) args.push("--base", base)
-    args.push("--body", input.body ?? "", "--json", PR_JSON_FIELDS)
-    return parsePullRequest(await this.invoke(args, cwd))
+    if (base !== undefined && base.length > 0) baseArgs.push("--base", base)
+    if (input.draft === true) baseArgs.push("--draft")
+    baseArgs.push("--body", input.body ?? "")
+
+    try {
+      return parsePullRequest(await this.invoke([...baseArgs, "--json", PR_JSON_FIELDS], cwd))
+    } catch (error) {
+      if (isUnknownJsonFieldError(error)) {
+        return parsePullRequest(
+          await this.invoke([...baseArgs, "--json", PR_BASE_JSON_FIELDS], cwd),
+        )
+      }
+      if (isUnknownJsonFlagError(error)) {
+        const output = await this.invoke(baseArgs, cwd)
+        const ref = extractPullRequestNumberFromUrl(output) ?? branch
+        return await this.viewPullRequest(cwd, ref)
+      }
+      throw error
+    }
+  }
+
+  /** 给当前分支关联的 PR 发表评论。 */
+  async comment(scope: WorkspaceScope, body: string): Promise<void> {
+    const trimmed = body.trim()
+    if (trimmed.length === 0) throw new Error("pull request comment body is required")
+    const cwd = this.cwdOf(scope)
+    const branch = await this.requireBranch(cwd)
+    await this.invoke(["pr", "comment", "--body", trimmed, "--", branch], cwd)
+  }
+
+  /** 合并当前分支的 PR：先查出 PR 编号再合并，避免 --delete-branch 后按分支名查不到 PR。 */
+  async merge(scope: WorkspaceScope, input: MergePullRequestInput): Promise<PullRequestInfo> {
+    const cwd = this.cwdOf(scope)
+    const branch = await this.requireBranch(cwd)
+    const existing = await this.viewPullRequest(cwd, branch)
+    const prNumber = String(existing.number)
+    const args = ["pr", "merge", `--${input.method}`]
+    if (input.deleteBranch === true) args.push("--delete-branch")
+    args.push("--", prNumber)
+    await this.invoke(args, cwd)
+    return await this.viewPullRequest(cwd, prNumber)
+  }
+
+  /** 将当前分支的草稿 PR 标记为可评审（Ready for review）。 */
+  async ready(scope: WorkspaceScope): Promise<PullRequestInfo> {
+    const cwd = this.cwdOf(scope)
+    const branch = await this.requireBranch(cwd)
+    await this.invoke(["pr", "ready", "--", branch], cwd)
+    return await this.viewPullRequest(cwd, branch)
+  }
+
+  /** 关闭当前分支的 PR。 */
+  async close(scope: WorkspaceScope): Promise<PullRequestInfo> {
+    const cwd = this.cwdOf(scope)
+    const branch = await this.requireBranch(cwd)
+    await this.invoke(["pr", "close", "--", branch], cwd)
+    return await this.viewPullRequest(cwd, branch)
+  }
+
+  /** 重新打开当前分支已关闭的 PR。 */
+  async reopen(scope: WorkspaceScope): Promise<PullRequestInfo> {
+    const cwd = this.cwdOf(scope)
+    const branch = await this.requireBranch(cwd)
+    await this.invoke(["pr", "reopen", "--", branch], cwd)
+    return await this.viewPullRequest(cwd, branch)
+  }
+
+  private async requireBranch(cwd: string): Promise<string> {
+    const branch = await this.branchOf(cwd)
+    if (branch === null) {
+      throw new GhCommandError("cannot perform pull request action from a detached HEAD")
+    }
+    return branch
+  }
+
+  private async viewPullRequest(cwd: string, ref: string): Promise<PullRequestInfo> {
+    try {
+      return parsePullRequest(
+        await this.invoke(["pr", "view", "--json", PR_JSON_FIELDS, "--", ref], cwd),
+      )
+    } catch (error) {
+      if (!isUnknownJsonFieldError(error)) throw error
+      return parsePullRequest(
+        await this.invoke(["pr", "view", "--json", PR_BASE_JSON_FIELDS, "--", ref], cwd),
+      )
+    }
+  }
+
+  private async viewDetailedPullRequest(cwd: string, ref: string): Promise<MobilePullRequestInfo> {
+    let output: string
+    try {
+      output = await this.invoke(["pr", "view", "--json", PR_DETAILED_JSON_FIELDS, "--", ref], cwd)
+    } catch (error) {
+      if (!isUnknownJsonFieldError(error)) throw error
+      try {
+        output = await this.invoke(["pr", "view", "--json", PR_JSON_FIELDS, "--", ref], cwd)
+      } catch (fallbackError) {
+        if (!isUnknownJsonFieldError(fallbackError)) throw fallbackError
+        output = await this.invoke(["pr", "view", "--json", PR_BASE_JSON_FIELDS, "--", ref], cwd)
+      }
+    }
+    return parseDetailedPullRequest(output)
   }
 
   /** runner 的错误在这里统一转成带 code 的可读错误。 */
@@ -275,6 +387,17 @@ function isNotGitRepoError(error: unknown): boolean {
 /** 旧版 gh CLI 不支持某个 `--json` 字段时的错误识别。 */
 function isUnknownJsonFieldError(error: unknown): boolean {
   return error instanceof GhCommandError && /unknown json field/i.test(error.stderr)
+}
+
+/** 某些 gh 版本 `gh pr create` 不支持 `--json` 选项时的错误识别。 */
+function isUnknownJsonFlagError(error: unknown): boolean {
+  return error instanceof GhCommandError && /unknown flag:\s*--json/i.test(error.stderr)
+}
+
+/** 从 `gh pr create` 输出的 PR URL 中提取 PR 编号。 */
+function extractPullRequestNumberFromUrl(output: string): string | null {
+  const match = output.match(/\/pull\/(\d+)\b/)
+  return match ? match[1]! : null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

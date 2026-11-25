@@ -233,4 +233,36 @@ describe("workspace", () => {
     expect((await ctx.workspace.searchPaths(thread.id, "keep")).entries).toHaveLength(1)
     await ctx.fiber.dispose()
   })
+
+  it("blocks case-insensitive .git paths and worktree .git regular files on create/rename/delete", async () => {
+    const { ctx, root, thread } = await createFixture()
+    // 模拟 Git Worktree 里的普通 `.git` 文件（非目录）。
+    await writeFile(join(root, ".git"), "gitdir: /tmp/main/.git/worktrees/wt\n")
+    await writeFile(join(root, "normal.txt"), "ok\n")
+
+    await expect(ctx.workspace.createFile(thread.id, ".GIT", "x")).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    await expect(ctx.workspace.createFile(thread.id, "sub/.GIT/config", "x")).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    await expect(
+      ctx.workspace.renamePath(thread.id, "normal.txt", ".GIT"),
+    ).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    await expect(
+      ctx.workspace.renamePath(thread.id, "normal.txt", "sub/.GIT"),
+    ).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    await expect(ctx.workspace.deletePath(thread.id, ".GIT")).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    await expect(ctx.workspace.deletePath(thread.id, ".git")).rejects.toMatchObject({
+      code: "PATH_FORBIDDEN",
+    })
+    expect(await readFile(join(root, ".git"), "utf8")).toContain("gitdir:")
+    await ctx.fiber.dispose()
+  })
 })

@@ -483,6 +483,7 @@ describe("mobile workbench.read protocol & Host implementation", () => {
         totalSize: binaryBuf.length,
         binary: true,
         truncated: false,
+        mtimeMs: expect.any(Number),
       })
 
       // 4. SVG rejected when explicitly requested as image, readable as xml text in auto mode.
@@ -869,6 +870,7 @@ describe("mobile workbench.read protocol & Host implementation", () => {
         totalSize: 4,
         binary: true,
         truncated: false,
+        mtimeMs: expect.any(Number),
       })
 
       // 5. Code search via Dart client

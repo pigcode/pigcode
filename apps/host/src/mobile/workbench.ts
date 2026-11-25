@@ -515,6 +515,7 @@ export class MobileWorkbench {
           ...(width !== undefined ? { width } : {}),
           ...(height !== undefined ? { height } : {}),
           nextOffset: totalSize,
+          mtimeMs: info.mtimeMs,
         },
       }),
     )
@@ -543,6 +544,7 @@ export class MobileWorkbench {
       ...(width !== undefined ? { width } : {}),
       ...(height !== undefined ? { height } : {}),
       ...(nextOffset !== undefined ? { nextOffset } : {}),
+      mtimeMs: info.mtimeMs,
     })
   }
 
@@ -558,7 +560,7 @@ export class MobileWorkbench {
     params: MobileWorkspaceReadFileParams,
     canonicalPath: string,
     realTarget: string,
-    info: { size: number },
+    info: { size: number; mtimeMs: number },
   ): Promise<MobileWorkspaceReadFileResult> {
     let rawBytes: Buffer
     try {
@@ -578,6 +580,7 @@ export class MobileWorkbench {
         totalSize: info.size,
         binary: true,
         truncated: false,
+        mtimeMs: info.mtimeMs,
       })
     }
 
@@ -599,6 +602,7 @@ export class MobileWorkbench {
         text: "",
         eol,
         ...(languageHint ? { languageHint } : {}),
+        mtimeMs: info.mtimeMs,
       })
     }
 
@@ -621,6 +625,7 @@ export class MobileWorkbench {
         eol,
         ...(languageHint ? { languageHint } : {}),
         nextOffset: fullText.length,
+        mtimeMs: info.mtimeMs,
       }),
     )
     const maxTextJsonBytes = Math.max(1024, this.frameByteBudget - envelopeBytes)
@@ -680,6 +685,7 @@ export class MobileWorkbench {
       eol,
       ...(languageHint ? { languageHint } : {}),
       ...(nextOffset !== undefined ? { nextOffset } : {}),
+      mtimeMs: info.mtimeMs,
     })
   }
 

@@ -1,6 +1,7 @@
 import type { Context } from "cordis"
 import { cleanupDeviceMobileAttachments } from "./attachments"
 import { cleanupDeviceMobilePreviews } from "./preview"
+import { cleanupDeviceMobileWorkbenchWrites } from "./workbench-write"
 import type { acceptNoise } from "./noise"
 
 export const deviceRevokedNotice = { type: "device.revoked" } as const
@@ -40,5 +41,10 @@ export function revokeDeviceWork(ctx: Context, publicKey: string): void {
     cleanupDeviceMobilePreviews(ctx, publicKey)
   } catch (error) {
     console.error("[host] could not clean up preview streams of revoked device", error)
+  }
+  try {
+    cleanupDeviceMobileWorkbenchWrites(ctx, publicKey)
+  } catch (error) {
+    console.error("[host] could not clean up workbench write sessions of revoked device", error)
   }
 }

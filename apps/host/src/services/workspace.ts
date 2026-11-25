@@ -7,24 +7,36 @@ import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { createPathIndex, searchPaths, type PathSearchResult } from "./path-search"
 import {
+  createWorkspaceFile,
+  deleteWorkspacePath,
   listDirectory,
   readWorkspaceFile,
+  renameWorkspacePath,
   writeWorkspaceFile,
+  type DeletePathResult,
   type DirectoryListing,
   type ReadFileResult,
+  type RenamePathResult,
   type WorkspaceEntry,
   type WriteFileResult,
 } from "./workspace-files"
 import { scopeCwd, type WorkspaceScope } from "./worktrees"
 
 export type {
+  DeletePathResult,
   DirectoryEntry,
   DirectoryListing,
   ReadFileResult,
+  RenamePathResult,
   WorkspaceEntry,
   WriteFileResult,
 } from "./workspace-files"
-export { FileChangedError } from "./workspace-files"
+export {
+  DirectoryNotEmptyError,
+  FileChangedError,
+  PathExistsError,
+  PathForbiddenError,
+} from "./workspace-files"
 
 const exec = promisify(execFile)
 
@@ -74,6 +86,13 @@ export interface WorkspaceService {
     text: string,
     options?: WriteOptions,
   ): Promise<WriteFileResult>
+  createFile(scope: WorkspaceScope, path: string, text?: string): Promise<WriteFileResult>
+  renamePath(scope: WorkspaceScope, oldPath: string, newPath: string): Promise<RenamePathResult>
+  deletePath(
+    scope: WorkspaceScope,
+    path: string,
+    options?: { recursive?: boolean | undefined },
+  ): Promise<DeletePathResult>
   search(scope: WorkspaceScope, query: string, glob?: string): Promise<SearchMatch[]>
 }
 
@@ -117,6 +136,24 @@ export const apply: WorkspacePlugin = (ctx) => {
     async writeFile(scope, path, text, options = {}) {
       const root = scopeCwd(ctx, scope)
       const result = await writeWorkspaceFile(root, path, text, options)
+      index.invalidate(root)
+      return result
+    },
+    async createFile(scope, path, text = "") {
+      const root = scopeCwd(ctx, scope)
+      const result = await createWorkspaceFile(root, path, text)
+      index.invalidate(root)
+      return result
+    },
+    async renamePath(scope, oldPath, newPath) {
+      const root = scopeCwd(ctx, scope)
+      const result = await renameWorkspacePath(root, oldPath, newPath)
+      index.invalidate(root)
+      return result
+    },
+    async deletePath(scope, path, options = {}) {
+      const root = scopeCwd(ctx, scope)
+      const result = await deleteWorkspacePath(root, path, options)
       index.invalidate(root)
       return result
     },

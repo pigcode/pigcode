@@ -4,6 +4,7 @@ import { NotAGitRepoError } from "./git"
 import {
   GhNotAvailableError,
   GithubService,
+  PR_BASE_JSON_FIELDS,
   PR_DETAILED_JSON_FIELDS,
   PR_JSON_FIELDS,
   summarizeStatusCheckRollup,
@@ -108,7 +109,7 @@ describe("github service", () => {
 
     expect(status).toEqual(PULL_REQUEST)
     expect(calls).toEqual([
-      { args: ["pr", "view", "feat/pr", "--json", PR_JSON_FIELDS], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
     ])
   })
 
@@ -201,7 +202,7 @@ describe("github service", () => {
     const result = await service.detailedStatus("thread-1")
 
     expect(calls).toEqual([
-      { args: ["pr", "view", "feat/pr", "--json", PR_DETAILED_JSON_FIELDS], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_DETAILED_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
     ])
     expect(result).toEqual({
       status: "ok",
@@ -229,8 +230,8 @@ describe("github service", () => {
     const result = await service.detailedStatus("thread-1")
 
     expect(calls).toEqual([
-      { args: ["pr", "view", "feat/pr", "--json", PR_DETAILED_JSON_FIELDS], cwd: "/repo" },
-      { args: ["pr", "view", "feat/pr", "--json", PR_JSON_FIELDS], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_DETAILED_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
     ])
     expect(result).toEqual({
       status: "ok",
@@ -321,5 +322,175 @@ describe("github service", () => {
       }),
     ).toEqual({ total: 2, passed: 1, failed: 0, pending: 1 })
     expect(summarizeStatusCheckRollup(null)).toBeUndefined()
+  })
+
+  it("falls back to PR_BASE_JSON_FIELDS when older gh rejects isDraft on status/create/detailedStatus", async () => {
+    const { run: statusRun, calls: statusCalls } = fakeRunner([
+      commandError({ stderr: 'Unknown JSON field: "isDraft"' }),
+      JSON.stringify(PULL_REQUEST),
+    ])
+    const statusSvc = makeService(statusRun)
+    await expect(statusSvc.status("thread-1")).resolves.toEqual(PULL_REQUEST)
+    expect(statusCalls).toEqual([
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_BASE_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
+    ])
+
+    // Older gh pr create rejecting --json falls back to URL creation + pr view
+    const { run: createRun, calls: createCalls } = fakeRunner([
+      commandError({ stderr: "unknown flag: --json" }),
+      "https://github.com/pigcode/pigcode/pull/42\n",
+      JSON.stringify({ ...PULL_REQUEST, isDraft: true }),
+    ])
+    const createSvc = makeService(createRun)
+    const created = await createSvc.create("thread-1", {
+      title: "Draft PR",
+      body: "WIP",
+      draft: true,
+    })
+    expect(created).toEqual({ ...PULL_REQUEST, isDraft: true })
+    expect(createCalls).toEqual([
+      {
+        args: [
+          "pr",
+          "create",
+          "--head",
+          "feat/pr",
+          "--title",
+          "Draft PR",
+          "--draft",
+          "--body",
+          "WIP",
+          "--json",
+          PR_JSON_FIELDS,
+        ],
+        cwd: "/repo",
+      },
+      {
+        args: [
+          "pr",
+          "create",
+          "--head",
+          "feat/pr",
+          "--title",
+          "Draft PR",
+          "--draft",
+          "--body",
+          "WIP",
+        ],
+        cwd: "/repo",
+      },
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "42"], cwd: "/repo" },
+    ])
+  })
+
+  it("supports comment, merge (with deleteBranch using PR number), ready, close, reopen, and detailedStatusByRef", async () => {
+    let current = "feat/pr"
+    const mergedPr = { ...PULL_REQUEST, state: "MERGED", isDraft: false }
+    const readyPr = { ...PULL_REQUEST, isDraft: false }
+    const closedPr = { ...PULL_REQUEST, state: "CLOSED", isDraft: false }
+    const reopenedPr = { ...PULL_REQUEST, state: "OPEN", isDraft: false }
+
+    const { run, calls } = fakeRunner([
+      "", // comment
+      JSON.stringify({ ...PULL_REQUEST, isDraft: true }), // merge lookup by branch
+      "", // merge by PR number
+      JSON.stringify(mergedPr), // merge refresh by PR number (even after branch changed!)
+      JSON.stringify({ ...mergedPr, additions: 10, deletions: 2, changedFiles: 1 }), // detailedStatusByRef
+      "", // ready
+      JSON.stringify(readyPr), // ready refresh
+      "", // close
+      JSON.stringify(closedPr), // close refresh
+      "", // reopen
+      JSON.stringify(reopenedPr), // reopen refresh
+    ])
+
+    const wrappedRun: GhRunner = async (args, cwd) => {
+      const out = await run(args, cwd)
+      if (args[0] === "pr" && args[1] === "merge" && args.includes("--delete-branch")) {
+        current = "main"
+      }
+      return out
+    }
+    const service = new GithubService(
+      wrappedRun,
+      () => "/repo",
+      async () => current,
+    )
+
+    await expect(service.comment("thread-1", "   ")).rejects.toThrow(/required/)
+    await service.comment("thread-1", "  Looks good!  ")
+    expect(calls[0]).toEqual({
+      args: ["pr", "comment", "--body", "Looks good!", "--", "feat/pr"],
+      cwd: "/repo",
+    })
+
+    const merged = await service.merge("thread-1", { method: "squash", deleteBranch: true })
+    expect(merged).toEqual(mergedPr)
+    expect(current).toBe("main")
+    expect(calls.slice(1, 4)).toEqual([
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"], cwd: "/repo" },
+      { args: ["pr", "merge", "--squash", "--delete-branch", "--", "42"], cwd: "/repo" },
+      { args: ["pr", "view", "--json", PR_JSON_FIELDS, "--", "42"], cwd: "/repo" },
+    ])
+
+    const detailed = await service.detailedStatusByRef("thread-1", "42")
+    expect(detailed).toEqual({
+      status: "ok",
+      branch: "main",
+      pr: { ...mergedPr, additions: 10, deletions: 2, changedFiles: 1 },
+    })
+
+    current = "feat/pr"
+    await expect(service.ready("thread-1")).resolves.toEqual(readyPr)
+    await expect(service.close("thread-1")).resolves.toEqual(closedPr)
+    await expect(service.reopen("thread-1")).resolves.toEqual(reopenedPr)
+    expect(calls.slice(5).map((c) => c.args)).toEqual([
+      ["pr", "ready", "--", "feat/pr"],
+      ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"],
+      ["pr", "close", "--", "feat/pr"],
+      ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"],
+      ["pr", "reopen", "--", "feat/pr"],
+      ["pr", "view", "--json", PR_JSON_FIELDS, "--", "feat/pr"],
+    ])
+  })
+
+  it("places positional branch/ref arguments after `--` to prevent flag injection on leading-dash branch names", async () => {
+    const dashBranch = "--undo"
+    const dashPr = { ...PULL_REQUEST, headRefName: dashBranch }
+    const { run, calls } = fakeRunner([
+      JSON.stringify(dashPr), // status
+      JSON.stringify(dashPr), // detailedStatus
+      "", // comment
+      "", // ready
+      JSON.stringify(dashPr), // ready refresh
+      "", // close
+      JSON.stringify({ ...dashPr, state: "CLOSED" }), // close refresh
+      "", // reopen
+      JSON.stringify(dashPr), // reopen refresh
+      JSON.stringify(dashPr), // merge lookup
+      "", // merge
+      JSON.stringify({ ...dashPr, state: "MERGED" }), // merge refresh
+    ])
+    const service = makeService(run, dashBranch)
+
+    await service.status("thread-1")
+    await service.detailedStatus("thread-1")
+    await service.comment("thread-1", "note")
+    await service.ready("thread-1")
+    await service.close("thread-1")
+    await service.reopen("thread-1")
+    await service.merge("thread-1", { method: "merge", deleteBranch: false })
+
+    for (const { args } of calls) {
+      const separatorIndex = args.indexOf("--")
+      expect(separatorIndex, `missing -- in ${args.join(" ")}`).toBeGreaterThan(1)
+      expect(separatorIndex).toBe(args.length - 2)
+    }
+    expect(calls[2]!.args).toEqual(["pr", "comment", "--body", "note", "--", "--undo"])
+    expect(calls[3]!.args).toEqual(["pr", "ready", "--", "--undo"])
+    expect(calls[5]!.args).toEqual(["pr", "close", "--", "--undo"])
+    expect(calls[7]!.args).toEqual(["pr", "reopen", "--", "--undo"])
+    expect(calls[10]!.args).toEqual(["pr", "merge", "--merge", "--", "42"])
   })
 })

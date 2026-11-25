@@ -29,6 +29,7 @@ export * from "./mobile-composer"
 export * from "./mobile-mentions"
 export * from "./mobile-attachments"
 export * from "./mobile-workbench"
+export * from "./mobile-workbench-write"
 export * from "./mobile-preview"
 
 export * from "./queued-messages"

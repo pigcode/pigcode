@@ -25,6 +25,14 @@ export type MobileErrorCode =
   | "PREVIEW_TIMEOUT"
   | "PREVIEW_TOO_LARGE"
   | "PREVIEW_STREAM_NOT_FOUND"
+  | "WORKBENCH_FILE_CONFLICT"
+  | "WORKBENCH_PATH_EXISTS"
+  | "WORKBENCH_PATH_FORBIDDEN"
+  | "WORKBENCH_DIR_NOT_EMPTY"
+  | "WORKBENCH_FILE_TOO_LARGE"
+  | "WORKBENCH_WRITE_SESSION_NOT_FOUND"
+  | "WORKBENCH_HASH_MISMATCH"
+  | "PR_ACTION_FAILED"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -53,6 +61,14 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   PREVIEW_TIMEOUT: "本机预览请求超时。",
   PREVIEW_TOO_LARGE: "预览响应或请求超出大小上限。",
   PREVIEW_STREAM_NOT_FOUND: "预览数据流已过期或关闭。",
+  WORKBENCH_FILE_CONFLICT: "电脑上的文件已被修改，请重新加载或确认覆盖。",
+  WORKBENCH_PATH_EXISTS: "目标文件或目录已存在。",
+  WORKBENCH_PATH_FORBIDDEN: "路径受保护或超出工作区范围，无法写入。",
+  WORKBENCH_DIR_NOT_EMPTY: "目录非空，请确认是否删除目录及其全部内容。",
+  WORKBENCH_FILE_TOO_LARGE: "文件内容超出手机端可保存的大小上限。",
+  WORKBENCH_WRITE_SESSION_NOT_FOUND: "文件保存会话已过期，请重试保存。",
+  WORKBENCH_HASH_MISMATCH: "文件传输校验失败，请重试保存。",
+  PR_ACTION_FAILED: "执行 GitHub PR 操作失败，请检查仓库、权限或合并冲突。",
 }
 
 export class MobileRequestError extends Error {

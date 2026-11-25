@@ -16,6 +16,7 @@ import 'sidebar_models.dart';
 import 'src/attachments.dart';
 import 'src/preview.dart';
 import 'src/workbench.dart';
+import 'src/workbench_write.dart';
 import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
@@ -39,6 +40,7 @@ export 'sidebar_models.dart';
 export 'src/attachments.dart';
 export 'src/preview.dart';
 export 'src/workbench.dart';
+export 'src/workbench_write.dart';
 export 'timeline.dart';
 export 'timeline_turns.dart';
 export 'timeline_models.dart';
@@ -64,6 +66,7 @@ const mobileClientFeatures = <String>[
   'composer.mentions',
   'composer.attachments',
   'workbench.read',
+  'workbench.write',
   'preview.tunnel',
 ];
 
@@ -86,6 +89,7 @@ class MobileConnection {
     this.supportsComposerMentions,
     this.supportsAttachments,
     this.supportsWorkbenchRead,
+    this.supportsWorkbenchWrite,
     this.supportsPreviewTunnel,
     this._reportsReminderSettings,
     this._registersApns,
@@ -109,6 +113,7 @@ class MobileConnection {
   final bool supportsComposerMentions;
   final bool supportsAttachments;
   final bool supportsWorkbenchRead;
+  final bool supportsWorkbenchWrite;
   final bool supportsPreviewTunnel;
   final bool _reportsReminderSettings;
   final bool _registersApns;
@@ -129,6 +134,11 @@ class MobileConnection {
     _rpc,
     supportsWorkbenchRead: supportsWorkbenchRead,
   );
+  late final MobileWorkbenchWriteClient workbenchWrite =
+      MobileWorkbenchWriteClient(
+        _rpc,
+        supportsWorkbenchWrite: supportsWorkbenchWrite,
+      );
   late final MobilePreviewCommands preview = MobilePreviewCommands(
     _rpc,
     supportsPreviewTunnel: supportsPreviewTunnel,
@@ -500,6 +510,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('composer.mentions'),
         (welcome['features'] as List).contains('composer.attachments'),
         (welcome['features'] as List).contains('workbench.read'),
+        (welcome['features'] as List).contains('workbench.write'),
         (welcome['features'] as List).contains('preview.tunnel'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
