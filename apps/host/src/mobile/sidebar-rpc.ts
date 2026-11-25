@@ -34,6 +34,7 @@ import {
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { dispatchThreadCommand } from "../rpc/thread-commands"
 import { QueueOperationError } from "../agents/message-queue"
+import { AttachmentError } from "../services/attachments"
 import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
@@ -222,7 +223,9 @@ export class MobileSidebarRpc {
       response = rpcSuccessSchema.parse({ jsonrpc: "2.0", id, result })
     } catch (error) {
       const code =
-        error instanceof MobileRequestError || error instanceof QueueOperationError
+        error instanceof MobileRequestError ||
+        error instanceof QueueOperationError ||
+        error instanceof AttachmentError
           ? error.code
           : "COMMAND_FAILED"
       if (code === "COMMAND_FAILED") console.error("[host] mobile request failed", error)

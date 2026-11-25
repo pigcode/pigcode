@@ -11,6 +11,7 @@ import {
 } from "@pigcode/contracts"
 import type { CommandMethod, CommandParams, PermissionMode } from "@pigcode/contracts"
 import { createThread } from "../services/thread-create"
+import { AttachmentError } from "../services/attachments"
 import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { subscribeDesktopThread } from "./desktop-thread-feed"
@@ -244,6 +245,39 @@ export class RpcServer {
       case "thread.setPlanMode": {
         const value = parsed as { threadId: string; planMode: boolean }
         return updateThreadModes(this.ctx, value.threadId, { planMode: value.planMode })
+      }
+      case "attachment.upload": {
+        const value = parsed as CommandParams<"attachment.upload">
+        if (value.threadId && !this.ctx.threads.get(value.threadId)) {
+          throw new Error(`thread not found: ${value.threadId}`)
+        }
+        const cleaned = value.dataBase64.replace(/\s+/g, "")
+        if (
+          cleaned.length === 0 ||
+          cleaned.length % 4 !== 0 ||
+          !/^[A-Za-z0-9+/]+={0,2}$/.test(cleaned)
+        ) {
+          throw new AttachmentError("ATTACHMENT_UNSUPPORTED_TYPE", "invalid base64 image payload")
+        }
+        const attachment = this.ctx.attachments.saveStaging({
+          buffer: Buffer.from(cleaned, "base64"),
+          ...(value.fileName ? { fileName: value.fileName } : {}),
+          ...(value.mimeType ? { declaredMimeType: value.mimeType } : {}),
+          ownerDeviceKey: null,
+        })
+        return { attachment }
+      }
+      case "attachment.read": {
+        const value = parsed as CommandParams<"attachment.read">
+        const result = await this.ctx.attachments.readBytes(value.attachmentId, value.variant, {
+          ...(value.threadId ? { threadId: value.threadId } : {}),
+          ownerDeviceKey: null,
+        })
+        return {
+          attachment: result.attachment,
+          mimeType: result.mimeType,
+          dataBase64: result.buffer.toString("base64"),
+        }
       }
       case "run.list":
         return { runs: this.ctx.agents.listRuns() }

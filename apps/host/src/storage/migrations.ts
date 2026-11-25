@@ -330,6 +330,25 @@ const MIGRATIONS: Migration[] = [
     FROM runs WHERE thread_id = threads.id ORDER BY rowid DESC LIMIT 1
   );
   `,
+  `
+  CREATE TABLE attachments (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT,
+    owner_device_key TEXT,
+    sha256 TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    storage_name TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    width INTEGER,
+    height INTEGER,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT
+  );
+  CREATE INDEX idx_attachments_thread ON attachments(thread_id);
+  CREATE INDEX idx_attachments_staging_expires ON attachments(status, expires_at);
+  `,
 ]
 
 /**

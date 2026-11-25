@@ -114,7 +114,7 @@ export class CodexDriver implements AgentDriver {
     checkpoint: false,
     subagents: false,
     mcp: true,
-    images: false,
+    images: true,
     usage: true,
     modelCatalog: true,
     nativeSessionId: true,
@@ -350,7 +350,19 @@ export class CodexDriver implements AgentDriver {
     const injected = input.handoff
       ? await injectHandoff(client, state.nativeThreadId, input.handoff)
       : false
-    const text = input.handoff && !injected ? `${input.handoff}\n\n${input.text}` : input.text
+    const text =
+      input.handoff && !injected
+        ? input.text
+          ? `${input.handoff}\n\n${input.text}`
+          : input.handoff
+        : input.text
+    const attachments = input.attachments ?? []
+    const turnInput: Array<
+      { type: "text"; text: string } | { type: "localImage"; path: string }
+    > = [
+      ...(text.length > 0 || attachments.length === 0 ? [{ type: "text" as const, text }] : []),
+      ...attachments.map((att) => ({ type: "localImage" as const, path: att.path })),
+    ]
     const onAbort = (): void => {
       void interruptTurn(state)
     }
@@ -358,7 +370,7 @@ export class CodexDriver implements AgentDriver {
     try {
       const started = (await client.request("turn/start", {
         threadId: state.nativeThreadId,
-        input: [{ type: "text", text }],
+        input: turnInput,
         ...collaborationMode(session.planMode === true, state.effectiveModel, input.effort),
         ...turnPermissionParams(session.permissionMode, session.cwd),
         // 思考深度只对本轮及之后的轮次生效；没有选择时沿用 Codex 的默认值。

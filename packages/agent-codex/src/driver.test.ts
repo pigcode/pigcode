@@ -428,6 +428,69 @@ describe("CodexDriver", () => {
     expect(models).toEqual([{ id: "gpt-6.1-sol", displayName: "GPT-6.1 Sol", isDefault: true }])
     expect(transport.closed).toBe(true)
   })
+
+  it("declares images feature and sends localImage items in turn/start", async () => {
+    const completeOnStart = (
+      message: { id?: string | number },
+      replay: ScriptedTransport,
+    ): void => {
+      replay.push({ id: message.id, result: { turn: { id: "turn_img" } } })
+      setTimeout(() => {
+        replay.push({
+          method: "turn/completed",
+          params: { threadId: "th_native", turn: { id: "turn_img", status: "completed" } },
+        })
+      }, 0)
+    }
+
+    const withText = setup({ onTurnStart: completeOnStart })
+    expect(withText.driver.features.images).toBe(true)
+    const session1 = await withText.driver.createSession({ threadId: "t_img_1", cwd: "/tmp" })
+    await withText.driver.send(
+      session1,
+      {
+        text: "describe",
+        attachments: [
+          {
+            id: "att_1",
+            path: "/tmp/att_1.png",
+            mimeType: "image/png",
+            fileName: "a.png",
+            sizeBytes: 100,
+          },
+        ],
+      },
+      runtimeFor().runtime,
+    )
+    expect(messageOf(withText.transport, "turn/start")?.params).toMatchObject({
+      input: [
+        { type: "text", text: "describe" },
+        { type: "localImage", path: "/tmp/att_1.png" },
+      ],
+    })
+
+    const imageOnly = setup({ onTurnStart: completeOnStart })
+    const session2 = await imageOnly.driver.createSession({ threadId: "t_img_2", cwd: "/tmp" })
+    await imageOnly.driver.send(
+      session2,
+      {
+        text: "",
+        attachments: [
+          {
+            id: "att_2",
+            path: "/tmp/att_2.jpg",
+            mimeType: "image/jpeg",
+            fileName: "b.jpg",
+            sizeBytes: 200,
+          },
+        ],
+      },
+      runtimeFor().runtime,
+    )
+    expect(messageOf(imageOnly.transport, "turn/start")?.params).toMatchObject({
+      input: [{ type: "localImage", path: "/tmp/att_2.jpg" }],
+    })
+  })
 })
 
 describe("CodexDriver process lifetime", () => {

@@ -20,6 +20,7 @@ import {
   readPathKind,
 } from "./folder-picker"
 import { createHostSupervisor } from "./host-supervisor"
+import { attachAttachmentThumbnails } from "./attachment-thumbnail"
 import { attachRelayCredentials } from "./relay-credential"
 import { hidesOnClose } from "./lifecycle"
 import {
@@ -272,6 +273,7 @@ const hosts = createHostSupervisor({
     watchHostActivity(host)
     browser.attachControlPort(host.controlPort)
     attachRelayCredentials(host.controlPort, profileDir())
+    attachAttachmentThumbnails(host.controlPort)
     reminders.attach(host.controlPort)
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
       mainWindow.webContents.postMessage("pigcode:port", null, [host.connectPage()])

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { attachmentIdsSchema } from "./attachments"
 import { reasoningEffortSchema } from "./domain"
 import { mobileCommandTextLimit } from "./mobile-commands"
 import { mobileThreadReference, mobileThreadReferences } from "./mobile-composer"
@@ -21,13 +22,24 @@ export const legacyMobileDraftCreateParams = mobileDraftModelParams.extend({
   permissionMode: runtimeModeSchema,
   text: z.string().min(1).max(mobileCommandTextLimit).regex(/\S/),
 })
-export const mobileDraftCreateParams = legacyMobileDraftCreateParams.extend({
-  effort: reasoningEffortSchema.optional(),
-  fast: z.boolean().optional(),
-  ultracode: z.boolean().optional(),
-  planMode: z.boolean().optional(),
-  references: mobileThreadReferences.optional(),
-})
+export const mobileDraftCreateParams = z
+  .strictObject({
+    instanceId: key,
+    commandId: z.uuid(),
+    projectId: key,
+    modelId: key.optional(),
+    permissionMode: runtimeModeSchema,
+    text: z.string().max(mobileCommandTextLimit),
+    effort: reasoningEffortSchema.optional(),
+    fast: z.boolean().optional(),
+    ultracode: z.boolean().optional(),
+    planMode: z.boolean().optional(),
+    references: mobileThreadReferences.optional(),
+    attachmentIds: attachmentIdsSchema.optional(),
+  })
+  .refine((value) => /\S/.test(value.text) || (value.attachmentIds?.length ?? 0) > 0, {
+    message: "text or attachmentIds is required",
+  })
 
 const instanceOption = z.strictObject({
   instanceId: key,

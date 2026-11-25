@@ -21,7 +21,13 @@ import type {
 } from "@pigcode/contracts"
 import type { DefaultAgentChoice, DetectOptions } from "./agent-catalog"
 import type { InstanceCreateOptions } from "./agent-settings"
-import type { ApprovalDecision, ApprovalRequest, AgentDriver, UserInput } from "./driver"
+import type {
+  ApprovalDecision,
+  ApprovalRequest,
+  AgentDriver,
+  UserImageAttachment,
+  UserInput,
+} from "./driver"
 import type { RestartRecovery } from "./restart"
 import type { RunSummary } from "./run-queue"
 import type { RequestHandlingOptions } from "./run-requests"
@@ -59,7 +65,7 @@ export interface DraftRunSelection {
 
 export type DraftRunOptions = Pick<
   StartRunOptions,
-  "effort" | "fast" | "ultracode" | "references"
+  "effort" | "fast" | "ultracode" | "references" | "attachmentIds"
 >
 
 export interface StartRunOptions {
@@ -73,15 +79,22 @@ export interface StartRunOptions {
   instanceId?: string
   /** 用户在输入框里 @ 引用的会话（#81）。 */
   references?: ReadonlyArray<{ kind: "thread"; threadId: string }>
+  /** 本次 run 附带的图片附件 id。 */
+  attachmentIds?: readonly string[]
+  /** 已解析成磁盘绝对路径的图片附件。 */
+  attachments?: readonly UserImageAttachment[]
 }
 
-/** 交给 driver 的输入：文本加上这次 run 选的思考深度、快速模式与 Ultracode。 */
+/** 交给 driver 的输入：文本加上这次 run 选的思考深度、快速模式、Ultracode 与图片附件。 */
 export function runInput(text: string, options: StartRunOptions): UserInput {
   return {
     text,
     ...(options.effort ? { effort: options.effort } : {}),
     ...(options.fast ? { fast: true } : {}),
     ...(options.ultracode ? { ultracode: true } : {}),
+    ...(options.attachments && options.attachments.length > 0
+      ? { attachments: options.attachments }
+      : {}),
   }
 }
 

@@ -12,6 +12,7 @@ import type {
   AgentExecutionModes,
   AgentSettingsValues,
   AgentStatus,
+  ImageAttachmentMimeType,
   ReasoningEffort,
 } from "@pigcode/contracts"
 import type { SessionMcp } from "./mcp"
@@ -23,6 +24,7 @@ export type {
   RuntimeMode,
   AgentSettingsValues,
   AgentStatus,
+  ImageAttachmentMimeType,
 } from "@pigcode/contracts"
 
 /** 审批决议；界面只提交这三种。 */
@@ -85,6 +87,42 @@ export interface CreateSessionInput {
   signal?: AbortSignal
 }
 
+/** 用户附带给 Agent 的单张已落盘图片附件；path 是 Host 本地磁盘上的绝对路径。 */
+export interface UserImageAttachment {
+  id: string
+  path: string
+  mimeType: ImageAttachmentMimeType
+  fileName: string
+  sizeBytes: number
+  width?: number | undefined
+  height?: number | undefined
+}
+
+/** 格式化单张图片的落盘路径提示，供不支持原生看图的 Agent 与交接历史复用。 */
+export function formatImageAttachmentHint(attachment: {
+  path?: string | undefined
+  fileName: string
+  mimeType: ImageAttachmentMimeType
+  width?: number | undefined
+  height?: number | undefined
+}): string {
+  const target = attachment.path ?? attachment.fileName
+  const dims =
+    attachment.width && attachment.height ? `, ${attachment.width}x${attachment.height}` : ""
+  return `[Attached image: ${target} (${attachment.mimeType}${dims})]`
+}
+
+/** 将未出现在 text 中的图片落盘路径提示附加到文本末尾，避免重复注入。 */
+export function appendImageAttachmentFallback(
+  text: string,
+  attachments: ReadonlyArray<UserImageAttachment>,
+): string {
+  const missing = attachments.filter((att) => !text.includes(`[Attached image: ${att.path}`))
+  if (missing.length === 0) return text
+  const block = missing.map((att) => formatImageAttachmentHint(att)).join("\n")
+  return text.trim().length > 0 ? `${text}\n\n${block}` : block
+}
+
 /** 用户发送给 Agent 的一条输入；handoff 在切换 Agent 后注入一次。 */
 export interface UserInput {
   text: string
@@ -95,6 +133,8 @@ export interface UserInput {
   fast?: boolean
   /** 本次 run 打开 Ultracode；不支持的 driver 忽略。 */
   ultracode?: boolean
+  /** 本次 run 附带的图片附件。 */
+  attachments?: ReadonlyArray<UserImageAttachment>
 }
 
 /** 单次 run 交给 driver 的运行时能力：取消信号、事件出口、审批与提问。 */
@@ -231,6 +271,11 @@ export interface AgentDriver {
    * 并带上交接，而不是让这个会话每次发送都失败。没实现时一律视为否。
    */
   isSessionNotFound?(message: string): boolean
+  /**
+   * 某些通用插件（如 ACP）按每个会话的初始化能力决定原生发送图片还是降级成路径文本；
+   * 返回 true 时由 driver 自行处理图片附件，Host 不预先往 text 里注入路径降级块。
+   */
+  handlesImages?(session: AgentSessionHandle): boolean
   /**
    * 原生会话存在哪里：两个实例算出来的值相同，就能接着用对方的原生会话（例如配置目录相同的两个 Claude 实例）。
    * 返回 null 或没实现时，只有同一个实例的原生会话能接（#82）。

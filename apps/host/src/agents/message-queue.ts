@@ -26,7 +26,10 @@ export class QueueOperationError extends Error {
   }
 }
 
-type QueueEffect = Pick<QueueReceipt, "effect" | "messageId" | "runId" | "stoppedRunId" | "text">
+type QueueEffect = Pick<
+  QueueReceipt,
+  "effect" | "messageId" | "runId" | "stoppedRunId" | "text" | "attachments"
+>
 type RecordEffect = (result: QueueEffect) => void
 
 interface QueueGate {
@@ -70,11 +73,19 @@ export class MessageQueue {
       threadId,
       paused: messages.length > 0 && state.paused,
       activeRunId: this.gate.currentRun(threadId),
-      messages: messages.map(({ id, text }) => ({
-        id,
-        text: text.length <= 200 ? text : text.slice(0, 199).replace(/[\uD800-\uDBFF]$/, "") + "…",
-        selected: id === state.selectedId,
-      })),
+      messages: messages.map(({ id, text, options }) => {
+        const attachments =
+          options.attachmentIds && options.attachmentIds.length > 0
+            ? (this.ctx.get("attachments")?.resolveRefs(options.attachmentIds, threadId) ?? [])
+            : []
+        return {
+          id,
+          text:
+            text.length <= 200 ? text : text.slice(0, 199).replace(/[\uD800-\uDBFF]$/, "") + "…",
+          selected: id === state.selectedId,
+          ...(attachments.length > 0 ? { attachments } : {}),
+        }
+      }),
     }
   }
 
@@ -104,7 +115,21 @@ export class MessageQueue {
       ? { deviceKey: admission.deviceKey, authorizationId: admission.authorizationId ?? "legacy" }
       : undefined
     const result = this.change(threadId, () => {
-      const { id, runId } = this.store.add(threadId, text, savedOptions, source)
+      let persistedOptions = savedOptions
+      if (savedOptions.attachmentIds && savedOptions.attachmentIds.length > 0) {
+        const attachmentsService = this.ctx.get("attachments")
+        if (!attachmentsService) throw new Error("attachments service is not available")
+        const committed = attachmentsService.commitForThread(
+          savedOptions.attachmentIds,
+          threadId,
+          admission?.deviceKey ?? null,
+        )
+        persistedOptions = {
+          ...savedOptions,
+          attachmentIds: committed.map((item) => item.id),
+        }
+      }
+      const { id, runId } = this.store.add(threadId, text, persistedOptions, source)
       admission?.recordReceipt(runId, id)
       return { runId, queuedMessageId: id }
     })
@@ -117,7 +142,16 @@ export class MessageQueue {
     const queued = this.pending(threadId, messageId)
     return this.change(threadId, () => {
       this.store.remove(threadId, queued.id)
-      const result: QueueEffect = { effect: "withdrawn", messageId, text: queued.text }
+      const attachments =
+        queued.options.attachmentIds && queued.options.attachmentIds.length > 0
+          ? (this.ctx.get("attachments")?.resolveRefs(queued.options.attachmentIds, threadId) ?? [])
+          : []
+      const result: QueueEffect = {
+        effect: "withdrawn",
+        messageId,
+        text: queued.text,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      }
       record(result)
       return result
     })

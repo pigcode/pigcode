@@ -34,7 +34,7 @@ const codexFeatures: AgentFeatures = {
   checkpoint: false,
   subagents: false,
   mcp: true,
-  images: false,
+  images: true,
   usage: true,
   modelCatalog: true,
   nativeSessionId: true,
@@ -61,5 +61,6 @@ describe("agent features", () => {
     // M5 起 Codex 通过 config.mcp_servers 注入插件工具；subagents 仍未实现。
     expect(codex.subagents).toBe(false)
     expect(codex.mcp).toBe(true)
+    expect(codex.images).toBe(true)
   })
 })

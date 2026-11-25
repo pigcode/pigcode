@@ -46,6 +46,12 @@ export const workbenchZhCN = {
   "hostError.QUEUE_STALE_RUN": "当前运行已变化，请重新查看队列",
   "hostError.QUEUE_LIMIT": "待发队列已满",
   "hostError.QUEUE_TEXT_TOO_LONG": "消息太长，无法加入待发队列",
+  "hostError.ATTACHMENT_TOO_LARGE": "图片超过允许的大小上限",
+  "hostError.ATTACHMENT_UNSUPPORTED_TYPE": "不支持的图片格式或文件已损坏",
+  "hostError.ATTACHMENT_NOT_FOUND": "图片附件不存在或已过期",
+  "hostError.ATTACHMENT_FORBIDDEN": "无权访问此图片附件",
+  "hostError.ATTACHMENT_LIMIT_EXCEEDED": "单条消息最多附带 6 张图片",
+  "hostError.ATTACHMENT_HASH_MISMATCH": "图片校验失败，请重新上传",
   "hostError.details": "详细信息",
 } as const
 
@@ -99,5 +105,11 @@ export const workbenchEnUS: Record<keyof typeof workbenchZhCN, string> = {
   "hostError.QUEUE_STALE_RUN": "The active run changed. Check the queue again.",
   "hostError.QUEUE_LIMIT": "The message queue is full",
   "hostError.QUEUE_TEXT_TOO_LONG": "The message is too long to queue",
+  "hostError.ATTACHMENT_TOO_LARGE": "The image exceeds the maximum allowed size",
+  "hostError.ATTACHMENT_UNSUPPORTED_TYPE": "Unsupported or malformed image file",
+  "hostError.ATTACHMENT_NOT_FOUND": "The image attachment was not found or has expired",
+  "hostError.ATTACHMENT_FORBIDDEN": "You do not have access to this image attachment",
+  "hostError.ATTACHMENT_LIMIT_EXCEEDED": "You can attach at most 6 images per message",
+  "hostError.ATTACHMENT_HASH_MISMATCH": "Image checksum mismatch. Upload it again.",
   "hostError.details": "Details",
 }

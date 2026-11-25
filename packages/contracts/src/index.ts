@@ -1,6 +1,7 @@
 /** Pigcode 共享协议、领域类型与命令入口。 */
 export * from "./protocol"
 export * from "./domain"
+export * from "./attachments"
 export * from "./agents"
 export * from "./events"
 export * from "./commands"
@@ -26,5 +27,6 @@ export * from "./mobile-requests"
 export * from "./mobile-drafts"
 export * from "./mobile-composer"
 export * from "./mobile-mentions"
+export * from "./mobile-attachments"
 
 export * from "./queued-messages"

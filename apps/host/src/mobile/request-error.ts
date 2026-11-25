@@ -13,6 +13,12 @@ export type MobileErrorCode =
   | "QUEUE_STALE_RUN"
   | "QUEUE_LIMIT"
   | "QUEUE_TEXT_TOO_LONG"
+  | "ATTACHMENT_TOO_LARGE"
+  | "ATTACHMENT_UNSUPPORTED_TYPE"
+  | "ATTACHMENT_NOT_FOUND"
+  | "ATTACHMENT_FORBIDDEN"
+  | "ATTACHMENT_LIMIT_EXCEEDED"
+  | "ATTACHMENT_HASH_MISMATCH"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -29,6 +35,12 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   QUEUE_STALE_RUN: "当前运行已变化，请重新查看队列。",
   QUEUE_LIMIT: "待发队列已满，请稍后发送。",
   QUEUE_TEXT_TOO_LONG: "这条消息太长，无法加入待发队列。",
+  ATTACHMENT_TOO_LARGE: "图片超过允许的大小上限。",
+  ATTACHMENT_UNSUPPORTED_TYPE: "不支持的图片格式或文件已损坏。",
+  ATTACHMENT_NOT_FOUND: "图片附件不存在或已过期。",
+  ATTACHMENT_FORBIDDEN: "无权访问此图片附件。",
+  ATTACHMENT_LIMIT_EXCEEDED: "单条消息最多附带 6 张图片。",
+  ATTACHMENT_HASH_MISMATCH: "图片校验失败，请重新上传。",
 }
 
 export class MobileRequestError extends Error {

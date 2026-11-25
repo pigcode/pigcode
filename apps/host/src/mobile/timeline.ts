@@ -348,7 +348,7 @@ export class MobileTimelineSession {
         if (event.kind === "message.assistant") messages++
         if (
           (event.kind === "message.user" || event.kind === "run.started") &&
-          event.text &&
+          (event.text || (event.attachments?.length ?? 0) > 0) &&
           !userRuns.has(key)
         ) {
           userRuns.add(key)

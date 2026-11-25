@@ -12,7 +12,7 @@ import type {
 } from "./driver"
 import type { ActiveRun, QueuedRun } from "./run-queue"
 import { handoffForRun } from "./handoff-delivery"
-import { freshSessionHandoff } from "./switching"
+import { freshSessionHandoff, recomposePendingHandoff } from "./switching"
 
 /** launchRun 需要的最小 Host 依赖；由 registry 组装，避免 registry 超过 500 行。 */
 export interface LaunchDeps {
@@ -78,8 +78,16 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       startFresh: () => startFresh(entry, deps, run.session.id, run.session.cwd),
     }
     // 带上还没发出的交接（切换 Agent、子代理说明）；原生会话接不上时，新会话还要带上这一轮之前的对话。
+    const imageCount = entry.input.attachments?.length ?? 0
     const fresh = lost
-      ? freshSessionHandoff(deps.ctx, run.threadId, run.runId, entry.input.text, entry.instanceId)
+      ? freshSessionHandoff(
+          deps.ctx,
+          run.threadId,
+          run.runId,
+          entry.input.text,
+          entry.instanceId,
+          imageCount,
+        )
       : null
     const handoff = handoffForRun(
       deps.ctx.storage.db,
@@ -87,6 +95,11 @@ export async function launchRun(entry: QueuedRun, deps: LaunchDeps): Promise<voi
       run.runId,
       entry.input.text,
       fresh,
+      {
+        images: imageCount,
+        recompose: (pendingHandoff, budget) =>
+          recomposePendingHandoff(deps.ctx, run.threadId, pendingHandoff, budget, run.runId),
+      },
     )
     deps.runs.setStatus(run.runId, "running")
     deps.append(run.threadId, run.runId, "run.started", {

@@ -52,6 +52,7 @@ const shared: BuildOptions = {
 /** 核心服务作为独立条目，供 profile 以相对 URL 加载；顺序即加载顺序。 */
 const coreEntries: Record<string, string> = {
   storage: join(root, "apps/host/src/services/storage.ts"),
+  attachments: join(root, "apps/host/src/services/attachments.ts"),
   settings: join(root, "apps/host/src/services/settings.ts"),
   projects: join(root, "apps/host/src/services/projects.ts"),
   threads: join(root, "apps/host/src/services/threads.ts"),

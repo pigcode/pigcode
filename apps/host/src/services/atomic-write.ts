@@ -115,3 +115,48 @@ export async function writeFileAtomic(
   }
   await fsyncDir(dir)
 }
+
+/** 同步原子写二进制文件；用于图片附件与缩略图缓存落盘。 */
+export function writeBufferAtomicSync(path: string, data: Uint8Array): void {
+  const dir = dirname(path)
+  mkdirSync(dir, { recursive: true })
+  const temp = tempPathFor(path)
+  try {
+    const fd = openSync(temp, "w")
+    try {
+      let written = 0
+      while (written < data.byteLength) {
+        written += writeSync(fd, data, written, data.byteLength - written)
+      }
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(temp, path)
+  } catch (error) {
+    rmSync(temp, { force: true })
+    throw error
+  }
+  fsyncDirSync(dir)
+}
+
+/** 异步原子写二进制文件。 */
+export async function writeBufferAtomic(path: string, data: Uint8Array): Promise<void> {
+  const dir = dirname(path)
+  await mkdir(dir, { recursive: true })
+  const temp = tempPathFor(path)
+  try {
+    const handle = await open(temp, "w")
+    try {
+      await handle.writeFile(data)
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    await rename(temp, path)
+  } catch (error) {
+    await rm(temp, { force: true })
+    throw error
+  }
+  await fsyncDir(dir)
+}

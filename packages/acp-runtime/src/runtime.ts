@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto"
+import { readFile } from "node:fs/promises"
 import type {
+  ContentBlock,
   InitializeResponse,
   NewSessionResponse,
   SessionNotification,
 } from "@agentclientprotocol/sdk"
 import { DEFAULT_RUNTIME_MODE, normalizeRuntimeMode, type RuntimeMode } from "@pigcode/contracts"
-import type {
-  AgentCommandInfo,
-  AgentRuntime,
-  AgentSessionHandle,
-  CreateSessionInput,
-  UserInput,
+import {
+  appendImageAttachmentFallback,
+  type AgentCommandInfo,
+  type AgentRuntime,
+  type AgentSessionHandle,
+  type CreateSessionInput,
+  type UserInput,
 } from "@pigcode/plugin-sdk"
 import {
   authenticateAcp,
@@ -53,6 +56,7 @@ type Session = {
   liveOnly: boolean
   invocation: string
   canClose: boolean
+  supportsImage: boolean
   fresh: boolean
   planMode: boolean
   normalMode: string | undefined
@@ -281,6 +285,7 @@ export class AcpRuntime {
         invocation,
         fresh: !original,
         canClose: Boolean(native?.close),
+        supportsImage: Boolean(info.agentCapabilities?.promptCapabilities?.image),
         liveOnly: Boolean(
           this.options.retainLiveOnly && !native?.resume && !info.agentCapabilities?.loadSession,
         ),
@@ -396,8 +401,27 @@ export class AcpRuntime {
       )
       runtime.signal.throwIfAborted()
       turn.prompting = true
-      const text = input.handoff ? `${input.handoff}\n\n${input.text}` : input.text
-      const result = await state.rpc.prompt(state.nativeId, text)
+      const baseText = input.handoff
+        ? input.text
+          ? `${input.handoff}\n\n${input.text}`
+          : input.handoff
+        : input.text
+      const attachments = input.attachments ?? []
+      let promptPayload: string | ContentBlock[] = baseText
+      if (attachments.length > 0) {
+        if (state.supportsImage) {
+          const blocks: ContentBlock[] = []
+          if (baseText.length > 0) blocks.push({ type: "text", text: baseText })
+          for (const att of attachments) {
+            const data = (await readFile(att.path)).toString("base64")
+            blocks.push({ type: "image", mimeType: att.mimeType, data })
+          }
+          promptPayload = blocks
+        } else {
+          promptPayload = appendImageAttachmentFallback(baseText, attachments)
+        }
+      }
+      const result = await state.rpc.prompt(state.nativeId, promptPayload)
       turn.events.finish()
       if (turn.cancelled || result.stopReason === "cancelled")
         runtime.emit({ type: "run.interrupted" })

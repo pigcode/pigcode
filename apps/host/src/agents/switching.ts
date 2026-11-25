@@ -3,7 +3,7 @@ import type { AgentModeSelection } from "@pigcode/contracts"
 import type { Context } from "cordis"
 import type { AgentSession } from "@pigcode/contracts"
 import type { AgentSessionStore } from "./session-store"
-import { HandoffStore, type NewHandoff } from "../storage/handoff-store"
+import { HandoffStore, type Handoff, type NewHandoff } from "../storage/handoff-store"
 import { ThreadItemStore } from "../storage/thread-items"
 import {
   buildSelection,
@@ -72,6 +72,7 @@ export function composeHandoff(
     afterPosition?: number
     target?: TargetContext | null
     userText?: string
+    images?: number
     tokenCap?: number
   },
 ): HandoffSelection | null {
@@ -79,6 +80,7 @@ export function composeHandoff(
     ...(options.afterPosition !== undefined ? { afterPosition: options.afterPosition } : {}),
     ...(options.excludeRunId !== undefined ? { excludeRunId: options.excludeRunId } : {}),
   })
+  const attachments = ctx.get("attachments")
   return buildSelection({
     items,
     heading: options.heading,
@@ -86,8 +88,41 @@ export function composeHandoff(
     budget: handoffBudget({
       target: options.target ?? null,
       userText: options.userText ?? "",
+      images: options.images ?? 0,
       ...(options.tokenCap !== undefined ? { tokenCap: options.tokenCap } : {}),
     }),
+    ...(attachments
+      ? { resolveAttachmentPath: (id: string) => attachments.getPath(id, threadId) }
+      : {}),
+  })
+}
+
+/** 按新一轮消息附带图片后收紧的预算重新挑选待发的切换交接。 */
+export function recomposePendingHandoff(
+  ctx: Context,
+  threadId: string,
+  handoff: Handoff,
+  budget: number,
+  excludeRunId?: string,
+): HandoffSelection | null {
+  const afterPosition =
+    handoff.strategy === "switch_delta" && handoff.coveredFrom !== null
+      ? Math.max(0, handoff.coveredFrom - 1)
+      : undefined
+  const items = new ThreadItemStore(ctx.storage.db).list(threadId, {
+    ...(afterPosition !== undefined ? { afterPosition } : {}),
+    ...(excludeRunId !== undefined ? { excludeRunId } : {}),
+  })
+  const heading = handoff.text.split("\n")[0] ?? previousAgentsLine(ctx, threadId)
+  const attachments = ctx.get("attachments")
+  return buildSelection({
+    items,
+    heading,
+    threadId,
+    budget,
+    ...(attachments
+      ? { resolveAttachmentPath: (id: string) => attachments.getPath(id, threadId) }
+      : {}),
   })
 }
 
@@ -158,12 +193,14 @@ export function freshSessionHandoff(
   runId: string,
   userText: string,
   toInstanceId?: string,
+  images?: number,
 ): NewHandoff | null {
   const selection = composeHandoff(ctx, threadId, {
     heading:
       "Context handoff: the agent's previous session for this conversation could not be resumed, so this is a new session. Continue from here; do not repeat completed work.",
     excludeRunId: runId,
     userText,
+    images: images ?? 0,
   })
   return selection === null
     ? null

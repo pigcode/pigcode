@@ -1,6 +1,8 @@
 plugins:
   - id: core.storage
     name: "@pigcode/host/services/storage"
+  - id: core.attachments
+    name: "@pigcode/host/services/attachments"
   - id: core.settings
     name: "@pigcode/host/services/settings"
   - id: core.projects

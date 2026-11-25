@@ -1,6 +1,8 @@
 import {
+  imageAttachmentSchema,
   timelineTextPreviewLength,
   timelineToolPreviewLength,
+  type ImageAttachmentRef,
   type MobileTimelineEvent,
   type ThreadEvent,
 } from "@pigcode/contracts"
@@ -83,12 +85,16 @@ export function timelineEvent(
         kind: event.type,
         ...preview(text(payload.text) ?? "", timelineTextPreviewLength),
       }
-    case "message.completed":
+    case "message.completed": {
+      const attachments =
+        payload.role === "user" ? attachmentRefs(payload.attachments) : undefined
       return {
         ...base,
         kind: payload.role === "user" ? "message.user" : "message.assistant",
         ...preview(text(payload.text) ?? "", timelineTextPreviewLength),
+        ...(attachments ? { attachments } : {}),
       }
+    }
     case "reasoning.completed":
       return {
         ...base,
@@ -153,6 +159,16 @@ export function timelineEvent(
     default:
       return undefined
   }
+}
+
+function attachmentRefs(value: unknown): ImageAttachmentRef[] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined
+  const refs: ImageAttachmentRef[] = []
+  for (const item of value) {
+    const parsed = imageAttachmentSchema.safeParse(item)
+    if (parsed.success) refs.push(parsed.data)
+  }
+  return refs.length > 0 ? refs : undefined
 }
 
 function requestResult(type: ThreadEvent["type"], payload: Record<string, unknown>) {

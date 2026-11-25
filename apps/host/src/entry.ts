@@ -12,6 +12,7 @@ import { ThreadFeed } from "./rpc/thread-feed"
 import { attachQuitState } from "./rpc/quit-state"
 import { attachHostActivity } from "./rpc/host-activity"
 import { attachHostReminders } from "./rpc/host-reminders"
+import { desktopAttachmentThumbnailer } from "./services/attachment-thumbnail"
 import { desktopRelayCipher } from "./services/relay-credential"
 import { MobileConnections } from "./mobile/connections"
 import { RelaySettings } from "./services/relay-settings"
@@ -122,6 +123,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   // 数据库打不开（备份或迁移失败、数据库比应用新）时 storage 不会起来，其后的服务也都缺席；
   // 在这里带着真正的原因失败，而不是等到下面 ctx.agents 报 TypeError。
   await requireCoreService(ctx, "core.storage", "storage")
+  await requireCoreService(ctx, "core.attachments", "attachments")
   await requireCoreService(ctx, "core.agents", "agents")
   // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
   ctx.agents.recoverAfterRestart()
@@ -133,7 +135,9 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   if (control) attachHostReminders(ctx, (reminder) => control.postMessage({ type: "host.reminder", reminder }))
   const feed = new ThreadFeed(ctx)
   if (control) {
-    const cipher = desktopRelayCipher(new MessagePortTransport(control))
+    const controlTransport = new MessagePortTransport(control)
+    ctx.get("attachments")?.setThumbnailer(desktopAttachmentThumbnailer(controlTransport))
+    const cipher = desktopRelayCipher(controlTransport)
     const relay = new RelaySettings(ctx.settings, cipher)
     const mobile = new MobileConnections(ctx, relay, cipher, feed)
     mobileLifecycle = mobile

@@ -5,6 +5,7 @@ import { expect } from "vitest"
 import type { AgentRunConfig } from "../agents/driver"
 import { apply as agents } from "../agents/registry"
 import { MobileConnections } from "../mobile/connections"
+import { apply as attachments } from "../services/attachments"
 import { apply as projects } from "../services/projects"
 import { RelaySettings } from "../services/relay-settings"
 import { apply as sessions } from "../services/sessions"
@@ -32,6 +33,7 @@ export async function startMobileHost(options?: {
 }) {
   const ctx = new Context()
   await ctx.plugin(storage, { path: options?.storagePath ?? ":memory:" })
+  await ctx.plugin(attachments)
   await ctx.plugin(settings, options?.settingsPath ? { path: options.settingsPath } : {})
   await ctx.plugin(projects)
   await ctx.plugin(threads)

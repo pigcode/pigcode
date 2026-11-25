@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { attachmentIdsSchema } from "./attachments"
 import { reasoningEffortSchema } from "./domain"
 import { mobileThreadReference, mobileThreadReferences } from "./mobile-composer"
 
@@ -19,12 +20,20 @@ export const legacyMobileStartRunParams = z.strictObject({
   threadId,
   text: z.string().min(1).max(mobileCommandTextLimit).regex(/\S/),
 })
-export const mobileStartRunParams = legacyMobileStartRunParams.extend({
-  effort: reasoningEffortSchema.optional(),
-  fast: z.boolean().optional(),
-  ultracode: z.boolean().optional(),
-  references: mobileThreadReferences.optional(),
-})
+export const mobileStartRunParams = z
+  .strictObject({
+    commandId,
+    threadId,
+    text: z.string().max(mobileCommandTextLimit),
+    effort: reasoningEffortSchema.optional(),
+    fast: z.boolean().optional(),
+    ultracode: z.boolean().optional(),
+    references: mobileThreadReferences.optional(),
+    attachmentIds: attachmentIdsSchema.optional(),
+  })
+  .refine((value) => /\S/.test(value.text) || (value.attachmentIds?.length ?? 0) > 0, {
+    message: "text or attachmentIds is required",
+  })
 export const mobileInterruptRunParams = z.strictObject({ commandId, threadId, runId })
 export const mobileReceiptParams = z.strictObject({ commandId })
 

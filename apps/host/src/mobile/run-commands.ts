@@ -65,6 +65,7 @@ export class MobileRunCommands {
     fast,
     ultracode,
     references,
+    attachmentIds,
   }: MobileStartRunParams): Promise<MobileRunReceipt> {
     requireMobileThread(this.ctx, threadId)
     if (references) {
@@ -75,6 +76,7 @@ export class MobileRunCommands {
     if (fast !== undefined) extras.fast = fast
     if (ultracode !== undefined) extras.ultracode = ultracode
     if (references !== undefined) extras.references = references
+    if (attachmentIds !== undefined) extras.attachmentIds = attachmentIds
     const binding =
       Object.keys(extras).length > 0
         ? commandBinding(methods.start, threadId, text, extras)
@@ -99,6 +101,7 @@ export class MobileRunCommands {
               })),
             }
           : {}),
+        ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
         admission: {
           deviceKey: this.deviceKey,
           ...(source ? { authorizationId: source.authorizationId } : {}),

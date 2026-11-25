@@ -3,7 +3,7 @@
  * 剩下的由 agent 在需要时自己读，不占上下文。和插件工具一样走 pigcode MCP 桥，Claude 里的全名是
  * mcp__pigcode__thread_read。只读，不需要审批。
  */
-import type { McpToolDefinition } from "@pigcode/plugin-sdk"
+import { formatImageAttachmentHint, type McpToolDefinition } from "@pigcode/plugin-sdk"
 import type { Context } from "cordis"
 import type { McpBridgeService } from "../services/mcp-bridge"
 import { ThreadItemStore } from "../storage/thread-items"
@@ -76,8 +76,9 @@ export function readThread(ctx: Context, callerThreadId: string, raw: unknown): 
   if (typeof input.itemId === "string" && input.itemId) {
     const item = store.get(threadId, input.itemId)
     if (!item) throw new Error(`item not found: ${input.itemId}`)
-    const offset = clamp(input.textOffset, 0, 0, item.text.length)
-    return { thread: header, items: [shape(item, chars, offset)], nextPosition: null }
+    const fullText = itemText(ctx, threadId, item)
+    const offset = clamp(input.textOffset, 0, 0, fullText.length)
+    return { thread: header, items: [shape(ctx, threadId, item, chars, offset)], nextPosition: null }
   }
 
   const limit = clamp(input.limit, DEFAULT_LIMIT, 1, MAX_LIMIT)
@@ -87,7 +88,7 @@ export function readThread(ctx: Context, callerThreadId: string, raw: unknown): 
   const items = page.slice(0, limit)
   return {
     thread: header,
-    items: items.map((item) => shape(item, chars, 0)),
+    items: items.map((item) => shape(ctx, threadId, item, chars, 0)),
     nextPosition: page.length > limit ? (items.at(-1)?.position ?? null) : null,
   }
 }
@@ -123,12 +124,35 @@ export function registerThreadReadTool(
   }
 }
 
+function itemText(
+  ctx: Context,
+  threadId: string,
+  item: ReturnType<ThreadItemStore["list"]>[number],
+): string {
+  if (item.kind !== "user_message" || !item.attachments || item.attachments.length === 0) {
+    return item.text
+  }
+  const attachments = ctx.get("attachments")
+  const hints = item.attachments.map((att) =>
+    formatImageAttachmentHint({
+      ...att,
+      ...(attachments?.getPath(att.id, threadId)
+        ? { path: attachments.getPath(att.id, threadId) }
+        : {}),
+    }),
+  )
+  return item.text.trim().length > 0 ? `${item.text}\n${hints.join("\n")}` : hints.join("\n")
+}
+
 function shape(
+  ctx: Context,
+  threadId: string,
   item: ReturnType<ThreadItemStore["list"]>[number],
   chars: number,
   offset: number,
 ): Record<string, unknown> {
-  const text = item.text.slice(offset, offset + chars)
+  const full = itemText(ctx, threadId, item)
+  const text = full.slice(offset, offset + chars)
   const end = offset + text.length
   return {
     id: item.id,
@@ -138,8 +162,8 @@ function shape(
     runId: item.runId,
     status: item.status,
     text,
-    truncated: end < item.text.length,
-    nextTextOffset: end < item.text.length ? end : null,
+    truncated: end < full.length,
+    nextTextOffset: end < full.length ? end : null,
   }
 }
 

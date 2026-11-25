@@ -9,6 +9,7 @@ import { Context } from "cordis"
 import { expect, it } from "vitest"
 import { AcpDriver } from "../../../../packages/agent-acp/src/driver"
 import { apply as plugins } from "../services/plugins"
+import { apply as attachments } from "../services/attachments"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as settings } from "../services/settings"
@@ -301,3 +302,135 @@ it("prepares a shared registry runtime without launching it or allocating an ins
     await rm(root, { recursive: true, force: true })
   }
 })
+
+it("sends native ACP image blocks when promptCapabilities.image is true and falls back to path text once when false", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pigcode-acp-img-test-"))
+  const script = join(root, "acp-img.mjs")
+  const imgFixture = String.raw`
+import { createInterface } from "node:readline"
+import { randomUUID } from "node:crypto"
+const [mode] = process.argv.slice(2)
+const send = (message) => console.log(JSON.stringify({ jsonrpc: "2.0", ...message }))
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line)
+  const result = (value) => send({ id, result: value })
+  if (method === "initialize") return result({
+    protocolVersion: 1,
+    agentInfo: { name: mode, version: "1.0.0" },
+    authMethods: [],
+    agentCapabilities: mode === "vision" ? { promptCapabilities: { image: true } } : {},
+  })
+  if (method === "session/new") return result({ sessionId: randomUUID() })
+  if (method === "session/prompt") {
+    send({
+      method: "session/update",
+      params: {
+        sessionId: params.sessionId,
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: JSON.stringify(params.prompt) },
+        },
+      },
+    })
+    return result({ stopReason: "end_turn" })
+  }
+  send({ id, error: { code: -32601, message: "Method not found" } })
+})
+`
+  await writeFile(script, imgFixture)
+  const png = Buffer.alloc(33)
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0)
+  png.writeUInt32BE(13, 8)
+  png.write("IHDR", 12, "ascii")
+  png.writeUInt32BE(120, 16)
+  png.writeUInt32BE(80, 20)
+
+  const ctx = new Context()
+  const driver = new AcpDriver()
+  try {
+    await ctx.plugin(storage, { path: ":memory:" })
+    await ctx.plugin(attachments, { attachmentsDir: join(root, "attachments") })
+    await ctx.plugin(settings, {})
+    await ctx.plugin(projects)
+    await ctx.plugin(threads)
+    await ctx.plugin(sessions)
+    await ctx.plugin(agents, { fake: false, dataDir: join(root, "agent-data") })
+    ctx.agents.register(driver)
+
+    const project = ctx.projects.add(root)
+    const visionInst = ctx.agents.createInstance("acp", "Vision ACP", {
+      values: { binaryPath: process.execPath, arguments: [script, "vision"] },
+    })
+    const textOnlyInst = ctx.agents.createInstance("acp", "Text ACP", {
+      values: { binaryPath: process.execPath, arguments: [script, "text-only"] },
+    })
+
+    // 1. Vision ACP: native image content block + text, NO [Attached image: ...] text fallback
+    const att1 = ctx.attachments.saveStaging({ buffer: png, fileName: "chart.png" })
+    const tVision = ctx.threads.create(project.id, "Vision", "acp", undefined, {
+      instanceId: visionInst.instanceId,
+    })
+    await (
+      await ctx.agents.startRun(tVision.id, "analyze", undefined, { attachmentIds: [att1.id] })
+    ).done
+    const visionReply = ctx.sessions
+      .read(tVision.id, 0)
+      .find(
+        (e) =>
+          e.type === "message.completed" && (e.payload as { role?: string }).role === "assistant",
+      )
+    const visionBlocks = JSON.parse((visionReply?.payload as { text: string }).text) as unknown[]
+    expect(visionBlocks).toEqual([
+      { type: "text", text: "analyze" },
+      { type: "image", mimeType: "image/png", data: png.toString("base64") },
+    ])
+
+    // 2. Vision ACP image-only: only image block
+    const att1b = ctx.attachments.saveStaging({ buffer: png, fileName: "only.png" })
+    await (
+      await ctx.agents.startRun(tVision.id, "", undefined, { attachmentIds: [att1b.id] })
+    ).done
+    const visionReply2 = ctx.sessions
+      .read(tVision.id, 0)
+      .filter(
+        (e) =>
+          e.type === "message.completed" && (e.payload as { role?: string }).role === "assistant",
+      )
+      .at(-1)
+    expect(JSON.parse((visionReply2?.payload as { text: string }).text)).toEqual([
+      { type: "image", mimeType: "image/png", data: png.toString("base64") },
+    ])
+
+    // 3. Text-only ACP: falls back to [Attached image: <path> ...] ONCE (not duplicated!)
+    const att2 = ctx.attachments.saveStaging({ buffer: png, fileName: "log.png" })
+    const tText = ctx.threads.create(project.id, "Text", "acp", undefined, {
+      instanceId: textOnlyInst.instanceId,
+    })
+    await (
+      await ctx.agents.startRun(tText.id, "check this", undefined, { attachmentIds: [att2.id] })
+    ).done
+    const textReply = ctx.sessions
+      .read(tText.id, 0)
+      .find(
+        (e) =>
+          e.type === "message.completed" && (e.payload as { role?: string }).role === "assistant",
+      )
+    const textBlocks = JSON.parse((textReply?.payload as { text: string }).text) as Array<{
+      type: string
+      text?: string
+    }>
+    const expectedPath = ctx.attachments.getPath(att2.id, tText.id)!
+    expect(textBlocks).toEqual([
+      {
+        type: "text",
+        text: `check this\n\n[Attached image: ${expectedPath} (image/png, 120x80)]`,
+      },
+    ])
+    // Ensure not duplicated
+    expect(textBlocks[0]!.text!.split("[Attached image:").length - 1).toBe(1)
+  } finally {
+    await driver.close()
+    await ctx.fiber.dispose()
+    await rm(root, { recursive: true, force: true })
+  }
+}, 20_000)

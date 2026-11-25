@@ -7,6 +7,7 @@ import {
   ndJsonStream,
   PROTOCOL_VERSION,
   RequestError,
+  type ContentBlock,
   type InitializeResponse,
   type RequestPermissionRequest,
   type RequestPermissionResponse,
@@ -128,8 +129,12 @@ export function openAcp(
       options.validate?.(reply)
       return reply
     },
-    async prompt(sessionId: string, text: string): Promise<{ stopReason: string }> {
-      const prompt = [{ type: "text" as const, text }]
+    async prompt(
+      sessionId: string,
+      input: string | ContentBlock[],
+    ): Promise<{ stopReason: string }> {
+      const prompt: ContentBlock[] =
+        typeof input === "string" ? [{ type: "text" as const, text: input }] : input
       const fromNotification = options.promptCompletion
       if (!fromNotification)
         return connection.agent.request("session/prompt", { sessionId, prompt })

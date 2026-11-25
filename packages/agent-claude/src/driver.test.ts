@@ -275,6 +275,57 @@ describe("ClaudeDriver", () => {
     await captured?.canUseTool?.("Bash", { command: "ls" }, options)
     expect(approvals).toEqual(["Bash"])
   })
+
+  it("streams image attachments as base64 content blocks to the SDK query", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-claude-img-"))
+    const imgPath = join(dir, "clip.png")
+    const imgBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    await writeFile(imgPath, imgBytes)
+    let capturedPrompt: unknown
+    const replay = replayQuery("fixtures/simple.jsonl")
+    const driver = new ClaudeDriver({
+      queryFn: (params) => {
+        capturedPrompt = params.prompt
+        return replay(params)
+      },
+    })
+    const session = await driver.createSession({ threadId: "t_img", cwd: dir })
+    await driver.send(
+      session,
+      {
+        text: "inspect",
+        attachments: [
+          {
+            id: "att_1",
+            path: imgPath,
+            mimeType: "image/png",
+            fileName: "clip.png",
+            sizeBytes: imgBytes.length,
+          },
+        ],
+      },
+      {
+        signal: new AbortController().signal,
+        emit: () => undefined,
+        requestApproval: async () => "allow-once",
+      },
+    )
+    expect(typeof capturedPrompt).not.toBe("string")
+    const first = await (capturedPrompt as AsyncIterable<{ message: { content: unknown } }>)[
+      Symbol.asyncIterator
+    ]().next()
+    expect(first.value?.message.content).toEqual([
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/png",
+          data: imgBytes.toString("base64"),
+        },
+      },
+      { type: "text", text: "inspect" },
+    ])
+  })
 })
 
 /** 用真实 SDK 启动一个假的 CLI：它启动一个孙进程，把 pid 写到文件里，然后一直等着。 */

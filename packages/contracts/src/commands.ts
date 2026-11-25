@@ -27,6 +27,11 @@ import {
 import { DEFAULT_RUNTIME_MODE } from "./runtime-modes"
 import { relayTestAndSaveParamsSchema } from "./relay"
 import { queuedMessageCommands } from "./queued-messages"
+import {
+  attachmentIdsSchema,
+  attachmentReadParamsSchema,
+  attachmentUploadParamsSchema,
+} from "./attachments"
 
 export interface GitBranches {
   currentBranch: string | null
@@ -144,20 +149,28 @@ export const commandSchemas = {
     permissionMode: permissionModeSchema,
   }),
   "thread.setPlanMode": z.object({ threadId: z.string().min(1), planMode: z.boolean() }),
-  "run.start": z.object({
-    threadId: z.string().min(1),
-    text: z.string().min(1),
-    commandId: z.uuid().optional(),
-    instanceId: z.string().min(1).optional(),
-    /** 本次 run 的思考深度；缺省时用 agent 自己的默认值。 */
-    effort: reasoningEffortSchema.optional(),
-    /** 本次 run 用快速模式；只对目录里标了 fast 的模型生效，其余 driver 忽略。 */
-    fast: z.boolean().optional(),
-    /** 本次 run 打开 Ultracode；只对目录里标了 ultracode 的模型生效，其余 driver 忽略。 */
-    ultracode: z.boolean().optional(),
-    /** 用户在输入框里 @ 引用的会话；Host 给 agent 附上它们的摘要和读取方法。 */
-    references: threadReferencesSchema.optional(),
-  }),
+  "attachment.upload": attachmentUploadParamsSchema,
+  "attachment.read": attachmentReadParamsSchema,
+  "run.start": z
+    .object({
+      threadId: z.string().min(1),
+      text: z.string(),
+      commandId: z.uuid().optional(),
+      instanceId: z.string().min(1).optional(),
+      /** 本次 run 的思考深度；缺省时用 agent 自己的默认值。 */
+      effort: reasoningEffortSchema.optional(),
+      /** 本次 run 用快速模式；只对目录里标了 fast 的模型生效，其余 driver 忽略。 */
+      fast: z.boolean().optional(),
+      /** 本次 run 打开 Ultracode；只对目录里标了 ultracode 的模型生效，其余 driver 忽略。 */
+      ultracode: z.boolean().optional(),
+      /** 用户在输入框里 @ 引用的会话；Host 给 agent 附上它们的摘要和读取方法。 */
+      references: threadReferencesSchema.optional(),
+      /** 本次 run 附带的图片附件 id；有附件时允许 text 为空字符串。 */
+      attachmentIds: attachmentIdsSchema.optional(),
+    })
+    .refine((value) => value.text.length > 0 || (value.attachmentIds?.length ?? 0) > 0, {
+      message: "text or attachmentIds is required",
+    }),
   "run.list": z.object({}),
   ...queuedMessageCommands,
   "command.receipt": z.object({ commandId: z.uuid() }),

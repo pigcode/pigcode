@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { MAX_MESSAGE_ATTACHMENTS, imageAttachmentSchema } from "./attachments"
 
 export const queueMethods = {
   get: "queue.get",
@@ -20,10 +21,13 @@ export const queuedMessageCommands = {
   [queueMethods.resume]: queueResumeParams,
 } as const
 
+const queuedMessageAttachments = z.array(imageAttachmentSchema).max(MAX_MESSAGE_ATTACHMENTS)
+
 const queuedMessage = z.strictObject({
   id,
   text: z.string(),
   selected: z.boolean(),
+  attachments: queuedMessageAttachments.optional(),
 })
 export const queuedMessagesSnapshot = queueThreadParams.extend({
   paused: z.boolean(),
@@ -40,6 +44,7 @@ export const queueReceipt = queueResumeParams.extend({
   runId: id.optional(),
   stoppedRunId: id.optional(),
   text: z.string().optional(),
+  attachments: queuedMessageAttachments.optional(),
 })
 const queueReceiptResult = z.strictObject({ receipt: queueReceipt.optional() })
 
@@ -56,6 +61,7 @@ export function mobileQueueJsonSchemas() {
     QueueWithdrawParams: queueWithdrawParams,
     QueueStopAndSendParams: queueStopAndSendParams,
     QueueResumeParams: queueResumeParams,
+    ImageAttachment: imageAttachmentSchema,
     QueuedMessage: queuedMessage,
     QueueSnapshot: queuedMessagesSnapshot,
     QueueMethod: queueMethod,

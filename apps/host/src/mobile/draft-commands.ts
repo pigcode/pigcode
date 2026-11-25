@@ -62,6 +62,7 @@ export class MobileDraftCommands {
     ultracode,
     planMode,
     references,
+    attachmentIds,
   }: MobileDraftCreateParams): Promise<MobileDraftReceipt> {
     const permit = this.devices.runAuthorization(this.deviceKey)
     const extras: Record<string, unknown> = {}
@@ -70,6 +71,7 @@ export class MobileDraftCommands {
     if (ultracode !== undefined) extras.ultracode = ultracode
     if (planMode !== undefined) extras.planMode = planMode
     if (references !== undefined) extras.references = references
+    if (attachmentIds !== undefined) extras.attachmentIds = attachmentIds
     const binding =
       Object.keys(extras).length > 0
         ? commandBinding(
@@ -159,6 +161,7 @@ export class MobileDraftCommands {
                 })),
               }
             : {}),
+          ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
         },
       )
       if (!receipt) throw new Error("missing accepted draft receipt")

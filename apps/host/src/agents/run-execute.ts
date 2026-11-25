@@ -1,11 +1,12 @@
 import { updateThreadModes } from "./execution-modes"
 /** 执行一轮 run：调用 driver.send，把事件映射成线程事件；原生会话接不上时换新会话重试一次。 */
+import { appendImageAttachmentFallback } from "@pigcode/plugin-sdk"
 import type { Context } from "cordis"
 import type { AgentRuntime, ApprovalDecision, QuestionRequest, UserInput } from "./driver"
 import type { ActiveRun } from "./run-queue"
 import { mapAgentEvent, type RunEventHooks } from "./run-events"
 import { handoffForRun } from "./handoff-delivery"
-import { freshSessionHandoff } from "./switching"
+import { freshSessionHandoff, recomposePendingHandoff } from "./switching"
 import { isThreadReadTool } from "./thread-read-tool"
 
 /**
@@ -106,8 +107,9 @@ export function createExecute(
       },
     }
     armStall()
+    const effectiveInput = prepareDriverInput(run, input)
     try {
-      await run.driver.send(run.session, input, runtime)
+      await run.driver.send(run.session, effectiveInput, runtime)
       if (!isCurrent(run)) return
       if (lost) {
         clearStall()
@@ -139,8 +141,27 @@ export function createExecute(
       if (run.session.cwd !== previousCwd) {
         await deps.ctx.get("checkpoints")?.moveExecution(run.runId, run.session.cwd, run.controller.signal)
       }
-      const fresh = freshSessionHandoff(deps.ctx, run.threadId, run.runId, input.text)
-      const handoff = handoffForRun(deps.ctx.storage.db, run.threadId, run.runId, input.text, fresh)
+      const imageCount = input.attachments?.length ?? 0
+      const fresh = freshSessionHandoff(
+        deps.ctx,
+        run.threadId,
+        run.runId,
+        input.text,
+        run.instanceId,
+        imageCount,
+      )
+      const handoff = handoffForRun(
+        deps.ctx.storage.db,
+        run.threadId,
+        run.runId,
+        input.text,
+        fresh,
+        {
+          images: imageCount,
+          recompose: (pendingHandoff, budget) =>
+            recomposePendingHandoff(deps.ctx, run.threadId, pendingHandoff, budget, run.runId),
+        },
+      )
       const rest: UserInput = { ...input }
       delete rest.handoff
       await execute(run, handoff === null ? rest : { ...rest, handoff })
@@ -150,6 +171,19 @@ export function createExecute(
   }
 
   return execute
+}
+
+/** 不支持原生看图的 Agent 自动把已落盘的图片路径说明附加到文本末尾。 */
+function prepareDriverInput(run: ActiveRun, input: UserInput): UserInput {
+  if (!input.attachments || input.attachments.length === 0) return input
+  const nativeImages = run.driver.handlesImages
+    ? run.driver.handlesImages(run.session)
+    : run.driver.features?.images === true
+  if (nativeImages) return input
+  return {
+    ...input,
+    text: appendImageAttachmentFallback(input.text, input.attachments),
+  }
 }
 /** Keep the next queued message out of the driver until its previous native turn is cleaned up. */
 export function trackRunExecution(ctx: Context, send: ReturnType<typeof createExecute>) {

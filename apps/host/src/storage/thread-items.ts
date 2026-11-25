@@ -3,7 +3,7 @@
  * 交接挑选、pigcode_thread_read 分页和增量判断都读这张表，不再每次重放整个事件日志。
  * 事件日志仍然是源头：条目和事件在同一个事务里写入，迁移时从事件日志回填。
  */
-import type { ThreadEvent } from "@pigcode/contracts"
+import { imageAttachmentSchema, type ImageAttachmentRef, type ThreadEvent } from "@pigcode/contracts"
 import type Database from "better-sqlite3"
 
 /** 条目的种类。tool 是读文件、搜索这类不改东西的工具；command 和 file_change 单独分出来，交接要用。 */
@@ -35,6 +35,8 @@ export interface ThreadItem {
   status: string
   /** 给人和 agent 读的文本：消息原文，或者「命令 + 退出码 + 输出」这样的渲染结果。 */
   text: string
+  /** 用户消息附带的图片元数据（不含本机绝对路径）。 */
+  attachments?: ImageAttachmentRef[]
 }
 
 /** 交接和读取会用到的工具名。 */
@@ -52,14 +54,16 @@ export function projectThreadItem(db: Database.Database, event: ThreadEvent): vo
     case "message.completed": {
       const role = payload.role
       const text = typeof payload.text === "string" ? payload.text : ""
-      if ((role !== "user" && role !== "assistant") || text.trim() === "") return
+      const attachments = role === "user" ? parseAttachmentRefs(payload.attachments) : []
+      if (role !== "user" && role !== "assistant") return
+      if (text.trim() === "" && attachments.length === 0) return
       insert(db, event, {
         id: `msg:${event.seq}`,
         kind: role === "user" ? "user_message" : "assistant_message",
         status: payload.partial === true ? "partial" : "completed",
         text,
         parent,
-        data: {},
+        data: attachments.length > 0 ? { attachments } : {},
       })
       return
     }
@@ -442,7 +446,26 @@ function eventOf(row: Row): ThreadEvent {
   }
 }
 
+function parseAttachmentRefs(value: unknown): ImageAttachmentRef[] {
+  if (!Array.isArray(value) || value.length === 0) return []
+  const refs: ImageAttachmentRef[] = []
+  for (const item of value) {
+    const parsed = imageAttachmentSchema.safeParse(item)
+    if (parsed.success) refs.push(parsed.data)
+  }
+  return refs
+}
+
 function mapItem(row: Row): ThreadItem {
+  let attachments: ImageAttachmentRef[] = []
+  if (typeof row.payload_json === "string" && row.payload_json.length > 2) {
+    try {
+      const data = JSON.parse(row.payload_json) as Row
+      attachments = parseAttachmentRefs(data.attachments)
+    } catch {
+      // 忽略损坏的扩展字段。
+    }
+  }
   return {
     id: row.id as string,
     threadId: row.thread_id as string,
@@ -455,5 +478,6 @@ function mapItem(row: Row): ThreadItem {
     parentToolUseId: (row.parent_tool_use_id as string | null) ?? null,
     status: row.status as string,
     text: row.text as string,
+    ...(attachments.length > 0 ? { attachments } : {}),
   }
 }

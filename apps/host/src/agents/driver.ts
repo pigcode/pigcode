@@ -14,6 +14,7 @@ export type {
   AgentStatus,
   QuestionRequest,
   SessionMcp,
+  UserImageAttachment,
   UserInput,
 } from "@pigcode/plugin-sdk"
 

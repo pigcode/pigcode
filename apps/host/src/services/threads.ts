@@ -75,6 +75,8 @@ export interface ThreadsService {
   archive(threadId: string): Thread | undefined
   /** 取消归档；和主会话同一时刻归档的子代理一起回来。 */
   unarchive(threadId: string): Thread | undefined
+  /** 彻底删除会话及其关联数据（含子代理与图片附件）。 */
+  remove(threadId: string): boolean
   /** 标为已读（看过最近一次 run 的结果），或者标回未读。 */
   markRead(threadId: string, read: boolean): Thread | undefined
   /** 只确认调用方实际看过的结果和版本。 */
@@ -245,6 +247,33 @@ export const apply: ThreadsPlugin = (ctx) => {
         )
         .run(threadId, threadId, thread.archivedAt)
       return service.get(threadId)
+    },
+    remove(threadId) {
+      const thread = service.get(threadId)
+      if (!thread) return false
+      const childIds = (
+        ctx.storage.db
+          .prepare(`SELECT id FROM threads WHERE parent_thread_id = ?`)
+          .all(threadId) as Array<{ id: string }>
+      ).map((row) => row.id)
+      const ids = [...childIds, threadId]
+      ctx.storage.db.transaction(() => {
+        for (const id of ids) {
+          ctx.get("attachments")?.deleteForThread(id)
+          ctx.storage.db.prepare(`DELETE FROM pending_requests WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM schedule_runs WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM schedules WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM runs WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM agent_sessions WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM checkpoints WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM worktrees WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM thread_events WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM thread_items WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM thread_handoffs WHERE thread_id = ?`).run(id)
+          ctx.storage.db.prepare(`DELETE FROM threads WHERE id = ?`).run(id)
+        }
+      })()
+      return true
     },
     markRead(threadId, read) {
       const thread = service.get(threadId)

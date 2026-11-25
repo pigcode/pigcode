@@ -97,14 +97,24 @@ export async function dispatchDesktopQueue(
   }
   if (method !== "run.start") return dispatchQueuedMessage(ctx, receipts, method, parsed)
 
-  const { threadId, commandId, text, effort, fast, ultracode, instanceId, references } =
-    parsed as CommandParams<"run.start">
+  const {
+    threadId,
+    commandId,
+    text,
+    effort,
+    fast,
+    ultracode,
+    instanceId,
+    references,
+    attachmentIds,
+  } = parsed as CommandParams<"run.start">
   const options = {
     ...(effort ? { effort } : {}),
     ...(fast ? { fast: true } : {}),
     ...(ultracode ? { ultracode: true } : {}),
     ...(instanceId ? { instanceId } : {}),
     ...(references ? { references } : {}),
+    ...(attachmentIds && attachmentIds.length > 0 ? { attachmentIds } : {}),
   }
   const binding = commandBinding(method, threadId, text, options)
   const prior = commandId ? receipts.existing(commandId, binding, mobileRunReceipt) : undefined

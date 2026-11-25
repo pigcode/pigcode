@@ -230,6 +230,9 @@ export class AcpDriver implements AgentDriver {
   send(session: AgentSessionHandle, input: UserInput, runtime: AgentRuntime) {
     return this.runtime.send(session, input, runtime)
   }
+  handlesImages() {
+    return true
+  }
   interrupt(session: AgentSessionHandle) {
     return this.runtime.interrupt(session)
   }

@@ -7,6 +7,7 @@
  * - 开头说明覆盖范围、省略了多少，以及怎么用 pigcode MCP 桥上的 thread_read 去读省略的部分。
  * 不让模型写总结：交接是按规则挑出来的原文。
  */
+import { formatImageAttachmentHint } from "@pigcode/plugin-sdk"
 import type { ThreadItem, ThreadItemKind } from "../storage/thread-items"
 
 /** 交接收录的条目种类。 */
@@ -80,14 +81,19 @@ export function buildSelection(input: {
   heading: string
   threadId: string
   budget: number
+  resolveAttachmentPath?: (attachmentId: string) => string | undefined
 }): HandoffSelection | null {
   const candidates = input.items.filter(
     (item) =>
-      item.parentToolUseId === null && HANDOFF_KINDS.includes(item.kind) && item.text.trim(),
+      item.parentToolUseId === null &&
+      HANDOFF_KINDS.includes(item.kind) &&
+      (item.text.trim().length > 0 ||
+        (item.kind === "user_message" && (item.attachments?.length ?? 0) > 0)),
   )
   if (candidates.length === 0) return null
   const coveredFrom = input.items[0]?.position ?? null
   const coveredTo = input.items.at(-1)?.position ?? null
+  const renderItem = (item: ThreadItem): string => render(item, input.resolveAttachmentPath)
   const header = (selected: number, omitted: number): string =>
     [
       input.heading,
@@ -106,7 +112,7 @@ export function buildSelection(input: {
   const tryAdd = (index: number): void => {
     const item = candidates[index]
     if (!item || selected.has(index)) return
-    const cost = byteLength(JSON.stringify(render(item))) + 4
+    const cost = byteLength(JSON.stringify(renderItem(item))) + 4
     if (cost > remaining) return
     selected.add(index)
     remaining -= cost
@@ -120,7 +126,7 @@ export function buildSelection(input: {
   const kept = candidates.filter((_, index) => selected.has(index))
   const omitted = candidates.length - kept.length
   return {
-    text: [header(kept.length, omitted), ...kept.map(render)].join("\n\n"),
+    text: [header(kept.length, omitted), ...kept.map(renderItem)].join("\n\n"),
     selectedItemIds: kept.map((item) => item.id),
     omittedCount: omitted,
     coveredFrom,
@@ -128,8 +134,11 @@ export function buildSelection(input: {
   }
 }
 
-/** 一条历史：来源标记一行，下面是原文。 */
-function render(item: ThreadItem): string {
+/** 一条历史：来源标记一行，下面是原文与图片附件路径线索。 */
+function render(
+  item: ThreadItem,
+  resolveAttachmentPath?: (attachmentId: string) => string | undefined,
+): string {
   const role = item.kind === "user_message" ? "user" : "assistant"
   const tags = [
     `Historical ${role}`,
@@ -140,7 +149,22 @@ function render(item: ThreadItem): string {
     `item=${item.id}`,
     ...(item.status === "completed" ? [] : [`status=${item.status}`]),
   ]
-  return `[${tags.join("; ")}]\n${item.text}`
+  const attachmentLines =
+    item.kind === "user_message" && item.attachments && item.attachments.length > 0
+      ? item.attachments.map((att) =>
+          formatImageAttachmentHint({
+            ...att,
+            ...(resolveAttachmentPath?.(att.id) ? { path: resolveAttachmentPath(att.id) } : {}),
+          }),
+        )
+      : []
+  const body =
+    attachmentLines.length > 0
+      ? item.text.trim().length > 0
+        ? `${item.text}\n${attachmentLines.join("\n")}`
+        : attachmentLines.join("\n")
+      : item.text
+  return `[${tags.join("; ")}]\n${body}`
 }
 
 function byteLength(text: string): number {

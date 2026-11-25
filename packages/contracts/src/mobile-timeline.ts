@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { MAX_MESSAGE_ATTACHMENTS, imageAttachmentSchema } from "./attachments"
 import { mobileThreadComposerState } from "./mobile-composer"
 
 export const timelinePageBytes = 256 * 1024
@@ -78,6 +79,7 @@ export const mobileTimelineEvent = z.strictObject({
   failed: z.boolean().optional(),
   finishedSteps: sequence.optional(),
   totalSteps: sequence.optional(),
+  attachments: z.array(imageAttachmentSchema).max(MAX_MESSAGE_ATTACHMENTS).optional(),
 })
 
 const mobileTimelineToolPreview = z.strictObject({
@@ -157,6 +159,7 @@ export const mobileTimelineModels = {
   MobileTimelineContentParams: mobileTimelineContentParams,
   MobileTimelineContentField: mobileTimelineContentField,
   MobileTimelineKind: mobileTimelineKind,
+  ImageAttachment: imageAttachmentSchema,
   MobileTimelineEvent: mobileTimelineEvent,
   MobileTimelineToolPreview: mobileTimelineToolPreview,
   MobileTimelinePendingKind: mobileTimelinePendingKind,

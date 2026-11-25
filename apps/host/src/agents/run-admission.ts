@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto"
-import type { AgentModeSelection, Thread, ThreadEvent } from "@pigcode/contracts"
+import type {
+  AgentModeSelection,
+  ImageAttachmentRef,
+  Thread,
+  ThreadEvent,
+} from "@pigcode/contracts"
 import type { Context } from "cordis"
 import { threadCwd } from "../services/worktrees"
 import type { RunStore } from "../storage/run-store"
-import type { AgentDriver } from "./driver"
+import type { AgentDriver, UserImageAttachment } from "./driver"
 import type { QueuedRun } from "./run-queue"
 import { runInput, type StartRunOptions } from "./service"
 import type { AgentSessionStore } from "./session-store"
@@ -88,6 +93,20 @@ export function writeRunAdmission(
 ): void {
   const { runId, threadId, queuedAt } = entry
   const { text } = entry.input
+  let resolvedAttachments: readonly UserImageAttachment[] = entry.input.attachments ?? []
+  if (options.attachmentIds && options.attachmentIds.length > 0) {
+    const attachmentsService = ctx.get("attachments")
+    if (!attachmentsService) throw new Error("attachments service is not available")
+    resolvedAttachments = attachmentsService.commitForThread(
+      options.attachmentIds,
+      threadId,
+      options.admission?.deviceKey ?? null,
+    )
+    entry.input = { ...entry.input, attachments: resolvedAttachments }
+  }
+  const attachmentRefs: ImageAttachmentRef[] = resolvedAttachments.map(
+    ({ path: _path, ...ref }) => ref,
+  )
   const awaitingAgent = queued || options.admission?.deviceKey !== undefined
   if (options.admission?.deviceKey && thread.archivedAt) {
     ctx.threads.unarchive(threadId)
@@ -101,12 +120,13 @@ export function writeRunAdmission(
     status: awaitingAgent ? "queued" : "running",
     startedAt: queuedAt,
   })
-  maybeAutoTitle(ctx, thread, text, runId, append)
+  maybeAutoTitle(ctx, thread, text, runId, append, attachmentRefs)
   const references = recordThreadReferences(ctx, threadId, options.references ?? [])
   append(threadId, runId, "message.completed", {
     role: "user",
     text,
     ...(references.length > 0 ? { references } : {}),
+    ...(attachmentRefs.length > 0 ? { attachments: attachmentRefs } : {}),
   })
   if (awaitingAgent) append(threadId, runId, "run.queued", { queuedAt })
   options.admission?.recordReceipt(runId)
