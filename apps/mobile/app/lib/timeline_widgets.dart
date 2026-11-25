@@ -13,9 +13,11 @@ import 'package:re_highlight/styles/atom-one-light.dart';
 
 import 'attachments/image_viewer_page.dart';
 import 'mobile_sheet.dart';
+import 'preview/preview_url_extractor.dart';
 import 'theme_colors.dart';
 import 'timeline/timeline_tokens.dart';
 import 'timeline/tools/markdown_table.dart';
+import 'workbench/workbench_utils.dart';
 import 'workspace_icon.dart';
 
 typedef TimelineContentLoader =
@@ -280,7 +282,11 @@ Widget _timelineTaskListBlock(
           if (index > 0) const SizedBox(height: TimelineMarkdown.listGap),
           _TimelineTaskCheckbox(
             checked: match.group(1)!.toLowerCase() == 'x',
-            content: _markdown(context, match.group(2)!),
+            content: _markdown(
+              context,
+              match.group(2)!,
+              onLinkTap: config.onLinkTap,
+            ),
           ),
         ],
     ],
@@ -386,7 +392,11 @@ class _TimelineTaskCheckbox extends StatelessWidget {
   }
 }
 
-Widget _markdown(BuildContext context, String value) {
+Widget _markdown(
+  BuildContext context,
+  String value, {
+  TimelineOpenLinkCallback? onLinkTap,
+}) {
   final theme = Theme.of(context);
   final body = theme.textTheme.bodyMedium;
   final palette = theme.brightness == Brightness.dark
@@ -466,6 +476,19 @@ Widget _markdown(BuildContext context, String value) {
       imageBuilder: (context, url, width, height) =>
           _MarkdownImage(url: url, width: width, height: height),
       onLinkTap: (url, title) {
+        if (onLinkTap != null) {
+          onLinkTap(url, title);
+          return;
+        }
+        final trimmed = url.trim();
+        final uri = Uri.tryParse(trimmed);
+        if (uri != null &&
+            (uri.scheme.toLowerCase() == 'http' ||
+                uri.scheme.toLowerCase() == 'https') &&
+            !isLocalhostPreviewUrl(trimmed)) {
+          unawaited(confirmAndOpenExternalUrl(context, uri));
+          return;
+        }
         Clipboard.setData(ClipboardData(text: url));
         ScaffoldMessenger.maybeOf(
           context,
@@ -567,12 +590,14 @@ class TimelineAnswer extends StatelessWidget {
     required this.text,
     this.streaming = false,
     this.more,
+    this.onLinkTap,
     this.padding = const EdgeInsets.symmetric(vertical: 8),
   });
 
   final String text;
   final bool streaming;
   final VoidCallback? more;
+  final TimelineOpenLinkCallback? onLinkTap;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -582,9 +607,14 @@ class TimelineAnswer extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (streaming)
-          StreamingMarkdown(text: text, isStreaming: true, builder: _markdown)
+          StreamingMarkdown(
+            text: text,
+            isStreaming: true,
+            builder: (context, value) =>
+                _markdown(context, value, onLinkTap: onLinkTap),
+          )
         else
-          _markdown(context, text),
+          _markdown(context, text, onLinkTap: onLinkTap),
         if (more != null)
           TextButton(onPressed: more, child: const Text('查看完整正文')),
       ],

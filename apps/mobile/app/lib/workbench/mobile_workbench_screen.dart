@@ -70,10 +70,15 @@ class MobileWorkbenchScreen extends StatefulWidget {
 
 class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
   late MobileWorkbenchTab _selectedTab;
+  bool _previewActivated = false;
+
+  bool get _hasWorkbenchTabs =>
+      connectionSupportsWorkbenchRead(widget.connection) ||
+      widget.previewTabBuilder == null;
 
   List<MobileWorkbenchTab> get _availableTabs => [
-    MobileWorkbenchTab.files,
-    MobileWorkbenchTab.pr,
+    if (_hasWorkbenchTabs) MobileWorkbenchTab.files,
+    if (_hasWorkbenchTabs) MobileWorkbenchTab.pr,
     if (widget.previewTabBuilder != null) MobileWorkbenchTab.preview,
   ];
 
@@ -81,22 +86,24 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
   void initState() {
     super.initState();
     _selectedTab = _resolveInitialTab(widget.initialTab);
+    _previewActivated = _selectedTab == MobileWorkbenchTab.preview;
   }
 
   @override
   void didUpdateWidget(covariant MobileWorkbenchScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_availableTabs.contains(_selectedTab)) {
-      _selectedTab = MobileWorkbenchTab.files;
+      _selectedTab = _availableTabs.first;
+    }
+    if (_selectedTab == MobileWorkbenchTab.preview) {
+      _previewActivated = true;
     }
   }
 
   MobileWorkbenchTab _resolveInitialTab(MobileWorkbenchTab requested) {
-    if (requested == MobileWorkbenchTab.preview &&
-        widget.previewTabBuilder == null) {
-      return MobileWorkbenchTab.files;
-    }
-    return requested;
+    final tabs = _availableTabs;
+    if (tabs.contains(requested)) return requested;
+    return tabs.first;
   }
 
   @override
@@ -139,7 +146,12 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
           selected: _selectedTab,
           onSelected: (tab) {
             if (_selectedTab != tab) {
-              setState(() => _selectedTab = tab);
+              setState(() {
+                _selectedTab = tab;
+                if (tab == MobileWorkbenchTab.preview) {
+                  _previewActivated = true;
+                }
+              });
             }
           },
         ),
@@ -158,28 +170,32 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
         child: IndexedStack(
           index: selectedIndex,
           children: [
-            TickerMode(
-              enabled: _selectedTab == MobileWorkbenchTab.files,
-              child: FileBrowserTab(
-                connection: widget.connection,
-                threadId: widget.threadId,
-                initialDirectory: widget.initialDirectory,
-                searchDebounce: widget.searchDebounce,
+            if (_hasWorkbenchTabs) ...[
+              TickerMode(
+                enabled: _selectedTab == MobileWorkbenchTab.files,
+                child: FileBrowserTab(
+                  connection: widget.connection,
+                  threadId: widget.threadId,
+                  initialDirectory: widget.initialDirectory,
+                  searchDebounce: widget.searchDebounce,
+                ),
               ),
-            ),
-            TickerMode(
-              enabled: _selectedTab == MobileWorkbenchTab.pr,
-              child: PrStatusTab(
-                connection: widget.connection,
-                threadId: widget.threadId,
-                active: _selectedTab == MobileWorkbenchTab.pr,
-                openExternalUrl: widget.openExternalUrl,
+              TickerMode(
+                enabled: _selectedTab == MobileWorkbenchTab.pr,
+                child: PrStatusTab(
+                  connection: widget.connection,
+                  threadId: widget.threadId,
+                  active: _selectedTab == MobileWorkbenchTab.pr,
+                  openExternalUrl: widget.openExternalUrl,
+                ),
               ),
-            ),
+            ],
             if (widget.previewTabBuilder case final buildPreview?)
               TickerMode(
                 enabled: _selectedTab == MobileWorkbenchTab.preview,
-                child: Builder(builder: buildPreview),
+                child: _previewActivated
+                    ? Builder(builder: buildPreview)
+                    : const SizedBox.shrink(),
               ),
           ],
         ),

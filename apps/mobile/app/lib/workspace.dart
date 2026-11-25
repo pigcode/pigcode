@@ -11,6 +11,8 @@ import 'mobile_status_dot.dart';
 import 'mobile_surfaces.dart';
 import 'new_thread_draft.dart';
 import 'offline_cache.dart';
+import 'preview/preview_tab.dart';
+import 'preview/preview_webview_screen.dart';
 import 'share/share_receiver.dart';
 import 'sidebar_menu.dart';
 import 'theme_colors.dart';
@@ -106,6 +108,8 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.onVisibleThread,
     this.onActiveTargetChanged,
     this.onSidebarChanged,
+    this.openExternalUrl,
+    this.previewWebViewBuilder,
     this.presented = true,
   });
 
@@ -120,6 +124,8 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final ValueChanged<({String? threadId, bool draftOpen})>?
   onActiveTargetChanged;
   final ValueChanged<SidebarSnapshot?>? onSidebarChanged;
+  final ExternalUrlOpener? openExternalUrl;
+  final PreviewWebViewBuilder? previewWebViewBuilder;
   final bool presented;
   final bool connected;
   final String connectionLabel;
@@ -134,6 +140,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
 class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
   SidebarSnapshot? _lastSidebar;
   SidebarSnapshot? _reportedSidebar;
+  final Map<String, List<String>> _timelinePreviewUrls = {};
   bool _loadingCache = false;
 
   void _reportSidebarIfChanged() {
@@ -205,8 +212,9 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     final draftLink = online && connection?.supportsDraftCommands == true
         ? connection
         : null;
-    final canOpenWorkbench =
-        online && connectionSupportsWorkbenchRead(connection);
+    final supportsWorkbench = connectionSupportsWorkbenchRead(connection);
+    final supportsPreview = connectionSupportsPreviewTunnel(connection);
+    final canOpenWorkbench = online && (supportsWorkbench || supportsPreview);
     final computer = widget.computer;
     final localDrafts = computer != null && widget.deviceId != null;
     return WorkspaceView(
@@ -236,6 +244,23 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                   connection: active,
                   threadId: thread.id,
                   title: thread.title,
+                  initialTab: supportsWorkbench
+                      ? MobileWorkbenchTab.files
+                      : MobileWorkbenchTab.preview,
+                  openExternalUrl: widget.openExternalUrl,
+                  previewTabBuilder: supportsPreview
+                      ? (_) => PreviewTab(
+                            connection: active,
+                            threadId: thread.id,
+                            computerKey: computer?.computerKey,
+                            timelineUrls:
+                                _timelinePreviewUrls[thread.id] ?? const [],
+                            timelineUrlsProvider: () =>
+                                _timelinePreviewUrls[thread.id] ?? const [],
+                            openExternalUrl: widget.openExternalUrl,
+                            webViewBuilder: widget.previewWebViewBuilder,
+                          )
+                      : null,
                 ),
               );
             }
@@ -278,6 +303,11 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         computerKey: computer?.computerKey,
         onSynced: onSynced,
         onRunChangesChanged: presentation.onRunChangesChanged,
+        onPreviewUrlsChanged: (urls) {
+          _timelinePreviewUrls[thread.id] = urls;
+        },
+        openExternalUrl: widget.openExternalUrl,
+        previewWebViewBuilder: widget.previewWebViewBuilder,
         liveShare:
             widget.liveShare != null &&
                 !widget.liveShare!.forNewThread &&

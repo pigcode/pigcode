@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 import 'package:re_highlight/languages/all.dart';
@@ -10,11 +11,16 @@ import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../theme_colors.dart';
+import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 
 /// 点击时间线中的 `@文件路径` 或工具文件芯片时触发的只读源码打开回调。
 typedef TimelineOpenFileCallback =
     Future<void> Function(String path, {int? line});
+
+/// 点击时间线 Markdown 链接时的回调。
+typedef TimelineOpenLinkCallback = void Function(String url, String title);
 
 /// 外部浏览器打开链接函数（便于在测试中注入替身验证）。
 typedef ExternalUrlOpener = Future<bool> Function(Uri uri);
@@ -23,6 +29,101 @@ typedef ExternalUrlOpener = Future<bool> Function(Uri uri);
 Future<bool> launchExternalUrl(Uri uri) =>
     launchUrl(uri, mode: LaunchMode.externalApplication);
 
+enum _ExternalLinkDialogAction { cancel, copy, open }
+
+/// 弹窗确认后在系统外部浏览器打开 HTTP/HTTPS 链接，并附带复制链接选项。
+Future<void> confirmAndOpenExternalUrl(
+  BuildContext context,
+  Uri uri, {
+  ExternalUrlOpener? openExternalUrl,
+  String title = '打开外部链接',
+  String message = '即将在系统浏览器中打开以下外部链接：',
+}) async {
+  final scheme = uri.scheme.toLowerCase();
+  if (scheme != 'http' && scheme != 'https') {
+    await Clipboard.setData(ClipboardData(text: uri.toString()));
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text('已复制链接 ${uri.toString()}')),
+    );
+    return;
+  }
+
+  final action = await showDialog<_ExternalLinkDialogAction>(
+    context: context,
+    builder: (dialogContext) {
+      final colors = Theme.of(dialogContext).brightness == Brightness.dark
+          ? pigcodeDark
+          : pigcodeLight;
+      return AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: TimelineSpace.x4,
+          children: [
+            Text(message),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(TimelineSpace.x4),
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(TimelineRadius.block),
+                border: Border.all(color: colors.border),
+              ),
+              child: Text(
+                uri.toString(),
+                style: TimelineType.metaMonoStyle(colors.secondaryText),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_ExternalLinkDialogAction.cancel),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_ExternalLinkDialogAction.copy),
+            child: const Text('复制链接'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(_ExternalLinkDialogAction.open),
+            child: const Text('在浏览器打开'),
+          ),
+        ],
+      );
+    },
+  );
+
+  if (!context.mounted) return;
+  switch (action) {
+    case _ExternalLinkDialogAction.copy:
+      await Clipboard.setData(ClipboardData(text: uri.toString()));
+      if (!context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(content: Text('已复制链接 ${uri.toString()}')),
+      );
+    case _ExternalLinkDialogAction.open:
+      final opener = openExternalUrl ?? launchExternalUrl;
+      var opened = false;
+      try {
+        opened = await opener(uri);
+      } catch (_) {
+        opened = false;
+      }
+      if (!context.mounted || opened) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(content: Text('无法在外部浏览器打开此链接')),
+      );
+    case _ExternalLinkDialogAction.cancel || null:
+      break;
+  }
+}
+
 /// 读取 `connection.supportsWorkbenchRead`；在未覆写该属性的旧版桩连接上安全降级为 `false`。
 bool connectionSupportsWorkbenchRead(MobileConnection? connection) {
   if (connection == null) return false;
@@ -30,6 +131,26 @@ bool connectionSupportsWorkbenchRead(MobileConnection? connection) {
     return connection.supportsWorkbenchRead;
   } on NoSuchMethodError {
     return false;
+  }
+}
+
+/// 读取 `connection.supportsPreviewTunnel`；在未覆写该属性的旧版桩连接上安全降级为 `false`。
+bool connectionSupportsPreviewTunnel(MobileConnection? connection) {
+  if (connection == null) return false;
+  try {
+    return connection.supportsPreviewTunnel;
+  } on NoSuchMethodError {
+    return false;
+  }
+}
+
+/// 安全读取连接关联的 `computerKey`；在未覆写 `computer` 的旧版测试桩上返回 `null`。
+String? connectionComputerKey(MobileConnection? connection) {
+  if (connection == null) return null;
+  try {
+    return connection.computer.computerKey;
+  } on NoSuchMethodError {
+    return null;
   }
 }
 

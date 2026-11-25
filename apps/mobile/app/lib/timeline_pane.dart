@@ -14,6 +14,9 @@ import 'composer/mention_editing_controller.dart';
 import 'local_drafts.dart';
 import 'offline_cache.dart';
 import 'offline_sync_label.dart';
+import 'preview/preview_tab.dart';
+import 'preview/preview_url_extractor.dart';
+import 'preview/preview_webview_screen.dart';
 import 'run_composer.dart';
 import 'run_changes_card.dart';
 import 'run_diff_screen.dart';
@@ -115,6 +118,9 @@ class TimelinePane extends ConsumerStatefulWidget {
     this.computerKey,
     this.onSynced,
     this.onRunChangesChanged,
+    this.onPreviewUrlsChanged,
+    this.openExternalUrl,
+    this.previewWebViewBuilder,
     this.reading,
     this.liveShare,
   });
@@ -129,6 +135,9 @@ class TimelinePane extends ConsumerStatefulWidget {
   final String? computerKey;
   final ValueChanged<bool>? onSynced;
   final ValueChanged<RunChangesShortcut?>? onRunChangesChanged;
+  final ValueChanged<List<String>>? onPreviewUrlsChanged;
+  final ExternalUrlOpener? openExternalUrl;
+  final PreviewWebViewBuilder? previewWebViewBuilder;
   final ({
     bool visible,
     int visit,
@@ -155,6 +164,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   Future<MobileRunChangesPage>? _shortcutFiles;
   List<MobileTimelineEvent>? _changeEvents;
   MobileConnection? _changeConnection;
+  List<MobileTimelineEvent>? _previewSourceEvents;
+  MobileActiveRun? _previewSourceLive;
+  List<String> _reportedPreviewUrls = const [];
   bool _openingChanges = false;
   String _observedText = '';
   ThreadDraftStorage? _draftStore;
@@ -357,6 +369,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final errors = current?.problem ?? selected?.error;
     final synced = online && errors == null && selected?.isLoading == false;
     _reportRunChanges(synced ? connection : null, snapshot);
+    _reportPreviewUrls(snapshot);
     if (_synced != synced && widget.onSynced != null) {
       _synced = synced;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -397,6 +410,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
                 connectionSupportsWorkbenchRead(connection)
             ? (path, {line}) => _openWorkbenchFile(connection, path, line: line)
             : null,
+        onOpenLink: (url, title) => unawaited(_handleTimelineLinkTap(url, title)),
         changesCard: online && connection?.supportsRunChanges == true
             ? (turn) => _changes(connection!, turn)
             : null,
@@ -899,12 +913,26 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     }
     if (path.endsWith('/')) {
       final dir = path.substring(0, path.length - 1);
+      final supportsPreview = connectionSupportsPreviewTunnel(connection);
       await MobileWorkbenchScreen.open(
         context,
         connection: connection,
         threadId: widget.threadId,
         initialTab: MobileWorkbenchTab.files,
         initialDirectory: dir,
+        openExternalUrl: widget.openExternalUrl,
+        previewTabBuilder: supportsPreview
+            ? (_) => PreviewTab(
+                  connection: connection,
+                  threadId: widget.threadId,
+                  computerKey: _effectiveComputerKey,
+                  timelineUrls: extractPreviewUrlsFromSnapshot(_latest),
+                  timelineUrlsProvider: () =>
+                      extractPreviewUrlsFromSnapshot(_latest),
+                  openExternalUrl: widget.openExternalUrl,
+                  webViewBuilder: widget.previewWebViewBuilder,
+                )
+            : null,
       );
       return;
     }
@@ -915,6 +943,92 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       path: path,
       initialLine: targetLine,
     );
+  }
+
+  void _reportPreviewUrls(TimelineSnapshot? snapshot) {
+    final callback = widget.onPreviewUrlsChanged;
+    if (callback == null) return;
+    final events = snapshot?.events;
+    final live = snapshot?.live;
+    if (identical(_previewSourceEvents, events) &&
+        identical(_previewSourceLive, live)) {
+      return;
+    }
+    _previewSourceEvents = events;
+    _previewSourceLive = live;
+    final next = extractPreviewUrlsFromSnapshot(snapshot);
+    if (_stringListEquals(_reportedPreviewUrls, next)) return;
+    _reportedPreviewUrls = next;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && identical(_reportedPreviewUrls, next)) {
+        callback(next);
+      }
+    });
+  }
+
+  bool _stringListEquals(List<String> a, List<String> b) {
+    if (identical(a, b)) return true;
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _handleTimelineLinkTap(String rawUrl, String title) async {
+    if (!mounted) return;
+    final trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return;
+
+    if (isLocalhostPreviewUrl(trimmed)) {
+      final connection = widget.connection;
+      if (!widget.online || connection == null) {
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('电脑当前离线，连接后再打开本机预览')),
+          );
+        return;
+      }
+      if (!connectionSupportsPreviewTunnel(connection)) {
+        ScaffoldMessenger.maybeOf(context)
+          ?..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('请更新电脑上的 Pigcode 后使用本机预览')),
+          );
+        return;
+      }
+      final uri = normalizePreviewInput(trimmed).uri;
+      if (uri != null) {
+        await MobilePreviewWebViewScreen.open(
+          context,
+          connection: connection,
+          initialUrl: uri,
+          computerKey: _effectiveComputerKey,
+          openExternalUrl: widget.openExternalUrl,
+          webViewBuilder: widget.previewWebViewBuilder,
+        );
+      }
+      return;
+    }
+
+    final uri = Uri.tryParse(trimmed);
+    if (uri != null &&
+        (uri.scheme.toLowerCase() == 'http' ||
+            uri.scheme.toLowerCase() == 'https')) {
+      await confirmAndOpenExternalUrl(
+        context,
+        uri,
+        openExternalUrl: widget.openExternalUrl,
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: trimmed));
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text('已复制链接 $trimmed')));
   }
 
   String _detail(Object error) => switch (error) {

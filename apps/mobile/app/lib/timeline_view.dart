@@ -35,6 +35,7 @@ class TimelineView extends StatefulWidget {
     this.loadAttachmentThumb,
     this.loadAttachmentFull,
     this.onOpenFile,
+    this.onOpenLink,
   });
 
   final TimelineSnapshot snapshot;
@@ -50,6 +51,7 @@ class TimelineView extends StatefulWidget {
   final AttachmentBytesLoader? loadAttachmentThumb;
   final AttachmentBytesLoader? loadAttachmentFull;
   final TimelineOpenFileCallback? onOpenFile;
+  final TimelineOpenLinkCallback? onOpenLink;
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -578,6 +580,7 @@ class _TimelineViewState extends State<TimelineView> {
   }) => TimelineAnswer(
     text: event.text ?? '',
     padding: padding,
+    onLinkTap: widget.onOpenLink,
     more: widget.online && event.truncated == true
         ? () => _openText(event)
         : null,
@@ -906,6 +909,7 @@ class _TimelineViewState extends State<TimelineView> {
         TimelineAnswer(
           text: live.text,
           streaming: true,
+          onLinkTap: widget.onOpenLink,
           more: live.textTruncated
               ? () => showTimelineDetails(context, '完整正文', [
                   TimelineDetails(

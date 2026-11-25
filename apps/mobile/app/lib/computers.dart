@@ -9,6 +9,7 @@ import 'mobile_secure_storage.dart';
 import 'mobile_command_journal.dart';
 import 'local_drafts.dart';
 import 'offline_cache.dart';
+import 'preview/preview_history.dart';
 
 final computersProvider =
     AsyncNotifierProvider<Computers, List<ComputerProfile>>(Computers.new);
@@ -35,6 +36,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       await mobileSecureStorage.delete(key: _cleanupKey);
       await MobileCommandJournal.clearOnInstall();
       await clearDraftsOnInstall();
+      await clearPreviewHistoryOnInstall();
       await ref.read(offlineCacheProvider).clearOnInstall();
       await ref.read(attachmentCacheProvider).clearAllAttachmentCaches();
       await preferences.setBool(_installation, true);
@@ -155,6 +157,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       ref.read(attachmentCacheProvider).clearComputerAttachmentCache(key),
       MobileCommandJournal.clearForComputer(key),
       clearComputerDrafts(key),
+      clearComputerPreviewHistory(key),
     ]);
   }
 
