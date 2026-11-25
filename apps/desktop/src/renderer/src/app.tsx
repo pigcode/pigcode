@@ -57,7 +57,8 @@ const TerminalDrawer = lazy(() =>
   import("./terminal-drawer").then((module) => ({ default: module.TerminalDrawer })),
 )
 import { useThreadReading } from "./thread-reading"
-import { addProject, loadWorkspace, sidebarActions } from "./workspace-actions"
+import { addProject, sidebarActions } from "./workspace-actions"
+import { useWorkspaceSync } from "./workspace-sync"
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
@@ -148,13 +149,14 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     if (location) setHistory((current) => pushLocation(current, location))
   }, [view, settingsPage, state.activeThreadId])
 
-  // 连上 Host 时合并项目和会话，补上连接中断时创建的定时任务会话。
-  useEffect(() => {
-    if (state.status !== "connected") return
-    void loadWorkspace(connection, store).catch((error: unknown) => {
+  const reportWorkspaceError = useCallback(
+    (error: unknown) => {
       store.update({ error: messageOf(error) })
-    })
-  }, [state.status, connection, store])
+    },
+    [store],
+  )
+  // 连上或重连 Host 时合并项目和会话，补齐重启恢复的中断状态与连接中断时创建的定时任务会话（#84）。
+  useWorkspaceSync(connection, store, reportWorkspaceError)
 
   // 当前线程或它的 agent 变化时刷新 Agent 功能，界面据此隐藏不支持的控件。
   // 只依赖 agent id：线程标题、更新时间这类变化不需要重新查询。

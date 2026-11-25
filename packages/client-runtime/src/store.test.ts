@@ -169,6 +169,19 @@ describe("AppStore", () => {
     store.addEvent(threadEvent("th_1", 5, "run.completed"))
     expect(store.getSnapshot().threadStates["th_1"]?.status).toBe("completed")
 
+    // Host 重启打断等待审批的 run 时只落 run.interrupted（无 approval.resolved），待审批计数必须清零。
+    store.addEvent(threadEvent("th_1", 6, "run.started"))
+    store.addEvent(threadEvent("th_1", 7, "approval.requested"))
+    expect(store.getSnapshot().threadStates["th_1"]).toMatchObject({
+      status: "waiting-approval",
+      pendingApprovals: 1,
+    })
+    store.addEvent(threadEvent("th_1", 8, "run.interrupted", { reason: "host-restart" }))
+    expect(store.getSnapshot().threadStates["th_1"]).toMatchObject({
+      status: "interrupted",
+      pendingApprovals: 0,
+    })
+
     store.setThreadError("th_1", "manual")
     expect(store.getSnapshot().threadStates["th_1"]?.lastError).toBe("manual")
     store.setThreadStatus("th_1", "interrupted")

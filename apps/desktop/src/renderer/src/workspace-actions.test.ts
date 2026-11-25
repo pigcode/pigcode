@@ -94,6 +94,29 @@ describe("workspace actions", () => {
     ])
   })
 
+  it("updates stale running and waiting-approval threads to interrupted after Host restart (#84)", async () => {
+    const running = { ...thread("t1", "p1", "2026-10-20T01:00:00.000Z"), status: "running" as const }
+    const waiting = {
+      ...thread("t2", "p1", "2026-10-20T02:00:00.000Z"),
+      status: "waiting-approval" as const,
+    }
+    const store = new AppStore()
+    store.update({ projects: [project("p1")], threads: [running, waiting] })
+    const { connection } = fakeConnection({
+      "project.list": () => [project("p1")],
+      "thread.list": () => [
+        { ...running, status: "interrupted" as const },
+        { ...waiting, status: "interrupted" as const },
+      ],
+    })
+
+    await loadWorkspace(connection, store)
+    expect(store.getSnapshot().threads.map((item) => [item.id, item.status])).toEqual([
+      ["t1", "interrupted"],
+      ["t2", "interrupted"],
+    ])
+  })
+
   it("renames a thread with the record the Host returns", async () => {
     const store = storeWith([thread("t1", "p1", "2026-10-20T01:00:00.000Z")], null)
     const renamed = { ...thread("t1", "p1", "2026-10-21T00:00:00.000Z"), title: "Renamed" }

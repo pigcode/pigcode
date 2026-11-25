@@ -47,7 +47,12 @@ const connection = new Connection({
       store.queueReasoning(delta.threadId, delta.event.text)
     }
   },
-  onStatus: (status) => store.update({ status }),
+  onStatus: (status) =>
+    store.update(
+      status === "connected"
+        ? { status, connectionRevision: connection.connectionRevision }
+        : { status },
+    ),
   onLiveSnapshot: (threadId, live) => store.restoreLiveRun(threadId, live),
   onScheduledThread: (thread) => {
     const { threads } = store.getSnapshot()

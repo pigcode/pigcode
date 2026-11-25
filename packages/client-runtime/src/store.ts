@@ -36,6 +36,8 @@ export interface AppState {
   error: string | null
   /** 首次连接后是否发生过 Host 重连；供界面显示重连提示。 */
   reconnected: boolean
+  /** 每次成功连上或重连 Host 递增，确保 0 订阅同步重连也能触发工作区刷新（#84）。 */
+  connectionRevision: number
   /** 当前线程 agent 的 Agent 功能；尚未加载时为 null。 */
   agentFeatures: AgentFeatures | null
   /** 插件启停后递增，通知依赖 agent 列表的界面重新拉取。 */
@@ -119,8 +121,9 @@ function errorFromPayload(payload: unknown): string | null {
   return null
 }
 
-/** 应用一条事件后的审批计数。 */
+/** 应用一条事件后的审批计数；run 结束（含 Host 重启中断）后清空残留计数。 */
 function pendingApprovalsAfter(previous: ThreadViewState, event: ThreadEvent): number {
+  if (RUN_END_EVENTS.has(event.type)) return 0
   if (event.type === "approval.requested") return previous.pendingApprovals + 1
   if (event.type === "approval.resolved") return Math.max(0, previous.pendingApprovals - 1)
   return previous.pendingApprovals
@@ -136,6 +139,7 @@ const initialState: AppState = {
   streamingText: "",
   error: null,
   reconnected: false,
+  connectionRevision: 0,
   agentFeatures: null,
   agentRevision: 0,
   threadStates: {},
