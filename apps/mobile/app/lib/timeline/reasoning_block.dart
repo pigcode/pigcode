@@ -1,21 +1,27 @@
 import 'package:flutter/material.dart';
 
 import '../theme_colors.dart';
+import 'shimmer_text.dart';
 import 'timeline_tokens.dart';
 
-/// 思考块：Brain 图标、「正在思考 / 思考」、展开后的正文；流式时在行尾露出最新一句。
+/// 思考块（桌面 `ReasoningBlock`）：Brain 图标、「正在思考」（扫光 + 尾句渐隐）或「思考」，
+/// 展开后最多 240px 高纯文本并支持流式跟随；独立时带左细线，在摘要组内直接复用组导线。
 class TimelineReasoningBlock extends StatefulWidget {
   const TimelineReasoningBlock({
     super.key,
     required this.text,
     this.streaming = false,
     this.truncated = false,
+    this.showIcon = true,
+    this.compact = false,
     this.onOpenFull,
   });
 
   final String text;
   final bool streaming;
   final bool truncated;
+  final bool showIcon;
+  final bool compact;
   final VoidCallback? onOpenFull;
 
   @override
@@ -23,7 +29,10 @@ class TimelineReasoningBlock extends StatefulWidget {
 }
 
 class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
+  final _scroll = ScrollController();
   bool _expanded = false;
+  bool _following = true;
+  bool _autoJumping = false;
 
   String get _peek {
     final lines = widget.text
@@ -35,91 +44,201 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(TimelineReasoningBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_expanded &&
+        widget.streaming &&
+        _following &&
+        widget.text != oldWidget.text) {
+      _jumpToBottom();
+    }
+  }
+
+  void _onScroll() {
+    if (_autoJumping || !_scroll.hasClients) return;
+    final position = _scroll.position;
+    _following =
+        position.maxScrollExtent - position.pixels <=
+        TimelineToolCard.reasoningFollowThreshold;
+  }
+
+  void _jumpToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      _autoJumping = true;
+      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+      _autoJumping = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final touch = timelineTouchHeight(context);
     final label = widget.streaming ? '正在思考' : '思考';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final labelStyle = TimelineType.contentStyle(colors.timelineSubtle);
+    final minHeight = widget.compact ? 0.0 : timelineTouchHeight(context);
+
+    final headRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: touch),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: TimelineIcon.row,
-                  height: TimelineIcon.row,
-                  child: Icon(
-                    Icons.psychology_outlined,
-                    size: TimelineIcon.row,
-                    color: colors.timelineSubtle,
-                  ),
-                ),
-                const SizedBox(width: TimelineSpace.x4),
-                Text(
-                  label,
-                  style: TimelineType.contentStyle(colors.timelineSubtle),
-                ),
-                if (widget.streaming && !_expanded && _peek.isNotEmpty) ...[
-                  const SizedBox(width: TimelineSpace.x4),
-                  Expanded(
-                    child: Text(
-                      _peek,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.end,
-                      style: TimelineType.metaStyle(colors.timelineFaint),
-                    ),
-                  ),
-                ] else
-                  const Spacer(),
-                Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_down
-                      : Icons.keyboard_arrow_right,
-                  size: TimelineIcon.control,
-                  color: colors.timelineFaint,
-                ),
-              ],
+        if (widget.showIcon) ...[
+          SizedBox(
+            width: TimelineIcon.row,
+            height: TimelineIcon.row,
+            child: Center(
+              child: Icon(
+                Icons.psychology_outlined,
+                size: TimelineIcon.row,
+                color: colors.timelineSubtle,
+              ),
             ),
           ),
+          const SizedBox(width: TimelineSpace.fieldGap),
+        ],
+        if (widget.streaming)
+          TimelineShimmerText(text: label, style: labelStyle)
+        else
+          Text(label, style: labelStyle),
+        if (widget.streaming && !_expanded && _peek.isNotEmpty) ...[
+          const SizedBox(width: TimelineSpace.fieldGap),
+          Expanded(
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (bounds) {
+                final width = bounds.width;
+                final edge = width > 0
+                    ? (TimelineToolCard.reasoningPeekFade / width).clamp(
+                        0.0,
+                        0.45,
+                      )
+                    : 0.0;
+                return LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: const [Colors.transparent, Colors.white],
+                  stops: [0, edge],
+                ).createShader(bounds);
+              },
+              child: Text(
+                _peek,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.clip,
+                textAlign: TextAlign.end,
+                style: TimelineType.contentStyle(colors.timelineFaint),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(width: TimelineSpace.fieldGap),
+        AnimatedRotation(
+          turns: _expanded ? 0.25 : 0,
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : TimelineMotion.slow,
+          curve: TimelineMotion.ease,
+          child: Icon(
+            Icons.chevron_right,
+            size: TimelineIcon.badge,
+            color: colors.timelineFaint,
+          ),
         ),
-        if (_expanded)
-          Padding(
+      ],
+    );
+
+    final bodyContent = ConstrainedBox(
+      constraints: const BoxConstraints(
+        maxHeight: TimelineToolCard.reasoningMaxHeight,
+      ),
+      child: SingleChildScrollView(
+        controller: _scroll,
+        child: Text(
+          widget.text.trim(),
+          style: TimelineType.contentStyle(colors.timelineFaint),
+        ),
+      ),
+    );
+
+    // 摘要组内部（!showIcon）：不重复画左导线，顶部只留 4px（`.summary-group-list .reasoning-body`）。
+    final expandedBody = widget.showIcon
+        ? Padding(
             padding: const EdgeInsetsDirectional.only(
-              start: TimelineIcon.row + TimelineSpace.x4,
-              top: TimelineSpace.x2,
+              start: TimelineSpace.guideIndent,
+              top: TimelineSpace.reasoningBodyTop,
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 border: BorderDirectional(
-                  start: BorderSide(color: colors.divider),
+                  start: BorderSide(
+                    color: colors.timelineBorder,
+                    width: TimelineBorder.regular,
+                  ),
                 ),
               ),
               child: Padding(
                 padding: const EdgeInsetsDirectional.only(
-                  start: TimelineSpace.x6,
+                  start: TimelineSpace.reasoningBodyPadding,
                 ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: SingleChildScrollView(
-                    child: Text(
-                      widget.text,
-                      style: TimelineType.contentStyle(colors.timelineSubtle),
-                    ),
-                  ),
-                ),
+                child: bodyContent,
+              ),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.only(top: TimelineSpace.x2),
+            child: bodyContent,
+          );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          expanded: _expanded,
+          child: InkWell(
+            onTap: () {
+              setState(() => _expanded = !_expanded);
+              if (_expanded && widget.streaming) _jumpToBottom();
+            },
+            borderRadius: BorderRadius.circular(TimelineRadius.xs),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                heightFactor: 1,
+                child: widget.compact
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: TimelineSpace.x1,
+                        ),
+                        child: headRow,
+                      )
+                    : headRow,
               ),
             ),
           ),
+        ),
+        if (_expanded) expandedBody,
         if (widget.truncated)
           Padding(
-            padding: const EdgeInsetsDirectional.only(
-              start: TimelineIcon.row + TimelineSpace.x4,
+            padding: EdgeInsetsDirectional.only(
+              start: widget.showIcon
+                  ? TimelineIcon.row + TimelineSpace.fieldGap
+                  : 0,
             ),
             child: TextButton(
               onPressed: widget.onOpenFull,

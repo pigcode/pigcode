@@ -84,10 +84,13 @@ class _RunChangesCardState extends State<RunChangesCard> {
       }
       final noteStyle = TimelineType.metaStyle(colors.timelineFaint);
       return Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
+        margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x3),
         decoration: BoxDecoration(
           color: colors.timelineCard,
-          border: Border.all(color: colors.timelineBorder),
+          border: Border.all(
+            color: colors.timelineBorder,
+            width: TimelineBorder.regular,
+          ),
           borderRadius: BorderRadius.circular(TimelineRadius.panel),
         ),
         clipBehavior: Clip.antiAlias,
@@ -104,7 +107,7 @@ class _RunChangesCardState extends State<RunChangesCard> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
-                  height: 40,
+                  height: TimelineControl.bar,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: TimelineSpace.x6,
@@ -129,14 +132,16 @@ class _RunChangesCardState extends State<RunChangesCard> {
                         if (added > 0)
                           Text(
                             '+$added',
-                            style: TimelineType.metaStyle(colors.diffAdded),
+                            style: TimelineType.diffCountStyle(colors.diffAdded),
                           ),
                         if (added > 0 && removed > 0)
                           const SizedBox(width: TimelineSpace.x2),
                         if (removed > 0)
                           Text(
                             '-$removed',
-                            style: TimelineType.metaStyle(colors.diffRemoved),
+                            style: TimelineType.diffCountStyle(
+                              colors.diffRemoved,
+                            ),
                           ),
                         const SizedBox(width: TimelineSpace.x1),
                         Icon(
@@ -232,11 +237,18 @@ class _ChangeRow extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Color.alphaBlend(
-          colors.background.withValues(alpha: .5),
+          colors.background.withValues(
+            alpha: TimelineToolCard.changeRowBlendAlpha,
+          ),
           colors.timelineCard,
         ),
         border: separated
-            ? Border(top: BorderSide(color: colors.timelineDivider))
+            ? Border(
+                top: BorderSide(
+                  color: colors.timelineDivider,
+                  width: TimelineBorder.regular,
+                ),
+              )
             : null,
       ),
       child: Row(
@@ -276,12 +288,12 @@ class _ChangeRow extends StatelessWidget {
             ),
           ),
           if (file.added case final added? when added > 0)
-            Text('+$added', style: TimelineType.metaStyle(colors.diffAdded)),
+            Text('+$added', style: TimelineType.diffCountStyle(colors.diffAdded)),
           if (file.removed case final removed? when removed > 0) ...[
             const SizedBox(width: TimelineSpace.x2),
             Text(
               '-$removed',
-              style: TimelineType.metaStyle(colors.diffRemoved),
+              style: TimelineType.diffCountStyle(colors.diffRemoved),
             ),
           ],
         ],

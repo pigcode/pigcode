@@ -109,6 +109,23 @@ void main() {
       await _matchScreen('markdown-table', brightness);
     }, variant: _platforms);
 
+    testWidgets('Markdown 代码块与引用 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(richMarkdown: true));
+      expect(find.text('ts'), findsOneWidget);
+      expect(find.text('lint 通过'), findsOneWidget);
+      await _matchScreen('timeline-markdown', brightness);
+    }, variant: _platforms);
+
+    testWidgets('气泡折叠、文件摘要与提示 ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(states: true));
+      expect(find.byTooltip('展开'), findsOneWidget);
+      expect(find.text('已修改 4 文件'), findsOneWidget);
+      expect(find.text('+1'), findsOneWidget);
+      expect(find.textContaining('MCP 桥'), findsOneWidget);
+      expect(find.textContaining('退出码 1'), findsOneWidget);
+      await _matchScreen('timeline-states', brightness);
+    }, variant: _platforms);
+
     testWidgets('新会话 ${brightness.name}', (tester) async {
       await _openPage(tester, brightness, workspaceFixture());
       await tester.tap(find.byTooltip('新会话'));

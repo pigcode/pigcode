@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../mobile_status_dot.dart';
 import '../theme_colors.dart';
+import 'shimmer_text.dart';
 import 'timeline_tokens.dart';
 
-/// 运行中接在轮末的一行：3×3 点阵、「工作中」扫光、等宽计时；排队时写「排队中」且不计时。
+/// 运行中接在轮末的一行（桌面 `.turn-loading`）：
+/// 15px 图标槽内 10×10 3×3 点阵（8 帧 1.4s）、4s 扫光「工作中」、13px 等宽耗时（`formatDuration`）；
+/// 排队时写「排队中」、不扫光、不计时。
 class TimelineLoadingRow extends StatefulWidget {
   const TimelineLoadingRow({
     super.key,
@@ -27,12 +30,7 @@ class TimelineLoadingRow extends StatefulWidget {
   State<TimelineLoadingRow> createState() => _TimelineLoadingRowState();
 }
 
-class _TimelineLoadingRowState extends State<TimelineLoadingRow>
-    with SingleTickerProviderStateMixin {
-  late final _shimmer = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 4),
-  );
+class _TimelineLoadingRowState extends State<TimelineLoadingRow> {
   Timer? _clock;
   Duration _elapsed = Duration.zero;
 
@@ -55,7 +53,7 @@ class _TimelineLoadingRowState extends State<TimelineLoadingRow>
     _clock?.cancel();
     _elapsed = _elapsedFor(widget.startedAt);
     if (!widget.queued && widget.startedAt != null) {
-      _clock = Timer.periodic(const Duration(seconds: 1), (_) {
+      _clock = Timer.periodic(TimelineMotion.tick, (_) {
         if (!mounted) return;
         setState(() => _elapsed = _elapsedFor(widget.startedAt));
       });
@@ -69,21 +67,8 @@ class _TimelineLoadingRowState extends State<TimelineLoadingRow>
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (reduceMotion) {
-      _shimmer.stop();
-      _shimmer.value = .5;
-    } else if (!_shimmer.isAnimating) {
-      _shimmer.repeat();
-    }
-  }
-
-  @override
   void dispose() {
     _clock?.cancel();
-    _shimmer.dispose();
     super.dispose();
   }
 
@@ -97,13 +82,10 @@ class _TimelineLoadingRowState extends State<TimelineLoadingRow>
     final plan = widget.totalSteps != null && widget.totalSteps! > 0
         ? '${widget.finishedSteps ?? 0}/${widget.totalSteps}'
         : null;
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    final text = Text(
-      label,
-      style: TimelineType.contentStyle(colors.timelineSubtle),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
+    final labelStyle = TimelineType.contentStyle(colors.timelineSubtle);
+
+    return Semantics(
+      label: label,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -114,30 +96,13 @@ class _TimelineLoadingRowState extends State<TimelineLoadingRow>
               child: MobileRunningDotMatrix(color: colors.secondaryText),
             ),
           ),
-          const SizedBox(width: TimelineSpace.x4),
-          if (reduceMotion)
-            text
+          const SizedBox(width: TimelineSpace.fieldGap),
+          if (widget.queued)
+            Text(label, style: labelStyle)
           else
-            AnimatedBuilder(
-              animation: _shimmer,
-              builder: (context, child) => ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (bounds) => LinearGradient(
-                  begin: Alignment(-1.4 + 2.8 * _shimmer.value, 0),
-                  end: Alignment(-0.4 + 2.8 * _shimmer.value, 0),
-                  colors: [
-                    colors.timelineSubtle,
-                    colors.foreground,
-                    colors.timelineSubtle,
-                  ],
-                  stops: const [0, .5, 1],
-                ).createShader(bounds),
-                child: child,
-              ),
-              child: text,
-            ),
+            TimelineShimmerText(text: label, style: labelStyle),
           if (step != null && step.isNotEmpty) ...[
-            const SizedBox(width: TimelineSpace.x4),
+            const SizedBox(width: TimelineSpace.fieldGap),
             Flexible(
               child: Text(
                 step,
@@ -147,30 +112,22 @@ class _TimelineLoadingRowState extends State<TimelineLoadingRow>
               ),
             ),
           ],
-          if (!widget.queued) ...[
-            const SizedBox(width: TimelineSpace.x4),
+          if (!widget.queued && widget.startedAt != null) ...[
+            const SizedBox(width: TimelineSpace.fieldGap),
             Text(
-              _formatElapsed(_elapsed),
-              style: TimelineType.codeStyle(
-                colors.timelineFaint,
-              ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+              formatTimelineDuration(_elapsed),
+              style: TimelineType.metaMonoStyle(colors.timelineSubtle),
             ),
           ],
           if (plan != null) ...[
-            const SizedBox(width: TimelineSpace.x4),
+            const SizedBox(width: TimelineSpace.fieldGap),
             Text(
               '计划 $plan',
-              style: TimelineType.smallStyle(colors.timelineFaint),
+              style: TimelineType.metaStyle(colors.timelineFaint),
             ),
           ],
         ],
       ),
     );
-  }
-
-  String _formatElapsed(Duration value) {
-    final minutes = value.inMinutes;
-    final seconds = value.inSeconds.remainder(60);
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
   }
 }

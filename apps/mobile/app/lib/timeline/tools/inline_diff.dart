@@ -96,24 +96,38 @@ class TimelineInlineDiff extends StatelessWidget {
     }
     final numbered = lines.any((line) => line.number != null);
     return Container(
-      constraints: const BoxConstraints(maxHeight: 240),
-      margin: const EdgeInsets.only(bottom: 8),
+      width: double.infinity,
+      constraints: const BoxConstraints(
+        maxHeight: TimelineToolCard.inlineDiffMaxHeight,
+      ),
+      margin: const EdgeInsets.only(bottom: TimelineSpace.x4),
       decoration: BoxDecoration(
         color: colors.timelineCard,
-        border: Border.all(color: colors.timelineBorder),
+        border: Border.all(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
         borderRadius: BorderRadius.circular(TimelineRadius.panel),
       ),
       clipBehavior: Clip.antiAlias,
-      child: SingleChildScrollView(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 4),
-              for (final line in lines) _line(context, line, numbered, colors),
-              const SizedBox(height: 4),
-            ],
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: IntrinsicWidth(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: TimelineSpace.x2),
+                    for (final line in lines)
+                      _line(context, line, numbered, colors),
+                    const SizedBox(height: TimelineSpace.x2),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -134,9 +148,13 @@ class TimelineInlineDiff extends StatelessWidget {
         ? colors.diffRemoved
         : colors.timelineSubtle;
     final background = added
-        ? colors.diffAdded.withValues(alpha: .14)
+        ? colors.diffAdded.withValues(
+            alpha: TimelineToolCard.inlineDiffTintAlpha,
+          )
         : removed
-        ? colors.diffRemoved.withValues(alpha: .14)
+        ? colors.diffRemoved.withValues(
+            alpha: TimelineToolCard.inlineDiffTintAlpha,
+          )
         : null;
     final markerColor = line.kind == 2 ? colors.timelineFaint : color;
     return Container(
@@ -148,7 +166,7 @@ class TimelineInlineDiff extends StatelessWidget {
                 : removed
                 ? colors.diffRemoved
                 : Colors.transparent,
-            width: 3,
+            width: TimelineBorder.diffBar,
           ),
         ),
       ),
@@ -158,33 +176,33 @@ class TimelineInlineDiff extends StatelessWidget {
         children: [
           if (numbered)
             Container(
-              width: 48,
-              padding: const EdgeInsets.only(right: 8),
+              width: TimelineToolCard.inlineDiffGutterWidth,
+              padding: const EdgeInsets.only(right: TimelineSpace.x4),
               decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: colors.timelineBorder)),
+                border: Border(
+                  right: BorderSide(
+                    color: colors.timelineBorder,
+                    width: TimelineBorder.regular,
+                  ),
+                ),
               ),
               child: Text(
                 line.number?.toString() ?? '',
                 textAlign: TextAlign.right,
-                style: TimelineType.codeStyle(color).copyWith(
-                  color: line.number == null ? colors.timelineFaint : color,
-                ),
+                style: TimelineType.codeStyle(
+                  line.number == null ? colors.timelineFaint : color,
+                ).copyWith(fontFeatures: TimelineType.tabular),
               ),
             ),
           SizedBox(
-            width: 20,
+            width: TimelineToolCard.inlineDiffMarkerWidth,
             child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                line.marker,
-                style: TimelineType.codeStyle(
-                  markerColor,
-                ).copyWith(color: markerColor),
-              ),
+              padding: const EdgeInsets.only(left: TimelineSpace.x4),
+              child: Text(line.marker, style: TimelineType.codeStyle(markerColor)),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: TimelineSpace.x6),
             child: Text(
               line.code,
               softWrap: false,

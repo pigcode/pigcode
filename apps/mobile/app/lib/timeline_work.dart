@@ -110,13 +110,20 @@ List<List<TimelineWork>> groupTimelineWork(
   return result;
 }
 
-({String label, TimelineToolKind? icon, List<String> files, bool filesOnly})
+({
+  String label,
+  String? singleFileLabel,
+  TimelineToolKind? icon,
+  List<String> files,
+  bool filesOnly,
+})
 summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
   var explored = 0;
   var commands = 0;
   var editsWithoutPath = 0;
   var browser = false;
-  final changedPaths = <String>{};
+  final seenPaths = <String>{};
+  final changedPaths = <String>[];
   for (final item in items.where(
     (item) => item.kind == TimelineWorkKind.tool,
   )) {
@@ -134,9 +141,12 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
         commands++;
         browser = browser || tool == TimelineToolKind.browser;
       case TimelineToolKind.edit:
-        final paths = _editPaths(_toolInput(item)).map(_canonicalPath).toSet();
+        final paths = _editPaths(_toolInput(item)).toList();
         if (paths.isEmpty) editsWithoutPath++;
-        changedPaths.addAll(paths);
+        for (final path in paths) {
+          final canonical = _canonicalPath(path);
+          if (seenPaths.add(canonical)) changedPaths.add(path);
+        }
       case TimelineToolKind.plan ||
           TimelineToolKind.ask ||
           TimelineToolKind.other:
@@ -150,8 +160,14 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
     if (changedPaths.isNotEmpty) '$tense修改 ${changedPaths.length} 文件',
     if (editsWithoutPath != 0) '$tense修改 $editsWithoutPath 次（路径未知）',
   ];
+  final filesOnly =
+      explored == 0 &&
+      commands == 0 &&
+      changedPaths.isNotEmpty &&
+      editsWithoutPath == 0;
   return (
     label: labels.isEmpty ? '思考' : labels.join('，'),
+    singleFileLabel: filesOnly && changedPaths.length == 1 ? '$tense修改' : null,
     icon: browser
         ? TimelineToolKind.browser
         : changedPaths.isNotEmpty || editsWithoutPath != 0
@@ -161,8 +177,8 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
         : explored != 0
         ? TimelineToolKind.read
         : null,
-    files: changedPaths.toList()..sort(),
-    filesOnly: explored == 0 && commands == 0 && changedPaths.isNotEmpty,
+    files: changedPaths,
+    filesOnly: filesOnly,
   );
 }
 

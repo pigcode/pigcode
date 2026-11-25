@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'theme_colors.dart';
 import 'timeline/loading_row.dart';
 import 'timeline/notice_line.dart';
 import 'timeline/reasoning_block.dart';
 import 'timeline/summary_group.dart';
+import 'timeline/timeline_tokens.dart';
 import 'timeline/tools/tool_views.dart';
 import 'timeline/turn_actions.dart';
 import 'timeline/user_bubble.dart';
@@ -46,7 +48,7 @@ class TimelineView extends StatefulWidget {
 typedef _Row = ({String key, int seq, Widget Function() build});
 
 // The timeline gutter and the inner turn padding each contribute 16 pixels.
-const _turnInsets = EdgeInsets.symmetric(horizontal: 32);
+const _turnInsets = EdgeInsets.symmetric(horizontal: TimelineSpace.turnGutter);
 
 class _TimelineViewState extends State<TimelineView> {
   final _scroll = ScrollController();
@@ -177,27 +179,6 @@ class _TimelineViewState extends State<TimelineView> {
           seq,
           () => _workGroup(turn, group, tail: tail, touchAbove: touchAbove),
         );
-        if (_expandedWork.contains(seq)) {
-          for (final item in group) {
-            add(
-              'work-member-${item.event.seq}',
-              item.event.seq,
-              () => DecoratedBox(
-                decoration: BoxDecoration(
-                  border: BorderDirectional(
-                    start: BorderSide(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 14),
-                  child: _work(turn, item, followed: false, showIcon: false),
-                ),
-              ),
-            );
-          }
-        }
       }
       for (final request in turn.pendingRequests) {
         add(
@@ -212,6 +193,21 @@ class _TimelineViewState extends State<TimelineView> {
               ),
         );
       }
+      for (final notice in turn.notices) {
+        add(
+          'notice-${notice.seq}',
+          notice.seq,
+          () => Padding(
+            padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
+            child: TimelineNoticeLine(
+              text: notice.text ?? 'Agent 提示',
+              level: notice.kind == MobileTimelineKind.notice
+                  ? TimelineNoticeLevel.warning
+                  : TimelineNoticeLevel.info,
+            ),
+          ),
+        );
+      }
       if (turn.answer case final answer?) {
         add('answer-${answer.seq}', answer.seq, () => _answer(answer));
       }
@@ -220,24 +216,12 @@ class _TimelineViewState extends State<TimelineView> {
           'failure-$key',
           turn.terminal?.seq ?? turn.firstSeq,
           () => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x4),
             child: TimelineErrorBlock(
               text: (turn.terminal?.text?.isNotEmpty ?? false)
                   ? turn.terminal!.text!
                   : '运行失败',
             ),
-          ),
-        );
-      }
-      for (final notice in turn.notices) {
-        add(
-          'notice-${notice.seq}',
-          notice.seq,
-          () => TimelineNoticeLine(
-            text: notice.text ?? 'Agent 提示',
-            level: notice.kind == MobileTimelineKind.notice
-                ? TimelineNoticeLevel.warning
-                : TimelineNoticeLevel.info,
           ),
         );
       }
@@ -258,7 +242,7 @@ class _TimelineViewState extends State<TimelineView> {
           'copy-$key',
           answer.seq,
           () => Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: TimelineSpace.x2),
             child: TimelineTurnActions(
               text: answer.text!,
               createdAt: answer.createdAt,
@@ -454,27 +438,65 @@ class _TimelineViewState extends State<TimelineView> {
           ),
         if (!_pinned)
           Positioned(
-            right: 12,
-            bottom: 12,
-            child: IconButton.filledTonal(
-              tooltip: '回到底部',
-              onPressed: () {
-                setState(() => _pinned = true);
-                _follow();
-              },
-              icon: const Icon(Icons.arrow_downward),
-            ),
+            left: 0,
+            right: 0,
+            bottom: TimelineSpace.x6,
+            child: Center(child: _scrollToBottomButton(context)),
           ),
       ],
+    );
+  }
+
+  Widget _scrollToBottomButton(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Tooltip(
+      message: '回到底部',
+      child: Semantics(
+        button: true,
+        label: '回到底部',
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            setState(() => _pinned = true);
+            _follow();
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(TimelineSpace.x3),
+            child: Container(
+              width: TimelineControl.lg,
+              height: TimelineControl.lg,
+              decoration: BoxDecoration(
+                color: colors.timelineCard,
+                border: Border.all(
+                  color: colors.timelineBorder,
+                  width: TimelineBorder.regular,
+                ),
+                borderRadius: BorderRadius.circular(TimelineRadius.full),
+                boxShadow: TimelineShadow.md(theme.brightness),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.arrow_downward,
+                size: TimelineIcon.row,
+                color: colors.foreground,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _user(MobileTimelineEvent event, {required bool workTouchesAbove}) {
     return Padding(
       padding: EdgeInsets.only(
-        top: 56,
+        top: TimelineSpace.turnTop,
         bottom:
-            48 - (workTouchesAbove ? timelineWorkTouchOverhang(context) : 0),
+            TimelineSpace.userBottomGap -
+            (workTouchesAbove ? timelineWorkTouchOverhang(context) : 0),
       ),
       child: TimelineUserBubble(
         text: event.text ?? '',
@@ -487,7 +509,9 @@ class _TimelineViewState extends State<TimelineView> {
 
   Widget _answer(
     MobileTimelineEvent event, {
-    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(vertical: 8),
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(
+      vertical: TimelineSpace.x4,
+    ),
   }) => TimelineAnswer(
     text: event.text ?? '',
     padding: padding,
@@ -552,12 +576,12 @@ class _TimelineViewState extends State<TimelineView> {
       _rebuildRows();
     });
 
+    final active = group.reversed
+        .where(
+          (item) => item.kind == TimelineWorkKind.tool && item.output == null,
+        )
+        .firstOrNull;
     if (!expanded && growing) {
-      final active = group.reversed
-          .where(
-            (item) => item.kind == TimelineWorkKind.tool && item.output == null,
-          )
-          .firstOrNull;
       final preview = active ?? group.last;
       if (preview.kind == TimelineWorkKind.tool) {
         return _toolPreviewLine(
@@ -572,14 +596,31 @@ class _TimelineViewState extends State<TimelineView> {
 
     final summary = summarizeTimelineWork(group, finished: !growing);
     return Padding(
-      padding: EdgeInsets.only(bottom: tail ? 0 : 16),
-      child: TimelineSummaryGroupRow(
+      padding: EdgeInsets.only(bottom: tail ? 0 : TimelineSpace.workGap),
+      child: TimelineSummaryGroup(
         label: summary.label,
+        singleFileLabel: summary.singleFileLabel,
         icon: summary.icon,
         files: summary.filesOnly ? summary.files : const [],
         expanded: expanded,
         toggleable: true,
+        shimmer: growing && active == null,
         onToggle: toggle,
+        children: expanded
+            ? [
+                for (final item in group)
+                  KeyedSubtree(
+                    key: ValueKey('work-member-${item.event.seq}'),
+                    child: _work(
+                      turn,
+                      item,
+                      followed: false,
+                      showIcon: false,
+                      compact: true,
+                    ),
+                  ),
+              ]
+            : const [],
       ),
     );
   }
@@ -589,17 +630,20 @@ class _TimelineViewState extends State<TimelineView> {
     TimelineWork item, {
     required bool followed,
     bool showIcon = true,
+    bool compact = false,
     bool touchAbove = false,
   }) => switch (item.kind) {
     TimelineWorkKind.message => _answer(
       item.event,
-      padding: EdgeInsets.only(bottom: followed ? 16 : 0),
+      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
     ),
     TimelineWorkKind.reasoning => Padding(
-      padding: EdgeInsets.only(bottom: followed ? 16 : 0),
+      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
       child: TimelineReasoningBlock(
         text: item.event.text ?? '',
         truncated: item.event.truncated == true && widget.online,
+        showIcon: showIcon,
+        compact: compact,
         onOpenFull: () => _openText(item.event),
       ),
     ),
@@ -610,12 +654,13 @@ class _TimelineViewState extends State<TimelineView> {
       followed: followed,
     ),
     TimelineWorkKind.tool => Padding(
-      padding: EdgeInsets.only(bottom: followed ? 16 : 0),
+      padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
       child: TimelineToolView(
         item: item,
         ended: turn.terminal != null,
         content: widget.content,
         showIcon: showIcon,
+        compact: compact,
         liveOutput: _toolLiveOutput(item, turn),
         onOpenDetails: () => _openTool(item, turn),
       ),

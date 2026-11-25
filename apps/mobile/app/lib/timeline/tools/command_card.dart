@@ -24,10 +24,14 @@ class TimelineCommandCard extends StatelessWidget {
         : pigcodeLight;
     return Container(
       width: double.infinity,
+      margin: const EdgeInsets.only(bottom: TimelineSpace.x4),
       padding: TimelineToolCard.padding,
       decoration: BoxDecoration(
         color: colors.timelinePanel,
-        border: Border.all(color: colors.timelineBorder),
+        border: Border.all(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
         borderRadius: BorderRadius.circular(TimelineToolCard.radius),
       ),
       child: Column(
@@ -66,8 +70,8 @@ class _CommandTextState extends State<_CommandText> {
     final promptStyle = TimelineType.codeStyle(colors.timelineSubtle);
     return LayoutBuilder(
       builder: (context, constraints) {
-        const promptWidth = 8.0;
-        const gap = 8.0;
+        const promptWidth = TimelineToolCard.promptWidth;
+        const gap = TimelineSpace.fieldGap;
         final painter = TextPainter(
           text: TextSpan(text: widget.command, style: style),
           maxLines: TimelineToolCard.commandLines,
@@ -112,7 +116,7 @@ class _CommandTextState extends State<_CommandText> {
               Padding(
                 padding: const EdgeInsetsDirectional.only(
                   start: promptWidth + gap,
-                  top: 2,
+                  top: TimelineSpace.x1,
                 ),
                 child: TextButton.icon(
                   onPressed: () => setState(() => _expanded = !_expanded),
@@ -120,12 +124,12 @@ class _CommandTextState extends State<_CommandText> {
                     _expanded
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
-                    size: TimelineIcon.meta,
+                    size: TimelineIcon.btn,
                   ),
                   label: Text(_expanded ? '收起' : '展开'),
                   style: TextButton.styleFrom(
                     foregroundColor: colors.timelineSubtle,
-                    minimumSize: const Size(0, 28),
+                    minimumSize: const Size(0, TimelineControl.md),
                     padding: EdgeInsets.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     textStyle: TimelineType.metaStyle(colors.timelineSubtle),
@@ -173,7 +177,9 @@ class _CommandOutputState extends State<_CommandOutput> {
     if (_autoJumping) return;
     if (!_scroll.hasClients) return;
     final position = _scroll.position;
-    final following = position.maxScrollExtent - position.pixels < 4;
+    final following =
+        position.maxScrollExtent - position.pixels <
+        TimelineToolCard.outputFollowThreshold;
     if (following != _following) setState(() => _following = following);
   }
 

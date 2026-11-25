@@ -6,6 +6,12 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_mobile/app_theme.dart';
 import 'package:pigcode_mobile/theme_colors.dart';
 import 'package:pigcode_mobile/timeline/loading_row.dart';
+import 'package:pigcode_mobile/timeline/notice_line.dart';
+import 'package:pigcode_mobile/timeline/summary_group.dart';
+import 'package:pigcode_mobile/timeline/timeline_tokens.dart';
+import 'package:pigcode_mobile/timeline/tool_row.dart';
+import 'package:pigcode_mobile/timeline/tools/inline_diff.dart';
+import 'package:pigcode_mobile/timeline/user_bubble.dart';
 import 'package:pigcode_mobile/timeline_view.dart';
 import 'package:pigcode_mobile/timeline_widgets.dart';
 
@@ -72,6 +78,10 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
         home: Scaffold(
           body: DecoratedBox(
             decoration: const BoxDecoration(color: Colors.white),
@@ -321,6 +331,271 @@ void main() {
         controller.position.pixels,
         closeTo(controller.position.maxScrollExtent, 1),
       );
+    },
+  );
+
+  testWidgets(
+    'caps expanded summary group height to 16 lines, follows new items, and stops following when scrolled up',
+    (tester) async {
+      List<Widget> buildItems(int count) => [
+        for (var i = 1; i <= count; i++)
+          SizedBox(
+            height: 36,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('摘要项 $i'),
+            ),
+          ),
+      ];
+
+      Widget host(int count) => MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: TimelineSummaryGroup(
+            label: '已查阅 $count 项',
+            icon: null,
+            files: const [],
+            expanded: true,
+            toggleable: true,
+            children: buildItems(count),
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(host(20));
+      await tester.pumpAndSettle();
+
+      final bodyFinder = find.byType(TimelineSummaryGroupBody);
+      final bodyRect = tester.getRect(bodyFinder);
+      expect(
+        bodyRect.height,
+        lessThanOrEqualTo(TimelineSummary.maxBodyHeight + TimelineSpace.x4 + 1),
+      );
+
+      final innerScrollable = find.descendant(
+        of: bodyFinder,
+        matching: find.byType(Scrollable),
+      );
+      final position = tester.state<ScrollableState>(innerScrollable).position;
+      expect(position.maxScrollExtent, greaterThan(0));
+      expect(position.pixels, closeTo(position.maxScrollExtent, 2));
+
+      // 追加新项时自动跟随到底部。
+      await tester.pumpWidget(host(22));
+      await tester.pumpAndSettle();
+      expect(position.pixels, closeTo(position.maxScrollExtent, 2));
+
+      // 手动上翻后停止跟随新项。
+      await tester.drag(innerScrollable, const Offset(0, 200));
+      await tester.pumpAndSettle();
+      final scrolledOffset = position.pixels;
+      expect(scrolledOffset, lessThan(position.maxScrollExtent - 20));
+
+      await tester.pumpWidget(host(24));
+      await tester.pumpAndSettle();
+      expect(position.pixels, closeTo(scrolledOffset, 2));
+    },
+  );
+
+  testWidgets(
+    'renders desktop file chip rules on summary groups (single file, 3 + N, hidden when expanded)',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: const [
+                TimelineSummaryGroupRow(
+                  label: '已修改 1 文件',
+                  singleFileLabel: '已修改',
+                  icon: null,
+                  files: ['src/app.dart'],
+                  expanded: false,
+                  toggleable: true,
+                ),
+                TimelineSummaryGroupRow(
+                  label: '已修改 4 文件',
+                  icon: null,
+                  files: [
+                    'src/a.dart',
+                    'src/b.dart',
+                    'src/c.dart',
+                    'src/d.dart',
+                  ],
+                  expanded: false,
+                  toggleable: true,
+                ),
+                TimelineSummaryGroupRow(
+                  label: '已修改 2 文件',
+                  icon: null,
+                  files: ['src/e.dart', 'src/f.dart'],
+                  expanded: true,
+                  toggleable: true,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      expect(find.text('已修改'), findsOneWidget);
+      expect(find.text('app.dart'), findsOneWidget);
+      expect(find.text('已修改 1 文件'), findsNothing);
+
+      expect(find.text('已修改 4 文件'), findsOneWidget);
+      expect(find.text('a.dart'), findsOneWidget);
+      expect(find.text('b.dart'), findsOneWidget);
+      expect(find.text('c.dart'), findsOneWidget);
+      expect(find.text('d.dart'), findsNothing);
+      expect(find.text('+1'), findsOneWidget);
+
+      // 展开后只显示统计，不显示文件 chip。
+      expect(find.text('已修改 2 文件'), findsOneWidget);
+      expect(find.text('e.dart'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'clamps long user bubbles with mask and leaves short bubbles unmasked',
+    (tester) async {
+      final longText = List.generate(12, (i) => '第 ${i + 1} 行用于测试超长气泡折叠行为。')
+          .join('\n');
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const TimelineUserBubble(text: '简短消息'),
+                  TimelineUserBubble(text: '$longText\n参考 @lib/main.dart'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 短气泡不套渐隐遮罩；长气泡有 1 个渐隐遮罩和「展开」按钮。
+      expect(find.byType(ShaderMask), findsOneWidget);
+      expect(find.byTooltip('展开'), findsOneWidget);
+      expect(find.text('main.dart'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('展开'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ShaderMask), findsNothing);
+      expect(find.byTooltip('收起'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'renders code block desktop defaults, notice levels, queued loading row, and unwrapped inline diff',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const TimelineCodeBlock(
+                    name: 'TS',
+                    code: 'const answer = 42;\n',
+                    closed: true,
+                  ),
+                  const TimelineCodeBlock(
+                    name: '',
+                    code: 'plain text',
+                    closed: true,
+                  ),
+                  const TimelineNoticeLine(
+                    text: '普通信息',
+                    level: TimelineNoticeLevel.info,
+                  ),
+                  const TimelineNoticeLine(
+                    text: '警告信息',
+                    level: TimelineNoticeLevel.warning,
+                  ),
+                  const TimelineNoticeLine(
+                    text: '错误信息',
+                    level: TimelineNoticeLevel.error,
+                  ),
+                  const TimelineErrorBlock(text: '执行出错'),
+                  const TimelineLoadingRow(queued: true),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 代码块语言小写、缺省为 text、默认不折行。
+      expect(find.text('ts'), findsOneWidget);
+      expect(find.text('text'), findsOneWidget);
+      expect(find.byTooltip('自动换行'), findsNWidgets(2));
+      await tester.tap(find.byTooltip('自动换行').first);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('不折行'), findsOneWidget);
+
+      // Notice 三级底色严格对应桌面 token。
+      Container containerOf(String label) => tester.widget<Container>(
+        find
+            .ancestor(of: find.text(label), matching: find.byType(Container))
+            .first,
+      );
+      expect(
+        (containerOf('普通信息').decoration as BoxDecoration).color,
+        pigcodeLight.timelineInlineCode,
+      );
+      expect(
+        (containerOf('警告信息').decoration as BoxDecoration).color,
+        pigcodeLight.attentionTint,
+      );
+      expect(
+        (containerOf('错误信息').decoration as BoxDecoration).color,
+        pigcodeLight.errorTint,
+      );
+      expect(find.text('排队中'), findsOneWidget);
+
+      // 编辑工具展开后直接展示内联 diff，不套 TimelineToolDetails 双层灰壳。
+      await tester.pumpWidget(
+        page(const [
+          MobileTimelineEvent(
+            seq: 1,
+            runId: 'edit-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'e1',
+            name: 'Edit',
+            text: '{"file_path":"lib/a.dart","old_string":"a","new_string":"b"}',
+            createdAt: '2026-11-22T10:00:00.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 2,
+            runId: 'edit-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'e1',
+            name: 'Edit',
+            text: '',
+            createdAt: '2026-11-22T10:00:01.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('已编辑'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineInlineDiff), findsOneWidget);
+      expect(find.byType(TimelineToolDetails), findsNothing);
     },
   );
 }

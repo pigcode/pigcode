@@ -46,6 +46,6 @@ pnpm exec vitest run apps/host/src/mobile/timeline.test.ts
 ./scripts/test-visual.sh
 ```
 
-新增场景 `timeline-work`（展开一轮摘要组）和 `timeline-tools`（再展开命令详情），覆盖时间线、审批、提问和浅深色。更新基线前逐张检查 `app/visual/baselines`，确认组件层次、触区和状态文案后再提交。
+新增场景 `timeline-work`（展开一轮摘要组）、`timeline-tools`（再展开命令详情）、`timeline-diff`（编辑内联 diff）、`markdown-table`（横向滚动表格）、`timeline-markdown`（标题、列表、任务复选框、引用、代码块与图片）和 `timeline-states`（计划卡、折行提示、错误块与长用户气泡），覆盖时间线、审批、提问和浅深色。更新基线前逐张检查 `app/visual/baselines`，确认组件层次、触区和状态文案后再提交。
 
 模拟器联调用本机 Go 中继和 `apps/host` 的 fake Agent（输入 `showcase` 生成全工具演示，`approve` 生成审批，`ask` 生成提问），在模拟器打开对应会话，核对工具行展开、代码块复制/折行、内联审批与提问、上翻历史和回到底部。

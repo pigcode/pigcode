@@ -37,6 +37,8 @@ const tokens = {
   timelineBorder: "--cv-border",
   timelineInlineCode: "--cv-inline-code",
   timelineDecoration: "--cv-decoration",
+  timelineShimmerSoft: "--cv-shimmer-soft",
+  timelineRemoved: "--cv-removed",
   hover: "--hover",
   link: "--link",
   timelineFile: "--file-node-fg",

@@ -5,7 +5,9 @@ import 'timeline_tokens.dart';
 
 enum TimelineNoticeLevel { info, warning, error }
 
-/// 轮外可见的一行提示：MCP 未接上、Host 重启、审批结果等。
+/// 轮外可见的一行提示（桌面 `.turn-notice`）：
+/// padding 6/12、r8、13/1.5、Info 12px 图标；按级别区分底色（info 用 `--cv-inline-code`、
+/// warning 用 `--warn-soft`、error 用 `--bad-soft`）。
 class TimelineNoticeLine extends StatelessWidget {
   const TimelineNoticeLine({
     super.key,
@@ -22,7 +24,7 @@ class TimelineNoticeLine extends StatelessWidget {
         ? pigcodeDark
         : pigcodeLight;
     final background = switch (level) {
-      TimelineNoticeLevel.info => colors.panel,
+      TimelineNoticeLevel.info => colors.timelineInlineCode,
       TimelineNoticeLevel.warning => colors.attentionTint,
       TimelineNoticeLevel.error => colors.errorTint,
     };
@@ -30,11 +32,6 @@ class TimelineNoticeLine extends StatelessWidget {
       TimelineNoticeLevel.info => colors.timelineSubtle,
       TimelineNoticeLevel.warning => colors.attention,
       TimelineNoticeLevel.error => colors.error,
-    };
-    final icon = switch (level) {
-      TimelineNoticeLevel.info => Icons.info_outline,
-      TimelineNoticeLevel.warning => Icons.warning_amber_rounded,
-      TimelineNoticeLevel.error => Icons.error_outline,
     };
     return Container(
       width: double.infinity,
@@ -50,12 +47,22 @@ class TimelineNoticeLine extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Icon(icon, size: TimelineIcon.meta, color: foreground),
+            padding: const EdgeInsets.only(top: TimelineSpace.x1),
+            child: Icon(
+              Icons.info_outline,
+              size: TimelineIcon.badge,
+              color: foreground,
+            ),
           ),
-          const SizedBox(width: TimelineSpace.x4),
+          const SizedBox(width: TimelineSpace.fieldGap),
           Expanded(
-            child: Text(text, style: TimelineType.metaStyle(foreground)),
+            child: Text(
+              text,
+              style: TimelineType.metaStyle(
+                foreground,
+                height: TimelineType.noticeHeight,
+              ),
+            ),
           ),
         ],
       ),
@@ -63,7 +70,8 @@ class TimelineNoticeLine extends StatelessWidget {
   }
 }
 
-/// 失败轮的错误块：错误浅底 + 左图标。
+/// 失败轮的错误块（桌面 `.turn-error`）：8/12 内衬、r8、`10% --cv-removed` 底、
+/// AlertTriangle 12px 图标、15/1.5 正文。
 class TimelineErrorBlock extends StatelessWidget {
   const TimelineErrorBlock({super.key, required this.text});
 
@@ -81,27 +89,30 @@ class TimelineErrorBlock extends StatelessWidget {
         vertical: TimelineSpace.x4,
       ),
       decoration: BoxDecoration(
-        color: colors.errorTint,
+        color: colors.timelineRemoved.withValues(
+          alpha: TimelineToolCard.errorTintAlpha,
+        ),
         borderRadius: BorderRadius.circular(TimelineRadius.block),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(top: 3),
+            padding: const EdgeInsets.only(top: TimelineSpace.x2),
             child: Icon(
-              Icons.error_outline,
-              size: TimelineIcon.meta,
+              Icons.warning_amber_rounded,
+              size: TimelineIcon.badge,
               color: colors.error,
             ),
           ),
-          const SizedBox(width: TimelineSpace.x4),
+          const SizedBox(width: TimelineSpace.fieldGap),
           Expanded(
             child: Text(
               text,
               style: TimelineType.contentStyle(
                 colors.error,
-              ).copyWith(height: 1.5),
+                height: TimelineType.noticeHeight,
+              ),
             ),
           ),
         ],

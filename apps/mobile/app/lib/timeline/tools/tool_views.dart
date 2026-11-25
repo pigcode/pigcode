@@ -18,6 +18,7 @@ class TimelineToolView extends StatefulWidget {
     required this.ended,
     required this.content,
     this.showIcon = true,
+    this.compact = false,
     this.liveOutput,
     this.onOpenDetails,
   });
@@ -26,6 +27,7 @@ class TimelineToolView extends StatefulWidget {
   final bool ended;
   final TimelineContentLoader content;
   final bool showIcon;
+  final bool compact;
   final String? liveOutput;
   final VoidCallback? onOpenDetails;
 
@@ -120,6 +122,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
           timelineCommandDescription(item) == null,
       onStatusTap: failed ? _showFailure : null,
       showIcon: widget.showIcon,
+      compact: widget.compact,
       expandable: _expandable,
       expanded: _expanded,
       onTap: _expandable
@@ -136,6 +139,8 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     final input = item.input?.text?.trim();
     final live = timelineStripAnsi(widget.liveOutput ?? '').trim();
     final output = timelineStripAnsi(timelineToolOutput(item) ?? '').trim();
+    final truncated =
+        item.input?.truncated == true || item.output?.truncated == true;
     final sections = <Widget>[];
     if (kind == TimelineToolKind.command) {
       final command = timelineCommand(item) ?? '';
@@ -144,7 +149,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TimelineCommandCard(command: command, output: text, running: running),
-          if (item.input?.truncated == true || item.output?.truncated == true)
+          if (truncated)
             TextButton(
               onPressed: widget.onOpenDetails,
               child: const Text('查看完整内容'),
@@ -154,7 +159,17 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     } else if (kind == TimelineToolKind.edit) {
       final diff = _editDiff();
       if (diff != null) {
-        sections.add(diff);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            diff,
+            if (truncated)
+              TextButton(
+                onPressed: widget.onOpenDetails,
+                child: const Text('查看完整内容'),
+              ),
+          ],
+        );
       } else if (output.isNotEmpty) {
         sections.add(TimelineToolSection(label: '结果', text: output));
       }
@@ -177,7 +192,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         sections.add(TimelineToolSection(label: '参数', text: input));
       }
     }
-    if (item.input?.truncated == true || item.output?.truncated == true) {
+    if (truncated) {
       sections.add(
         Align(
           alignment: AlignmentDirectional.centerStart,
@@ -235,6 +250,9 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       return TimelineInlineDiff(oldText: oldText, newText: newText);
     }
     if (edits is List) {
+      final colors = Theme.of(context).brightness == Brightness.dark
+          ? pigcodeDark
+          : pigcodeLight;
       final rows = <Widget>[];
       for (final entry in edits.whereType<Map>()) {
         final path =
@@ -246,12 +264,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         if (rows.isNotEmpty) rows.add(const SizedBox(height: TimelineSpace.x4));
         if (path != null) {
           rows.add(
-            Text(
-              path,
-              style: TimelineType.smallStyle(
-                Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
+            Text(path, style: TimelineType.smallStyle(colors.timelineSubtle)),
           );
           rows.add(const SizedBox(height: TimelineSpace.x1));
         }
@@ -272,7 +285,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
   }
 }
 
-/// 计划卡：ExitPlanMode 交出的计划正文，默认限高，可原地展开。
+/// 计划卡（桌面 `.plan-card`）：ExitPlanMode 交出的计划正文，默认 256 限高渐隐，居中胶囊展开。
 class TimelinePlanCard extends StatefulWidget {
   const TimelinePlanCard({
     super.key,
@@ -320,79 +333,180 @@ class _TimelinePlanCardState extends State<TimelinePlanCard> {
         ? pigcodeDark
         : pigcodeLight;
     final text = _planText;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(TimelineSpace.x7),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.divider),
-        borderRadius: BorderRadius.circular(TimelineRadius.panel),
+    final moreButton = Material(
+      color: colors.background,
+      shape: StadiumBorder(
+        side: BorderSide(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: InkWell(
+        customBorder: const StadiumBorder(),
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Container(
+          height: TimelineControl.md,
+          padding: const EdgeInsets.symmetric(horizontal: TimelineSpace.x6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(TimelineRadius.full),
+            boxShadow: TimelineShadow.sm,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Text(
+                _expanded ? '收起计划' : '查看完整计划',
+                style: TimelineType.metaStyle(colors.foreground),
+              ),
+              const SizedBox(width: TimelineSpace.x2),
               Icon(
-                Icons.checklist_rounded,
-                size: TimelineIcon.row,
-                color: colors.timelineSubtle,
-              ),
-              const SizedBox(width: TimelineSpace.x4),
-              Expanded(
-                child: Text(
-                  '计划',
-                  style: TimelineType.contentStyle(
-                    colors.foreground,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: '复制计划',
-                onPressed: text.isEmpty ? null : () => _copy(context, text),
-                icon: const Icon(Icons.copy_rounded, size: 14),
-                color: colors.timelineFaint,
-                visualDensity: VisualDensity.compact,
+                _expanded
+                    ? Icons.keyboard_arrow_up
+                    : Icons.keyboard_arrow_down,
+                size: TimelineIcon.meta,
+                color: colors.foreground,
               ),
             ],
           ),
-          const SizedBox(height: TimelineSpace.x2),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 260),
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: _expanded ? double.infinity : 256,
-              ),
-              child: ClipRect(
+        ),
+      ),
+    );
+
+    final planContent = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: _expanded
+            ? double.infinity
+            : TimelineToolCard.planCollapsedHeight,
+      ),
+      child: ClipRect(
+        child: _expanded
+            ? TimelineAnswer(text: text, padding: EdgeInsets.zero)
+            : ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white, Colors.white, Colors.transparent],
+                  stops: [0, TimelineSpace.planFadeStop, 1],
+                ).createShader(bounds),
                 child: TimelineAnswer(text: text, padding: EdgeInsets.zero),
               ),
-            ),
+      ),
+    );
+    final body = MediaQuery.disableAnimationsOf(context)
+        ? planContent
+        : AnimatedSize(
+            duration: TimelineMotion.slower,
+            curve: TimelineMotion.ease,
+            alignment: Alignment.topCenter,
+            child: planContent,
+          );
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: TimelineSpace.x4),
+      decoration: BoxDecoration(
+        color: colors.timelineCard,
+        border: Border.all(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
+        borderRadius: BorderRadius.circular(TimelineRadius.panel),
+        boxShadow: TimelineShadow.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: TimelineControl.bar,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                    TimelineSpace.x7,
+                    TimelineSpace.x7,
+                    TimelineSpace.x6,
+                    0,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.checklist_rounded,
+                        size: TimelineIcon.row,
+                        color: colors.timelineSubtle,
+                      ),
+                      const SizedBox(width: TimelineSpace.x4),
+                      Expanded(
+                        child: Text(
+                          '计划',
+                          style: TimelineType.contentStyle(
+                            colors.foreground,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        width: TimelineControl.md,
+                        height: TimelineControl.md,
+                        child: IconButton(
+                          tooltip: '复制计划',
+                          padding: EdgeInsets.zero,
+                          onPressed: text.isEmpty
+                              ? null
+                              : () => _copy(context, text),
+                          icon: const Icon(
+                            Icons.copy_rounded,
+                            size: TimelineIcon.btn,
+                          ),
+                          color: colors.timelineSubtle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  TimelineSpace.x7,
+                  TimelineSpace.x4,
+                  TimelineSpace.x7,
+                  TimelineSpace.x7,
+                ),
+                child: body,
+              ),
+              if (_expanded)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: TimelineSpace.x6),
+                  child: Center(child: moreButton),
+                ),
+              if (widget.item.input?.truncated == true)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(
+                    start: TimelineSpace.x7,
+                    bottom: TimelineSpace.x4,
+                  ),
+                  child: TextButton(
+                    onPressed: () => showTimelineDetails(context, '完整计划', [
+                      TimelineDetails(
+                        label: '计划',
+                        field: MobileTimelineContentField.input,
+                        seq: widget.item.input!.seq,
+                        preview: text,
+                        truncated: true,
+                      ),
+                    ], widget.content),
+                    child: const Text('加载完整计划'),
+                  ),
+                ),
+            ],
           ),
           if (!_expanded)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: TextButton(
-                onPressed: () => setState(() => _expanded = true),
-                child: const Text('查看完整计划'),
-              ),
-            ),
-          if (widget.item.input?.truncated == true)
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: TextButton(
-                onPressed: () => showTimelineDetails(context, '完整计划', [
-                  TimelineDetails(
-                    label: '计划',
-                    field: MobileTimelineContentField.input,
-                    seq: widget.item.input!.seq,
-                    preview: text,
-                    truncated: true,
-                  ),
-                ], widget.content),
-                child: const Text('加载完整计划'),
-              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: TimelineSpace.x6,
+              child: Center(child: moreButton),
             ),
         ],
       ),
@@ -442,14 +556,23 @@ class _FailureSheetState extends State<_FailureSheet> {
         : pigcodeLight;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: const EdgeInsets.fromLTRB(
+          TimelineSpace.x9,
+          0,
+          TimelineSpace.x9,
+          TimelineSpace.x9,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Icon(Icons.error_outline, size: 20, color: colors.error),
+                Icon(
+                  Icons.error_outline,
+                  size: TimelineIcon.alert,
+                  color: colors.error,
+                ),
                 const SizedBox(width: TimelineSpace.x4),
                 Expanded(
                   child: Text(
@@ -481,11 +604,16 @@ class _FailureSheetState extends State<_FailureSheet> {
             if (widget.output.isNotEmpty) ...[
               const SizedBox(height: TimelineSpace.x4),
               Container(
-                constraints: const BoxConstraints(maxHeight: 240),
+                constraints: const BoxConstraints(
+                  maxHeight: TimelineToolCard.sectionMaxHeight,
+                ),
                 padding: TimelineToolCard.padding,
                 decoration: BoxDecoration(
                   color: colors.timelinePanel,
-                  border: Border.all(color: colors.timelineBorder),
+                  border: Border.all(
+                    color: colors.timelineBorder,
+                    width: TimelineBorder.regular,
+                  ),
                   borderRadius: BorderRadius.circular(TimelineToolCard.radius),
                 ),
                 child: SingleChildScrollView(

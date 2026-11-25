@@ -388,7 +388,9 @@ class RequestApprovalForm extends StatelessWidget {
           ),
         if (plan != null)
           ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320),
+            constraints: const BoxConstraints(
+              maxHeight: TimelineToolCard.approvalPlanMaxHeight,
+            ),
             child: SingleChildScrollView(
               child: TimelineAnswer(text: plan, padding: EdgeInsets.zero),
             ),
@@ -396,14 +398,19 @@ class RequestApprovalForm extends StatelessWidget {
         else if (approval.detail case final detail?)
           Container(
             width: double.infinity,
-            constraints: const BoxConstraints(maxHeight: 200),
+            constraints: const BoxConstraints(
+              maxHeight: TimelineToolCard.approvalDetailMaxHeight,
+            ),
             padding: const EdgeInsets.symmetric(
               horizontal: TimelineSpace.x6,
               vertical: TimelineSpace.x4,
             ),
             decoration: BoxDecoration(
               color: colors.timelinePanel,
-              border: Border.all(color: colors.timelineBorder),
+              border: Border.all(
+                color: colors.timelineBorder,
+                width: TimelineBorder.regular,
+              ),
               borderRadius: BorderRadius.circular(TimelineRadius.block),
             ),
             child: SingleChildScrollView(
@@ -449,9 +456,9 @@ class _PermAction extends StatelessWidget {
         onTap: onPressed,
         borderRadius: BorderRadius.circular(TimelineRadius.full),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x5),
           child: Opacity(
-            opacity: enabled ? 1 : .45,
+            opacity: enabled ? 1 : TimelineToolCard.disabledOpacity,
             child: Container(
               height: TimelineControl.sm,
               padding: const EdgeInsets.symmetric(horizontal: TimelineSpace.x5),
@@ -459,7 +466,10 @@ class _PermAction extends StatelessWidget {
                 color: primary ? colors.foreground : colors.popover,
                 border: primary
                     ? null
-                    : Border.all(color: colors.timelineBorder),
+                    : Border.all(
+                        color: colors.timelineBorder,
+                        width: TimelineBorder.regular,
+                      ),
                 borderRadius: BorderRadius.circular(TimelineRadius.full),
               ),
               child: Row(
@@ -634,7 +644,10 @@ class _QuestionField extends StatelessWidget {
           children: [
             if (question.header case final header?)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TimelineSpace.x4,
+                  vertical: TimelineSpace.x1,
+                ),
                 decoration: BoxDecoration(
                   color: colors.field,
                   borderRadius: BorderRadius.circular(TimelineRadius.full),
@@ -695,7 +708,7 @@ class _QuestionField extends StatelessWidget {
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: TimelineSpace.x6,
-                vertical: 11,
+                vertical: TimelineSpace.inputVertical,
               ),
             ),
             onChanged: onOther,
@@ -734,9 +747,9 @@ class _QuestionOption extends StatelessWidget {
         onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(TimelineRadius.block),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x4),
           child: Container(
-            constraints: const BoxConstraints(minHeight: 28),
+            constraints: const BoxConstraints(minHeight: TimelineControl.md),
             padding: const EdgeInsets.symmetric(
               horizontal: TimelineSpace.x5,
               vertical: TimelineSpace.x1,

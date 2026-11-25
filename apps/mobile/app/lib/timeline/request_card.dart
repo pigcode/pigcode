@@ -104,8 +104,8 @@ class InlineRequestCard extends ConsumerWidget {
         loading: () => Row(
           children: [
             const SizedBox.square(
-              dimension: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              dimension: TimelineIcon.meta,
+              child: CircularProgressIndicator(strokeWidth: TimelineSpace.x1),
             ),
             const SizedBox(width: TimelineSpace.x4),
             Text(
@@ -138,21 +138,19 @@ class InlineRequestCard extends ConsumerWidget {
       );
     }
 
+    final theme = Theme.of(context);
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
-      padding: const EdgeInsets.all(TimelineSpace.x7),
+      padding: TimelineSpace.card,
       decoration: BoxDecoration(
         color: colors.popover,
-        border: Border.all(color: colors.timelineBorder),
+        border: Border.all(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
         borderRadius: BorderRadius.circular(TimelineRadius.panel),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: TimelineShadow.md(theme.brightness),
       ),
       child: body,
     );

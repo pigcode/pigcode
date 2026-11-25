@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../theme_colors.dart';
-import '../workspace_icon.dart';
 import 'timeline_tokens.dart';
 
 /// 工作区折叠头的文案：正常结束「用时 N 秒」，被停止「已停止」，没有时间「已处理」。
@@ -11,26 +10,11 @@ String timelineWorkLabel(TimelineTurn turn) {
   final start = DateTime.tryParse(turn.startedAt);
   final end = DateTime.tryParse(turn.terminal?.createdAt ?? '');
   if (start == null || end == null) return '已处理';
-  var remaining = (end.difference(start).inMilliseconds / 1000).round().clamp(
-    1,
-    9999999,
-  );
-  final parts = <String>[];
-  for (final (size, unit) in const [
-    (86400, '天'),
-    (3600, '时'),
-    (60, '分'),
-    (1, '秒'),
-  ]) {
-    final value = remaining ~/ size;
-    remaining %= size;
-    if (value > 0) parts.add('$value $unit');
-    if (parts.length == 2) break;
-  }
-  return '用时 ${parts.join(' ')}';
+  return '用时 ${formatTimelineDuration(end.difference(start))}';
 }
 
-/// 结束轮的工作折叠头：次级文字、底部细线、箭头旋转 90°。
+/// 结束轮的工作折叠头（桌面 `.work-head`）：次级文字 15/24、底部 8px 内衬 + `--cv-hairline` 细线、
+/// 箭头 `--cv-subtlest` 0.7 透明度、展开旋转 90°。
 class TimelineWorkHeader extends StatelessWidget {
   const TimelineWorkHeader({
     super.key,
@@ -47,35 +31,45 @@ class TimelineWorkHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
     final line = DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.timelineDivider)),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.timelineDivider,
+            width: TimelineBorder.regular,
+          ),
+        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 9),
+        padding: const EdgeInsets.only(bottom: TimelineSpace.x4),
         child: Row(
           children: [
             Flexible(
               child: Text(
                 timelineWorkLabel(turn),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TimelineType.contentStyle(
                   colors.timelineSubtle,
-                ).copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                ).copyWith(fontFeatures: TimelineType.tabular),
               ),
             ),
             if (canToggle) ...[
-              const SizedBox(width: TimelineSpace.x4),
-              IconTheme(
-                data: IconThemeData(color: colors.timelineSubtle),
-                child: RotatedBox(
-                  quarterTurns: open ? 0 : 3,
-                  child: const WorkspaceIcon(
-                    WorkspaceGlyph.chevronDown,
-                    size: TimelineIcon.control,
+              const SizedBox(width: TimelineSpace.fieldGap),
+              AnimatedRotation(
+                turns: open ? 0.25 : 0,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : TimelineMotion.slow,
+                curve: TimelineMotion.ease,
+                child: Icon(
+                  Icons.chevron_right,
+                  size: TimelineIcon.meta,
+                  color: colors.timelineFaint.withValues(
+                    alpha: TimelineSummary.workChevronOpacity,
                   ),
                 ),
               ),
@@ -84,12 +78,8 @@ class TimelineWorkHeader extends StatelessWidget {
         ),
       ),
     );
-    if (!canToggle) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: TimelineSpace.x6),
-        child: line,
-      );
-    }
+
+    if (!canToggle) return line;
     final hit = timelineTouchHeight(context);
     return Semantics(
       expanded: open,
@@ -97,10 +87,11 @@ class TimelineWorkHeader extends StatelessWidget {
       child: InkWell(
         key: ValueKey('fold-${turn.key}'),
         onTap: onToggle,
+        borderRadius: BorderRadius.circular(TimelineRadius.xs),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: hit),
           child: Align(
-            alignment: Alignment.topLeft,
+            alignment: AlignmentDirectional.topStart,
             heightFactor: 1,
             child: line,
           ),

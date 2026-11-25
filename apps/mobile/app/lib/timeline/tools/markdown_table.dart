@@ -114,7 +114,7 @@ Widget timelineTableBlock(
 }
 
 /// Markdown 表格：桌面 `.md-table` 的手机实现。
-/// 外层 1px 边、r12、横向滚动；单元格 8/12 内衬、min 64/max 28rem、仅水平分隔线。
+/// 外层 1px 边、r12，内容在边框内横向滚动；单元格 8/12 内衬、min 64/max 28rem、仅水平分隔线。
 class TimelineMarkdownTable extends StatelessWidget {
   const TimelineMarkdownTable({
     super.key,
@@ -138,41 +138,52 @@ class TimelineMarkdownTable extends StatelessWidget {
       letterSpacing: 0,
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x7),
-      child: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Container(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth),
-            decoration: BoxDecoration(
-              border: Border.all(color: colors.timelineBorder),
-              borderRadius: BorderRadius.circular(TimelineRadius.panel),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Table(
-              defaultColumnWidth: const IntrinsicColumnWidth(flex: 1),
-              defaultVerticalAlignment: TableCellVerticalAlignment.top,
-              border: TableBorder(
-                horizontalInside: BorderSide(color: colors.timelineBorder),
-              ),
-              children: [
-                for (final (index, row) in data.rows.indexed)
-                  TableRow(
-                    children: [
-                      for (final (column, value) in row.indexed)
-                        _cell(
-                          context,
-                          index == 0,
-                          value,
-                          column < data.alignments.length
-                              ? data.alignments[column]
-                              : TextAlign.left,
-                          cellStyle,
-                          colors,
-                        ),
-                    ],
+      padding: const EdgeInsets.symmetric(
+        vertical: TimelineMarkdown.blockMargin,
+      ),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: colors.timelineBorder,
+            width: TimelineBorder.regular,
+          ),
+          borderRadius: BorderRadius.circular(TimelineRadius.panel),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: LayoutBuilder(
+          builder: (context, constraints) => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: Table(
+                defaultColumnWidth: const IntrinsicColumnWidth(flex: 1),
+                defaultVerticalAlignment: TableCellVerticalAlignment.top,
+                border: TableBorder(
+                  horizontalInside: BorderSide(
+                    color: colors.timelineBorder,
+                    width: TimelineBorder.regular,
                   ),
-              ],
+                ),
+                children: [
+                  for (final (index, row) in data.rows.indexed)
+                    TableRow(
+                      children: [
+                        for (final (column, value) in row.indexed)
+                          _cell(
+                            context,
+                            index == 0,
+                            value,
+                            column < data.alignments.length
+                                ? data.alignments[column]
+                                : TextAlign.left,
+                            cellStyle,
+                            colors,
+                          ),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -203,7 +214,10 @@ class TimelineMarkdownTable extends StatelessWidget {
         vertical: TimelineSpace.x4,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 64, maxWidth: 448),
+        constraints: const BoxConstraints(
+          minWidth: TimelineMarkdown.tableCellMinWidth,
+          maxWidth: TimelineMarkdown.tableCellMaxWidth,
+        ),
         child: Align(
           alignment: alignment,
           child: Text.rich(
@@ -229,17 +243,18 @@ class TimelineMarkdownTable extends StatelessWidget {
           WidgetSpan(
             alignment: PlaceholderAlignment.middle,
             child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              margin: TimelineMarkdown.inlineCodeMargin,
+              padding: TimelineMarkdown.inlineCodePadding,
               decoration: BoxDecoration(
                 color: colors.timelineInlineCode,
                 borderRadius: BorderRadius.circular(TimelineRadius.small),
               ),
               child: Text(
                 token.substring(1, token.length - 1),
-                style: TimelineType.codeStyle(
-                  colors.foreground,
-                ).copyWith(fontSize: TimelineType.meta, height: 1.3),
+                style: TimelineType.codeStyle(colors.foreground).copyWith(
+                  fontSize: TimelineType.meta,
+                  height: TimelineType.inlineCodeHeight,
+                ),
               ),
             ),
           ),

@@ -38,7 +38,7 @@ TextSpan? _highlighted(
   if (!closed || language.isEmpty || _highlight.getLanguage(language) == null) {
     return null;
   }
-  final base = TimelineType.codeStyle(color);
+  final base = TimelineType.codeBlockStyle(color);
   final renderer = TextSpanRenderer(
     base,
     dark ? atomOneDarkTheme : atomOneLightTheme,
@@ -47,7 +47,9 @@ TextSpan? _highlighted(
   return renderer.span;
 }
 
-/// 代码块：语言标题、复制、折行开关；流式未闭合的围栏先不高亮。
+/// 代码块（桌面 `.code-block`）：1px 边、r12、`--cv-card` 底、header padding 8/8/0/12、
+/// 语言 13px lowercase 等宽、28×28 换行与复制按钮、body padding 4/12/12、12/1.6；
+/// 流式未闭合的围栏先不高亮。
 class TimelineCodeBlock extends StatefulWidget {
   const TimelineCodeBlock({
     super.key,
@@ -65,7 +67,7 @@ class TimelineCodeBlock extends StatefulWidget {
 }
 
 class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
-  bool _wrap = true;
+  bool _wrap = false;
   bool _copied = false;
   Timer? _reset;
 
@@ -80,7 +82,7 @@ class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
     if (!mounted) return;
     setState(() => _copied = true);
     _reset?.cancel();
-    _reset = Timer(const Duration(milliseconds: 1500), () {
+    _reset = Timer(TimelineMotion.copyReset, () {
       if (mounted) setState(() => _copied = false);
     });
   }
@@ -91,9 +93,11 @@ class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
     final colors = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+    final trimmed = widget.code.replaceFirst(RegExp(r'\n$'), '');
+    final language = widget.name.trim().toLowerCase();
     final span = _highlighted(
-      widget.name,
-      widget.code,
+      language,
+      trimmed,
       widget.closed,
       colors.foreground,
       theme.brightness == Brightness.dark,
@@ -101,65 +105,59 @@ class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
     final text = Text.rich(
       span ??
           TextSpan(
-            text: widget.code,
-            style: TimelineType.codeStyle(colors.foreground),
+            text: trimmed,
+            style: TimelineType.codeBlockStyle(colors.foreground),
           ),
+      softWrap: _wrap,
     );
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x3),
+      margin: const EdgeInsets.symmetric(
+        vertical: TimelineMarkdown.blockMargin,
+      ),
       decoration: BoxDecoration(
-        color: colors.surfaceSunken,
-        border: Border.all(color: colors.divider),
+        color: colors.timelineCard,
+        border: Border.all(
+          color: colors.timelineBorder,
+          width: TimelineBorder.regular,
+        ),
         borderRadius: BorderRadius.circular(TimelineRadius.panel),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsetsDirectional.only(
-              start: TimelineSpace.x6,
-              end: TimelineSpace.x2,
-            ),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: colors.divider)),
-            ),
+          Padding(
+            padding: TimelineMarkdown.codeHeadPadding,
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    widget.name.trim().isEmpty ? '代码' : widget.name.trim(),
+                    language.isEmpty ? 'text' : language,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TimelineType.smallStyle(colors.timelineFaint),
+                    style: TimelineType.metaMonoStyle(colors.timelineSubtle),
                   ),
                 ),
-                IconButton(
+                const SizedBox(width: TimelineSpace.x6),
+                _CodeBlockButton(
                   tooltip: _wrap ? '不折行' : '自动换行',
-                  onPressed: () => setState(() => _wrap = !_wrap),
-                  icon: Icon(
-                    Icons.wrap_text,
-                    size: TimelineIcon.meta,
-                    color: _wrap ? colors.foreground : colors.timelineFaint,
-                  ),
-                  visualDensity: VisualDensity.compact,
+                  icon: Icons.wrap_text,
+                  pressed: _wrap,
+                  onTap: () => setState(() => _wrap = !_wrap),
                 ),
-                IconButton(
+                const SizedBox(width: TimelineSpace.x1),
+                _CodeBlockButton(
                   tooltip: _copied ? '已复制' : '复制代码',
-                  onPressed: _copy,
-                  icon: Icon(
-                    _copied ? Icons.check_rounded : Icons.copy_rounded,
-                    size: TimelineIcon.meta,
-                    color: _copied ? colors.readyMark : colors.timelineFaint,
-                  ),
-                  visualDensity: VisualDensity.compact,
+                  icon: _copied ? Icons.check_rounded : Icons.copy_rounded,
+                  highlight: _copied ? colors.readyMark : null,
+                  onTap: _copy,
                 ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(TimelineSpace.x6),
+            padding: TimelineMarkdown.codeBodyPadding,
             child: _wrap
                 ? text
                 : SingleChildScrollView(
@@ -173,6 +171,57 @@ class _TimelineCodeBlockState extends State<TimelineCodeBlock> {
   }
 }
 
+class _CodeBlockButton extends StatelessWidget {
+  const _CodeBlockButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+    this.pressed = false,
+    this.highlight,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool pressed;
+  final Color? highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        toggled: pressed,
+        child: Material(
+          color: pressed ? colors.hover : Colors.transparent,
+          borderRadius: BorderRadius.circular(TimelineRadius.block),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(TimelineRadius.block),
+            child: SizedBox(
+              width: TimelineControl.md,
+              height: TimelineControl.md,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: TimelineIcon.btn,
+                  color:
+                      highlight ??
+                      (pressed ? colors.foreground : colors.timelineSubtle),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 final _markdownThemes = <Brightness, GptMarkdownThemeData>{};
 
 final _markdownBlocks = [
@@ -180,60 +229,228 @@ final _markdownBlocks = [
     syntax: const TimelineTableSyntax(),
     builder: timelineTableBlock,
   ),
+  MarkdownBlockComponent(
+    syntax: const _TimelineTaskListSyntax(),
+    builder: _timelineTaskListBlock,
+  ),
 ];
 
-GptMarkdownThemeData _markdownTheme(
-  Brightness brightness, {
-  required Color link,
-  required Color hairline,
-}) => _markdownThemes.putIfAbsent(
-  brightness,
-  () => GptMarkdownThemeData(
-    brightness: brightness,
-    h1: const TextStyle(fontSize: 19, height: 1.5, fontWeight: FontWeight.w600),
-    h2: const TextStyle(fontSize: 17, height: 1.5, fontWeight: FontWeight.w600),
-    h3: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w600),
-    h4: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w600),
-    h5: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
-    h6: const TextStyle(fontSize: 15, height: 1.5, fontWeight: FontWeight.w400),
-    linkColor: link,
-    hrLineColor: hairline,
-    hrLinePadding: const EdgeInsets.symmetric(vertical: 20),
-    autoAddDividerLineAfterH1: false,
-    styleSheet: const GptMarkdownStyleSheet(
-      heading: HeadingStyle(padding: EdgeInsets.only(top: 8)),
-    ),
-  ),
-);
+final _taskLinePattern = RegExp(r'^\s*[-*]\s+\[([ xX])\]\s+(.*)$');
+
+class _TimelineTaskListSyntax extends MarkdownBlockSyntax {
+  const _TimelineTaskListSyntax();
+
+  @override
+  String get type => 'timeline.taskList';
+
+  @override
+  String get prefix => '-';
+
+  @override
+  MarkdownBlockMatch? parse(List<String> lines, int startLine) {
+    if (!_taskLinePattern.hasMatch(lines[startLine])) return null;
+    var end = startLine;
+    while (end < lines.length && _taskLinePattern.hasMatch(lines[end])) {
+      end++;
+    }
+    return MarkdownBlockMatch(
+      node: MdCustomBlock(
+        type: type,
+        body: lines.sublist(startLine, end).join('\n'),
+      ),
+      endLine: end,
+    );
+  }
+}
+
+Widget _timelineTaskListBlock(
+  BuildContext context,
+  MdCustomBlock node,
+  GptMarkdownConfig config,
+) {
+  final lines = node.body.split('\n');
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final (index, line) in lines.indexed)
+        if (_taskLinePattern.firstMatch(line) case final match?) ...[
+          if (index > 0) const SizedBox(height: TimelineMarkdown.listGap),
+          _TimelineTaskCheckbox(
+            checked: match.group(1)!.toLowerCase() == 'x',
+            content: _markdown(context, match.group(2)!),
+          ),
+        ],
+    ],
+  );
+}
+
+GptMarkdownThemeData _markdownTheme(Brightness brightness) =>
+    _markdownThemes.putIfAbsent(brightness, () {
+      final palette = brightness == Brightness.dark
+          ? pigcodeDark
+          : pigcodeLight;
+      return GptMarkdownThemeData(
+        brightness: brightness,
+        h1: TimelineType.headingStyle(TimelineType.heading1, FontWeight.w600),
+        h2: TimelineType.headingStyle(TimelineType.heading2, FontWeight.w600),
+        h3: TimelineType.headingStyle(TimelineType.heading3, FontWeight.w600),
+        h4: TimelineType.headingStyle(TimelineType.heading3, FontWeight.w600),
+        h5: TimelineType.headingStyle(TimelineType.heading3, FontWeight.w500),
+        h6: TimelineType.headingStyle(TimelineType.heading3, FontWeight.w400),
+        linkColor: palette.link,
+        hrLineColor: palette.timelineBorder,
+        hrLineThickness: TimelineBorder.regular,
+        hrLinePadding: const EdgeInsets.symmetric(
+          vertical: TimelineSpace.x2,
+        ),
+        autoAddDividerLineAfterH1: false,
+        styleSheet: GptMarkdownStyleSheet(
+          heading: const HeadingStyle(
+            padding: EdgeInsets.only(top: TimelineSpace.x4),
+          ),
+          link: LinkStyle(
+            color: palette.link,
+            decoration: TextDecoration.none,
+            fontWeight: FontWeight.w500,
+          ),
+          blockQuote: BlockQuoteStyle(
+            barWidth: TimelineMarkdown.quoteBarWidth,
+            barColor: palette.timelineBorder,
+            padding: const EdgeInsetsDirectional.only(
+              start: TimelineMarkdown.quotePadding,
+            ),
+            margin: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
+            textStyle: TextStyle(color: palette.timelineSubtle),
+          ),
+          list: ListStyle(
+            bulletColor: palette.timelineFaint,
+            markerTextStyle: TimelineType.contentStyle(palette.timelineFaint),
+            indent: TimelineSpace.x4,
+            gapAfterMarker: TimelineSpace.x4,
+          ),
+          hr: HrStyle(
+            thickness: TimelineBorder.regular,
+            color: palette.timelineBorder,
+            padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
+          ),
+        ),
+      );
+    });
+
+class _TimelineTaskCheckbox extends StatelessWidget {
+  const _TimelineTaskCheckbox({required this.checked, required this.content});
+
+  final bool checked;
+  final Widget content;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(
+            top: TimelineMarkdown.checkboxTopOffset,
+          ),
+          child: Container(
+            width: TimelineControl.check,
+            height: TimelineControl.check,
+            decoration: BoxDecoration(
+              color: checked ? palette.foreground : Colors.transparent,
+              border: Border.all(
+                color: checked ? palette.foreground : palette.strongBorder,
+                width: TimelineBorder.regular,
+              ),
+              borderRadius: BorderRadius.circular(TimelineRadius.xs),
+            ),
+            alignment: Alignment.center,
+            child: checked
+                ? Icon(
+                    Icons.check,
+                    size: TimelineIcon.check,
+                    color: palette.background,
+                  )
+                : null,
+          ),
+        ),
+        const SizedBox(width: TimelineSpace.fieldGap),
+        Expanded(child: content),
+      ],
+    );
+  }
+}
 
 Widget _markdown(BuildContext context, String value) {
   final theme = Theme.of(context);
-  final colors = theme.colorScheme;
   final body = theme.textTheme.bodyMedium;
   final palette = theme.brightness == Brightness.dark
       ? pigcodeDark
       : pigcodeLight;
   final inlineStyle = InlineCodeStyle(
-    color: colors.onSurface,
-    backgroundColor: colors.surfaceContainerHighest,
-    borderColor: colors.outlineVariant,
-    borderWidth: .5,
+    color: palette.foreground,
+    backgroundColor: palette.timelineInlineCode,
+    borderWidth: 0,
+    borderRadius: const Radius.circular(TimelineRadius.small),
+    padding: TimelineMarkdown.inlineCodePadding,
+    fontFamilyFallback: TimelineType.monoFallback,
+    fontSizeFactor: TimelineType.meta / TimelineType.content,
+    fontWeight: FontWeight.w400,
   );
   return GptMarkdownTheme(
-    gptThemeData: _markdownTheme(
-      theme.brightness,
-      link: palette.link,
-      hairline: palette.timelineBorder,
-    ),
+    gptThemeData: _markdownTheme(theme.brightness),
     child: GptMarkdown(
       value,
       style: body?.copyWith(
-        height: 1.6,
+        color: palette.foreground,
+        fontSize: TimelineType.content,
+        height: TimelineType.contentHeight,
         letterSpacing: theme.platform == TargetPlatform.android
-            ? (body.fontSize ?? 15) * .025
+            ? TimelineType.content * TimelineMarkdown.letterSpacingFactor
             : null,
       ),
       inlineCodeStyle: inlineStyle,
+      inlineCodeBuilder: (context, code, style, codeStyle) => TextSpan(
+        children: [
+          const WidgetSpan(
+            child: SizedBox(width: TimelineMarkdown.inlineCodeOuterGap),
+          ),
+          CodeTextSpan(text: code, codeStyle: codeStyle, style: style),
+          const WidgetSpan(
+            child: SizedBox(width: TimelineMarkdown.inlineCodeOuterGap),
+          ),
+        ],
+      ),
+      unOrderedListBuilder: (context, child, config) => Padding(
+        padding: const EdgeInsetsDirectional.only(
+          start: TimelineSpace.x4,
+          top: TimelineSpace.x1,
+          bottom: TimelineSpace.x1,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(
+                top: TimelineMarkdown.listBulletTopOffset,
+              ),
+              child: Container(
+                width: TimelineMarkdown.listBulletSize,
+                height: TimelineMarkdown.listBulletSize,
+                decoration: BoxDecoration(
+                  color: palette.timelineFaint,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(width: TimelineSpace.x4),
+            Expanded(child: child),
+          ],
+        ),
+      ),
       codeBuilder: (context, name, code, closed) =>
           TimelineCodeBlock(name: name, code: code, closed: closed),
       tableBuilder: (context, rows, textStyle, config) => TimelineMarkdownTable(
@@ -242,28 +459,8 @@ Widget _markdown(BuildContext context, String value) {
         config: config,
       ),
       blockComponents: _markdownBlocks,
-      checkboxBuilder: (context, checked, content, style) {
-        final palette = theme.brightness == Brightness.dark
-            ? pigcodeDark
-            : pigcodeLight;
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 3),
-              child: Icon(
-                checked
-                    ? Icons.check_box_rounded
-                    : Icons.check_box_outline_blank,
-                size: 14,
-                color: checked ? palette.readyMark : palette.timelineFaint,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Expanded(child: content),
-          ],
-        );
-      },
+      checkboxBuilder: (context, checked, content, style) =>
+          _TimelineTaskCheckbox(checked: checked, content: content),
       imageBuilder: (context, url, width, height) =>
           _MarkdownImage(url: url, width: width, height: height),
       onLinkTap: (url, title) {
@@ -276,7 +473,7 @@ Widget _markdown(BuildContext context, String value) {
   );
 }
 
-/// Markdown 图片：http(s) 直接加载，data:image 解码后显示。
+/// Markdown 图片（桌面 `.md-image`）：margin 16 0、r12、1px 边、`--bg` 底、最高 360。
 class _MarkdownImage extends StatelessWidget {
   const _MarkdownImage({required this.url, this.width, this.height});
 
@@ -286,6 +483,9 @@ class _MarkdownImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
     final image = switch (url) {
       _ when url.startsWith('data:image/') => _dataImage(),
       _ when url.startsWith('http://') || url.startsWith('https://') =>
@@ -298,11 +498,13 @@ class _MarkdownImage extends StatelessWidget {
           loadingBuilder: (context, child, progress) => progress == null
               ? child
               : const SizedBox(
-                  height: 40,
+                  height: TimelineControl.bar,
                   child: Center(
                     child: SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      dimension: TimelineIcon.control,
+                      child: CircularProgressIndicator(
+                        strokeWidth: TimelineSpace.x1,
+                      ),
                     ),
                   ),
                 ),
@@ -310,11 +512,23 @@ class _MarkdownImage extends StatelessWidget {
       _ => _fallback(context),
     };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x3),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(TimelineRadius.block),
+      padding: const EdgeInsets.symmetric(
+        vertical: TimelineMarkdown.blockMargin,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.background,
+          border: Border.all(
+            color: colors.timelineBorder,
+            width: TimelineBorder.regular,
+          ),
+          borderRadius: BorderRadius.circular(TimelineRadius.panel),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 240),
+          constraints: const BoxConstraints(
+            maxHeight: TimelineMarkdown.imageMaxHeight,
+          ),
           child: image,
         ),
       ),

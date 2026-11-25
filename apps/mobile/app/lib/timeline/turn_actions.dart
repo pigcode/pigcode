@@ -7,18 +7,23 @@ import '../theme_colors.dart';
 import 'relative_time.dart';
 import 'timeline_tokens.dart';
 
-/// 回答和用户气泡下方的操作栏：复制 + 相对时间。
+enum TimelineTurnActionKind { reply, user }
+
+/// 回答和用户气泡下方的操作栏（桌面 `.turn-actions` / `.turn-user-actions`）：
+/// 复制图标（24×24、r6、12px 图标）+ 相对时间；图标与文字对齐桌面边缘，同时保留移动端易点触区。
 class TimelineTurnActions extends StatefulWidget {
   const TimelineTurnActions({
     super.key,
     required this.text,
     this.createdAt,
     this.copyLabel = '复制',
+    this.kind = TimelineTurnActionKind.reply,
   });
 
   final String text;
   final String? createdAt;
   final String copyLabel;
+  final TimelineTurnActionKind kind;
 
   @override
   State<TimelineTurnActions> createState() => _TimelineTurnActionsState();
@@ -39,7 +44,7 @@ class _TimelineTurnActionsState extends State<TimelineTurnActions> {
     if (!mounted) return;
     setState(() => _copied = true);
     _reset?.cancel();
-    _reset = Timer(const Duration(milliseconds: 1500), () {
+    _reset = Timer(TimelineMotion.copyReset, () {
       if (mounted) setState(() => _copied = false);
     });
   }
@@ -49,35 +54,50 @@ class _TimelineTurnActionsState extends State<TimelineTurnActions> {
     final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+    final isUser = widget.kind == TimelineTurnActionKind.user;
     final time = timelineRelativeTime(widget.createdAt);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          onPressed: _copy,
-          tooltip: _copied ? '已复制' : widget.copyLabel,
-          icon: Icon(
-            _copied ? Icons.check_rounded : Icons.copy_rounded,
-            size: TimelineIcon.meta,
-            color: _copied ? colors.readyMark : colors.timelineFaint,
-          ),
-          color: colors.timelineFaint,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(
-            minWidth: TimelineControl.touch,
-            minHeight: TimelineControl.touch,
-          ),
-          visualDensity: VisualDensity.compact,
-        ),
-        if (time.isNotEmpty)
-          Padding(
-            padding: const EdgeInsetsDirectional.only(start: TimelineSpace.x1),
-            child: Text(
-              time,
-              style: TimelineType.smallStyle(colors.timelineFaint),
+    final timeStyle = isUser
+        ? TimelineType.microStyle(colors.muted)
+        : TimelineType.metaStyle(
+            colors.timelineFaint,
+          ).copyWith(fontFeatures: TimelineType.tabular);
+
+    return Padding(
+      padding: EdgeInsetsDirectional.only(end: isUser ? TimelineSpace.x2 : 0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: _copied ? '已复制' : widget.copyLabel,
+            child: Semantics(
+              button: true,
+              label: _copied ? '已复制' : widget.copyLabel,
+              child: InkWell(
+                onTap: _copy,
+                borderRadius: BorderRadius.circular(TimelineRadius.small),
+                child: SizedBox(
+                  width: TimelineControl.sm,
+                  height: TimelineControl.sm,
+                  child: Center(
+                    child: Icon(
+                      _copied ? Icons.check_rounded : Icons.copy_rounded,
+                      size: TimelineIcon.btn,
+                      color: _copied ? colors.readyMark : colors.timelineSubtle,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-      ],
+          if (time.isNotEmpty)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(
+                start: TimelineSpace.x2,
+              ),
+              child: Text(time, style: timeStyle),
+            ),
+        ],
+      ),
     );
   }
 }

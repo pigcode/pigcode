@@ -287,6 +287,153 @@ TimelineSnapshot _markdownHistory() => TimelineSnapshot(
   live: null,
 );
 
+TimelineSnapshot _richMarkdownHistory() => TimelineSnapshot(
+  events: const [
+    MobileTimelineEvent(
+      seq: 1,
+      runId: 'review',
+      kind: MobileTimelineKind.runStarted,
+      text: '把代码块、引用、任务列表和分隔线一起过一遍。',
+      createdAt: '2025-06-18T08:20:00Z',
+    ),
+    MobileTimelineEvent(
+      seq: 2,
+      runId: 'review',
+      kind: MobileTimelineKind.messageAssistant,
+      text:
+          '### 实现说明\n\n'
+          '```ts\n'
+          'export function formatAnswer(value: number): string {\n'
+          '  return `The answer is \${value}`\n'
+          '}\n'
+          '```\n\n'
+          '- [x] lint 通过\n'
+          '- [x] 5 个测试全部通过\n'
+          '- [ ] README 的用法说明留到下一步\n\n'
+          '---\n\n'
+          '> 参考了 [Vitest 文档](https://vitest.dev/guide/) 里内联快照的写法。',
+      createdAt: '2025-06-18T08:20:05Z',
+    ),
+    MobileTimelineEvent(
+      seq: 3,
+      runId: 'review',
+      kind: MobileTimelineKind.runCompleted,
+      createdAt: '2025-06-18T08:20:06Z',
+    ),
+  ],
+  through: 3,
+  cursor: 3,
+  nextBefore: null,
+  live: null,
+);
+
+TimelineSnapshot _statesHistory() => TimelineSnapshot(
+  events: const [
+    MobileTimelineEvent(
+      seq: 1,
+      runId: 'review',
+      kind: MobileTimelineKind.runStarted,
+      text:
+          '帮我逐项核对以下内容，重点看 @lib/timeline/user_bubble.dart 的长消息折叠与遮罩：\n'
+          '1. 用户气泡超过 120px 后自动折叠并从 70% 开始向下渐隐。\n'
+          '2. 折叠态底部居中放 28×24 胶囊按钮，展开后不盖住正文。\n'
+          '3. 只改文件的摘要组收起时列出最多 3 个文件名与 +N。\n'
+          '4. 提示行按 info/warning/error 分级底色，失败块用错误浅底。',
+      createdAt: '2025-06-18T08:22:00Z',
+    ),
+    MobileTimelineEvent(
+      seq: 2,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'e1',
+      name: 'Edit',
+      text: '{"file_path":"lib/a.dart","old_string":"a","new_string":"b"}',
+      createdAt: '2025-06-18T08:22:01Z',
+    ),
+    MobileTimelineEvent(
+      seq: 3,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'e1',
+      name: 'Edit',
+      text: '',
+      createdAt: '2025-06-18T08:22:01Z',
+    ),
+    MobileTimelineEvent(
+      seq: 4,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'e2',
+      name: 'Edit',
+      text: '{"file_path":"lib/b.dart","old_string":"a","new_string":"b"}',
+      createdAt: '2025-06-18T08:22:02Z',
+    ),
+    MobileTimelineEvent(
+      seq: 5,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'e2',
+      name: 'Edit',
+      text: '',
+      createdAt: '2025-06-18T08:22:02Z',
+    ),
+    MobileTimelineEvent(
+      seq: 6,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'e3',
+      name: 'Edit',
+      text: '{"file_path":"lib/c.dart","old_string":"a","new_string":"b"}',
+      createdAt: '2025-06-18T08:22:03Z',
+    ),
+    MobileTimelineEvent(
+      seq: 7,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'e3',
+      name: 'Edit',
+      text: '',
+      createdAt: '2025-06-18T08:22:03Z',
+    ),
+    MobileTimelineEvent(
+      seq: 8,
+      runId: 'review',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'e4',
+      name: 'Edit',
+      text: '{"file_path":"lib/d.dart","old_string":"a","new_string":"b"}',
+      createdAt: '2025-06-18T08:22:04Z',
+    ),
+    MobileTimelineEvent(
+      seq: 9,
+      runId: 'review',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'e4',
+      name: 'Edit',
+      text: '',
+      createdAt: '2025-06-18T08:22:04Z',
+    ),
+    MobileTimelineEvent(
+      seq: 10,
+      runId: 'review',
+      kind: MobileTimelineKind.notice,
+      text: '插件工具的 MCP 桥暂未连接，已跳过相关工具。',
+      createdAt: '2025-06-18T08:22:05Z',
+    ),
+    MobileTimelineEvent(
+      seq: 11,
+      runId: 'review',
+      kind: MobileTimelineKind.runFailed,
+      text: '命令执行返回退出码 1，请检查测试日志。',
+      createdAt: '2025-06-18T08:22:06Z',
+    ),
+  ],
+  through: 11,
+  cursor: 11,
+  nextBefore: null,
+  live: null,
+);
+
 Widget workspaceFixture({
   bool online = true,
   bool running = false,
@@ -295,14 +442,22 @@ Widget workspaceFixture({
   bool completedEditOnly = false,
   bool showcase = false,
   bool markdown = false,
+  bool richMarkdown = false,
+  bool states = false,
 }) {
   final history = showcase
       ? _showcaseHistory()
       : markdown
       ? _markdownHistory()
+      : richMarkdown
+      ? _richMarkdownHistory()
+      : states
+      ? _statesHistory()
       : _history(pending, running, completedEditOnly: completedEditOnly);
-  final status = showcase || markdown
+  final status = showcase || markdown || richMarkdown
       ? MobileThreadStatus.completed
+      : states
+      ? MobileThreadStatus.failed
       : pending != null
       ? MobileThreadStatus.waitingApproval
       : running
