@@ -8,6 +8,7 @@ import '../../timeline_work.dart';
 import '../timeline_tokens.dart';
 import '../tool_row.dart';
 import 'command_card.dart';
+import 'inline_diff.dart';
 
 /// 单个工具调用的行和展开内容。按工具族选择摘要、图标和详情。
 class TimelineToolView extends StatefulWidget {
@@ -108,7 +109,12 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       status: _status,
       running: running,
       failed: failed,
-      detailFaint: kind == TimelineToolKind.command,
+      detailTone: switch (kind) {
+        TimelineToolKind.command => TimelineDetailTone.tertiary,
+        TimelineToolKind.read ||
+        TimelineToolKind.edit => TimelineDetailTone.primary,
+        _ => TimelineDetailTone.secondary,
+      },
       hideDetailWhenExpanded:
           kind == TimelineToolKind.command &&
           timelineCommandDescription(item) == null,
@@ -226,7 +232,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         (record['content'] as String?);
     final edits = record['edits'] ?? record['changes'];
     if (oldText != null || newText != null) {
-      return _InlineDiff(oldText: oldText, newText: newText);
+      return TimelineInlineDiff(oldText: oldText, newText: newText);
     }
     if (edits is List) {
       final rows = <Widget>[];
@@ -249,7 +255,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
           );
           rows.add(const SizedBox(height: TimelineSpace.x1));
         }
-        rows.add(_InlineDiff(oldText: oldValue, newText: newValue));
+        rows.add(TimelineInlineDiff(oldText: oldValue, newText: newValue));
       }
       return rows.isEmpty
           ? null
@@ -260,80 +266,9 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     }
     final patch = record['patch'];
     if (patch is String && patch.trim().isNotEmpty) {
-      return _InlineDiff(patch: patch);
+      return TimelineInlineDiff(patch: patch);
     }
     return null;
-  }
-}
-
-/// 编辑工具的紧凑内联 diff：保留上下文，新增/删除行用符号和底色区分。
-class _InlineDiff extends StatelessWidget {
-  const _InlineDiff({this.oldText, this.newText, this.patch});
-
-  final String? oldText;
-  final String? newText;
-  final String? patch;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    final lines = <(String, int)>[];
-    if (patch != null) {
-      for (final line in patch!.split('\n')) {
-        if (line.startsWith('***') || line.startsWith('@@')) continue;
-        if (line.startsWith('+')) {
-          lines.add((line, 1));
-        } else if (line.startsWith('-')) {
-          lines.add((line, -1));
-        } else if (line.trim().isNotEmpty) {
-          lines.add((line, 0));
-        }
-      }
-    } else {
-      for (final line in (oldText ?? '').split('\n')) {
-        lines.add(('-$line', -1));
-      }
-      for (final line in (newText ?? '').split('\n')) {
-        lines.add(('+$line', 1));
-      }
-    }
-    if (lines.isEmpty) return const SizedBox.shrink();
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 280),
-      child: SingleChildScrollView(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final (line, kind) in lines)
-                Container(
-                  color: kind > 0
-                      ? colors.diffAddedBackground
-                      : kind < 0
-                      ? colors.diffRemovedBackground
-                      : null,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: TimelineSpace.x2,
-                  ),
-                  child: Text(
-                    line,
-                    style: TimelineType.codeStyle(
-                      kind > 0
-                          ? colors.diffAdded
-                          : kind < 0
-                          ? colors.diffRemoved
-                          : colors.timelineSubtle,
-                    ).copyWith(height: 1.6),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

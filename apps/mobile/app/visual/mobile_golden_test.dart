@@ -91,6 +91,18 @@ void main() {
       await _matchScreen('timeline-tools', brightness);
     }, variant: _platforms);
 
+    testWidgets('内联 diff ${brightness.name}', (tester) async {
+      await _openPage(tester, brightness, workspaceFixture(showcase: true));
+      await tester.tap(find.text('用时 8 秒'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('已查阅'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('已编辑'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('新的连接提示'), findsOneWidget);
+      await _matchScreen('timeline-diff', brightness);
+    }, variant: _platforms);
+
     testWidgets('Markdown 表格 ${brightness.name}', (tester) async {
       await _openPage(tester, brightness, workspaceFixture(markdown: true));
       expect(find.text('文件'), findsOneWidget);

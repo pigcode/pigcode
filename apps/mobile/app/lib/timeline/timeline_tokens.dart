@@ -43,6 +43,7 @@ abstract final class TimelineType {
   static TextStyle codeStyle(Color color, {double height = codeLineHeight}) =>
       TextStyle(
         fontFamily: 'monospace',
+        fontFamilyFallback: const ['PingFang SC', 'Noto Sans SC'],
         fontSize: code,
         height: height / code,
         color: color,

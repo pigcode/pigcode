@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../theme_colors.dart';
 import 'timeline_tokens.dart';
 
+enum TimelineDetailTone { primary, secondary, tertiary }
+
 /// 工具行公共外壳：图标、动作、对象、改动行数、状态词和展开箭头。
 class TimelineToolRow extends StatelessWidget {
   const TimelineToolRow({
@@ -14,7 +16,7 @@ class TimelineToolRow extends StatelessWidget {
     this.status,
     this.running = false,
     this.failed = false,
-    this.detailFaint = false,
+    this.detailTone = TimelineDetailTone.primary,
     this.hideDetailWhenExpanded = false,
     this.onStatusTap,
     this.showIcon = true,
@@ -31,7 +33,7 @@ class TimelineToolRow extends StatelessWidget {
   final String? status;
   final bool running;
   final bool failed;
-  final bool detailFaint;
+  final TimelineDetailTone detailTone;
   final bool hideDetailWhenExpanded;
   final VoidCallback? onStatusTap;
   final bool showIcon;
@@ -48,9 +50,11 @@ class TimelineToolRow extends StatelessWidget {
     final actionColor = failed ? colors.error : colors.timelineSubtle;
     final detailColor = failed
         ? colors.error
-        : detailFaint
-        ? colors.timelineFaint
-        : colors.foreground;
+        : switch (detailTone) {
+            TimelineDetailTone.primary => colors.foreground,
+            TimelineDetailTone.secondary => colors.timelineSubtle,
+            TimelineDetailTone.tertiary => colors.timelineFaint,
+          };
     final statusColor = failed ? colors.error : colors.timelineFaint;
     final touch = timelineTouchHeight(context);
 
