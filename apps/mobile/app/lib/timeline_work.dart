@@ -334,52 +334,83 @@ String? timelineCommandDescription(TimelineWork item) =>
 String timelineStripAnsi(String value) =>
     value.replaceAll(RegExp('\x1B\\[[0-?]*[ -/]*[@-~]'), '');
 
+int _countTextLines(String value) {
+  if (value.isEmpty) return 0;
+  final normalized = value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  final trimmed = normalized.endsWith('\n')
+      ? normalized.substring(0, normalized.length - 1)
+      : normalized;
+  return trimmed.isEmpty ? 0 : trimmed.split('\n').length;
+}
+
 /// 编辑类工具的增删行数；无法判断时返回 null。
-({int added, int removed})? timelineEditStats(TimelineWork item) {
-  final input = _toolInput(item);
+({int added, int removed})? timelineEditStats(TimelineWork item) =>
+    timelineEditStatsFromInput(_toolInput(item));
+
+/// 从已解析的工具输入（完整或预览）计算编辑类工具的增删行数。
+({int added, int removed})? timelineEditStatsFromInput(Object? input) {
   var added = 0;
   var removed = 0;
   var found = false;
   void count(Object? oldValue, Object? newValue) {
     if (oldValue is String && oldValue.isNotEmpty) {
-      removed += oldValue.split('\n').length;
+      removed += _countTextLines(oldValue);
       found = true;
     }
     if (newValue is String && newValue.isNotEmpty) {
-      added += newValue.split('\n').length;
+      added += _countTextLines(newValue);
       found = true;
     }
   }
 
-  if (input is Map) {
-    final edits = input['edits'] ?? input['changes'];
-    if (edits is List) {
-      for (final entry in edits.whereType<Map>()) {
+  void countPatch(String patch) {
+    if (!patch.contains('\n')) return;
+    var patchFound = false;
+    for (final line in patch.split('\n')) {
+      if (line.startsWith('***') ||
+          line.startsWith('@@') ||
+          line.startsWith('+++') ||
+          line.startsWith('---')) {
+        continue;
+      }
+      if (line.startsWith('+')) {
+        added++;
+        patchFound = true;
+      } else if (line.startsWith('-')) {
+        removed++;
+        patchFound = true;
+      }
+    }
+    found = found || patchFound;
+  }
+
+  void countEntries(List entries) {
+    for (final entry in entries.whereType<Map>()) {
+      final diff = entry['diff'] ?? entry['unified_diff'];
+      if (diff is String) {
+        countPatch(diff);
+      } else {
         count(
           _field(entry, ['old_string', 'oldString', 'old']),
-          _field(entry, ['new_string', 'newString', 'new']),
+          _field(entry, ['new_string', 'newString', 'new', 'content']),
         );
       }
     }
+  }
+
+  if (input is List) {
+    countEntries(input);
+  } else if (input is String && input.contains('*** Begin Patch')) {
+    countPatch(input);
+  } else if (input is Map) {
+    final edits = input['edits'] ?? input['changes'];
+    if (edits is List) countEntries(edits);
     count(
-      _field(input, ['old_string', 'oldString']),
-      _field(input, ['new_string', 'newString', 'content']),
+      _field(input, ['old_string', 'oldString', 'old']),
+      _field(input, ['new_string', 'newString', 'content', 'new_source']),
     );
-    final patch = input['patch'];
-    if (patch is String && patch.contains('\n')) {
-      var patchFound = false;
-      for (final line in patch.split('\n')) {
-        if (line.startsWith('***') || line.startsWith('@@')) continue;
-        if (line.startsWith('+')) {
-          added++;
-          patchFound = true;
-        } else if (line.startsWith('-')) {
-          removed++;
-          patchFound = true;
-        }
-      }
-      found = found || patchFound;
-    }
+    final patch = input['patch'] ?? input['input'];
+    if (patch is String) countPatch(patch);
   }
   return found ? (added: added, removed: removed) : null;
 }

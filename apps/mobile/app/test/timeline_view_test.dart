@@ -1251,6 +1251,161 @@ void main() {
   );
 
   testWidgets(
+    'renders Write tool as numbered green inline diff without bogus removal line and auto-loads truncated Write/Edit input',
+    (tester) async {
+      // 1. 短文件 Write：展开显示带行号的新增 diff 面板，不出现多余的 `-` 删除行或结果灰框。
+      await tester.pumpWidget(
+        page(const [
+          MobileTimelineEvent(
+            seq: 1,
+            runId: 'write-short',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'w1',
+            name: 'Write',
+            text:
+                '{"file_path":"lib/hello.dart","content":"void main() {\\n  print(1);\\n}\\n"}',
+            createdAt: '2026-11-25T10:00:00.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 2,
+            runId: 'write-short',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'w1',
+            name: 'Write',
+            text: 'File created successfully at: lib/hello.dart',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('hello.dart'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineInlineDiff), findsOneWidget);
+      expect(find.byType(TimelineToolDetails), findsNothing);
+      expect(find.text('void main() {'), findsOneWidget);
+      expect(find.text('  print(1);'), findsOneWidget);
+      expect(find.text('}'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(TimelineInlineDiff),
+          matching: find.text('+'),
+        ),
+        findsNWidgets(3),
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TimelineInlineDiff),
+          matching: find.text('-'),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TimelineInlineDiff),
+          matching: find.text('1'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(TimelineInlineDiff),
+          matching: find.text('3'),
+        ),
+        findsOneWidget,
+      );
+
+      // 2. 输入超过 512B 被截断的 Write：展开后自动分片拉取完整 input 并直接渲染 diff 面板（支持失败重试），
+      //    不再退化成「结果: File created successfully」+「查看完整内容」。
+      const fullWriteJson =
+          '{"file_path":"web/index.html","content":"<!DOCTYPE html>\\n<html>\\n<body>ok</body>\\n</html>\\n"}';
+      var failOnce = true;
+      Future<MobileTimelineContentResult> loader({
+        int? seq,
+        String? runId,
+        String? toolId,
+        required MobileTimelineContentField field,
+        int? offset,
+      }) async {
+        expect(seq, 10);
+        expect(field, MobileTimelineContentField.input);
+        if (failOnce) {
+          failOnce = false;
+          throw Exception('offline');
+        }
+        if (offset == null) {
+          return MobileTimelineContentResult(
+            text: fullWriteJson.substring(0, 40),
+            nextOffset: 40,
+          );
+        }
+        return MobileTimelineContentResult(
+          text: fullWriteJson.substring(offset),
+        );
+      }
+
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(disableAnimations: true),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: TimelineView(
+              snapshot: TimelineSnapshot(
+                events: const [
+                  MobileTimelineEvent(
+                    seq: 10,
+                    runId: 'write-trunc',
+                    kind: MobileTimelineKind.toolStarted,
+                    itemId: 'w2',
+                    name: 'Write',
+                    text: '{"file_path":"web/index.html","content":"<!DOCTYPE',
+                    truncated: true,
+                    createdAt: '2026-11-25T10:00:00.000Z',
+                  ),
+                  MobileTimelineEvent(
+                    seq: 11,
+                    runId: 'write-trunc',
+                    kind: MobileTimelineKind.toolCompleted,
+                    itemId: 'w2',
+                    name: 'Write',
+                    text: 'File created successfully at: web/index.html',
+                    createdAt: '2026-11-25T10:00:01.000Z',
+                  ),
+                ],
+                through: 11,
+                cursor: 11,
+                nextBefore: null,
+                live: null,
+              ),
+              online: true,
+              loadEarlier: () async {},
+              content: loader,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('index.html'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineToolDetails), findsNothing);
+      expect(find.text('查看完整内容'), findsNothing);
+      expect(find.text('改动内容加载失败，点击重试'), findsOneWidget);
+
+      await tester.tap(find.text('改动内容加载失败，点击重试'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineInlineDiff), findsOneWidget);
+      expect(find.text('<!DOCTYPE html>'), findsOneWidget);
+      expect(find.text('<body>ok</body>'), findsOneWidget);
+      expect(find.text('</html>'), findsOneWidget);
+      expect(find.text('File created successfully at: web/index.html'), findsNothing);
+      expect(find.text('查看完整内容'), findsNothing);
+    },
+  );
+
+  testWidgets(
     'falls back to rendering live reasoning when the snapshot has no matching turn yet',
     (tester) async {
       await tester.pumpWidget(

@@ -739,6 +739,7 @@ class _TimelineViewState extends State<TimelineView> {
         item: item,
         ended: turn.terminal != null,
         content: widget.content,
+        online: widget.online,
         showIcon: showIcon,
         compact: compact,
         liveOutput: _toolLiveOutput(item, turn),

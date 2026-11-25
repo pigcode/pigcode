@@ -12,14 +12,33 @@ class TimelineInlineDiff extends StatelessWidget {
   final String? newText;
   final String? patch;
 
+  List<String> _splitLines(String text) {
+    if (text.isEmpty) return const [];
+    final normalized = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final trimmed = normalized.endsWith('\n')
+        ? normalized.substring(0, normalized.length - 1)
+        : normalized;
+    return trimmed.isEmpty ? const [] : trimmed.split('\n');
+  }
+
   List<_DiffLine> get _lines {
     if (patch != null) return _parsePatch(patch!);
     final lines = <_DiffLine>[];
-    for (final line in (oldText ?? '').split('\n')) {
+    final oldLines = _splitLines(oldText ?? '');
+    final newLines = _splitLines(newText ?? '');
+    final hasOld = oldLines.isNotEmpty;
+    for (final line in oldLines) {
       lines.add(_DiffLine(kind: -1, marker: '-', code: line));
     }
-    for (final line in (newText ?? '').split('\n')) {
-      lines.add(_DiffLine(kind: 1, marker: '+', code: line));
+    for (var index = 0; index < newLines.length; index++) {
+      lines.add(
+        _DiffLine(
+          kind: 1,
+          marker: '+',
+          code: newLines[index],
+          number: hasOld ? null : index + 1,
+        ),
+      );
     }
     return lines;
   }
@@ -30,15 +49,48 @@ class TimelineInlineDiff extends StatelessWidget {
     int? oldNumber;
     int? newNumber;
     var seenHunk = false;
-    for (final line in text.split('\n')) {
+    var addingFile = false;
+    for (final line in _splitLines(text)) {
+      if (line.startsWith('*** Add File:')) {
+        if (lines.isNotEmpty) {
+          lines.add(const _DiffLine(kind: 2, marker: '', code: '⋯'));
+        }
+        addingFile = true;
+        oldNumber = null;
+        newNumber = 1;
+        seenHunk = true;
+        continue;
+      }
+      if (line.startsWith('*** Update File:') ||
+          line.startsWith('*** Delete File:')) {
+        if (lines.isNotEmpty) {
+          lines.add(const _DiffLine(kind: 2, marker: '', code: '⋯'));
+        }
+        addingFile = false;
+        oldNumber = null;
+        newNumber = null;
+        seenHunk = false;
+        continue;
+      }
       final match = hunk.firstMatch(line);
       if (match != null) {
         if (seenHunk) {
           lines.add(const _DiffLine(kind: 2, marker: '', code: '⋯'));
         }
         seenHunk = true;
+        addingFile = false;
         oldNumber = int.parse(match.group(1)!);
         newNumber = int.parse(match.group(2)!);
+        continue;
+      }
+      if (line.startsWith('@@')) {
+        if (lines.isNotEmpty) {
+          lines.add(const _DiffLine(kind: 2, marker: '', code: '⋯'));
+        }
+        seenHunk = true;
+        addingFile = false;
+        oldNumber = null;
+        newNumber = null;
         continue;
       }
       if (line.startsWith('diff ') ||
@@ -49,16 +101,12 @@ class TimelineInlineDiff extends StatelessWidget {
           line.startsWith('\\ No newline')) {
         continue;
       }
-      if (line.startsWith('+')) {
+      if (line.startsWith('+') || addingFile) {
+        final code = line.startsWith('+') ? line.substring(1) : line;
         lines.add(
-          _DiffLine(
-            kind: 1,
-            marker: '+',
-            code: line.substring(1),
-            number: newNumber,
-          ),
+          _DiffLine(kind: 1, marker: '+', code: code, number: newNumber),
         );
-        newNumber = (newNumber ?? 0) + 1;
+        if (newNumber != null) newNumber += 1;
       } else if (line.startsWith('-')) {
         lines.add(
           _DiffLine(
@@ -68,7 +116,7 @@ class TimelineInlineDiff extends StatelessWidget {
             number: oldNumber,
           ),
         );
-        oldNumber = (oldNumber ?? 0) + 1;
+        if (oldNumber != null) oldNumber += 1;
       } else if (line.startsWith(' ')) {
         lines.add(
           _DiffLine(
@@ -78,8 +126,8 @@ class TimelineInlineDiff extends StatelessWidget {
             number: oldNumber,
           ),
         );
-        oldNumber = (oldNumber ?? 0) + 1;
-        newNumber = (newNumber ?? 0) + 1;
+        if (oldNumber != null) oldNumber += 1;
+        if (newNumber != null) newNumber += 1;
       }
     }
     return lines;

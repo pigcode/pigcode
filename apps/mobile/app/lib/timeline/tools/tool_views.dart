@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pigcode_client/pigcode_client.dart';
@@ -17,6 +20,7 @@ class TimelineToolView extends StatefulWidget {
     required this.item,
     required this.ended,
     required this.content,
+    this.online = true,
     this.showIcon = true,
     this.compact = false,
     this.liveOutput,
@@ -26,6 +30,7 @@ class TimelineToolView extends StatefulWidget {
   final TimelineWork item;
   final bool ended;
   final TimelineContentLoader content;
+  final bool online;
   final bool showIcon;
   final bool compact;
   final String? liveOutput;
@@ -36,7 +41,95 @@ class TimelineToolView extends StatefulWidget {
 }
 
 class _TimelineToolViewState extends State<TimelineToolView> {
+  static const _maxInputPages = 64;
+
   bool _expanded = false;
+  Object? _fullInput;
+  bool _loadingInput = false;
+  bool _inputLoadFailed = false;
+  int _inputLoadGeneration = 0;
+
+  @override
+  void didUpdateWidget(TimelineToolView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.input?.seq != widget.item.input?.seq ||
+        oldWidget.item.input?.text != widget.item.input?.text ||
+        oldWidget.item.input?.truncated != widget.item.input?.truncated) {
+      _inputLoadGeneration++;
+      _fullInput = null;
+      _loadingInput = false;
+      _inputLoadFailed = false;
+      if (_expanded && _needsFullEditInput) {
+        unawaited(_loadFullEditInput());
+      }
+    }
+  }
+
+  bool get _needsFullEditInput =>
+      kind == TimelineToolKind.edit &&
+      item.input?.truncated == true &&
+      _fullInput == null;
+
+  Future<void> _loadFullEditInput() async {
+    final inputEvent = item.input;
+    if (!widget.online ||
+        inputEvent == null ||
+        _loadingInput ||
+        _fullInput != null) {
+      return;
+    }
+    final generation = ++_inputLoadGeneration;
+    setState(() {
+      _loadingInput = true;
+      _inputLoadFailed = false;
+    });
+    final buffer = StringBuffer();
+    int? offset;
+    var pages = 0;
+    try {
+      while (pages < _maxInputPages) {
+        pages++;
+        final page = await widget.content(
+          seq: inputEvent.seq,
+          field: MobileTimelineContentField.input,
+          offset: offset,
+        );
+        if (!mounted || generation != _inputLoadGeneration) return;
+        buffer.write(page.text);
+        offset = page.nextOffset;
+        if (offset == null) break;
+      }
+      final raw = buffer.toString().trim();
+      Object? parsed = raw;
+      if (raw.startsWith('{') || raw.startsWith('[') || raw.startsWith('"')) {
+        try {
+          parsed = jsonDecode(raw);
+        } on FormatException {
+          parsed = raw;
+        }
+      }
+      if (mounted && generation == _inputLoadGeneration) {
+        setState(() {
+          _fullInput = parsed;
+          _loadingInput = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && generation == _inputLoadGeneration) {
+        setState(() {
+          _loadingInput = false;
+          _inputLoadFailed = true;
+        });
+      }
+    }
+  }
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded && _needsFullEditInput) {
+      unawaited(_loadFullEditInput());
+    }
+  }
 
   TimelineWork get item => widget.item;
   TimelineToolKind get kind => timelineToolKind(item);
@@ -86,8 +179,11 @@ class _TimelineToolViewState extends State<TimelineToolView> {
     return null;
   }
 
-  ({int added, int removed})? get _diff =>
-      kind == TimelineToolKind.edit ? timelineEditStats(item) : null;
+  ({int added, int removed})? get _diff {
+    if (kind != TimelineToolKind.edit) return null;
+    if (_fullInput != null) return timelineEditStatsFromInput(_fullInput);
+    return timelineEditStats(item);
+  }
 
   bool get _nonExpandableReadOnly =>
       kind == TimelineToolKind.read ||
@@ -136,7 +232,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       onTap: _nonExpandableReadOnly
           ? null
           : _expandable
-          ? () => setState(() => _expanded = !_expanded)
+          ? _toggleExpanded
           : widget.onOpenDetails,
       child: _expanded ? _details(context) : null,
     );
@@ -167,20 +263,44 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         ],
       );
     } else if (kind == TimelineToolKind.edit) {
-      final diff = _editDiff();
-      if (diff != null) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            diff,
-            if (truncated)
-              TextButton(
-                onPressed: widget.onOpenDetails,
-                child: const Text('查看完整内容'),
-              ),
-          ],
+      if (_loadingInput) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: TimelineSpace.x4),
+          child: Text(
+            '正在加载改动内容…',
+            style: TimelineType.metaStyle(colors.timelineFaint),
+          ),
         );
-      } else if (output.isNotEmpty) {
+      }
+      final diff = _editDiff();
+      if (diff != null) return diff;
+      if (_inputLoadFailed) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: TimelineSpace.x4),
+          child: InkWell(
+            onTap: () => unawaited(_loadFullEditInput()),
+            borderRadius: BorderRadius.circular(TimelineRadius.xs),
+            child: Text(
+              '改动内容加载失败，点击重试',
+              style: TimelineType.metaStyle(colors.timelineSubtle).copyWith(
+                decoration: TextDecoration.underline,
+                decorationStyle: TextDecorationStyle.dotted,
+                decorationColor: colors.timelineSubtle,
+              ),
+            ),
+          ),
+        );
+      }
+      if (item.input?.truncated == true && !widget.online) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: TimelineSpace.x4),
+          child: Text(
+            '电脑离线，暂时无法加载完整改动',
+            style: TimelineType.metaStyle(colors.timelineFaint),
+          ),
+        );
+      }
+      if (output.isNotEmpty) {
         sections.add(TimelineToolSection(label: '结果', text: output));
       }
     } else if (kind == TimelineToolKind.mcp) {
@@ -248,14 +368,19 @@ class _TimelineToolViewState extends State<TimelineToolView> {
   }
 
   Widget? _editDiff() {
-    final record = timelineToolRecord(item);
+    final source = _fullInput;
+    if (source is String && source.contains('*** Begin Patch')) {
+      return TimelineInlineDiff(patch: source);
+    }
+    final record = source is Map ? source : timelineToolRecord(item);
     final oldText =
         (record['old_string'] ?? record['oldString']) as String? ??
         (record['old'] as String?);
     final newText =
         (record['new_string'] ?? record['newString']) as String? ??
-        (record['content'] as String?);
-    final edits = record['edits'] ?? record['changes'];
+        (record['content'] as String?) ??
+        (record['new_source'] as String?);
+    final edits = source is List ? source : (record['edits'] ?? record['changes']);
     if (oldText != null || newText != null) {
       return TimelineInlineDiff(oldText: oldText, newText: newText);
     }
@@ -268,9 +393,17 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         final path =
             (entry['file_path'] ?? entry['path'] ?? entry['filePath'])
                 as String?;
-        final oldValue = (entry['old_string'] ?? entry['oldString']) as String?;
-        final newValue = (entry['new_string'] ?? entry['newString']) as String?;
-        if (oldValue == null && newValue == null) continue;
+        final diffText = (entry['diff'] ?? entry['unified_diff']) as String?;
+        final oldValue =
+            (entry['old_string'] ?? entry['oldString'] ?? entry['old'])
+                as String?;
+        final newValue =
+            (entry['new_string'] ??
+                    entry['newString'] ??
+                    entry['new'] ??
+                    entry['content'])
+                as String?;
+        if (diffText == null && oldValue == null && newValue == null) continue;
         if (rows.isNotEmpty) rows.add(const SizedBox(height: TimelineSpace.x4));
         if (path != null) {
           rows.add(
@@ -278,7 +411,11 @@ class _TimelineToolViewState extends State<TimelineToolView> {
           );
           rows.add(const SizedBox(height: TimelineSpace.x1));
         }
-        rows.add(TimelineInlineDiff(oldText: oldValue, newText: newValue));
+        rows.add(
+          diffText != null
+              ? TimelineInlineDiff(patch: diffText)
+              : TimelineInlineDiff(oldText: oldValue, newText: newValue),
+        );
       }
       return rows.isEmpty
           ? null
@@ -287,7 +424,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
               children: rows,
             );
     }
-    final patch = record['patch'];
+    final patch = record['patch'] ?? record['input'];
     if (patch is String && patch.trim().isNotEmpty) {
       return TimelineInlineDiff(patch: patch);
     }
