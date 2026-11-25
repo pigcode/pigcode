@@ -47,8 +47,6 @@ class _TimelineToolViewState extends State<TimelineToolView> {
   String get _name => (item.output?.name ?? item.event.name ?? '').trim();
 
   String get _action {
-    if (failed) return '执行失败';
-    if (stopped) return '已停止';
     final prefix = running ? '正在' : '已';
     return switch (kind) {
       TimelineToolKind.read => '$prefix读取',
@@ -68,7 +66,7 @@ class _TimelineToolViewState extends State<TimelineToolView> {
   }
 
   IconData get _icon => switch (kind) {
-    TimelineToolKind.read => Icons.description_outlined,
+    TimelineToolKind.read => Icons.search,
     TimelineToolKind.search => Icons.search,
     TimelineToolKind.fetch => Icons.public,
     TimelineToolKind.edit => Icons.edit_outlined,
@@ -91,11 +89,17 @@ class _TimelineToolViewState extends State<TimelineToolView> {
   ({int added, int removed})? get _diff =>
       kind == TimelineToolKind.edit ? timelineEditStats(item) : null;
 
+  bool get _nonExpandableReadOnly =>
+      kind == TimelineToolKind.read ||
+      kind == TimelineToolKind.search ||
+      kind == TimelineToolKind.fetch;
+
   bool get _expandable =>
-      item.input != null ||
-      item.output != null ||
-      kind == TimelineToolKind.command ||
-      kind == TimelineToolKind.edit;
+      !_nonExpandableReadOnly &&
+      (item.input != null ||
+          item.output != null ||
+          kind == TimelineToolKind.command ||
+          kind == TimelineToolKind.edit);
 
   @override
   Widget build(BuildContext context) {
@@ -107,6 +111,10 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       icon: _icon,
       action: _action,
       detail: detail,
+      detailIsFile:
+          (kind == TimelineToolKind.read || kind == TimelineToolKind.edit) &&
+          detail != null &&
+          detail.isNotEmpty,
       diff: _diff,
       status: _status,
       running: running,
@@ -125,7 +133,9 @@ class _TimelineToolViewState extends State<TimelineToolView> {
       compact: widget.compact,
       expandable: _expandable,
       expanded: _expanded,
-      onTap: _expandable
+      onTap: _nonExpandableReadOnly
+          ? null
+          : _expandable
           ? () => setState(() => _expanded = !_expanded)
           : widget.onOpenDetails,
       child: _expanded ? _details(context) : null,

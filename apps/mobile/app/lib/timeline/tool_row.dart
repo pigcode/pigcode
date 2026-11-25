@@ -19,6 +19,7 @@ class TimelineToolRow extends StatelessWidget {
     this.running = false,
     this.failed = false,
     this.detailTone = TimelineDetailTone.primary,
+    this.detailIsFile = false,
     this.hideDetailWhenExpanded = false,
     this.onStatusTap,
     this.showIcon = true,
@@ -37,6 +38,7 @@ class TimelineToolRow extends StatelessWidget {
   final bool running;
   final bool failed;
   final TimelineDetailTone detailTone;
+  final bool detailIsFile;
   final bool hideDetailWhenExpanded;
   final VoidCallback? onStatusTap;
   final bool showIcon;
@@ -97,12 +99,35 @@ class TimelineToolRow extends StatelessWidget {
               if (showDetail) ...[
                 const SizedBox(width: TimelineSpace.fieldGap),
                 Flexible(
-                  child: Text(
-                    detail!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TimelineType.contentStyle(detailColor),
-                  ),
+                  child: detailIsFile
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.insert_drive_file_outlined,
+                              size: TimelineIcon.row,
+                              color: failed
+                                  ? colors.error
+                                  : colors.timelineSubtle,
+                            ),
+                            const SizedBox(width: TimelineSpace.x3),
+                            Flexible(
+                              child: Text(
+                                detail!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TimelineType.contentStyle(detailColor),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          detail!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TimelineType.contentStyle(detailColor),
+                        ),
                 ),
               ],
               if (showDiff) ...[

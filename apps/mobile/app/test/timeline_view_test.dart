@@ -94,8 +94,8 @@ void main() {
                     seq: 1,
                     runId: 'review',
                     kind: MobileTimelineKind.toolStarted,
-                    itemId: 'read',
-                    name: 'Read',
+                    itemId: 'inspect',
+                    name: 'CustomInspect',
                     text: 'docs/mobile.md',
                     createdAt: '2026-11-22T10:00:00.000Z',
                   ),
@@ -115,7 +115,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('正在读取'));
+    await tester.tap(find.text('CustomInspect'));
     await tester.pumpAndSettle();
     expect(find.text('参数'), findsOneWidget);
   });
@@ -150,7 +150,11 @@ void main() {
           event(MobileTimelineKind.reasoning, text: '查阅结构，再修改入口。'),
           ...tool('read', 'Read', '{"file_path":"docs/mobile.md"}'),
           ...tool('grep', 'Grep', '{"pattern":"timeline"}'),
-          ...tool('first-edit', 'Edit', '{"file_path":"app/main.dart"}'),
+          ...tool(
+            'first-edit',
+            'Edit',
+            '{"file_path":"app/main.dart","old_string":"old","new_string":"new"}',
+          ),
           event(
             MobileTimelineKind.toolStarted,
             id: 'second-edit',
@@ -180,11 +184,231 @@ void main() {
 
       await tester.tap(summary);
       await tester.pumpAndSettle();
-      final read = find.textContaining('mobile.md');
-      await tester.ensureVisible(read);
-      await tester.tap(read);
+      expect(find.text('mobile.md'), findsOneWidget);
+      final edit = find.text('main.dart').first;
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
       await tester.pumpAndSettle();
-      expect(find.text('参数'), findsOneWidget);
+      expect(find.byType(TimelineInlineDiff), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'aligns Read, Search, Fetch, and Edit tool rows with ZCode 4.0.0 presentation',
+    (tester) async {
+      await tester.pumpWidget(
+        page(const [
+          MobileTimelineEvent(
+            seq: 1,
+            runId: 'align-run',
+            kind: MobileTimelineKind.runStarted,
+            text: '检查读取与搜索样式',
+            createdAt: '2026-11-25T10:00:00.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 2,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'r-ok',
+            name: 'Read',
+            text: '{"file_path":"lib/a.dart"}',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 3,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'r-ok',
+            name: 'Read',
+            text: 'void main() {}',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 4,
+            runId: 'align-run',
+            kind: MobileTimelineKind.messageAssistant,
+            text: '分隔 1',
+            createdAt: '2026-11-25T10:00:02.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 5,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 's-ok',
+            name: 'Grep',
+            text: '{"pattern":"TimelineToolRow"}',
+            createdAt: '2026-11-25T10:00:03.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 6,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 's-ok',
+            name: 'Grep',
+            text: 'lib/a.dart:1',
+            createdAt: '2026-11-25T10:00:03.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 7,
+            runId: 'align-run',
+            kind: MobileTimelineKind.messageAssistant,
+            text: '分隔 2',
+            createdAt: '2026-11-25T10:00:04.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 8,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'f-ok',
+            name: 'WebFetch',
+            text: '{"url":"https://example.com/spec"}',
+            createdAt: '2026-11-25T10:00:05.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 9,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'f-ok',
+            name: 'WebFetch',
+            text: '<html>ok</html>',
+            createdAt: '2026-11-25T10:00:05.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 10,
+            runId: 'align-run',
+            kind: MobileTimelineKind.messageAssistant,
+            text: '分隔 3',
+            createdAt: '2026-11-25T10:00:06.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 11,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'r-fail',
+            name: 'Read',
+            text: '{"file_path":"lib/missing.dart"}',
+            createdAt: '2026-11-25T10:00:07.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 12,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'r-fail',
+            name: 'Read',
+            text: 'ENOENT: file not found',
+            failed: true,
+            createdAt: '2026-11-25T10:00:07.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 13,
+            runId: 'align-run',
+            kind: MobileTimelineKind.messageAssistant,
+            text: '分隔 4',
+            createdAt: '2026-11-25T10:00:08.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 14,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'e-ok',
+            name: 'Edit',
+            text: '{"file_path":"lib/b.dart","old_string":"x","new_string":"y"}',
+            createdAt: '2026-11-25T10:00:09.000Z',
+          ),
+          MobileTimelineEvent(
+            seq: 15,
+            runId: 'align-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'e-ok',
+            name: 'Edit',
+            text: '',
+            createdAt: '2026-11-25T10:00:09.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      Finder rowFor(String text) => find.ancestor(
+        of: find.text(text),
+        matching: find.byType(TimelineToolRow),
+      );
+
+      // 1. Read：放大镜图标 + 文件图标 chip + 无展开箭头 + 点按不弹参数/结果框。
+      final readRow = rowFor('a.dart');
+      expect(
+        find.descendant(of: readRow, matching: find.byIcon(Icons.search)),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: readRow,
+          matching: find.byIcon(Icons.insert_drive_file_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: readRow,
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        findsNothing,
+      );
+      await tester.tap(find.text('a.dart'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineToolDetails), findsNothing);
+      expect(find.text('参数'), findsNothing);
+      expect(find.text('结果'), findsNothing);
+
+      // 2. Search / Fetch：无展开箭头 + 点按不弹参数/结果框。
+      for (final label in const ['TimelineToolRow', 'https://example.com/spec']) {
+        final row = rowFor(label);
+        expect(
+          find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
+          findsNothing,
+        );
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+        expect(find.byType(TimelineToolDetails), findsNothing);
+      }
+
+      // 3. Edit：带文件图标 chip + 保留展开箭头，点击可展开内联 diff。
+      final editRow = rowFor('b.dart');
+      expect(
+        find.descendant(
+          of: editRow,
+          matching: find.byIcon(Icons.insert_drive_file_outlined),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: editRow,
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('b.dart'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TimelineInlineDiff), findsOneWidget);
+
+      // 4. 失败的 Read：不显示展开箭头，保留「已读取」动作与可点的「执行失败」状态弹层。
+      final failedReadRow = rowFor('missing.dart');
+      expect(
+        find.descendant(
+          of: failedReadRow,
+          matching: find.byIcon(Icons.chevron_right),
+        ),
+        findsNothing,
+      );
+      final failStatus = find.descendant(
+        of: failedReadRow,
+        matching: find.text('执行失败'),
+      );
+      expect(failStatus, findsOneWidget);
+      await tester.ensureVisible(failStatus);
+      await tester.tap(failStatus);
+      await tester.pumpAndSettle();
+      expect(find.text('ENOENT: file not found'), findsOneWidget);
     },
   );
 
@@ -631,18 +855,18 @@ void main() {
             seq: 9,
             runId: 'compact-run',
             kind: MobileTimelineKind.toolStarted,
-            itemId: 'r2',
-            name: 'Read',
-            text: '{"file_path":"lib/b.dart"}',
+            itemId: 'e2',
+            name: 'Edit',
+            text: '{"file_path":"lib/b.dart","old_string":"a","new_string":"b"}',
             createdAt: '2026-11-25T10:00:06.000Z',
           ),
           MobileTimelineEvent(
             seq: 10,
             runId: 'compact-run',
             kind: MobileTimelineKind.toolCompleted,
-            itemId: 'r2',
-            name: 'Read',
-            text: 'ok',
+            itemId: 'e2',
+            name: 'Edit',
+            text: '',
             createdAt: '2026-11-25T10:00:06.000Z',
           ),
         ];
