@@ -14,6 +14,7 @@ import 'run_commands.dart';
 import 'sidebar.dart';
 import 'sidebar_models.dart';
 import 'src/attachments.dart';
+import 'src/workbench.dart';
 import 'timeline.dart';
 
 export 'host_rpc.dart' show MobileRpcFailure;
@@ -35,6 +36,7 @@ export 'reminder_models.dart';
 export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'src/attachments.dart';
+export 'src/workbench.dart';
 export 'timeline.dart';
 export 'timeline_turns.dart';
 export 'timeline_models.dart';
@@ -59,6 +61,7 @@ const mobileClientFeatures = <String>[
   'composer.controls',
   'composer.mentions',
   'composer.attachments',
+  'workbench.read',
 ];
 
 class MobileConnection {
@@ -79,6 +82,7 @@ class MobileConnection {
     this.supportsComposerControls,
     this.supportsComposerMentions,
     this.supportsAttachments,
+    this.supportsWorkbenchRead,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -100,6 +104,7 @@ class MobileConnection {
   final bool supportsComposerControls;
   final bool supportsComposerMentions;
   final bool supportsAttachments;
+  final bool supportsWorkbenchRead;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -114,6 +119,10 @@ class MobileConnection {
   late final MobileAttachmentCommands attachments = MobileAttachmentCommands(
     _rpc,
     supportsAttachments: supportsAttachments,
+  );
+  late final MobileWorkbenchCommands workbench = MobileWorkbenchCommands(
+    _rpc,
+    supportsWorkbenchRead: supportsWorkbenchRead,
   );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -156,6 +165,61 @@ class MobileConnection {
     threadId: threadId,
     onProgress: onProgress,
   );
+
+  Future<MobileDirectoryListing> listDirectory({
+    required String threadId,
+    String path = '',
+    int offset = 0,
+    int? limit,
+  }) => workbench.listDirectory(
+    threadId: threadId,
+    path: path,
+    offset: offset,
+    limit: limit,
+  );
+
+  Future<MobileFileChunk> readFile({
+    required String threadId,
+    required String path,
+    int offset = 0,
+    int? length,
+    String mode = 'auto',
+    String variant = 'full',
+  }) => workbench.readFile(
+    threadId: threadId,
+    path: path,
+    offset: offset,
+    length: length,
+    mode: mode,
+    variant: variant,
+  );
+
+  Future<MobileFileImageData> readFileImage({
+    required String threadId,
+    required String path,
+    String variant = 'full',
+    void Function(int received, int total)? onProgress,
+  }) => workbench.readFileImage(
+    threadId: threadId,
+    path: path,
+    variant: variant,
+    onProgress: onProgress,
+  );
+
+  Future<MobileSearchResult> searchFiles({
+    required String threadId,
+    required String query,
+    String? glob,
+    int? limit,
+  }) => workbench.searchFiles(
+    threadId: threadId,
+    query: query,
+    glob: glob,
+    limit: limit,
+  );
+
+  Future<MobilePrStatusResult> getPrStatus({required String threadId}) =>
+      workbench.getPrStatus(threadId: threadId);
 
   Future<MobileSidebar> openSidebar() {
     if (!supportsSidebar) throw const ConnectionFailure('update-desktop');
@@ -391,6 +455,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('composer.controls'),
         (welcome['features'] as List).contains('composer.mentions'),
         (welcome['features'] as List).contains('composer.attachments'),
+        (welcome['features'] as List).contains('workbench.read'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

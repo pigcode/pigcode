@@ -28,5 +28,6 @@ export * from "./mobile-drafts"
 export * from "./mobile-composer"
 export * from "./mobile-mentions"
 export * from "./mobile-attachments"
+export * from "./mobile-workbench"
 
 export * from "./queued-messages"

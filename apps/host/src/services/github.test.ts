@@ -1,6 +1,14 @@
 /** 验证 GitHub PR 服务：gh 参数、JSON 解析与错误映射；测试不联网。 */
 import { describe, expect, it } from "vitest"
-import { GhNotAvailableError, GithubService, PR_JSON_FIELDS, type GhRunner } from "./github"
+import { NotAGitRepoError } from "./git"
+import {
+  GhNotAvailableError,
+  GithubService,
+  PR_DETAILED_JSON_FIELDS,
+  PR_JSON_FIELDS,
+  summarizeStatusCheckRollup,
+  type GhRunner,
+} from "./github"
 
 /** 一次 fake gh 调用的记录。 */
 interface GhCall {
@@ -166,5 +174,152 @@ describe("github service", () => {
         message: stderr,
       })
     }
+  })
+
+  it("returns detailed PR status with normalized checksSummary from CheckRun and StatusContext entries", async () => {
+    const detailedPayload = {
+      ...PULL_REQUEST,
+      isDraft: true,
+      additions: 128,
+      deletions: 34,
+      changedFiles: 5,
+      reviewDecision: "APPROVED",
+      updatedAt: "2026-11-25T10:20:30Z",
+      statusCheckRollup: [
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "SUCCESS" },
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "SKIPPED" },
+        { __typename: "CheckRun", status: "COMPLETED", conclusion: "FAILURE" },
+        { __typename: "CheckRun", status: "IN_PROGRESS", conclusion: "" },
+        { __typename: "StatusContext", state: "SUCCESS" },
+        { __typename: "StatusContext", state: "ERROR" },
+        { __typename: "StatusContext", state: "PENDING" },
+      ],
+    }
+    const { run, calls } = fakeRunner([JSON.stringify(detailedPayload)])
+    const service = makeService(run)
+
+    const result = await service.detailedStatus("thread-1")
+
+    expect(calls).toEqual([
+      { args: ["pr", "view", "feat/pr", "--json", PR_DETAILED_JSON_FIELDS], cwd: "/repo" },
+    ])
+    expect(result).toEqual({
+      status: "ok",
+      branch: "feat/pr",
+      pr: {
+        ...PULL_REQUEST,
+        isDraft: true,
+        additions: 128,
+        deletions: 34,
+        changedFiles: 5,
+        reviewDecision: "APPROVED",
+        updatedAt: "2026-11-25T10:20:30Z",
+        checksSummary: { total: 7, passed: 3, failed: 2, pending: 2 },
+      },
+    })
+  })
+
+  it("falls back to base PR_JSON_FIELDS when an older gh CLI rejects extended JSON fields", async () => {
+    const { run, calls } = fakeRunner([
+      commandError({ stderr: 'Unknown JSON field: "statusCheckRollup"' }),
+      JSON.stringify(PULL_REQUEST),
+    ])
+    const service = makeService(run)
+
+    const result = await service.detailedStatus("thread-1")
+
+    expect(calls).toEqual([
+      { args: ["pr", "view", "feat/pr", "--json", PR_DETAILED_JSON_FIELDS], cwd: "/repo" },
+      { args: ["pr", "view", "feat/pr", "--json", PR_JSON_FIELDS], cwd: "/repo" },
+    ])
+    expect(result).toEqual({
+      status: "ok",
+      branch: "feat/pr",
+      pr: PULL_REQUEST,
+    })
+  })
+
+  it("maps detailedStatus non-ok conditions cleanly without throwing", async () => {
+    // Non-git repository
+    const notGit = new GithubService(
+      async () => {
+        throw new Error("should not call gh")
+      },
+      () => "/not-a-repo",
+      async () => {
+        throw new NotAGitRepoError("/not-a-repo")
+      },
+    )
+    await expect(notGit.detailedStatus("thread-1")).resolves.toEqual({
+      status: "not-git",
+      branch: null,
+    })
+
+    // Detached HEAD inside a git repo
+    const detached = makeService(async () => {
+      throw new Error("should not call gh")
+    }, null)
+    await expect(detached.detailedStatus("thread-1")).resolves.toEqual({
+      status: "no-pr",
+      branch: null,
+    })
+
+    // No PR on branch
+    const noPr = makeService(
+      fakeRunner([commandError({ stderr: 'no pull requests found for branch "feat/pr"' })]).run,
+    )
+    await expect(noPr.detailedStatus("thread-1")).resolves.toEqual({
+      status: "no-pr",
+      branch: "feat/pr",
+    })
+
+    // gh unavailable
+    const noGh = makeService(fakeRunner([commandError({ code: "ENOENT" })]).run)
+    await expect(noGh.detailedStatus("thread-1")).resolves.toEqual({
+      status: "gh-unavailable",
+      branch: "feat/pr",
+    })
+
+    // gh unauthenticated
+    const unauth = makeService(
+      fakeRunner([
+        commandError({ stderr: "To get started with GitHub CLI, please run: gh auth login" }),
+      ]).run,
+    )
+    await expect(unauth.detailedStatus("thread-1")).resolves.toEqual({
+      status: "gh-unauthenticated",
+      branch: "feat/pr",
+    })
+
+    // no remote
+    const noRemote = makeService(
+      fakeRunner([commandError({ stderr: "no git remotes found" })]).run,
+    )
+    await expect(noRemote.detailedStatus("thread-1")).resolves.toEqual({
+      status: "no-remote",
+      branch: "feat/pr",
+    })
+
+    // Empty reviewDecision normalized to null; GraphQL rollup wrapper supported
+    const emptyReview = makeService(
+      fakeRunner([JSON.stringify({ ...PULL_REQUEST, reviewDecision: "" })]).run,
+    )
+    await expect(emptyReview.detailedStatus("thread-1")).resolves.toEqual({
+      status: "ok",
+      branch: "feat/pr",
+      pr: { ...PULL_REQUEST, reviewDecision: null },
+    })
+
+    expect(
+      summarizeStatusCheckRollup({
+        contexts: {
+          nodes: [
+            { status: "COMPLETED", conclusion: "NEUTRAL" },
+            { status: "QUEUED", conclusion: null },
+          ],
+        },
+      }),
+    ).toEqual({ total: 2, passed: 1, failed: 0, pending: 1 })
+    expect(summarizeStatusCheckRollup(null)).toBeUndefined()
   })
 })

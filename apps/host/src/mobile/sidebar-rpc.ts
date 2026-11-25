@@ -49,6 +49,7 @@ import { mobileErrorMessages, mobileParams as params, MobileRequestError } from 
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
+import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
 const pageByteBudget = 48 * 1024
@@ -124,6 +125,7 @@ export class MobileSidebarRpc {
   private readonly composer: MobileComposerCommands
   private readonly mentions: MobileMentionCommands
   private readonly attachments: MobileAttachments
+  private readonly workbench: MobileWorkbench
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -191,6 +193,7 @@ export class MobileSidebarRpc {
     this.attachments = new MobileAttachments(ctx, session.deviceKey, () =>
       this.requirePairedDevice(),
     )
+    this.workbench = new MobileWorkbench(ctx, () => this.requirePairedDevice())
   }
 
   start(): void {
@@ -287,6 +290,14 @@ export class MobileSidebarRpc {
     if (this.session.features.includes("changes.read") && mobileRunChangesRequests.has(request.method)) {
       this.requirePairedDevice()
       return this.changes.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("workbench.read") &&
+      mobileWorkbenchRequests.has(request.method)
+    ) {
+      this.requirePairedDevice()
+      return this.workbench.dispatch(request)
     }
 
     const canRun = this.session.features.includes("run.write")

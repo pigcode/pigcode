@@ -69,6 +69,10 @@ export interface AttachmentsConfig {
 export interface AttachmentsService {
   readonly dir: string
   setThumbnailer(thumbnailer: AttachmentThumbnailer | undefined): void
+  generateThumbnail(
+    input: Buffer,
+    options?: { maxEdge?: number; maxBytes?: number },
+  ): Promise<Buffer | null>
   saveStaging(input: SaveStagingInput): ImageAttachmentRef
   commitForThread(
     attachmentIds: readonly string[],
@@ -165,6 +169,18 @@ export const apply: AttachmentsPlugin = (ctx, config = {}) => {
     dir,
     setThumbnailer(next) {
       thumbnailer = next
+    },
+    async generateThumbnail(input, options) {
+      if (!thumbnailer) return null
+      try {
+        const generated = await thumbnailer(input, {
+          maxEdge: options?.maxEdge ?? DEFAULT_THUMB_MAX_EDGE,
+          maxBytes: options?.maxBytes ?? MOBILE_THUMBNAIL_MAX_BYTES,
+        })
+        return generated && generated.length > 0 ? generated : null
+      } catch {
+        return null
+      }
     },
     saveStaging(input) {
       const { buffer } = input

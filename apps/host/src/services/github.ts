@@ -1,10 +1,19 @@
 /** GitHub PR 服务：通过 gh CLI 查询与创建 PR，不读取或保存 GitHub token。 */
 import type { Context } from "cordis"
-import { pullRequestInfoSchema, type HostErrorCode, type PullRequestInfo } from "@pigcode/contracts"
+import {
+  mobilePrStatusResult,
+  mobilePullRequestInfo,
+  pullRequestInfoSchema,
+  type HostErrorCode,
+  type MobilePrChecksSummary,
+  type MobilePrStatusResult,
+  type MobilePullRequestInfo,
+  type PullRequestInfo,
+} from "@pigcode/contracts"
 import { execFile } from "node:child_process"
 import { promisify } from "node:util"
 import { scopeCwd, type WorkspaceScope } from "./worktrees"
-import { currentBranch } from "./git"
+import { currentBranch, NOT_A_GIT_REPO, NotAGitRepoError } from "./git"
 
 const exec = promisify(execFile)
 
@@ -13,6 +22,10 @@ const MAX_BUFFER = 8 * 1024 * 1024
 
 /** `gh pr view/create --json` 请求的字段，顺序与解析后的展示一致。 */
 export const PR_JSON_FIELDS = "number,url,state,title,headRefName,baseRefName"
+
+/** 手机端只读工作台请求的扩展 PR 字段；旧版 gh 不支持时回退到 PR_JSON_FIELDS。 */
+export const PR_DETAILED_JSON_FIELDS =
+  "number,url,state,title,headRefName,baseRefName,isDraft,additions,deletions,changedFiles,reviewDecision,statusCheckRollup,updatedAt"
 
 /** 执行一次 gh；参数与 cwd 都由服务解析，测试可注入 fake。 */
 export type GhRunner = (args: string[], cwd: string) => Promise<string>
@@ -85,6 +98,7 @@ export interface CreatePullRequestInput {
 export interface GithubServiceInterface {
   /** scope 是会话 id，或者新会话草稿的项目（看项目根目录的当前分支）。 */
   status(scope: WorkspaceScope): Promise<PullRequestInfo | null>
+  detailedStatus(scope: WorkspaceScope): Promise<MobilePrStatusResult>
   create(scope: WorkspaceScope, input: CreatePullRequestInput): Promise<PullRequestInfo>
 }
 
@@ -135,6 +149,44 @@ export class GithubService implements GithubServiceInterface {
       return parsePullRequest(output)
     } catch (error) {
       if (isNoPullRequest(error)) return null
+      throw error
+    }
+  }
+
+  /**
+   * 手机端只读工作台使用的结构化 PR 状态：区分非 git 仓库、无远端、gh 未安装/未登录与无 PR，
+   * 并汇总 CI 检查状态；旧版 gh 不支持扩展字段时优雅回退到基础字段。
+   */
+  async detailedStatus(scope: WorkspaceScope): Promise<MobilePrStatusResult> {
+    const cwd = this.cwdOf(scope)
+    let branch: string | null
+    try {
+      branch = await this.branchOf(cwd)
+    } catch (error) {
+      if (isNotGitRepoError(error)) return { status: "not-git", branch: null }
+      throw error
+    }
+    if (branch === null) return { status: "no-pr", branch: null }
+
+    try {
+      let output: string
+      try {
+        output = await this.invoke(["pr", "view", branch, "--json", PR_DETAILED_JSON_FIELDS], cwd)
+      } catch (error) {
+        if (!isUnknownJsonFieldError(error)) throw error
+        output = await this.invoke(["pr", "view", branch, "--json", PR_JSON_FIELDS], cwd)
+      }
+      return mobilePrStatusResult.parse({
+        status: "ok",
+        branch,
+        pr: parseDetailedPullRequest(output),
+      })
+    } catch (error) {
+      if (error instanceof GhNotAvailableError) return { status: "gh-unavailable", branch }
+      if (error instanceof GhNotAuthenticatedError) return { status: "gh-unauthenticated", branch }
+      if (error instanceof GitNoRemoteError) return { status: "no-remote", branch }
+      if (isNotGitRepoError(error)) return { status: "not-git", branch: null }
+      if (isNoPullRequest(error)) return { status: "no-pr", branch }
       throw error
     }
   }
@@ -211,6 +263,90 @@ function isNoPullRequest(error: unknown): boolean {
   return /no (open )?pull requests? found/i.test(errorDetail(error))
 }
 
+/** 识别非 git 仓库错误（来自 git currentBranch 或 gh 自身输出）。 */
+function isNotGitRepoError(error: unknown): boolean {
+  return (
+    error instanceof NotAGitRepoError ||
+    stringField(error, "code") === NOT_A_GIT_REPO ||
+    /not a git repository/i.test(errorDetail(error))
+  )
+}
+
+/** 旧版 gh CLI 不支持某个 `--json` 字段时的错误识别。 */
+function isUnknownJsonFieldError(error: unknown): boolean {
+  return error instanceof GhCommandError && /unknown json field/i.test(error.stderr)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function isNonNegativeInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+}
+
+/** 把 gh 返回的 statusCheckRollup（兼容 CheckRun 与 StatusContext）汇总为四项计数。 */
+export function summarizeStatusCheckRollup(raw: unknown): MobilePrChecksSummary | undefined {
+  let items: unknown[] | undefined
+  if (Array.isArray(raw)) {
+    items = raw
+  } else if (isRecord(raw) && isRecord(raw.contexts) && Array.isArray(raw.contexts.nodes)) {
+    items = raw.contexts.nodes
+  }
+  if (!items) return undefined
+
+  let passed = 0
+  let failed = 0
+  let pending = 0
+
+  for (const item of items) {
+    if (!isRecord(item)) continue
+    const typename = typeof item.__typename === "string" ? item.__typename : ""
+    const hasCheckRunFields =
+      typename === "CheckRun" ||
+      typeof item.status === "string" ||
+      typeof item.conclusion === "string"
+
+    if (hasCheckRunFields) {
+      const status = typeof item.status === "string" ? item.status.toUpperCase() : ""
+      const conclusion = typeof item.conclusion === "string" ? item.conclusion.toUpperCase() : ""
+      if (status.length > 0 && status !== "COMPLETED") {
+        pending += 1
+      } else if (conclusion === "SUCCESS" || conclusion === "NEUTRAL" || conclusion === "SKIPPED") {
+        passed += 1
+      } else if (
+        conclusion === "FAILURE" ||
+        conclusion === "TIMED_OUT" ||
+        conclusion === "CANCELLED" ||
+        conclusion === "ACTION_REQUIRED" ||
+        conclusion === "STARTUP_FAILURE" ||
+        conclusion === "ERROR"
+      ) {
+        failed += 1
+      } else {
+        pending += 1
+      }
+      continue
+    }
+
+    if (typename === "StatusContext" || typeof item.state === "string") {
+      const state = typeof item.state === "string" ? item.state.toUpperCase() : ""
+      if (state === "SUCCESS") {
+        passed += 1
+      } else if (state === "FAILURE" || state === "ERROR") {
+        failed += 1
+      } else {
+        pending += 1
+      }
+      continue
+    }
+
+    pending += 1
+  }
+
+  return { total: passed + failed + pending, passed, failed, pending }
+}
+
 /** 解析 gh --json 输出；空输出或字段不符时抛通用命令错误。 */
 function parsePullRequest(output: string): PullRequestInfo {
   const trimmed = output.trim()
@@ -224,6 +360,55 @@ function parsePullRequest(output: string): PullRequestInfo {
   }
 
   const parsed = pullRequestInfoSchema.safeParse(value)
+  if (!parsed.success) throw new GhCommandError("gh returned an unexpected pull request payload")
+  return parsed.data
+}
+
+/** 解析扩展 PR JSON（同样兼容基础字段回退结果）。 */
+function parseDetailedPullRequest(output: string): MobilePullRequestInfo {
+  const trimmed = output.trim()
+  if (trimmed.length === 0) throw new GhCommandError("gh returned an empty pull request payload")
+
+  let value: unknown
+  try {
+    value = JSON.parse(trimmed)
+  } catch {
+    throw new GhCommandError("gh returned invalid JSON for pull request")
+  }
+
+  if (!isRecord(value)) {
+    throw new GhCommandError("gh returned an unexpected pull request payload")
+  }
+
+  const checksSummary = summarizeStatusCheckRollup(value.statusCheckRollup)
+  const rawReview = value.reviewDecision
+  const hasReview = "reviewDecision" in value
+  const reviewDecision =
+    rawReview === null || rawReview === ""
+      ? null
+      : typeof rawReview === "string"
+        ? rawReview
+        : undefined
+
+  const candidate: Record<string, unknown> = {
+    number: value.number,
+    title: value.title,
+    state: value.state,
+    url: value.url,
+    headRefName: value.headRefName,
+    baseRefName: value.baseRefName,
+    ...(typeof value.isDraft === "boolean" ? { isDraft: value.isDraft } : {}),
+    ...(isNonNegativeInt(value.additions) ? { additions: value.additions } : {}),
+    ...(isNonNegativeInt(value.deletions) ? { deletions: value.deletions } : {}),
+    ...(isNonNegativeInt(value.changedFiles) ? { changedFiles: value.changedFiles } : {}),
+    ...(hasReview && reviewDecision !== undefined ? { reviewDecision } : {}),
+    ...(checksSummary !== undefined ? { checksSummary } : {}),
+    ...(typeof value.updatedAt === "string" && value.updatedAt.length > 0
+      ? { updatedAt: value.updatedAt }
+      : {}),
+  }
+
+  const parsed = mobilePullRequestInfo.safeParse(candidate)
   if (!parsed.success) throw new GhCommandError("gh returned an unexpected pull request payload")
   return parsed.data
 }
