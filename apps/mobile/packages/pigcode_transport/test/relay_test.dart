@@ -23,4 +23,24 @@ void main() {
     expect(sleeping.state, RelayComputerState.sleeping);
     expect(sleeping.lastOnlineAt?.millisecondsSinceEpoch, 1795392000000);
   });
+
+  test('closing a per-connect HttpClient keeps an upgraded WebSocket alive', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      final ws = await WebSocketTransformer.upgrade(request);
+      ws.listen((data) => ws.add(data), onDone: () => ws.close());
+    });
+
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+    final socket = await WebSocket.connect(
+      'ws://127.0.0.1:${server.port}/ws',
+      customClient: client,
+    );
+    client.close();
+    addTearDown(() => socket.close());
+
+    socket.add('hello-after-close');
+    expect(await socket.first, 'hello-after-close');
+  });
 }

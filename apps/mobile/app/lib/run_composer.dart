@@ -11,6 +11,7 @@ import 'attachments/composer_attachments_controller.dart';
 import 'attachments/image_compressor.dart';
 import 'attachments/image_viewer_page.dart';
 import 'composer/composer_catalog.dart';
+import 'composer/composer_status_banner.dart';
 import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
 import 'composer/context_meter.dart';
@@ -22,6 +23,7 @@ import 'local_drafts.dart';
 import 'message_queue_panel.dart';
 import 'run_command_journal.dart';
 import 'run_composer_state.dart';
+import 'timeline/timeline_tokens.dart';
 import 'workspace_icon.dart';
 
 class RunComposer extends ConsumerStatefulWidget {
@@ -653,21 +655,11 @@ class _ComposerInlineNotice extends StatelessWidget {
   final VoidCallback onDismiss;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = ComposerSurface.palette(Theme.of(context).brightness);
-    return Semantics(
-      liveRegion: true,
-      child: Row(
-        spacing: ComposerSpace.chipGap,
-        children: [
-          Expanded(
-            child: Text(text, style: ComposerType.notice(colors.error)),
-          ),
-          TextButton(onPressed: onDismiss, child: const Text('知道了')),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => ComposerStatusBanner(
+    tone: ComposerStatusTone.error,
+    title: text,
+    trailing: ComposerBannerAction(label: '知道了', onPressed: onDismiss),
+  );
 }
 
 class RunComposerView extends StatelessWidget {
@@ -716,7 +708,6 @@ class RunComposerView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final runId = stoppableRunId;
 
     bool enabled(MobileRunMethod method) =>
@@ -728,12 +719,13 @@ class RunComposerView extends StatelessWidget {
     final statusBanners = <Widget>[
       ...extraBanners,
       if (storageError)
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            const Text('无法读取发送状态。'),
-            TextButton(onPressed: onRetryLoad, child: const Text('重试读取')),
-          ],
+        ComposerStatusBanner(
+          tone: ComposerStatusTone.error,
+          title: '无法读取发送状态。',
+          trailing: ComposerBannerAction(
+            label: '重试读取',
+            onPressed: onRetryLoad,
+          ),
         ),
       if (state case final view?)
         for (final kind in MobileRunMethod.values)
@@ -781,9 +773,9 @@ class RunComposerView extends StatelessWidget {
         final banners = <Widget>[
           ...statusBanners,
           if (tooLong)
-            Text(
-              '每条消息最多 $mobileCommandTextLimit 个字符。',
-              style: theme.textTheme.bodySmall,
+            ComposerStatusBanner(
+              tone: ComposerStatusTone.error,
+              title: '每条消息最多 $mobileCommandTextLimit 个字符。',
             ),
         ];
         final actions = <Widget>[
@@ -844,6 +836,23 @@ class _PendingRunRow extends StatelessWidget {
   final VoidCallback onCheck;
   final VoidCallback onRetry;
 
+  static String? _previewText(
+    PendingSend pending,
+    String currentDraftText, {
+    required bool working,
+  }) {
+    final trimmed = pending.params.text.trim();
+    if (trimmed.isNotEmpty) {
+      // 输入框里仍显示同一份草稿原文时不再重复展示，避免出现两遍相同文字。
+      if (currentDraftText.trim() == trimmed) return null;
+      return trimmed;
+    }
+    if (working) return null;
+    final imageCount = pending.params.attachmentIds?.length ?? 0;
+    if (imageCount <= 0) return null;
+    return imageCount == 1 ? '[图片]' : '[$imageCount 张图片]';
+  }
+
   @override
   Widget build(BuildContext context) {
     final pending = state.pending[kind];
@@ -862,57 +871,77 @@ class _PendingRunRow extends StatelessWidget {
           }
         : state.notices[kind] ?? label;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Semantics(
-          liveRegion: true,
-          child: Text(text, style: Theme.of(context).textTheme.bodySmall),
-        ),
-        if (recovered != null)
-          SelectableText(
+    final tone = recovered != null
+        ? ComposerStatusTone.success
+        : working
+        ? ComposerStatusTone.neutral
+        : pending != null
+        ? ComposerStatusTone.attention
+        : ComposerStatusTone.error;
+
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: draft,
+      builder: (context, value, _) {
+        final colors = ComposerSurface.palette(Theme.of(context).brightness);
+        final preview = pending is PendingSend
+            ? _previewText(pending, value.text, working: working)
+            : null;
+        final canCopyRejected = switch (outcome) {
+          RunCommandOutcome(
+            receipt: null,
+            command: PendingSend(:final params),
+          )
+              when params.text.isNotEmpty && value.text != params.text =>
+            params.text,
+          _ => null,
+        };
+
+        Widget? detail;
+        if (recovered != null) {
+          detail = SelectableText(
             recovered.queuedMessageId ?? recovered.runId,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        if (pending case PendingSend(:final params))
-          Text(
-            params.text.trim().isNotEmpty
-                ? params.text
-                : (params.attachmentIds?.length ?? 0) <= 1
-                ? '[图片]'
-                : '[${params.attachmentIds!.length} 张图片]',
+            style: TimelineType.microStyle(colors.faint).copyWith(
+              fontFamily: 'monospace',
+              fontFamilyFallback: TimelineType.monoFallback,
+            ),
+          );
+        } else if (preview != null) {
+          detail = Text(
+            preview,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        if (pending != null && !working)
-          Wrap(
-            children: [
-              TextButton(
-                onPressed: online ? onCheck : null,
-                child: const Text('查回执'),
-              ),
-              TextButton(
-                onPressed: online ? onRetry : null,
-                child: const Text('用原编号重试'),
-              ),
-            ],
-          ),
-        if (outcome case RunCommandOutcome(
-          receipt: null,
-          command: PendingSend(:final params),
-        ) when params.text.isNotEmpty)
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: draft,
-            builder: (context, value, _) => value.text == params.text
-                ? const SizedBox.shrink()
-                : TextButton(
-                    onPressed: () =>
-                        Clipboard.setData(ClipboardData(text: params.text)),
-                    child: const Text('复制原文'),
-                  ),
-          ),
-      ],
+            style: TimelineType.smallStyle(colors.muted),
+          );
+        }
+
+        final actions = <Widget>[
+          if (pending != null && !working) ...[
+            ComposerBannerAction(
+              label: '查回执',
+              onPressed: online ? onCheck : null,
+            ),
+            ComposerBannerAction(
+              label: '用原编号重试',
+              emphasized: true,
+              onPressed: online ? onRetry : null,
+            ),
+          ],
+          if (canCopyRejected != null)
+            ComposerBannerAction(
+              label: '复制原文',
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: canCopyRejected)),
+            ),
+        ];
+
+        return ComposerStatusBanner(
+          tone: tone,
+          loading: working,
+          title: text,
+          detail: detail,
+          actions: actions,
+        );
+      },
     );
   }
 }

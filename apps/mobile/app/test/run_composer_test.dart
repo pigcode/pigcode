@@ -314,4 +314,29 @@ void main() {
     expect(find.text('已找回发送回执'), findsOneWidget);
     expect(await journal.read(savedSend.method), isNull);
   });
+
+  testWidgets(
+    'avoids duplicating pending text when the draft still holds the same message',
+    (tester) async {
+      final host = _CommandHost(dropReply: true);
+      final connection = _Connection(host);
+
+      await tester.pumpWidget(_page(connection));
+      await tester.pumpAndSettle();
+      await tester.enterText(_input, '你好');
+      await tester.pump();
+      await tester.tap(_send);
+      await tester.pumpAndSettle();
+
+      expect(find.text('发送结果待确认'), findsOneWidget);
+      // 输入框内已显示“你好”，顶部状态条不应重复再印一遍“你好”。
+      expect(find.text('你好'), findsOneWidget);
+
+      // 修改输入框内容后，状态条才展示原本待确认的消息摘要。
+      await tester.enterText(_input, '另一句话');
+      await tester.pump();
+      expect(find.text('你好'), findsOneWidget);
+      expect(find.text('另一句话'), findsOneWidget);
+    },
+  );
 }

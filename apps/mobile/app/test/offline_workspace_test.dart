@@ -64,20 +64,21 @@ class _SavedCache implements ComputerOfflineCache {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _workspace({bool hasCache = true}) => ProviderScope(
-  child: MaterialApp(
-    home: MobileWorkspace(
-      connection: null,
-      connected: false,
-      connectionLabel: '电脑离线',
-      onComputers: () {},
-      reconnect: () {},
-      computer: _profile,
-      deviceId: 'fixture-phone',
-      cache: hasCache ? _SavedCache() : null,
-    ),
-  ),
-);
+Widget _workspace({bool hasCache = true, String connectionLabel = '电脑离线'}) =>
+    ProviderScope(
+      child: MaterialApp(
+        home: MobileWorkspace(
+          connection: null,
+          connected: false,
+          connectionLabel: connectionLabel,
+          onComputers: () {},
+          reconnect: () {},
+          computer: _profile,
+          deviceId: 'fixture-phone',
+          cache: hasCache ? _SavedCache() : null,
+        ),
+      ),
+    );
 
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
@@ -154,4 +155,19 @@ void main() {
       expect(find.text('原来的模型'), findsOneWidget);
     },
   );
+
+  testWidgets('compacts long connection error sentences in the header badge', (
+    tester,
+  ) async {
+    expect(compactConnectionBadgeLabel('电脑离线'), '电脑离线');
+    expect(compactConnectionBadgeLabel('电脑离线 · 最后在线 01:22'), '电脑离线');
+    expect(compactConnectionBadgeLabel('连不上中继，请检查网络。'), '连不上中继');
+    expect(compactConnectionBadgeLabel('正在连接电脑…'), '连接中…');
+    expect(compactConnectionBadgeLabel('电脑上的 Pigcode 已退出'), '电脑已退出');
+    expect(compactConnectionBadgeLabel('电脑上的 Pigcode 正在重启'), '电脑重启中');
+
+    await tester.pumpWidget(_workspace(connectionLabel: '连不上中继，请检查网络。'));
+    await tester.pumpAndSettle();
+    expect(find.text('连不上中继'), findsOneWidget);
+  });
 }

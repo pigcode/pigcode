@@ -10,6 +10,7 @@ import 'attachments/composer_attachment_strip.dart';
 import 'attachments/composer_attachments_controller.dart';
 import 'attachments/image_compressor.dart';
 import 'composer/composer_catalog.dart';
+import 'composer/composer_status_banner.dart';
 import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
 import 'composer/mention_editing_controller.dart';
@@ -711,21 +712,25 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
       if (view.notice case final notice?) _DraftNotice(notice),
       if (_attachmentNotice case final notice?) _DraftNotice(notice),
       if (view.pending != null)
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            const Text('首发结果待确认'),
-            TextButton(
-              onPressed: online && !view.working ? () => actions.check() : null,
-              child: const Text('查回执'),
-            ),
-            TextButton(
-              onPressed: online && !view.working
-                  ? () => actions.check(retry: true)
-                  : null,
-              child: const Text('用原编号重试'),
-            ),
-          ],
+        ComposerStatusBanner(
+          tone: view.working
+              ? ComposerStatusTone.neutral
+              : ComposerStatusTone.attention,
+          loading: view.working,
+          title: view.working ? '正在确认发送…' : '首发结果待确认',
+          actions: view.working
+              ? const []
+              : [
+                  ComposerBannerAction(
+                    label: '查回执',
+                    onPressed: online ? () => actions.check() : null,
+                  ),
+                  ComposerBannerAction(
+                    label: '用原编号重试',
+                    emphasized: true,
+                    onPressed: online ? () => actions.check(retry: true) : null,
+                  ),
+                ],
         ),
       if (form.text.length > mobileCommandTextLimit)
         const _DraftNotice('首条消息超过长度上限，请缩短后发送。'),
@@ -897,9 +902,9 @@ class _DraftNotice extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    liveRegion: true,
-    child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+  Widget build(BuildContext context) => ComposerStatusBanner(
+    tone: ComposerStatusTone.attention,
+    title: text,
   );
 }
 

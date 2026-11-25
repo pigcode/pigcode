@@ -134,8 +134,6 @@ String relayAdmission(String text) {
   return status as String;
 }
 
-final _relayHttpClient = HttpClient();
-
 // WebSocket.connect delegates the HTTP upgrade to openUrl. Keep the relay
 // token on the configured WSS origin by rejecting automatic redirects there.
 class _RelayUpgradeClient implements HttpClient {
@@ -158,14 +156,18 @@ Future<WebSocket> _openRelaySocket(
   ComputerProfile computer,
   HttpClient? client,
 ) async {
+  // 每次建连使用独立 HttpClient，避免 iOS 在 Wi-Fi / 蜂窝切换后复用旧接口的陈旧池或半开连接。
+  final owned = client == null ? HttpClient() : null;
+  owned?.connectionTimeout = const Duration(seconds: 8);
   try {
     final opening = WebSocket.connect(
       computer.address.toString(),
-      customClient: _RelayUpgradeClient(client ?? _relayHttpClient),
+      customClient: _RelayUpgradeClient(client ?? owned!),
     );
     final socket = await opening.timeout(
       const Duration(seconds: 8),
       onTimeout: () {
+        owned?.close(force: true);
         unawaited(
           opening.then<void>(
             (lateSocket) => lateSocket.close(),
@@ -175,9 +177,11 @@ Future<WebSocket> _openRelaySocket(
         throw const ConnectionFailure('unreachable');
       },
     );
-    socket.pingInterval = const Duration(seconds: 25);
+    owned?.close();
+    socket.pingInterval = const Duration(seconds: 15);
     return socket;
   } catch (_) {
+    owned?.close(force: true);
     throw const ConnectionFailure('unreachable');
   }
 }

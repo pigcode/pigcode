@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/cupertino.dart' show CupertinoDialogAction;
-import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show setEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -39,6 +39,23 @@ final computerReconnectFactoryProvider = Provider<ComputerReconnectFactory>(
     observe: () => RelayStatusWatch.open(computer),
     onChange: onChange,
   ),
+);
+
+const _routableTransports = {
+  ConnectivityResult.wifi,
+  ConnectivityResult.mobile,
+  ConnectivityResult.ethernet,
+  ConnectivityResult.vpn,
+  ConnectivityResult.other,
+};
+
+@visibleForTesting
+bool shouldReconnectForNetworkChange(
+  Set<ConnectivityResult> previous,
+  Set<ConnectivityResult> next,
+) => !setEquals(
+  previous.intersection(_routableTransports),
+  next.intersection(_routableTransports),
 );
 
 const _version = String.fromEnvironment('PIGCODE_PRODUCT_VERSION');
@@ -128,13 +145,13 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       final next = networks.toSet();
       final previous = _network;
       _network = next;
-      if (previous == null || setEquals(previous, next)) return;
-      // 网络类型变化时旧连接通常已经失效，交给 socket 自己的关闭回调重连；
-      // 尚未建立连接（包括卡在旧网络上的在途拨号）时立即切到新代重连。
-      final session = _session;
-      if (session != null && session.connection == null) {
-        session.retry();
+      if (previous == null ||
+          !shouldReconnectForNetworkChange(previous, next)) {
+        return;
       }
+      // Wi-Fi / 蜂窝 / VPN 切换后，iOS 上的旧 TCP 连接会长时间半开假在线；
+      // 直接切到新代并立即用新网络重连，避免发消息卡死在旧 socket。
+      _session?.retry();
     }, onError: (Object _) {});
     unawaited(
       connectivity.checkConnectivity().then<void>((networks) {

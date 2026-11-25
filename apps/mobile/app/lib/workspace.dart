@@ -22,6 +22,32 @@ import 'workbench/mobile_workbench_screen.dart';
 import 'workbench/workbench_utils.dart';
 import 'workspace_icon.dart';
 
+/// 顶栏状态胶囊宽度紧凑（上限 118px），把完整提示句压缩成 4~6 字短标签，
+/// 避免出现“连不上中继，请...”这类半句截断；完整文案仍保留在会话详情与电脑列表中。
+@visibleForTesting
+String compactConnectionBadgeLabel(String? connectionLabel) {
+  final head = connectionLabel?.split(' · ').first.trim();
+  if (head == null || head.isEmpty) return '电脑连接已断开';
+  return switch (head) {
+    '正在连接电脑…' => '连接中…',
+    '正在重新连接电脑…' => '重连中…',
+    '电脑上的 Pigcode 已退出' => '电脑已退出',
+    '电脑上的 Pigcode 正在重启' => '电脑重启中',
+    '连不上中继，请检查网络。' => '连不上中继',
+    '这台电脑未连接中继。' => '电脑离线',
+    '中继拒绝了访问令牌，请重新扫码。' => '令牌失效',
+    '电脑或设备身份验证失败，请检查配对。' => '配对失效',
+    '电脑的手机连接已满，请稍后重试。' => '连接已满',
+    '请更新 Pigcode 手机端后重新连接。' => '需更新手机端',
+    '请更新这台电脑上的 Pigcode 后重新连接。' => '需更新电脑端',
+    '连接协议不兼容，请检查两端和中继的版本。' => '版本不兼容',
+    '连接已关闭。请确认电脑上的配对未取消。' => '连接已断开',
+    '电脑连接已断开' => '电脑连接已断开',
+    '正在恢复会话…' => '恢复中…',
+    _ => head.split(RegExp(r'[，。]')).first.trim(),
+  };
+}
+
 typedef _WorkspaceData = ({
   SidebarSnapshot? snapshot,
   bool online,
@@ -798,7 +824,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (!widget.online) {
       final badge = _headerStatusBadge(
         context,
-        label: widget.connectionLabel ?? '电脑连接已断开',
+        label: compactConnectionBadgeLabel(widget.connectionLabel),
         background: colors.field,
         foreground: colors.muted,
         dotColor: colors.faint,
