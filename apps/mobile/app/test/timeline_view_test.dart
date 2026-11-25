@@ -7,6 +7,7 @@ import 'package:pigcode_mobile/app_theme.dart';
 import 'package:pigcode_mobile/theme_colors.dart';
 import 'package:pigcode_mobile/timeline/loading_row.dart';
 import 'package:pigcode_mobile/timeline/notice_line.dart';
+import 'package:pigcode_mobile/timeline/reasoning_block.dart';
 import 'package:pigcode_mobile/timeline/summary_group.dart';
 import 'package:pigcode_mobile/timeline/timeline_tokens.dart';
 import 'package:pigcode_mobile/timeline/tool_row.dart';
@@ -14,6 +15,7 @@ import 'package:pigcode_mobile/timeline/tools/inline_diff.dart';
 import 'package:pigcode_mobile/timeline/user_bubble.dart';
 import 'package:pigcode_mobile/timeline_view.dart';
 import 'package:pigcode_mobile/timeline_widgets.dart';
+import 'package:pigcode_mobile/timeline_work.dart';
 
 List<MobileTimelineEvent> runs(int start, int end) => [
   for (var index = start; index <= end; index++) ...[
@@ -598,4 +600,381 @@ void main() {
       expect(find.byType(TimelineToolDetails), findsNothing);
     },
   );
+
+  testWidgets(
+    'merges live streaming reasoning into the tail summary group with single-line preview and stable expansion',
+    (tester) async {
+      final events = const [
+        MobileTimelineEvent(
+          seq: 1,
+          runId: 'active-run',
+          kind: MobileTimelineKind.runStarted,
+          text: '排查问题',
+          createdAt: '2026-11-25T10:00:00.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 2,
+          runId: 'active-run',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'read-1',
+          name: 'Read',
+          text: '{"file_path":"lib/timeline_view.dart"}',
+          createdAt: '2026-11-25T10:00:01.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 3,
+          runId: 'active-run',
+          kind: MobileTimelineKind.toolCompleted,
+          itemId: 'read-1',
+          name: 'Read',
+          text: 'ok',
+          createdAt: '2026-11-25T10:00:02.000Z',
+        ),
+      ];
+      MobileActiveRun live(String reasoning, {bool truncated = false}) =>
+          MobileActiveRun(
+            runId: 'active-run',
+            startedAt: '2026-11-25T10:00:00.000Z',
+            revision: reasoning.length,
+            text: '',
+            textTruncated: false,
+            reasoning: reasoning,
+            reasoningTruncated: truncated,
+            tools: const [],
+            pending: const [],
+          );
+
+      // 1. 先有工具再出现 live.reasoning：合入同一尾部摘要组，收起态展示单行流式思考预览，
+      //    下方不再重复绘制独立思考块。
+      await tester.pumpWidget(page(events, live: live('第一行思考\n核对摘要分组逻辑')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineReasoningBlock), findsOneWidget);
+      expect(find.text('正在思考'), findsOneWidget);
+      expect(find.text('核对摘要分组逻辑'), findsOneWidget);
+      expect(find.text('查阅 1 项'), findsNothing);
+      expect(find.text('timeline_view.dart'), findsNothing);
+
+      // 2. 点击单行预览展开整个尾部摘要组，能同时看到工具与末尾流式思考。
+      await tester.tap(find.text('正在思考'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineSummaryGroup), findsOneWidget);
+      expect(find.text('查阅 1 项'), findsOneWidget);
+      expect(find.text('timeline_view.dart'), findsOneWidget);
+      expect(find.byType(TimelineReasoningBlock), findsOneWidget);
+
+      // 3. 组内点按流式思考展开正文；后续增量到达时 Key 稳定不闪跳、不收起。
+      await tester.tap(find.text('正在思考'));
+      await tester.pumpAndSettle();
+      expect(find.text('第一行思考\n核对摘要分组逻辑'), findsOneWidget);
+
+      await tester.pumpWidget(
+        page(
+          events,
+          live: live('第一行思考\n核对摘要分组逻辑\n准备继续执行', truncated: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('第一行思考\n核对摘要分组逻辑\n准备继续执行'), findsOneWidget);
+      expect(find.text('查看完整过程'), findsOneWidget);
+
+      // 4. 点按「查看完整过程」可打开完整思考弹层。
+      await tester.tap(find.text('查看完整过程'));
+      await tester.pumpAndSettle();
+      expect(find.text('完整思考'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'falls back to rendering live reasoning when the snapshot has no matching turn yet',
+    (tester) async {
+      await tester.pumpWidget(
+        page(
+          runs(20, 20),
+          live: const MobileActiveRun(
+            runId: 'unseen-run',
+            startedAt: '2026-11-25T10:00:00.000Z',
+            revision: 1,
+            text: '',
+            textTruncated: false,
+            reasoning: '首帧尚无 turn 的流式思考',
+            reasoningTruncated: false,
+            tools: [],
+            pending: [],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineReasoningBlock), findsOneWidget);
+      expect(find.text('正在思考'), findsOneWidget);
+      expect(find.text('首帧尚无 turn 的流式思考'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'hides empty-command streaming shell tools until command input arrives or the run ends',
+    (tester) async {
+      const start = MobileTimelineEvent(
+        seq: 1,
+        runId: 'shell-run',
+        kind: MobileTimelineKind.runStarted,
+        text: '跑测试',
+        createdAt: '2026-11-25T10:00:00.000Z',
+      );
+      const emptyShell = MobileTimelineEvent(
+        seq: 2,
+        runId: 'shell-run',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 'bash-1',
+        name: 'Bash',
+        text: '{}',
+        createdAt: '2026-11-25T10:00:01.000Z',
+      );
+
+      // 1. 运行中空命令 shell 不提前占行。
+      await tester.pumpWidget(page(const [start, emptyShell]));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('正在执行'), findsNothing);
+      expect(find.byType(TimelineToolRow), findsNothing);
+
+      // 2. 收到命令后恢复正常展示。
+      await tester.pumpWidget(
+        page(const [
+          start,
+          MobileTimelineEvent(
+            seq: 2,
+            runId: 'shell-run',
+            kind: MobileTimelineKind.toolStarted,
+            itemId: 'bash-1',
+            name: 'Bash',
+            text: '{"command":"flutter test"}',
+            createdAt: '2026-11-25T10:00:01.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('正在执行'), findsOneWidget);
+      expect(find.text('flutter test'), findsOneWidget);
+
+      // 3. 即使始终未收到命令，run 结束后恢复展示为已停止。
+      await tester.pumpWidget(
+        page(const [
+          start,
+          emptyShell,
+          MobileTimelineEvent(
+            seq: 3,
+            runId: 'shell-run',
+            kind: MobileTimelineKind.runInterrupted,
+            createdAt: '2026-11-25T10:00:02.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('已停止'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'keeps tools awaiting approval outside summary groups and restores grouping once resolved',
+    (tester) async {
+      final baseEvents = const [
+        MobileTimelineEvent(
+          seq: 1,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.runStarted,
+          text: '运行脚本',
+          createdAt: '2026-11-25T10:00:00.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 2,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'r1',
+          name: 'Read',
+          text: '{"file_path":"lib/a.dart"}',
+          createdAt: '2026-11-25T10:00:01.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 3,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.toolCompleted,
+          itemId: 'r1',
+          name: 'Read',
+          text: 'ok',
+          createdAt: '2026-11-25T10:00:01.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 4,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'g1',
+          name: 'Grep',
+          text: '{"pattern":"foo"}',
+          createdAt: '2026-11-25T10:00:02.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 5,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.toolCompleted,
+          itemId: 'g1',
+          name: 'Grep',
+          text: 'lib/a.dart:1',
+          createdAt: '2026-11-25T10:00:02.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 6,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'b1',
+          name: 'Bash',
+          text: '{"command":"rm -rf build"}',
+          createdAt: '2026-11-25T10:00:03.000Z',
+        ),
+        MobileTimelineEvent(
+          seq: 7,
+          runId: 'approval-run',
+          kind: MobileTimelineKind.approvalRequested,
+          itemId: 'req-1',
+          name: 'Bash',
+          createdAt: '2026-11-25T10:00:04.000Z',
+        ),
+      ];
+
+      // 1. 待审批的 Bash 保持独立行，不并入前面的 [Read, Grep] 摘要组。
+      await tester.pumpWidget(page(baseEvents));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineSummaryGroup), findsOneWidget);
+      expect(find.text('已查阅 2 项'), findsOneWidget);
+      expect(find.text('正在执行'), findsOneWidget);
+      expect(find.text('rm -rf build'), findsOneWidget);
+
+      // 2. 审批解决并完成后，自动恢复合并进同一个摘要组。
+      await tester.pumpWidget(
+        page([
+          ...baseEvents,
+          const MobileTimelineEvent(
+            seq: 8,
+            runId: 'approval-run',
+            kind: MobileTimelineKind.approvalResolved,
+            itemId: 'req-1',
+            text: '已允许一次',
+            createdAt: '2026-11-25T10:00:05.000Z',
+          ),
+          const MobileTimelineEvent(
+            seq: 9,
+            runId: 'approval-run',
+            kind: MobileTimelineKind.toolCompleted,
+            itemId: 'b1',
+            name: 'Bash',
+            text: 'done',
+            createdAt: '2026-11-25T10:00:06.000Z',
+          ),
+          const MobileTimelineEvent(
+            seq: 10,
+            runId: 'approval-run',
+            kind: MobileTimelineKind.runCompleted,
+            createdAt: '2026-11-25T10:00:07.000Z',
+          ),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(TimelineSummaryGroup), findsOneWidget);
+      expect(find.text('已查阅 2 项，已执行 1 命令'), findsOneWidget);
+      expect(find.text('rm -rf build'), findsNothing);
+    },
+  );
+
+  test('timeline_work helpers cover active item, empty shell, and approval splits', () {
+    const readEvent = MobileTimelineEvent(
+      seq: 1,
+      runId: 'r1',
+      kind: MobileTimelineKind.toolStarted,
+      itemId: 'r1',
+      name: 'Read',
+      text: '{"file_path":"a.dart"}',
+      createdAt: '2026-11-25T10:00:00Z',
+    );
+    const readDone = MobileTimelineEvent(
+      seq: 2,
+      runId: 'r1',
+      kind: MobileTimelineKind.toolCompleted,
+      itemId: 'r1',
+      name: 'Read',
+      text: 'ok',
+      createdAt: '2026-11-25T10:00:01Z',
+    );
+    const emptyBash = TimelineWork(
+      TimelineWorkKind.tool,
+      MobileTimelineEvent(
+        seq: 3,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 'b1',
+        name: 'Bash',
+        text: '{"command":"   "}',
+        createdAt: '2026-11-25T10:00:02Z',
+      ),
+    );
+    const describedBash = TimelineWork(
+      TimelineWorkKind.tool,
+      MobileTimelineEvent(
+        seq: 4,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 'b2',
+        name: 'Bash',
+        text: '{"description":"跑校验"}',
+        createdAt: '2026-11-25T10:00:03Z',
+      ),
+    );
+    const pendingBash = TimelineWork(
+      TimelineWorkKind.tool,
+      MobileTimelineEvent(
+        seq: 5,
+        runId: 'r1',
+        kind: MobileTimelineKind.toolStarted,
+        itemId: 'b3',
+        name: 'Bash',
+        text: '{"command":"rm -rf tmp"}',
+        createdAt: '2026-11-25T10:00:04Z',
+      ),
+      pendingApproval: true,
+    );
+    const liveReasoning = TimelineWork(
+      TimelineWorkKind.reasoning,
+      MobileTimelineEvent(
+        seq: 6,
+        runId: 'r1',
+        kind: MobileTimelineKind.reasoning,
+        text: '思考中',
+        createdAt: '2026-11-25T10:00:05Z',
+      ),
+      streaming: true,
+    );
+    const readWork = TimelineWork(
+      TimelineWorkKind.tool,
+      readEvent,
+      result: readDone,
+    );
+
+    expect(isEmptyStreamingCommand(emptyBash, ended: false), isTrue);
+    expect(isEmptyStreamingCommand(emptyBash, ended: true), isFalse);
+    expect(isEmptyStreamingCommand(describedBash, ended: false), isFalse);
+
+    expect(timelineJoinsSummary(pendingBash), isFalse);
+    final groups = groupTimelineWork(
+      [readWork, describedBash, pendingBash, readWork, liveReasoning],
+      0,
+    );
+    expect(groups.map((g) => g.length).toList(), [2, 1, 2]);
+    expect(groups[1].single.pendingApproval, isTrue);
+
+    expect(activeSummaryWorkItem([readWork, liveReasoning]), liveReasoning);
+    expect(activeSummaryWorkItem([describedBash, liveReasoning]), liveReasoning);
+    expect(activeSummaryWorkItem([readWork]), isNull);
+  });
 }

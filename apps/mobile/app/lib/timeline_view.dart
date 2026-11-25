@@ -63,6 +63,7 @@ class _TimelineViewState extends State<TimelineView> {
   bool _userScrolling = false;
   bool _settling = false;
   bool _loadingEarlier = false;
+  bool _liveReasoningMerged = false;
   String? _historyError;
 
   @override
@@ -79,7 +80,14 @@ class _TimelineViewState extends State<TimelineView> {
   @override
   void didUpdateWidget(covariant TimelineView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!identical(oldWidget.snapshot.events, widget.snapshot.events)) {
+    final eventsChanged = !identical(
+      oldWidget.snapshot.events,
+      widget.snapshot.events,
+    );
+    final liveChanged =
+        !identical(oldWidget.snapshot.live, widget.snapshot.live) ||
+        oldWidget.online != widget.online;
+    if (eventsChanged) {
       final previous = _turns;
       _turns = timelineTurns(widget.snapshot.events);
       if (!_pinned) {
@@ -93,14 +101,18 @@ class _TimelineViewState extends State<TimelineView> {
           }
         }
       }
-      _rebuildRows();
     }
+    if (eventsChanged || liveChanged) _rebuildRows();
     if (!identical(oldWidget.snapshot, widget.snapshot)) _follow();
   }
 
   void _rebuildRows() {
     final history = <_Row>[];
     final after = <_Row>[];
+    final active = widget.online ? widget.snapshot.live : null;
+    final hasLiveReasoning =
+        active != null && active.reasoning.trim().isNotEmpty;
+    var liveReasoningMerged = false;
     void add(String key, int sequence, Widget Function() build) {
       (sequence < _pivot ? history : after).add((
         key: key,
@@ -119,9 +131,28 @@ class _TimelineViewState extends State<TimelineView> {
       final visibleWork = [
         for (final item in turn.work)
           if (!(item.kind == TimelineWorkKind.question &&
-              turn.isPendingRequest(item.event.itemId)))
+                  turn.isPendingRequest(item.event.itemId)) &&
+              !isEmptyStreamingCommand(item, ended: ended))
             item,
       ];
+      if (!ended && hasLiveReasoning && active.runId == turn.runId) {
+        liveReasoningMerged = true;
+        final anchorSeq = visibleWork.lastOrNull?.event.seq ?? turn.firstSeq;
+        visibleWork.add(
+          TimelineWork(
+            TimelineWorkKind.reasoning,
+            MobileTimelineEvent(
+              seq: anchorSeq,
+              runId: active.runId,
+              kind: MobileTimelineKind.reasoning,
+              createdAt: active.startedAt,
+              text: active.reasoning,
+              truncated: active.reasoningTruncated,
+            ),
+            streaming: true,
+          ),
+        );
+      }
       final groups = !turn.folded || _expanded.contains(key)
           ? groupTimelineWork(visibleWork, _pivot)
           : const <List<TimelineWork>>[];
@@ -168,7 +199,7 @@ class _TimelineViewState extends State<TimelineView> {
         final touchAbove = index == 0 && workTouchesAbove;
         if (group.length == 1) {
           add(
-            'work-$seq',
+            first.streaming ? 'live-reasoning-$key' : 'work-$seq',
             seq,
             () => _work(turn, first, followed: !tail, touchAbove: touchAbove),
           );
@@ -259,6 +290,7 @@ class _TimelineViewState extends State<TimelineView> {
         );
       }
     }
+    _liveReasoningMerged = liveReasoningMerged;
     _history = history.reversed.toList();
     _newRows = after;
   }
@@ -576,11 +608,7 @@ class _TimelineViewState extends State<TimelineView> {
       _rebuildRows();
     });
 
-    final active = group.reversed
-        .where(
-          (item) => item.kind == TimelineWorkKind.tool && item.output == null,
-        )
-        .firstOrNull;
+    final active = activeSummaryWorkItem(group);
     if (!expanded && growing) {
       final preview = active ?? group.last;
       if (preview.kind == TimelineWorkKind.tool) {
@@ -590,6 +618,17 @@ class _TimelineViewState extends State<TimelineView> {
           followed: !tail,
           toggle: toggle,
           touchAbove: touchAbove,
+        );
+      }
+      if (preview.kind == TimelineWorkKind.reasoning) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: tail ? 0 : TimelineSpace.workGap),
+          child: TimelineReasoningBlock(
+            text: preview.event.text ?? '',
+            streaming: preview.streaming,
+            shimmer: true,
+            onTap: toggle,
+          ),
         );
       }
     }
@@ -610,7 +649,11 @@ class _TimelineViewState extends State<TimelineView> {
             ? [
                 for (final item in group)
                   KeyedSubtree(
-                    key: ValueKey('work-member-${item.event.seq}'),
+                    key: ValueKey(
+                      item.streaming
+                          ? 'work-member-live-reasoning-${turn.key}'
+                          : 'work-member-${item.event.seq}',
+                    ),
                     child: _work(
                       turn,
                       item,
@@ -641,10 +684,16 @@ class _TimelineViewState extends State<TimelineView> {
       padding: EdgeInsets.only(bottom: followed ? TimelineSpace.workGap : 0),
       child: TimelineReasoningBlock(
         text: item.event.text ?? '',
+        streaming: item.streaming,
         truncated: item.event.truncated == true && widget.online,
         showIcon: showIcon,
         compact: compact,
-        onOpenFull: () => _openText(item.event),
+        onOpenFull: item.streaming
+            ? () => _openLiveReasoning(
+                runId: item.event.runId ?? turn.runId,
+                preview: item.event.text ?? '',
+              )
+            : () => _openText(item.event),
       ),
     ),
     TimelineWorkKind.question => TimelineWorkLine(
@@ -765,23 +814,27 @@ class _TimelineViewState extends State<TimelineView> {
     );
   }
 
+  void _openLiveReasoning({required String? runId, required String preview}) =>
+      showTimelineDetails(context, '完整思考', [
+        TimelineDetails(
+          label: '思考',
+          runId: runId,
+          field: MobileTimelineContentField.reasoning,
+          preview: preview,
+          truncated: true,
+        ),
+      ], widget.online ? widget.content : null);
+
   Widget _live(MobileActiveRun live) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      if (live.reasoning.isNotEmpty)
+      if (!_liveReasoningMerged && live.reasoning.trim().isNotEmpty)
         TimelineReasoningBlock(
           text: live.reasoning,
           streaming: true,
           truncated: live.reasoningTruncated,
-          onOpenFull: () => showTimelineDetails(context, '完整思考', [
-            TimelineDetails(
-              label: '思考',
-              runId: live.runId,
-              field: MobileTimelineContentField.reasoning,
-              preview: live.reasoning,
-              truncated: true,
-            ),
-          ], widget.content),
+          onOpenFull: () =>
+              _openLiveReasoning(runId: live.runId, preview: live.reasoning),
         ),
       if (live.text.isNotEmpty)
         TimelineAnswer(

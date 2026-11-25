@@ -14,6 +14,7 @@ import { apply as settings } from "../services/settings"
 import { apply as storage } from "../services/storage"
 import { apply as threads } from "../services/threads"
 import { MobileTimelineSession } from "./timeline"
+import { timelineEvent } from "./timeline-projection"
 
 it("opens recent runs with an ordered live snapshot and keeps earlier tool details available by sequence", async () => {
   const ctx = new Context()
@@ -311,4 +312,47 @@ it("sends the desktop snapshot before a delta published while the subscription r
   } finally {
     await host.stop()
   }
+})
+
+it("projects approval.requested toolName or name onto MobileTimelineEvent.name", () => {
+  const base = {
+    seq: 10,
+    threadId: "t1",
+    runId: "r1",
+    type: "approval.requested" as const,
+    schemaVersion: 1,
+    createdAt: "2026-11-25T10:00:00.000Z",
+  }
+
+  expect(
+    timelineEvent({
+      ...base,
+      payload: { requestId: "req-1", toolName: "Bash", title: "允许运行？" },
+    }),
+  ).toMatchObject({
+    kind: "approval.requested",
+    itemId: "req-1",
+    name: "Bash",
+  })
+
+  expect(
+    timelineEvent({
+      ...base,
+      payload: { id: "req-2", name: "Edit" },
+    }),
+  ).toMatchObject({
+    kind: "approval.requested",
+    itemId: "req-2",
+    name: "Edit",
+  })
+
+  const withoutToolName = timelineEvent({
+    ...base,
+    payload: { requestId: "req-3", toolName: "   " },
+  })
+  expect(withoutToolName).toMatchObject({
+    kind: "approval.requested",
+    itemId: "req-3",
+  })
+  expect(withoutToolName).not.toHaveProperty("name")
 })

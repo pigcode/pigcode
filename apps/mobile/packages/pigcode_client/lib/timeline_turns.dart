@@ -12,11 +12,19 @@ enum TimelineTurnStatus {
 enum TimelineWorkKind { message, reasoning, tool, question }
 
 class TimelineWork {
-  const TimelineWork(this.kind, this.event, {this.result});
+  const TimelineWork(
+    this.kind,
+    this.event, {
+    this.result,
+    this.streaming = false,
+    this.pendingApproval = false,
+  });
 
   final TimelineWorkKind kind;
   final MobileTimelineEvent event;
   final MobileTimelineEvent? result;
+  final bool streaming;
+  final bool pendingApproval;
 
   MobileTimelineEvent? get input =>
       event.kind == MobileTimelineKind.toolStarted ? event : null;
@@ -148,6 +156,16 @@ class _Draft {
             work[index].event,
             result: event,
           );
+        } else {
+          final existing = work[index];
+          final trimmed = (event.text ?? '').trim();
+          if (existing.result == null && trimmed.isNotEmpty && trimmed != '{}') {
+            work[index] = TimelineWork(
+              TimelineWorkKind.tool,
+              event,
+              result: existing.result,
+            );
+          }
         }
       case MobileTimelineKind.questionRequested:
         _hasQuestionEvents = true;
@@ -222,6 +240,66 @@ class _Draft {
         work.lastOrNull?.kind == TimelineWorkKind.message) {
       answer = work.removeLast().event;
     }
+    final pendingApprovals = requestEvents.values
+        .where((event) => event.kind == MobileTimelineKind.approvalRequested)
+        .toList();
+    if (pendingApprovals.isNotEmpty) {
+      final matched = <int>{};
+      for (final request in pendingApprovals) {
+        final index = _matchPendingApprovalTool(request, matched);
+        if (index != null) matched.add(index);
+      }
+      for (final index in matched) {
+        final item = work[index];
+        work[index] = TimelineWork(
+          item.kind,
+          item.event,
+          result: item.result,
+          streaming: item.streaming,
+          pendingApproval: true,
+        );
+      }
+    }
     return TimelineTurn._(this);
+  }
+
+  int? _matchPendingApprovalTool(
+    MobileTimelineEvent request,
+    Set<int> matched,
+  ) {
+    bool isRunningTool(TimelineWork item) =>
+        item.kind == TimelineWorkKind.tool && item.output == null;
+
+    final requestId = request.itemId;
+    if (requestId != null && requestId.isNotEmpty) {
+      for (var index = work.length - 1; index >= 0; index--) {
+        final item = work[index];
+        if (isRunningTool(item) && item.event.itemId == requestId) {
+          return index;
+        }
+      }
+    }
+
+    final requestName = (request.name ?? '').trim().toLowerCase();
+    if (requestName.isNotEmpty) {
+      int? fallback;
+      for (var index = work.length - 1; index >= 0; index--) {
+        final item = work[index];
+        if (!isRunningTool(item)) continue;
+        final toolName = (item.event.name ?? '').trim().toLowerCase();
+        if (toolName != requestName) continue;
+        if (!matched.contains(index)) return index;
+        fallback ??= index;
+      }
+      return fallback;
+    }
+
+    int? fallback;
+    for (var index = work.length - 1; index >= 0; index--) {
+      if (!isRunningTool(work[index])) continue;
+      if (!matched.contains(index)) return index;
+      fallback ??= index;
+    }
+    return fallback;
   }
 }

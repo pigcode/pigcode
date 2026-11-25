@@ -72,10 +72,36 @@ TimelineSummaryCategory? timelineSummaryCategory(TimelineWork item) {
   };
 }
 
-/// 连续摘要组只收思考、查阅、执行和修改；过程正文、计划、提问和未知工具单独成行。
+/// 连续摘要组只收思考、查阅、执行和修改；过程正文、计划、提问、待审批工具和未知工具单独成行。
 bool timelineJoinsSummary(TimelineWork item) {
   if (item.kind == TimelineWorkKind.reasoning) return true;
+  if (item.pendingApproval) return false;
   return timelineSummaryCategory(item) != null;
+}
+
+/// 摘要组里正在进行的一项：从后往前找最后一个运行中工具或仍在流式输出的思考（对齐桌面 `activeSummaryItem`）。
+TimelineWork? activeSummaryWorkItem(List<TimelineWork> items) {
+  for (final item in items.reversed) {
+    if (item.kind == TimelineWorkKind.reasoning) {
+      if (item.streaming) return item;
+    } else if (item.kind == TimelineWorkKind.tool && item.output == null) {
+      return item;
+    }
+  }
+  return null;
+}
+
+/// 运行中尚未收到命令正文且无说明的终端命令工具；过滤掉避免提前占出一行空「正在执行」。
+bool isEmptyStreamingCommand(TimelineWork item, {required bool ended}) {
+  if (ended || item.kind != TimelineWorkKind.tool || item.output != null) {
+    return false;
+  }
+  if (timelineToolKind(item) != TimelineToolKind.command) return false;
+  final command = timelineCommand(item);
+  if (command != null && command.trim().isNotEmpty) return false;
+  final description = timelineCommandDescription(item);
+  if (description != null && description.trim().isNotEmpty) return false;
+  return true;
 }
 
 // 工具分类沿用桌面端 tool-identity.ts 的展示族。
@@ -295,7 +321,9 @@ String? timelineCommand(TimelineWork item) {
     if (joined.isNotEmpty) return joined;
   }
   final input = _toolInput(item);
-  return input is String && !input.startsWith('{') ? input : null;
+  return input is String && !input.startsWith('{') && input.trim().isNotEmpty
+      ? input.trim()
+      : null;
 }
 
 /// 命令工具的一行说明，优先用 Agent 给的 description。

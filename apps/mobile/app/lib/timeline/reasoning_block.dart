@@ -11,17 +11,21 @@ class TimelineReasoningBlock extends StatefulWidget {
     super.key,
     required this.text,
     this.streaming = false,
+    this.shimmer = false,
     this.truncated = false,
     this.showIcon = true,
     this.compact = false,
+    this.onTap,
     this.onOpenFull,
   });
 
   final String text;
   final bool streaming;
+  final bool shimmer;
   final bool truncated;
   final bool showIcon;
   final bool compact;
+  final VoidCallback? onTap;
   final VoidCallback? onOpenFull;
 
   @override
@@ -89,6 +93,7 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
         ? pigcodeDark
         : pigcodeLight;
     final label = widget.streaming ? '正在思考' : '思考';
+    final shimmers = widget.streaming || widget.shimmer;
     final labelStyle = TimelineType.contentStyle(colors.timelineSubtle);
     final minHeight = widget.compact ? 0.0 : timelineTouchHeight(context);
 
@@ -109,7 +114,7 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
           ),
           const SizedBox(width: TimelineSpace.fieldGap),
         ],
-        if (widget.streaming)
+        if (shimmers)
           TimelineShimmerText(text: label, style: labelStyle)
         else
           Text(label, style: labelStyle),
@@ -208,12 +213,14 @@ class _TimelineReasoningBlockState extends State<TimelineReasoningBlock> {
       children: [
         Semantics(
           button: true,
-          expanded: _expanded,
+          expanded: widget.onTap != null ? false : _expanded,
           child: InkWell(
-            onTap: () {
-              setState(() => _expanded = !_expanded);
-              if (_expanded && widget.streaming) _jumpToBottom();
-            },
+            onTap:
+                widget.onTap ??
+                () {
+                  setState(() => _expanded = !_expanded);
+                  if (_expanded && widget.streaming) _jumpToBottom();
+                },
             borderRadius: BorderRadius.circular(TimelineRadius.xs),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: minHeight),

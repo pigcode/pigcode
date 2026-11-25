@@ -13,6 +13,12 @@ function text(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined
 }
 
+function nonEmptyText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 function printable(value: unknown): string | undefined {
   return typeof value === "string" ? value : JSON.stringify(value)
 }
@@ -123,7 +129,17 @@ export function timelineEvent(
       const itemId = text(payload.requestId) ?? text(payload.id)
       if (!itemId) return undefined
       const result = requestResult(event.type, payload)
-      return { ...base, kind: event.type, itemId, ...(result ? preview(result, 512) : {}) }
+      const toolName =
+        event.type === "approval.requested"
+          ? (nonEmptyText(payload.toolName) ?? nonEmptyText(payload.name))
+          : undefined
+      return {
+        ...base,
+        kind: event.type,
+        itemId,
+        ...(toolName ? { name: preview(toolName, 120).text } : {}),
+        ...(result ? preview(result, 512) : {}),
+      }
     }
     case "notice":
       return {
