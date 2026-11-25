@@ -18,7 +18,6 @@
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A51470020000000000000001 /* MobileShareReceiver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A51470010000000000000001 /* MobileShareReceiver.swift */; };
 		A51470020000000000000002 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A51470010000000000000004 /* ShareViewController.swift */; };
-		A51470020000000000000003 /* ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A51470010000000000000007 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,17 +46,6 @@
 			files = (
 			);
 			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		A51470040000000000000004 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				A51470020000000000000003 /* ShareExtension.appex in Embed Foundation Extensions */,
-			);
-			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -207,8 +195,7 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
-				A51470040000000000000004 /* Embed Foundation Extensions */,
-				A51470040000000000000005 /* Optional Strip ShareExtension */,
+				A51470040000000000000005 /* Optional Embed ShareExtension */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
@@ -348,7 +335,7 @@
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
 		};
-		A51470040000000000000005 /* Optional Strip ShareExtension */ = {
+		A51470040000000000000005 /* Optional Embed ShareExtension */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -356,12 +343,12 @@
 			);
 			inputPaths = (
 			);
-			name = "Optional Strip ShareExtension";
+			name = "Optional Embed ShareExtension";
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ \"${PIGCODE_DISABLE_SHARE_EXTENSION:-0}\" = \"1\" ]; then\n  rm -rf \"${TARGET_BUILD_DIR}/${PLUGINS_FOLDER_PATH}/ShareExtension.appex\"\nfi\n";
+			shellScript = "set -eu\ndest=\"${TARGET_BUILD_DIR}/${PLUGINS_FOLDER_PATH}/ShareExtension.appex\"\nif [ \"${PIGCODE_DISABLE_SHARE_EXTENSION:-0}\" = \"1\" ]; then\n  rm -rf \"$dest\"\n  rmdir \"${TARGET_BUILD_DIR}/${PLUGINS_FOLDER_PATH}\" 2>/dev/null || true\n  exit 0\nfi\nmkdir -p \"${TARGET_BUILD_DIR}/${PLUGINS_FOLDER_PATH}\"\nrm -rf \"$dest\"\nditto \"${BUILT_PRODUCTS_DIR}/ShareExtension.appex\" \"$dest\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -711,6 +698,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = "$(PIGCODE_SHARE_EXTENSION_CODE_SIGNING_ALLOWED)";
 				CODE_SIGN_ENTITLEMENTS = "$(PIGCODE_SHARE_EXTENSION_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
@@ -740,6 +728,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = "$(PIGCODE_SHARE_EXTENSION_CODE_SIGNING_ALLOWED)";
 				CODE_SIGN_ENTITLEMENTS = "$(PIGCODE_SHARE_EXTENSION_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
@@ -767,6 +756,7 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGNING_ALLOWED = "$(PIGCODE_SHARE_EXTENSION_CODE_SIGNING_ALLOWED)";
 				CODE_SIGN_ENTITLEMENTS = "$(PIGCODE_SHARE_EXTENSION_ENTITLEMENTS)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";

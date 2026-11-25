@@ -16,9 +16,11 @@
 免费个人 Apple ID 不支持 App Group 能力签名。如需临时在真机上安装调试主 App，可在本地创建 `ios/Flutter/LocalSigning.xcconfig`（已加入 `.gitignore`，不会入库）并写入：
 
 ```xcconfig
+DEVELOPMENT_TEAM = <你的 Personal Team ID>
 PIGCODE_RUNNER_ENTITLEMENTS =
 PIGCODE_SHARE_EXTENSION_ENTITLEMENTS =
 PIGCODE_DISABLE_SHARE_EXTENSION = 1
+PIGCODE_SHARE_EXTENSION_CODE_SIGNING_ALLOWED = NO
 ```
 
-重新构建即可跳过 App Group entitlement 与 `ShareExtension.appex` 嵌入。
+重新构建即可跳过 App Group entitlement 与 `ShareExtension.appex` 签名/嵌入。
