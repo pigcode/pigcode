@@ -24,6 +24,8 @@ export interface PanelSurface {
   dirty?: boolean
   /** 文件导航打开的临时预览；编辑后或显式打开时保留为独立标签。 */
   preview?: boolean
+  /** 终端标签绑定的已有终端 id；页面刷新恢复时用来重新附着。 */
+  terminalId?: string
 }
 
 /** 一组标签与当前激活的标签；没有标签时 activeId 为 null，面板显示启动器。 */
@@ -136,11 +138,13 @@ export function closeRemovedSurfaces(
     .reduce((next, surface) => closeSurface(next, surface.id), state)
 }
 
-/** 修改某个标签的标题、地址、图标、文件或未保存状态，例如浏览器加载页面后显示页面标题与网站图标。 */
+/** 修改某个标签的标题、地址、图标、文件、未保存状态或绑定的终端 id。 */
 export function updateSurface(
   state: PanelSurfaceState,
   id: string,
-  patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview">>,
+  patch: Partial<
+    Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview" | "terminalId">
+  >,
 ): PanelSurfaceState {
   return {
     ...state,

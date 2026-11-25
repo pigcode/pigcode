@@ -304,11 +304,19 @@ export function WorkbenchPanel({
       : undefined,
   }
 
+  const updateTab = useCallback(
+    (id: string, patch: Parameters<typeof updateSurface>[2]) => {
+      onPanelChange((state) => updateSurface(state, id, patch))
+    },
+    [onPanelChange],
+  )
+
   const context: WorkbenchContextValue = {
     connection,
     scope,
     add,
     close,
+    updateTab,
     openFile,
     fileProps,
     worktrees,

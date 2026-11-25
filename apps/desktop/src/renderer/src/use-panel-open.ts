@@ -34,7 +34,7 @@ export function usePanelOpen(draftKey: string | null) {
   )
 
   const set = useCallback(
-    (panel: keyof PanelOpen, value: SetStateAction<boolean>, key = draftKey) => {
+    (panel: keyof PanelOpen, value: SetStateAction<boolean>, key: string | null = draftKey) => {
       const next = (current: PanelOpen): PanelOpen => ({
         ...current,
         [panel]: typeof value === "function" ? value(current[panel]) : value,
@@ -52,9 +52,12 @@ export function usePanelOpen(draftKey: string | null) {
     rightOpen: open.right,
     terminalOpen: open.terminal,
     setRightOpen: useCallback(
-      (value: SetStateAction<boolean>, key?: string) => set("right", value, key),
+      (value: SetStateAction<boolean>, key?: string | null) => set("right", value, key),
       [set],
     ),
-    setTerminalOpen: useCallback((value: SetStateAction<boolean>) => set("terminal", value), [set]),
+    setTerminalOpen: useCallback(
+      (value: SetStateAction<boolean>, key?: string | null) => set("terminal", value, key),
+      [set],
+    ),
   }
 }

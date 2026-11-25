@@ -44,6 +44,10 @@ export interface GitBranches {
   remoteBranches: string[]
 }
 
+/** 终端在窗口里的打开位置：底部抽屉或右侧 Workbench；页面刷新后据此还原到原位置。 */
+export const terminalPlacementSchema = z.enum(["drawer", "workbench"])
+export type TerminalPlacement = z.infer<typeof terminalPlacementSchema>
+
 /** 定时任务的标题：可以留空。 */
 const scheduleTitle = z.string().trim().max(120)
 /** 结束日期；null 表示永不结束。 */
@@ -365,6 +369,21 @@ export const commandSchemas = {
   "terminal.open": scoped({
     cols: z.number().int().positive(),
     rows: z.number().int().positive(),
+    placement: terminalPlacementSchema.optional(),
+  }),
+  /** 列出当前会话或新会话草稿里仍在运行的终端，供窗口刷新后重新附着。 */
+  "terminal.list": scoped({}),
+  /** 重新附着到仍在运行的终端，返回回滚缓冲与当前游标并订阅后续实时输出。 */
+  "terminal.attach": z.object({
+    terminalId: z.string().min(1),
+    afterCursor: z.number().int().min(0).optional(),
+    cols: z.number().int().positive().optional(),
+    rows: z.number().int().positive().optional(),
+  }),
+  /** 新会话草稿变成正式会话时，把草稿项目下打开的终端平滑改绑到新会话。 */
+  "terminal.rebind": z.object({
+    terminalId: z.string().min(1),
+    threadId: z.string().min(1),
   }),
   "terminal.write": z.object({ terminalId: z.string().min(1), data: z.string() }),
   "terminal.resize": z.object({

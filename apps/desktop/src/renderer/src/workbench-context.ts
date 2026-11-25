@@ -4,7 +4,7 @@
  */
 import { createContext, useContext, type ComponentProps } from "react"
 import type { Connection } from "@pigcode/client-runtime"
-import type { CheckpointPhase } from "@pigcode/ui-workbench"
+import type { CheckpointPhase, PanelSurface } from "@pigcode/ui-workbench"
 import type { FilesSurface } from "./files-surface"
 import type { usePullRequest } from "./use-pull-request"
 import type { useWorktrees } from "./use-worktrees"
@@ -29,6 +29,13 @@ export interface WorkbenchContextValue {
   add(kind: string): void
   /** 关闭一个标签；有未保存修改的文件标签先确认。 */
   close(id: string): void
+  /** 更新标签元数据（例如记录已打开的终端 id）。 */
+  updateTab(
+    id: string,
+    patch: Partial<
+      Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview" | "terminalId">
+    >,
+  ): void
   /** 从当前文件导航打开文件，可以复用预览标签或保留独立标签。 */
   openFile(path: string, sourceId: string, preview: boolean): void
   /** 文件树与文件标签共用的属性。 */

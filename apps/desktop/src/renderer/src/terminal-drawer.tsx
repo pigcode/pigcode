@@ -29,12 +29,24 @@ export interface TerminalDrawerProps {
   owner: TerminalOwner
   open: boolean
   onClose: () => void
+  /** 页面刷新后从 Host 恢复的已有抽屉终端；非空时直接附着，不另开重复终端。 */
+  initialSessions?: readonly TerminalSession[] | undefined
+  /** 当前槽位的 terminal.list 恢复查询尚未完成时为 true，暂不自动新开空白终端。 */
+  recovering?: boolean | undefined
+  /** 标签打开或附着上某个终端时通知上层，防止重复恢复。 */
+  onTerminalBound?: ((terminalId: string) => void) | undefined
+  /** 标签关闭或退出时通知上层清理恢复记录。 */
+  onTerminalClosed?: ((terminalId: string) => void) | undefined
 }
 
 /** 一个终端标签：序号在这个抽屉里递增，不复用；shell 起来后记下它的名字与目录。 */
 export interface TerminalTab {
   key: string
   index: number
+  /** 刷新恢复时要附着的已有终端 id；普通新开标签不带。 */
+  attachTerminalId?: string | undefined
+  /** 已绑定的真实终端 id。 */
+  terminalId?: string | undefined
   shell?: string | undefined
   cwd?: string | undefined
 }
@@ -65,26 +77,81 @@ export function terminalTitles(tabs: readonly TerminalTab[], fallback: string): 
   })
 }
 
-export function TerminalDrawer({ connection, owner, open, onClose }: TerminalDrawerProps) {
+export function TerminalDrawer({
+  connection,
+  owner,
+  open,
+  onClose,
+  initialSessions,
+  recovering = false,
+  onTerminalBound,
+  onTerminalClosed,
+}: TerminalDrawerProps) {
   const { t } = useLocale()
   const [height, setHeight] = useState(DEFAULT_HEIGHT)
+  const seenRecovered = useRef<Set<string>>(
+    new Set((initialSessions ?? []).map((session) => session.id)),
+  )
   // 最近一个标签的序号；只在事件与 effect 里递增，StrictMode 重复调用初始化函数也不会跳号。
-  const last = useRef(1)
+  const last = useRef(
+    initialSessions && initialSessions.length > 0 ? initialSessions.length : recovering ? 0 : 1,
+  )
   const newTab = (): TerminalTab => {
     last.current += 1
     return { key: `tab-${last.current}`, index: last.current }
   }
-  const [tabs, setTabs] = useState<TerminalTab[]>([{ key: "tab-1", index: 1 }])
+  const [tabs, setTabs] = useState<TerminalTab[]>(() =>
+    initialSessions && initialSessions.length > 0
+      ? initialSessions.map((session, i) => ({
+          key: `tab-${i + 1}`,
+          index: i + 1,
+          attachTerminalId: session.id,
+          terminalId: session.id,
+          shell: session.shell,
+          cwd: session.cwd,
+        }))
+      : recovering
+        ? []
+        : [{ key: "tab-1", index: 1 }],
+  )
   const [activeKey, setActiveKey] = useState("tab-1")
   const list = useRef<HTMLDivElement>(null)
 
-  // 关掉最后一个标签会收起面板；再打开时新开一个终端。
+  // 合并恢复的已有终端；仅在抽屉打开、恢复查询完成且当前无标签（也无待合并恢复会话）时才新开空白终端。
   useEffect(() => {
-    if (!open || tabs.length > 0) return
+    const incoming = (initialSessions ?? []).filter(
+      (session) => !seenRecovered.current.has(session.id),
+    )
+    if (incoming.length > 0) {
+      for (const session of incoming) seenRecovered.current.add(session.id)
+      setTabs((current) => {
+        const existingIds = new Set(
+          current.flatMap((tab) => [tab.attachTerminalId, tab.terminalId].filter(Boolean)),
+        )
+        const added = incoming
+          .filter((session) => !existingIds.has(session.id))
+          .map((session) => {
+            last.current += 1
+            return {
+              key: `tab-${last.current}`,
+              index: last.current,
+              attachTerminalId: session.id,
+              terminalId: session.id,
+              shell: session.shell,
+              cwd: session.cwd,
+            }
+          })
+        if (added.length === 0) return current
+        if (current.length === 0) setActiveKey(added[0]!.key)
+        return [...current, ...added]
+      })
+      return
+    }
+    if (!open || recovering || tabs.length > 0) return
     const tab = newTab()
     setTabs([tab])
     setActiveKey(tab.key)
-  }, [open, tabs.length])
+  }, [open, recovering, tabs.length, initialSessions])
 
   const active = tabs.find((tab) => tab.key === activeKey) ?? tabs[0] ?? null
   const titles = terminalTitles(tabs, t("workbench.terminal"))
@@ -98,6 +165,12 @@ export function TerminalDrawer({ connection, owner, open, onClose }: TerminalDra
   function close(key: string): void {
     const at = tabs.findIndex((tab) => tab.key === key)
     if (at < 0) return
+    const target = tabs[at]
+    const closedTerminalId = target?.terminalId ?? target?.attachTerminalId
+    if (closedTerminalId) {
+      seenRecovered.current.add(closedTerminalId)
+      onTerminalClosed?.(closedTerminalId)
+    }
     const rest = tabs.filter((tab) => tab.key !== key)
     setTabs(rest)
     if (rest.length === 0) {
@@ -109,9 +182,13 @@ export function TerminalDrawer({ connection, owner, open, onClose }: TerminalDra
   }
 
   function opened(key: string, session: TerminalSession): void {
+    seenRecovered.current.add(session.id)
+    onTerminalBound?.(session.id)
     setTabs((current) =>
       current.map((tab) =>
-        tab.key === key ? { ...tab, shell: session.shell, cwd: session.cwd } : tab,
+        tab.key === key
+          ? { ...tab, terminalId: session.id, shell: session.shell, cwd: session.cwd }
+          : tab,
       ),
     )
   }
@@ -245,6 +322,8 @@ export function TerminalDrawer({ connection, owner, open, onClose }: TerminalDra
               connection={connection}
               owner={owner}
               active={open && selected}
+              placement="drawer"
+              attachTerminalId={tab.attachTerminalId}
               onOpened={(session) => opened(tab.key, session)}
               onExit={() => close(tab.key)}
             />

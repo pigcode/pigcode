@@ -1,6 +1,6 @@
 /** 验证连接从 snapshot/cursor 恢复线程事件，并维护每线程订阅。 */
 import { describe, expect, it } from "vitest"
-import type { Thread, ThreadEvent } from "@pigcode/contracts"
+import type { TerminalOutput, Thread, ThreadEvent } from "@pigcode/contracts"
 import { MemoryTransport } from "../../../apps/host/src/rpc/memory-transport"
 import { Connection } from "./connection"
 
@@ -72,7 +72,7 @@ describe("Connection", () => {
 
   it("dispatches terminal output until unsubscribed", async () => {
     const transport = new MemoryTransport()
-    const outputs: Array<{ terminalId: string; data: string }> = []
+    const outputs: TerminalOutput[] = []
     const connection = new Connection({
       onEvent: () => {},
       onDelta: () => {},
@@ -85,14 +85,22 @@ describe("Connection", () => {
       method: "terminal.output",
       params: { terminalId: "term_1", data: "hello" },
     })
-    expect(outputs).toEqual([{ terminalId: "term_1", data: "hello" }])
+    transport.host.send({
+      jsonrpc: "2.0",
+      method: "terminal.output",
+      params: { terminalId: "term_1", data: " world", cursor: 11 },
+    })
+    expect(outputs).toEqual([
+      { terminalId: "term_1", data: "hello" },
+      { terminalId: "term_1", data: " world", cursor: 11 },
+    ])
     off()
     transport.host.send({
       jsonrpc: "2.0",
       method: "terminal.output",
-      params: { terminalId: "term_1", data: "ignored" },
+      params: { terminalId: "term_1", data: "ignored", cursor: 18 },
     })
-    expect(outputs).toHaveLength(1)
+    expect(outputs).toHaveLength(2)
   })
 
   it("dispatches terminal exits so the tab can close", async () => {
@@ -483,5 +491,30 @@ describe("Connection", () => {
     // 失败的连接不能留下来让下一次调用发进死端口。
     await expect(connection.call("project.list", {})).rejects.toThrow("host not connected")
     expect(statuses).toEqual(["connecting", "connected", "reconnecting"])
+  })
+
+  it("notifies onReconnect only when replacing an existing transport", async () => {
+    let reconnects = 0
+    const connection = new Connection({
+      onEvent: () => {},
+      onDelta: () => {},
+      onStatus: () => {},
+    })
+    const off = connection.onReconnect(() => {
+      reconnects += 1
+    })
+
+    const first = new MemoryTransport()
+    await connection.attach(first.client)
+    expect(reconnects).toBe(0)
+
+    const second = new MemoryTransport()
+    await connection.attach(second.client)
+    expect(reconnects).toBe(1)
+
+    off()
+    const third = new MemoryTransport()
+    await connection.attach(third.client)
+    expect(reconnects).toBe(1)
   })
 })

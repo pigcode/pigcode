@@ -4,9 +4,15 @@ import { randomUUID } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { basename } from "node:path"
 import { createRequire } from "node:module"
+import type { TerminalPlacement } from "@pigcode/contracts"
 import type { AgentLoginCommand, AgentLoginPty } from "@pigcode/plugin-sdk"
 import { launchTarget, terminateProcessGroup } from "@pigcode/plugin-sdk/node"
 import { threadCwd } from "./worktrees"
+
+export type { TerminalPlacement }
+
+/** 每个终端默认保留的最大输出回滚字节数（UTF-8，256 KiB）。 */
+export const DEFAULT_SCROLLBACK_BYTES = 256 * 1024
 
 /** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
 export type PtyLike = AgentLoginPty
@@ -32,7 +38,13 @@ export interface PtyFactory {
  */
 export type TerminalOwner = { threadId: string } | { projectId: string }
 
-/** 打开的终端会话；id 用于后续 write/resize/close/subscribe。 */
+/** 打开终端的可选参数。 */
+export interface TerminalOpenOptions {
+  /** 终端在窗口里打开的位置，用于页面刷新后放回原位置。 */
+  placement?: TerminalPlacement | undefined
+}
+
+/** 打开的终端会话；id 用于后续 write/resize/close/subscribe/attach。 */
 export interface TerminalSession {
   id: string
   /** 在新会话草稿里打开的终端没有会话。 */
@@ -45,13 +57,44 @@ export interface TerminalSession {
   shell: string
   /** shell 启动时的工作目录（线程的项目根或 worktree）。 */
   cwd: string
+  /** 当前累计输出的单调游标（UTF-16 字符偏移），初始为 0。 */
+  cursor: number
+  /** 终端打开的位置；缺省兼容旧调用方。 */
+  placement?: TerminalPlacement | undefined
+  /** ISO 创建时间。 */
+  createdAt: string
+}
+
+/** 重新附着到活跃终端的原子快照与订阅句柄。 */
+export interface TerminalAttachResult {
+  session: TerminalSession
+  replay: string
+  cursor: number
+  truncated: boolean
+  unsubscribe: () => void
 }
 
 /** 终端服务入口；同一线程可以同时开多个终端（底部终端的多个标签、右栏的终端标签）。 */
 export interface TerminalService {
   /** 仅供 Host 内的 Agent 登录流程使用，输入参数来自已配置的 ACP 命令。 */
   openLoginTerminal(launch: AgentLoginCommand): AgentLoginPty
-  open(owner: TerminalOwner, cols: number, rows: number): Promise<TerminalSession>
+  open(
+    owner: TerminalOwner,
+    cols: number,
+    rows: number,
+    options?: TerminalOpenOptions,
+  ): Promise<TerminalSession>
+  /** 列出活跃终端（按创建顺序，带实时 cursor/cols/rows）；传 owner 时按会话或草稿项目过滤。 */
+  list(owner?: TerminalOwner): TerminalSession[]
+  /** 把新会话草稿打开的终端平滑改绑到同项目的新会话。 */
+  rebind(id: string, threadId: string): TerminalSession
+  /** 在同一同步 tick 内返回回滚重放并注册实时输出/退出监听，确保零重复零遗漏。 */
+  attach(
+    id: string,
+    listener: (data: string, cursor: number) => void,
+    onExit?: (exitCode: number) => void,
+    afterCursor?: number,
+  ): TerminalAttachResult
   write(id: string, data: string): void
   resize(id: string, cols: number, rows: number): void
   close(id: string): void
@@ -79,6 +122,8 @@ export const inject = ["projects", "threads", "storage"]
 /** terminal 插件配置；测试通过 ptyFactory 注入 fake。 */
 export interface TerminalConfig {
   ptyFactory?: PtyFactory
+  /** 有界输出回滚缓冲大小（UTF-8 字节）；默认 256 KiB。 */
+  scrollbackBytes?: number
 }
 
 /** terminal 插件函数，携带 Cordis 需要的 inject 元数据。 */
@@ -87,17 +132,34 @@ export interface TerminalPlugin {
   inject: string[]
 }
 
-/** 内部终端记录：会话、PTY 与当前订阅者。 */
+/** 回滚缓冲中的单个输出分片。 */
+interface ScrollbackChunk {
+  start: number
+  data: string
+  bytes: number
+}
+
+/** 内部终端记录：会话、PTY、有界回滚缓冲与当前订阅者。 */
 interface TerminalEntry {
   session: TerminalSession
   pty: PtyLike
-  subscribers: Set<(data: string) => void>
+  chunks: ScrollbackChunk[]
+  bufferedBytes: number
+  startCursor: number
+  endCursor: number
+  subscribers: Set<(data: string, cursor: number) => void>
   exitSubscribers: Set<(exitCode: number) => void>
 }
 
 /** 注册 terminal 服务；Host 卸载时终止所有 PTY，终端不跨重启保留。 */
 export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
+  const maxScrollbackBytes =
+    config.scrollbackBytes === undefined
+      ? DEFAULT_SCROLLBACK_BYTES
+      : Number.isFinite(config.scrollbackBytes)
+        ? Math.max(0, Math.floor(config.scrollbackBytes))
+        : DEFAULT_SCROLLBACK_BYTES
   const terminals = new Map<string, TerminalEntry>()
   const loginPtys = new Set<PtyLike>()
   /** 正在结束的 PTY；Host 退出前要等它们。 */
@@ -114,6 +176,115 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     const found = terminals.get(id)
     if (!found) throw new Error(`terminal not found: ${id}`)
     return found
+  }
+
+  /** 返回会话浅拷贝，防止调用方篡改内部状态。 */
+  function snapshot(found: TerminalEntry): TerminalSession {
+    return { ...found.session, cursor: found.endCursor }
+  }
+
+  /** 写入一条 PTY 输出并按 maxScrollbackBytes 维护环形回滚缓冲。 */
+  function appendChunk(current: TerminalEntry, data: string): void {
+    if (data.length === 0) return
+    const start = current.endCursor
+    current.endCursor += data.length
+    current.session.cursor = current.endCursor
+
+    if (maxScrollbackBytes <= 0) {
+      current.chunks.length = 0
+      current.bufferedBytes = 0
+      current.startCursor = current.endCursor
+      return
+    }
+
+    const bytes = Buffer.byteLength(data, "utf8")
+    if (bytes > maxScrollbackBytes) {
+      current.chunks.length = 0
+      const { text, droppedUnits } = sliceTailByUtf8Bytes(data, maxScrollbackBytes)
+      current.startCursor = start + droppedUnits
+      if (text.length > 0) {
+        const keptBytes = Buffer.byteLength(text, "utf8")
+        current.chunks.push({ start: current.startCursor, data: text, bytes: keptBytes })
+        current.bufferedBytes = keptBytes
+      } else {
+        current.bufferedBytes = 0
+      }
+      return
+    }
+
+    current.chunks.push({ start, data, bytes })
+    current.bufferedBytes += bytes
+    while (current.bufferedBytes > maxScrollbackBytes && current.chunks.length > 0) {
+      const removed = current.chunks.shift()!
+      current.bufferedBytes -= removed.bytes
+      // 若前一片末尾恰好以高代理结束、下一片以低代理开始，跳过孤立低代理码元避免损坏。
+      const next = current.chunks[0]
+      if (
+        next &&
+        next.data.length > 0 &&
+        isHighSurrogate(removed.data.charCodeAt(removed.data.length - 1)) &&
+        isLowSurrogate(next.data.charCodeAt(0))
+      ) {
+        const trimmed = next.data.slice(1)
+        const nextBytes = Buffer.byteLength(trimmed, "utf8")
+        current.bufferedBytes -= next.bytes - nextBytes
+        if (trimmed.length > 0) {
+          next.start += 1
+          next.data = trimmed
+          next.bytes = nextBytes
+        } else {
+          current.chunks.shift()
+        }
+      }
+    }
+    current.startCursor = current.chunks[0]?.start ?? current.endCursor
+  }
+
+  /** 从回滚缓冲切出 [Math.max(afterCursor, startCursor), endCursor) 的文本，不切裂代理对。 */
+  function readReplay(
+    current: TerminalEntry,
+    afterCursor: number,
+  ): { replay: string; truncated: boolean } {
+    if (!Number.isInteger(afterCursor) || afterCursor < 0) {
+      throw new Error(`invalid terminal cursor: ${afterCursor}`)
+    }
+    const truncated = afterCursor < current.startCursor
+    if (afterCursor >= current.endCursor || current.chunks.length === 0) {
+      return { replay: "", truncated }
+    }
+    const from = Math.max(afterCursor, current.startCursor)
+    const parts: string[] = []
+    for (let i = 0; i < current.chunks.length; i += 1) {
+      const chunk = current.chunks[i]!
+      const chunkEnd = chunk.start + chunk.data.length
+      if (chunkEnd <= from) continue
+      if (chunk.start < from) {
+        let offset = from - chunk.start
+        if (
+          offset < chunk.data.length &&
+          isLowSurrogate(chunk.data.charCodeAt(offset)) &&
+          isHighSurrogate(chunk.data.charCodeAt(offset - 1))
+        ) {
+          offset += 1
+        }
+        parts.push(chunk.data.slice(offset))
+      } else {
+        let slice = chunk.data
+        // 若 from 刚好等于当前分片起点且跨分片落在代理对中间，跳过前导低代理。
+        if (parts.length === 0 && from === chunk.start && i > 0 && slice.length > 0) {
+          const prev = current.chunks[i - 1]!
+          if (
+            prev.data.length > 0 &&
+            isHighSurrogate(prev.data.charCodeAt(prev.data.length - 1)) &&
+            isLowSurrogate(slice.charCodeAt(0))
+          ) {
+            slice = slice.slice(1)
+          }
+        }
+        parts.push(slice)
+      }
+    }
+    return { replay: parts.join(""), truncated }
   }
 
   /** 从索引移除并清空订阅者；是否 kill 由调用方决定。 */
@@ -149,7 +320,7 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
       pty.onExit(() => loginPtys.delete(pty))
       return pty
     },
-    async open(owner, cols, rows) {
+    async open(owner, cols, rows, options) {
       validateSize(cols, rows)
       const { threadId, projectId, cwd } = await resolveTerminalCwd(ctx, owner)
       const id = `term_${randomUUID()}`
@@ -163,31 +334,87 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
         rows,
         shell: shellName(shell),
         cwd,
+        cursor: 0,
+        ...(options?.placement ? { placement: options.placement } : {}),
+        createdAt: new Date().toISOString(),
       }
       const current: TerminalEntry = {
         session,
         pty,
+        chunks: [],
+        bufferedBytes: 0,
+        startCursor: 0,
+        endCursor: 0,
         subscribers: new Set(),
         exitSubscribers: new Set(),
       }
       terminals.set(id, current)
-      // 输出只广播给当前订阅者；shell 自己退出时通知订阅者，界面据此关掉这个标签。
+      // 输出先写入有界回滚缓冲并推进单调游标，再广播给当前订阅者。
       pty.onData((data) => {
-        for (const listener of [...current.subscribers]) listener(data)
+        appendChunk(current, data)
+        const cursor = current.endCursor
+        for (const listener of [...current.subscribers]) listener(data, cursor)
       })
       pty.onExit(({ exitCode }) => {
         const listeners = [...current.exitSubscribers]
         detach(id)
         for (const listener of listeners) listener(exitCode)
       })
-      return session
+      return snapshot(current)
+    },
+    list(owner) {
+      const result: TerminalSession[] = []
+      for (const found of terminals.values()) {
+        if (owner) {
+          if ("threadId" in owner) {
+            if (found.session.threadId !== owner.threadId) continue
+          } else if (found.session.threadId !== null || found.session.projectId !== owner.projectId) {
+            continue
+          }
+        }
+        result.push(snapshot(found))
+      }
+      return result
+    },
+    rebind(id, threadId) {
+      const found = entry(id)
+      const thread = ctx.threads.get(threadId)
+      if (!thread) throw new Error(`thread not found: ${threadId}`)
+      if (thread.projectId !== found.session.projectId) {
+        throw new Error(`terminal project mismatch: ${id}`)
+      }
+      if (found.session.threadId !== null && found.session.threadId !== threadId) {
+        throw new Error(`terminal already bound to thread: ${found.session.threadId}`)
+      }
+      found.session.threadId = threadId
+      return snapshot(found)
+    },
+    attach(id, listener, onExit, afterCursor = 0) {
+      const found = entry(id)
+      const { replay, truncated } = readReplay(found, afterCursor)
+      const cursor = found.endCursor
+      found.subscribers.add(listener)
+      if (onExit) found.exitSubscribers.add(onExit)
+      return {
+        session: snapshot(found),
+        replay,
+        cursor,
+        truncated,
+        unsubscribe() {
+          found.subscribers.delete(listener)
+          if (onExit) found.exitSubscribers.delete(onExit)
+        },
+      }
     },
     write(id, data) {
       entry(id).pty.write(data)
     },
     resize(id, cols, rows) {
       validateSize(cols, rows)
-      entry(id).pty.resize(cols, rows)
+      const found = entry(id)
+      found.pty.resize(cols, rows)
+      found.session.cols = cols
+      found.session.rows = rows
     },
     close,
     closeThread(threadId) {
@@ -202,10 +429,11 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     },
     subscribe(id, listener, onExit) {
       const found = entry(id)
-      found.subscribers.add(listener)
+      const wrapped = (data: string) => listener(data)
+      found.subscribers.add(wrapped)
       if (onExit) found.exitSubscribers.add(onExit)
       return () => {
-        found.subscribers.delete(listener)
+        found.subscribers.delete(wrapped)
         if (onExit) found.exitSubscribers.delete(onExit)
       }
     },
@@ -261,6 +489,43 @@ function validateSize(cols: number, rows: number): void {
   if (!Number.isInteger(cols) || cols <= 0 || !Number.isInteger(rows) || rows <= 0) {
     throw new Error(`invalid terminal size: ${cols}x${rows}`)
   }
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
+}
+
+/** 截断单片超长文本，保留末尾最多 maxBytes 个 UTF-8 字节且不切裂 UTF-16 代理对。 */
+function sliceTailByUtf8Bytes(
+  data: string,
+  maxBytes: number,
+): { text: string; droppedUnits: number } {
+  if (maxBytes <= 0) return { text: "", droppedUnits: data.length }
+  let usedBytes = 0
+  let index = data.length
+  while (index > 0) {
+    const code = data.charCodeAt(index - 1)
+    let stepUnits = 1
+    let stepBytes: number
+    if (isLowSurrogate(code) && index >= 2 && isHighSurrogate(data.charCodeAt(index - 2))) {
+      stepUnits = 2
+      stepBytes = 4
+    } else if (code <= 0x7f) {
+      stepBytes = 1
+    } else if (code <= 0x7ff) {
+      stepBytes = 2
+    } else {
+      stepBytes = 3
+    }
+    if (usedBytes + stepBytes > maxBytes) break
+    usedBytes += stepBytes
+    index -= stepUnits
+  }
+  return { text: data.slice(index), droppedUnits: index }
 }
 
 /** shell 路径的显示名：/bin/zsh → zsh，C:\\Windows\\System32\\cmd.exe → cmd。 */

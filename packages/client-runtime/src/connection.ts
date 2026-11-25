@@ -63,6 +63,7 @@ export class Connection {
   private readonly terminalExitListeners = new Set<
     (exit: { terminalId: string; exitCode: number }) => void
   >()
+  private readonly reconnectListeners = new Set<() => void>()
   private readonly attachmentCache = new AttachmentReadCache()
 
   constructor(private readonly handlers: ConnectionHandlers) {}
@@ -107,6 +108,9 @@ export class Connection {
     }
     if (attempt !== this.attempts) return false
     this.handlers.onStatus("connected")
+    if (previous) {
+      for (const listener of [...this.reconnectListeners]) listener()
+    }
     return true
   }
 
@@ -250,6 +254,14 @@ export class Connection {
     }
   }
 
+  /** 订阅传输层替换完成事件（页面未刷新但重连到 Host）；供已挂载的终端续接输出订阅。 */
+  onReconnect(listener: () => void): () => void {
+    this.reconnectListeners.add(listener)
+    return () => {
+      this.reconnectListeners.delete(listener)
+    }
+  }
+
   /** 订阅线程并回放 cursor 之后的事件，随后更新该线程的 cursor。 */
   private async subscribe(threadId: string, cursor: number, client = this.client): Promise<void> {
     if (!client) throw new Error("host not connected")
@@ -279,6 +291,7 @@ export class Connection {
         event?: AgentEvent
         terminalId?: unknown
         data?: unknown
+        cursor?: unknown
         exitCode?: unknown
       }
     }
@@ -304,9 +317,13 @@ export class Connection {
       return
     }
     if (value.method === "terminal.output" && value.params) {
-      const { terminalId, data } = value.params
+      const { terminalId, data, cursor } = value.params
       if (typeof terminalId === "string" && typeof data === "string") {
-        for (const listener of [...this.terminalListeners]) listener({ terminalId, data })
+        const output: TerminalOutput =
+          typeof cursor === "number" && Number.isInteger(cursor) && cursor >= 0
+            ? { terminalId, data, cursor }
+            : { terminalId, data }
+        for (const listener of [...this.terminalListeners]) listener(output)
       }
       return
     }

@@ -43,13 +43,19 @@ export function BrowserPane({ tab, active }: SurfaceRenderProps) {
 /** 终端：切走后保持挂载，shell 会话保留；工具栏里可以再开一个或结束这个。 */
 export function TerminalPane({ tab, active }: SurfaceRenderProps) {
   const { t } = useLocale()
-  const { connection, scope, add, close } = useWorkbench()
+  const { connection, scope, add, close, updateTab } = useWorkbench()
   return (
     <div className="surface-pane" hidden={!active}>
       <TerminalSurface
         connection={connection}
         owner={scope}
         active={active}
+        placement="workbench"
+        attachTerminalId={tab.terminalId}
+        onOpened={(session) => {
+          if (tab.terminalId !== session.id) updateTab(tab.id, { terminalId: session.id })
+        }}
+        onExit={() => close(tab.id)}
         tools={
           <>
             <Button

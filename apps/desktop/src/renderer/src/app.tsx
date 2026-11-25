@@ -44,6 +44,7 @@ import {
 import { loadAgentFeatures } from "./agent-context"
 import { NEW_THREAD_DRAFT_KEY, draftProjectId } from "./new-thread-draft"
 import { usePanelOpen } from "./use-panel-open"
+import { useTerminalRecovery } from "./use-terminal-recovery"
 import { useWorkspaceSlot } from "./use-workspace-slot"
 import { workspaceRevision } from "./workspace-revision"
 import { mergeChildStatus } from "./thread-status"
@@ -280,6 +281,36 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     setRightMaximized(false)
   }, [setRightOpen])
 
+  const openRecoveredDrawer = useCallback(
+    (key: string, isDraft: boolean) => {
+      setTerminalStarted(true)
+      setTerminalOpen(true, isDraft ? key : null)
+    },
+    [setTerminalOpen],
+  )
+
+  const openRecoveredWorkbench = useCallback(
+    (key: string, isDraft: boolean) => {
+      setRightStarted(true)
+      setRightOpen(true, isDraft ? key : null)
+      setRightMaximized(false)
+    },
+    [setRightOpen],
+  )
+
+  const terminalRecovery = useTerminalRecovery({
+    connection,
+    connected: state.status === "connected",
+    connectionRevision: state.connectionRevision,
+    slotKey: slot.key,
+    scope: slot.scope,
+    panels,
+    setPanels,
+    onOpenDrawer: openRecoveredDrawer,
+    onOpenWorkbench: openRecoveredWorkbench,
+    locale,
+  })
+
   function browseProjectFiles(projectId: string): void {
     const key = slot.draftKeyOf(projectId)
     startDraft(projectId)
@@ -431,6 +462,14 @@ export function App({ store, connection, plugins, locale }: AppProps) {
               owner={slot.scope}
               open={terminalOpen && inChat}
               onClose={() => setTerminalOpen(false)}
+              initialSessions={terminalRecovery.drawerSessionsBySlot[slot.key]}
+              recovering={terminalRecovery.recovering}
+              onTerminalBound={(id) => {
+                if (slot.key) terminalRecovery.registerDrawerTerminal(slot.key, id)
+              }}
+              onTerminalClosed={(id) => {
+                if (slot.key) terminalRecovery.unregisterDrawerTerminal(slot.key, id)
+              }}
             />
           </Suspense>
         ) : undefined

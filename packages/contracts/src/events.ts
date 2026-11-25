@@ -202,6 +202,8 @@ export const agentEventSchema = z.discriminatedUnion("type", [
 export const terminalOutputSchema = z.object({
   terminalId: z.string().min(1),
   data: z.string(),
+  /** 截至本条数据（含）为止的终端累计输出游标（UTF-16 字符偏移）；旧版 Host 不带。 */
+  cursor: z.number().int().nonnegative().optional(),
 })
 
 /** 线程订阅快照，包含线程、运行、条目与待处理请求。 */

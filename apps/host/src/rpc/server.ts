@@ -17,7 +17,7 @@ import { dispatchAgentCommand } from "./agent-commands"
 import { subscribeDesktopThread } from "./desktop-thread-feed"
 import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
 import { desktopQueueRequests, dispatchDesktopQueue } from "./queued-message-commands"
-import { forwardTerminal } from "./terminal-notify"
+import { attachDesktopTerminal, forwardTerminal } from "./terminal-notify"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
 import { ThreadFeed } from "./thread-feed"
 import type { WorkspaceScope } from "../services/worktrees"
@@ -42,9 +42,9 @@ export class RpcServer {
   private disposers: Array<() => void> = []
   /** 每个线程只保留一个实时监听器；重复订阅先释放旧的。 */
   private readonly subscriptions = new Map<string, () => void>()
-  /** 页面打开的终端的输出订阅。 */
-  private terminalSubscriptions: Array<() => void> = []
-  /** 换过几次页面；页面换掉以后才完成的 terminal.open 不再为旧页面订阅输出。 */
+  /** 页面打开或附着的终端输出订阅；按 terminalId 索引，重复附着先释放旧订阅。 */
+  private readonly terminalSubscriptions = new Map<string, () => void>()
+  /** 换过几次页面；页面换掉以后才完成的 terminal.open 会立即关闭该孤儿终端。 */
   private page = 0
 
   constructor(
@@ -88,8 +88,8 @@ export class RpcServer {
     this.page += 1
     for (const unsubscribe of this.subscriptions.values()) unsubscribe()
     this.subscriptions.clear()
-    for (const unsubscribe of this.terminalSubscriptions) unsubscribe()
-    this.terminalSubscriptions = []
+    for (const unsubscribe of this.terminalSubscriptions.values()) unsubscribe()
+    this.terminalSubscriptions.clear()
   }
 
   private async handle(message: unknown): Promise<void> {
@@ -493,14 +493,69 @@ export class RpcServer {
         const page = this.page
         const scope = scopeOf(value)
         const owner = typeof scope === "string" ? { threadId: scope } : scope
-        const terminal = await this.ctx.terminal.open(owner, value.cols, value.rows)
-        if (page !== this.page) return terminal
-        this.terminalSubscriptions.push(
-          forwardTerminal(this.ctx.terminal, terminal.id, (message) =>
-            this.transport.send(message),
-          ),
+        const terminal = await this.ctx.terminal.open(
+          owner,
+          value.cols,
+          value.rows,
+          value.placement ? { placement: value.placement } : undefined,
         )
+        if (page !== this.page) {
+          try {
+            this.ctx.terminal.close(terminal.id)
+          } catch {
+            // 终端可能已自行退出。
+          }
+          return terminal
+        }
+        this.terminalSubscriptions.get(terminal.id)?.()
+        let dispose: (() => void) | undefined
+        dispose = forwardTerminal(
+          this.ctx.terminal,
+          terminal.id,
+          (message) => this.transport.send(message),
+          () => {
+            if (this.terminalSubscriptions.get(terminal.id) === dispose) {
+              this.terminalSubscriptions.delete(terminal.id)
+            }
+          },
+        )
+        this.terminalSubscriptions.set(terminal.id, dispose)
         return terminal
+      }
+      case "terminal.list": {
+        const value = parsed as CommandParams<"terminal.list">
+        const scope = scopeOf(value)
+        const owner = typeof scope === "string" ? { threadId: scope } : scope
+        return this.ctx.terminal.list(owner)
+      }
+      case "terminal.attach": {
+        const value = parsed as CommandParams<"terminal.attach">
+        this.terminalSubscriptions.get(value.terminalId)?.()
+        this.terminalSubscriptions.delete(value.terminalId)
+        let release: (() => void) | undefined
+        const attached = attachDesktopTerminal(
+          this.ctx.terminal,
+          value.terminalId,
+          {
+            afterCursor: value.afterCursor,
+            cols: value.cols,
+            rows: value.rows,
+          },
+          (message) => this.transport.send(message),
+          () => {
+            if (this.terminalSubscriptions.get(value.terminalId) === release) {
+              this.terminalSubscriptions.delete(value.terminalId)
+            }
+          },
+        )
+        release = attached.release
+        this.terminalSubscriptions.set(value.terminalId, release)
+        onReply(attached.afterReply)
+        return attached.result
+      }
+      case "terminal.rebind": {
+        const value = parsed as CommandParams<"terminal.rebind">
+        return this.ctx.terminal.rebind(value.terminalId, value.threadId)
       }
       case "terminal.write": {
         const value = parsed as { terminalId: string; data: string }
@@ -510,8 +565,12 @@ export class RpcServer {
         const value = parsed as { terminalId: string; cols: number; rows: number }
         return this.ctx.terminal.resize(value.terminalId, value.cols, value.rows)
       }
-      case "terminal.close":
-        return this.ctx.terminal.close((parsed as { terminalId: string }).terminalId)
+      case "terminal.close": {
+        const { terminalId } = parsed as { terminalId: string }
+        this.terminalSubscriptions.get(terminalId)?.()
+        this.terminalSubscriptions.delete(terminalId)
+        return this.ctx.terminal.close(terminalId)
+      }
       default:
         throw new Error(`unsupported method: ${method}`)
     }

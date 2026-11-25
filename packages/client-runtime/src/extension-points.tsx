@@ -52,6 +52,8 @@ export interface SurfaceTab {
   url?: string
   path?: string
   line?: number
+  /** 右侧 Workbench 终端标签绑定的已有终端 id；页面刷新恢复时用来重新附着。 */
+  terminalId?: string
 }
 
 /** Surface 的 render 收到的参数。 */
