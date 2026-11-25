@@ -1,9 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'attachments/attachment_cache.dart';
+import 'attachments/composer_attachment_strip.dart';
+import 'attachments/composer_attachments_controller.dart';
+import 'attachments/image_compressor.dart';
 import 'composer/composer_catalog.dart';
 import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
@@ -29,6 +34,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
     this.computerKey,
     this.deviceId,
     this.leading,
+    this.supportsAttachments,
   });
 
   final MobileConnection? connection;
@@ -42,6 +48,7 @@ class NewThreadDraft extends ConsumerStatefulWidget {
   final bool online;
   final ValueChanged<MobileDraftReceipt> onAccepted;
   final Widget? leading;
+  final bool? supportsAttachments;
 
   @override
   ConsumerState<NewThreadDraft> createState() => _NewThreadDraftState();
@@ -53,6 +60,12 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   final _textController = ComposerTextEditingController();
   final _focusNode = FocusNode();
   bool _initialTextSynced = false;
+  bool _initialAttachmentsSynced = false;
+  bool _submittingAttachments = false;
+  bool _rememberedAttachmentsSupport = false;
+  String? _attachmentNotice;
+  late ComposerAttachmentsController _attachments;
+  late String _attachmentsComputerKey;
   final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
     const ComposerSelectionSnapshot(),
   );
@@ -66,12 +79,165 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     entry: _entry,
   );
 
+  bool get _supportsAttachments =>
+      widget.supportsAttachments ??
+      (_rememberedAttachmentsSupport ||
+          connectionSupportsAttachments(widget.connection));
+
+  @override
+  void initState() {
+    super.initState();
+    _rememberedAttachmentsSupport = connectionSupportsAttachments(
+      widget.connection,
+    );
+    _attachmentsComputerKey = _target.computerKey;
+    _attachments = _createAttachmentsController(_attachmentsComputerKey);
+  }
+
+  ComposerAttachmentsController _createAttachmentsController(
+    String computerKey,
+  ) => ComposerAttachmentsController(
+    computerKey: computerKey,
+    cache: ref.read(attachmentCacheProvider),
+    compressor: ref.read(imageCompressorProvider),
+    connection: widget.connection,
+    online: widget.online,
+    onDraftChanged: (records) {
+      unawaited(
+        _applyDraftEdit((current) => current.copyWith(attachments: records)),
+      );
+    },
+  );
+
+  @override
+  void didUpdateWidget(covariant NewThreadDraft oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (connectionSupportsAttachments(widget.connection)) {
+      _rememberedAttachmentsSupport = true;
+    }
+    final nextKey = _target.computerKey;
+    if (nextKey != _attachmentsComputerKey) {
+      _attachments.dispose();
+      _attachmentsComputerKey = nextKey;
+      _initialAttachmentsSynced = false;
+      _attachments = _createAttachmentsController(nextKey);
+    }
+    _attachments.updateConnection(widget.connection, online: widget.online);
+  }
+
   @override
   void dispose() {
+    _attachments.dispose();
     _textController.dispose();
     _focusNode.dispose();
     _selectionNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhotos() async {
+    final remaining = _attachments.remainingSlots;
+    if (remaining <= 0) {
+      setState(
+        () => _attachmentNotice =
+            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+      );
+      return;
+    }
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .pickFromGallery(limit: remaining);
+      if (!mounted || picked.isEmpty) return;
+      if (_attachmentNotice != null) setState(() => _attachmentNotice = null);
+      await _attachments.addLocalFiles([
+        for (final file in picked) file.path,
+      ]);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _attachmentNotice = '无法访问相册，请在系统设置中允许 Pigcode 访问照片。');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _attachmentNotice = '无法打开相册，请重试。');
+      }
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    if (_attachments.remainingSlots <= 0) {
+      setState(
+        () => _attachmentNotice =
+            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+      );
+      return;
+    }
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .captureFromCamera();
+      if (!mounted || picked == null) return;
+      if (_attachmentNotice != null) setState(() => _attachmentNotice = null);
+      await _attachments.addLocalFiles([picked.path]);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _attachmentNotice = '无法使用相机，请在系统设置中允许 Pigcode 使用相机。');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _attachmentNotice = '无法启动拍照，请重试。');
+      }
+    }
+  }
+
+  Future<void> _handleSubmit({
+    required NewThreadDraftController actions,
+    required NewThreadForm form,
+    required NewThreadForm displayed,
+    required MobileProjectSummary project,
+    required MobileDraftInstance instance,
+    required String? selectedModel,
+    required MobileDraftPermission? permission,
+    required bool effectivePlanMode,
+    required ResolvedComposerRunOptions runOptions,
+    required bool supportsControls,
+  }) async {
+    if (_submittingAttachments) return;
+    List<String>? attachmentIds;
+    if (_attachments.hasItems) {
+      setState(() => _submittingAttachments = true);
+      try {
+        attachmentIds = await _attachments.ensureAllUploaded();
+      } finally {
+        if (mounted) setState(() => _submittingAttachments = false);
+      }
+      if (!mounted || attachmentIds == null) return;
+    }
+    final references = _textController.resolveReferences(form.text);
+    unawaited(
+      actions.submit(
+        NewThreadForm(
+          text: form.text,
+          projectId: project.id,
+          instanceId: instance.instanceId,
+          modelId: selectedModel,
+          instanceLabel: displayed.instanceLabel,
+          modelLabel: displayed.modelLabel,
+          permissionMode: permission,
+          planMode: effectivePlanMode,
+          attachments: _attachments.serializeForDraft(),
+        ),
+        effort: runOptions.effort,
+        fast: runOptions.fast,
+        ultracode: runOptions.ultracode,
+        planMode: effectivePlanMode ? true : null,
+        references:
+            supportsControls && references.isNotEmpty ? references : null,
+        attachmentIds:
+            attachmentIds != null && attachmentIds.isNotEmpty
+            ? attachmentIds
+            : null,
+      ),
+    );
   }
 
   void _syncTextFromForm(String nextText) {
@@ -211,6 +377,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
       if (receipt != null &&
           receipt.commandId != previous?.value?.receipt?.commandId) {
         _textController.clearThreadReferences();
+        unawaited(_attachments.clear(deleteDraftFiles: true));
         widget.onAccepted(receipt);
       }
     });
@@ -231,6 +398,17 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         final targetText = view.form.text;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _syncTextFromForm(targetText);
+        });
+      }
+    }
+    if (!_initialAttachmentsSynced) {
+      _initialAttachmentsSynced = true;
+      final savedAttachments = view.form.attachments;
+      if (savedAttachments.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            unawaited(_attachments.restoreFromDraft(savedAttachments));
+          }
         });
       }
     }
@@ -303,7 +481,9 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         form.instanceLabel != displayed.instanceLabel ||
         form.modelLabel != displayed.modelLabel;
     if (defaultsLoaded &&
-        (form.text.isNotEmpty || (planModeUnsupported && form.planMode)) &&
+        (form.text.isNotEmpty ||
+            form.attachments.isNotEmpty ||
+            (planModeUnsupported && form.planMode)) &&
         !view.working &&
         view.notice == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -319,15 +499,15 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         instance?.permissionModes.contains(permission) == true;
     final validModel =
         modelCatalog != null && (selectedModel == null || model != null);
-    final allowed =
+    final baseAllowed =
         online &&
         !view.working &&
+        !_submittingAttachments &&
         view.pending == null &&
         project != null &&
         instance != null &&
         validModel &&
         validPermission &&
-        form.text.trim().isNotEmpty &&
         form.text.length <= mobileCommandTextLimit;
 
     final preferences = supportsControls
@@ -500,6 +680,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
       if (online && options?.value?.instances.isEmpty == true)
         const Text('电脑上暂无可用的 Agent 实例。'),
       if (view.notice case final notice?) _DraftNotice(notice),
+      if (_attachmentNotice case final notice?) _DraftNotice(notice),
       if (view.pending != null)
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
@@ -521,115 +702,141 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         const _DraftNotice('首条消息超过长度上限，请缩短后发送。'),
     ];
 
-    final dock = SingleChildScrollView(
-      child: MobileComposerMentionHost(
-        connection: link,
-        online: online,
-        controller: _textController,
-        focusNode: _focusNode,
-        enabled: !view.working,
-        projectId: selectedProject,
-        threadId: null,
-        instanceId: selectedInstance,
-        projects: projects,
-        threads: widget.threads,
-        supportsPlanMode:
-            supportsControls &&
-            (instance?.supportsPlanMode == true || effectivePlanMode),
-        permissionModes: supportsControls
-            ? (instance?.permissionModes ?? const [])
-            : const [],
-        canOpenModelPicker:
-            supportsControls && link != null && !view.working && instances.isNotEmpty,
-        onOpenModelPicker:
-            supportsControls && link != null && !view.working && instances.isNotEmpty
-            ? () => unawaited(_openModelPicker(link))
-            : null,
-        onTogglePlanMode: supportsControls && !view.working
-            ? () => unawaited(
-                _applyDraftEdit(
-                  (current) => current.copyWith(planMode: !effectivePlanMode),
-                ),
-              )
-            : null,
-        onSelectPermissionMode: supportsControls && !view.working
-            ? (mode) => unawaited(
-                _applyDraftEdit(
-                  (current) => current.copyWith(permissionMode: mode),
-                ),
-              )
-            : null,
-        onTextChanged: (text) => actions.edit(displayed.copyWith(text: text)),
-        externalLeading: widget.leading,
-        builder: (context, leading) => _DraftComposer(
-          controller: _textController,
-          focusNode: _focusNode,
-          header: projectPicker,
-          banners: banners,
-          leading: leading,
-          trailing: trailingControls,
-          offline: !online,
-          working: view.working,
-          onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
-          onSend: allowed
-              ? () {
-                  final references = _textController.resolveReferences(
-                    form.text,
-                  );
-                  actions.submit(
-                    NewThreadForm(
-                      text: form.text,
-                      projectId: project.id,
-                      instanceId: instance.instanceId,
-                      modelId: selectedModel,
-                      instanceLabel: displayed.instanceLabel,
-                      modelLabel: displayed.modelLabel,
-                      permissionMode: permission,
-                      planMode: effectivePlanMode,
+    final supportsImages = instance?.supportsImages ?? true;
+    return ListenableBuilder(
+      listenable: _attachments,
+      builder: (context, _) {
+        final hasAttachments = _attachments.hasItems;
+        final allowed =
+            baseAllowed && (form.text.trim().isNotEmpty || hasAttachments);
+        final showAttachmentStrip =
+            _attachments.hasItems || _attachments.bannerError != null;
+        final dock = SingleChildScrollView(
+          child: MobileComposerMentionHost(
+            connection: link,
+            online: online,
+            controller: _textController,
+            focusNode: _focusNode,
+            enabled: !view.working,
+            projectId: selectedProject,
+            threadId: null,
+            instanceId: selectedInstance,
+            projects: projects,
+            threads: widget.threads,
+            supportsPlanMode:
+                supportsControls &&
+                (instance?.supportsPlanMode == true || effectivePlanMode),
+            permissionModes: supportsControls
+                ? (instance?.permissionModes ?? const [])
+                : const [],
+            canOpenModelPicker:
+                supportsControls &&
+                link != null &&
+                !view.working &&
+                instances.isNotEmpty,
+            onOpenModelPicker:
+                supportsControls &&
+                    link != null &&
+                    !view.working &&
+                    instances.isNotEmpty
+                ? () => unawaited(_openModelPicker(link))
+                : null,
+            onTogglePlanMode: supportsControls && !view.working
+                ? () => unawaited(
+                    _applyDraftEdit(
+                      (current) =>
+                          current.copyWith(planMode: !effectivePlanMode),
                     ),
-                    effort: runOptions.effort,
-                    fast: runOptions.fast,
-                    ultracode: runOptions.ultracode,
-                    planMode: effectivePlanMode ? true : null,
-                    references: supportsControls && references.isNotEmpty
-                        ? references
+                  )
+                : null,
+            onSelectPermissionMode: supportsControls && !view.working
+                ? (mode) => unawaited(
+                    _applyDraftEdit(
+                      (current) => current.copyWith(permissionMode: mode),
+                    ),
+                  )
+                : null,
+            onTextChanged: (text) =>
+                actions.edit(displayed.copyWith(text: text)),
+            externalLeading: widget.leading,
+            supportsAttachments: _supportsAttachments,
+            attachmentCount: _attachments.count,
+            onPickPhotos: _supportsAttachments
+                ? () => unawaited(_pickPhotos())
+                : null,
+            onTakePhoto: _supportsAttachments
+                ? () => unawaited(_takePhoto())
+                : null,
+            builder: (context, leading) => _DraftComposer(
+              controller: _textController,
+              focusNode: _focusNode,
+              header: projectPicker,
+              banners: banners,
+              attachments: showAttachmentStrip
+                  ? ComposerAttachmentStrip(
+                      controller: _attachments,
+                      supportsImages: supportsImages,
+                    )
+                  : null,
+              leading: leading,
+              trailing: trailingControls,
+              offline: !online,
+              working: view.working,
+              onChanged: (text) =>
+                  actions.edit(displayed.copyWith(text: text)),
+              onSend: allowed
+                  ? () => unawaited(
+                      _handleSubmit(
+                        actions: actions,
+                        form: form,
+                        displayed: displayed,
+                        project: project,
+                        instance: instance,
+                        selectedModel: selectedModel,
+                        permission: permission,
+                        effectivePlanMode: effectivePlanMode,
+                        runOptions: runOptions,
+                        supportsControls: supportsControls,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        );
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final showPrompt =
+                form.text.trim().isEmpty &&
+                !hasAttachments &&
+                MediaQuery.viewInsetsOf(context).bottom == 0 &&
+                constraints.maxHeight >= ComposerType.heroMinViewportHeight;
+            return Column(
+              children: [
+                Expanded(
+                  child: Center(
+                    child: showPrompt
+                        ? Text(
+                            '做点什么？',
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(
+                                  fontSize: ComposerType.heroFontSize,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0,
+                                  height: ComposerType.heroHeight,
+                                  leadingDistribution:
+                                      TextLeadingDistribution.even,
+                                ),
+                          )
                         : null,
-                  );
-                }
-              : null,
-        ),
-      ),
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final showPrompt =
-            form.text.trim().isEmpty &&
-            MediaQuery.viewInsetsOf(context).bottom == 0 &&
-            constraints.maxHeight >= ComposerType.heroMinViewportHeight;
-        return Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: showPrompt
-                    ? Text(
-                        '做点什么？',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(
-                              fontSize: ComposerType.heroFontSize,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0,
-                              height: ComposerType.heroHeight,
-                              leadingDistribution: TextLeadingDistribution.even,
-                            ),
-                      )
-                    : null,
-              ),
-            ),
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: constraints.maxHeight),
-              child: dock,
-            ),
-          ],
+                  ),
+                ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: constraints.maxHeight),
+                  child: dock,
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -677,6 +884,7 @@ class _DraftComposer extends StatelessWidget {
     required this.offline,
     required this.working,
     required this.onChanged,
+    this.attachments,
     this.leading,
     this.onSend,
   });
@@ -685,6 +893,7 @@ class _DraftComposer extends StatelessWidget {
   final FocusNode focusNode;
   final Widget header;
   final List<Widget> banners;
+  final Widget? attachments;
   final Widget? leading;
   final Widget trailing;
   final bool offline;
@@ -700,6 +909,7 @@ class _DraftComposer extends StatelessWidget {
     hintText: '描述要做的事',
     header: header,
     banners: banners,
+    attachments: attachments,
     leading: leading,
     trailing: trailing,
     offline: offline,

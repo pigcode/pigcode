@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'attachments/attachment_cache.dart';
 import 'mobile_secure_storage.dart';
 import 'mobile_command_journal.dart';
 import 'local_drafts.dart';
@@ -35,6 +36,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
       await MobileCommandJournal.clearOnInstall();
       await clearDraftsOnInstall();
       await ref.read(offlineCacheProvider).clearOnInstall();
+      await ref.read(attachmentCacheProvider).clearAllAttachmentCaches();
       await preferences.setBool(_installation, true);
     }
     final seed = await mobileSecureStorage.read(key: _seedKey);
@@ -150,6 +152,7 @@ class Computers extends AsyncNotifier<List<ComputerProfile>> {
   Future<void> _clearComputerData(String key) async {
     await Future.wait([
       ref.read(offlineCacheProvider).clear(key),
+      ref.read(attachmentCacheProvider).clearComputerAttachmentCache(key),
       MobileCommandJournal.clearForComputer(key),
       clearComputerDrafts(key),
     ]);

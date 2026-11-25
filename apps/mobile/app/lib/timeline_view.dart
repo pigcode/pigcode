@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'attachments/image_viewer_page.dart';
 import 'theme_colors.dart';
 import 'timeline/loading_row.dart';
 import 'timeline/notice_line.dart';
@@ -29,6 +30,9 @@ class TimelineView extends StatefulWidget {
     this.retry,
     this.changesCard,
     this.requestCard,
+    this.peekAttachmentThumb,
+    this.loadAttachmentThumb,
+    this.loadAttachmentFull,
   });
 
   final TimelineSnapshot snapshot;
@@ -40,6 +44,9 @@ class TimelineView extends StatefulWidget {
   final Widget Function(TimelineTurn turn)? changesCard;
   final Widget Function(TimelineTurn turn, MobileTimelineEvent request)?
   requestCard;
+  final AttachmentThumbPeeker? peekAttachmentThumb;
+  final AttachmentBytesLoader? loadAttachmentThumb;
+  final AttachmentBytesLoader? loadAttachmentFull;
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -546,6 +553,10 @@ class _TimelineViewState extends State<TimelineView> {
         createdAt: event.createdAt,
         truncated: event.truncated == true,
         onOpenFull: widget.online ? () => _openText(event) : null,
+        attachments: event.attachments,
+        peekAttachmentThumb: widget.peekAttachmentThumb,
+        loadAttachmentThumb: widget.loadAttachmentThumb,
+        loadAttachmentFull: widget.loadAttachmentFull,
       ),
     );
   }

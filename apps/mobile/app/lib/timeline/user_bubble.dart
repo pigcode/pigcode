@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pigcode_client/pigcode_client.dart';
 
+import '../attachments/image_viewer_page.dart';
 import '../theme_colors.dart';
+import '../timeline_widgets.dart';
 import 'timeline_tokens.dart';
 import 'turn_actions.dart';
 
 /// 用户消息气泡（桌面 `.turn-user` + `.msg-user`）：
 /// 右对齐、最大 560px、8/12 内衬、r12、0.5px 边；超过 120 折叠并 70%→100% 渐隐，
-/// 折叠时底部居中悬浮 28×24 胶囊展开按钮，展开后排在正文下方；支持 `@文件` 引用标签。
+/// 折叠时底部居中悬浮 28×24 胶囊展开按钮，展开后排在正文下方；支持 `@文件` 引用标签与图片附件网格。
 class TimelineUserBubble extends StatefulWidget {
   const TimelineUserBubble({
     super.key,
@@ -16,6 +19,10 @@ class TimelineUserBubble extends StatefulWidget {
     this.truncated = false,
     this.onOpenFull,
     this.onMention,
+    this.attachments = const [],
+    this.peekAttachmentThumb,
+    this.loadAttachmentThumb,
+    this.loadAttachmentFull,
   });
 
   final String text;
@@ -23,6 +30,10 @@ class TimelineUserBubble extends StatefulWidget {
   final bool truncated;
   final VoidCallback? onOpenFull;
   final Future<void> Function(String path)? onMention;
+  final List<MobileAttachmentRef> attachments;
+  final AttachmentThumbPeeker? peekAttachmentThumb;
+  final AttachmentBytesLoader? loadAttachmentThumb;
+  final AttachmentBytesLoader? loadAttachmentFull;
 
   @override
   State<TimelineUserBubble> createState() => _TimelineUserBubbleState();
@@ -133,6 +144,8 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
     final base = TimelineType.contentStyle(
       colors.foreground,
     ).copyWith(leadingDistribution: TextLeadingDistribution.even);
+    final hasAttachments = widget.attachments.isNotEmpty;
+    final hasText = widget.text.trim().isNotEmpty;
     final tokens = _parseMentions(widget.text);
     final measureSpan = _buildMeasureSpan(tokens, base, colors.timelineFile);
     final displaySpan = _buildDisplaySpan(tokens, base, colors.timelineFile);
@@ -152,53 +165,61 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
                 final maxTextWidth =
                     (constraints.maxWidth - TimelineSpace.bubble.horizontal)
                         .clamp(0.0, double.infinity);
-                final painter = TextPainter(
-                  text: measureSpan,
-                  textDirection: Directionality.of(context),
-                  textScaler: MediaQuery.textScalerOf(context),
-                  maxLines: null,
-                )..layout(maxWidth: maxTextWidth);
-                final overflows =
-                    painter.height >
-                    TimelineSpace.userCollapse +
-                        TimelineSpace.userCollapseTolerance;
-                painter.dispose();
+                var overflows = false;
+                if (hasText || !hasAttachments) {
+                  final painter = TextPainter(
+                    text: measureSpan,
+                    textDirection: Directionality.of(context),
+                    textScaler: MediaQuery.textScalerOf(context),
+                    maxLines: null,
+                  )..layout(maxWidth: maxTextWidth);
+                  overflows =
+                      painter.height >
+                      TimelineSpace.userCollapse +
+                          TimelineSpace.userCollapseTolerance;
+                  painter.dispose();
+                }
 
                 final clamped = overflows && !_expanded;
-                final rawText = Text.rich(displaySpan);
-                final constrained = ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: clamped
-                        ? TimelineSpace.userCollapse
-                        : double.infinity,
-                  ),
-                  child: ClipRect(
-                    child: clamped
-                        ? ShaderMask(
-                            blendMode: BlendMode.dstIn,
-                            shaderCallback: (bounds) => const LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.white,
-                                Colors.white,
-                                Colors.transparent,
-                              ],
-                              stops: [0, TimelineSpace.userFadeStop, 1],
-                            ).createShader(bounds),
-                            child: rawText,
-                          )
-                        : rawText,
-                  ),
-                );
-                final body = MediaQuery.disableAnimationsOf(context)
-                    ? constrained
-                    : AnimatedSize(
-                        duration: TimelineMotion.slower,
-                        curve: TimelineMotion.ease,
-                        alignment: Alignment.topCenter,
-                        child: constrained,
-                      );
+                final Widget? textBody;
+                if (hasText || !hasAttachments) {
+                  final rawText = Text.rich(displaySpan);
+                  final constrained = ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: clamped
+                          ? TimelineSpace.userCollapse
+                          : double.infinity,
+                    ),
+                    child: ClipRect(
+                      child: clamped
+                          ? ShaderMask(
+                              blendMode: BlendMode.dstIn,
+                              shaderCallback: (bounds) => const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.white,
+                                  Colors.white,
+                                  Colors.transparent,
+                                ],
+                                stops: [0, TimelineSpace.userFadeStop, 1],
+                              ).createShader(bounds),
+                              child: rawText,
+                            )
+                          : rawText,
+                    ),
+                  );
+                  textBody = MediaQuery.disableAnimationsOf(context)
+                      ? constrained
+                      : AnimatedSize(
+                          duration: TimelineMotion.slower,
+                          curve: TimelineMotion.ease,
+                          alignment: Alignment.topCenter,
+                          child: constrained,
+                        );
+                } else {
+                  textBody = null;
+                }
 
                 return DecoratedBox(
                   decoration: BoxDecoration(
@@ -217,7 +238,16 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            body,
+                            if (hasAttachments)
+                              TimelineUserAttachmentGrid(
+                                attachments: widget.attachments,
+                                peekThumb: widget.peekAttachmentThumb,
+                                loadThumb: widget.loadAttachmentThumb,
+                                loadFull: widget.loadAttachmentFull,
+                              ),
+                            if (hasAttachments && textBody != null)
+                              const SizedBox(height: TimelineSpace.x4),
+                            ?textBody,
                             if (overflows && _expanded) ...[
                               const SizedBox(height: TimelineSpace.x4),
                               Center(
@@ -259,6 +289,7 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
               text: widget.text,
               createdAt: widget.createdAt,
               kind: TimelineTurnActionKind.user,
+              showCopy: hasText || !hasAttachments,
             ),
           ],
         ),

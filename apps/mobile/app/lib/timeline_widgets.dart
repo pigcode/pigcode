@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:re_highlight/styles/atom-one-light.dart';
 
+import 'attachments/image_viewer_page.dart';
 import 'mobile_sheet.dart';
 import 'theme_colors.dart';
 import 'timeline/timeline_tokens.dart';
@@ -914,6 +916,307 @@ class _TimelineActivityState extends State<TimelineActivity> {
                   ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 根据单张图片的原始宽高元数据计算气泡内的自适应占位尺寸，限制最大宽高防止长截图撑爆屏幕，
+/// 并提前占位避免缩略图异步加载完成时触发时间线抖动。
+Size computeSingleAttachmentSize({
+  int? width,
+  int? height,
+  double maxWidth = 260,
+  double maxHeight = 280,
+  double minSide = 96,
+}) {
+  final boundedMaxWidth = maxWidth.clamp(minSide, double.infinity);
+  final boundedMaxHeight = maxHeight.clamp(minSide, double.infinity);
+  if (width == null || height == null || width <= 0 || height <= 0) {
+    final fallbackWidth = math.min(boundedMaxWidth, 200.0);
+    return Size(fallbackWidth, math.min(boundedMaxHeight, 150.0));
+  }
+  final aspect = (width / height).clamp(0.45, 2.2);
+  var targetWidth = boundedMaxWidth;
+  var targetHeight = targetWidth / aspect;
+  if (targetHeight > boundedMaxHeight) {
+    targetHeight = boundedMaxHeight;
+    targetWidth = targetHeight * aspect;
+  }
+  if (targetWidth < minSide) {
+    targetWidth = math.min(minSide, boundedMaxWidth);
+    targetHeight = (targetWidth / aspect).clamp(minSide, boundedMaxHeight);
+  }
+  if (targetHeight < minSide) {
+    targetHeight = math.min(minSide, boundedMaxHeight);
+    targetWidth = (targetHeight * aspect).clamp(minSide, boundedMaxWidth);
+  }
+  return Size(targetWidth, targetHeight);
+}
+
+/// 多图消息的紧凑网格列数：1 张为 1 列，2/4 张为 2 列，3/5/6 张为 3 列。
+int timelineAttachmentGridColumns(int count) {
+  if (count <= 1) return 1;
+  if (count == 2 || count == 4) return 2;
+  return 3;
+}
+
+typedef AttachmentThumbPeeker = Uint8List? Function(String attachmentId);
+
+/// 时间线用户气泡中的图片附件区（支持 1 张自适应宽高与 2–6 张紧凑 2/3 列圆角方格）。
+class TimelineUserAttachmentGrid extends StatefulWidget {
+  const TimelineUserAttachmentGrid({
+    super.key,
+    required this.attachments,
+    this.peekThumb,
+    this.loadThumb,
+    this.loadFull,
+  });
+
+  static const gridKey = ValueKey('timeline-user-attachments');
+
+  final List<MobileAttachmentRef> attachments;
+  final AttachmentThumbPeeker? peekThumb;
+  final AttachmentBytesLoader? loadThumb;
+  final AttachmentBytesLoader? loadFull;
+
+  @override
+  State<TimelineUserAttachmentGrid> createState() =>
+      _TimelineUserAttachmentGridState();
+}
+
+class _TimelineUserAttachmentGridState
+    extends State<TimelineUserAttachmentGrid> {
+  final _thumbs = <String, Uint8List>{};
+  final _loading = <String>{};
+  final _failed = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _syncLoads();
+  }
+
+  @override
+  void didUpdateWidget(covariant TimelineUserAttachmentGrid oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.attachments != widget.attachments ||
+        oldWidget.loadThumb != widget.loadThumb) {
+      _syncLoads();
+    }
+  }
+
+  void _syncLoads() {
+    for (final ref in widget.attachments) {
+      if (_thumbs.containsKey(ref.id)) continue;
+      final mem = widget.peekThumb?.call(ref.id);
+      if (mem != null && mem.isNotEmpty) {
+        _thumbs[ref.id] = mem;
+        _failed.remove(ref.id);
+        continue;
+      }
+      if (widget.loadThumb != null && !_loading.contains(ref.id)) {
+        unawaited(_fetchThumb(ref.id));
+      }
+    }
+  }
+
+  Future<void> _fetchThumb(String attachmentId) async {
+    final loader = widget.loadThumb;
+    if (loader == null) return;
+    _loading.add(attachmentId);
+    try {
+      final bytes = await loader(attachmentId);
+      if (!mounted) return;
+      setState(() {
+        _loading.remove(attachmentId);
+        if (bytes != null && bytes.isNotEmpty) {
+          _thumbs[attachmentId] = bytes;
+          _failed.remove(attachmentId);
+        } else {
+          _failed.add(attachmentId);
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading.remove(attachmentId);
+        _failed.add(attachmentId);
+      });
+    }
+  }
+
+  void _openViewer(int index) {
+    final items = [
+      for (final ref in widget.attachments)
+        ImageViewerItem.fromRef(ref, initialBytes: _thumbs[ref.id]),
+    ];
+    unawaited(
+      ImageViewerPage.open(
+        context,
+        items: items,
+        initialIndex: index,
+        loadThumb: widget.loadThumb,
+        loadFull: widget.loadFull,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final attachments = widget.attachments;
+    if (attachments.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxAvailable = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 260.0;
+        if (attachments.length == 1) {
+          final ref = attachments.single;
+          final size = computeSingleAttachmentSize(
+            width: ref.width,
+            height: ref.height,
+            maxWidth: math.min(260.0, maxAvailable),
+            maxHeight: 280.0,
+          );
+          return KeyedSubtree(
+            key: TimelineUserAttachmentGrid.gridKey,
+            child: _TimelineAttachmentCell(
+              key: ValueKey('timeline-attachment-${ref.id}'),
+              attachment: ref,
+              width: size.width,
+              height: size.height,
+              bytes: _thumbs[ref.id],
+              loading: _loading.contains(ref.id),
+              failed: _failed.contains(ref.id),
+              onTap: () => _openViewer(0),
+            ),
+          );
+        }
+
+        final columns = timelineAttachmentGridColumns(attachments.length);
+        const gap = TimelineSpace.x2;
+        final gridLimit = columns == 2 ? 224.0 : 272.0;
+        final gridWidth = math.min(gridLimit, maxAvailable);
+        final cellSize = ((gridWidth - gap * (columns - 1)) / columns).clamp(
+          48.0,
+          gridWidth,
+        );
+
+        return SizedBox(
+          key: TimelineUserAttachmentGrid.gridKey,
+          width: gridWidth,
+          child: Wrap(
+            spacing: gap,
+            runSpacing: gap,
+            children: [
+              for (var i = 0; i < attachments.length; i++)
+                _TimelineAttachmentCell(
+                  key: ValueKey('timeline-attachment-${attachments[i].id}'),
+                  attachment: attachments[i],
+                  width: cellSize,
+                  height: cellSize,
+                  bytes: _thumbs[attachments[i].id],
+                  loading: _loading.contains(attachments[i].id),
+                  failed: _failed.contains(attachments[i].id),
+                  onTap: () => _openViewer(i),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TimelineAttachmentCell extends StatelessWidget {
+  const _TimelineAttachmentCell({
+    super.key,
+    required this.attachment,
+    required this.width,
+    required this.height,
+    required this.bytes,
+    required this.loading,
+    required this.failed,
+    required this.onTap,
+  });
+
+  final MobileAttachmentRef attachment;
+  final double width;
+  final double height;
+  final Uint8List? bytes;
+  final bool loading;
+  final bool failed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final radius = BorderRadius.circular(TimelineRadius.block);
+
+    return Semantics(
+      button: true,
+      label: '查看图片 ${attachment.fileName}',
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.field,
+              borderRadius: radius,
+              border: Border.all(
+                color: colors.timelineBorder,
+                width: TimelineBorder.hair,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: bytes != null
+                  ? Image.memory(
+                      bytes!,
+                      width: width,
+                      height: height,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, _, _) => Center(
+                        child: IconTheme(
+                          data: IconThemeData(color: colors.timelineFaint),
+                          child: const WorkspaceIcon(
+                            WorkspaceGlyph.image,
+                            size: TimelineIcon.alert,
+                          ),
+                        ),
+                      ),
+                    )
+                  : Center(
+                      child: loading
+                          ? SizedBox.square(
+                              dimension: TimelineIcon.control,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colors.timelineFaint,
+                              ),
+                            )
+                          : IconTheme(
+                              data: IconThemeData(
+                                color: failed
+                                    ? colors.timelineSubtle
+                                    : colors.timelineFaint,
+                              ),
+                              child: const WorkspaceIcon(
+                                WorkspaceGlyph.image,
+                                size: TimelineIcon.alert,
+                              ),
+                            ),
+                    ),
             ),
           ),
         ),

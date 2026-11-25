@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
+import 'attachments/attachment_cache.dart';
+import 'attachments/draft_attachment.dart';
+import 'attachments/image_compressor.dart';
 import 'composer/composer_catalog.dart';
 import 'local_drafts.dart';
 import 'mobile_secure_storage.dart';
@@ -19,6 +22,7 @@ class NewThreadForm {
     this.modelLabel,
     this.permissionMode,
     this.planMode = false,
+    this.attachments = const [],
   });
 
   final String text;
@@ -29,6 +33,7 @@ class NewThreadForm {
   final String? modelLabel;
   final MobileDraftPermission? permissionMode;
   final bool planMode;
+  final List<DraftAttachmentRecord> attachments;
 
   factory NewThreadForm.fromJson(Map<String, dynamic> json) => NewThreadForm(
     text: json['text'] as String,
@@ -41,6 +46,7 @@ class NewThreadForm {
         ? null
         : MobileDraftPermission.fromWire(json['permissionMode'] as String),
     planMode: json['planMode'] as bool? ?? false,
+    attachments: decodeDraftAttachmentRecords(json['attachments']),
   );
 
   Map<String, Object?> toJson() => {
@@ -52,6 +58,8 @@ class NewThreadForm {
     'modelLabel': modelLabel,
     'permissionMode': permissionMode?.wire,
     'planMode': planMode,
+    if (attachments.isNotEmpty)
+      'attachments': attachments.map((item) => item.toJson()).toList(),
   };
 
   NewThreadForm copyWith({
@@ -63,6 +71,7 @@ class NewThreadForm {
     String? modelLabel,
     MobileDraftPermission? permissionMode,
     bool? planMode,
+    List<DraftAttachmentRecord>? attachments,
     bool resetModel = false,
   }) => NewThreadForm(
     text: text ?? this.text,
@@ -73,15 +82,30 @@ class NewThreadForm {
     modelLabel: resetModel ? null : modelLabel ?? this.modelLabel,
     permissionMode: permissionMode ?? this.permissionMode,
     planMode: planMode ?? this.planMode,
+    attachments: attachments ?? this.attachments,
   );
 
-  bool matches(MobileDraftCreateParams command) =>
-      text == command.text &&
-      projectId == command.projectId &&
-      instanceId == command.instanceId &&
-      modelId == command.modelId &&
-      permissionMode == command.permissionMode &&
-      planMode == (command.planMode ?? false);
+  bool matches(MobileDraftCreateParams command) {
+    final commandIds = command.attachmentIds ?? const <String>[];
+    final formIds = [
+      for (final item in attachments)
+        if (item.remoteRef case final ref?) ref.id,
+    ];
+    final sameAttachments =
+        commandIds.length == formIds.length &&
+        attachments.length == formIds.length &&
+        [
+          for (var i = 0; i < commandIds.length; i++)
+            commandIds[i] == formIds[i],
+        ].every((match) => match);
+    return text == command.text &&
+        projectId == command.projectId &&
+        instanceId == command.instanceId &&
+        modelId == command.modelId &&
+        permissionMode == command.permissionMode &&
+        planMode == (command.planMode ?? false) &&
+        sameAttachments;
+  }
 }
 
 class _DraftRecord {
@@ -92,10 +116,14 @@ class _DraftRecord {
 
 /// One encrypted slot stores the editable draft and its outstanding command.
 class NewThreadDraftStorage {
-  NewThreadDraftStorage(String computerKey, String deviceId)
-    : _lease = ComputerStorageLease(computerKey),
-      _key = '${_computerPrefix(computerKey)}$deviceId';
+  NewThreadDraftStorage(
+    String computerKey,
+    String deviceId, {
+    this._attachmentCache,
+  }) : _lease = ComputerStorageLease(computerKey),
+       _key = '${_computerPrefix(computerKey)}$deviceId';
 
+  final AttachmentCacheStore? _attachmentCache;
   final ComputerStorageLease _lease;
   final String _key;
 
@@ -134,11 +162,13 @@ class NewThreadDraftStorage {
               _key,
               hasDraft:
                   next.form.text.isNotEmpty ||
+                  next.form.attachments.isNotEmpty ||
                   next.form.projectId != null ||
                   next.form.instanceId != null ||
                   next.form.modelId != null ||
                   next.form.permissionMode != null ||
                   next.form.planMode,
+              attachmentCache: _attachmentCache,
             );
           }
         }
@@ -189,11 +219,14 @@ final newThreadDraftProvider = AsyncNotifierProvider.autoDispose
     );
 
 class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
-  NewThreadDraftController(this.target)
-    : _store = NewThreadDraftStorage(target.computerKey, target.deviceId);
+  NewThreadDraftController(this.target);
 
   final DraftTarget target;
-  final NewThreadDraftStorage _store;
+  late final NewThreadDraftStorage _store = NewThreadDraftStorage(
+    target.computerKey,
+    target.deviceId,
+    attachmentCache: ref.read(attachmentCacheProvider),
+  );
   MobileDraftCommands get _api => target.connection!.drafts;
 
   @override
@@ -259,6 +292,7 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
     bool? ultracode,
     bool? planMode,
     List<MobileThreadReference>? references,
+    List<String>? attachmentIds,
   }) async {
     if (target.connection == null ||
         state.value?.pending != null ||
@@ -267,6 +301,9 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
     }
     try {
       final supported = connectionSupportsComposerControls(target.connection);
+      final supportsAttachments = connectionSupportsAttachments(
+        target.connection,
+      );
       final normalizedEffort = effort?.trim();
       final effectivePlanMode = supported && (planMode ?? form.planMode);
       final command = MobileDraftCreateParams(
@@ -287,6 +324,12 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
         references:
             supported && references != null && references.isNotEmpty
                 ? references
+                : null,
+        attachmentIds:
+            supportsAttachments &&
+                    attachmentIds != null &&
+                    attachmentIds.isNotEmpty
+                ? attachmentIds
                 : null,
       );
       final retained = await _store._update(
@@ -375,16 +418,27 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
     return _complete(command);
   }
 
-  Future<_DraftRecord> _complete(MobileDraftCreateParams command) =>
-      _store._update((draft) {
-        if (!ref.mounted || draft.pending?.commandId != command.commandId) {
-          return draft;
+  Future<_DraftRecord> _complete(MobileDraftCreateParams command) async {
+    var removedAttachments = const <DraftAttachmentRecord>[];
+    final updated = await _store._update((draft) {
+      if (!ref.mounted || draft.pending?.commandId != command.commandId) {
+        return draft;
+      }
+      final matched = draft.form.matches(command);
+      if (matched) removedAttachments = draft.form.attachments;
+      final form = matched ? const NewThreadForm() : draft.form;
+      return _DraftRecord(form, null);
+    });
+    if (removedAttachments.isNotEmpty) {
+      final cache = ref.read(attachmentCacheProvider);
+      for (final item in removedAttachments) {
+        if (item.draftFileName case final fileName?) {
+          unawaited(cache.deleteDraftFile(target.computerKey, fileName));
         }
-        final form = draft.form.matches(command)
-            ? const NewThreadForm()
-            : draft.form;
-        return _DraftRecord(form, null);
-      });
+      }
+    }
+    return updated;
+  }
 
   Future<NewThreadDraftState> _inaccessible(
     MobileDraftCreateParams command,

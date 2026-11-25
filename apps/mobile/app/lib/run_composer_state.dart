@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:uuid/uuid.dart';
 
+import 'attachments/attachment_cache.dart';
+import 'attachments/image_compressor.dart';
 import 'composer/composer_catalog.dart';
 import 'run_command_journal.dart';
 import 'local_drafts.dart';
@@ -37,12 +39,15 @@ final runComposerProvider = AsyncNotifierProvider.autoDispose
 
 class RunComposerController extends AsyncNotifier<RunComposerState> {
   RunComposerController(this.target)
-    : _journal = RunCommandJournal(target.$1, target.$2),
-      _draft = ThreadDraftStorage(target.$1.computer.computerKey, target.$2);
+    : _journal = RunCommandJournal(target.$1, target.$2);
 
   final ComposerTarget target;
   final RunCommandJournal _journal;
-  final ThreadDraftStorage _draft;
+  late final ThreadDraftStorage _draft = ThreadDraftStorage(
+    target.$1.computer.computerKey,
+    target.$2,
+    attachmentCache: ref.read(attachmentCacheProvider),
+  );
   MobileRunCommands get _api => target.$1.runCommands;
 
   @override
@@ -85,8 +90,10 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     bool? fast,
     bool? ultracode,
     List<MobileThreadReference>? references,
+    List<String>? attachmentIds,
   }) {
     final supported = connectionSupportsComposerControls(target.$1);
+    final supportsAttachments = connectionSupportsAttachments(target.$1);
     final normalizedEffort = effort?.trim();
     return _submit(
       PendingSend(
@@ -104,6 +111,12 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
           references:
               supported && references != null && references.isNotEmpty
                   ? references
+                  : null,
+          attachmentIds:
+              supportsAttachments &&
+                      attachmentIds != null &&
+                      attachmentIds.isNotEmpty
+                  ? attachmentIds
                   : null,
         ),
       ),
@@ -226,7 +239,10 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     command,
     mounted: () => ref.mounted,
     beforeRemove: accepted && command is PendingSend
-        ? () => _draft.clearIfMatches(command.params.text)
+        ? () => _draft.clearIfMatchesContent(
+            command.params.text,
+            attachmentIds: command.params.attachmentIds ?? const [],
+          )
         : null,
   );
 

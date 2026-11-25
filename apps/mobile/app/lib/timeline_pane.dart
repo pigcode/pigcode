@@ -1,10 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
+import 'attachments/attachment_cache.dart';
+import 'attachments/composer_attachments_controller.dart';
+import 'attachments/image_compressor.dart';
+import 'composer/composer_suggestion_panel.dart';
 import 'composer/mention_editing_controller.dart';
 import 'local_drafts.dart';
 import 'offline_cache.dart';
@@ -147,14 +152,38 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _openingChanges = false;
   String _observedText = '';
   ThreadDraftStorage? _draftStore;
+  ComposerAttachmentsController? _attachments;
+  bool _rememberedAttachmentsSupport = false;
   final _text = ComposerTextEditingController();
 
   @override
   void initState() {
     super.initState();
+    _rememberedAttachmentsSupport = connectionSupportsAttachments(
+      widget.connection,
+    );
     _restoreHistory();
     final key = widget.computerKey;
-    if (key != null) _draftStore = ThreadDraftStorage(key, widget.threadId);
+    if (key != null) {
+      final cache = ref.read(attachmentCacheProvider);
+      _draftStore = ThreadDraftStorage(
+        key,
+        widget.threadId,
+        attachmentCache: cache,
+      );
+      _attachments = ComposerAttachmentsController(
+        computerKey: key,
+        cache: cache,
+        compressor: ref.read(imageCompressorProvider),
+        connection: widget.connection,
+        online: widget.online,
+        onDraftChanged: (records) {
+          final store = _draftStore;
+          if (store == null) return;
+          unawaited(store.saveAttachments(records).catchError((Object _) {}));
+        },
+      );
+    }
     _text.addListener(_saveEditedText);
     _restoreDraft();
   }
@@ -162,6 +191,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   @override
   void didUpdateWidget(covariant TimelinePane oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (connectionSupportsAttachments(widget.connection)) {
+      _rememberedAttachmentsSupport = true;
+    }
     if (!identical(oldWidget.cache, widget.cache)) {
       _latest = null;
       _resumeFrom = null;
@@ -170,10 +202,12 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     } else if (!identical(oldWidget.connection, widget.connection)) {
       _resumeFrom = _latest;
     }
+    _attachments?.updateConnection(widget.connection, online: widget.online);
   }
 
   @override
   void dispose() {
+    _attachments?.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -204,15 +238,23 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       return;
     }
     unawaited(
-      store.read().then(
-        (value) {
+      store.readFull().then(
+        (restored) {
           if (!mounted) return;
           setState(() {
-            _observedText = value;
-            _text.text = value;
+            _observedText = restored.text;
+            _text.text = restored.text;
             _draftReady = true;
             _draftError = false;
           });
+          if (restored.attachments.isNotEmpty) {
+            unawaited(
+              _attachments?.restoreFromDraft(
+                restored.attachments,
+                threadId: widget.threadId,
+              ),
+            );
+          }
         },
         onError: (Object _) {
           if (mounted) {
@@ -315,6 +357,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         },
         problem: errors == null ? null : _detail(errors),
         retry: retry,
+        peekAttachmentThumb: _peekAttachmentThumb,
+        loadAttachmentThumb: _loadAttachmentThumb,
+        loadAttachmentFull: _loadAttachmentFull,
         changesCard: online && connection?.supportsRunChanges == true
             ? (turn) => _changes(connection!, turn)
             : null,
@@ -589,18 +634,131 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     );
   }
 
+  String? get _effectiveComputerKey =>
+      widget.computerKey ?? widget.connection?.computer.computerKey;
+
+  Uint8List? _peekAttachmentThumb(String attachmentId) {
+    final key = _effectiveComputerKey;
+    if (key == null) return null;
+    return ref.read(attachmentCacheProvider).peekThumbMemory(key, attachmentId);
+  }
+
+  Future<Uint8List?> _loadAttachmentThumb(String attachmentId) async {
+    final cache = ref.read(attachmentCacheProvider);
+    final key = _effectiveComputerKey;
+    if (key != null) {
+      final cached = await cache.readThumb(key, attachmentId);
+      if (cached != null) return cached;
+    }
+    final connection = widget.connection;
+    if (!widget.online || !connectionSupportsAttachments(connection)) {
+      return null;
+    }
+    final data = await connection!.readAttachmentThumb(
+      attachmentId,
+      threadId: widget.threadId,
+    );
+    if (key != null) {
+      unawaited(cache.writeThumb(key, attachmentId, data.bytes));
+    }
+    return data.bytes;
+  }
+
+  Future<Uint8List?> _loadAttachmentFull(String attachmentId) async {
+    final cache = ref.read(attachmentCacheProvider);
+    final key = _effectiveComputerKey;
+    if (key != null) {
+      final cached = await cache.readFull(key, attachmentId);
+      if (cached != null) return cached;
+    }
+    final connection = widget.connection;
+    if (!widget.online || !connectionSupportsAttachments(connection)) {
+      return null;
+    }
+    final data = await connection!.readAttachmentFull(
+      attachmentId,
+      threadId: widget.threadId,
+    );
+    if (key != null) {
+      unawaited(cache.writeFull(key, attachmentId, data.bytes));
+    }
+    return data.bytes;
+  }
+
+  Future<void> _pickOfflinePhotos() async {
+    final attachments = _attachments;
+    if (attachments == null || attachments.remainingSlots <= 0) return;
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .pickFromGallery(limit: attachments.remainingSlots);
+      if (!mounted || picked.isEmpty) return;
+      await attachments.addLocalFiles([for (final item in picked) item.path]);
+    } on PlatformException {
+      // 离线场景下忽略未授权异常。
+    } catch (_) {}
+  }
+
+  Future<void> _takeOfflinePhoto() async {
+    final attachments = _attachments;
+    if (attachments == null || attachments.remainingSlots <= 0) return;
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .captureFromCamera();
+      if (!mounted || picked == null) return;
+      await attachments.addLocalFiles([picked.path]);
+    } on PlatformException {
+      // 离线场景下忽略未授权异常。
+    } catch (_) {}
+  }
+
   Widget _offlineComposer() {
     if (!_draftReady) return const SizedBox.shrink();
-    return RunComposerView(
-      draft: _text,
-      online: false,
-      state: null,
-      storageError: false,
-      onRetryLoad: () {},
-      onSend: (_) {},
-      onStop: (_) {},
-      onCheck: (_) {},
-      onRetry: (_) {},
+    final attachments = _attachments;
+    final canStageOffline =
+        attachments != null &&
+        (_rememberedAttachmentsSupport ||
+            connectionSupportsAttachments(widget.connection));
+    if (attachments == null) {
+      return RunComposerView(
+        draft: _text,
+        online: false,
+        state: null,
+        storageError: false,
+        onRetryLoad: () {},
+        onSend: (_) {},
+        onStop: (_) {},
+        onCheck: (_) {},
+        onRetry: (_) {},
+      );
+    }
+    return ListenableBuilder(
+      listenable: attachments,
+      builder: (context, _) => RunComposerView(
+        draft: _text,
+        online: false,
+        state: null,
+        storageError: false,
+        onRetryLoad: () {},
+        onSend: (_) {},
+        onStop: (_) {},
+        onCheck: (_) {},
+        onRetry: (_) {},
+        attachments: attachments,
+        loadRemoteFull: _loadAttachmentFull,
+        leading: canStageOffline
+            ? MobileComposerAttachButton(
+                offline: true,
+                showMentions: false,
+                showAttachments: true,
+                attachmentCount: attachments.count,
+                onSelectTrigger: (_) {},
+                onPickPhotos: () => unawaited(_pickOfflinePhotos()),
+                onTakePhoto: () => unawaited(_takeOfflinePhoto()),
+              )
+            : null,
+      ),
     );
   }
 
@@ -638,6 +796,10 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         threads: widget.threads,
         online: true,
         draft: _text,
+        attachments: _attachments,
+        supportsAttachments:
+            _rememberedAttachmentsSupport ||
+            connectionSupportsAttachments(connection),
         stoppableRunId: runId,
         queueRevision: revision,
         composer: snapshot.composer,

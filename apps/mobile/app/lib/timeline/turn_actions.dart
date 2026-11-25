@@ -18,12 +18,14 @@ class TimelineTurnActions extends StatefulWidget {
     this.createdAt,
     this.copyLabel = '复制',
     this.kind = TimelineTurnActionKind.reply,
+    this.showCopy = true,
   });
 
   final String text;
   final String? createdAt;
   final String copyLabel;
   final TimelineTurnActionKind kind;
+  final bool showCopy;
 
   @override
   State<TimelineTurnActions> createState() => _TimelineTurnActionsState();
@@ -62,37 +64,42 @@ class _TimelineTurnActionsState extends State<TimelineTurnActions> {
             colors.timelineFaint,
           ).copyWith(fontFeatures: TimelineType.tabular);
 
+    if (!widget.showCopy && time.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: EdgeInsetsDirectional.only(end: isUser ? TimelineSpace.x2 : 0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Tooltip(
-            message: _copied ? '已复制' : widget.copyLabel,
-            child: Semantics(
-              button: true,
-              label: _copied ? '已复制' : widget.copyLabel,
-              child: InkWell(
-                onTap: _copy,
-                borderRadius: BorderRadius.circular(TimelineRadius.small),
-                child: SizedBox(
-                  width: TimelineControl.sm,
-                  height: TimelineControl.sm,
-                  child: Center(
-                    child: Icon(
-                      _copied ? Icons.check_rounded : Icons.copy_rounded,
-                      size: TimelineIcon.btn,
-                      color: _copied ? colors.readyMark : colors.timelineSubtle,
+          if (widget.showCopy)
+            Tooltip(
+              message: _copied ? '已复制' : widget.copyLabel,
+              child: Semantics(
+                button: true,
+                label: _copied ? '已复制' : widget.copyLabel,
+                child: InkWell(
+                  onTap: _copy,
+                  borderRadius: BorderRadius.circular(TimelineRadius.small),
+                  child: SizedBox(
+                    width: TimelineControl.sm,
+                    height: TimelineControl.sm,
+                    child: Center(
+                      child: Icon(
+                        _copied ? Icons.check_rounded : Icons.copy_rounded,
+                        size: TimelineIcon.btn,
+                        color: _copied
+                            ? colors.readyMark
+                            : colors.timelineSubtle,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
           if (time.isNotEmpty)
             Padding(
-              padding: const EdgeInsetsDirectional.only(
-                start: TimelineSpace.x2,
+              padding: EdgeInsetsDirectional.only(
+                start: widget.showCopy ? TimelineSpace.x2 : 0,
               ),
               child: Text(time, style: timeStyle),
             ),

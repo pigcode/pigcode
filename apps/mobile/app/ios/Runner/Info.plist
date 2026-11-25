@@ -25,7 +25,9 @@
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>NSCameraUsageDescription</key>
-	<string>扫描电脑上的 Pigcode 配对二维码。</string>
+	<string>扫描电脑上的 Pigcode 配对二维码，或拍照发送给 Agent。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>选择相册中的图片或截图发送给 Agent。</string>
 	<key>PigcodeAPNSEnvironment</key>
 	<string>$(PIGCODE_APNS_ENVIRONMENT)</string>
 	<key>LSRequiresIPhoneOS</key>

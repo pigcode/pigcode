@@ -4,12 +4,22 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import '../attachments/image_compressor.dart';
 import '../mobile_sheet.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'composer_mentions.dart';
 import 'composer_tokens.dart';
 import 'mention_editing_controller.dart';
+
+/// `+` 插入底部菜单的可选动作。
+enum ComposerAttachAction {
+  pickPhotos,
+  takePhoto,
+  mention,
+  command,
+  skill,
+}
 
 /// 手机端工具栏左下角灰色圆底 `+` 插入按钮（视觉圆 32px，触区 >= 44/48px）。
 class MobileComposerAttachButton extends StatelessWidget {
@@ -19,9 +29,16 @@ class MobileComposerAttachButton extends StatelessWidget {
     this.enabled = true,
     this.offline = false,
     this.active = false,
+    this.showMentions = true,
+    this.showAttachments = false,
+    this.attachmentCount = 0,
+    this.onPickPhotos,
+    this.onTakePhoto,
   });
 
   static const buttonKey = ValueKey('composer-attach-button');
+  static const galleryOptionKey = ValueKey('composer-attach-gallery');
+  static const cameraOptionKey = ValueKey('composer-attach-camera');
   static const mentionOptionKey = ValueKey('composer-attach-mention');
   static const commandOptionKey = ValueKey('composer-attach-command');
   static const skillOptionKey = ValueKey('composer-attach-skill');
@@ -30,11 +47,32 @@ class MobileComposerAttachButton extends StatelessWidget {
   final bool enabled;
   final bool offline;
   final bool active;
+  final bool showMentions;
+  final bool showAttachments;
+  final int attachmentCount;
+  final VoidCallback? onPickPhotos;
+  final VoidCallback? onTakePhoto;
 
   Future<void> _openSheet(BuildContext context) async {
-    final chosen = await showMobileComposerAttachSheet(context);
-    if (chosen != null) {
-      onSelectTrigger(chosen);
+    final chosen = await showMobileComposerAttachMenu(
+      context,
+      showMentions: showMentions,
+      showAttachments: showAttachments,
+      attachmentCount: attachmentCount,
+    );
+    switch (chosen) {
+      case null:
+        return;
+      case ComposerAttachAction.pickPhotos:
+        onPickPhotos?.call();
+      case ComposerAttachAction.takePhoto:
+        onTakePhoto?.call();
+      case ComposerAttachAction.mention:
+        onSelectTrigger(ComposerTriggerKind.mention);
+      case ComposerAttachAction.command:
+        onSelectTrigger(ComposerTriggerKind.command);
+      case ComposerAttachAction.skill:
+        onSelectTrigger(ComposerTriggerKind.skill);
     }
   }
 
@@ -79,41 +117,118 @@ class MobileComposerAttachButton extends StatelessWidget {
   }
 }
 
-/// 弹出手机端 `+` 插入菜单（`@` 引用文件或会话、`/` 运行命令、`$` 使用 Skill）。
+/// 弹出手机端 `+` 插入菜单（仅触发符号的兼容包装）。
 Future<ComposerTriggerKind?> showMobileComposerAttachSheet(
   BuildContext context,
-) => showMobileSheet<ComposerTriggerKind>(
-  context,
-  title: '添加到消息',
-  content: (sheetContext) => SliverList.list(
-    children: [
-      _AttachOptionRow(
-        key: MobileComposerAttachButton.mentionOptionKey,
-        glyph: WorkspaceGlyph.atSign,
-        label: '引用文件或会话',
-        trigger: '@',
-        dividerAbove: false,
-        onTap: () => Navigator.pop(sheetContext, ComposerTriggerKind.mention),
-      ),
-      _AttachOptionRow(
-        key: MobileComposerAttachButton.commandOptionKey,
-        glyph: WorkspaceGlyph.slash,
-        label: '运行命令',
-        trigger: '/',
-        dividerAbove: true,
-        onTap: () => Navigator.pop(sheetContext, ComposerTriggerKind.command),
-      ),
-      _AttachOptionRow(
-        key: MobileComposerAttachButton.skillOptionKey,
-        glyph: WorkspaceGlyph.dollarSign,
-        label: '使用 Skill',
-        trigger: r'$',
-        dividerAbove: true,
-        onTap: () => Navigator.pop(sheetContext, ComposerTriggerKind.skill),
-      ),
-    ],
-  ),
-);
+) async {
+  final action = await showMobileComposerAttachMenu(
+    context,
+    showMentions: true,
+    showAttachments: false,
+  );
+  return switch (action) {
+    ComposerAttachAction.mention => ComposerTriggerKind.mention,
+    ComposerAttachAction.command => ComposerTriggerKind.command,
+    ComposerAttachAction.skill => ComposerTriggerKind.skill,
+    _ => null,
+  };
+}
+
+/// 弹出手机端 `+` 插入菜单：
+/// - 电脑支持 `composer.attachments` 时，在顶部展示「相册选图」与「拍照」（达 6 张上限时禁用）；
+/// - 旧版电脑未声明 `composer.attachments` 时自动隐藏图片项；
+/// - 在线且支持提及时展示 `@`、`/`、`$`。
+Future<ComposerAttachAction?> showMobileComposerAttachMenu(
+  BuildContext context, {
+  bool showMentions = true,
+  bool showAttachments = false,
+  int attachmentCount = 0,
+}) {
+  final atLimit = attachmentCount >= mobileMaxMessageAttachments;
+  final galleryMeta = atLimit
+      ? '已达上限'
+      : attachmentCount > 0
+      ? '$attachmentCount/$mobileMaxMessageAttachments'
+      : '';
+  final cameraMeta = atLimit ? '已达上限' : '';
+  return showMobileSheet<ComposerAttachAction>(
+    context,
+    title: '添加到消息',
+    content: (sheetContext) {
+      final rows = <Widget>[];
+      if (showAttachments) {
+        rows.add(
+          _AttachOptionRow(
+            key: MobileComposerAttachButton.galleryOptionKey,
+            glyph: WorkspaceGlyph.image,
+            label: '相册选图',
+            trigger: galleryMeta,
+            dividerAbove: false,
+            onTap: atLimit
+                ? null
+                : () => Navigator.pop(
+                    sheetContext,
+                    ComposerAttachAction.pickPhotos,
+                  ),
+          ),
+        );
+        rows.add(
+          _AttachOptionRow(
+            key: MobileComposerAttachButton.cameraOptionKey,
+            glyph: WorkspaceGlyph.camera,
+            label: '拍照',
+            trigger: cameraMeta,
+            dividerAbove: true,
+            onTap: atLimit
+                ? null
+                : () => Navigator.pop(
+                    sheetContext,
+                    ComposerAttachAction.takePhoto,
+                  ),
+          ),
+        );
+      }
+      if (showMentions) {
+        rows.addAll([
+          _AttachOptionRow(
+            key: MobileComposerAttachButton.mentionOptionKey,
+            glyph: WorkspaceGlyph.atSign,
+            label: '引用文件或会话',
+            trigger: '@',
+            dividerAbove: rows.isNotEmpty,
+            onTap: () => Navigator.pop(
+              sheetContext,
+              ComposerAttachAction.mention,
+            ),
+          ),
+          _AttachOptionRow(
+            key: MobileComposerAttachButton.commandOptionKey,
+            glyph: WorkspaceGlyph.slash,
+            label: '运行命令',
+            trigger: '/',
+            dividerAbove: true,
+            onTap: () => Navigator.pop(
+              sheetContext,
+              ComposerAttachAction.command,
+            ),
+          ),
+          _AttachOptionRow(
+            key: MobileComposerAttachButton.skillOptionKey,
+            glyph: WorkspaceGlyph.dollarSign,
+            label: '使用 Skill',
+            trigger: r'$',
+            dividerAbove: true,
+            onTap: () => Navigator.pop(
+              sheetContext,
+              ComposerAttachAction.skill,
+            ),
+          ),
+        ]);
+      }
+      return SliverList.list(children: rows);
+    },
+  );
+}
 
 class _AttachOptionRow extends StatelessWidget {
   const _AttachOptionRow({
@@ -129,62 +244,69 @@ class _AttachOptionRow extends StatelessWidget {
   final String label;
   final String trigger;
   final bool dividerAbove;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = ComposerSurface.palette(theme.brightness);
+    final enabled = onTap != null;
     final minHeight = math.max(
       ComposerControl.attachOptionMinHeight,
       timelineTouchHeight(context),
     );
+    final semanticsLabel = trigger.isEmpty ? label : '$label（$trigger）';
     return Semantics(
       button: true,
-      label: '$label（$trigger）',
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: minHeight),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: dividerAbove
-                  ? Border(
-                      top: BorderSide(
-                        color: colors.divider,
-                        width: ComposerBorder.regular,
-                      ),
-                    )
-                  : null,
-            ),
-            child: Padding(
-              padding: ComposerSpace.attachOptionPadding,
-              child: Row(
-                spacing: ComposerSpace.attachOptionGap,
-                children: [
-                  IconTheme(
-                    data: IconThemeData(color: colors.secondaryText),
-                    child: WorkspaceIcon(
-                      glyph,
-                      size: ComposerControl.attachOptionIcon,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: ComposerType.attachOptionTitle(
-                        colors.foreground,
-                        theme.platform,
+      enabled: enabled,
+      label: semanticsLabel,
+      child: Opacity(
+        opacity: enabled ? 1.0 : ComposerControl.disabledOpacity,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: minHeight),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: dividerAbove
+                    ? Border(
+                        top: BorderSide(
+                          color: colors.divider,
+                          width: ComposerBorder.regular,
+                        ),
+                      )
+                    : null,
+              ),
+              child: Padding(
+                padding: ComposerSpace.attachOptionPadding,
+                child: Row(
+                  spacing: ComposerSpace.attachOptionGap,
+                  children: [
+                    IconTheme(
+                      data: IconThemeData(color: colors.secondaryText),
+                      child: WorkspaceIcon(
+                        glyph,
+                        size: ComposerControl.attachOptionIcon,
                       ),
                     ),
-                  ),
-                  Text(
-                    trigger,
-                    style: ComposerType.attachOptionMeta(colors.muted),
-                  ),
-                ],
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: ComposerType.attachOptionTitle(
+                          colors.foreground,
+                          theme.platform,
+                        ),
+                      ),
+                    ),
+                    if (trigger.isNotEmpty)
+                      Text(
+                        trigger,
+                        style: ComposerType.attachOptionMeta(colors.muted),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -531,6 +653,10 @@ class MobileComposerMentionHost extends StatefulWidget {
     this.onSelectPermissionMode,
     this.onTextChanged,
     this.externalLeading,
+    this.supportsAttachments,
+    this.attachmentCount = 0,
+    this.onPickPhotos,
+    this.onTakePhoto,
     this.searchDebounce = const Duration(milliseconds: 120),
   });
 
@@ -552,6 +678,10 @@ class MobileComposerMentionHost extends StatefulWidget {
   final ValueChanged<MobileDraftPermission>? onSelectPermissionMode;
   final ValueChanged<String>? onTextChanged;
   final Widget? externalLeading;
+  final bool? supportsAttachments;
+  final int attachmentCount;
+  final VoidCallback? onPickPhotos;
+  final VoidCallback? onTakePhoto;
   final Duration searchDebounce;
   final Widget Function(BuildContext context, Widget? leading) builder;
 
@@ -973,14 +1103,24 @@ class _MobileComposerMentionHostState extends State<MobileComposerMentionHost> {
   @override
   Widget build(BuildContext context) {
     final active = _mentionsEnabled && widget.enabled ? _trigger : null;
+    final showAttachments =
+        (widget.supportsAttachments ??
+            connectionSupportsAttachments(widget.connection)) &&
+        (widget.onPickPhotos != null || widget.onTakePhoto != null);
+    final showAttachButton = _mentionsEnabled || showAttachments;
     final Widget? leading =
         widget.externalLeading ??
-        (_mentionsEnabled
+        (showAttachButton
             ? MobileComposerAttachButton(
                 enabled: widget.enabled,
                 offline: !widget.online,
                 active: active != null,
+                showMentions: _mentionsEnabled,
+                showAttachments: showAttachments,
+                attachmentCount: widget.attachmentCount,
                 onSelectTrigger: _handleInsertTrigger,
+                onPickPhotos: widget.onPickPhotos,
+                onTakePhoto: widget.onTakePhoto,
               )
             : null);
 

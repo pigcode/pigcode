@@ -5,6 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'attachments/attachment_cache.dart';
+import 'attachments/composer_attachment_strip.dart';
+import 'attachments/composer_attachments_controller.dart';
+import 'attachments/image_compressor.dart';
+import 'attachments/image_viewer_page.dart';
 import 'composer/composer_catalog.dart';
 import 'composer/composer_suggestion_panel.dart';
 import 'composer/composer_tokens.dart';
@@ -33,6 +38,8 @@ class RunComposer extends ConsumerStatefulWidget {
     this.composer,
     this.wrapInput,
     this.draft,
+    this.attachments,
+    this.supportsAttachments,
     this.leading,
     this.trailing,
   });
@@ -48,6 +55,8 @@ class RunComposer extends ConsumerStatefulWidget {
   final MobileThreadComposerState? composer;
   final Widget Function(Widget)? wrapInput;
   final TextEditingController? draft;
+  final ComposerAttachmentsController? attachments;
+  final bool? supportsAttachments;
   final Widget? leading;
   final Widget? trailing;
 
@@ -61,24 +70,86 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   final _selectionNotifier = ValueNotifier<ComposerSelectionSnapshot>(
     const ComposerSelectionSnapshot(),
   );
+  ComposerAttachmentsController? _localAttachments;
+  late ThreadDraftStorage _draftStore;
   MobileThreadComposerState? _composerOverride;
   String? _composerNotice;
   bool _updatingComposer = false;
+  bool _submittingAttachments = false;
+  bool _rememberedAttachmentsSupport = false;
   ComposerSelectionSnapshot _latestSelection =
       const ComposerSelectionSnapshot();
 
   TextEditingController get _draft => widget.draft ?? _localDraft;
-  late final _draftStore = ThreadDraftStorage(
-    widget.connection.computer.computerKey,
-    widget.threadId,
-  );
+  ComposerAttachmentsController get _attachments =>
+      widget.attachments ?? _localAttachments!;
 
   MobileThreadComposerState? get _composer =>
       _composerOverride ?? widget.composer;
 
+  bool get _supportsAttachments =>
+      widget.supportsAttachments ??
+      (_rememberedAttachmentsSupport ||
+          connectionSupportsAttachments(widget.connection));
+
+  @override
+  void initState() {
+    super.initState();
+    _rememberedAttachmentsSupport = connectionSupportsAttachments(
+      widget.connection,
+    );
+    _draftStore = ThreadDraftStorage(
+      widget.connection.computer.computerKey,
+      widget.threadId,
+      attachmentCache: ref.read(attachmentCacheProvider),
+    );
+    _initLocalAttachmentsIfNeeded();
+    _attachments.updateConnection(widget.connection, online: widget.online);
+  }
+
+  void _initLocalAttachmentsIfNeeded() {
+    if (widget.attachments != null) {
+      _localAttachments?.dispose();
+      _localAttachments = null;
+      return;
+    }
+    _localAttachments?.dispose();
+    final store = _draftStore;
+    final controller = ComposerAttachmentsController(
+      computerKey: widget.connection.computer.computerKey,
+      cache: ref.read(attachmentCacheProvider),
+      compressor: ref.read(imageCompressorProvider),
+      connection: widget.connection,
+      online: widget.online,
+      onDraftChanged: (records) =>
+          unawaited(store.saveAttachments(records).catchError((Object _) {})),
+    );
+    _localAttachments = controller;
+    unawaited(
+      store.readFull().then((restored) {
+        if (!mounted || !identical(_localAttachments, controller)) return;
+        if (restored.attachments.isNotEmpty) {
+          unawaited(
+            controller.restoreFromDraft(
+              restored.attachments,
+              threadId: widget.threadId,
+            ),
+          );
+        }
+      }, onError: (Object _) {}),
+    );
+  }
+
   @override
   void didUpdateWidget(covariant RunComposer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (connectionSupportsAttachments(widget.connection)) {
+      _rememberedAttachmentsSupport = true;
+    }
+    final targetChanged =
+        oldWidget.threadId != widget.threadId ||
+        oldWidget.connection.computer.computerKey !=
+            widget.connection.computer.computerKey;
     if (oldWidget.threadId != widget.threadId ||
         !identical(oldWidget.connection, widget.connection)) {
       _composerOverride = null;
@@ -87,14 +158,133 @@ class _RunComposerState extends ConsumerState<RunComposer> {
     } else if (!identical(oldWidget.composer, widget.composer)) {
       _composerOverride = null;
     }
+    if (targetChanged || !identical(oldWidget.attachments, widget.attachments)) {
+      _draftStore = ThreadDraftStorage(
+        widget.connection.computer.computerKey,
+        widget.threadId,
+        attachmentCache: ref.read(attachmentCacheProvider),
+      );
+      _initLocalAttachmentsIfNeeded();
+    }
+    _attachments.updateConnection(widget.connection, online: widget.online);
   }
 
   @override
   void dispose() {
     _localDraft.dispose();
+    _localAttachments?.dispose();
     _focusNode.dispose();
     _selectionNotifier.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhotos() async {
+    final remaining = _attachments.remainingSlots;
+    if (remaining <= 0) {
+      setState(
+        () => _composerNotice =
+            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+      );
+      return;
+    }
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .pickFromGallery(limit: remaining);
+      if (!mounted || picked.isEmpty) return;
+      await _attachments.addLocalFiles([
+        for (final file in picked) file.path,
+      ]);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _composerNotice = '无法访问相册，请在系统设置中允许 Pigcode 访问照片。');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _composerNotice = '无法打开相册，请重试。');
+      }
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    if (_attachments.remainingSlots <= 0) {
+      setState(
+        () => _composerNotice =
+            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+      );
+      return;
+    }
+    try {
+      final picked = await ref
+          .read(mobileImagePickerProvider)
+          .captureFromCamera();
+      if (!mounted || picked == null) return;
+      await _attachments.addLocalFiles([picked.path]);
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _composerNotice = '无法使用相机，请在系统设置中允许 Pigcode 使用相机。');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _composerNotice = '无法启动拍照，请重试。');
+      }
+    }
+  }
+
+  Future<Uint8List?> _loadRemoteFull(String attachmentId) async {
+    final cache = ref.read(attachmentCacheProvider);
+    final computerKey = widget.connection.computer.computerKey;
+    final cached = await cache.readFull(computerKey, attachmentId);
+    if (cached != null) return cached;
+    if (!widget.online || !connectionSupportsAttachments(widget.connection)) {
+      return null;
+    }
+    final data = await widget.connection.readAttachmentFull(
+      attachmentId,
+      threadId: widget.threadId,
+    );
+    unawaited(cache.writeFull(computerKey, attachmentId, data.bytes));
+    return data.bytes;
+  }
+
+  Future<void> _handleSend(
+    String text, {
+    required ResolvedComposerRunOptions runOptions,
+    required bool supportsControls,
+    required RunComposerController controller,
+  }) async {
+    if (_submittingAttachments) return;
+    final draft = _draft;
+    final references = draft is ComposerTextEditingController
+        ? draft.resolveReferences(text)
+        : const <MobileThreadReference>[];
+
+    List<String>? attachmentIds;
+    if (_attachments.hasItems) {
+      setState(() => _submittingAttachments = true);
+      try {
+        attachmentIds = await _attachments.ensureAllUploaded();
+      } finally {
+        if (mounted) setState(() => _submittingAttachments = false);
+      }
+      if (!mounted || attachmentIds == null) return;
+    }
+
+    unawaited(
+      controller.send(
+        text,
+        effort: runOptions.effort,
+        fast: runOptions.fast,
+        ultracode: runOptions.ultracode,
+        references: supportsControls && references.isNotEmpty
+            ? references
+            : null,
+        attachmentIds:
+            attachmentIds != null && attachmentIds.isNotEmpty
+            ? attachmentIds
+            : null,
+      ),
+    );
   }
 
   void _scheduleSelectionSync(ComposerSelectionSnapshot snapshot) {
@@ -224,9 +414,14 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         return;
       }
       if (outcome.command case PendingSend(:final params)) {
-        if (outcome.receipt != null && _draft.text == params.text) {
-          _draft.clear();
-        } else if (outcome.receipt == null && _draft.text.isEmpty) {
+        if (outcome.receipt != null) {
+          if (_draft.text == params.text) _draft.clear();
+          if (params.attachmentIds case final ids? when ids.isNotEmpty) {
+            unawaited(_attachments.clearCommittedIds(ids));
+          }
+        } else if (outcome.receipt == null &&
+            _draft.text.isEmpty &&
+            params.text.isNotEmpty) {
           _draft.text = params.text;
         }
       }
@@ -313,78 +508,86 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         ),
     ];
 
-    final view = MobileComposerMentionHost(
-      connection: widget.connection,
-      online: widget.online,
-      controller: _draft,
-      focusNode: _focusNode,
-      projectId: widget.projectId,
-      threadId: widget.threadId,
-      instanceId: activeComposer?.instanceId,
-      projects: widget.projects,
-      threads: widget.threads,
-      supportsPlanMode:
-          supportsControls &&
-          activeComposer != null &&
-          (activeComposer.supportsPlanMode || activeComposer.planMode),
-      permissionModes: supportsControls
-          ? (currentInstance?.permissionModes ?? const [])
-          : const [],
-      canOpenModelPicker: supportsControls && activeComposer != null,
-      onOpenModelPicker: supportsControls && activeComposer != null
-          ? () => unawaited(_openModelPicker())
-          : null,
-      onTogglePlanMode: supportsControls && activeComposer != null
-          ? () => unawaited(
-              _mutateComposer(
-                () => widget.connection.composer.setPlanMode(
-                  threadId: widget.threadId,
-                  planMode: !activeComposer.planMode,
-                ),
-              ),
-            )
-          : null,
-      onSelectPermissionMode: supportsControls && activeComposer != null
-          ? (mode) => unawaited(
-              _mutateComposer(
-                () => widget.connection.composer.setPermissionMode(
-                  threadId: widget.threadId,
-                  permissionMode: mode,
-                ),
-              ),
-            )
-          : null,
-      externalLeading: widget.leading,
-      builder: (context, leading) => RunComposerView(
-        draft: _draft,
-        focusNode: _focusNode,
+    final supportsImages =
+        (activeComposer?.supportsImages ?? true) &&
+        (currentInstance?.supportsImages ?? true);
+
+    final view = ListenableBuilder(
+      listenable: _attachments,
+      builder: (context, _) => MobileComposerMentionHost(
+        connection: widget.connection,
         online: widget.online,
-        stoppableRunId: widget.stoppableRunId,
-        allowQueue: widget.connection.supportsQueueCommands,
-        state: commandState.value,
-        storageError: commandState.hasError,
-        onRetryLoad: () => ref.invalidate(provider),
-        onSend: (text) {
-          final draft = _draft;
-          final references = draft is ComposerTextEditingController
-              ? draft.resolveReferences(text)
-              : const <MobileThreadReference>[];
-          controller.send(
-            text,
-            effort: runOptions.effort,
-            fast: runOptions.fast,
-            ultracode: runOptions.ultracode,
-            references: supportsControls && references.isNotEmpty
-                ? references
-                : null,
-          );
-        },
-        onStop: controller.stop,
-        onCheck: controller.check,
-        onRetry: controller.retry,
-        extraBanners: extraBanners,
-        leading: leading,
-        trailing: effectiveTrailing,
+        controller: _draft,
+        focusNode: _focusNode,
+        projectId: widget.projectId,
+        threadId: widget.threadId,
+        instanceId: activeComposer?.instanceId,
+        projects: widget.projects,
+        threads: widget.threads,
+        supportsPlanMode:
+            supportsControls &&
+            activeComposer != null &&
+            (activeComposer.supportsPlanMode || activeComposer.planMode),
+        permissionModes: supportsControls
+            ? (currentInstance?.permissionModes ?? const [])
+            : const [],
+        canOpenModelPicker: supportsControls && activeComposer != null,
+        onOpenModelPicker: supportsControls && activeComposer != null
+            ? () => unawaited(_openModelPicker())
+            : null,
+        onTogglePlanMode: supportsControls && activeComposer != null
+            ? () => unawaited(
+                _mutateComposer(
+                  () => widget.connection.composer.setPlanMode(
+                    threadId: widget.threadId,
+                    planMode: !activeComposer.planMode,
+                  ),
+                ),
+              )
+            : null,
+        onSelectPermissionMode: supportsControls && activeComposer != null
+            ? (mode) => unawaited(
+                _mutateComposer(
+                  () => widget.connection.composer.setPermissionMode(
+                    threadId: widget.threadId,
+                    permissionMode: mode,
+                  ),
+                ),
+              )
+            : null,
+        externalLeading: widget.leading,
+        supportsAttachments: _supportsAttachments,
+        attachmentCount: _attachments.count,
+        onPickPhotos: _supportsAttachments ? () => unawaited(_pickPhotos()) : null,
+        onTakePhoto: _supportsAttachments ? () => unawaited(_takePhoto()) : null,
+        builder: (context, leading) => RunComposerView(
+          draft: _draft,
+          focusNode: _focusNode,
+          online: widget.online,
+          stoppableRunId: widget.stoppableRunId,
+          allowQueue: widget.connection.supportsQueueCommands,
+          state: commandState.value,
+          storageError: commandState.hasError,
+          onRetryLoad: () => ref.invalidate(provider),
+          onSend: (text) => unawaited(
+            _handleSend(
+              text,
+              runOptions: runOptions,
+              supportsControls: supportsControls,
+              controller: controller,
+            ),
+          ),
+          onStop: controller.stop,
+          onCheck: controller.check,
+          onRetry: controller.retry,
+          extraBanners: extraBanners,
+          attachments: _attachments,
+          supportsImages: supportsImages,
+          submittingAttachments: _submittingAttachments,
+          loadRemoteFull: _loadRemoteFull,
+          leading: leading,
+          trailing: effectiveTrailing,
+        ),
       ),
     );
     final input = widget.wrapInput?.call(view) ?? view;
@@ -409,25 +612,37 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   Future<void> _restoreWithdrawal(QueueReceipt receipt) async {
     final controller = _draft;
     final original = controller.text;
-    final text = receipt.text!;
-    final restored = await _draftStore.restoreWithdrawal(
+    final text = receipt.text ?? '';
+    final restored = await _draftStore.restoreWithdrawalWithAttachments(
       receipt.commandId,
       text,
       fallback: original,
+      attachments: receipt.attachments,
     );
     if (!mounted || !identical(controller, _draft)) return;
-    final current = controller.text;
-    if (!restored.appended && current != original) return;
-    final next = current == original
-        ? restored.text
-        : current.isEmpty
-        ? text
-        : '$current\n$text';
-    controller.value = TextEditingValue(
-      text: next,
-      selection: TextSelection.collapsed(offset: next.length),
-    );
-    if (next != restored.text) await _draftStore.save(next, previous: current);
+    if (text.isNotEmpty) {
+      final current = controller.text;
+      if (restored.appended || current == original) {
+        final next = current == original
+            ? restored.text
+            : current.isEmpty
+            ? text
+            : '$current\n$text';
+        controller.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: next.length),
+        );
+        if (next != restored.text) {
+          await _draftStore.save(next, previous: current);
+        }
+      }
+    }
+    if (receipt.attachments.isNotEmpty) {
+      await _attachments.restoreCommittedRefs(
+        receipt.attachments,
+        threadId: widget.threadId,
+      );
+    }
   }
 }
 
@@ -471,6 +686,10 @@ class RunComposerView extends StatelessWidget {
     this.stoppableRunId,
     this.allowQueue = false,
     this.extraBanners = const [],
+    this.attachments,
+    this.supportsImages = true,
+    this.submittingAttachments = false,
+    this.loadRemoteFull,
     this.leading,
     this.trailing,
   });
@@ -488,6 +707,10 @@ class RunComposerView extends StatelessWidget {
   final ValueChanged<MobileRunMethod> onCheck;
   final ValueChanged<MobileRunMethod> onRetry;
   final List<Widget> extraBanners;
+  final ComposerAttachmentsController? attachments;
+  final bool supportsImages;
+  final bool submittingAttachments;
+  final AttachmentBytesLoader? loadRemoteFull;
   final Widget? leading;
   final Widget? trailing;
 
@@ -533,13 +756,28 @@ class RunComposerView extends StatelessWidget {
         ? '生成中 · 发出的消息会排队'
         : '回复…';
 
-    return ValueListenableBuilder<TextEditingValue>(
-      valueListenable: draft,
-      builder: (context, value, _) {
-        final text = value.text;
+    final listenable = attachments == null
+        ? draft
+        : Listenable.merge([draft, attachments!]);
+
+    return ListenableBuilder(
+      listenable: listenable,
+      builder: (context, _) {
+        final text = draft.text;
         final hasText = text.trim().isNotEmpty;
+        final attachmentController = attachments;
+        final hasAttachments = attachmentController?.hasItems ?? false;
+        final showAttachmentStrip =
+            attachmentController != null &&
+            (attachmentController.hasItems ||
+                attachmentController.bannerError != null);
+        final hasContent = hasText || hasAttachments;
         final tooLong = text.length > mobileCommandTextLimit;
-        final canSend = enabled(MobileRunMethod.runStart) && hasText && !tooLong;
+        final canSend =
+            enabled(MobileRunMethod.runStart) &&
+            !submittingAttachments &&
+            hasContent &&
+            !tooLong;
         final banners = <Widget>[
           ...statusBanners,
           if (tooLong)
@@ -558,7 +796,7 @@ class RunComposerView extends StatelessWidget {
                   ? () => onStop(runId)
                   : null,
             ),
-          if (runId == null || (allowQueue && hasText))
+          if (runId == null || (allowQueue && hasContent))
             MobileComposerActionButton(
               tooltip: '发送消息',
               glyph: WorkspaceGlyph.arrowUp,
@@ -573,6 +811,13 @@ class RunComposerView extends StatelessWidget {
           hintText: hintText,
           offline: !online,
           banners: banners,
+          attachments: showAttachmentStrip
+              ? ComposerAttachmentStrip(
+                  controller: attachmentController,
+                  supportsImages: supportsImages,
+                  loadRemoteFull: loadRemoteFull,
+                )
+              : null,
           leading: leading,
           trailing: trailing,
           actions: actions,
@@ -631,7 +876,11 @@ class _PendingRunRow extends StatelessWidget {
           ),
         if (pending case PendingSend(:final params))
           Text(
-            params.text,
+            params.text.trim().isNotEmpty
+                ? params.text
+                : (params.attachmentIds?.length ?? 0) <= 1
+                ? '[图片]'
+                : '[${params.attachmentIds!.length} 张图片]',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
@@ -652,7 +901,7 @@ class _PendingRunRow extends StatelessWidget {
         if (outcome case RunCommandOutcome(
           receipt: null,
           command: PendingSend(:final params),
-        ))
+        ) when params.text.isNotEmpty)
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: draft,
             builder: (context, value, _) => value.text == params.text

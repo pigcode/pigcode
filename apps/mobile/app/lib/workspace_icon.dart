@@ -44,6 +44,8 @@ enum WorkspaceGlyph {
   slash,
   messagesSquare,
   dollarSign,
+  image,
+  camera,
 }
 
 class WorkspaceIcon extends StatelessWidget {
@@ -851,6 +853,47 @@ class _WorkspaceIconPainter extends CustomPainter {
             ..lineTo(6, 19),
           stroke,
         );
+      case WorkspaceGlyph.image:
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            const Rect.fromLTWH(3, 3, 18, 18),
+            const Radius.circular(2),
+          ),
+          stroke,
+        );
+        canvas.drawCircle(const Offset(9, 9), 2, stroke);
+        canvas.drawPath(
+          Path()
+            ..moveTo(21, 15)
+            ..lineTo(17.914, 11.914)
+            ..arcToPoint(
+              const Offset(15.086, 11.914),
+              radius: const Radius.circular(2),
+              clockwise: false,
+            )
+            ..lineTo(6, 21),
+          stroke,
+        );
+      case WorkspaceGlyph.camera:
+        const corner = Radius.circular(2);
+        canvas.drawPath(
+          Path()
+            ..moveTo(14.5, 4)
+            ..lineTo(9.5, 4)
+            ..lineTo(7, 7)
+            ..lineTo(4, 7)
+            ..arcToPoint(const Offset(2, 9), radius: corner, clockwise: false)
+            ..lineTo(2, 18)
+            ..arcToPoint(const Offset(4, 20), radius: corner, clockwise: false)
+            ..lineTo(20, 20)
+            ..arcToPoint(const Offset(22, 18), radius: corner, clockwise: false)
+            ..lineTo(22, 9)
+            ..arcToPoint(const Offset(20, 7), radius: corner, clockwise: false)
+            ..lineTo(17, 7)
+            ..close(),
+          stroke,
+        );
+        canvas.drawCircle(const Offset(12, 13), 3, stroke);
     }
     canvas.restore();
   }

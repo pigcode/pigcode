@@ -8,6 +8,14 @@ import 'package:uuid/uuid.dart';
 import 'mobile_command_journal.dart';
 import 'theme_colors.dart';
 
+/// 待发消息单行摘要文案：包含附件时前置 `[图片]` 或 `[N 张图片]`。
+String formatQueuedMessageSummary(QueuedMessage message) {
+  final count = message.attachments.length;
+  if (count == 0) return message.text;
+  final badge = count == 1 ? '[图片]' : '[$count 张图片]';
+  return message.text.trim().isEmpty ? badge : '$badge ${message.text}';
+}
+
 typedef _QueueTarget = (MobileConnection connection, String threadId);
 
 final _snapshotProvider = FutureProvider.autoDispose
@@ -265,7 +273,8 @@ class _MessageQueuePanelState extends ConsumerState<MessageQueuePanel> {
         return;
       }
       final withdrawn =
-          receipt.effect == QueueEffect.withdrawn && receipt.text != null;
+          receipt.effect == QueueEffect.withdrawn &&
+          (receipt.text != null || receipt.attachments.isNotEmpty);
       final restore = widget.onWithdraw;
       final finish = widget.onWithdrawalAcknowledged;
       unawaited(
@@ -329,7 +338,7 @@ class _MessageQueuePanelState extends ConsumerState<MessageQueuePanel> {
                   children: [
                     Expanded(
                       child: Text(
-                        message.text,
+                        formatQueuedMessageSummary(message),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

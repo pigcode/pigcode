@@ -20,6 +20,7 @@ class MobileComposerCard extends StatefulWidget {
     this.focusNode,
     this.header,
     this.banners = const [],
+    this.attachments,
     this.leading,
     this.trailing,
     this.offline = false,
@@ -38,6 +39,7 @@ class MobileComposerCard extends StatefulWidget {
   final FocusNode? focusNode;
   final Widget? header;
   final List<Widget> banners;
+  final Widget? attachments;
   final Widget? leading;
   final Widget? trailing;
   final bool offline;
@@ -95,8 +97,9 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
                     children: widget.banners,
                   ),
                 ),
+              ?widget.attachments,
               Padding(
-                padding: hasBanners
+                padding: hasBanners || widget.attachments != null
                     ? ComposerSpace.inputPaddingWithBanners
                     : ComposerSpace.inputPadding,
                 child: TextField(
