@@ -6,6 +6,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
 import 'mobile_surfaces.dart';
@@ -632,8 +633,9 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           right: visualInset,
           top: visualInset,
           bottom: visualInset,
-          child: DecoratedBox(
-            decoration: mobileRaisedSurface(Theme.of(context).brightness),
+          child: const MobileGlassSurface(
+            blurSigma: 20,
+            child: SizedBox.expand(),
           ),
         ),
         Material(
@@ -1201,53 +1203,75 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             ? [mobileDrawerShadow(theme.brightness)]
                             : null,
                       ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          ExcludeSemantics(
-                            excluding: _open,
-                            child: ExcludeFocus(
-                              excluding: _open,
-                              child: SafeArea(
-                                child: Column(
-                                  children: [
-                                    _header(
-                                      context,
-                                      thread,
-                                      projectName: project?.name,
-                                      canOpenDraft: canOpenDraft,
+                      child: Builder(
+                        builder: (context) {
+                          final topPadding = MediaQuery.paddingOf(context).top;
+                          const headerHeight = 54.0;
+                          final topInset = topPadding + headerHeight;
+                          final body = _draftOpen && widget.draft != null
+                              ? KeyedSubtree(
+                                  key: ValueKey(('new-thread', _draftProject)),
+                                  child: widget.draft!(
+                                    _draftProject,
+                                    thread?.projectId,
+                                    _acceptDraft,
+                                    (_) {},
+                                  ),
+                                )
+                              : _summary(thread);
+                          return Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ExcludeSemantics(
+                                excluding: _open,
+                                child: ExcludeFocus(
+                                  excluding: _open,
+                                  child: MobileChromeInsets(
+                                    topInset: topInset,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Positioned.fill(child: body),
+                                        Positioned(
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          child: MobileTopGlassVeil(
+                                            height: topInset + 16,
+                                            statusBarHeight: topPadding,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          top: 0,
+                                          left: 0,
+                                          right: 0,
+                                          child: SafeArea(
+                                            bottom: false,
+                                            child: _header(
+                                              context,
+                                              thread,
+                                              projectName: project?.name,
+                                              canOpenDraft: canOpenDraft,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    Expanded(
-                                      child: _draftOpen && widget.draft != null
-                                          ? KeyedSubtree(
-                                              key: ValueKey((
-                                                'new-thread',
-                                                _draftProject,
-                                              )),
-                                              child: widget.draft!(
-                                                _draftProject,
-                                                thread?.projectId,
-                                                _acceptDraft,
-                                                (_) {},
-                                              ),
-                                            )
-                                          : _summary(thread),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                          if (_open)
-                            Semantics(
-                              button: true,
-                              label: '收起菜单',
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () => _menu(false),
-                              ),
-                            ),
-                        ],
+                              if (_open)
+                                Semantics(
+                                  button: true,
+                                  label: '收起菜单',
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => _menu(false),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -1317,9 +1341,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
     if (!widget.online) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final topInset = MediaQuery.paddingOf(context).top + 54;
     return ListView(
       key: ValueKey(thread.id),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, topInset + 20, 16, 16),
       children: [
         Text(
           threadStatusText(thread.status),

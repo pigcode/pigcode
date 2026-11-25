@@ -17,6 +17,11 @@ class TimelineUserBubble extends StatefulWidget {
     required this.text,
     this.createdAt,
     this.truncated = false,
+    this.showActions = true,
+    this.leadingStatus,
+    this.statusCaption,
+    this.bubbleOpacity = 1.0,
+    this.onBubbleTap,
     this.onOpenFull,
     this.onMention,
     this.attachments = const [],
@@ -28,6 +33,11 @@ class TimelineUserBubble extends StatefulWidget {
   final String text;
   final String? createdAt;
   final bool truncated;
+  final bool showActions;
+  final Widget? leadingStatus;
+  final Widget? statusCaption;
+  final double bubbleOpacity;
+  final VoidCallback? onBubbleTap;
   final VoidCallback? onOpenFull;
   final Future<void> Function(String path)? onMention;
   final List<MobileAttachmentRef> attachments;
@@ -226,7 +236,7 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
                   textBody = null;
                 }
 
-                return DecoratedBox(
+                final Widget decoratedBubble = DecoratedBox(
                   decoration: BoxDecoration(
                     color: colors.timelineUser,
                     border: Border.all(
@@ -282,6 +292,28 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
                     ],
                   ),
                 );
+                final Widget fadedBubble = widget.bubbleOpacity >= 0.999
+                    ? decoratedBubble
+                    : Opacity(
+                        opacity: widget.bubbleOpacity,
+                        child: decoratedBubble,
+                      );
+                final Widget interactiveBubble = widget.onBubbleTap == null
+                    ? fadedBubble
+                    : GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: widget.onBubbleTap,
+                        child: fadedBubble,
+                      );
+                if (widget.leadingStatus == null) return interactiveBubble;
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    widget.leadingStatus!,
+                    Flexible(child: interactiveBubble),
+                  ],
+                );
               },
             ),
             if (widget.truncated)
@@ -289,13 +321,19 @@ class _TimelineUserBubbleState extends State<TimelineUserBubble> {
                 onPressed: widget.onOpenFull,
                 child: const Text('查看完整正文'),
               ),
-            const SizedBox(height: TimelineSpace.x2),
-            TimelineTurnActions(
-              text: widget.text,
-              createdAt: widget.createdAt,
-              kind: TimelineTurnActionKind.user,
-              showCopy: hasText || !hasAttachments,
-            ),
+            if (widget.statusCaption case final caption?) ...[
+              const SizedBox(height: TimelineSpace.x2),
+              caption,
+            ],
+            if (widget.showActions) ...[
+              const SizedBox(height: TimelineSpace.x2),
+              TimelineTurnActions(
+                text: widget.text,
+                createdAt: widget.createdAt,
+                kind: TimelineTurnActionKind.user,
+                showCopy: hasText || !hasAttachments,
+              ),
+            ],
           ],
         ),
       ),

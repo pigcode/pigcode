@@ -5,9 +5,11 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:pigcode_client/pigcode_client.dart';
 
 import 'attachments/image_viewer_page.dart';
+import 'mobile_glass.dart';
 import 'theme_colors.dart';
 import 'timeline/loading_row.dart';
 import 'timeline/notice_line.dart';
+import 'timeline/optimistic_user_bubble.dart';
 import 'timeline/reasoning_block.dart';
 import 'timeline/summary_group.dart';
 import 'timeline/timeline_tokens.dart';
@@ -36,6 +38,10 @@ class TimelineView extends StatefulWidget {
     this.loadAttachmentFull,
     this.onOpenFile,
     this.onOpenLink,
+    this.optimisticMessage,
+    this.onTapOptimisticFailed,
+    this.topInset = 0,
+    this.bottomInset = 0,
   });
 
   final TimelineSnapshot snapshot;
@@ -52,6 +58,10 @@ class TimelineView extends StatefulWidget {
   final AttachmentBytesLoader? loadAttachmentFull;
   final TimelineOpenFileCallback? onOpenFile;
   final TimelineOpenLinkCallback? onOpenLink;
+  final OptimisticUserMessage? optimisticMessage;
+  final VoidCallback? onTapOptimisticFailed;
+  final double topInset;
+  final double bottomInset;
 
   @override
   State<TimelineView> createState() => _TimelineViewState();
@@ -115,7 +125,18 @@ class _TimelineViewState extends State<TimelineView> {
       }
     }
     if (eventsChanged || liveChanged) _rebuildRows();
-    if (!identical(oldWidget.snapshot, widget.snapshot)) _follow();
+    final optimisticChanged =
+        oldWidget.optimisticMessage != widget.optimisticMessage;
+    if (oldWidget.optimisticMessage?.commandId !=
+            widget.optimisticMessage?.commandId &&
+        widget.optimisticMessage != null) {
+      _pinned = true;
+      _follow();
+    } else if (!identical(oldWidget.snapshot, widget.snapshot) ||
+        optimisticChanged ||
+        (oldWidget.bottomInset != widget.bottomInset && _pinned)) {
+      _follow();
+    }
   }
 
   void _rebuildRows() {
@@ -386,10 +407,38 @@ class _TimelineViewState extends State<TimelineView> {
     super.dispose();
   }
 
+  bool _isOptimisticReconciled(OptimisticUserMessage message) {
+    if (message.status != OptimisticMessageStatus.accepted) return false;
+    if (message.queuedMessageId != null) return true;
+    final runId = message.runId;
+    if (runId != null) {
+      for (final event in widget.snapshot.events.reversed) {
+        if (event.kind == MobileTimelineKind.messageUser &&
+            event.runId == runId) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = widget.online ? widget.snapshot.live : null;
     final hasEarlier = widget.online && widget.snapshot.nextBefore != null;
+    final optimistic = widget.optimisticMessage;
+    final visibleOptimistic =
+        optimistic != null && !_isOptimisticReconciled(optimistic)
+        ? optimistic
+        : null;
+    // 存在历史前插区间时把顶部留白放在 center 之前，保证补载历史零锚点位移；
+    // 短会话无更早历史时放在 center 之后，避免首条消息被顶栏悬浮胶囊遮挡。
+    final topInsetBeforeCenter = _history.isNotEmpty || hasEarlier;
+    final bottomSpacerHeight = widget.bottomInset + 8;
+    final scrollButtonBottom = widget.bottomInset > 0
+        ? widget.bottomInset + TimelineSpace.x4
+        : TimelineSpace.x6;
+
     return Stack(
       children: [
         NotificationListener<Notification>(
@@ -412,6 +461,8 @@ class _TimelineViewState extends State<TimelineView> {
               center: _center,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               slivers: [
+                if (widget.topInset > 0 && topInsetBeforeCenter)
+                  SliverToBoxAdapter(child: SizedBox(height: widget.topInset)),
                 SliverPadding(
                   padding: _turnInsets,
                   sliver: SliverList.builder(
@@ -443,6 +494,8 @@ class _TimelineViewState extends State<TimelineView> {
                   key: _center,
                   child: const SizedBox.shrink(),
                 ),
+                if (widget.topInset > 0 && !topInsetBeforeCenter)
+                  SliverToBoxAdapter(child: SizedBox(height: widget.topInset)),
                 SliverPadding(
                   padding: _turnInsets,
                   sliver: SliverList.builder(
@@ -461,18 +514,45 @@ class _TimelineViewState extends State<TimelineView> {
                     padding: _turnInsets,
                     sliver: SliverToBoxAdapter(child: _live(active)),
                   ),
-                if (_history.isEmpty && _newRows.isEmpty && active == null)
+                if (visibleOptimistic != null)
+                  SliverPadding(
+                    padding: _turnInsets,
+                    sliver: SliverToBoxAdapter(
+                      key: ValueKey('optimistic-${visibleOptimistic.commandId}'),
+                      child: TimelineOptimisticUserBubble(
+                        message: visibleOptimistic,
+                        online: widget.online,
+                        onTapAction: widget.onTapOptimisticFailed,
+                        onMention: widget.onOpenFile == null
+                            ? null
+                            : (rawPath) {
+                                final parsed = parseFileReference(rawPath);
+                                return widget.onOpenFile!(
+                                  parsed.path,
+                                  line: parsed.line,
+                                );
+                              },
+                        peekAttachmentThumb: widget.peekAttachmentThumb,
+                        loadAttachmentThumb: widget.loadAttachmentThumb,
+                        loadAttachmentFull: widget.loadAttachmentFull,
+                      ),
+                    ),
+                  ),
+                if (_history.isEmpty &&
+                    _newRows.isEmpty &&
+                    active == null &&
+                    visibleOptimistic == null)
                   const SliverToBoxAdapter(
                     child: Center(child: Text('这条会话还没有消息。')),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                SliverToBoxAdapter(child: SizedBox(height: bottomSpacerHeight)),
               ],
             ),
           ),
         ),
         if (widget.problem case final message?)
           Positioned(
-            top: 4,
+            top: widget.topInset + 4,
             left: 12,
             right: 12,
             child: Card(
@@ -495,7 +575,7 @@ class _TimelineViewState extends State<TimelineView> {
           Positioned(
             left: 0,
             right: 0,
-            bottom: TimelineSpace.x6,
+            bottom: scrollButtonBottom,
             child: Center(child: _scrollToBottomButton(context)),
           ),
       ],
@@ -520,23 +600,17 @@ class _TimelineViewState extends State<TimelineView> {
           },
           child: Padding(
             padding: const EdgeInsets.all(TimelineSpace.x3),
-            child: Container(
-              width: TimelineControl.lg,
-              height: TimelineControl.lg,
-              decoration: BoxDecoration(
-                color: colors.timelineCard,
-                border: Border.all(
-                  color: colors.timelineBorder,
-                  width: TimelineBorder.regular,
+            child: MobileGlassSurface(
+              blurSigma: 18,
+              child: SizedBox.square(
+                dimension: TimelineControl.lg + 4,
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_downward_rounded,
+                    size: TimelineIcon.control,
+                    color: colors.foreground,
+                  ),
                 ),
-                borderRadius: BorderRadius.circular(TimelineRadius.full),
-                boxShadow: TimelineShadow.md(theme.brightness),
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.arrow_downward,
-                size: TimelineIcon.row,
-                color: colors.foreground,
               ),
             ),
           ),

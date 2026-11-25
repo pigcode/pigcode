@@ -150,12 +150,16 @@ class MobileSheetAction extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.glyph,
+    this.icon,
+    this.destructive = false,
     this.dividerAbove = false,
   });
 
   final String label;
   final VoidCallback onTap;
   final WorkspaceGlyph? glyph;
+  final IconData? icon;
+  final bool destructive;
   final bool dividerAbove;
 
   @override
@@ -164,6 +168,8 @@ class MobileSheetAction extends StatelessWidget {
     final palette = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+    final iconColor = destructive ? palette.error : palette.secondaryText;
+    final labelColor = destructive ? palette.error : null;
     return Semantics(
       button: true,
       child: InkWell(
@@ -183,15 +189,18 @@ class MobileSheetAction extends StatelessWidget {
                 children: [
                   if (glyph case final glyph?)
                     IconTheme(
-                      data: IconThemeData(color: palette.secondaryText),
+                      data: IconThemeData(color: iconColor),
                       child: WorkspaceIcon(glyph),
-                    ),
+                    )
+                  else if (icon case final iconData?)
+                    Icon(iconData, size: 20, color: iconColor),
                   Expanded(
                     child: Text(
                       label,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: 16,
                         height: 1.45,
+                        color: labelColor,
                         letterSpacing: theme.platform == TargetPlatform.iOS
                             ? -.24
                             : 0,

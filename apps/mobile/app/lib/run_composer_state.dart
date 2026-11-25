@@ -91,6 +91,8 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     bool? ultracode,
     List<MobileThreadReference>? references,
     List<String>? attachmentIds,
+    bool clearDraftImmediately = false,
+    void Function(PendingSend saved)? onReserved,
   }) {
     final supported = connectionSupportsComposerControls(target.$1);
     final supportsAttachments = connectionSupportsAttachments(target.$1);
@@ -120,6 +122,39 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
                   : null,
         ),
       ),
+      clearDraftImmediately: clearDraftImmediately,
+      onReserved: onReserved,
+    );
+  }
+
+  Future<void> discard(MobileRunMethod method) async {
+    final current = state.value;
+    if (current == null || current.working.contains(method)) return;
+    final pending = current.pending[method];
+    if (pending != null) {
+      await _journal.remove(pending, mounted: () => ref.mounted);
+    }
+    if (!ref.mounted) return;
+    final nextPending = {...?state.value?.pending}..remove(method);
+    final nextNotices = {...?state.value?.notices}..remove(method);
+    final nextOutcomes = {...?state.value?.outcomes}..remove(method);
+    _change(
+      pending: nextPending,
+      notices: nextNotices,
+      outcomes: nextOutcomes,
+    );
+  }
+
+  void clearOutcome(MobileRunMethod method) {
+    final current = state.value;
+    if (current == null) return;
+    if (!current.outcomes.containsKey(method) &&
+        !current.notices.containsKey(method)) {
+      return;
+    }
+    _change(
+      notices: {...current.notices}..remove(method),
+      outcomes: {...current.outcomes}..remove(method),
     );
   }
 
@@ -167,7 +202,11 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     return true;
   }
 
-  Future<void> _submit(PendingRunCommand command) async {
+  Future<void> _submit(
+    PendingRunCommand command, {
+    bool clearDraftImmediately = false,
+    void Function(PendingSend saved)? onReserved,
+  }) async {
     final method = command.method;
     if (state.value?.pending[method] != null || !_begin(method)) return;
     try {
@@ -178,6 +217,13 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
       if (saved.commandId != command.commandId) {
         _notice(method, _waiting(method));
         return;
+      }
+      if (clearDraftImmediately && saved is PendingSend) {
+        await _draft.clearIfMatchesContent(
+          saved.params.text,
+          attachmentIds: saved.params.attachmentIds ?? const [],
+        );
+        if (ref.mounted) onReserved?.call(saved);
       }
       await _transmit(saved);
     } catch (_) {

@@ -17,6 +17,7 @@ import 'composer/mention_editing_controller.dart';
 import 'composer/mobile_composer_card.dart';
 import 'composer/model_picker_sheet.dart';
 import 'composer/model_preferences.dart';
+import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'new_thread_draft_state.dart';
 import 'share/share_receiver.dart';
@@ -837,40 +838,49 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
             ),
           ),
         );
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final showPrompt =
-                form.text.trim().isEmpty &&
-                !hasAttachments &&
-                MediaQuery.viewInsetsOf(context).bottom == 0 &&
-                constraints.maxHeight >= ComposerType.heroMinViewportHeight;
-            return Column(
-              children: [
-                Expanded(
-                  child: Center(
-                    child: showPrompt
-                        ? Text(
-                            '做点什么？',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(
-                                  fontSize: ComposerType.heroFontSize,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0,
-                                  height: ComposerType.heroHeight,
-                                  leadingDistribution:
-                                      TextLeadingDistribution.even,
-                                ),
-                          )
-                        : null,
-                  ),
-                ),
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: constraints.maxHeight),
-                  child: dock,
-                ),
-              ],
-            );
-          },
+        final topInset = MobileChromeInsets.topOf(context);
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.only(top: topInset),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final showPrompt =
+                    form.text.trim().isEmpty &&
+                    !hasAttachments &&
+                    MediaQuery.viewInsetsOf(context).bottom == 0 &&
+                    constraints.maxHeight >= ComposerType.heroMinViewportHeight;
+                return Column(
+                  children: [
+                    Expanded(
+                      child: Center(
+                        child: showPrompt
+                            ? Text(
+                                '做点什么？',
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      fontSize: ComposerType.heroFontSize,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0,
+                                      height: ComposerType.heroHeight,
+                                      leadingDistribution:
+                                          TextLeadingDistribution.even,
+                                    ),
+                              )
+                            : null,
+                      ),
+                    ),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight,
+                      ),
+                      child: dock,
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         );
       },
     );
@@ -948,7 +958,9 @@ class _DraftComposer extends StatelessWidget {
     trailing: trailing,
     offline: offline,
     readOnly: working,
+    glass: true,
     onChanged: onChanged,
+    onSubmitted: (_) => onSend?.call(),
     actions: [
       MobileComposerActionButton(
         tooltip: '发送首条消息',

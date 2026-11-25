@@ -12,17 +12,21 @@ import 'attachments/image_compressor.dart';
 import 'composer/composer_suggestion_panel.dart';
 import 'composer/mention_editing_controller.dart';
 import 'local_drafts.dart';
+import 'mobile_glass.dart';
 import 'offline_cache.dart';
 import 'offline_sync_label.dart';
 import 'preview/preview_tab.dart';
 import 'preview/preview_url_extractor.dart';
 import 'preview/preview_webview_screen.dart';
+import 'run_command_journal.dart';
 import 'run_composer.dart';
+import 'run_composer_state.dart';
 import 'run_changes_card.dart';
 import 'run_diff_screen.dart';
 import 'share/share_receiver.dart';
 import 'thread_read_receipt.dart';
 import 'timeline/notice_line.dart';
+import 'timeline/optimistic_user_bubble.dart';
 import 'timeline/request_card.dart';
 import 'timeline_view.dart';
 import 'timeline_work.dart';
@@ -174,6 +178,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
   bool _rememberedAttachmentsSupport = false;
   String? _handledLiveShareId;
   final _text = ComposerTextEditingController();
+  double _composerHeight = 0;
+  PendingSend? _lastUnconfirmedSend;
+  final _optimisticAttachments = <String, List<MobileAttachmentRef>>{};
 
   @override
   void initState() {
@@ -379,11 +386,35 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final retry = provider == null
         ? null
         : () => ref.read(provider.notifier).retry();
+    final topInset = MobileChromeInsets.topOf(context);
+    final runProvider =
+        online && connection != null && connection.supportsRunCommands
+        ? runComposerProvider((connection, threadId))
+        : null;
+    final runState = runProvider == null ? null : ref.watch(runProvider).value;
+    final optimistic = _resolveOptimisticMessage(
+      runState: runState,
+      snapshot: snapshot,
+      online: online,
+      runProvider: runProvider,
+    );
     final Widget timeline;
     if (snapshot != null) {
       timeline = TimelineView(
         snapshot: snapshot,
         online: online,
+        topInset: topInset,
+        bottomInset: _composerHeight,
+        optimisticMessage: optimistic,
+        onTapOptimisticFailed: optimistic != null && optimistic.actionable
+            ? () => unawaited(
+                _handleOptimisticAction(
+                  optimistic,
+                  online: online,
+                  runProvider: runProvider,
+                ),
+              )
+            : null,
         loadEarlier: provider == null
             ? () async {}
             : () => ref.read(provider.notifier).loadEarlier(),
@@ -474,21 +505,62 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
               ?.runId
         : null;
     final content = LayoutBuilder(
-      builder: (context, constraints) => Column(
+      builder: (context, constraints) => Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(child: timeline),
-          if (!online && syncedAt != null && snapshot != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                offlineSyncLabel(syncedAt),
-                style: Theme.of(context).textTheme.bodySmall,
+          Positioned.fill(
+            child: snapshot == null
+                ? Padding(
+                    padding: EdgeInsets.only(
+                      top: topInset,
+                      bottom: _composerHeight,
+                    ),
+                    child: timeline,
+                  )
+                : timeline,
+          ),
+          if (snapshot != null && _composerHeight > 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: MobileBottomGlassVeil(height: _composerHeight + 18),
+            ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: _MeasureSize(
+              onChange: (size) {
+                if (!mounted) return;
+                if ((_composerHeight - size.height).abs() > 0.5) {
+                  setState(() => _composerHeight = size.height);
+                }
+              },
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!online && syncedAt != null && snapshot != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          offlineSyncLabel(syncedAt),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    if (_draftError) const Text('暂时无法保存本机草稿。'),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: constraints.maxHeight * .6,
+                      ),
+                      child: SingleChildScrollView(child: input),
+                    ),
+                  ],
+                ),
               ),
             ),
-          if (_draftError) const Text('暂时无法保存本机草稿。'),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: constraints.maxHeight * .6),
-            child: SingleChildScrollView(child: input),
           ),
         ],
       ),
@@ -777,6 +849,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         online: false,
         state: null,
         storageError: false,
+        glass: true,
         onRetryLoad: () {},
         onSend: (_) {},
         onStop: (_) {},
@@ -791,6 +864,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         online: false,
         state: null,
         storageError: false,
+        glass: true,
         onRetryLoad: () {},
         onSend: (_) {},
         onStop: (_) {},
@@ -854,6 +928,14 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         stoppableRunId: runId,
         queueRevision: revision,
         composer: snapshot.composer,
+        optimisticBubbles: true,
+        glass: true,
+        onSendReserved: (saved, refs) {
+          if (refs.isNotEmpty) {
+            _optimisticAttachments[saved.commandId] = refs;
+          }
+          _lastUnconfirmedSend = saved;
+        },
         wrapInput: (input) => input,
       );
     }
@@ -1036,4 +1118,202 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     ConnectionFailure(code: 'update-desktop') => '请更新电脑上的 Pigcode 后查看时间线。',
     _ => '暂时无法读取这条会话。',
   };
+
+  OptimisticUserMessage? _resolveOptimisticMessage({
+    required RunComposerState? runState,
+    required TimelineSnapshot? snapshot,
+    required bool online,
+    required AsyncNotifierProvider<RunComposerController, RunComposerState>?
+    runProvider,
+  }) {
+    const method = MobileRunMethod.runStart;
+    if (runState != null) {
+      final pending = runState.pending[method];
+      if (pending is PendingSend) {
+        _lastUnconfirmedSend = pending;
+        final working = runState.working.contains(method);
+        return OptimisticUserMessage(
+          commandId: pending.commandId,
+          text: pending.params.text,
+          status: working
+              ? OptimisticMessageStatus.sending
+              : OptimisticMessageStatus.unconfirmed,
+          attachments: _attachmentsForCommand(pending),
+          params: pending.params,
+        );
+      }
+      final outcome = runState.outcomes[method];
+      if (outcome != null && outcome.command is PendingSend) {
+        final send = outcome.command as PendingSend;
+        if (outcome.receipt case final receipt?) {
+          _lastUnconfirmedSend = null;
+          final alreadyInTimeline =
+              receipt.queuedMessageId != null ||
+              (snapshot != null &&
+                  snapshot.events.any(
+                    (event) =>
+                        event.kind == MobileTimelineKind.messageUser &&
+                        event.runId == receipt.runId,
+                  ));
+          if (alreadyInTimeline) {
+            if (runProvider != null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  ref.read(runProvider.notifier).clearOutcome(method);
+                }
+              });
+            }
+            return null;
+          }
+          return OptimisticUserMessage(
+            commandId: send.commandId,
+            text: send.params.text,
+            status: OptimisticMessageStatus.accepted,
+            attachments: _attachmentsForCommand(send),
+            runId: receipt.runId,
+            queuedMessageId: receipt.queuedMessageId,
+            params: send.params,
+          );
+        }
+        _lastUnconfirmedSend = null;
+        return OptimisticUserMessage(
+          commandId: send.commandId,
+          text: send.params.text,
+          status: OptimisticMessageStatus.rejected,
+          attachments: _attachmentsForCommand(send),
+          errorText: runState.notices[method],
+          params: send.params,
+        );
+      }
+      // 联机状态已无 pending/outcome，说明该条已经结算。
+      _lastUnconfirmedSend = null;
+      return null;
+    }
+
+    if (!online) {
+      final offlinePending = _lastUnconfirmedSend;
+      if (offlinePending != null) {
+        return OptimisticUserMessage(
+          commandId: offlinePending.commandId,
+          text: offlinePending.params.text,
+          status: OptimisticMessageStatus.unconfirmed,
+          attachments: _attachmentsForCommand(offlinePending),
+          params: offlinePending.params,
+        );
+      }
+    }
+    return null;
+  }
+
+  List<MobileAttachmentRef> _attachmentsForCommand(PendingSend send) {
+    final cached = _optimisticAttachments[send.commandId];
+    if (cached != null) return cached;
+    final ids = send.params.attachmentIds;
+    if (ids == null || ids.isEmpty) return const [];
+    return [
+      for (final id in ids)
+        MobileAttachmentRef(
+          id: id,
+          fileName: '图片',
+          mimeType: 'image/jpeg',
+          sizeBytes: 0,
+        ),
+    ];
+  }
+
+  Future<void> _handleOptimisticAction(
+    OptimisticUserMessage message, {
+    required bool online,
+    required AsyncNotifierProvider<RunComposerController, RunComposerState>?
+    runProvider,
+  }) async {
+    const method = MobileRunMethod.runStart;
+    final controller = runProvider == null ? null : ref.read(runProvider.notifier);
+    await showOptimisticMessageActionsSheet(
+      context,
+      message: message,
+      online: online,
+      onResend: controller == null
+          ? null
+          : () {
+              if (message.status == OptimisticMessageStatus.rejected) {
+                final params = message.params;
+                if (params == null) return;
+                controller.clearOutcome(method);
+                unawaited(
+                  controller.send(
+                    params.text,
+                    effort: params.effort,
+                    fast: params.fast,
+                    ultracode: params.ultracode,
+                    references: params.references,
+                    attachmentIds: params.attachmentIds,
+                    clearDraftImmediately: true,
+                    onReserved: (saved) {
+                      if (message.attachments.isNotEmpty) {
+                        _optimisticAttachments[saved.commandId] =
+                            message.attachments;
+                      }
+                      _lastUnconfirmedSend = saved;
+                    },
+                  ),
+                );
+              } else {
+                unawaited(controller.retry(method));
+              }
+            },
+      onCheckReceipt: controller == null
+          ? null
+          : () => unawaited(controller.check(method)),
+      onRestoreToInput: () {
+        final current = _text.text;
+        final next = current.trim().isEmpty
+            ? message.text
+            : '$current\n${message.text}';
+        _text.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: next.length),
+        );
+        if (controller != null) {
+          unawaited(controller.discard(method));
+        }
+        setState(() => _lastUnconfirmedSend = null);
+      },
+      onDelete: () {
+        if (controller != null) {
+          unawaited(controller.discard(method));
+        }
+        setState(() => _lastUnconfirmedSend = null);
+      },
+    );
+  }
+}
+
+class _MeasureSize extends StatefulWidget {
+  const _MeasureSize({required this.onChange, required this.child});
+
+  final ValueChanged<Size> onChange;
+  final Widget child;
+
+  @override
+  State<_MeasureSize> createState() => _MeasureSizeState();
+}
+
+class _MeasureSizeState extends State<_MeasureSize> {
+  Size? _lastSize;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = context.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      final size = box.size;
+      if (_lastSize != size) {
+        _lastSize = size;
+        widget.onChange(size);
+      }
+    });
+    return widget.child;
+  }
 }

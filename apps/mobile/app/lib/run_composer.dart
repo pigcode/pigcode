@@ -44,6 +44,9 @@ class RunComposer extends ConsumerStatefulWidget {
     this.supportsAttachments,
     this.leading,
     this.trailing,
+    this.optimisticBubbles = false,
+    this.glass = false,
+    this.onSendReserved,
   });
 
   final MobileConnection connection;
@@ -61,6 +64,10 @@ class RunComposer extends ConsumerStatefulWidget {
   final bool? supportsAttachments;
   final Widget? leading;
   final Widget? trailing;
+  final bool optimisticBubbles;
+  final bool glass;
+  final void Function(PendingSend saved, List<MobileAttachmentRef> attachments)?
+  onSendReserved;
 
   @override
   ConsumerState<RunComposer> createState() => _RunComposerState();
@@ -262,6 +269,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         : const <MobileThreadReference>[];
 
     List<String>? attachmentIds;
+    var committedRefs = const <MobileAttachmentRef>[];
     if (_attachments.hasItems) {
       setState(() => _submittingAttachments = true);
       try {
@@ -270,6 +278,11 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         if (mounted) setState(() => _submittingAttachments = false);
       }
       if (!mounted || attachmentIds == null) return;
+      final idSet = attachmentIds.toSet();
+      committedRefs = [
+        for (final item in _attachments.items)
+          if (item.remoteRef case final ref? when idSet.contains(ref.id)) ref,
+      ];
     }
 
     unawaited(
@@ -284,6 +297,19 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         attachmentIds:
             attachmentIds != null && attachmentIds.isNotEmpty
             ? attachmentIds
+            : null,
+        clearDraftImmediately: widget.optimisticBubbles,
+        onReserved: widget.optimisticBubbles
+            ? (saved) {
+                if (!mounted) return;
+                // 发送已落盘 journal 后立刻清空输入框与已选图片，消息以气泡呈现在时间线底部。
+                if (_draft.text == saved.params.text) _draft.clear();
+                if (saved.params.attachmentIds case final ids?
+                    when ids.isNotEmpty) {
+                  unawaited(_attachments.clearCommittedIds(ids));
+                }
+                widget.onSendReserved?.call(saved, committedRefs);
+              }
             : null,
       ),
     );
@@ -421,7 +447,8 @@ class _RunComposerState extends ConsumerState<RunComposer> {
           if (params.attachmentIds case final ids? when ids.isNotEmpty) {
             unawaited(_attachments.clearCommittedIds(ids));
           }
-        } else if (outcome.receipt == null &&
+        } else if (!widget.optimisticBubbles &&
+            outcome.receipt == null &&
             _draft.text.isEmpty &&
             params.text.isNotEmpty) {
           _draft.text = params.text;
@@ -589,6 +616,8 @@ class _RunComposerState extends ConsumerState<RunComposer> {
           loadRemoteFull: _loadRemoteFull,
           leading: leading,
           trailing: effectiveTrailing,
+          optimisticBubbles: widget.optimisticBubbles,
+          glass: widget.glass,
         ),
       ),
     );
@@ -684,6 +713,8 @@ class RunComposerView extends StatelessWidget {
     this.loadRemoteFull,
     this.leading,
     this.trailing,
+    this.optimisticBubbles = false,
+    this.glass = false,
   });
 
   final TextEditingController draft;
@@ -705,6 +736,8 @@ class RunComposerView extends StatelessWidget {
   final AttachmentBytesLoader? loadRemoteFull;
   final Widget? leading;
   final Widget? trailing;
+  final bool optimisticBubbles;
+  final bool glass;
 
   @override
   Widget build(BuildContext context) {
@@ -729,9 +762,10 @@ class RunComposerView extends StatelessWidget {
         ),
       if (state case final view?)
         for (final kind in MobileRunMethod.values)
-          if (view.pending[kind] != null ||
-              view.notices[kind] != null ||
-              view.outcomes[kind]?.recovered == true)
+          if (!(optimisticBubbles && kind == MobileRunMethod.runStart) &&
+              (view.pending[kind] != null ||
+                  view.notices[kind] != null ||
+                  view.outcomes[kind]?.recovered == true))
             _PendingRunRow(
               kind: kind,
               draft: draft,
@@ -802,6 +836,10 @@ class RunComposerView extends StatelessWidget {
           inputKey: const ValueKey('run-composer-input'),
           hintText: hintText,
           offline: !online,
+          glass: glass,
+          onSubmitted: (_) {
+            if (canSend) onSend(text);
+          },
           banners: banners,
           attachments: showAttachmentStrip
               ? ComposerAttachmentStrip(

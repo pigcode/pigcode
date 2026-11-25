@@ -342,9 +342,10 @@ abstract final class ComposerControl {
   static const double lockedRowOpacity = 0.6;
   static const double effortOnDotOpacity = 0.6;
 
-  /// 多行输入行数范围。
+  /// 多行输入行数范围与贴合字高的光标基准高度（避免 1.6 倍行高把 iOS 光标拉得比文字高一截）。
   static const int minLines = 1;
   static const int maxLines = 5;
+  static const double cursorHeight = 19;
 
   /// 圆形按钮透明触区每侧超出视觉圆的像素量。
   static double actionOverhang(BuildContext context) =>

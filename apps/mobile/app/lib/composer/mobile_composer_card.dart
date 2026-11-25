@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../mobile_glass.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'composer_tokens.dart';
@@ -25,7 +26,9 @@ class MobileComposerCard extends StatefulWidget {
     this.trailing,
     this.offline = false,
     this.readOnly = false,
+    this.glass = false,
     this.onChanged,
+    this.onSubmitted,
     this.outerPadding = ComposerSpace.shell,
   });
 
@@ -44,7 +47,9 @@ class MobileComposerCard extends StatefulWidget {
   final Widget? trailing;
   final bool offline;
   final bool readOnly;
+  final bool glass;
   final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSubmitted;
   final EdgeInsetsGeometry outerPadding;
 
   @override
@@ -65,99 +70,147 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
     final brightness = Theme.of(context).brightness;
     final colors = ComposerSurface.palette(brightness);
     final hasBanners = widget.banners.isNotEmpty;
+    final useSendAction = widget.onSubmitted != null;
+    final cursorHeight = MediaQuery.textScalerOf(
+      context,
+    ).scale(ComposerControl.cursorHeight);
+    final useGlass =
+        widget.glass &&
+        !widget.offline &&
+        !MediaQuery.highContrastOf(context);
+    final cardBorderRadius = BorderRadius.circular(ComposerRadius.card);
+
+    final innerContent = Material(
+      type: MaterialType.transparency,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (hasBanners)
+            Padding(
+              padding: ComposerSpace.bannerPadding,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: ComposerSpace.bannerGap,
+                children: widget.banners,
+              ),
+            ),
+          ?widget.attachments,
+          Padding(
+            padding: hasBanners || widget.attachments != null
+                ? ComposerSpace.inputPaddingWithBanners
+                : ComposerSpace.inputPadding,
+            child: TextField(
+              key: widget.inputKey,
+              controller: widget.controller,
+              focusNode: widget.focusNode,
+              onChanged: widget.onChanged,
+              onSubmitted: widget.onSubmitted,
+              readOnly: widget.readOnly,
+              minLines: ComposerControl.minLines,
+              maxLines: ComposerControl.maxLines,
+              keyboardType: useSendAction
+                  ? TextInputType.text
+                  : TextInputType.multiline,
+              textInputAction: useSendAction
+                  ? TextInputAction.send
+                  : TextInputAction.newline,
+              cursorHeight: cursorHeight,
+              cursorRadius: const Radius.circular(1.5),
+              style: ComposerType.input,
+              decoration: InputDecoration(
+                hintText: widget.hintText,
+                hintStyle: ComposerType.input.copyWith(color: colors.faint),
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+          Padding(
+            padding: ComposerSpace.toolbarPadding(
+              context,
+              hasLeading: widget.leading != null,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                ?widget.leading,
+                if (widget.trailing case final trailing?)
+                  Expanded(
+                    child: Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: trailing,
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                if (widget.actions.isNotEmpty) ...[
+                  const SizedBox(width: ComposerSpace.toolbarActionGap),
+                  for (var i = 0; i < widget.actions.length; i++) ...[
+                    if (i > 0)
+                      const SizedBox(width: ComposerSpace.toolbarGap),
+                    widget.actions[i],
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final baseDecoration = ComposerSurface.card(
+      brightness,
+      focused: _focused,
+      offline: widget.offline,
+    );
 
     final card = Focus(
       canRequestFocus: false,
       skipTraversal: true,
       onFocusChange: _handleFocusChange,
-      child: AnimatedContainer(
-        key: MobileComposerCard.cardKey,
-        duration: MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : TimelineMotion.med,
-        curve: TimelineMotion.ease,
-        decoration: ComposerSurface.card(
-          brightness,
-          focused: _focused,
-          offline: widget.offline,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (hasBanners)
-                Padding(
-                  padding: ComposerSpace.bannerPadding,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    spacing: ComposerSpace.bannerGap,
-                    children: widget.banners,
+      child: useGlass
+          ? MobileGlassSurface(
+              borderRadius: cardBorderRadius,
+              blurSigma: 22,
+              tintOpacity: brightness == Brightness.dark ? 0.74 : 0.82,
+              borderColorOverride: Colors.transparent,
+              shadows: brightness == Brightness.dark
+                  ? ComposerSurface.darkShadow
+                  : ComposerSurface.lightShadow,
+              child: AnimatedContainer(
+                key: MobileComposerCard.cardKey,
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : TimelineMotion.med,
+                curve: TimelineMotion.ease,
+                decoration: BoxDecoration(
+                  borderRadius: cardBorderRadius,
+                  border: Border.all(
+                    color: ComposerSurface.cardBorder(
+                      brightness,
+                      focused: _focused,
+                    ),
+                    width: ComposerBorder.card,
                   ),
                 ),
-              ?widget.attachments,
-              Padding(
-                padding: hasBanners || widget.attachments != null
-                    ? ComposerSpace.inputPaddingWithBanners
-                    : ComposerSpace.inputPadding,
-                child: TextField(
-                  key: widget.inputKey,
-                  controller: widget.controller,
-                  focusNode: widget.focusNode,
-                  onChanged: widget.onChanged,
-                  readOnly: widget.readOnly,
-                  minLines: ComposerControl.minLines,
-                  maxLines: ComposerControl.maxLines,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  style: ComposerType.input,
-                  decoration: InputDecoration(
-                    hintText: widget.hintText,
-                    hintStyle: ComposerType.input.copyWith(color: colors.faint),
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                  ),
-                ),
+                child: innerContent,
               ),
-              Padding(
-                padding: ComposerSpace.toolbarPadding(
-                  context,
-                  hasLeading: widget.leading != null,
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    ?widget.leading,
-                    if (widget.trailing case final trailing?)
-                      Expanded(
-                        child: Align(
-                          alignment: AlignmentDirectional.centerEnd,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: trailing,
-                          ),
-                        ),
-                      )
-                    else
-                      const Spacer(),
-                    if (widget.actions.isNotEmpty) ...[
-                      const SizedBox(width: ComposerSpace.toolbarActionGap),
-                      for (var i = 0; i < widget.actions.length; i++) ...[
-                        if (i > 0)
-                          const SizedBox(width: ComposerSpace.toolbarGap),
-                        widget.actions[i],
-                      ],
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+            )
+          : AnimatedContainer(
+              key: MobileComposerCard.cardKey,
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : TimelineMotion.med,
+              curve: TimelineMotion.ease,
+              decoration: baseDecoration,
+              child: innerContent,
+            ),
     );
 
     final content = widget.header == null
