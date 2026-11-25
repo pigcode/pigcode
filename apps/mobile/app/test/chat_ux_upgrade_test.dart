@@ -391,4 +391,36 @@ void main() {
       expect(find.byType(UiKitView), findsNothing);
     },
   );
+
+  testWidgets('keeps glass surface on offline MobileComposerCard when glass is enabled', (
+    tester,
+  ) async {
+    addTearDown(() => MobileNativeGlass.instance.setSupportedForTest(false));
+    MobileNativeGlass.instance.setSupportedForTest(true);
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: pigcodeTheme(Brightness.light).copyWith(
+          platform: TargetPlatform.iOS,
+        ),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: MobileComposerCard(
+              controller: controller,
+              hintText: '电脑离线，消息发不出去',
+              offline: true,
+              glass: true,
+              actions: const [],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(MobileGlassSurface), findsOneWidget);
+    expect(find.byType(UiKitView), findsOneWidget);
+  });
 }

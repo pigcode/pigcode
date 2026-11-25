@@ -625,25 +625,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     double visualInset,
     Widget child,
   ) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(
-          left: visualInset,
-          right: visualInset,
-          top: visualInset,
-          bottom: visualInset,
-          child: const MobileGlassSurface(
-            blurSigma: 20,
-            child: SizedBox.expand(),
-          ),
-        ),
-        Material(
+    return Padding(
+      padding: EdgeInsets.all(visualInset),
+      child: MobileGlassSurface(
+        blurSigma: 16,
+        child: Material(
           type: MaterialType.transparency,
           shape: const StadiumBorder(),
           child: child,
         ),
-      ],
+      ),
     );
   }
 
@@ -932,7 +923,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
               context,
               visualInset,
               SizedBox.square(
-                dimension: hit,
+                dimension: hit - visualInset * 2,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -940,6 +931,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                       value: attention ? '有待处理会话' : null,
                       child: IconButton(
                         focusNode: _menuButton,
+                        padding: EdgeInsets.zero,
                         onPressed: () => _menu(true),
                         tooltip: '打开菜单',
                         color: colors.foreground,
@@ -948,8 +940,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                     ),
                     if (attention)
                       Positioned(
-                        right: 8 + visualInset,
-                        top: 9 + visualInset,
+                        right: 8,
+                        top: 9,
                         child: IgnorePointer(
                           child: Container(
                             width: 8,
@@ -957,7 +949,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: colors.attentionMark,
-                              border: Border.all(color: colors.background),
+                              border: Border.all(
+                                color: colors.surface,
+                                width: 1.5,
+                              ),
                             ),
                           ),
                         ),
@@ -966,36 +961,45 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 ),
               ),
             ),
-            SizedBox(width: 10 - visualInset),
+            const SizedBox(width: 8),
             Expanded(
-              child: canOpenThreadSheet
-                  ? Tooltip(
-                      message: '会话详情',
-                      child: Semantics(
-                        button: true,
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(10),
-                            onTap: () => _showThreadSheet(
-                              thread,
-                              projectName: projectName,
-                            ),
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: hit),
-                              child: Align(
-                                alignment: AlignmentDirectional.centerStart,
-                                child: titleRow,
+              child: Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: _headerControl(
+                  context,
+                  visualInset,
+                  canOpenThreadSheet
+                      ? Tooltip(
+                          message: '会话详情',
+                          child: Semantics(
+                            button: true,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(999),
+                              onTap: () => _showThreadSheet(
+                                thread,
+                                projectName: projectName,
+                              ),
+                              child: SizedBox(
+                                height: hit - visualInset * 2,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 13,
+                                  ),
+                                  child: titleRow,
+                                ),
                               ),
                             ),
                           ),
+                        )
+                      : SizedBox(
+                          height: hit - visualInset * 2,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 13),
+                            child: titleRow,
+                          ),
                         ),
-                      ),
-                    )
-                  : Align(
-                      alignment: AlignmentDirectional.centerStart,
-                      child: titleRow,
-                    ),
+                ),
+              ),
             ),
             if (!widget.online &&
                 widget.error != null &&
@@ -1007,13 +1011,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                 icon: const Icon(Icons.refresh, size: 20),
               ),
             if (hasRightControl) ...[
-              SizedBox(width: 10 - visualInset),
+              const SizedBox(width: 8),
               _headerControl(
                 context,
                 visualInset,
                 Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: rightActionCount > 1 ? 1 : 0,
+                    horizontal: rightActionCount > 1 ? 2 : 0,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1024,7 +1028,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                           child: IconButton(
                             tooltip: '改动',
                             style: IconButton.styleFrom(
-                              minimumSize: Size.square(hit),
+                              minimumSize: Size.square(hit - visualInset * 2),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: changes.open,
@@ -1056,12 +1060,13 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         ),
                       if (showWorkbench)
                         SizedBox.square(
-                          dimension: hit,
+                          dimension: hit - visualInset * 2,
                           child: IconButton(
                             key: const ValueKey('workspace-workbench-button'),
                             tooltip: '工作台',
+                            padding: EdgeInsets.zero,
                             style: IconButton.styleFrom(
-                              minimumSize: Size.square(hit),
+                              minimumSize: Size.square(hit - visualInset * 2),
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: () =>
@@ -1075,9 +1080,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                         ),
                       if (showRightAction)
                         SizedBox.square(
-                          dimension: hit,
+                          dimension: hit - visualInset * 2,
                           child: IconButton(
                             tooltip: _draftOpen ? '返回会话' : '新会话',
+                            padding: EdgeInsets.zero,
                             onPressed: _draftOpen
                                 ? () => setState(() => _draftOpen = false)
                                 : () => _openDraft(null),
@@ -1154,30 +1160,29 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                             ignoring: !_open,
                             child: TickerMode(
                               enabled: _open,
-                              child: SafeArea(
-                                child: SidebarMenu(
-                                  snapshot: widget.snapshot,
-                                  selectedId: _draftOpen ? null : thread?.id,
-                                  computerName: widget.computerName,
-                                  online: widget.online,
-                                  connectionLabel: widget.connectionLabel,
-                                  commands: widget.sidebarCommands,
-                                  focusNode: _menuFocus,
-                                  onSelect: (id) {
-                                    _reminderThread = null;
-                                    _reminderUnavailable = false;
-                                    _draftOpen = false;
-                                    _visit++;
-                                    _selectThread(id);
-                                    _menu(false);
-                                  },
-                                  onNewThread: canOpenDraft ? _openDraft : null,
-                                  onSettings: widget.onSettings,
-                                  onComputers: () {
-                                    _menu(false);
-                                    widget.onComputers();
-                                  },
-                                ),
+                              child: SidebarMenu(
+                                active: _open,
+                                snapshot: widget.snapshot,
+                                selectedId: _draftOpen ? null : thread?.id,
+                                computerName: widget.computerName,
+                                online: widget.online,
+                                connectionLabel: widget.connectionLabel,
+                                commands: widget.sidebarCommands,
+                                focusNode: _menuFocus,
+                                onSelect: (id) {
+                                  _reminderThread = null;
+                                  _reminderUnavailable = false;
+                                  _draftOpen = false;
+                                  _visit++;
+                                  _selectThread(id);
+                                  _menu(false);
+                                },
+                                onNewThread: canOpenDraft ? _openDraft : null,
+                                onSettings: widget.onSettings,
+                                onComputers: () {
+                                  _menu(false);
+                                  widget.onComputers();
+                                },
                               ),
                             ),
                           ),
@@ -1238,7 +1243,6 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                           right: 0,
                                           child: MobileTopGlassVeil(
                                             height: topInset + 16,
-                                            statusBarHeight: topPadding,
                                           ),
                                         ),
                                         Positioned(

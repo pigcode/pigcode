@@ -74,10 +74,7 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
     final cursorHeight = MediaQuery.textScalerOf(
       context,
     ).scale(ComposerControl.cursorHeight);
-    final useGlass =
-        widget.glass &&
-        !widget.offline &&
-        !MediaQuery.highContrastOf(context);
+    final useGlass = widget.glass && !MediaQuery.highContrastOf(context);
     final cardBorderRadius = BorderRadius.circular(ComposerRadius.card);
 
     final innerContent = Material(
@@ -192,6 +189,9 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
                       : TimelineMotion.med,
                   curve: TimelineMotion.ease,
                   decoration: BoxDecoration(
+                    color: widget.offline
+                        ? colors.surfaceSunken
+                        : Colors.transparent,
                     borderRadius: cardBorderRadius,
                     border: Border.all(
                       color: nativeGlass && !_focused

@@ -334,65 +334,79 @@ class _SpecularGlassRimPainter extends CustomPainter {
       oldDelegate.outerBorderColor != outerBorderColor;
 }
 
-/// 顶栏背后的轻柔渐隐遮罩：
-/// 只在最上方状态栏区域轻度柔化避免与系统时钟打架，顶栏悬浮胶囊背后保持足够通透，
-/// 让滚动正文清晰进入 `UIGlassEffect` 透镜产生真实折射与边缘光晕。
+/// 顶栏背后的轻柔渐隐遮罩（纯渐变、无生硬裁切模糊带）：
+/// 避免 Flutter `BackdropFilter` 与上层原生 `UIGlassEffect` 平台视图产生采样接缝，
+/// 顶部状态栏柔化保护系统时间，顶栏悬浮胶囊背后保持清透以呈现真实光学折射。
 class MobileTopGlassVeil extends StatelessWidget {
   const MobileTopGlassVeil({
     super.key,
     required this.height,
-    this.statusBarHeight = 0,
+    this.color,
   });
 
   final double height;
-  final double statusBarHeight;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
-    final bg = colors.background;
-    final highContrast = MediaQuery.highContrastOf(context);
-    final blurHeight = statusBarHeight > 0 ? statusBarHeight + 8 : 0.0;
+    final bg = color ?? colors.background;
 
     return IgnorePointer(
       child: SizedBox(
         height: height,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (!highContrast && blurHeight > 0)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: blurHeight,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    bg.withValues(alpha: 0.86),
-                    bg.withValues(alpha: 0.44),
-                    bg.withValues(alpha: 0.14),
-                    bg.withValues(alpha: 0.0),
-                  ],
-                  stops: const [0.0, 0.36, 0.70, 1.0],
-                ),
-              ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                bg.withValues(alpha: 0.92),
+                bg.withValues(alpha: 0.62),
+                bg.withValues(alpha: 0.16),
+                bg.withValues(alpha: 0.0),
+              ],
+              stops: const [0.0, 0.34, 0.72, 1.0],
             ),
-          ],
+          ),
         ),
       ),
     );
+  }
+}
+
+/// 轻量尺寸测量包装：用于动态同步悬浮顶栏/底栏高度到穿透滚动列表的留白。
+class MobileMeasureSize extends StatefulWidget {
+  const MobileMeasureSize({
+    super.key,
+    required this.onChange,
+    required this.child,
+  });
+
+  final ValueChanged<Size> onChange;
+  final Widget child;
+
+  @override
+  State<MobileMeasureSize> createState() => _MobileMeasureSizeState();
+}
+
+class _MobileMeasureSizeState extends State<MobileMeasureSize> {
+  Size? _lastSize;
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final box = context.findRenderObject();
+      if (box is! RenderBox || !box.hasSize) return;
+      final size = box.size;
+      if (_lastSize != size) {
+        _lastSize = size;
+        widget.onChange(size);
+      }
+    });
+    return widget.child;
   }
 }
 
@@ -417,17 +431,22 @@ class MobileChromeInsets extends InheritedWidget {
       oldWidget.topInset != topInset;
 }
 
-/// 底部输入框背后的柔和渐变托底：让滚动消息在输入卡片下方自然淡出。
+/// 底部输入框或侧栏底栏背后的柔和渐变托底：让滚动内容在悬浮卡片下方自然淡出。
 class MobileBottomGlassVeil extends StatelessWidget {
-  const MobileBottomGlassVeil({super.key, required this.height});
+  const MobileBottomGlassVeil({
+    super.key,
+    required this.height,
+    this.color,
+  });
 
   final double height;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
-    final bg = colors.background;
+    final bg = color ?? colors.background;
     return IgnorePointer(
       child: SizedBox(
         height: height,
@@ -439,7 +458,7 @@ class MobileBottomGlassVeil extends StatelessWidget {
               colors: [
                 bg.withValues(alpha: 0.0),
                 bg.withValues(alpha: 0.45),
-                bg.withValues(alpha: 0.86),
+                bg.withValues(alpha: 0.88),
               ],
               stops: const [0.0, 0.5, 1.0],
             ),

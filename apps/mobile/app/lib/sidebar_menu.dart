@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
+import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
-import 'mobile_surfaces.dart';
 import 'offline_sync_label.dart';
 import 'sidebar_options.dart';
 import 'theme_colors.dart';
@@ -49,6 +49,7 @@ class SidebarMenu extends StatefulWidget {
     this.onNewThread,
     this.onSettings,
     this.commands,
+    this.active = true,
   });
 
   final SidebarSnapshot? snapshot;
@@ -62,6 +63,7 @@ class SidebarMenu extends StatefulWidget {
   final ValueChanged<String?>? onNewThread;
   final VoidCallback? onSettings;
   final MobileSidebarCommands? commands;
+  final bool active;
 
   @override
   State<SidebarMenu> createState() => _SidebarMenuState();
@@ -73,6 +75,8 @@ class _SidebarMenuState extends State<SidebarMenu> {
   String _query = '';
   SidebarArrangement _arrangement = defaultSidebarArrangement;
   bool _updating = false;
+  double _headerHeight = 0;
+  double _footerHeight = 0;
 
   bool get _canEdit => widget.online && widget.commands != null && !_updating;
   bool get _all => _arrangement.filters.length == SidebarCategory.values.length;
@@ -493,19 +497,26 @@ class _SidebarMenuState extends State<SidebarMenu> {
       if (_searching)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: TextField(
-            autofocus: true,
-            onChanged: (value) =>
-                setState(() => _query = value.trim().toLowerCase()),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: '搜索项目或会话',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              filled: true,
-              fillColor: colors.surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
+          child: MobileGlassSurface(
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            blurSigma: 14,
+            useNativeGlass: widget.active,
+            child: Material(
+              type: MaterialType.transparency,
+              child: TextField(
+                autofocus: true,
+                onChanged: (value) =>
+                    setState(() => _query = value.trim().toLowerCase()),
+                textInputAction: TextInputAction.search,
+                decoration: const InputDecoration(
+                  hintText: '搜索项目或会话',
+                  prefixIcon: Icon(Icons.search, size: 20),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
               ),
             ),
           ),
@@ -515,33 +526,35 @@ class _SidebarMenuState extends State<SidebarMenu> {
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 50),
-            child: DecoratedBox(
-              decoration: mobileRaisedSurface(
-                theme.brightness,
-                radius: const BorderRadius.all(Radius.circular(16)),
-              ),
-              child: TextButton(
-                style: TextButton.styleFrom(
-                  alignment: AlignmentDirectional.centerStart,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  foregroundColor: colors.foreground,
-                  textStyle: labelStyle(16, fontWeight: FontWeight.w500),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                onPressed: () => create(null),
-                child: Row(
-                  children: [
-                    const WorkspaceIcon(WorkspaceGlyph.compose),
-                    const SizedBox(width: 10),
-                    Flexible(
-                      child: alignedLabel(
-                        const Text('新会话'),
-                        const Offset(0, -2 / 3),
-                      ),
+            child: MobileGlassSurface(
+              borderRadius: const BorderRadius.all(Radius.circular(16)),
+              blurSigma: 16,
+              useNativeGlass: widget.active,
+              child: Material(
+                type: MaterialType.transparency,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    alignment: AlignmentDirectional.centerStart,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    foregroundColor: colors.foreground,
+                    textStyle: labelStyle(16, fontWeight: FontWeight.w500),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  ],
+                  ),
+                  onPressed: () => create(null),
+                  child: Row(
+                    children: [
+                      const WorkspaceIcon(WorkspaceGlyph.compose),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: alignedLabel(
+                          const Text('新会话'),
+                          const Offset(0, -2 / 3),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -701,67 +714,72 @@ class _SidebarMenuState extends State<SidebarMenu> {
           Expanded(
             child: Semantics(
               label: '管理电脑',
-              child: DecoratedBox(
-                decoration: mobileRaisedSurface(theme.brightness),
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 50),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 6,
-                    ),
-                    foregroundColor: colors.foreground,
-                    textStyle: labelStyle(14),
-                  ),
-                  onPressed: widget.onComputers,
-                  child: Row(
-                    children: [
-                      IconTheme(
-                        data: IconThemeData(color: colors.secondaryText),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.laptop,
-                          size: 18,
-                        ),
+              child: MobileGlassSurface(
+                blurSigma: 16,
+                useNativeGlass: widget.active,
+                child: Material(
+                  type: MaterialType.transparency,
+                  shape: const StadiumBorder(),
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 50),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
                       ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) => Row(
-                            mainAxisSize: MainAxisSize.min,
-                            spacing: 6,
-                            children: [
-                              MobileStatusDot(
-                                color: widget.online
-                                    ? colors.readyMark
-                                    : colors.faint,
-                              ),
-                              Flexible(
-                                child: Text(
-                                  widget.computerName,
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    letterSpacing: isAndroid ? .2 : null,
-                                  ),
-                                ),
-                              ),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: constraints.maxWidth * .6,
-                                ),
-                                child: Text(
-                                  connectionText,
-                                  style: TextStyle(color: colors.muted),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                      foregroundColor: colors.foreground,
+                      textStyle: labelStyle(14),
+                    ),
+                    onPressed: widget.onComputers,
+                    child: Row(
+                      children: [
+                        IconTheme(
+                          data: IconThemeData(color: colors.secondaryText),
+                          child: const WorkspaceIcon(
+                            WorkspaceGlyph.laptop,
+                            size: 18,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) => Row(
+                              mainAxisSize: MainAxisSize.min,
+                              spacing: 6,
+                              children: [
+                                MobileStatusDot(
+                                  color: widget.online
+                                      ? colors.readyMark
+                                      : colors.faint,
+                                ),
+                                Flexible(
+                                  child: Text(
+                                    widget.computerName,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: isAndroid ? .2 : null,
+                                    ),
+                                  ),
+                                ),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: constraints.maxWidth * .6,
+                                  ),
+                                  child: Text(
+                                    connectionText,
+                                    style: TextStyle(color: colors.muted),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -769,14 +787,19 @@ class _SidebarMenuState extends State<SidebarMenu> {
           ),
           if (widget.onSettings case final open?) ...[
             const SizedBox(width: 10),
-            DecoratedBox(
-              decoration: mobileRaisedSurface(theme.brightness),
-              child: SizedBox.square(
-                dimension: 50,
-                child: IconButton(
-                  tooltip: '设置',
-                  onPressed: open,
-                  icon: const WorkspaceIcon(WorkspaceGlyph.settings),
+            MobileGlassSurface(
+              blurSigma: 16,
+              useNativeGlass: widget.active,
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                child: SizedBox.square(
+                  dimension: 50,
+                  child: IconButton(
+                    tooltip: '设置',
+                    onPressed: open,
+                    icon: const WorkspaceIcon(WorkspaceGlyph.settings),
+                  ),
                 ),
               ),
             ),
@@ -791,19 +814,83 @@ class _SidebarMenuState extends State<SidebarMenu> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxHeight < 320 || textScaler.scale(22) > 44) {
-              return ListView(children: [...header, ...content, footer]);
+              return SafeArea(
+                child: ListView(children: [...header, ...content, footer]),
+              );
             }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            final mediaPadding = MediaQuery.paddingOf(context);
+            final topFallback =
+                mediaPadding.top +
+                56 +
+                (widget.onNewThread != null ? 60 : 0) +
+                (_searching ? 56 : 0);
+            final bottomFallback = mediaPadding.bottom + 68;
+            final listTop = _headerHeight > 0 ? _headerHeight : topFallback;
+            final listBottom =
+                (_footerHeight > 0 ? _footerHeight : bottomFallback) + 12;
+
+            return Stack(
+              fit: StackFit.expand,
               children: [
-                ...header,
-                Expanded(
+                Positioned.fill(
                   child: ListView(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.only(top: listTop, bottom: listBottom),
                     children: content,
                   ),
                 ),
-                footer,
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: MobileTopGlassVeil(
+                    height: listTop + 14,
+                    color: colors.window,
+                  ),
+                ),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: MobileMeasureSize(
+                    onChange: (measured) {
+                      if (!mounted) return;
+                      if ((_headerHeight - measured.height).abs() > 0.5) {
+                        setState(() => _headerHeight = measured.height);
+                      }
+                    },
+                    child: SafeArea(
+                      bottom: false,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: header,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MobileBottomGlassVeil(
+                    height: listBottom + 10,
+                    color: colors.window,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: MobileMeasureSize(
+                    onChange: (measured) {
+                      if (!mounted) return;
+                      if ((_footerHeight - measured.height).abs() > 0.5) {
+                        setState(() => _footerHeight = measured.height);
+                      }
+                    },
+                    child: SafeArea(top: false, child: footer),
+                  ),
+                ),
               ],
             );
           },
