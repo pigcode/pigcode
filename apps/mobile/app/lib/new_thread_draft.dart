@@ -382,6 +382,8 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           : null,
     );
 
+    final isLoadingCatalog =
+        online && (options?.isLoading == true || models?.isLoading == true);
     final Widget trailingControls;
     if (supportsControls && link != null) {
       final modelLabel =
@@ -389,7 +391,11 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           form.modelLabel ??
           instance?.label ??
           form.instanceLabel ??
-          (validModel ? 'Agent 默认模型' : form.modelId ?? '选择模型');
+          (isLoadingCatalog
+              ? '加载模型…'
+              : validModel
+              ? 'Agent 默认模型'
+              : form.modelId ?? '选择模型');
       trailingControls = MobileModelPickerChip(
         agentId: instance?.agentId ?? selectedInstance,
         instanceId: selectedInstance,
@@ -400,6 +406,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         fast: runOptions.fast == true,
         ultracode: runOptions.ultracode == true,
         planMode: effectivePlanMode,
+        loading: isLoadingCatalog,
         permissionMode: permission,
         defaultPermissionMode: instance?.defaultPermissionMode,
         onTap: !view.working && instances.isNotEmpty
@@ -476,8 +483,6 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     }
 
     final banners = <Widget>[
-      if (online && (options?.isLoading == true || models?.isLoading == true))
-        const LinearProgressIndicator(),
       if (online &&
           (view.selectionUnavailable ||
               options?.hasError == true ||

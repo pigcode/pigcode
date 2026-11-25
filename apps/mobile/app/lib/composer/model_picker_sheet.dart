@@ -92,6 +92,7 @@ class MobileModelPickerChip extends StatelessWidget {
     this.fast = false,
     this.ultracode = false,
     this.planMode = false,
+    this.loading = false,
     this.permissionMode,
     this.defaultPermissionMode,
     this.onTap,
@@ -109,6 +110,7 @@ class MobileModelPickerChip extends StatelessWidget {
   final bool fast;
   final bool ultracode;
   final bool planMode;
+  final bool loading;
   final MobileDraftPermission? permissionMode;
   final MobileDraftPermission? defaultPermissionMode;
   final VoidCallback? onTap;
@@ -175,7 +177,15 @@ class MobileModelPickerChip extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   spacing: ComposerSpace.modelChipGap,
                   children: [
-                    if (agentId case final id? when id.isNotEmpty)
+                    if (loading && (agentId == null || agentId!.isEmpty))
+                      SizedBox.square(
+                        dimension: ComposerControl.suggestionSpinnerSize,
+                        child: CircularProgressIndicator(
+                          strokeWidth: ComposerControl.suggestionSpinnerStroke,
+                          color: colors.faint,
+                        ),
+                      )
+                    else if (agentId case final id? when id.isNotEmpty)
                       AgentBadgeIcon(
                         agentId: id,
                         instanceId: instanceId,
@@ -192,6 +202,14 @@ class MobileModelPickerChip extends StatelessWidget {
                         style: ComposerType.modelChipName(primaryTextColor),
                       ),
                     ),
+                    if (loading && agentId != null && agentId!.isNotEmpty)
+                      SizedBox.square(
+                        dimension: ComposerControl.suggestionSpinnerSize,
+                        child: CircularProgressIndicator(
+                          strokeWidth: ComposerControl.suggestionSpinnerStroke,
+                          color: colors.faint,
+                        ),
+                      ),
                     if (effortText != null)
                       Text(
                         effortText,

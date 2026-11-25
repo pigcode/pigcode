@@ -86,6 +86,7 @@ class _ControlsHost implements HostRequests {
   _ControlsHost({
     MobileThreadComposerState? initialComposer,
     this.rejectSwitchAgent = false,
+    this.optionsGate,
   }) : composerState =
            initialComposer ??
            const MobileThreadComposerState(
@@ -107,6 +108,7 @@ class _ControlsHost implements HostRequests {
   final _notifications = StreamController<Map<String, dynamic>>.broadcast();
   MobileThreadComposerState composerState;
   bool rejectSwitchAgent;
+  final Completer<void>? optionsGate;
 
   void dispose() => unawaited(_notifications.close());
 
@@ -118,6 +120,7 @@ class _ControlsHost implements HostRequests {
     calls.add((method: method, params: params));
     switch (method) {
       case MobileDraftMethods.options:
+        if (optionsGate case final gate?) await gate.future;
         return const MobileDraftOptions(
           defaultInstanceId: 'claude',
           instances: [_claudeInstance, _codexInstance],
@@ -819,6 +822,73 @@ void main() {
       expect(createCall.params.containsKey('ultracode'), isFalse);
       expect(createCall.params.containsKey('planMode'), isFalse);
     });
+
+    testWidgets(
+      'shows inline spinner inside model chip instead of a top progress bar while catalog loads',
+      (tester) async {
+        final gate = Completer<void>();
+        final host = _ControlsHost(optionsGate: gate);
+        addTearDown(host.dispose);
+        final connection = _ControlsConnection(host);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: pigcodeTheme(Brightness.light),
+              home: Scaffold(
+                body: NewThreadDraft(
+                  connection: connection,
+                  projects: const [
+                    MobileProjectSummary(id: 'proj-1', name: 'demo5'),
+                  ],
+                  online: true,
+                  onAccepted: (_) {},
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        await tester.pump();
+
+        expect(find.byType(LinearProgressIndicator), findsNothing);
+        final chip = find.byKey(MobileModelPickerChip.chipKey);
+        expect(chip, findsOneWidget);
+        expect(
+          find.descendant(of: chip, matching: find.text('加载模型…')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: chip,
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsOneWidget,
+        );
+        final cardHeightBefore = tester
+            .getSize(find.byKey(const ValueKey('mobile-composer-card')))
+            .height;
+
+        gate.complete();
+        await tester.pumpAndSettle();
+
+        expect(
+          find.descendant(of: chip, matching: find.text('Claude Opus 4.6')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: chip,
+            matching: find.byType(CircularProgressIndicator),
+          ),
+          findsNothing,
+        );
+        final cardHeightAfter = tester
+            .getSize(find.byKey(const ValueKey('mobile-composer-card')))
+            .height;
+        expect(cardHeightAfter, cardHeightBefore);
+      },
+    );
   });
 
   group('360px narrow screen touch targets and zero overflow', () {
