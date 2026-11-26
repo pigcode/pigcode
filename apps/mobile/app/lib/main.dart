@@ -15,8 +15,10 @@ import 'attachments/composer_attachments_controller.dart';
 import 'attachments/image_compressor.dart';
 import 'computer_reconnect.dart';
 import 'computers.dart';
+import 'computers_hub.dart';
 import 'local_drafts.dart';
 import 'mobile_glass.dart';
+import 'multi_computer_summary.dart';
 import 'new_thread_draft_state.dart';
 import 'offline_cache.dart';
 import 'mobile_reminders.dart';
@@ -109,6 +111,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   String? _activeThreadId;
   bool _activeDraftOpen = false;
   ShareNavigationRequest? _openShareTarget;
+  OpenThreadRequest? _openThreadRequest;
+  int _openThreadSeq = 0;
   LiveShareInjection? _liveShare;
   bool _shareSheetOpen = false;
   bool _stagingShare = false;
@@ -118,6 +122,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   final _loadingCachedSidebars = <String>{};
   final _reminderSettings = ValueNotifier<MobileReminderSettings?>(null);
   (MobileConnection, bool, MobileReminderPermission, String?)? _sentSettings;
+  late final MultiComputerCoordinator _coordinator;
+  List<ComputerProfile>? _syncedComputers;
+  bool _fetchingActiveSummary = false;
+  int _activeSummaryRevision = 0;
 
   @override
   void initState() {
@@ -127,6 +135,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
         lifecycle == null ||
         lifecycle == AppLifecycleState.resumed ||
         lifecycle == AppLifecycleState.inactive;
+    _coordinator = ref.read(multiComputerCoordinatorFactoryProvider)(
+      ref.read(offlineCacheProvider),
+    )..setForeground(_foreground);
+    _coordinator.addListener(_onCoordinatorChanged);
     _reminders = ref.read(mobileReminderBridgeProvider);
     _reminders.watch(
       onTap: () => unawaited(_readReminderTap()),
@@ -153,6 +165,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       // Wi-Fi / 蜂窝 / VPN 切换后，iOS 上的旧 TCP 连接会长时间半开假在线；
       // 直接切到新代并立即用新网络重连，避免发消息卡死在旧 socket。
       _session?.retry();
+      unawaited(_coordinator.refreshAll(force: false));
     }, onError: (Object _) {});
     unawaited(
       connectivity.checkConnectivity().then<void>((networks) {
@@ -161,11 +174,71 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     );
   }
 
+  void _onCoordinatorChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _syncComputersList(List<ComputerProfile> entries) {
+    if (identical(_syncedComputers, entries)) return;
+    _syncedComputers = entries;
+    final identity = ref.read(computersProvider.notifier).identity;
+    _coordinator.updateComputers(entries, identity: identity);
+    _syncActiveCoordinatorState();
+  }
+
+  void _syncActiveCoordinatorState() {
+    final key = _selected;
+    _coordinator.setActiveComputer(
+      computerKey: key,
+      connected: _session?.connection != null,
+      status: _session?.status,
+      sidebar: key == null ? null : (_activeSidebar ?? _cachedSidebars[key]),
+    );
+  }
+
+  void _refreshActiveSummary({bool force = false}) {
+    final key = _selected;
+    final connection = _session?.connection;
+    if (key == null ||
+        connection == null ||
+        (_fetchingActiveSummary && !force)) {
+      return;
+    }
+    bool supported = false;
+    try {
+      supported = connection.supportsComputerSummary;
+    } catch (_) {
+      return;
+    }
+    if (!supported) return;
+    _fetchingActiveSummary = true;
+    final revision = ++_activeSummaryRevision;
+    unawaited(
+      connection.summary
+          .fetch()
+          .then((summary) {
+            if (!mounted ||
+                _selected != key ||
+                _activeSummaryRevision != revision) {
+              return;
+            }
+            _coordinator.recordActiveSummary(key, summary);
+          })
+          .catchError((Object _) {})
+          .whenComplete(() {
+            if (_activeSummaryRevision == revision) {
+              _fetchingActiveSummary = false;
+            }
+          }),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive) return;
     _foreground = state == AppLifecycleState.resumed;
     _session?.setForeground(_foreground);
+    _coordinator.setForeground(_foreground);
     _syncVisibleThread();
     if (_foreground) {
       unawaited(_readReminderTap());
@@ -281,6 +354,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   void _showWorkspace(bool open) {
     setState(() => _workspaceOpen = open);
     _syncVisibleThread();
+    if (!open) {
+      _refreshActiveSummary();
+      unawaited(_coordinator.refreshAll(force: false));
+    }
   }
 
   void _notifyShareSheet() {
@@ -550,6 +627,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     MobileConnection? initial,
     MobileReminder? reminder,
     ShareNavigationRequest? shareTarget,
+    OpenThreadRequest? openThreadRequest,
     bool openWorkspace = true,
   }) {
     final identity = ref.read(computersProvider.notifier).identity;
@@ -562,6 +640,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       } else {
         setState(() {});
         _reportReminderSettings();
+        _syncActiveCoordinatorState();
+        if (session.connection != null) _refreshActiveSummary();
         _notifyShareSheet();
       }
     });
@@ -572,17 +652,19 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _cache = ref.read(offlineCacheProvider).open(computer.computerKey);
       _openReminder = reminder;
       _openShareTarget = shareTarget;
+      _openThreadRequest = openThreadRequest;
       _liveShare = null;
       _activeSidebar = _cachedSidebars[computer.computerKey];
       _activeThreadId = shareTarget?.openDraft == true
           ? null
-          : shareTarget?.threadId;
+          : (openThreadRequest?.threadId ?? shareTarget?.threadId);
       _activeDraftOpen = shareTarget?.openDraft ?? false;
       _computerId = null;
       _visibleThreadId = null;
       _workspaceOpen = openWorkspace;
       _feedback = null;
     });
+    _syncActiveCoordinatorState();
     _syncVisibleThread();
     _notifyShareSheet();
     unawaited(
@@ -593,6 +675,31 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       }),
     );
     session.start(foreground: _foreground, initial: initial);
+  }
+
+  void _openInboxItem(CrossComputerInboxItem inboxItem) {
+    if (_working) return;
+    final req = (
+      id: ++_openThreadSeq,
+      threadId: inboxItem.item.threadId,
+      title: inboxItem.item.title,
+      projectId: inboxItem.item.projectId,
+    );
+    if (_selected == inboxItem.computer.computerKey) {
+      setState(() {
+        _openThreadRequest = req;
+        _workspaceOpen = true;
+      });
+      _syncVisibleThread();
+      final session = _session;
+      if (session != null &&
+          session.connection == null &&
+          !session.connecting) {
+        session.retry();
+      }
+    } else {
+      _select(inboxItem.computer, openThreadRequest: req, openWorkspace: true);
+    }
   }
 
   Future<void> _choose(
@@ -716,6 +823,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _cache = null;
       _openReminder = null;
       _openShareTarget = null;
+      _openThreadRequest = null;
       _liveShare = null;
       _activeSidebar = null;
       _activeThreadId = null;
@@ -724,6 +832,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _visibleThreadId = null;
       _workspaceOpen = false;
     });
+    _syncActiveCoordinatorState();
     _syncVisibleThread();
     _notifyShareSheet();
   }
@@ -838,6 +947,8 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _coordinator.removeListener(_onCoordinatorChanged);
+    _coordinator.dispose();
     _reminders.watch();
     _reminderSettings.dispose();
     _shareSheetRevision.dispose();
@@ -863,147 +974,43 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       if (next != null) _scheduleShareSheet();
     });
     final computers = ref.watch(computersProvider);
+    if (computers case AsyncData(
+      :final value,
+    ) when !identical(_syncedComputers, value)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncComputersList(value);
+      });
+    }
     final connectionLabel = _connectionLabel(context);
-    final manager = Scaffold(
-      appBar: AppBar(
-        title: const Text('电脑'),
-        actions: [
-          Center(
-            child: MobileGlassChromeButton(
-              padding: const EdgeInsetsDirectional.only(end: 10),
-              child: SizedBox.square(
-                dimension: 40,
-                child: IconButton(
-                  tooltip: '通知设置',
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(Icons.notifications_outlined, size: 20),
-                  onPressed: _openReminderSettings,
-                ),
-              ),
-            ),
-          ),
-        ],
-        leadingWidth: _selected != null ? 58 : null,
-        leading: _selected != null
-            ? Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: MobileGlassChromeButton(
-                  padding: const EdgeInsetsDirectional.only(start: 10),
-                  child: SizedBox.square(
-                    dimension: 40,
-                    child: BackButton(onPressed: () => _showWorkspace(true)),
-                  ),
-                ),
-              )
-            : null,
-      ),
-      body: SafeArea(
-        top: false,
-        child: computers.when(
-          loading: () =>
-              const Center(child: CircularProgressIndicator.adaptive()),
-          error: (_, _) => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('无法读取系统凭据存储。'),
-                TextButton(
-                  onPressed: () => ref.invalidate(computersProvider),
-                  child: const Text('重试'),
-                ),
-              ],
-            ),
-          ),
-          data: (entries) => ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
-            children: [
-              if (entries.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 16),
-                  child: Text('在电脑打开「设置 → 手机连接」，生成二维码后用手机扫描。'),
-                ),
-              for (final entry in entries)
-                ListTile(
-                  key: ValueKey(entry.computerKey),
-                  leading: const Icon(Icons.computer_outlined),
-                  title: Text(entry.name),
-                  subtitle: Text(
-                    _selected == entry.computerKey ? connectionLabel : '点按连接',
-                  ),
-                  selected: _selected == entry.computerKey,
-                  enabled: !_working,
-                  onTap: () => unawaited(_choose(entry)),
-                  trailing: IconButton(
-                    tooltip: '移除 ${entry.name}',
-                    icon: const Icon(Icons.remove_circle_outline),
-                    onPressed: _working
-                        ? null
-                        : () => unawaited(_forget(entry)),
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              if (_verification case final code?)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Semantics(
-                      liveRegion: true,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _updatingRelay
-                                ? '核对两端数字，在电脑确认更新中继。'
-                                : '核对两端数字，在电脑点允许。',
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            code,
-                            style: Theme.of(context).textTheme.headlineMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                )
-              else if (_working)
-                const LinearProgressIndicator(),
-              if (_feedback case final feedback?)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Semantics(liveRegion: true, child: Text(feedback)),
-                ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.icon(
-                  onPressed: _working ? null : _scan,
-                  icon: const Icon(Icons.qr_code_scanner),
-                  label: Text(entries.isEmpty ? '扫码配对电脑' : '扫码配对或更新'),
-                  style: FilledButton.styleFrom(minimumSize: const Size(0, 50)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 16),
-                child: Text(
-                  '本机设备编号 ${ref.read(computersProvider.notifier).deviceNumber}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-              if (_version.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Text(
-                    'Pigcode $_version',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+    final deviceNumber = computers.hasValue
+        ? ref.read(computersProvider.notifier).deviceNumber
+        : '';
+    final manager = ComputersHub(
+      coordinator: _coordinator,
+      loadingComputers: computers.isLoading && !computers.hasValue,
+      computersError: computers.hasError && !computers.hasValue,
+      onRetryComputers: () => ref.invalidate(computersProvider),
+      selectedComputerKey: _selected,
+      activeConnectionLabel: connectionLabel,
+      working: _working,
+      updatingRelay: _updatingRelay,
+      verificationCode: _verification,
+      feedback: _feedback,
+      deviceNumber: deviceNumber,
+      version: _version,
+      onBackToWorkspace: _selected != null ? () => _showWorkspace(true) : null,
+      onOpenReminderSettings: () => unawaited(_openReminderSettings()),
+      onRefreshAll: () async {
+        _refreshActiveSummary(force: true);
+        await _coordinator.refreshAll(force: true);
+      },
+      onRefreshComputer: (computer) =>
+          _coordinator.refreshComputer(computer.computerKey, force: true),
+      onSelectComputer: (computer) => unawaited(_choose(computer)),
+      onOpenInboxItem: _openInboxItem,
+      onForgetComputer: (computer) => unawaited(_forget(computer)),
+      onScanPair: () => unawaited(_scan()),
+      onDismissFeedback: () => setState(() => _feedback = null),
     );
     final profile = computers.value
         ?.where((entry) => entry.computerKey == _selected)
@@ -1021,8 +1028,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           cache: _cache,
           openReminder: _openReminder,
           openShareTarget: _openShareTarget,
+          openThreadRequest: _openThreadRequest,
           liveShare: _liveShare,
           presented: _workspaceOpen,
+          otherComputersUrgentCount: _coordinator.otherComputersUrgentCount,
           onVisibleThread: (id) {
             _visibleThreadId = id;
             _syncVisibleThread();
@@ -1036,6 +1045,15 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
             _activeSidebar = snapshot;
             if (_selected case final key?) {
               _cachedSidebars[key] = snapshot;
+            }
+            _syncActiveCoordinatorState();
+            if (snapshot?.threads.any(
+                  (t) =>
+                      !t.archived &&
+                      t.status == MobileThreadStatus.waitingApproval,
+                ) ==
+                true) {
+              _refreshActiveSummary();
             }
             _notifyShareSheet();
           },

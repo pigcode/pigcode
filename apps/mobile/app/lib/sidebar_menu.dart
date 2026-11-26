@@ -55,9 +55,13 @@ class SidebarMenu extends StatefulWidget {
     this.onSettings,
     this.commands,
     this.active = true,
+    this.otherComputersUrgentCount = 0,
   });
 
   static const addProjectButtonKey = ValueKey('sidebar-add-project');
+  static const otherComputersBadgeKey = ValueKey(
+    'sidebar-other-computers-badge',
+  );
 
   final SidebarSnapshot? snapshot;
   final String? selectedId;
@@ -74,6 +78,7 @@ class SidebarMenu extends StatefulWidget {
   final VoidCallback? onSettings;
   final MobileSidebarCommands? commands;
   final bool active;
+  final int otherComputersUrgentCount;
 
   @override
   State<SidebarMenu> createState() => _SidebarMenuState();
@@ -851,6 +856,44 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             ),
                           ),
                         ),
+                        if (widget.otherComputersUrgentCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Semantics(
+                            label:
+                                '其他电脑有 ${widget.otherComputersUrgentCount} 项待处理',
+                            child: Container(
+                              key: SidebarMenu.otherComputersBadgeKey,
+                              height: 22,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.attentionTint,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  MobileStatusDot(color: colors.attentionMark),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    widget.otherComputersUrgentCount > 99
+                                        ? '99+'
+                                        : '${widget.otherComputersUrgentCount}',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.attention,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

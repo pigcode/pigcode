@@ -13,7 +13,10 @@ const offlineMaxEntries = 32;
 const offlineMaxEntryBytes = 256 * 1024;
 const offlineMaxBytes = 2 * 1024 * 1024;
 const _sidebarId = '';
+const _summaryId = '__summary__';
 const _keyPrefix = 'pigcode.mobile.offline-key.v1.';
+
+bool _isReservedCacheId(String id) => id == _sidebarId || id == _summaryId;
 
 final offlineCacheProvider = Provider<OfflineCacheStore>(
   (_) => OfflineCacheStore(directory: _applicationCache),
@@ -194,8 +197,28 @@ class ComputerOfflineCache {
   Future<void> saveSidebar(SidebarSnapshot snapshot) async {
     await _store._access(_lease, (book) {
       final threads = snapshot.threads.map((thread) => thread.id).toSet();
-      book.removeWhere((id) => id.isNotEmpty && !threads.contains(id));
+      book.removeWhere(
+        (id) => !_isReservedCacheId(id) && !threads.contains(id),
+      );
       book.put(_sidebarId, _boundedSidebar(snapshot));
+    });
+  }
+
+  Future<MobileComputerSummary?> readSummary() async {
+    final value = await _store._access(_lease, (book) => book.read(_summaryId));
+    if (value == null) return null;
+    try {
+      return MobileComputerSummary.fromJson(value);
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
+  }
+
+  Future<void> saveSummary(MobileComputerSummary summary) async {
+    await _store._access(_lease, (book) {
+      book.put(_summaryId, summary.toJson());
     });
   }
 
@@ -320,7 +343,7 @@ class _CacheBook {
 
   Map<String, dynamic>? read(String id) {
     final entry = _entries[id];
-    if (entry != null && id != _sidebarId) {
+    if (entry != null && !_isReservedCacheId(id)) {
       _entries[id] = (touched: ++_clock, data: entry.data);
       changed = true;
     }
@@ -337,7 +360,9 @@ class _CacheBook {
     if (_jsonBytes(data) > offlineMaxEntryBytes) return;
     _entries[id] = (touched: ++_clock, data: data);
     final oldest =
-        _entries.entries.where((entry) => entry.key != _sidebarId).toList()
+        _entries.entries
+            .where((entry) => !_isReservedCacheId(entry.key))
+            .toList()
           ..sort((a, b) => a.value.touched.compareTo(b.value.touched));
     var bytes = _jsonBytes(toJson()) + 64;
     for (final entry in oldest) {

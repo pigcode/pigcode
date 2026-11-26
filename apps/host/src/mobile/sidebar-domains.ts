@@ -21,6 +21,7 @@ import { MobileAgentManage, mobileAgentRequests } from "./agent-manage"
 import { MobileAttachments, mobileAttachmentRequests } from "./attachments"
 import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
 import { MobileComposerCommands, mobileComposerRequests } from "./composer-commands"
+import { MobileComputerSummary, mobileSummaryRequests } from "./computer-summary"
 import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileMentionCommands, mobileMentionRequests } from "./mentions"
 import { fingerprint, type PairedDevices } from "./paired-devices"
@@ -80,6 +81,7 @@ export class MobileDomainRouter {
   private readonly agentManage: MobileAgentManage
   private readonly scheduleManage: MobileScheduleManage
   private readonly pluginManage: MobilePluginManage
+  private readonly computerSummary: MobileComputerSummary
   private readonly receipts: MobileCommandReceipts
   private readonly timeline: MobileTimelineSession
   private readonly changes: MobileRunChanges
@@ -156,6 +158,7 @@ export class MobileDomainRouter {
     this.agentManage = new MobileAgentManage(ctx, requirePairedDevice)
     this.scheduleManage = new MobileScheduleManage(ctx, requirePairedDevice)
     this.pluginManage = new MobilePluginManage(ctx, requirePairedDevice)
+    this.computerSummary = new MobileComputerSummary(ctx, session, requirePairedDevice)
   }
 
   close(): void {
@@ -254,6 +257,13 @@ export class MobileDomainRouter {
       mobilePluginRequests.has(request.method)
     ) {
       return this.pluginManage.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("computer.summary") &&
+      mobileSummaryRequests.has(request.method)
+    ) {
+      return this.computerSummary.dispatch(request)
     }
 
     const canRun = this.session.features.includes("run.write")

@@ -36,5 +36,6 @@ export * from "./mobile-projects"
 export * from "./mobile-agents"
 export * from "./mobile-schedules"
 export * from "./mobile-plugins"
+export * from "./mobile-summary"
 
 export * from "./queued-messages"

@@ -38,6 +38,7 @@ export const mobileFeatures = [
   "agents.manage",
   "schedules.manage",
   "plugins.manage",
+  "computer.summary",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

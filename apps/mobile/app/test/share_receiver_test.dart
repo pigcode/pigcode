@@ -19,6 +19,7 @@ import 'package:pigcode_mobile/local_drafts.dart';
 import 'package:pigcode_mobile/main.dart'
     show PigcodeApp, computerReconnectFactoryProvider;
 import 'package:pigcode_mobile/mobile_reminders.dart';
+import 'package:pigcode_mobile/multi_computer_summary.dart';
 import 'package:pigcode_mobile/offline_cache.dart';
 import 'package:pigcode_mobile/share/share_receiver.dart';
 import 'package:pigcode_mobile/share/share_target_sheet.dart';
@@ -791,6 +792,15 @@ void main() {
                 onChange: onChange,
               ),
             ),
+            multiComputerCoordinatorFactoryProvider.overrideWithValue(
+              (cacheStore) => MultiComputerCoordinator(
+                cacheStore: cacheStore,
+                observeStatus: (_) async =>
+                    throw const ConnectionFailure('incompatible'),
+                fetchSummary: (_, _) async =>
+                    throw const ConnectionFailure('offline'),
+              ),
+            ),
           ],
           child: const PigcodeApp(),
         ),
@@ -1102,7 +1112,7 @@ void main() {
         );
 
         // 先连上旧电脑
-        await tester.tap(find.text('旧电脑'));
+        await tester.tap(find.byKey(ValueKey(legacyPc.computerKey)));
         await tester.pumpAndSettle();
 
         shareChannel.push(

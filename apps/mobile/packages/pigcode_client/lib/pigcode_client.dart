@@ -15,6 +15,7 @@ import 'sidebar.dart';
 import 'sidebar_models.dart';
 import 'src/agent_manage.dart';
 import 'src/attachments.dart';
+import 'src/computer_summary.dart';
 import 'src/plugin_manage.dart';
 import 'src/preview.dart';
 import 'src/project_manage.dart';
@@ -44,6 +45,7 @@ export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'src/agent_manage.dart';
 export 'src/attachments.dart';
+export 'src/computer_summary.dart';
 export 'src/plugin_manage.dart';
 export 'src/preview.dart';
 export 'src/project_manage.dart';
@@ -83,11 +85,13 @@ const mobileClientFeatures = <String>[
   'agents.manage',
   'schedules.manage',
   'plugins.manage',
+  'computer.summary',
 ];
 
 class MobileConnection {
   MobileConnection._(
     this._link,
+    this.computerId,
     this.computerName,
     this.computer,
     this._acceptsRelayReceipt,
@@ -111,12 +115,14 @@ class MobileConnection {
     this.supportsAgentManage,
     this.supportsScheduleManage,
     this.supportsPluginManage,
+    this.supportsComputerSummary,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
   ) : _rpc = HostRpc(_link);
 
   final SecureLink _link;
+  final String computerId;
   final String computerName;
   final ComputerProfile computer;
   final bool _acceptsRelayReceipt;
@@ -140,6 +146,7 @@ class MobileConnection {
   final bool supportsAgentManage;
   final bool supportsScheduleManage;
   final bool supportsPluginManage;
+  final bool supportsComputerSummary;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -187,6 +194,12 @@ class MobileConnection {
   late final MobilePluginManageClient plugins = MobilePluginManageClient(
     _rpc,
     supportsPluginManage: supportsPluginManage,
+  );
+  late final MobileSummaryClient summary = MobileSummaryClient(
+    _rpc,
+    supportsComputerSummary: supportsComputerSummary,
+    computerId: computerId,
+    computerName: computerName,
   );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -539,6 +552,7 @@ class MobileConnection {
       );
       final connection = MobileConnection._(
         link,
+        status.computerId,
         status.computerName,
         computer.withRelayRevision(revision),
         (welcome['features'] as List).contains('relay.saveReceipt'),
@@ -562,6 +576,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('agents.manage'),
         (welcome['features'] as List).contains('schedules.manage'),
         (welcome['features'] as List).contains('plugins.manage'),
+        (welcome['features'] as List).contains('computer.summary'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

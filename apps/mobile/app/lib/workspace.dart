@@ -121,6 +121,13 @@ class _WorkspaceController extends Notifier<_WorkspaceData> {
   }
 }
 
+typedef OpenThreadRequest = ({
+  int id,
+  String threadId,
+  String? title,
+  String? projectId,
+});
+
 class MobileWorkspace extends ConsumerStatefulWidget {
   const MobileWorkspace({
     super.key,
@@ -135,6 +142,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.cache,
     this.openReminder,
     this.openShareTarget,
+    this.openThreadRequest,
     this.liveShare,
     this.onVisibleThread,
     this.onActiveTargetChanged,
@@ -142,6 +150,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.openExternalUrl,
     this.previewWebViewBuilder,
     this.presented = true,
+    this.otherComputersUrgentCount = 0,
   });
 
   final MobileConnection? connection;
@@ -150,6 +159,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final ComputerOfflineCache? cache;
   final MobileReminder? openReminder;
   final ShareNavigationRequest? openShareTarget;
+  final OpenThreadRequest? openThreadRequest;
   final LiveShareInjection? liveShare;
   final ValueChanged<String?>? onVisibleThread;
   final ValueChanged<({String? threadId, bool draftOpen})>?
@@ -163,6 +173,7 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final VoidCallback reconnect;
   final VoidCallback onComputers;
   final VoidCallback? onSettings;
+  final int otherComputersUrgentCount;
 
   @override
   ConsumerState<MobileWorkspace> createState() => _MobileWorkspaceState();
@@ -178,7 +189,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
       );
   bool _loadingCache = false;
   int _openThreadSeq = 0;
-  ({int id, String threadId})? _pendingOpenThread;
+  OpenThreadRequest? _pendingOpenThread;
 
   void _syncConnectionNotifier(MobileConnection? next) {
     if (identical(_connectionNotifier.value, next)) return;
@@ -212,6 +223,14 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
   @override
   void initState() {
     super.initState();
+    if (widget.openThreadRequest case final req?) {
+      _pendingOpenThread = (
+        id: ++_openThreadSeq,
+        threadId: req.threadId,
+        title: req.title,
+        projectId: req.projectId,
+      );
+    }
     _restoreSidebar();
   }
 
@@ -221,6 +240,16 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     if (!identical(oldWidget.cache, widget.cache)) {
       _lastSidebar = null;
       _restoreSidebar();
+    }
+    if (widget.openThreadRequest != null &&
+        widget.openThreadRequest?.id != oldWidget.openThreadRequest?.id) {
+      final req = widget.openThreadRequest!;
+      _pendingOpenThread = (
+        id: ++_openThreadSeq,
+        threadId: req.threadId,
+        title: req.title,
+        projectId: req.projectId,
+      );
     }
   }
 
@@ -300,7 +329,12 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
             initialProjects: _lastSidebar?.projects ?? const [],
             onOpenThread: (threadId) {
               setState(() {
-                _pendingOpenThread = (id: ++_openThreadSeq, threadId: threadId);
+                _pendingOpenThread = (
+                  id: ++_openThreadSeq,
+                  threadId: threadId,
+                  title: null,
+                  projectId: null,
+                );
               });
               if (provider != null) {
                 unawaited(ref.read(provider.notifier).refresh());
@@ -312,6 +346,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         );
       },
       openThreadRequest: _pendingOpenThread,
+      otherComputersUrgentCount: widget.otherComputersUrgentCount,
       onAddProject: canManageProjects
           ? (viewContext) async {
               final active = connection;
@@ -523,6 +558,7 @@ class WorkspaceView extends StatefulWidget {
     this.onVisibleThread,
     this.onActiveTargetChanged,
     this.presented = true,
+    this.otherComputersUrgentCount = 0,
     this.sidebarCommands,
     this.onOpenTerminal,
     this.onOpenWorkbench,
@@ -537,11 +573,12 @@ class WorkspaceView extends StatefulWidget {
   final bool offlineDraftAvailable;
   final MobileReminder? openReminder;
   final ShareNavigationRequest? openShareTarget;
-  final ({int id, String threadId})? openThreadRequest;
+  final OpenThreadRequest? openThreadRequest;
   final ValueChanged<String?>? onVisibleThread;
   final ValueChanged<({String? threadId, bool draftOpen})>?
   onActiveTargetChanged;
   final bool presented;
+  final int otherComputersUrgentCount;
   final MobileSidebarCommands? sidebarCommands;
   final void Function(BuildContext context, MobileThreadSummary thread)?
   onOpenTerminal;
@@ -661,7 +698,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
   }
 
-  void _applyOpenThreadRequest(({int id, String threadId})? request) {
+  void _applyOpenThreadRequest(OpenThreadRequest? request) {
     if (request == null) return;
     _reminderThread = null;
     _reminderUnavailable = false;
@@ -678,8 +715,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
         ? null
         : MobileThreadSummary(
             id: request.threadId,
-            projectId: '',
-            title: '定时任务会话',
+            projectId: request.projectId ?? '',
+            title: request.title ?? '正在打开会话…',
             updatedAt: DateTime.now().toUtc().toIso8601String(),
             archived: false,
             pinned: false,
@@ -1426,6 +1463,8 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                       )
                                     : null,
                                 onSettings: widget.onSettings,
+                                otherComputersUrgentCount:
+                                    widget.otherComputersUrgentCount,
                                 onComputers: () {
                                   _menu(false);
                                   widget.onComputers();
