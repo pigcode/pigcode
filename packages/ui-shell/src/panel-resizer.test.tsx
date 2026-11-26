@@ -5,16 +5,29 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import type { ComponentProps } from "react"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { Shell } from "./shell"
 
 const KEY = "pigcode.sidebarWidth"
+const RIGHT_KEY = "pigcode.rightWidth"
 
-beforeEach(() => window.localStorage.removeItem(KEY))
+function setWindowWidth(width: number): void {
+  Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: width })
+  act(() => {
+    window.dispatchEvent(new Event("resize"))
+  })
+}
+
+beforeEach(() => {
+  window.localStorage.removeItem(KEY)
+  window.localStorage.removeItem(RIGHT_KEY)
+  Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 })
+})
 afterEach(() => {
   cleanup()
   window.localStorage.removeItem(KEY)
+  window.localStorage.removeItem(RIGHT_KEY)
 })
 
 function renderShell(props: Partial<ComponentProps<typeof Shell>> = {}) {
@@ -36,8 +49,11 @@ function renderShell(props: Partial<ComponentProps<typeof Shell>> = {}) {
 }
 
 const separator = () => screen.getByRole("separator", { name: "调整侧栏宽度" })
+const rightSeparator = () => screen.getByRole("separator", { name: "右侧面板" })
 const sidebarWidth = (container: HTMLElement) =>
   (container.querySelector(".app") as HTMLElement).style.getPropertyValue("--sidebar-w")
+const rightWidth = (container: HTMLElement) =>
+  (container.querySelector(".app") as HTMLElement).style.getPropertyValue("--right-w")
 
 /** jsdom 没有 PointerEvent；React 只看事件名，用同名的 MouseEvent 代替。 */
 function pointer(target: EventTarget, type: string, clientX: number): void {
@@ -176,6 +192,65 @@ describe("sidebar resizer", () => {
     try {
       renderShell()
       expect(screen.queryByRole("separator", { name: "调整侧栏宽度" })).toBeNull()
+    } finally {
+      Reflect.deleteProperty(window, "matchMedia")
+    }
+  })
+
+  it("reserves readable chat width when both sidebar and right panel are docked in medium windows", () => {
+    setWindowWidth(970)
+    const { container } = renderShell({ rightPanel: <div>right</div>, rightOpen: true })
+    const side = Number.parseInt(sidebarWidth(container), 10)
+    const right = Number.parseInt(rightWidth(container), 10)
+    expect(side).toBe(250)
+    expect(right).toBe(320)
+    expect(970 - side - right).toBeGreaterThanOrEqual(400)
+
+    setWindowWidth(1040)
+    expect(sidebarWidth(container)).toBe("260px")
+    expect(rightWidth(container)).toBe("380px")
+    expect(rightSeparator().getAttribute("aria-valuemax")).toBe("380")
+  })
+
+  it("restores saved sidebar and right widths after shrinking and widening the window", () => {
+    window.localStorage.setItem(KEY, "340")
+    window.localStorage.setItem(RIGHT_KEY, "500")
+    setWindowWidth(1440)
+    const { container } = renderShell({ rightPanel: <div>right</div>, rightOpen: true })
+    expect(sidebarWidth(container)).toBe("340px")
+    expect(rightWidth(container)).toBe("500px")
+
+    setWindowWidth(970)
+    expect(sidebarWidth(container)).toBe("250px")
+    expect(rightWidth(container)).toBe("320px")
+    expect(window.localStorage.getItem(KEY)).toBe("340")
+    expect(window.localStorage.getItem(RIGHT_KEY)).toBe("500")
+
+    setWindowWidth(1440)
+    expect(sidebarWidth(container)).toBe("340px")
+    expect(rightWidth(container)).toBe("500px")
+  })
+
+  it("closes the narrow right panel overlay when clicking its scrim", () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(max-width: 960px)",
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }),
+    })
+    try {
+      const onToggleRight = vi.fn()
+      const { container } = renderShell({
+        rightPanel: <div>right</div>,
+        rightOpen: true,
+        onToggleRight,
+      })
+      const scrim = container.querySelector(".right-scrim") as HTMLElement | null
+      expect(scrim).not.toBeNull()
+      fireEvent.click(scrim!)
+      expect(onToggleRight).toHaveBeenCalledTimes(1)
     } finally {
       Reflect.deleteProperty(window, "matchMedia")
     }

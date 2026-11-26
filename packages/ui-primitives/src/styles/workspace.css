@@ -70,9 +70,9 @@
   display: flex;
   flex: none;
   width: var(--right-w);
-  min-width: 320px;
+  min-width: var(--right-min-w);
   min-height: 0;
-  max-width: 72%;
+  max-width: max(var(--right-min-w), calc(100% - var(--panel-min-w)));
   overflow: visible;
   border-left: 1px solid var(--divider);
   background: var(--bg);
@@ -178,7 +178,10 @@ body.is-resizing-rows webview {
   pointer-events: none;
 }
 
-/* ─── 窄窗口：内容区占满，右侧面板浮在内容区上方，避免挤压聊天宽度 ─── */
+/* ─── 窄窗口：内容区占满，右侧面板改成带蒙层的右侧抽屉，点击蒙层可收起 ─── */
+.right-scrim {
+  display: none;
+}
 @media (max-width: 960px) {
   .app,
   .app.is-collapsed {
@@ -189,23 +192,46 @@ body.is-resizing-rows webview {
     grid-column: 1;
     border-left: 0;
   }
+  .right-scrim {
+    display: block;
+    position: fixed;
+    inset: calc(var(--titlebar-h) + var(--topbar-h)) 0 0;
+    z-index: 55;
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-med) var(--ease);
+  }
+  .app.has-right:not(.is-right-max) .right-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
   .app.has-right .right-panel-slot {
     position: fixed;
     z-index: 60;
-    top: calc(var(--titlebar-h) + var(--topbar-h) + var(--gap));
-    right: var(--gap);
-    bottom: var(--gap);
+    top: calc(var(--titlebar-h) + var(--topbar-h));
+    right: 0;
+    bottom: 0;
     left: auto;
-    width: min(460px, calc(100vw - 2 * var(--gap)));
+    width: min(var(--right-w), calc(100vw - var(--topbar-h)));
+    min-width: 0;
     max-width: none;
     overflow: hidden;
-    border-left: 0;
-    border-radius: var(--r-panel);
+    border-top: 1px solid var(--divider);
+    border-left: 1px solid var(--divider);
+    border-radius: var(--r-panel) 0 0 0;
     box-shadow: var(--shadow-modal);
   }
   .app.is-right-max .right-panel-slot {
-    inset: calc(var(--titlebar-h) + var(--gap)) var(--gap) var(--gap);
+    inset: var(--titlebar-h) 0 0;
     width: auto;
+    border-top: 0;
+    border-left: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .app.is-right-max .right-panel-bar {
+    padding-left: var(--controls-w);
   }
   .panel-resizer {
     display: none;

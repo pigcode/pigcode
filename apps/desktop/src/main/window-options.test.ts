@@ -54,6 +54,14 @@ describe("createMainWindowOptions", () => {
     expect(options.backgroundColor).toBe(defaultTitleBarColors(true)?.color)
     expect(options.titleBarOverlay).toMatchObject(defaultTitleBarColors(true) ?? {})
   })
+
+  it("enforces minimum window dimensions on all platforms", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      const options = optionsFor(platform)
+      expect(options.minWidth).toBeGreaterThanOrEqual(640)
+      expect(options.minHeight).toBeGreaterThanOrEqual(480)
+    }
+  })
 })
 
 describe("defaultTitleBarColors", () => {

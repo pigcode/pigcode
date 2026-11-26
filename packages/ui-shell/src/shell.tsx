@@ -18,7 +18,7 @@ import { AddProjectDialog } from "./add-project-dialog"
 import { registerBuiltinCommands } from "./builtin-commands"
 import { CommandPalette } from "./command-palette"
 import { Icon } from "./icon"
-import { PanelResizer, SidebarResizer, useRightWidth, useSidebarWidth } from "./panel-resizer"
+import { PanelResizer, SidebarResizer, useShellPanelWidths } from "./panel-resizer"
 import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar } from "./settings-sidebar"
 import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
@@ -152,8 +152,6 @@ export function Shell({
   const registry = useExtensionRegistry()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [rightWidth, setRightWidth] = useRightWidth()
-  const [sidebarWidth, setSidebarWidth] = useSidebarWidth()
   const [localExpanded, setLocalExpanded] = useState<Record<string, boolean>>({})
   const [localSidebarOpen, setLocalSidebarOpen] = useState(true)
   // 插件页、定时任务页和聊天一样用工作区侧栏，侧栏里对应的入口高亮；只有设置换成设置侧栏。
@@ -167,6 +165,12 @@ export function Shell({
   const expanded = expandedProjects ?? localExpanded
   const open = sidebarOpen ?? localSidebarOpen
   const activePage = settingsPage ?? DEFAULT_SETTINGS_PAGE
+  const showRight = rightPanel !== undefined && rightOpen
+  const { sidebarWidth, sidebarMax, setSidebarWidth, rightWidth, rightMax, setRightWidth } =
+    useShellPanelWidths({
+      sidebarDocked: open && !narrow,
+      rightDocked: showRight && !rightMaximized && !narrow,
+    })
 
   // 抽屉只在窄窗口里有意义；变宽后复位，下次变窄时从收起开始。
   useEffect(() => {
@@ -323,7 +327,6 @@ export function Shell({
     )
   }, [registry, t, hasToggleRight])
 
-  const showRight = rightPanel !== undefined && rightOpen
   const appClass = [
     "app",
     open ? "" : "is-collapsed",
@@ -441,8 +444,19 @@ export function Shell({
           </div>
         ) : null}
       </aside>
-      {open && !narrow ? <SidebarResizer width={sidebarWidth} onChange={setSidebarWidth} /> : null}
+      {open && !narrow ? (
+        <SidebarResizer width={sidebarWidth} max={sidebarMax} onChange={setSidebarWidth} />
+      ) : null}
       <div className="drawer-scrim" aria-hidden="true" onClick={() => setDrawerOpen(false)} />
+      {rightPanel !== undefined ? (
+        <div
+          className="right-scrim"
+          aria-hidden="true"
+          onClick={() => {
+            if (narrow && showRight && !rightMaximized) onToggleRight?.()
+          }}
+        />
+      ) : null}
       <div className="workspace">
         <main className="panel">
           {children}
@@ -450,8 +464,8 @@ export function Shell({
         </main>
         {rightPanel !== undefined ? (
           <div className="right-panel-slot" hidden={!showRight}>
-            {showRight && !rightMaximized ? (
-              <PanelResizer width={rightWidth} onChange={setRightWidth} />
+            {showRight && !rightMaximized && !narrow ? (
+              <PanelResizer width={rightWidth} max={rightMax} onChange={setRightWidth} />
             ) : null}
             {rightPanel}
           </div>

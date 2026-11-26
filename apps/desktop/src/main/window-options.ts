@@ -20,6 +20,10 @@ export function readThemeSource(value: unknown): ThemeSource | null {
 /** Windows/Linux 自绘标题栏的高度；原生窗口按钮与它等高。 */
 export const TITLE_BAR_HEIGHT = 36
 
+/** 主窗口最小尺寸：保证窄窗口抽屉与核心输入区不被压垮。 */
+export const MIN_WINDOW_WIDTH = 640
+export const MIN_WINDOW_HEIGHT = 480
+
 /** macOS 交通灯的位置：竖直居中在 40px 高的侧栏顶行里。 */
 export const TRAFFIC_LIGHT_POSITION = { x: 14, y: 12 }
 
@@ -99,6 +103,8 @@ export function createMainWindowOptions({
   const options: BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     ...(initial ? { backgroundColor: initial.color } : {}),
     autoHideMenuBar: true,

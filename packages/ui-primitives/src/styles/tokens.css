@@ -592,6 +592,8 @@
     侧栏顶行按钮的起点（macOS 让出交通灯的位置）；侧栏收起后顶行按钮占的宽度，内容区顶栏从它右边开始
   */
   --right-w: 460px;
+  --right-min-w: 320px;
+  --panel-min-w: 400px;
   --titlebar-h: 0px;
   --controls-left: 10px;
   --controls-w: 126px;

@@ -273,6 +273,9 @@
   gap: 6px;
   max-width: 300px;
 }
+.composer.is-compact .chip-btn.model-chip {
+  max-width: min(300px, 38cqi);
+}
 .model-name {
   min-width: 0;
   color: var(--fg);

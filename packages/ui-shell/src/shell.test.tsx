@@ -192,6 +192,7 @@ describe("Shell", () => {
   })
 
   it("resizes the right panel from its separator and remembers the width", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1280 })
     window.localStorage.removeItem("pigcode.rightWidth")
     const { container } = renderShell()
     const app = container.querySelector(".app") as HTMLElement

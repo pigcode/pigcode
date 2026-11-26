@@ -21,6 +21,8 @@ import { TerminalSurface, type TerminalOwner, type TerminalSession } from "./ter
 
 const MIN_HEIGHT = 140
 const DEFAULT_HEIGHT = 260
+/** 抽屉展开时上方聊天区保留的最小高度，避免窗口变矮后输入区被压没。 */
+const MIN_CHAT_HEIGHT = 200
 
 /** 底部终端属性。 */
 export interface TerminalDrawerProps {
@@ -51,9 +53,12 @@ export interface TerminalTab {
   cwd?: string | undefined
 }
 
-/** 抽屉高度不超过聊天区的七成，给消息留出空间。 */
-function clampHeight(height: number, container: HTMLElement | null): number {
-  const max = Math.max(MIN_HEIGHT, Math.round((container?.clientHeight ?? 800) * 0.7))
+/** 抽屉高度不超过聊天区的七成，且为上方消息与输入区预留最小高度。 */
+export function clampDrawerHeight(height: number, panelHeight: number): number {
+  const max = Math.max(
+    MIN_HEIGHT,
+    Math.min(Math.round(panelHeight * 0.7), panelHeight - MIN_CHAT_HEIGHT),
+  )
   return Math.min(max, Math.max(MIN_HEIGHT, Math.round(height)))
 }
 
@@ -88,7 +93,10 @@ export function TerminalDrawer({
   onTerminalClosed,
 }: TerminalDrawerProps) {
   const { t } = useLocale()
-  const [height, setHeight] = useState(DEFAULT_HEIGHT)
+  const drawerRef = useRef<HTMLElement>(null)
+  const endDrag = useRef<(() => void) | null>(null)
+  const [preferredHeight, setPreferredHeight] = useState(DEFAULT_HEIGHT)
+  const [panelHeight, setPanelHeight] = useState(0)
   const seenRecovered = useRef<Set<string>>(
     new Set((initialSessions ?? []).map((session) => session.id)),
   )
@@ -209,30 +217,74 @@ export function TerminalDrawer({
     select(target.key, true)
   }
 
+  // 监听所在面板高度变化：窗口变矮时临时收紧抽屉高度，变高后无损恢复用户拖好的高度。
+  useEffect(() => {
+    const panel = drawerRef.current?.closest<HTMLElement>(".panel")
+    if (!panel) return undefined
+    const sync = (): void => {
+      const next = panel.clientHeight
+      if (next > 0) setPanelHeight(next)
+    }
+    sync()
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync)
+    observer?.observe(panel)
+    window.addEventListener("resize", sync)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", sync)
+    }
+  }, [open])
+
+  // 拖动过程中组件卸载时清理全局监听和鼠标样式。
+  useEffect(() => () => endDrag.current?.(), [])
+
+  const effectiveHeight =
+    panelHeight > 0 ? clampDrawerHeight(preferredHeight, panelHeight) : preferredHeight
+
   function startResize(event: ReactPointerEvent<HTMLDivElement>): void {
     event.preventDefault()
+    endDrag.current?.()
     const container = event.currentTarget.closest<HTMLElement>(".panel")
     const startY = event.clientY
-    const startHeight = height
+    const startHeight = effectiveHeight
+    const measurePanel = (): number => container?.clientHeight || panelHeight || 800
     const move = (moveEvent: PointerEvent): void => {
-      setHeight(clampHeight(startHeight + startY - moveEvent.clientY, container))
+      setPreferredHeight(
+        clampDrawerHeight(startHeight + startY - moveEvent.clientY, measurePanel()),
+      )
     }
-    const up = (): void => {
+    const cancel = (keyEvent: KeyboardEvent | globalThis.KeyboardEvent): void => {
+      if (keyEvent.key !== "Escape") return
+      keyEvent.preventDefault()
+      keyEvent.stopPropagation()
+      setPreferredHeight(startHeight)
+      stop()
+    }
+    const stop = (): void => {
       window.removeEventListener("pointermove", move)
-      window.removeEventListener("pointerup", up)
+      window.removeEventListener("pointerup", stop)
+      window.removeEventListener("pointercancel", stop)
+      window.removeEventListener("blur", stop)
+      window.removeEventListener("keydown", cancel, true)
       document.body.classList.remove("is-resizing-rows")
+      endDrag.current = null
     }
+    endDrag.current = stop
     window.addEventListener("pointermove", move)
-    window.addEventListener("pointerup", up)
+    window.addEventListener("pointerup", stop)
+    window.addEventListener("pointercancel", stop)
+    window.addEventListener("blur", stop)
+    window.addEventListener("keydown", cancel, true)
     document.body.classList.add("is-resizing-rows")
   }
 
   return (
     <section
+      ref={drawerRef}
       className="terminal-drawer"
       hidden={!open}
       aria-label={t("panel.terminalDrawer")}
-      style={{ height }}
+      style={{ height: effectiveHeight }}
     >
       <div className="terminal-drawer-resizer" aria-hidden="true" onPointerDown={startResize} />
       <header className="terminal-drawer-head">
