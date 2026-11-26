@@ -31,6 +31,12 @@ describe("unified update items", () => {
     expect(cliUpdateItems({ codex: failed })).toEqual([failed])
     expect(cliUpdateItems({ codex: { ...failed, command: null } })).toEqual([])
   })
+  it("excludes uninstalled managed CLIs unless an install is actively running", () => {
+    const uninstalled = { ...cli, agentId: "antigravity", currentVersion: null }
+    expect(cliUpdateItems({ antigravity: uninstalled })).toEqual([])
+    const installing = { ...uninstalled, phase: "running" as const }
+    expect(cliUpdateItems({ antigravity: installing })).toEqual([installing])
+  })
   it("shows an app update only when a version and action are known", () => {
     const app: DesktopUpdateState = {
       autoCheck: true,

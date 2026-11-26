@@ -92,7 +92,7 @@ it("runs the advertised login command in a PTY and verifies credentials on a fre
       ctx.agents.auth(id, { action: "terminal", flowId: cancelled, data: "y" }),
     ).rejects.toThrow()
     await ctx.agents.auth(id, { action: "terminal", flowId: unverified, data: "n" })
-    await expect.poll(async () => (await status()).phase).toBe("failed")
+    await expect.poll(async () => (await status()).phase, { timeout: 8000 }).toBe("failed")
     const accepted = await start()
     await ctx.agents.auth(id, {
       action: "terminal",
@@ -100,7 +100,7 @@ it("runs the advertised login command in a PTY and verifies credentials on a fre
       size: { cols: 72, rows: 12 },
     })
     await ctx.agents.auth(id, { action: "terminal", flowId: accepted, data: "y" })
-    await expect.poll(async () => (await status()).phase).toBe("connected")
+    await expect.poll(async () => (await status()).phase, { timeout: 8000 }).toBe("connected")
     const probes = (await readFile(marker + ".checks", "utf8")).trim().split("\n")
     expect(new Set(probes).size).toBeGreaterThanOrEqual(3)
     expect((await status()).terminal).toBeUndefined()

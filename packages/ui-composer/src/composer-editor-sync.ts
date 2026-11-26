@@ -139,7 +139,11 @@ export function useComposerEditorSync({
   }, [editor, disabled])
 
   useEffect(() => {
-    if (autoFocus && !disabled) editor?.commands.focus()
+    // TipTap 的 commands.focus() 会把 view.focus() 推迟到下一帧 rAF，若用户在首帧内点了
+    // 顶部按钮或菜单，延迟聚焦会抢回焦点并触发 focus-out 关掉刚打开的浮层；这里同步聚焦。
+    if (autoFocus && !disabled && editor && !editor.isDestroyed) {
+      editor.view.focus()
+    }
   }, [autoFocus, disabled, editor])
 
   useEffect(() => {

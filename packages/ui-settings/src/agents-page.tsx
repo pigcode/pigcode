@@ -173,7 +173,9 @@ export function AgentsPage({
   )
   const hasUpdates =
     Boolean(onUpdateCli) &&
-    Object.values(cliUpdates).some((update) => update.available && update.canUpdate)
+    Object.values(cliUpdates).some(
+      (update) => update.available && update.canUpdate && update.currentVersion !== null,
+    )
   const refreshing = detecting || checkingCliUpdates
 
   async function run(key: string, action: () => Promise<void>): Promise<void> {
@@ -205,7 +207,9 @@ export function AgentsPage({
     void run("update-clis", async () => {
       const targets = new Map(
         Object.values(cliUpdates)
-          .filter((update) => update.available && update.canUpdate)
+          .filter(
+            (update) => update.available && update.canUpdate && update.currentVersion !== null,
+          )
           .map((update) => [update.target, update.instanceId]),
       )
       await Promise.all([...targets.values()].map(onUpdateCli))

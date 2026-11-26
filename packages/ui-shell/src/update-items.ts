@@ -12,7 +12,7 @@ export function cliUpdateItems(
   const items = new Map<string, AgentCliUpdateState>()
   for (const state of Object.values(states)) {
     const relevant =
-      state.available ||
+      (state.available && state.currentVersion !== null) ||
       cliUpdateRunning(state) ||
       state.phase === "unchanged" ||
       (state.phase === "failed" && state.command !== null) ||

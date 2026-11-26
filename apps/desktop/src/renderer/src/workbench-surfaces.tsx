@@ -55,6 +55,9 @@ export function TerminalPane({ tab, active }: SurfaceRenderProps) {
         onOpened={(session) => {
           if (tab.terminalId !== session.id) updateTab(tab.id, { terminalId: session.id })
         }}
+        onClosed={(closedId) => {
+          if (tab.terminalId === closedId) updateTab(tab.id, { terminalId: undefined })
+        }}
         onExit={() => close(tab.id)}
         tools={
           <>

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { MOBILE_ATTACHMENT_CHUNK_BYTES } from "@pigcode/contracts"
 import { describe, expect, it } from "vitest"
+import { hasDartClientEnv } from "./dart-env"
 import {
   MAX_NOISE_ENCRYPTED_FRAME_BYTES,
   makePng,
@@ -10,7 +11,7 @@ import {
   startDartWorkbenchDriver,
 } from "./workbench-test-helper"
 
-describe("mobile workbench.read Dart end-to-end", () => {
+describe.skipIf(!hasDartClientEnv())("mobile workbench.read Dart end-to-end", () => {
   it("runs real Node Host + Dart pigcode_client end-to-end across list, text chunking, image reassembly, binary, search, pr.status, and Noise single-frame limits", async () => {
     const root = await mkdtemp(join(tmpdir(), "pigcode-wb-dart-e2e-"))
     const host = await setupWorkbenchReadHost({

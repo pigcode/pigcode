@@ -10,9 +10,10 @@ import {
   makePng,
   setupAttachmentHost,
 } from "./attachments.test-helpers"
+import { hasDartClientEnv } from "./dart-env"
 import { mobileFrames } from "./mobile-frames"
 
-describe("mobile composer.attachments Dart client end-to-end", () => {
+describe.skipIf(!hasDartClientEnv())("mobile composer.attachments Dart client end-to-end", () => {
   it("runs real Node Host + Dart pigcode_client end-to-end across upload, send, draft, thumb/full read, queue withdraw, and mid-flight cancel", async () => {
     const vision = createVisionDriver("dart-vision", true)
     const noVision = createVisionDriver("dart-plain", false)

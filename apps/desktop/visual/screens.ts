@@ -419,7 +419,7 @@ export async function walkSettings(walk: Walk): Promise<void> {
 
   await nav("settings.plugins")
   await expect(page.getByRole("heading", { name: t("plugins.pageTitle") })).toBeVisible()
-  await expect(page.locator(".market-tile")).toHaveCount(4)
+  await expect(page.locator(".market-tile")).toHaveCount(13)
   await step("settings-plugins")
   await page.getByRole("radio", { name: t("plugins.market.community"), exact: true }).click()
   await expect(page.locator(".market-tile")).toHaveCount(2)
@@ -445,7 +445,7 @@ export async function walkSettings(walk: Walk): Promise<void> {
   }
   const pluginManagementTitle = page.getByRole("heading", { name: t("plugins.title"), level: 1 })
   await expect(pluginManagementTitle).toBeVisible()
-  await expect(page.locator(".market-tile")).toHaveCount(5)
+  await expect(page.locator(".market-tile")).toHaveCount(14)
   await pluginManagementTitle.hover()
   await step("settings-plugins-installed")
 

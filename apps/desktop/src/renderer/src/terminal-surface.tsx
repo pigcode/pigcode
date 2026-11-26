@@ -68,6 +68,8 @@ export interface TerminalSurfaceProps {
   tools?: ReactNode
   /** shell 已经起来或附着完成：底部终端用它的名字与目录给标签起名。 */
   onOpened?: ((session: TerminalSession) => void) | undefined
+  /** 组件卸载时主动关闭了底层 PTY（例如切走会话），通知调用方清理已失效的 terminalId。 */
+  onClosed?: ((terminalId: string) => void) | undefined
   /** shell 自己退出了（例如输入 exit），或要附着的终端已提前退出。 */
   onExit?: (() => void) | undefined
 }
@@ -81,6 +83,7 @@ export function TerminalSurface({
   attachTerminalId,
   tools,
   onOpened,
+  onClosed,
   onExit,
 }: TerminalSurfaceProps) {
   const { t } = useLocale()
@@ -104,8 +107,8 @@ export function TerminalSurface({
   const activeRef = useRef(active)
   activeRef.current = active
   // 回调可能每次渲染都换；放进 ref，打开/附着终端的 effect 不因此重跑。
-  const callbacks = useRef({ onOpened, onExit })
-  callbacks.current = { onOpened, onExit }
+  const callbacks = useRef({ onOpened, onClosed, onExit })
+  callbacks.current = { onOpened, onClosed, onExit }
   const ownerRef = useRef(owner)
   ownerRef.current = owner
 
@@ -259,7 +262,9 @@ export function TerminalSurface({
         .then((raw) => {
           const session = raw as TerminalSession
           if (cancelled) {
-            void connection.call("terminal.close", { terminalId: session.id }).catch(() => undefined)
+            void connection
+              .call("terminal.close", { terminalId: session.id })
+              .catch(() => undefined)
             return
           }
           activeId = session.id
@@ -283,6 +288,7 @@ export function TerminalSurface({
       offReconnect?.()
       idRef.current = null
       if (activeId && !exitedRef.current) {
+        callbacks.current.onClosed?.(activeId)
         void connection.call("terminal.close", { terminalId: activeId }).catch(() => undefined)
       }
     }

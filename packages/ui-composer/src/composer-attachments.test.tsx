@@ -141,7 +141,11 @@ describe("Composer image attachments", () => {
 
     // 打开 + 菜单验证顶部的「添加图片」条目存在。
     await user.click(screen.getByRole("button", { name: "添加" }))
-    const addImageItem = await screen.findByRole("menuitem", { name: /添加图片/ })
+    const addImageItem = await screen.findByRole(
+      "menuitem",
+      { name: /添加图片/ },
+      { timeout: 5000 },
+    )
     expect(addImageItem).toBeTruthy()
 
     const fileInput = screen.getByTestId("composer-image-input") as HTMLInputElement

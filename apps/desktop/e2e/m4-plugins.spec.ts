@@ -76,7 +76,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await openDebugSettings.click()
   await expect(debugSettingsTitle).toBeVisible()
   await expect(debugSettings).toHaveAttribute("aria-current", "page")
-  await expect(settingsNav).toHaveText(["通用", "外观", "Agent", "Debug Settings"])
+  await expect(settingsNav).toHaveText(["通用", "外观", "手机连接", "Agent", "Debug Settings"])
   await expect(sidebar.locator(".side-group")).toHaveText(["设置", "插件设置"])
   await expect(
     page
@@ -96,7 +96,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await settingsSearch.getByRole("option", { name: "Debug Settings" }).click()
   await expect(settingsSearch).toBeHidden()
   await expect(debugSettingsTitle).toBeVisible()
-  await expect(settingsNav).toHaveCount(4)
+  await expect(settingsNav).toHaveCount(5)
   await backToApp()
   await expect(debugPanel).toBeVisible()
 

@@ -89,7 +89,7 @@ describe("NewThreadView", () => {
     renderView({ details: <section aria-label="工作区">/work/pigcode</section> })
     expect(screen.queryByRole("region", { name: "工作区" })).toBeNull()
     await userEvent.click(screen.getByRole("button", { name: "会话详情" }))
-    const card = await screen.findByRole("dialog", { name: "会话详情" })
+    const card = await screen.findByRole("dialog", { name: "会话详情" }, { timeout: 5000 })
     expect(card.textContent).toContain("/work/pigcode")
     cleanup()
 

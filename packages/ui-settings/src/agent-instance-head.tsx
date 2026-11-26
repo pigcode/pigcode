@@ -90,7 +90,7 @@ export function InstanceItem({
             </span>
           </span>
         </span>
-        {update && (update.available || updating) ? (
+        {update && ((update.available && update.currentVersion !== null) || updating) ? (
           <button
             className="icon-btn agent-item-update"
             type="button"

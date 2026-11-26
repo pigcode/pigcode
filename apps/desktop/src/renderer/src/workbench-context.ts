@@ -29,12 +29,12 @@ export interface WorkbenchContextValue {
   add(kind: string): void
   /** 关闭一个标签；有未保存修改的文件标签先确认。 */
   close(id: string): void
-  /** 更新标签元数据（例如记录已打开的终端 id）。 */
+  /** 更新标签元数据（例如记录或清空已打开的终端 id）。 */
   updateTab(
     id: string,
-    patch: Partial<
-      Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview" | "terminalId">
-    >,
+    patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview">> & {
+      terminalId?: string | undefined
+    },
   ): void
   /** 从当前文件导航打开文件，可以复用预览标签或保留独立标签。 */
   openFile(path: string, sourceId: string, preview: boolean): void

@@ -53,6 +53,7 @@ describe("TerminalSurface reattach and rebind (#85)", () => {
     })
 
     const onOpened = vi.fn()
+    const onClosed = vi.fn()
     const view = render(
       <StrictMode>
         <LocaleProvider locale="zh-CN">
@@ -63,6 +64,7 @@ describe("TerminalSurface reattach and rebind (#85)", () => {
             placement="drawer"
             attachTerminalId="term_existing"
             onOpened={onOpened}
+            onClosed={onClosed}
           />
         </LocaleProvider>
       </StrictMode>,
@@ -75,6 +77,7 @@ describe("TerminalSurface reattach and rebind (#85)", () => {
     // StrictMode 下第一次卸载绝不误杀已有终端，且绝不调用 terminal.open。
     expect(calls.some((call) => call.method === "terminal.open")).toBe(false)
     expect(calls.some((call) => call.method === "terminal.close")).toBe(false)
+    expect(onClosed).not.toHaveBeenCalled()
     expect(calls.filter((call) => call.method === "terminal.attach")).toContainEqual({
       method: "terminal.attach",
       params: { terminalId: "term_existing", cols: 96, rows: 28 },
@@ -98,6 +101,7 @@ describe("TerminalSurface reattach and rebind (#85)", () => {
     expect(writes).toEqual(["saved-line\r\n", "live!\n"])
 
     view.unmount()
+    expect(onClosed).toHaveBeenCalledWith("term_existing")
     expect(
       calls.some(
         (call) => call.method === "terminal.close" && call.params.terminalId === "term_existing",

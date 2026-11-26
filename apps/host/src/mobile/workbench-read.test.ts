@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { promisify } from "node:util"
 import {
   MOBILE_ATTACHMENT_CHUNK_BYTES,
   mobileWorkbenchMethods,
@@ -172,6 +174,10 @@ describe("mobile workbench.read file reading, search, and PR status", () => {
       const longLine = `const needle = "${"z".repeat(260)}";`
       await writeFile(join(root, "src", "match.ts"), `line1\n${longLine}\nconst needle = 2;\n`)
       await writeFile(join(root, "src", "other.dart"), "final needle = 'dart';\n")
+      // 没装 ripgrep 的环境（如 GitHub Actions）会回退到 git grep，需为工作区初始化并暂存文件。
+      const exec = promisify(execFile)
+      await exec("git", ["init", "-q"], { cwd: root })
+      await exec("git", ["add", "."], { cwd: root })
 
       const project = host.ctx.projects.add(root, "搜索项目")
       const thread = host.ctx.threads.create(project.id, "搜索会话", "fake")

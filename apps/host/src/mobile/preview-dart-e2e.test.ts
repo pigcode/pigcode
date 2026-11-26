@@ -4,6 +4,7 @@ import { createInterface } from "node:readline"
 import { fileURLToPath } from "node:url"
 import { MOBILE_PREVIEW_CHUNK_BYTES, type MobilePreviewFetchResult } from "@pigcode/contracts"
 import { describe, expect, it } from "vitest"
+import { hasDartClientEnv } from "./dart-env"
 import { mobileFrames } from "./mobile-frames"
 import {
   MAX_NOISE_ENCRYPTED_FRAME_BYTES,
@@ -13,7 +14,7 @@ import {
   startLocalPreviewTestServer,
 } from "./preview.test-helpers"
 
-describe("mobile preview.tunnel Dart client end-to-end", () => {
+describe.skipIf(!hasDartClientEnv())("mobile preview.tunnel Dart client end-to-end", () => {
   it("runs real Node Host + Dart pigcode_client end-to-end over preview.tunnel with strict <= 65,535-byte encrypted frames", async () => {
     const server = await startLocalPreviewTestServer()
     const closedPort = await allocateClosedLoopbackPort()

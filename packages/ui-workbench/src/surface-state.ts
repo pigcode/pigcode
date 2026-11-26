@@ -142,14 +142,25 @@ export function closeRemovedSurfaces(
 export function updateSurface(
   state: PanelSurfaceState,
   id: string,
-  patch: Partial<
-    Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview" | "terminalId">
-  >,
+  patch: Partial<Pick<PanelSurface, "title" | "url" | "icon" | "path" | "dirty" | "preview">> & {
+    terminalId?: string | undefined
+  },
 ): PanelSurfaceState {
   return {
     ...state,
-    surfaces: state.surfaces.map((surface) =>
-      surface.id === id ? { ...surface, ...patch } : surface,
-    ),
+    surfaces: state.surfaces.map((surface) => {
+      if (surface.id !== id) return surface
+      const { terminalId, ...rest } = patch
+      if ("terminalId" in patch && terminalId === undefined) {
+        const next: PanelSurface = { ...surface, ...rest }
+        delete next.terminalId
+        return next
+      }
+      return {
+        ...surface,
+        ...rest,
+        ...(terminalId !== undefined ? { terminalId } : {}),
+      }
+    }),
   }
 }

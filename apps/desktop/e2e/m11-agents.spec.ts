@@ -157,7 +157,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     )
     await model.fill("gpt-work-e2e")
     await model.press("Enter")
-    await editor.getByRole("button", { name: "保存" }).click()
+    await editor.getByRole("button", { name: "保存", exact: true }).click()
     await expect(editor.getByText("已保存", { exact: true })).toBeVisible()
     await page.screenshot({ path: "test-results/agents-codex-settings.png" })
 
@@ -221,10 +221,10 @@ test("agents are plugins with settings that reach the composer", async () => {
     // 恢复默认也要保存，并显示保存结果；它在「其他」一组里。
     await page.getByRole("button", { name: "打开 Codex 的设置" }).click()
     await editor.getByRole("textbox", { name: "启动参数" }).fill(runtimeValues.launchArgs)
-    await editor.getByRole("button", { name: "保存" }).click()
+    await editor.getByRole("button", { name: "保存", exact: true }).click()
     await expect(editor.getByText("已保存", { exact: true })).toBeVisible()
     await editor.getByRole("button", { name: "还原" }).click()
-    await editor.getByRole("button", { name: "保存" }).click()
+    await editor.getByRole("button", { name: "保存", exact: true }).click()
     await expect(editor.getByText("已保存", { exact: true })).toBeVisible()
   } finally {
     await app.close()
@@ -307,7 +307,7 @@ test("projects, threads and agent settings survive a restart", async () => {
     await openAgents(page)
     await page.getByRole("button", { name: "打开 Claude Code 的设置" }).click()
     await page.getByRole("textbox", { name: "启动参数" }).fill("--chrome")
-    await page.getByRole("button", { name: "保存" }).click()
+    await page.getByRole("button", { name: "保存", exact: true }).click()
     await expect(page.getByText("已保存", { exact: true })).toBeVisible()
     await first.close()
 
@@ -347,6 +347,7 @@ test("Claude defaults persist without replacing an instance draft, and an overri
       await global.click()
       await page.getByRole("option", { name: choice, exact: true }).click()
       await expect(global).toHaveText(choice)
+      await expect(page.getByRole("listbox")).toHaveCount(0)
     }
     await changeDefault("过期前自动压缩")
     await expect(rule).toContainText("跟 Claude 默认一样 · 过期前自动压缩")
