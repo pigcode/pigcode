@@ -60,3 +60,44 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+.pr-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  user-select: none;
+}
+.pr-actions,
+.pr-merge-box,
+.pr-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.pr-action-row,
+.pr-confirm-row,
+.pr-merge-controls,
+.pr-comment-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.pr-merge-select {
+  min-width: 150px;
+}
+.pr-confirm-text {
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+}
+.pr-comment-sent {
+  color: var(--ok, var(--fg-2));
+  font-size: var(--fs-sm);
+}
+.pr-comment-footer {
+  justify-content: flex-end;
+}

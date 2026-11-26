@@ -94,4 +94,95 @@ describe("PrPanel", () => {
     expect(screen.getByText("gh command failed")).toBeTruthy()
     expect(screen.queryByRole("button", { name: "详细信息" })).toBeNull()
   })
+
+  it("submits draft flag when creating as draft", async () => {
+    const onCreate = vi.fn()
+    render(<PrPanel pullRequest={null} onCreate={onCreate} />)
+
+    await userEvent.type(screen.getByLabelText("标题"), "WIP feature")
+    await userEvent.click(screen.getByRole("checkbox", { name: "创建为草稿（Draft）" }))
+    await userEvent.click(screen.getByRole("button", { name: "创建 PR" }))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      title: "WIP feature",
+      draft: true,
+    })
+  })
+
+  it("renders draft badge and marks draft PR as ready", async () => {
+    const onReady = vi.fn()
+    render(
+      <PrPanel
+        pullRequest={{ ...PULL_REQUEST, isDraft: true }}
+        onCreate={vi.fn()}
+        onReady={onReady}
+        onClose={vi.fn()}
+        onComment={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText("草稿")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "合并 PR" })).toBeNull()
+    await userEvent.click(screen.getByRole("button", { name: "标记为 Ready" }))
+    expect(onReady).toHaveBeenCalledTimes(1)
+  })
+
+  it("confirms before merging with selected method and deleteBranch", async () => {
+    const onMerge = vi.fn()
+    render(
+      <PrPanel
+        pullRequest={{ ...PULL_REQUEST, isDraft: false }}
+        onCreate={vi.fn()}
+        onMerge={onMerge}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole("combobox", { name: "合并方式" }))
+    await userEvent.click(await screen.findByRole("option", { name: "Rebase 变基合并" }))
+    await userEvent.click(screen.getByRole("checkbox", { name: "合并后删除源分支" }))
+    await userEvent.click(screen.getByRole("button", { name: "合并 PR" }))
+    expect(onMerge).not.toHaveBeenCalled()
+    expect(screen.getByText("确认合并这个 PR？")).toBeTruthy()
+
+    await userEvent.click(screen.getByRole("button", { name: "确认合并" }))
+    expect(onMerge).toHaveBeenCalledWith({ method: "rebase", deleteBranch: true })
+  })
+
+  it("confirms close, allows reopen on closed PR, and handles comments", async () => {
+    const onClose = vi.fn()
+    const onReopen = vi.fn()
+    const onComment = vi.fn()
+    const { rerender } = render(
+      <PrPanel
+        pullRequest={PULL_REQUEST}
+        onCreate={vi.fn()}
+        onClose={onClose}
+        onComment={onComment}
+      />,
+    )
+
+    await userEvent.click(screen.getByRole("button", { name: "关闭 PR" }))
+    expect(onClose).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "确认关闭" }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+
+    const commentBox = screen.getByLabelText("发表评论") as HTMLTextAreaElement
+    await userEvent.type(commentBox, "LGTM!")
+    await userEvent.click(screen.getByRole("button", { name: "发送评论" }))
+    expect(onComment).toHaveBeenCalledWith("LGTM!")
+    expect(commentBox.value).toBe("")
+    expect(screen.getByText("已发表评论")).toBeTruthy()
+
+    rerender(
+      <PrPanel
+        pullRequest={{ ...PULL_REQUEST, state: "CLOSED" }}
+        onCreate={vi.fn()}
+        onReopen={onReopen}
+        onComment={onComment}
+      />,
+    )
+    await userEvent.click(screen.getByRole("button", { name: "重新打开 PR" }))
+    expect(onReopen).toHaveBeenCalledTimes(1)
+  })
 })

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../composer/composer_tokens.dart';
+import '../mobile_glass.dart';
+import '../mobile_sheet.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
@@ -25,6 +27,7 @@ class _DirectoryCache {
 }
 
 /// 工作台「文件」Tab：
+/// - 支持 `workbench.write` 时在顶部显示当前 Worktree 快捷条、新建文件与长按/菜单重命名和删除；
 /// - 顶部双模式搜索条（文件名 / 代码内容，250ms 防抖 + 清空按钮）；
 /// - 可横向滚动的面包屑路径栏；
 /// - 目录树懒加载缓存、下拉刷新、底部「加载更多」分页、忽略项弱化显示与符号链接标记。
@@ -35,6 +38,10 @@ class FileBrowserTab extends StatefulWidget {
     required this.threadId,
     this.initialDirectory = '',
     this.searchDebounce = const Duration(milliseconds: 250),
+    this.revision = 0,
+    this.threadBusy = false,
+    this.onWorkspaceMutated,
+    this.onOpenGitTab,
   });
 
   static const searchInputKey = ValueKey('workbench-search-input');
@@ -42,11 +49,19 @@ class FileBrowserTab extends StatefulWidget {
   static const filenameModeKey = ValueKey('workbench-search-mode-filename');
   static const contentModeKey = ValueKey('workbench-search-mode-content');
   static const loadMoreKey = ValueKey('workbench-load-more');
+  static const worktreeBarKey = ValueKey('workbench-worktree-bar');
+  static const createFileButtonKey = ValueKey('workbench-create-file');
+  static ValueKey<String> entryMoreKey(String path) =>
+      ValueKey('workbench-entry-more-$path');
 
   final MobileConnection connection;
   final String threadId;
   final String initialDirectory;
   final Duration searchDebounce;
+  final int revision;
+  final bool threadBusy;
+  final VoidCallback? onWorkspaceMutated;
+  final VoidCallback? onOpenGitTab;
 
   @override
   State<FileBrowserTab> createState() => _FileBrowserTabState();
@@ -74,6 +89,11 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
   List<MobileSearchMatch> _contentResults = const [];
   bool _contentResultsTruncated = false;
 
+  MobileWorktreeListResult? _worktreeList;
+  bool _loadingWorktrees = false;
+  bool _mutating = false;
+
+  bool get _canWrite => connectionSupportsWorkbenchWrite(widget.connection);
   String get _query => _searchController.text.trim();
   bool get _inSearchMode => _query.isNotEmpty;
 
@@ -82,6 +102,22 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
     super.initState();
     _currentPath = _normalizeDirPath(widget.initialDirectory);
     unawaited(_loadDirectory(_currentPath));
+    if (_canWrite) {
+      unawaited(_loadWorktrees());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FileBrowserTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revision != widget.revision ||
+        oldWidget.threadId != widget.threadId) {
+      _cache.clear();
+      unawaited(_loadDirectory(_currentPath, forceRefresh: true));
+      if (_canWrite) {
+        unawaited(_loadWorktrees());
+      }
+    }
   }
 
   @override
@@ -311,7 +347,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
     }
   }
 
-  void _openFile(String path, {int? line}) {
+  void _openFile(String path, {int? line, bool initialEditing = false}) {
     unawaited(
       MobileFileViewerScreen.open(
         context,
@@ -319,8 +355,435 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
         threadId: widget.threadId,
         path: path,
         initialLine: line,
+        initialEditing: initialEditing,
+        onFileChanged: _onWorkspaceChanged,
       ),
     );
+  }
+
+  void _onWorkspaceChanged() {
+    _cache.clear();
+    unawaited(_loadDirectory(_currentPath, forceRefresh: true));
+    if (_canWrite) {
+      unawaited(_loadWorktrees());
+    }
+    widget.onWorkspaceMutated?.call();
+  }
+
+  Future<void> _loadWorktrees() async {
+    if (!_canWrite || _loadingWorktrees) return;
+    _loadingWorktrees = true;
+    try {
+      final result = await widget.connection.workbenchWrite.listWorktrees(
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      setState(() => _worktreeList = result);
+    } catch (_) {
+      // Worktree 快捷条属增强能力，静默容错以免干扰目录浏览。
+    } finally {
+      _loadingWorktrees = false;
+    }
+  }
+
+  String _activeWorktreeLabel() {
+    final list = _worktreeList;
+    if (list == null || list.mainActive) return '主工作区';
+    for (final item in list.worktrees) {
+      if (item.active) return item.branch ?? item.name;
+    }
+    return '主工作区';
+  }
+
+  Future<void> _openWorktreeSheet() async {
+    if (!_canWrite) return;
+    await _loadWorktrees();
+    if (!mounted) return;
+    await showMobileSheet<void>(
+      context,
+      title: '切换工作区',
+      content: (sheet) {
+        final list = _worktreeList;
+        final worktrees = list?.worktrees ?? const <MobileWorktreeItem>[];
+        final colors = Theme.of(sheet).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return SliverList.list(
+          children: [
+            if (widget.threadBusy)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  '会话运行中，结束后才可切换或移除 Worktree。',
+                  style: TimelineType.smallStyle(colors.attention),
+                ),
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.folder_outlined, size: 20),
+              title: const Text('主工作区'),
+              subtitle: Text(
+                (list?.mainActive ?? true)
+                    ? '当前使用中'
+                    : '移除当前活动 Worktree 后自动切回主工作区',
+                style: TimelineType.smallStyle(colors.muted),
+              ),
+              trailing: (list?.mainActive ?? true)
+                  ? Icon(Icons.check_rounded, color: colors.foreground, size: 18)
+                  : null,
+            ),
+            for (final item in worktrees)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                enabled: !widget.threadBusy && !item.active,
+                leading: const Icon(Icons.account_tree_outlined, size: 20),
+                title: Text(item.branch ?? item.name),
+                subtitle: item.branch != null
+                    ? Text(
+                        item.name,
+                        style: TimelineType.smallStyle(colors.muted),
+                      )
+                    : null,
+                trailing: item.active
+                    ? Icon(
+                        Icons.check_rounded,
+                        color: colors.foreground,
+                        size: 18,
+                      )
+                    : null,
+                onTap: () async {
+                  Navigator.pop(sheet);
+                  await _switchWorktree(item.id);
+                },
+              ),
+            const Divider(height: 16),
+            MobileSheetAction(
+              label: '新建 Worktree',
+              glyph: WorkspaceGlyph.plus,
+              onTap: () {
+                Navigator.pop(sheet);
+                unawaited(_createWorktree());
+              },
+            ),
+            if (widget.onOpenGitTab != null)
+              MobileSheetAction(
+                label: '打开 Git 页管理全部',
+                icon: Icons.tune_rounded,
+                onTap: () {
+                  Navigator.pop(sheet);
+                  widget.onOpenGitTab?.call();
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _switchWorktree(String worktreeId) async {
+    if (_mutating) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.connection.workbenchWrite.switchWorktree(
+        threadId: widget.threadId,
+        worktreeId: worktreeId,
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已切换 Worktree')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(error, fallback: '切换 Worktree 失败。'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _createWorktree() async {
+    if (_mutating) return;
+    setState(() => _mutating = true);
+    try {
+      final created = await widget.connection.workbenchWrite.createWorktree(
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已创建并切换到 ${created.branch ?? created.name}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(error, fallback: '创建 Worktree 失败。'),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _showCreateFileDialog() async {
+    if (!_canWrite || _mutating) return;
+    final prefix = _currentPath.isEmpty ? '' : '$_currentPath/';
+    final resultPath = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _TextPromptDialog(
+        title: '新建文件',
+        labelText: '相对路径',
+        hintText: '如 src/example.dart',
+        initialValue: prefix,
+        confirmLabel: '创建并编辑',
+      ),
+    );
+    if (!mounted || resultPath == null || resultPath.isEmpty) return;
+    setState(() => _mutating = true);
+    try {
+      final created = await widget.connection.workbenchWrite.createFile(
+        threadId: widget.threadId,
+        path: resultPath,
+        text: '',
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      _openFile(created.path, initialEditing: true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: resultPath,
+              fallback: '创建文件失败，请检查路径后重试。',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _openEntryActions(MobileDirectoryEntry entry) async {
+    if (!_canWrite || _mutating) return;
+    await showMobileSheet<void>(
+      context,
+      title: entry.name,
+      content: (sheet) => SliverList.list(
+        children: [
+          MobileSheetAction(
+            label: '重命名 / 移动',
+            glyph: WorkspaceGlyph.pencil,
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(_showRenameDialog(entry));
+            },
+          ),
+          MobileSheetAction(
+            label: '删除',
+            icon: Icons.delete_outline_rounded,
+            destructive: true,
+            onTap: () {
+              Navigator.pop(sheet);
+              unawaited(_confirmDeleteEntry(entry));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showRenameDialog(MobileDirectoryEntry entry) async {
+    final newPath = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => _TextPromptDialog(
+        title: '重命名 ${entry.name}',
+        labelText: '新路径',
+        initialValue: entry.path,
+        confirmLabel: '确认',
+      ),
+    );
+    if (!mounted || newPath == null || newPath.isEmpty || newPath == entry.path) {
+      return;
+    }
+    setState(() => _mutating = true);
+    try {
+      await widget.connection.workbenchWrite.renamePath(
+        threadId: widget.threadId,
+        oldPath: entry.path,
+        newPath: newPath,
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已重命名')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: newPath,
+              fallback: '重命名失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _confirmDeleteEntry(MobileDirectoryEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final palette = Theme.of(dialogContext).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
+          title: Text('删除「${entry.name}」？'),
+          content: Text(
+            entry.isDirectory
+                ? '将尝试删除目录 ${entry.path}。'
+                : '将永久删除文件 ${entry.path}，此操作不可撤销。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _mutating = true);
+    try {
+      await widget.connection.workbenchWrite.deletePath(
+        threadId: widget.threadId,
+        path: entry.path,
+        recursive: false,
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除 ${entry.name}')),
+      );
+    } on MobileRpcFailure catch (error) {
+      if (!mounted) return;
+      if (error.problem.code == 'WORKBENCH_DIR_NOT_EMPTY') {
+        setState(() => _mutating = false);
+        await _confirmRecursiveDelete(entry);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: entry.path,
+              fallback: '删除失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: entry.path,
+              fallback: '删除失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
+  }
+
+  Future<void> _confirmRecursiveDelete(MobileDirectoryEntry entry) async {
+    final recursiveConfirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final palette = Theme.of(dialogContext).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
+          title: const Text('确认递归删除非空目录？'),
+          content: Text('目录 ${entry.path} 不为空，继续将永久删除目录及其全部内容。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('全部删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || recursiveConfirmed != true) return;
+    setState(() => _mutating = true);
+    try {
+      await widget.connection.workbenchWrite.deletePath(
+        threadId: widget.threadId,
+        path: entry.path,
+        recursive: true,
+      );
+      if (!mounted) return;
+      _onWorkspaceChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除 ${entry.name}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: entry.path,
+              fallback: '递归删除失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _mutating = false);
+    }
   }
 
   @override
@@ -328,6 +791,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (_canWrite) _buildWorktreeBar(context),
         _buildSearchBar(context),
         if (!_inSearchMode) _buildBreadcrumbs(context),
         Expanded(
@@ -336,6 +800,59 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
               : _buildDirectoryList(context),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorktreeBar(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final label = _activeWorktreeLabel();
+    return InkWell(
+      key: FileBrowserTab.worktreeBarKey,
+      onTap: _mutating ? null : () => unawaited(_openWorktreeSheet()),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.background,
+          border: Border(bottom: BorderSide(color: colors.divider)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: TimelineSpace.x6,
+            vertical: TimelineSpace.x2 + 2,
+          ),
+          child: Row(
+            spacing: TimelineSpace.x3,
+            children: [
+              Icon(
+                Icons.account_tree_outlined,
+                size: 15,
+                color: colors.muted,
+              ),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TimelineType.metaStyle(
+                    colors.secondaryText,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Text(
+                widget.threadBusy ? '运行中' : '切换',
+                style: TimelineType.smallStyle(colors.muted),
+              ),
+              Icon(
+                Icons.keyboard_arrow_down_rounded,
+                size: 16,
+                color: colors.muted,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -457,45 +974,64 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
         color: colors.background,
         border: Border(bottom: BorderSide(color: colors.divider)),
       ),
-      child: SingleChildScrollView(
-        controller: _crumbScroll,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: TimelineSpace.x6,
-          vertical: TimelineSpace.x2,
-        ),
-        child: Row(
-          children: [
-            _BreadcrumbItem(
-              key: const ValueKey('workbench-crumb-root'),
-              label: '根目录',
-              active: segments.isEmpty,
-              onTap: segments.isEmpty ? null : () => unawaited(_loadDirectory('')),
-            ),
-            for (var i = 0; i < segments.length; i++) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                child: Icon(
-                  Icons.chevron_right_rounded,
-                  size: 16,
-                  color: colors.faint,
-                ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              controller: _crumbScroll,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: TimelineSpace.x6,
+                vertical: TimelineSpace.x2,
               ),
-              _BreadcrumbItem(
-                key: ValueKey(
-                  'workbench-crumb-${segments.take(i + 1).join('/')}',
-                ),
-                label: segments[i],
-                active: i == segments.length - 1,
-                onTap: i == segments.length - 1
-                    ? null
-                    : () => unawaited(
-                        _loadDirectory(segments.take(i + 1).join('/')),
+              child: Row(
+                children: [
+                  _BreadcrumbItem(
+                    key: const ValueKey('workbench-crumb-root'),
+                    label: '根目录',
+                    active: segments.isEmpty,
+                    onTap: segments.isEmpty
+                        ? null
+                        : () => unawaited(_loadDirectory('')),
+                  ),
+                  for (var i = 0; i < segments.length; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 16,
+                        color: colors.faint,
                       ),
+                    ),
+                    _BreadcrumbItem(
+                      key: ValueKey(
+                        'workbench-crumb-${segments.take(i + 1).join('/')}',
+                      ),
+                      label: segments[i],
+                      active: i == segments.length - 1,
+                      onTap: i == segments.length - 1
+                          ? null
+                          : () => unawaited(
+                              _loadDirectory(segments.take(i + 1).join('/')),
+                            ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+          if (_canWrite)
+            Padding(
+              padding: const EdgeInsetsDirectional.only(end: TimelineSpace.x4),
+              child: IconButton(
+                key: FileBrowserTab.createFileButtonKey,
+                tooltip: '新建文件',
+                onPressed: _mutating ? null : () => unawaited(_showCreateFileDialog()),
+                color: colors.foreground,
+                icon: const Icon(Icons.note_add_outlined, size: 19),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -610,6 +1146,11 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
           final entry = entries[index];
           return _DirectoryEntryRow(
             entry: entry,
+            showMore: _canWrite,
+            onMore: _canWrite ? () => unawaited(_openEntryActions(entry)) : null,
+            onLongPress: _canWrite
+                ? () => unawaited(_openEntryActions(entry))
+                : null,
             onTap: () {
               if (entry.isDirectory) {
                 unawaited(_loadDirectory(entry.path));
@@ -835,10 +1376,19 @@ class _BreadcrumbItem extends StatelessWidget {
 }
 
 class _DirectoryEntryRow extends StatelessWidget {
-  const _DirectoryEntryRow({required this.entry, required this.onTap});
+  const _DirectoryEntryRow({
+    required this.entry,
+    required this.onTap,
+    this.showMore = false,
+    this.onMore,
+    this.onLongPress,
+  });
 
   final MobileDirectoryEntry entry;
   final VoidCallback onTap;
+  final bool showMore;
+  final VoidCallback? onMore;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -854,12 +1404,14 @@ class _DirectoryEntryRow extends StatelessWidget {
     final row = ConstrainedBox(
       constraints: BoxConstraints(minHeight: touch),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: TimelineSpace.x7,
-          vertical: TimelineSpace.x3,
+        padding: EdgeInsetsDirectional.fromSTEB(
+          TimelineSpace.x7,
+          TimelineSpace.x3,
+          showMore ? TimelineSpace.x2 : TimelineSpace.x7,
+          TimelineSpace.x3,
         ),
         child: Row(
-          spacing: TimelineSpace.x5,
+          spacing: TimelineSpace.x4,
           children: [
             IconTheme(
               data: IconThemeData(color: iconColor),
@@ -902,6 +1454,19 @@ class _DirectoryEntryRow extends StatelessWidget {
                 size: 18,
                 color: colors.faint,
               ),
+            if (showMore)
+              IconButton(
+                key: FileBrowserTab.entryMoreKey(entry.path),
+                tooltip: '更多操作',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+                onPressed: onMore,
+                icon: Icon(
+                  Icons.more_horiz,
+                  size: 18,
+                  color: colors.muted,
+                ),
+              ),
           ],
         ),
       ),
@@ -910,6 +1475,7 @@ class _DirectoryEntryRow extends StatelessWidget {
     return InkWell(
       key: ValueKey('workbench-entry-${entry.path}'),
       onTap: onTap,
+      onLongPress: onLongPress,
       child: entry.ignored ? Opacity(opacity: 0.5, child: row) : row,
     );
   }
@@ -1108,5 +1674,75 @@ class _ContentSearchRow extends StatelessWidget {
       start = end;
     }
     return TextSpan(style: baseStyle, children: spans);
+  }
+}
+
+class _TextPromptDialog extends StatefulWidget {
+  const _TextPromptDialog({
+    required this.title,
+    required this.labelText,
+    required this.initialValue,
+    required this.confirmLabel,
+    this.hintText,
+  });
+
+  final String title;
+  final String labelText;
+  final String? hintText;
+  final String initialValue;
+  final String confirmLabel;
+
+  @override
+  State<_TextPromptDialog> createState() => _TextPromptDialogState();
+}
+
+class _TextPromptDialogState extends State<_TextPromptDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final trimmed = _controller.text.trim();
+    if (trimmed.isNotEmpty) {
+      Navigator.of(context).pop(trimmed);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MobileGlassDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        autocorrect: false,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          hintText: widget.hintText,
+          border: const OutlineInputBorder(),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.confirmLabel),
+        ),
+      ],
+    );
   }
 }

@@ -108,7 +108,7 @@ export function WorkbenchPanel({
   const [diffBase, setDiffBase] = useState<string | null>(null)
   // 切换或新建 worktree 会换掉线程的工作目录，同样要重读文件树与打开的文件。
   const worktrees = useWorktrees(connection, threadId, onError, onCheckoutChanged)
-  const pr = usePullRequest(connection, scope, tab === "pr", checkoutRevision)
+  const pr = usePullRequest(connection, scope, tab === "pr", checkoutRevision, onCheckoutChanged)
 
   /** 重新拉取 checkpoint 列表；Diff 与 Checkpoint tab 共用。检查点属于会话的 run，草稿里没有。 */
   const refreshCheckpoints = useCallback(async (): Promise<void> => {

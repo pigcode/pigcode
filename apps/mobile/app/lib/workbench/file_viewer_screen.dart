@@ -17,9 +17,10 @@ import '../timeline_widgets.dart';
 import '../workspace_icon.dart';
 import 'workbench_utils.dart';
 
-/// 手机端只读文件查看器：
+/// 手机端文件查看与轻量编辑器：
 /// - 支持代码语法高亮（`re_highlight`）、等宽行号、目标行高亮与自动定位、自动换行/横向滚动、文本选择复制；
 /// - 支持 Markdown 预览（复用 `gpt_markdown`）与源码一键切换（带目标行跳入时默认切到源码）；
+/// - 支持普通非截断文本文件编辑保存（带 `expectedMtimeMs` 并发冲突解决与大文件透明分片提交）；
 /// - 支持大文件分片续读（`nextOffset != null`）及 > 1 MiB 截断提示；
 /// - 支持项目图片文件（`InteractiveViewer` 缩放 + 双击放大 + 黑底全屏预览）与二进制文件提示。
 class MobileFileViewerScreen extends StatefulWidget {
@@ -29,6 +30,8 @@ class MobileFileViewerScreen extends StatefulWidget {
     required this.threadId,
     required this.path,
     this.initialLine,
+    this.initialEditing = false,
+    this.onFileChanged,
   });
 
   static const wrapToggleKey = ValueKey('file-viewer-wrap-toggle');
@@ -37,11 +40,17 @@ class MobileFileViewerScreen extends StatefulWidget {
   static const loadMoreKey = ValueKey('file-viewer-load-more');
   static const fullscreenImageKey = ValueKey('file-viewer-image-fullscreen');
   static const truncationBannerKey = ValueKey('file-viewer-truncation-banner');
+  static const editButtonKey = ValueKey('file-viewer-edit');
+  static const saveButtonKey = ValueKey('file-viewer-save');
+  static const cancelEditButtonKey = ValueKey('file-viewer-cancel-edit');
+  static const editorInputKey = ValueKey('file-viewer-editor-input');
 
   final MobileConnection connection;
   final String threadId;
   final String path;
   final int? initialLine;
+  final bool initialEditing;
+  final VoidCallback? onFileChanged;
 
   static Future<void> open(
     BuildContext context, {
@@ -49,6 +58,8 @@ class MobileFileViewerScreen extends StatefulWidget {
     required String threadId,
     required String path,
     int? initialLine,
+    bool initialEditing = false,
+    VoidCallback? onFileChanged,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => MobileFileViewerScreen(
@@ -56,6 +67,8 @@ class MobileFileViewerScreen extends StatefulWidget {
         threadId: threadId,
         path: path,
         initialLine: initialLine,
+        initialEditing: initialEditing,
+        onFileChanged: onFileChanged,
       ),
     ),
   );
@@ -70,6 +83,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
 
   final _verticalScroll = ScrollController();
   final _imageTransform = TransformationController();
+  final _editController = TextEditingController();
   GlobalKey? _targetLineKey;
   Offset? _doubleTapPosition;
 
@@ -81,6 +95,15 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
   String? _languageHint;
   bool _truncated = false;
   int? _nextOffset;
+  double? _mtimeMs;
+  String? _eol;
+
+  bool _editing = false;
+  String _editBaseline = '';
+  bool _dirty = false;
+  bool _saving = false;
+  int _saveSentBytes = 0;
+  int _saveTotalBytes = 0;
 
   MobileFileImageData? _imageData;
   int _imageReceivedBytes = 0;
@@ -108,6 +131,14 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
   bool get _exceededOneMbCap =>
       _mode == 'text' &&
       (_totalSize > _oneMiB || (_nextOffset == null && _truncated));
+  bool get _canEdit =>
+      !_loading &&
+      _error == null &&
+      _mode == 'text' &&
+      !_truncated &&
+      _nextOffset == null &&
+      !_exceededOneMbCap &&
+      connectionSupportsWorkbenchWrite(widget.connection);
 
   @override
   void initState() {
@@ -117,17 +148,28 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
     if (widget.initialLine != null && widget.initialLine! > 0) {
       _targetLineKey = GlobalKey();
     }
-    unawaited(_loadInitial());
+    _editController.addListener(_onEditTextChanged);
+    unawaited(_loadInitial(enterEditIfRequested: widget.initialEditing));
   }
 
   @override
   void dispose() {
+    _editController.removeListener(_onEditTextChanged);
+    _editController.dispose();
     _verticalScroll.dispose();
     _imageTransform.dispose();
     super.dispose();
   }
 
-  Future<void> _loadInitial() async {
+  void _onEditTextChanged() {
+    if (!_editing) return;
+    final nextDirty = _editController.text != _editBaseline;
+    if (nextDirty != _dirty && mounted) {
+      setState(() => _dirty = nextDirty);
+    }
+  }
+
+  Future<void> _loadInitial({bool enterEditIfRequested = false}) async {
     final generation = ++_loadGeneration;
     setState(() {
       _loading = true;
@@ -139,6 +181,11 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
       _loadedBytes = 0;
       _nextOffset = null;
       _truncated = false;
+      _mtimeMs = null;
+      _eol = null;
+      _editing = false;
+      _editBaseline = '';
+      _dirty = false;
       _imageData = null;
       _imageReceivedBytes = 0;
       _imageTotalBytes = 0;
@@ -162,6 +209,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
           _mode = 'image';
           _totalSize = chunk.totalSize;
           _imageTotalBytes = chunk.totalSize;
+          _mtimeMs = chunk.mtimeMs;
         });
         await _loadImage(canonical, generation);
         return;
@@ -172,6 +220,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
           _canonicalPath = canonical;
           _mode = 'binary';
           _totalSize = chunk.totalSize;
+          _mtimeMs = chunk.mtimeMs;
           _loading = false;
         });
         return;
@@ -181,6 +230,8 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
       var loadedBytes = utf8.encode(text).length;
       var nextOffset = chunk.nextOffset;
       var truncated = chunk.truncated;
+      final mtimeMs = chunk.mtimeMs;
+      final eol = chunk.eol;
       final targetLine = widget.initialLine;
 
       // 若指定了目标行号且首片尚未覆盖到该行，自动续读直至覆盖目标行。
@@ -216,12 +267,16 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
         _languageHint = chunk.languageHint;
         _truncated = truncated;
         _nextOffset = nextOffset;
+        _mtimeMs = mtimeMs;
+        _eol = eol;
         _markdownPreview = isMarkdownPath(canonical) && targetLine == null;
         _loading = false;
         _invalidateHighlightCache();
       });
 
-      if (targetLine != null && targetLine > 0) {
+      if (enterEditIfRequested && _canEdit) {
+        _enterEditMode();
+      } else if (targetLine != null && targetLine > 0) {
         _scheduleScrollToLine(targetLine);
       }
     } catch (error) {
@@ -434,6 +489,193 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
     _imageTransform.value = matrix;
   }
 
+  void _enterEditMode() {
+    if (!_canEdit || _saving) return;
+    final baseline = _text.replaceAll('\r\n', '\n');
+    _editBaseline = baseline;
+    _editController.value = TextEditingValue(
+      text: baseline,
+      selection: TextSelection.collapsed(offset: baseline.length),
+    );
+    setState(() {
+      _editing = true;
+      _dirty = false;
+    });
+  }
+
+  Future<bool> _confirmDiscardEdits() async {
+    if (!_editing || !_dirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final palette = Theme.of(dialogContext).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
+          title: const Text('放弃未保存的修改？'),
+          content: const Text('当前文件的修改尚未保存到电脑端，离开后不会保留。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('继续编辑'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('放弃修改'),
+            ),
+          ],
+        );
+      },
+    );
+    return discard == true;
+  }
+
+  Future<void> _cancelEdit() async {
+    if (_saving) return;
+    if (!await _confirmDiscardEdits() || !mounted) return;
+    setState(() {
+      _editing = false;
+      _dirty = false;
+    });
+  }
+
+  Future<void> _confirmDiscardAndPop() async {
+    if (_saving) return;
+    if (!await _confirmDiscardEdits() || !mounted) return;
+    setState(() {
+      _editing = false;
+      _dirty = false;
+    });
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _save({bool ignoreConflict = false}) async {
+    if (_saving || !_editing) return;
+    final draftText = _editController.text;
+    final total = utf8.encode(draftText).length;
+    setState(() {
+      _saving = true;
+      _saveSentBytes = 0;
+      _saveTotalBytes = total;
+    });
+    try {
+      final result = await widget.connection.workbenchWrite.writeFile(
+        threadId: widget.threadId,
+        path: _canonicalPath,
+        text: draftText,
+        expectedMtimeMs: ignoreConflict ? null : _mtimeMs,
+        eol: _eol,
+        onProgress: (sent, totalBytes) {
+          if (!mounted) return;
+          setState(() {
+            _saveSentBytes = sent;
+            _saveTotalBytes = totalBytes;
+          });
+        },
+      );
+      if (!mounted) return;
+      final storedText =
+          _eol == 'crlf' ? draftText.replaceAll('\n', '\r\n') : draftText;
+      setState(() {
+        _saving = false;
+        _editing = false;
+        _dirty = false;
+        _text = storedText;
+        _totalSize = result.size;
+        _loadedBytes = utf8.encode(storedText).length;
+        _mtimeMs = result.mtimeMs;
+        _invalidateHighlightCache();
+      });
+      widget.onFileChanged?.call();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已保存')),
+      );
+    } on MobileRpcFailure catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      if (error.problem.code == 'WORKBENCH_FILE_CONFLICT') {
+        await _showConflictDialog();
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: _canonicalPath,
+              fallback: '保存失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            workbenchErrorMessage(
+              error,
+              path: _canonicalPath,
+              fallback: '保存失败，请重试。',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showConflictDialog() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final palette = Theme.of(dialogContext).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
+          title: const Text('文件已被修改'),
+          content: const Text(
+            '自你打开以来，电脑端或 Agent 已修改过这个文件。请选择要保留的版本：',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('keep'),
+              child: const Text('继续编辑'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('reload'),
+              child: const Text('重新加载'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop('overwrite'),
+              child: const Text('强制覆盖'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (choice == 'reload') {
+      await _loadInitial();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已重新加载电脑端最新内容')),
+      );
+    } else if (choice == 'overwrite') {
+      await _save(ignoreConflict: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -448,181 +690,309 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
     );
     final title = fileBaseName(_canonicalPath);
     final showSourceControls =
-        !_loading && _error == null && _mode == 'text' && !_showingMarkdownPreview;
+        !_loading &&
+        _error == null &&
+        _mode == 'text' &&
+        !_editing &&
+        !_showingMarkdownPreview;
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      appBar: AppBar(
-        toolbarHeight: toolbarHeight,
-        titleSpacing: 0,
-        scrolledUnderElevation: 0,
-        systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
-        leadingWidth: touch + 14,
-        leading: Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: MobileGlassChromeButton(
-            padding: const EdgeInsetsDirectional.only(start: 10),
-            child: SizedBox.square(
-              dimension: 40,
-              child: IconButton(
-                tooltip: '返回',
-                padding: EdgeInsets.zero,
-                onPressed: () => Navigator.maybePop(context),
-                icon: const RotatedBox(
-                  quarterTurns: 1,
-                  child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 20),
+    return PopScope(
+      canPop: !(_editing && _dirty) && !_saving,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_saving) {
+          unawaited(_confirmDiscardAndPop());
+        }
+      },
+      child: Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
+          toolbarHeight: toolbarHeight,
+          titleSpacing: 0,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
+          leadingWidth: touch + 14,
+          leading: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: MobileGlassChromeButton(
+              padding: const EdgeInsetsDirectional.only(start: 10),
+              child: SizedBox.square(
+                dimension: 40,
+                child: IconButton(
+                  tooltip: '返回',
+                  padding: EdgeInsets.zero,
+                  onPressed: _saving ? null : () => Navigator.maybePop(context),
+                  icon: const RotatedBox(
+                    quarterTurns: 1,
+                    child: WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 20),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                height: 1.35,
-                leadingDistribution: TextLeadingDistribution.even,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _editing && _dirty ? '$title · 未保存' : title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  height: 1.35,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
               ),
-            ),
-            Text(
-              _canonicalPath,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.muted,
-                fontSize: 12,
-                height: 1.35,
-                leadingDistribution: TextLeadingDistribution.even,
+              Text(
+                _canonicalPath,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                  leadingDistribution: TextLeadingDistribution.even,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Center(
+              child: MobileGlassChromeButton(
+                padding: const EdgeInsetsDirectional.only(end: 10),
+                child: _editing
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            key: MobileFileViewerScreen.cancelEditButtonKey,
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.secondaryText,
+                              minimumSize: const Size(0, 40),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                            ),
+                            onPressed: _saving ? null : () => unawaited(_cancelEdit()),
+                            child: const Text('取消'),
+                          ),
+                          TextButton(
+                            key: MobileFileViewerScreen.saveButtonKey,
+                            style: TextButton.styleFrom(
+                              foregroundColor: _dirty
+                                  ? ComposerSurface.accent(theme.brightness)
+                                  : colors.muted,
+                              minimumSize: const Size(0, 40),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                            ),
+                            onPressed: (!_dirty || _saving)
+                                ? null
+                                : () => unawaited(_save()),
+                            child: Text(_saving ? '保存中…' : '保存'),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_canEdit)
+                            SizedBox.square(
+                              dimension: 40,
+                              child: IconButton(
+                                key: MobileFileViewerScreen.editButtonKey,
+                                tooltip: '编辑',
+                                padding: EdgeInsets.zero,
+                                onPressed: _enterEditMode,
+                                color: colors.foreground,
+                                icon: const WorkspaceIcon(
+                                  WorkspaceGlyph.pencil,
+                                  size: 18,
+                                ),
+                              ),
+                            ),
+                          if (!_loading &&
+                              _error == null &&
+                              _mode == 'text' &&
+                              _isMarkdown)
+                            TextButton(
+                              key: MobileFileViewerScreen.markdownToggleKey,
+                              style: TextButton.styleFrom(
+                                foregroundColor: colors.secondaryText,
+                                minimumSize: const Size(0, 40),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                ),
+                              ),
+                              onPressed: () {
+                                setState(
+                                  () => _markdownPreview = !_markdownPreview,
+                                );
+                                if (!_markdownPreview &&
+                                    widget.initialLine != null) {
+                                  _scrolledToInitialLine = false;
+                                  _scheduleScrollToLine(widget.initialLine!);
+                                }
+                              },
+                              child: Text(_markdownPreview ? '源码' : '预览'),
+                            ),
+                          if (showSourceControls)
+                            SizedBox.square(
+                              dimension: 40,
+                              child: IconButton(
+                                key: MobileFileViewerScreen.wrapToggleKey,
+                                tooltip: _wrap ? '切换为横向滚动' : '切换为自动换行',
+                                padding: EdgeInsets.zero,
+                                onPressed: () => setState(() => _wrap = !_wrap),
+                                color: _wrap
+                                    ? ComposerSurface.accent(theme.brightness)
+                                    : colors.muted,
+                                icon: const Icon(Icons.wrap_text, size: 19),
+                              ),
+                            ),
+                          if (!_loading &&
+                              _error == null &&
+                              _mode == 'image' &&
+                              _imageData != null)
+                            SizedBox.square(
+                              dimension: 40,
+                              child: IconButton(
+                                key: MobileFileViewerScreen.fullscreenImageKey,
+                                tooltip: '全屏预览',
+                                padding: EdgeInsets.zero,
+                                onPressed: _openFullscreenImage,
+                                color: colors.foreground,
+                                icon: const Icon(
+                                  Icons.fullscreen_rounded,
+                                  size: 21,
+                                ),
+                              ),
+                            ),
+                          SizedBox.square(
+                            dimension: 40,
+                            child: IconButton(
+                              key: MobileFileViewerScreen.moreMenuKey,
+                              tooltip: '更多操作',
+                              padding: EdgeInsets.zero,
+                              onPressed: () {
+                                unawaited(
+                                  showMobileSheet<void>(
+                                    context,
+                                    title: title,
+                                    content: (sheet) => SliverList.list(
+                                      children: [
+                                        MobileSheetAction(
+                                          label: '复制路径',
+                                          glyph: WorkspaceGlyph.copy,
+                                          onTap: () {
+                                            Navigator.pop(sheet);
+                                            unawaited(_copyPath());
+                                          },
+                                        ),
+                                        if (_mode == 'text' &&
+                                            !_loading &&
+                                            _error == null)
+                                          MobileSheetAction(
+                                            label: '复制全文',
+                                            icon: Icons.article_outlined,
+                                            onTap: () {
+                                              Navigator.pop(sheet);
+                                              unawaited(_copyContent());
+                                            },
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: Icon(
+                                Icons.more_horiz,
+                                color: colors.foreground,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Divider(
+              height: 1,
+              thickness: 1,
+              color: colors.divider,
+            ),
+          ),
         ),
-        actions: [
-          Center(
-            child: MobileGlassChromeButton(
-              padding: const EdgeInsetsDirectional.only(end: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!_loading &&
-                      _error == null &&
-                      _mode == 'text' &&
-                      _isMarkdown)
-                    TextButton(
-                      key: MobileFileViewerScreen.markdownToggleKey,
-                      style: TextButton.styleFrom(
-                        foregroundColor: colors.secondaryText,
-                        minimumSize: const Size(0, 40),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                      ),
-                      onPressed: () {
-                        setState(() => _markdownPreview = !_markdownPreview);
-                        if (!_markdownPreview && widget.initialLine != null) {
-                          _scrolledToInitialLine = false;
-                          _scheduleScrollToLine(widget.initialLine!);
-                        }
-                      },
-                      child: Text(_markdownPreview ? '源码' : '预览'),
-                    ),
-                  if (showSourceControls)
-                    SizedBox.square(
-                      dimension: 40,
-                      child: IconButton(
-                        key: MobileFileViewerScreen.wrapToggleKey,
-                        tooltip: _wrap ? '切换为横向滚动' : '切换为自动换行',
-                        padding: EdgeInsets.zero,
-                        onPressed: () => setState(() => _wrap = !_wrap),
-                        color: _wrap
-                            ? ComposerSurface.accent(theme.brightness)
-                            : colors.muted,
-                        icon: const Icon(Icons.wrap_text, size: 19),
-                      ),
-                    ),
-                  if (!_loading &&
-                      _error == null &&
-                      _mode == 'image' &&
-                      _imageData != null)
-                    SizedBox.square(
-                      dimension: 40,
-                      child: IconButton(
-                        key: MobileFileViewerScreen.fullscreenImageKey,
-                        tooltip: '全屏预览',
-                        padding: EdgeInsets.zero,
-                        onPressed: _openFullscreenImage,
-                        color: colors.foreground,
-                        icon: const Icon(Icons.fullscreen_rounded, size: 21),
-                      ),
-                    ),
-                  SizedBox.square(
-                    dimension: 40,
-                    child: IconButton(
-                      key: MobileFileViewerScreen.moreMenuKey,
-                      tooltip: '更多操作',
-                      padding: EdgeInsets.zero,
-                      onPressed: () {
-                        unawaited(
-                          showMobileSheet<void>(
-                            context,
-                            title: title,
-                            content: (sheet) => SliverList.list(
-                              children: [
-                                MobileSheetAction(
-                                  label: '复制路径',
-                                  glyph: WorkspaceGlyph.copy,
-                                  onTap: () {
-                                    Navigator.pop(sheet);
-                                    unawaited(_copyPath());
-                                  },
-                                ),
-                                if (_mode == 'text' &&
-                                    !_loading &&
-                                    _error == null)
-                                  MobileSheetAction(
-                                    label: '复制全文',
-                                    icon: Icons.article_outlined,
-                                    onTap: () {
-                                      Navigator.pop(sheet);
-                                      unawaited(_copyContent());
-                                    },
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.more_horiz,
-                        color: colors.foreground,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
+        body: SafeArea(
+          top: false,
+          child: _editing ? _buildEditorBody(context) : _buildBody(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditorBody(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final codeStyle = TextStyle(
+      fontFamily: theme.platform == TargetPlatform.iOS ? 'Menlo' : 'monospace',
+      fontFamilyFallback: TimelineType.monoFallback,
+      fontSize: TimelineType.code,
+      height: TimelineType.codeLineHeight / TimelineType.code,
+      leadingDistribution: TextLeadingDistribution.even,
+      color: colors.foreground,
+    );
+    final progress = _saving && _saveTotalBytes > 0
+        ? (_saveSentBytes / _saveTotalBytes).clamp(0.0, 1.0)
+        : null;
+    return Column(
+      children: [
+        if (_saving)
+          LinearProgressIndicator(
+            value: progress,
+            minHeight: 2,
+            backgroundColor: colors.divider,
+            color: ComposerSurface.accent(theme.brightness),
+          ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: TimelineSpace.x6,
+              vertical: TimelineSpace.x4,
+            ),
+            child: TextField(
+              key: MobileFileViewerScreen.editorInputKey,
+              controller: _editController,
+              enabled: !_saving,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              autocorrect: false,
+              enableSuggestions: false,
+              smartQuotesType: SmartQuotesType.disabled,
+              smartDashesType: SmartDashesType.disabled,
+              keyboardType: TextInputType.multiline,
+              style: codeStyle,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: '在此输入文件内容…',
+                hintStyle: codeStyle.copyWith(color: colors.faint),
+                contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: colors.divider,
-          ),
         ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: _buildBody(context),
-      ),
+      ],
     );
   }
 

@@ -145,6 +145,16 @@ bool connectionSupportsPreviewTunnel(MobileConnection? connection) {
   }
 }
 
+/// 读取 `connection.supportsWorkbenchWrite`；在未覆写该属性的旧版桩连接上安全降级为 `false`。
+bool connectionSupportsWorkbenchWrite(MobileConnection? connection) {
+  if (connection == null) return false;
+  try {
+    return connection.supportsWorkbenchWrite;
+  } on NoSuchMethodError {
+    return false;
+  }
+}
+
 /// 安全读取连接关联的 `computerKey`；在未覆写 `computer` 的旧版测试桩上返回 `null`。
 String? connectionComputerKey(MobileConnection? connection) {
   if (connection == null) return null;
@@ -513,6 +523,24 @@ String workbenchErrorMessage(
         return '请更新电脑上的 Pigcode 后使用工作台。';
       case 'RESULT_TOO_LARGE':
         return '内容过大，暂时无法加载。';
+      case 'WORKBENCH_FILE_CONFLICT':
+        return '电脑上的文件已被修改，请重新加载或确认覆盖。';
+      case 'WORKBENCH_PATH_EXISTS':
+        return '目标文件或目录已存在。';
+      case 'WORKBENCH_PATH_FORBIDDEN':
+        return '路径受保护或超出工作区范围，无法写入。';
+      case 'WORKBENCH_DIR_NOT_EMPTY':
+        return '目录非空，请确认是否删除目录及其全部内容。';
+      case 'WORKBENCH_FILE_TOO_LARGE':
+        return '文件内容超出手机端可保存的大小上限。';
+      case 'WORKBENCH_WRITE_SESSION_NOT_FOUND':
+        return '文件保存会话已过期，请重试保存。';
+      case 'WORKBENCH_HASH_MISMATCH':
+        return '文件传输校验失败，请重试保存。';
+      case 'PR_ACTION_FAILED':
+        return '执行 GitHub PR 操作失败，请检查仓库、权限或合并冲突。';
+      case 'THREAD_BUSY':
+        return '当前会话正在运行中，请等这一轮结束后再操作。';
     }
     if (problem.message.trim().isNotEmpty) {
       return problem.message;

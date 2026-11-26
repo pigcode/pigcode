@@ -202,7 +202,7 @@ export function CheckpointPane() {
   )
 }
 
-/** PR：当前分支的 PR 状态，或创建 PR 的表单；没有 gh 时显示原因。 */
+/** PR：当前分支的 PR 状态、创建表单与全套写操作；没有 gh 时显示原因。 */
 export function PrPane() {
   const { pr } = useWorkbench()
   return (
@@ -211,8 +211,14 @@ export function PrPane() {
         pullRequest={pr.pullRequest}
         loading={pr.loading}
         creating={pr.creating}
+        busyAction={pr.busyAction}
         error={pr.error}
         onCreate={pr.create}
+        onComment={pr.comment}
+        onMerge={pr.merge}
+        onReady={pr.ready}
+        onClose={pr.close}
+        onReopen={pr.reopen}
       />
     </div>
   )
