@@ -155,6 +155,16 @@ bool connectionSupportsWorkbenchWrite(MobileConnection? connection) {
   }
 }
 
+/// 读取 `connection.supportsTerminal`；在未覆写该属性的旧版桩连接上安全降级为 `false`。
+bool connectionSupportsTerminal(MobileConnection? connection) {
+  if (connection == null) return false;
+  try {
+    return connection.supportsTerminal;
+  } on NoSuchMethodError {
+    return false;
+  }
+}
+
 /// 安全读取连接关联的 `computerKey`；在未覆写 `computer` 的旧版测试桩上返回 `null`。
 String? connectionComputerKey(MobileConnection? connection) {
   if (connection == null) return null;
@@ -541,6 +551,12 @@ String workbenchErrorMessage(
         return '执行 GitHub PR 操作失败，请检查仓库、权限或合并冲突。';
       case 'THREAD_BUSY':
         return '当前会话正在运行中，请等这一轮结束后再操作。';
+      case 'TERMINAL_NOT_FOUND':
+        return '这个终端已关闭或不再可用。';
+      case 'TERMINAL_READ_ONLY':
+        return '电脑端打开的终端在手机上仅支持只读查看。';
+      case 'TERMINAL_LIMIT_EXCEEDED':
+        return '当前会话手机端同时打开的终端数量已达上限。';
     }
     if (problem.message.trim().isNotEmpty) {
       return problem.message;

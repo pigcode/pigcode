@@ -16,6 +16,7 @@ import 'preview/preview_tab.dart';
 import 'preview/preview_webview_screen.dart';
 import 'share/share_receiver.dart';
 import 'sidebar_menu.dart';
+import 'terminal/mobile_terminal_screen.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
 import 'timeline_pane.dart';
@@ -168,7 +169,26 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
   SidebarSnapshot? _lastSidebar;
   SidebarSnapshot? _reportedSidebar;
   final Map<String, List<String>> _timelinePreviewUrls = {};
+  late final ValueNotifier<MobileConnection?> _connectionNotifier =
+      ValueNotifier<MobileConnection?>(
+        widget.connected ? widget.connection : null,
+      );
   bool _loadingCache = false;
+
+  void _syncConnectionNotifier(MobileConnection? next) {
+    if (identical(_connectionNotifier.value, next)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !identical(_connectionNotifier.value, next)) {
+        _connectionNotifier.value = next;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectionNotifier.dispose();
+    super.dispose();
+  }
 
   void _reportSidebarIfChanged() {
     if (identical(_reportedSidebar, _lastSidebar) ||
@@ -241,7 +261,10 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         : null;
     final supportsWorkbench = connectionSupportsWorkbenchRead(connection);
     final supportsPreview = connectionSupportsPreviewTunnel(connection);
+    final supportsTerminal = connectionSupportsTerminal(connection);
     final canOpenWorkbench = online && (supportsWorkbench || supportsPreview);
+    final canOpenTerminal = online && supportsTerminal;
+    _syncConnectionNotifier(connected ? connection : null);
     final computer = widget.computer;
     final localDrafts = computer != null && widget.deviceId != null;
     return WorkspaceView(
@@ -261,6 +284,20 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           : widget.reconnect,
       onComputers: widget.onComputers,
       onSettings: widget.onSettings,
+      onOpenTerminal: canOpenTerminal
+          ? (context, thread) {
+              if (connection == null) return;
+              _connectionNotifier.value = connection;
+              unawaited(
+                MobileTerminalScreen.open(
+                  context,
+                  connectionListenable: _connectionNotifier,
+                  threadId: thread.id,
+                  threadTitle: thread.title,
+                ),
+              );
+            }
+          : null,
       onOpenWorkbench: canOpenWorkbench
           ? (context, thread) {
               final active = connection;
@@ -379,6 +416,7 @@ class WorkspaceView extends StatefulWidget {
     this.onActiveTargetChanged,
     this.presented = true,
     this.sidebarCommands,
+    this.onOpenTerminal,
     this.onOpenWorkbench,
   });
 
@@ -393,6 +431,8 @@ class WorkspaceView extends StatefulWidget {
   onActiveTargetChanged;
   final bool presented;
   final MobileSidebarCommands? sidebarCommands;
+  final void Function(BuildContext context, MobileThreadSummary thread)?
+  onOpenTerminal;
   final void Function(BuildContext context, MobileThreadSummary thread)?
   onOpenWorkbench;
   final String computerName;
@@ -903,6 +943,11 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     );
 
     final showChanges = changes != null;
+    final showTerminal =
+        widget.online &&
+        !_draftOpen &&
+        thread != null &&
+        widget.onOpenTerminal != null;
     final showWorkbench =
         widget.online &&
         !_draftOpen &&
@@ -911,6 +956,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final showRightAction = _draftOpen || canOpenDraft;
     final rightActionCount =
         (showChanges ? 1 : 0) +
+        (showTerminal ? 1 : 0) +
         (showWorkbench ? 1 : 0) +
         (showRightAction ? 1 : 0);
     final hasRightControl = rightActionCount > 0;
@@ -1060,6 +1106,26 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                   ),
                                 ],
                               ],
+                            ),
+                          ),
+                        ),
+                      if (showTerminal)
+                        SizedBox.square(
+                          dimension: hit - visualInset * 2,
+                          child: IconButton(
+                            key: const ValueKey('workspace-terminal-button'),
+                            tooltip: '终端',
+                            padding: EdgeInsets.zero,
+                            style: IconButton.styleFrom(
+                              minimumSize: Size.square(hit - visualInset * 2),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () =>
+                                widget.onOpenTerminal!(context, thread),
+                            color: colors.foreground,
+                            icon: const WorkspaceIcon(
+                              WorkspaceGlyph.terminal,
+                              size: 18,
                             ),
                           ),
                         ),
