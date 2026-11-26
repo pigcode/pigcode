@@ -164,6 +164,7 @@ export class SchedulesService {
       )
     const schedule = this.require(id)
     this.arm(schedule)
+    this.publish({ scheduleId: id })
     return schedule
   }
 
@@ -211,12 +212,14 @@ export class SchedulesService {
       )
     const updated = this.require(id)
     this.arm(updated)
+    this.publish({ scheduleId: id })
     return updated
   }
 
   delete(id: string): boolean {
     this.clearTimer(id)
     const result = this.db.prepare(`DELETE FROM schedules WHERE id = ?`).run(id)
+    if (result.changes > 0) this.publish({ scheduleId: id })
     return result.changes > 0
   }
 

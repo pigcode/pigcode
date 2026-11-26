@@ -44,6 +44,12 @@ export type MobileErrorCode =
   | "AGENT_INSTANCE_IN_USE"
   | "AGENT_DEFAULT_INSTANCE_IMMUTABLE"
   | "AGENT_SETTINGS_INVALID"
+  | "SCHEDULE_NOT_FOUND"
+  | "SCHEDULE_LEGACY_LOCKED"
+  | "PLUGIN_NOT_FOUND"
+  | "PLUGIN_BUILTIN_IMMUTABLE"
+  | "PLUGIN_CONFLICT"
+  | "PLUGIN_ACTION_FAILED"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -91,11 +97,20 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   AGENT_INSTANCE_IN_USE: "这个 Agent 实例正被现有会话使用，无法删除。",
   AGENT_DEFAULT_INSTANCE_IMMUTABLE: "默认实例不可删除或修改名称。",
   AGENT_SETTINGS_INVALID: "设置格式不正确，请检查填写内容。",
+  SCHEDULE_NOT_FOUND: "电脑上未找到这个定时任务。",
+  SCHEDULE_LEGACY_LOCKED: "旧版会话绑定的定时任务不能修改运行配置。",
+  PLUGIN_NOT_FOUND: "电脑上未找到这个插件。",
+  PLUGIN_BUILTIN_IMMUTABLE: "内置插件不能卸载，只能停用。",
+  PLUGIN_CONFLICT: "插件提供的服务与已启用的插件冲突。",
+  PLUGIN_ACTION_FAILED: "插件操作失败，请检查网络或电脑端日志。",
 }
 
 export class MobileRequestError extends Error {
-  constructor(readonly code: MobileErrorCode) {
-    super(mobileErrorMessages[code])
+  constructor(
+    readonly code: MobileErrorCode,
+    message?: string,
+  ) {
+    super(message?.trim() ? message.trim() : mobileErrorMessages[code])
   }
 }
 

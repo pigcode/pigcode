@@ -177,6 +177,8 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
         widget.connected ? widget.connection : null,
       );
   bool _loadingCache = false;
+  int _openThreadSeq = 0;
+  ({int id, String threadId})? _pendingOpenThread;
 
   void _syncConnectionNotifier(MobileConnection? next) {
     if (identical(_connectionNotifier.value, next)) return;
@@ -295,11 +297,21 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
             context,
             connectionListenable: _connectionNotifier,
             computerName: computerName,
+            initialProjects: _lastSidebar?.projects ?? const [],
+            onOpenThread: (threadId) {
+              setState(() {
+                _pendingOpenThread = (id: ++_openThreadSeq, threadId: threadId);
+              });
+              if (provider != null) {
+                unawaited(ref.read(provider.notifier).refresh());
+              }
+            },
             onOpenReminders: widget.onSettings,
             onComputers: widget.onComputers,
           ),
         );
       },
+      openThreadRequest: _pendingOpenThread,
       onAddProject: canManageProjects
           ? (viewContext) async {
               final active = connection;
@@ -507,6 +519,7 @@ class WorkspaceView extends StatefulWidget {
     this.offlineDraftAvailable = false,
     this.openReminder,
     this.openShareTarget,
+    this.openThreadRequest,
     this.onVisibleThread,
     this.onActiveTargetChanged,
     this.presented = true,
@@ -524,6 +537,7 @@ class WorkspaceView extends StatefulWidget {
   final bool offlineDraftAvailable;
   final MobileReminder? openReminder;
   final ShareNavigationRequest? openShareTarget;
+  final ({int id, String threadId})? openThreadRequest;
   final ValueChanged<String?>? onVisibleThread;
   final ValueChanged<({String? threadId, bool draftOpen})>?
   onActiveTargetChanged;
@@ -608,6 +622,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     super.initState();
     _openNotification(widget.openReminder);
     _applyShareTarget(widget.openShareTarget);
+    _applyOpenThreadRequest(widget.openThreadRequest);
     _selectRecentIfNeeded();
   }
 
@@ -627,6 +642,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _applyShareTarget(widget.openShareTarget);
       _selectRecentIfNeeded();
     }
+    if (oldWidget.openThreadRequest?.id != widget.openThreadRequest?.id) {
+      _applyOpenThreadRequest(widget.openThreadRequest);
+      _selectRecentIfNeeded();
+    }
     if (oldWidget.snapshot != widget.snapshot) {
       if (widget.snapshot?.threads.any(
             (thread) => thread.id == _acceptedThread?.id,
@@ -640,6 +659,33 @@ class _WorkspaceViewState extends State<WorkspaceView> {
       _reminderUnavailable = _thread == null;
       if (!_reminderUnavailable) _reminderThread = null;
     }
+  }
+
+  void _applyOpenThreadRequest(({int id, String threadId})? request) {
+    if (request == null) return;
+    _reminderThread = null;
+    _reminderUnavailable = false;
+    _open = false;
+    _draftOpen = false;
+    _visit++;
+    _selectThread(request.threadId);
+    final inSnapshot =
+        widget.snapshot?.threads.any(
+          (thread) => thread.id == request.threadId,
+        ) ==
+        true;
+    _acceptedThread = inSnapshot
+        ? null
+        : MobileThreadSummary(
+            id: request.threadId,
+            projectId: '',
+            title: '定时任务会话',
+            updatedAt: DateTime.now().toUtc().toIso8601String(),
+            archived: false,
+            pinned: false,
+            status: MobileThreadStatus.idle,
+            unread: false,
+          );
   }
 
   void _applyShareTarget(ShareNavigationRequest? request) {

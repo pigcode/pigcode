@@ -59,6 +59,7 @@ export class Connection {
   private receivedProjects = false
   private readonly subscriptions = new Map<string, number>()
   private readonly scheduleRunListeners = new Set<(change: ScheduleRunChange) => void>()
+  private readonly pluginListeners = new Set<() => void>()
   private readonly terminalListeners = new Set<(output: TerminalOutput) => void>()
   private readonly terminalExitListeners = new Set<
     (exit: { terminalId: string; exitCode: number }) => void
@@ -238,6 +239,14 @@ export class Connection {
     return () => this.scheduleRunListeners.delete(listener)
   }
 
+  /** 订阅插件或市场变化通知（例如手机端安装、启停、更新或卸载插件后即时同步桌面端）。 */
+  onPluginsChanged(listener: () => void): () => void {
+    this.pluginListeners.add(listener)
+    return () => {
+      this.pluginListeners.delete(listener)
+    }
+  }
+
   /** 订阅终端输出通知；右栏关闭时调用返回的函数释放订阅。 */
   onTerminalOutput(listener: (output: TerminalOutput) => void): () => void {
     this.terminalListeners.add(listener)
@@ -314,6 +323,10 @@ export class Connection {
         if (change.data.thread) this.handlers.onScheduledThread?.(change.data.thread)
         for (const listener of this.scheduleRunListeners) listener(change.data)
       }
+      return
+    }
+    if (value.method === "plugin.changed") {
+      for (const listener of [...this.pluginListeners]) listener()
       return
     }
     if (value.method === "terminal.output" && value.params) {

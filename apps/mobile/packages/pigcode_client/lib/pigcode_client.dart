@@ -15,8 +15,10 @@ import 'sidebar.dart';
 import 'sidebar_models.dart';
 import 'src/agent_manage.dart';
 import 'src/attachments.dart';
+import 'src/plugin_manage.dart';
 import 'src/preview.dart';
 import 'src/project_manage.dart';
+import 'src/schedule_manage.dart';
 import 'src/terminal.dart';
 import 'src/workbench.dart';
 import 'src/workbench_write.dart';
@@ -42,8 +44,10 @@ export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'src/agent_manage.dart';
 export 'src/attachments.dart';
+export 'src/plugin_manage.dart';
 export 'src/preview.dart';
 export 'src/project_manage.dart';
+export 'src/schedule_manage.dart';
 export 'src/terminal.dart';
 export 'src/workbench.dart';
 export 'src/workbench_write.dart';
@@ -77,6 +81,8 @@ const mobileClientFeatures = <String>[
   'terminal',
   'projects.manage',
   'agents.manage',
+  'schedules.manage',
+  'plugins.manage',
 ];
 
 class MobileConnection {
@@ -103,6 +109,8 @@ class MobileConnection {
     this.supportsTerminal,
     this.supportsProjectManage,
     this.supportsAgentManage,
+    this.supportsScheduleManage,
+    this.supportsPluginManage,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -130,6 +138,8 @@ class MobileConnection {
   final bool supportsTerminal;
   final bool supportsProjectManage;
   final bool supportsAgentManage;
+  final bool supportsScheduleManage;
+  final bool supportsPluginManage;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -169,6 +179,14 @@ class MobileConnection {
   late final MobileAgentManageClient agents = MobileAgentManageClient(
     _rpc,
     supportsAgentManage: supportsAgentManage,
+  );
+  late final MobileScheduleManageClient schedules = MobileScheduleManageClient(
+    _rpc,
+    supportsScheduleManage: supportsScheduleManage,
+  );
+  late final MobilePluginManageClient plugins = MobilePluginManageClient(
+    _rpc,
+    supportsPluginManage: supportsPluginManage,
   );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -542,6 +560,8 @@ class MobileConnection {
         (welcome['features'] as List).contains('terminal'),
         (welcome['features'] as List).contains('projects.manage'),
         (welcome['features'] as List).contains('agents.manage'),
+        (welcome['features'] as List).contains('schedules.manage'),
+        (welcome['features'] as List).contains('plugins.manage'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

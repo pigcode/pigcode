@@ -12,14 +12,18 @@ import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'agent_manage_screen.dart';
 import 'manage_utils.dart';
+import 'plugin_manage_screen.dart';
 import 'project_manage_screen.dart';
+import 'schedule_manage_screen.dart';
 
-/// 手机端统一「设置」主页：聚合当前电脑的管理入口（项目、Agent 实例，为 5B 预留定时任务/插件）与手机本机设置。
+/// 手机端统一「设置」主页：聚合当前电脑的管理入口（项目、Agent 实例、定时任务、插件管理）与手机本机设置。
 class SettingsHubScreen extends StatelessWidget {
   const SettingsHubScreen({
     super.key,
     required this.connectionListenable,
     required this.computerName,
+    this.initialProjects = const [],
+    this.onOpenThread,
     this.onOpenReminders,
     this.onComputers,
     this.onOpenAgents,
@@ -27,11 +31,15 @@ class SettingsHubScreen extends StatelessWidget {
 
   static const projectsTileKey = ValueKey('settings-hub-projects');
   static const agentsTileKey = ValueKey('settings-hub-agents');
+  static const schedulesTileKey = ValueKey('settings-hub-schedules');
+  static const pluginsTileKey = ValueKey('settings-hub-plugins');
   static const remindersTileKey = ValueKey('settings-hub-reminders');
   static const computersTileKey = ValueKey('settings-hub-computers');
 
   final ValueListenable<MobileConnection?> connectionListenable;
   final String computerName;
+  final List<MobileProjectSummary> initialProjects;
+  final ValueChanged<String>? onOpenThread;
   final VoidCallback? onOpenReminders;
   final VoidCallback? onComputers;
   final void Function(BuildContext context)? onOpenAgents;
@@ -40,6 +48,8 @@ class SettingsHubScreen extends StatelessWidget {
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
     required String computerName,
+    List<MobileProjectSummary> initialProjects = const [],
+    ValueChanged<String>? onOpenThread,
     VoidCallback? onOpenReminders,
     VoidCallback? onComputers,
     void Function(BuildContext context)? onOpenAgents,
@@ -48,6 +58,8 @@ class SettingsHubScreen extends StatelessWidget {
       builder: (_) => SettingsHubScreen(
         connectionListenable: connectionListenable,
         computerName: computerName,
+        initialProjects: initialProjects,
+        onOpenThread: onOpenThread,
         onOpenReminders: onOpenReminders,
         onComputers: onComputers,
         onOpenAgents: onOpenAgents,
@@ -69,6 +81,9 @@ class SettingsHubScreen extends StatelessWidget {
         final canProjects =
             online && connectionSupportsProjectManage(connection);
         final canAgents = online && connectionSupportsAgentManage(connection);
+        final canSchedules =
+            online && connectionSupportsScheduleManage(connection);
+        final canPlugins = online && connectionSupportsPluginManage(connection);
         final activeName = connection?.computerName ?? computerName;
 
         return Scaffold(
@@ -198,6 +213,86 @@ class SettingsHubScreen extends StatelessWidget {
                                 );
                               }
                             }
+                          : null,
+                    ),
+                    Divider(height: 1, indent: 56, color: colors.divider),
+                    ListTile(
+                      key: schedulesTileKey,
+                      leading: Icon(
+                        Icons.schedule_outlined,
+                        size: 20,
+                        color: colors.secondaryText,
+                      ),
+                      title: const Text('定时任务'),
+                      subtitle: Text(
+                        !online
+                            ? '电脑离线，连接后可管理'
+                            : canSchedules
+                            ? '新建、编辑、启停任务，手动触发并查看运行记录'
+                            : '当前电脑版本不支持手机端定时任务管理',
+                        style: TimelineType.metaStyle(colors.muted),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: colors.faint,
+                      ),
+                      enabled: canSchedules,
+                      onTap: canSchedules
+                          ? () {
+                              final hubRoute = ModalRoute.of(context);
+                              unawaited(
+                                ScheduleManageScreen.open(
+                                  context,
+                                  connectionListenable: connectionListenable,
+                                  initialProjects: initialProjects,
+                                  onOpenThread: onOpenThread == null
+                                      ? null
+                                      : (threadId) {
+                                          if (context.mounted) {
+                                            final nav = Navigator.of(context);
+                                            if (hubRoute != null) {
+                                              nav.popUntil(
+                                                (route) => route == hubRoute,
+                                              );
+                                            }
+                                            if (nav.canPop()) nav.pop();
+                                          }
+                                          onOpenThread!(threadId);
+                                        },
+                                ),
+                              );
+                            }
+                          : null,
+                    ),
+                    Divider(height: 1, indent: 56, color: colors.divider),
+                    ListTile(
+                      key: pluginsTileKey,
+                      leading: Icon(
+                        Icons.extension_outlined,
+                        size: 20,
+                        color: colors.secondaryText,
+                      ),
+                      title: const Text('插件管理'),
+                      subtitle: Text(
+                        !online
+                            ? '电脑离线，连接后可管理'
+                            : canPlugins
+                            ? '启停、更新、卸载插件，浏览并安装市场插件'
+                            : '当前电脑版本不支持手机端插件管理',
+                        style: TimelineType.metaStyle(colors.muted),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: colors.faint,
+                      ),
+                      enabled: canPlugins,
+                      onTap: canPlugins
+                          ? () => PluginManageScreen.open(
+                              context,
+                              connectionListenable: connectionListenable,
+                            )
                           : null,
                     ),
                   ],

@@ -34,5 +34,7 @@ export * from "./mobile-preview"
 export * from "./mobile-terminal"
 export * from "./mobile-projects"
 export * from "./mobile-agents"
+export * from "./mobile-schedules"
+export * from "./mobile-plugins"
 
 export * from "./queued-messages"

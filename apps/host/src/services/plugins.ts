@@ -76,6 +76,8 @@ export interface PluginsService {
   reload(): Promise<void>
   /** Host 入口 import 或 apply 失败的插件 id；它们的界面代码不进 boot graph。 */
   hostFailures(): ReadonlySet<string>
+  /** 订阅插件或市场发生变更（安装、启停、更新、卸载或市场列表变化）。 */
+  subscribe?(listener: () => void): () => void
 }
 
 declare module "cordis" {
@@ -118,6 +120,10 @@ export const apply: PluginsPlugin = (ctx, config) => {
   const loadErrors = new Map<string, string>()
   // Host 入口 import 或 apply 失败的插件：它们的界面代码也不加载，错误显示在插件页。
   const hostFailures = new Set<string>()
+  const changeListeners = new Set<() => void>()
+  function notifyChanged(): void {
+    for (const listener of [...changeListeners]) listener()
+  }
 
   /** 确认 loader 条目完成 apply；import 失败时 loader 只记日志不抛错。 */
   async function settleEntry(id: string, url: string): Promise<void> {
@@ -256,6 +262,7 @@ export const apply: PluginsPlugin = (ctx, config) => {
     await unloadEntry(entry.id)
     await reconcile()
     await updateBootGraph()
+    notifyChanged()
     return entry
   }
 
@@ -280,7 +287,11 @@ export const apply: PluginsPlugin = (ctx, config) => {
       await readOfficialMarketplace(env.profileDir),
       ...(await listMarketplaces(env.profileDir)),
     ],
-    addMarketplace: (source) => addMarketplace(env.profileDir, source, defaultSourceIo()),
+    addMarketplace: async (source) => {
+      const summary = await addMarketplace(env.profileDir, source, defaultSourceIo())
+      notifyChanged()
+      return summary
+    },
     refreshMarketplaces: async (id, ifStale) => {
       const io = defaultSourceIo()
       if (id === OFFICIAL_MARKETPLACE_ID)
@@ -295,8 +306,15 @@ export const apply: PluginsPlugin = (ctx, config) => {
       }
       return [await official, ...results]
     },
-    setMarketplaceEnabled: (id, enabled) => setMarketplaceEnabled(env.profileDir, id, enabled),
-    removeMarketplace: (id) => removeMarketplace(env.profileDir, id),
+    setMarketplaceEnabled: async (id, enabled) => {
+      const summary = await setMarketplaceEnabled(env.profileDir, id, enabled)
+      notifyChanged()
+      return summary
+    },
+    removeMarketplace: async (id) => {
+      await removeMarketplace(env.profileDir, id)
+      notifyChanged()
+    },
     uninstall: (id) =>
       mutate(async () => {
         const record = await recordOf(id)
@@ -307,18 +325,21 @@ export const apply: PluginsPlugin = (ctx, config) => {
         await uninstallPlugin(env, id)
         await reconcile()
         await updateBootGraph()
+        notifyChanged()
       }),
     enable: (id) =>
       mutate(async () => {
         await setPluginEnabled(env, id, true)
         await reconcile()
         await updateBootGraph()
+        notifyChanged()
       }),
     disable: (id) =>
       mutate(async () => {
         await setPluginEnabled(env, id, false)
         await reconcile()
         await updateBootGraph()
+        notifyChanged()
       }),
     reload: () =>
       mutate(async () => {
@@ -328,6 +349,12 @@ export const apply: PluginsPlugin = (ctx, config) => {
     bootGraph: () => buildBootGraph(env, hostFailures),
     hostFailures: () => hostFailures,
     loadAll: reconcile,
+    subscribe: (listener) => {
+      changeListeners.add(listener)
+      return () => {
+        changeListeners.delete(listener)
+      }
+    },
   })
 }
 

@@ -24,6 +24,24 @@ bool connectionSupportsAgentManage(MobileConnection? connection) {
   }
 }
 
+bool connectionSupportsScheduleManage(MobileConnection? connection) {
+  if (connection == null) return false;
+  try {
+    return connection.supportsScheduleManage;
+  } on NoSuchMethodError {
+    return false;
+  }
+}
+
+bool connectionSupportsPluginManage(MobileConnection? connection) {
+  if (connection == null) return false;
+  try {
+    return connection.supportsPluginManage;
+  } on NoSuchMethodError {
+    return false;
+  }
+}
+
 String manageErrorMessage(Object error) {
   if (error is MobileRpcFailure) {
     return switch (error.problem.code) {
@@ -35,6 +53,15 @@ String manageErrorMessage(Object error) {
       'AGENT_INSTANCE_IN_USE' => '这个 Agent 实例正被现有会话使用，无法删除。',
       'AGENT_DEFAULT_INSTANCE_IMMUTABLE' => '默认实例不可删除、停用或修改名称。',
       'AGENT_SETTINGS_INVALID' => '设置格式不正确，请检查填写内容。',
+      'SCHEDULE_NOT_FOUND' => '电脑上未找到这个定时任务。',
+      'SCHEDULE_LEGACY_LOCKED' => '旧版会话绑定的定时任务不能修改运行配置。',
+      'PLUGIN_NOT_FOUND' => '电脑上未找到这个插件。',
+      'PLUGIN_BUILTIN_IMMUTABLE' => '内置插件不能卸载，只能停用。',
+      'PLUGIN_CONFLICT' => '插件提供的服务与已启用的插件冲突。',
+      'PLUGIN_ACTION_FAILED' =>
+        error.problem.message.isNotEmpty
+            ? error.problem.message
+            : '插件操作失败，请检查网络或电脑端日志。',
       'RESOURCE_NOT_AVAILABLE' => '电脑上的这个项目或记录已不可用。',
       'DEVICE_REVOKED' => '这部手机的配对已失效，请重新扫码。',
       'METHOD_NOT_AVAILABLE' => '当前电脑版本暂不支持这项管理功能，请升级电脑端 Pigcode。',

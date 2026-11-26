@@ -36,6 +36,8 @@ export const mobileFeatures = [
   "terminal",
   "projects.manage",
   "agents.manage",
+  "schedules.manage",
+  "plugins.manage",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -163,11 +165,14 @@ export const relayRegistrationSchema = z.object({
   apnsSupport: z.boolean().optional(),
 })
 
-export const relayWatchSchema = relayRegistrationSchema.omit({
-  statusSupport: true, apnsSupport: true,
-}).extend({
-  type: z.literal("relay.watch"),
-})
+export const relayWatchSchema = relayRegistrationSchema
+  .omit({
+    statusSupport: true,
+    apnsSupport: true,
+  })
+  .extend({
+    type: z.literal("relay.watch"),
+  })
 
 export const relayAdmissionSchema = z.object({
   type: z.literal("relay.result"),

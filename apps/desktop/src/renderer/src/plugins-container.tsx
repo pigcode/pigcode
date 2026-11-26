@@ -5,7 +5,7 @@
  * Agent 插件没有自己的设置页时去 Agent 页。「创建插件」进入新会话草稿，输入框里预填好指南。
  * 这个模块在第一次打开插件页时才加载（workspace-pages）。
  */
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { useContributionConflicts, useContributions } from "@pigcode/client-runtime"
 import { prefillComposer } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
@@ -99,9 +99,24 @@ export function PluginManagerContainer({
     return markets
   }, [deps.connection])
 
+  const localMutationsRef = useRef(0)
+
   useEffect(() => {
     void refresh().catch(() => setPlugins([]))
     let active = true
+    const unsubscribe = deps.connection.onPluginsChanged?.(() => {
+      if (!active || localMutationsRef.current > 0) return
+      void (async () => {
+        try {
+          await refresh()
+          await refreshMarketplaces()
+          await refreshAgentViews(deps)
+          await deps.plugins.reload()
+        } catch {
+          // 后台同步失败不打断当前页面
+        }
+      })()
+    })
     void refreshMarketplaces()
       .then(async (markets) => {
         const official = markets.find((market) => market.official)
@@ -122,21 +137,29 @@ export function PluginManagerContainer({
       .catch(() => undefined)
     return () => {
       active = false
+      unsubscribe?.()
     }
-  }, [deps.connection, refresh, refreshMarketplaces])
+  }, [deps, refresh, refreshMarketplaces])
 
   async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
-    await action()
-    await refresh()
-    await refreshAgentViews(deps)
-    await deps.plugins.reload()
+    localMutationsRef.current += 1
+    try {
+      await action()
+      await refresh()
+      await refreshAgentViews(deps)
+      await deps.plugins.reload()
+    } finally {
+      localMutationsRef.current -= 1
+    }
   }
 
   /** 改了市场：重新读一遍市场列表。 */
   async function changeMarketplaces(action: () => Promise<unknown>): Promise<void> {
+    localMutationsRef.current += 1
     try {
       await action()
     } finally {
+      localMutationsRef.current -= 1
       await refreshMarketplaces()
     }
   }

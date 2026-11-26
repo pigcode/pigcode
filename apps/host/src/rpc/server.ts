@@ -37,6 +37,8 @@ export class RpcServer {
   private readonly terminalSubscriptions = new Map<string, () => void>()
   /** 换过几次页面；页面换掉以后才完成的 terminal.open 会立即关闭该孤儿终端。 */
   private page = 0
+  /** 正在处理桌面端自己发起的插件变更命令时，不向同一个桌面连接回声推送 plugin.changed。 */
+  private localPluginMutations = 0
 
   constructor(
     private readonly ctx: Context,
@@ -57,6 +59,15 @@ export class RpcServer {
         schedules.subscribe((change) =>
           this.transport.send({ jsonrpc: "2.0", method: "schedule.runChanged", params: change }),
         ),
+      )
+    }
+    const plugins = this.ctx.get("plugins")
+    if (plugins?.subscribe) {
+      this.disposers.push(
+        plugins.subscribe(() => {
+          if (this.localPluginMutations > 0) return
+          this.transport.send({ jsonrpc: "2.0", method: "plugin.changed", params: {} })
+        }),
       )
     }
     this.disposers.push(
@@ -345,37 +356,57 @@ export class RpcServer {
       case "plugin.list":
         return this.ctx.plugins.list()
       case "plugin.install":
-        return this.ctx.plugins.install((parsed as { spec: string }).spec)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.install((parsed as { spec: string }).spec),
+        )
       case "plugin.installLocal":
-        return this.ctx.plugins.installLocal((parsed as { sourceDir: string }).sourceDir)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.installLocal((parsed as { sourceDir: string }).sourceDir),
+        )
       case "plugin.enable":
-        return this.ctx.plugins.enable((parsed as { id: string }).id)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.enable((parsed as { id: string }).id),
+        )
       case "plugin.disable":
-        return this.ctx.plugins.disable((parsed as { id: string }).id)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.disable((parsed as { id: string }).id),
+        )
       case "plugin.uninstall":
-        return uninstallPluginAndClearDefault(this.ctx, (parsed as { id: string }).id)
+        return this.runLocalPluginMutation(() =>
+          uninstallPluginAndClearDefault(this.ctx, (parsed as { id: string }).id),
+        )
       case "plugin.installFromMarketplace": {
         const { marketplace, name } = parsed as CommandParams<"plugin.installFromMarketplace">
-        return this.ctx.plugins.installFromMarketplace(marketplace, name)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.installFromMarketplace(marketplace, name),
+        )
       }
       case "plugin.update":
-        return this.ctx.plugins.update((parsed as { id: string }).id)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.update((parsed as { id: string }).id),
+        )
       case "plugin.reload":
         return this.ctx.plugins.reload()
       case "marketplace.list":
         return this.ctx.plugins.marketplaces()
       case "marketplace.add":
-        return this.ctx.plugins.addMarketplace((parsed as { source: string }).source)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.addMarketplace((parsed as { source: string }).source),
+        )
       case "marketplace.refresh": {
         const { id, ifStale } = parsed as CommandParams<"marketplace.refresh">
         return this.ctx.plugins.refreshMarketplaces(id, ifStale)
       }
       case "marketplace.setEnabled": {
         const value = parsed as { id: string; enabled: boolean }
-        return this.ctx.plugins.setMarketplaceEnabled(value.id, value.enabled)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.setMarketplaceEnabled(value.id, value.enabled),
+        )
       }
       case "marketplace.remove":
-        return this.ctx.plugins.removeMarketplace((parsed as { id: string }).id)
+        return this.runLocalPluginMutation(() =>
+          this.ctx.plugins.removeMarketplace((parsed as { id: string }).id),
+        )
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
       case "schedule.list":
@@ -409,6 +440,15 @@ export class RpcServer {
         return this.ctx.schedules.runNow((parsed as { id: string }).id)
       default:
         throw new Error(`unsupported method: ${method}`)
+    }
+  }
+
+  private async runLocalPluginMutation<T>(action: () => Promise<T>): Promise<T> {
+    this.localPluginMutations += 1
+    try {
+      return await action()
+    } finally {
+      this.localPluginMutations -= 1
     }
   }
 }

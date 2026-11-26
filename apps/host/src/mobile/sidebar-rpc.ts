@@ -168,10 +168,12 @@ export class MobileSidebarRpc {
           ? error.code
           : "COMMAND_FAILED"
       if (code === "COMMAND_FAILED") console.error("[host] mobile request failed", error)
+      const messageText =
+        error instanceof MobileRequestError ? error.message : mobileErrorMessages[code]
       response = rpcFailureSchema.parse({
         jsonrpc: "2.0",
         id,
-        error: { code, message: mobileErrorMessages[code], retryable: code === "COMMAND_FAILED" },
+        error: { code, message: messageText, retryable: code === "COMMAND_FAILED" },
       })
     }
     if (this.active) this.transport.send(response)

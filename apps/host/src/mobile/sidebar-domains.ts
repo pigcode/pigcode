@@ -25,11 +25,13 @@ import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
 import { MobileMentionCommands, mobileMentionRequests } from "./mentions"
 import { fingerprint, type PairedDevices } from "./paired-devices"
 import { MobilePreview, mobilePreviewRequests } from "./preview"
+import { MobilePluginManage, mobilePluginRequests } from "./plugin-manage"
 import { MobileProjectManage, mobileProjectRequests } from "./project-manage"
 import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
 import { mobileParams as params } from "./request-error"
 import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
+import { MobileScheduleManage, mobileScheduleRequests } from "./schedule-manage"
 import { MobileTerminalSession, mobileTerminalRequests } from "./terminal"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
@@ -76,6 +78,8 @@ export class MobileDomainRouter {
   private readonly terminal: MobileTerminalSession
   private readonly projectManage: MobileProjectManage
   private readonly agentManage: MobileAgentManage
+  private readonly scheduleManage: MobileScheduleManage
+  private readonly pluginManage: MobilePluginManage
   private readonly receipts: MobileCommandReceipts
   private readonly timeline: MobileTimelineSession
   private readonly changes: MobileRunChanges
@@ -150,6 +154,8 @@ export class MobileDomainRouter {
     )
     this.projectManage = new MobileProjectManage(ctx, requirePairedDevice)
     this.agentManage = new MobileAgentManage(ctx, requirePairedDevice)
+    this.scheduleManage = new MobileScheduleManage(ctx, requirePairedDevice)
+    this.pluginManage = new MobilePluginManage(ctx, requirePairedDevice)
   }
 
   close(): void {
@@ -234,6 +240,20 @@ export class MobileDomainRouter {
       mobileAgentRequests.has(request.method)
     ) {
       return this.agentManage.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("schedules.manage") &&
+      mobileScheduleRequests.has(request.method)
+    ) {
+      return this.scheduleManage.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("plugins.manage") &&
+      mobilePluginRequests.has(request.method)
+    ) {
+      return this.pluginManage.dispatch(request)
     }
 
     const canRun = this.session.features.includes("run.write")
