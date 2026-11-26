@@ -219,7 +219,7 @@ describe("MobileProjectManage", () => {
     }
   })
 
-  it("gates mobile.project.* behind projects.manage capability in MobileSidebarRpc", async () => {
+  it("gates mobile.project.* behind projects.manage feature in MobileSidebarRpc", async () => {
     const { ctx } = await createHostFixture()
     try {
       const devices = new PairedDevices(ctx.settings)

@@ -37,9 +37,10 @@ export function prepareRunEntry(
   const previous =
     agentSessions.findActive(threadId, driver.id, instanceId) ??
     agentSessions.findResumable(threadId, driver.id, instanceId)
-  const session = previous?.cwd === cwd
-    ? previous
-    : agentSessions.findResumable(threadId, driver.id, instanceId, cwd)
+  const session =
+    previous?.cwd === cwd
+      ? previous
+      : agentSessions.findResumable(threadId, driver.id, instanceId, cwd)
   const forkFrom = pendingForkFromNativeSessionId(ctx, threadId)
   let resolveDone: () => void = () => undefined
   const done = new Promise<void>((resolve) => {
@@ -105,7 +106,14 @@ export function writeRunAdmission(
     entry.input = { ...entry.input, attachments: resolvedAttachments }
   }
   const attachmentRefs: ImageAttachmentRef[] = resolvedAttachments.map(
-    ({ path: _path, ...ref }) => ref,
+    ({ id, mimeType, fileName, sizeBytes, width, height }) => ({
+      id,
+      mimeType,
+      fileName,
+      sizeBytes,
+      ...(width !== undefined ? { width } : {}),
+      ...(height !== undefined ? { height } : {}),
+    }),
   )
   const awaitingAgent = queued || options.admission?.deviceKey !== undefined
   if (options.admission?.deviceKey && thread.archivedAt) {

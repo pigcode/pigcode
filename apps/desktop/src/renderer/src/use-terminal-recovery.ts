@@ -81,7 +81,8 @@ export function useTerminalRecovery({
       boundDrawerIdsRef.current.delete(prev)
       setDrawerSessionsBySlot((current) => {
         if (!(prev in current)) return current
-        const { [prev]: _removed, ...rest } = current
+        const rest = { ...current }
+        delete rest[prev]
         return rest
       })
     }
@@ -103,7 +104,8 @@ export function useTerminalRecovery({
       if (!existing || !existing.some((item) => item.id === terminalId)) return current
       const next = existing.filter((item) => item.id !== terminalId)
       if (next.length === 0) {
-        const { [key]: _removed, ...rest } = current
+        const rest = { ...current }
+        delete rest[key]
         return rest
       }
       return { ...current, [key]: next }
@@ -151,10 +153,7 @@ export function useTerminalRecovery({
             setDrawerSessionsBySlot((current) => {
               const existing = current[targetSlotKey] ?? []
               const existingIds = new Set(existing.map((item) => item.id))
-              const merged = [
-                ...existing,
-                ...toRecover.filter((item) => !existingIds.has(item.id)),
-              ]
+              const merged = [...existing, ...toRecover.filter((item) => !existingIds.has(item.id))]
               return { ...current, [targetSlotKey]: merged }
             })
             callbacksRef.current.onOpenDrawer(targetSlotKey, isDraft)

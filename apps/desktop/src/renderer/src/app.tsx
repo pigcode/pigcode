@@ -1,5 +1,5 @@
 /** 应用外壳：把 store/connection 接到 Shell、聊天、设置与插件管理器。 */
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import { translate, useAppearance, type Locale } from "@pigcode/ui-primitives"
 import { requestComposerThreadMention } from "@pigcode/ui-composer"
@@ -11,15 +11,7 @@ import {
   settingsPageOrFallback,
   type ShellView,
 } from "@pigcode/ui-shell"
-import {
-  EMPTY_SURFACE_STATE,
-  PanelLayoutControls,
-  addSurface,
-  closeRemovedSurfaces,
-  openFileSurface,
-  updateSurface,
-  type PanelSurfaceState,
-} from "@pigcode/ui-workbench"
+import { EMPTY_SURFACE_STATE, PanelLayoutControls, updateSurface } from "@pigcode/ui-workbench"
 import { useInstanceAgents } from "./agents"
 import { BrowserHost } from "./browser-host"
 import { AppearanceContext } from "./builtin-settings-pages"
@@ -28,7 +20,6 @@ import { ConnectionBanner } from "./connection-banner"
 import { useDesktopReminderNavigation } from "./desktop-reminder-navigation"
 import { UnsavedGuard } from "./unsaved-guard"
 import { PluginsView, SchedulesView } from "./workspace-pages"
-import { useBrowserOpen } from "./use-browser-open"
 import {
   EMPTY_HISTORY,
   canGoBack,
@@ -43,12 +34,13 @@ import {
 } from "./navigation"
 import { loadAgentFeatures } from "./agent-context"
 import { NEW_THREAD_DRAFT_KEY, draftProjectId } from "./new-thread-draft"
-import { usePanelOpen } from "./use-panel-open"
-import { useTerminalRecovery } from "./use-terminal-recovery"
-import { useWorkspaceSlot } from "./use-workspace-slot"
+import { useAppPanels } from "./use-app-panels"
 import { workspaceRevision } from "./workspace-revision"
 import { mergeChildStatus } from "./thread-status"
 import { UpdateCenterContext, useUpdateCenterState } from "./update-center"
+import { useThreadReading } from "./thread-reading"
+import { addProject, sidebarActions } from "./workspace-actions"
+import { useWorkspaceSync } from "./workspace-sync"
 
 // 工作台（xterm、diff）与底部终端在第一次打开时才加载，冷启动只加载聊天需要的代码。
 const WorkbenchPanel = lazy(() =>
@@ -57,9 +49,6 @@ const WorkbenchPanel = lazy(() =>
 const TerminalDrawer = lazy(() =>
   import("./terminal-drawer").then((module) => ({ default: module.TerminalDrawer })),
 )
-import { useThreadReading } from "./thread-reading"
-import { addProject, sidebarActions } from "./workspace-actions"
-import { useWorkspaceSync } from "./workspace-sync"
 
 /** App 的依赖。 */
 export interface AppProps extends CoreDeps {
@@ -87,55 +76,72 @@ export function App({ store, connection, plugins, locale }: AppProps) {
   const [selectedPage, setSelectedPage] = useState<string>(DEFAULT_SETTINGS_PAGE)
   // 选中的设置页被移除（插件停用或卸载）时退回通用页，内容区不留空白。
   const settingsPage = settingsPageOrFallback(settingsPages, selectedPage)
-  // 右栏第一次打开后才挂载（按需加载工作台代码），之后收起只隐藏，终端与浏览器标签保留。
-  const [rightStarted, setRightStarted] = useState(false)
-  const [rightMaximized, setRightMaximized] = useState(false)
-  // 底部终端第一次打开后才挂载，之后收起只隐藏，shell 会话保留到切换线程。
-  const [terminalStarted, setTerminalStarted] = useState(false)
   const activeThreadId = state.activeThreadId
   // 草稿里也能打开右栏和底部终端（参照 ZCode）：它们挂在草稿的项目上，不建会话；
   // 第一次发送建好会话后原样交给它。草稿各自记着右栏、终端开没开，新草稿默认收起。
   // 插槽不随设置、插件、定时任务页变：离开聊天时右栏和终端只是收起，回来时不重新挂载。
   const draftProject = !state.activeThreadId ? draftProjectId(state) : null
   const inChat = view === "chat"
-  const slot = useWorkspaceSlot(activeThreadId, draftProject)
-  const { rightOpen, setRightOpen, terminalOpen, setTerminalOpen } = usePanelOpen(
-    draftProject ? slot.key : null,
-  )
-  const [panels, setPanels] = useState<Record<string, PanelSurfaceState>>({})
   const [history, setHistory] = useState<NavHistory>(EMPTY_HISTORY)
   // 每次进入新会话草稿递增，草稿页据此把光标放回输入框。
   const [draftFocus, setDraftFocus] = useState(0)
   const [checkoutRevision, setCheckoutRevision] = useState(0)
   const onCheckoutChanged = useCallback(() => setCheckoutRevision((revision) => revision + 1), [])
-  const registeredSurfaces = useRef<ReadonlySet<string>>(new Set())
 
-  // Surface 注销（插件停用或卸载）时关掉每个线程里它已经打开的标签，当前标签改选邻居。
-  useEffect(() => {
-    const current = new Set(surfaceContributions.map((surface) => surface.id))
-    const removed = new Set([...registeredSurfaces.current].filter((id) => !current.has(id)))
-    registeredSurfaces.current = current
-    if (removed.size === 0) return
-    setPanels((panels) => {
-      let changed = false
-      const next: Record<string, PanelSurfaceState> = {}
-      for (const [threadId, panel] of Object.entries(panels)) {
-        next[threadId] = closeRemovedSurfaces(panel, removed)
-        if (next[threadId] !== panel) changed = true
-      }
-      return changed ? next : panels
-    })
-  }, [surfaceContributions])
+  /**
+   * 进入新会话草稿（参照 ZCode）：不在 Host 上建会话，第一次发送时才建。草稿落在指定的项目里；
+   * 没指定时沿用当前会话的项目，再退回最近用过的项目。已经在草稿里时只把光标放回输入框。
+   */
+  function startDraft(projectId?: string): void {
+    const snapshot = store.getSnapshot()
+    const current = snapshot.threads.find((thread) => thread.id === snapshot.activeThreadId)
+    const target = projectId ?? current?.projectId ?? snapshot.activeProjectId
+    if (target !== snapshot.activeProjectId) store.update({ activeProjectId: target })
+    store.setActiveThread(null)
+    setView("chat")
+    setDraftFocus((value) => value + 1)
+  }
+
+  const surfaceIds = useMemo(
+    () => surfaceContributions.map((surface) => surface.id),
+    [surfaceContributions],
+  )
+  const {
+    slot,
+    panels,
+    rightOpen,
+    rightStarted,
+    rightMaximized,
+    setRightMaximized,
+    terminalOpen,
+    setTerminalOpen,
+    terminalStarted,
+    terminalRecovery,
+    browsers,
+    updatePanel,
+    toggleRight,
+    toggleTerminal,
+    browseProjectFiles,
+    openSurface,
+    openLinkTab,
+  } = useAppPanels({
+    connection,
+    connected: state.status === "connected",
+    connectionRevision: state.connectionRevision,
+    view,
+    activeThreadId,
+    draftProject,
+    threads: state.threads,
+    surfaceIds,
+    locale,
+    onStartDraft: startDraft,
+  })
 
   // 只在用户正看着设置时把退回的页记下来：不在设置里时页面暂时不在（插件重新加载、停用后又启用），
   // 选中的仍是原来的页，它回来后再打开设置还是它。
   useEffect(() => {
     if (view === "settings" && settingsPage !== selectedPage) setSelectedPage(settingsPage)
   }, [view, settingsPage, selectedPage])
-
-  useEffect(() => {
-    if (rightOpen) setRightStarted(true)
-  }, [rightOpen])
 
   // 每次落到新的位置都记一笔；从历史里跳转时当前位置已经对上，不会重复记录。
   useEffect(() => {
@@ -184,20 +190,6 @@ export function App({ store, connection, plugins, locale }: AppProps) {
     timeline: activeTimeline,
   })
 
-  /**
-   * 进入新会话草稿（参照 ZCode）：不在 Host 上建会话，第一次发送时才建。草稿落在指定的项目里；
-   * 没指定时沿用当前会话的项目，再退回最近用过的项目。已经在草稿里时只把光标放回输入框。
-   */
-  function startDraft(projectId?: string): void {
-    const snapshot = store.getSnapshot()
-    const current = snapshot.threads.find((thread) => thread.id === snapshot.activeThreadId)
-    const target = projectId ?? current?.projectId ?? snapshot.activeProjectId
-    if (target !== snapshot.activeProjectId) store.update({ activeProjectId: target })
-    store.setActiveThread(null)
-    setView("chat")
-    setDraftFocus((value) => value + 1)
-  }
-
   function openThread(threadId: string): void {
     const projectId = store.getSnapshot().threads.find((item) => item.id === threadId)?.projectId
     if (projectId) store.update({ activeProjectId: projectId })
@@ -209,8 +201,12 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       .catch((error: unknown) => store.update({ error: messageOf(error) }))
   }
 
-  useDesktopReminderNavigation({ connection, store }, state.status === "connected", openThread,
-    () => store.update({ error: translate(locale, "reminder.threadUnavailable") }))
+  useDesktopReminderNavigation(
+    { connection, store },
+    state.status === "connected",
+    openThread,
+    () => store.update({ error: translate(locale, "reminder.threadUnavailable") }),
+  )
 
   /** 沿历史后退或前进；先去掉已经不存在的会话和已经移除的设置页。 */
   function travel(direction: "back" | "forward"): void {
@@ -251,129 +247,6 @@ export function App({ store, connection, plugins, locale }: AppProps) {
       ?.name ?? ""
   const activeEvents = activeTimeline?.events
   const activeRevision = useMemo(() => workspaceRevision(activeEvents ?? []), [activeEvents])
-
-  function toggleRight(): void {
-    if (!inChat || !slot.scope) return
-    setRightOpen((value) => !value)
-    setRightMaximized(false)
-  }
-
-  function toggleTerminal(): void {
-    if (!inChat || !slot.scope) return
-    setRightMaximized(false)
-    setTerminalStarted(true)
-    setTerminalOpen((value) => rightMaximized || !value)
-  }
-
-  /** 改一个面板的标签；key 是 slot key（会话 id，或者草稿的 key）。 */
-  const updatePanel = useCallback(
-    (key: string, update: (panel: PanelSurfaceState) => PanelSurfaceState) => {
-      setPanels((current) => ({
-        ...current,
-        [key]: update(current[key] ?? EMPTY_SURFACE_STATE),
-      }))
-    },
-    [],
-  )
-
-  const showRightPanel = useCallback(() => {
-    setRightOpen(true)
-    setRightMaximized(false)
-  }, [setRightOpen])
-
-  const openRecoveredDrawer = useCallback(
-    (key: string, isDraft: boolean) => {
-      setTerminalStarted(true)
-      setTerminalOpen(true, isDraft ? key : null)
-    },
-    [setTerminalOpen],
-  )
-
-  const openRecoveredWorkbench = useCallback(
-    (key: string, isDraft: boolean) => {
-      setRightStarted(true)
-      setRightOpen(true, isDraft ? key : null)
-      setRightMaximized(false)
-    },
-    [setRightOpen],
-  )
-
-  const terminalRecovery = useTerminalRecovery({
-    connection,
-    connected: state.status === "connected",
-    connectionRevision: state.connectionRevision,
-    slotKey: slot.key,
-    scope: slot.scope,
-    panels,
-    setPanels,
-    onOpenDrawer: openRecoveredDrawer,
-    onOpenWorkbench: openRecoveredWorkbench,
-    locale,
-  })
-
-  function browseProjectFiles(projectId: string): void {
-    const key = slot.draftKeyOf(projectId)
-    startDraft(projectId)
-    updatePanel(key, (panel) =>
-      addSurface(panel, "files", `files-${crypto.randomUUID()}`, () =>
-        translate(locale, "workbench.files"),
-      ),
-    )
-    setRightOpen(true, key)
-    setRightMaximized(false)
-  }
-
-  // agent 调用浏览器工具时，main 让界面给它的线程开（或亮出）浏览器标签；正在看这个线程时展开右栏。
-  useBrowserOpen({
-    panels,
-    keyOf: slot.keyOf,
-    threadId: state.activeThreadId,
-    view,
-    setPanels,
-    onOpenRight: showRightPanel,
-    locale,
-  })
-
-  /** 从聊天里打开文件或 Diff：当前线程的右栏切到对应标签（文件在自己的标签里打开）并展开。 */
-  function openSurface(kind: "file" | "diff", path?: string): void {
-    const threadId = state.activeThreadId
-    if (!threadId) return
-    updatePanel(slot.keyOf(threadId), (panel) =>
-      kind === "file" && path
-        ? openFileSurface(panel, path, `file-${crypto.randomUUID()}`)
-        : addSurface(panel, "diff", `diff-${crypto.randomUUID()}`, () => "Diff"),
-    )
-    showRightPanel()
-  }
-
-  const openLinkTab = useCallback(
-    (url: string) => {
-      if (!slot.key) return
-      const id = `browser-${crypto.randomUUID()}`
-      const title = new URL(url).host
-      updatePanel(slot.key, (panel) => ({
-        surfaces: [...panel.surfaces, { id, kind: "browser", title, url }],
-        activeId: id,
-      }))
-      showRightPanel()
-    },
-    [slot.key, showRightPanel, updatePanel],
-  )
-
-  // 草稿里开的浏览器也挂着；它还不属于哪个会话，agent 用不了，建好会话后才交给那个会话的 agent。
-  const { threadOf } = slot
-  const browsers = useMemo(() => {
-    const live = new Set(
-      state.threads.filter((thread) => thread.archivedAt === null).map((thread) => thread.id),
-    )
-    return Object.entries(panels).flatMap(([key, panel]) => {
-      const threadId = threadOf(key)
-      if (threadId !== null && !live.has(threadId)) return []
-      return panel.surfaces
-        .filter((surface) => surface.kind === "browser")
-        .map((surface) => ({ id: surface.id, slotKey: key, threadId, initialUrl: surface.url }))
-    })
-  }, [panels, state.threads, threadOf])
 
   const sidebar = sidebarActions(connection, store, {
     openThread,

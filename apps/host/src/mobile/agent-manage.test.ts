@@ -74,12 +74,15 @@ async function createAgentHostFixture() {
       },
     },
   }
-  ctx.provide("plugins" as never, {
-    records: async () => [
-      { id: "@pigcode/agent-demo", builtin: true, disabled: false, manifest: fakeManifest },
-    ],
-    list: async () => [{ id: "@pigcode/agent-demo", error: null }],
-  } as never)
+  ctx.provide(
+    "plugins" as never,
+    {
+      records: async () => [
+        { id: "@pigcode/agent-demo", builtin: true, disabled: false, manifest: fakeManifest },
+      ],
+      list: async () => [{ id: "@pigcode/agent-demo", error: null }],
+    } as never,
+  )
 
   const driver: AgentDriver = {
     id: "demo",
@@ -135,7 +138,11 @@ async function createAgentHostFixture() {
   return { ctx, manager }
 }
 
-function callAgent<T>(manager: MobileAgentManage, method: string, params: unknown = {}): Promise<T> {
+function callAgent<T>(
+  manager: MobileAgentManage,
+  method: string,
+  params: unknown = {},
+): Promise<T> {
   return manager.dispatch({ jsonrpc: "2.0", id: randomUUID(), method, params }) as Promise<T>
 }
 
@@ -309,7 +316,7 @@ describe("MobileAgentManage", () => {
     }
   })
 
-  it("gates mobile.agent.* behind agents.manage capability in MobileSidebarRpc", async () => {
+  it("gates mobile.agent.* behind agents.manage feature in MobileSidebarRpc", async () => {
     const { ctx } = await createAgentHostFixture()
     try {
       const devices = new PairedDevices(ctx.settings)

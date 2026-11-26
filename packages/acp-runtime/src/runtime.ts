@@ -1,19 +1,12 @@
 import { randomUUID } from "node:crypto"
-import { readFile } from "node:fs/promises"
+import type { NewSessionResponse, SessionNotification } from "@agentclientprotocol/sdk"
+import { DEFAULT_RUNTIME_MODE, normalizeRuntimeMode } from "@pigcode/contracts"
 import type {
-  ContentBlock,
-  InitializeResponse,
-  NewSessionResponse,
-  SessionNotification,
-} from "@agentclientprotocol/sdk"
-import { DEFAULT_RUNTIME_MODE, normalizeRuntimeMode, type RuntimeMode } from "@pigcode/contracts"
-import {
-  appendImageAttachmentFallback,
-  type AgentCommandInfo,
-  type AgentRuntime,
-  type AgentSessionHandle,
-  type CreateSessionInput,
-  type UserInput,
+  AgentCommandInfo,
+  AgentRuntime,
+  AgentSessionHandle,
+  CreateSessionInput,
+  UserInput,
 } from "@pigcode/plugin-sdk"
 import {
   authenticateAcp,
@@ -21,7 +14,6 @@ import {
   setupAcpSession,
   openAcp,
   requestOptions,
-  type AcpConnectionOptions,
   type AcpLaunch,
   type AcpProcess,
 } from "./connection"
@@ -33,64 +25,23 @@ import {
   type SessionSetup,
 } from "./catalog"
 import { sessionBridge, type SessionBridge } from "./mcp"
+import {
+  applySessionUpdate,
+  buildPromptPayload,
+  buildSessionHandle,
+  canReuseLiveSession,
+  type AcpLifecycle,
+  type AcpRuntimeOptions,
+  type AcpSession,
+  type AcpTurn,
+} from "./session"
 import { answerPermission, TurnEvents } from "./turn"
 
+export type { AcpRuntimeOptions }
 export const missingSession = "ACP native session unavailable"
 
-type Turn = {
-  runtime: AgentRuntime
-  events: TurnEvents
-  prompting: boolean
-  cancelled: boolean
-  done: Promise<void>
-  finish(): void
-  timer?: ReturnType<typeof setTimeout>
-}
-
-type Session = {
-  rpc: AcpProcess
-  bridge: SessionBridge
-  scope: string
-  nativeId: string
-  setup: SessionSetup
-  liveOnly: boolean
-  invocation: string
-  canClose: boolean
-  supportsImage: boolean
-  fresh: boolean
-  planMode: boolean
-  normalMode: string | undefined
-  policy: RuntimeMode
-  release(): void
-  translateError?: ((error: unknown) => unknown) | undefined
-  turn?: Turn | undefined
-  ending?: Promise<void>
-}
-
-export interface AcpRuntimeOptions extends AcpConnectionOptions {
-  sessionMeta?: Record<string, unknown>
-  cancelMeta?: Record<string, unknown>
-  authMethod?(launch: AcpLaunch): string | undefined
-  approvalMode?(policy: RuntimeMode): RuntimeMode
-  sessionPolicy?(setup: SessionSetup, mode: RuntimeMode): { id: string; value: string }
-  effortId?: string
-  deferredEffort?: boolean
-  legacyModelEffort?: boolean
-  id: string
-  retainLiveOnly?: boolean
-  probeModelEfforts?: boolean
-  normalMode?(setup: SessionSetup, policy: RuntimeMode): string | undefined
-  onInitialize?(scope: string, info: InitializeResponse): void
-  onSession?(scope: string, setup: SessionSetup, info: InitializeResponse): void
-}
-
-interface Lifecycle {
-  release?(): void
-  translateError?(error: unknown): unknown
-}
-
 export class AcpRuntime {
-  private readonly sessions = new Map<string, Session>()
+  private readonly sessions = new Map<string, AcpSession>()
   private readonly processes = new Map<AcpProcess, string>()
   private readonly grants = new Map<string, { scope: string; approvals: Set<string> }>()
   private readonly commands = new Map<string, Map<string, AgentCommandInfo[]>>()
@@ -174,7 +125,7 @@ export class AcpRuntime {
     input: CreateSessionInput,
     launch: AcpLaunch,
     scope: string,
-    lifecycle: Lifecycle = {},
+    lifecycle: AcpLifecycle = {},
   ): Promise<AgentSessionHandle> {
     const id = input.sessionId ?? `${this.options.id}_${randomUUID()}`
     const prior = this.sessions.get(id)
@@ -189,28 +140,20 @@ export class AcpRuntime {
       if (!policy) throw new Error("Unsupported ACP permission mode")
       await prior?.turn?.done
       input.signal?.throwIfAborted()
-      if (
-        prior &&
-        !prior.rpc.signal.aborted &&
-        !prior.ending &&
-        prior.liveOnly &&
-        prior.scope === scope &&
-        prior.nativeId === input.nativeSessionId &&
-        prior.invocation === invocation
-      ) {
+      if (canReuseLiveSession(prior, scope, input.nativeSessionId, invocation)) {
         prior.policy = policy
         lifecycle.release?.()
-        return this.handle(id, input, prior.nativeId, policy)
+        return buildSessionHandle(id, input, prior.nativeId, policy)
       }
       if (prior) await this.finish(id, prior)
-      const active: { state?: Session } = {}
+      const active: { state?: AcpSession } = {}
       const grants = this.grants.get(id) ?? { scope, approvals: new Set<string>() }
       rpc = this.open(launch, scope, {
         update: (event) => {
           const { state } = active
           if (state && state.nativeId !== event.sessionId) return
           this.rememberCommands(scope, input.cwd, event)
-          if (state) this.update(state, event)
+          if (state) applySessionUpdate(state, event)
         },
         approval: (request) => {
           const state = active.state
@@ -275,7 +218,7 @@ export class AcpRuntime {
       rpc.signal.throwIfAborted()
       const currentMode =
         selectConfig(setup.configOptions ?? [], "mode")?.currentValue ?? setup.modes?.currentModeId
-      const state: Session = {
+      const state: AcpSession = {
         rpc,
         bridge,
         scope,
@@ -299,7 +242,7 @@ export class AcpRuntime {
       active.state = state
       this.sessions.set(id, state)
       this.grants.set(id, grants)
-      return this.handle(id, input, nativeId, policy)
+      return buildSessionHandle(id, input, nativeId, policy)
     } catch (error) {
       if (rpc) await this.closeProcess(rpc)
       bridge?.close()
@@ -309,44 +252,6 @@ export class AcpRuntime {
     }
   }
 
-  private handle(
-    id: string,
-    input: CreateSessionInput,
-    nativeId: string,
-    permissionMode: RuntimeMode,
-  ): AgentSessionHandle {
-    return {
-      id,
-      threadId: input.threadId,
-      cwd: input.cwd,
-      nativeSessionId: nativeId,
-      permissionMode,
-      planMode: input.planMode ?? false,
-      model: input.model ?? null,
-    }
-  }
-
-  private update(state: Session, notification: SessionNotification) {
-    const update = notification.update
-    if (update.sessionUpdate === "config_option_update")
-      state.setup.configOptions = update.configOptions
-    if (update.sessionUpdate === "current_mode_update" && state.setup.modes)
-      state.setup.modes.currentModeId = update.currentModeId
-    if (!state.turn?.prompting) return
-    const mode =
-      update.sessionUpdate === "current_mode_update"
-        ? update.currentModeId
-        : update.sessionUpdate === "config_option_update"
-          ? selectConfig(update.configOptions, "mode")?.currentValue
-          : undefined
-    if (typeof mode === "string") {
-      state.planMode = mode === "plan"
-      if (!state.planMode) state.normalMode = mode
-      state.turn.runtime.setPlanMode?.(state.planMode)
-    }
-    state.turn.events.update(update)
-  }
-
   async send(session: AgentSessionHandle, input: UserInput, runtime: AgentRuntime) {
     const state = this.sessions.get(session.id)
     if (!state) throw new Error(missingSession)
@@ -354,7 +259,7 @@ export class AcpRuntime {
     const done = new Promise<void>((resolve) => {
       finish = resolve
     })
-    const turn: Turn = {
+    const turn: AcpTurn = {
       runtime,
       events: new TurnEvents(runtime),
       done,
@@ -401,26 +306,7 @@ export class AcpRuntime {
       )
       runtime.signal.throwIfAborted()
       turn.prompting = true
-      const baseText = input.handoff
-        ? input.text
-          ? `${input.handoff}\n\n${input.text}`
-          : input.handoff
-        : input.text
-      const attachments = input.attachments ?? []
-      let promptPayload: string | ContentBlock[] = baseText
-      if (attachments.length > 0) {
-        if (state.supportsImage) {
-          const blocks: ContentBlock[] = []
-          if (baseText.length > 0) blocks.push({ type: "text", text: baseText })
-          for (const att of attachments) {
-            const data = (await readFile(att.path)).toString("base64")
-            blocks.push({ type: "image", mimeType: att.mimeType, data })
-          }
-          promptPayload = blocks
-        } else {
-          promptPayload = appendImageAttachmentFallback(baseText, attachments)
-        }
-      }
+      const promptPayload = await buildPromptPayload(input, state.supportsImage)
       const result = await state.rpc.prompt(state.nativeId, promptPayload)
       turn.events.finish()
       if (turn.cancelled || result.stopReason === "cancelled")
@@ -445,7 +331,7 @@ export class AcpRuntime {
     }
   }
 
-  private cancel(state: Session, turn: Turn) {
+  private cancel(state: AcpSession, turn: AcpTurn) {
     if (turn.cancelled) return
     turn.cancelled = true
     if (!turn.prompting) {
@@ -482,7 +368,7 @@ export class AcpRuntime {
         .catch(() => undefined)
   }
 
-  private finish(id: string, state: Session) {
+  private finish(id: string, state: AcpSession) {
     state.ending ??= (async () => {
       try {
         if (!state.turn?.prompting)

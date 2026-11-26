@@ -17,24 +17,15 @@ import { dispatchAgentCommand } from "./agent-commands"
 import { subscribeDesktopThread } from "./desktop-thread-feed"
 import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
 import { desktopQueueRequests, dispatchDesktopQueue } from "./queued-message-commands"
-import { attachDesktopTerminal, forwardTerminal } from "./terminal-notify"
+import { TERMINAL_COMMANDS, dispatchTerminalCommand } from "./terminal-commands"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
 import { ThreadFeed } from "./thread-feed"
-import type { WorkspaceScope } from "../services/worktrees"
+import { WORKBENCH_COMMANDS, dispatchWorkbenchCommand } from "./workbench-commands"
 
 /** 界面有专门说明的错误（gh 未安装、未登录、没有远程仓库）带上自己的错误码，其余是 COMMAND_FAILED。 */
 function errorCode(error: unknown): string {
   const code = typeof error === "object" && error !== null && "code" in error ? error.code : null
   return isHostErrorCode(code) ? code : "COMMAND_FAILED"
-}
-
-/**
- * 右侧面板与终端的 threadId / projectId 转成服务用的 WorkspaceScope：会话 id，或者草稿的项目。
- * 契约保证两个只给了一个。
- */
-function scopeOf(value: { threadId?: string | undefined; projectId?: string | undefined }) {
-  const scope: WorkspaceScope = value.threadId ?? { projectId: value.projectId ?? "" }
-  return scope
 }
 
 /** 基于 Cordis 服务处理 RPC 请求的 Host 侧服务器。 */
@@ -148,6 +139,17 @@ export class RpcServer {
     }
     if (THREAD_COMMANDS.has(command)) {
       return dispatchThreadCommand(this.ctx, command, parsed, (id) => this.feed.changed(id))
+    }
+    if (WORKBENCH_COMMANDS.has(command)) {
+      return dispatchWorkbenchCommand(this.ctx, command, parsed)
+    }
+    if (TERMINAL_COMMANDS.has(command)) {
+      return dispatchTerminalCommand(this.ctx, command, parsed, {
+        subscriptions: this.terminalSubscriptions,
+        getPage: () => this.page,
+        send: (message) => this.transport.send(message),
+        onReply,
+      })
     }
 
     switch (command) {
@@ -376,102 +378,6 @@ export class RpcServer {
         return this.ctx.plugins.removeMarketplace((parsed as { id: string }).id)
       case "plugin.bootGraph":
         return this.ctx.plugins.bootGraph()
-      case "workspace.tree":
-        return this.ctx.workspace.tree(scopeOf(parsed as CommandParams<"workspace.tree">))
-      case "project.files":
-        return this.ctx.workspace.projectTree((parsed as { projectId: string }).projectId)
-      case "workspace.root":
-        return {
-          root: this.ctx.workspace.root(scopeOf(parsed as CommandParams<"workspace.root">)),
-        }
-      case "workspace.list": {
-        const value = parsed as CommandParams<"workspace.list">
-        return this.ctx.workspace.list(scopeOf(value), value.path)
-      }
-      case "workspace.searchPaths": {
-        const value = parsed as CommandParams<"workspace.searchPaths">
-        return this.ctx.workspace.searchPaths(
-          scopeOf(value),
-          value.query,
-          value.limit,
-          value.refresh,
-        )
-      }
-      case "workspace.readFile": {
-        const value = parsed as CommandParams<"workspace.readFile">
-        return this.ctx.workspace.readFile(scopeOf(value), value.path, value.encoding)
-      }
-      case "workspace.writeFile": {
-        const value = parsed as CommandParams<"workspace.writeFile">
-        return this.ctx.workspace.writeFile(scopeOf(value), value.path, value.text, {
-          expectedMtimeMs: value.expectedMtimeMs,
-          eol: value.eol,
-        })
-      }
-      case "workspace.createFile": {
-        const value = parsed as CommandParams<"workspace.createFile">
-        return this.ctx.workspace.createFile(scopeOf(value), value.path, value.text)
-      }
-      case "workspace.renamePath": {
-        const value = parsed as CommandParams<"workspace.renamePath">
-        return this.ctx.workspace.renamePath(scopeOf(value), value.oldPath, value.newPath)
-      }
-      case "workspace.deletePath": {
-        const value = parsed as CommandParams<"workspace.deletePath">
-        return this.ctx.workspace.deletePath(scopeOf(value), value.path, {
-          recursive: value.recursive,
-        })
-      }
-      case "workspace.search": {
-        const value = parsed as CommandParams<"workspace.search">
-        return this.ctx.workspace.search(scopeOf(value), value.query, value.glob)
-      }
-      case "git.status":
-        return this.ctx.git.status(scopeOf(parsed as CommandParams<"git.status">))
-      case "git.branches":
-        return this.ctx.git.branches((parsed as CommandParams<"git.branches">).projectId)
-      case "git.switchBranch":
-      case "git.createBranch": {
-        const value = parsed as CommandParams<"git.switchBranch">
-        return this.ctx.git.switchBranch(
-          value.projectId,
-          value.branch,
-          command === "git.createBranch",
-        )
-      }
-      case "git.diff": {
-        const value = parsed as CommandParams<"git.diff">
-        return this.ctx.git.diff(scopeOf(value), value.base, value.head)
-      }
-      case "pr.status":
-        return this.ctx.github.status(scopeOf(parsed as CommandParams<"pr.status">))
-      case "pr.create": {
-        const value = parsed as CommandParams<"pr.create">
-        return this.ctx.github.create(scopeOf(value), {
-          title: value.title,
-          ...(value.body === undefined ? {} : { body: value.body }),
-          ...(value.base === undefined ? {} : { base: value.base }),
-          ...(value.draft === undefined ? {} : { draft: value.draft }),
-        })
-      }
-      case "pr.comment": {
-        const value = parsed as CommandParams<"pr.comment">
-        await this.ctx.github.comment(scopeOf(value), value.body)
-        return { ok: true }
-      }
-      case "pr.merge": {
-        const value = parsed as CommandParams<"pr.merge">
-        return this.ctx.github.merge(scopeOf(value), {
-          method: value.method,
-          ...(value.deleteBranch === undefined ? {} : { deleteBranch: value.deleteBranch }),
-        })
-      }
-      case "pr.ready":
-        return this.ctx.github.ready(scopeOf(parsed as CommandParams<"pr.ready">))
-      case "pr.close":
-        return this.ctx.github.close(scopeOf(parsed as CommandParams<"pr.close">))
-      case "pr.reopen":
-        return this.ctx.github.reopen(scopeOf(parsed as CommandParams<"pr.reopen">))
       case "schedule.list":
         return this.ctx.schedules.list()
       case "schedule.create":
@@ -501,109 +407,6 @@ export class RpcServer {
       }
       case "schedule.runNow":
         return this.ctx.schedules.runNow((parsed as { id: string }).id)
-      case "checkpoint.list":
-        return this.ctx.checkpoints.list((parsed as { threadId: string }).threadId)
-      case "checkpoint.create": {
-        const value = parsed as { threadId: string; label?: string }
-        return this.ctx.checkpoints.create(value.threadId, value.label)
-      }
-      case "checkpoint.restore": {
-        const value = parsed as { threadId: string; checkpointId: string }
-        return this.ctx.checkpoints.restore(value.threadId, value.checkpointId)
-      }
-      case "worktree.list":
-        return this.ctx.worktrees.list((parsed as { threadId: string }).threadId)
-      case "worktree.create":
-        return this.ctx.worktrees.create((parsed as { threadId: string }).threadId)
-      case "worktree.switch": {
-        const value = parsed as { threadId: string; path: string }
-        return this.ctx.worktrees.switch(value.threadId, value.path)
-      }
-      case "worktree.remove":
-        return this.ctx.worktrees.remove((parsed as { threadId: string }).threadId)
-      case "terminal.open": {
-        const value = parsed as CommandParams<"terminal.open">
-        const page = this.page
-        const scope = scopeOf(value)
-        const owner = typeof scope === "string" ? { threadId: scope } : scope
-        const terminal = await this.ctx.terminal.open(
-          owner,
-          value.cols,
-          value.rows,
-          value.placement ? { placement: value.placement } : undefined,
-        )
-        if (page !== this.page) {
-          try {
-            this.ctx.terminal.close(terminal.id)
-          } catch {
-            // 终端可能已自行退出。
-          }
-          return terminal
-        }
-        this.terminalSubscriptions.get(terminal.id)?.()
-        let dispose: (() => void) | undefined
-        dispose = forwardTerminal(
-          this.ctx.terminal,
-          terminal.id,
-          (message) => this.transport.send(message),
-          () => {
-            if (this.terminalSubscriptions.get(terminal.id) === dispose) {
-              this.terminalSubscriptions.delete(terminal.id)
-            }
-          },
-        )
-        this.terminalSubscriptions.set(terminal.id, dispose)
-        return terminal
-      }
-      case "terminal.list": {
-        const value = parsed as CommandParams<"terminal.list">
-        const scope = scopeOf(value)
-        const owner = typeof scope === "string" ? { threadId: scope } : scope
-        return this.ctx.terminal.list(owner)
-      }
-      case "terminal.attach": {
-        const value = parsed as CommandParams<"terminal.attach">
-        this.terminalSubscriptions.get(value.terminalId)?.()
-        this.terminalSubscriptions.delete(value.terminalId)
-        let release: (() => void) | undefined
-        const attached = attachDesktopTerminal(
-          this.ctx.terminal,
-          value.terminalId,
-          {
-            afterCursor: value.afterCursor,
-            cols: value.cols,
-            rows: value.rows,
-          },
-          (message) => this.transport.send(message),
-          () => {
-            if (this.terminalSubscriptions.get(value.terminalId) === release) {
-              this.terminalSubscriptions.delete(value.terminalId)
-            }
-          },
-        )
-        release = attached.release
-        this.terminalSubscriptions.set(value.terminalId, release)
-        onReply(attached.afterReply)
-        return attached.result
-      }
-      case "terminal.rebind": {
-        const value = parsed as CommandParams<"terminal.rebind">
-        return this.ctx.terminal.rebind(value.terminalId, value.threadId)
-      }
-      case "terminal.write": {
-        const value = parsed as { terminalId: string; data: string }
-        return this.ctx.terminal.write(value.terminalId, value.data)
-      }
-      case "terminal.resize": {
-        const value = parsed as { terminalId: string; cols: number; rows: number }
-        return this.ctx.terminal.resize(value.terminalId, value.cols, value.rows)
-      }
-      case "terminal.close": {
-        const { terminalId } = parsed as { terminalId: string }
-        this.terminalSubscriptions.get(terminalId)?.()
-        this.terminalSubscriptions.delete(terminalId)
-        return this.ctx.terminal.close(terminalId)
-      }
       default:
         throw new Error(`unsupported method: ${method}`)
     }

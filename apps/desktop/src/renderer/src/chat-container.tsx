@@ -5,7 +5,6 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { useThreadOptions } from "./thread-options"
-import type { PermissionMode, Thread } from "@pigcode/contracts"
 import {
   contributionText,
   useAppStore,
@@ -13,16 +12,19 @@ import {
   type AppStore,
   type Connection,
 } from "@pigcode/client-runtime"
-import { copyText, useLocale } from "@pigcode/ui-primitives"
-import { ChatView, collectSubagents, type ChatLinkActions } from "@pigcode/ui-chat"
+import { useLocale } from "@pigcode/ui-primitives"
+import { ChatView, collectSubagents } from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
-import type {
-  ComposerAttachmentUploadInput,
-  ComposerCommand,
-  ComposerModelChoice,
-} from "@pigcode/ui-composer"
+import type { ComposerCommand } from "@pigcode/ui-composer"
 import type { ClientPluginController } from "./client-plugins"
 import { useAgentFeatures, useAgents, useModelCatalog } from "./agents"
+import {
+  createChatThreadActions,
+  messageOf,
+  projectRelative,
+  useChatAttachmentActions,
+  useChatLinkActions,
+} from "./chat-helpers"
 import { runRequestHandlers } from "./run-request-handlers"
 import { QueuedMessages } from "./queued-messages"
 import { submitDesktopMessage } from "./desktop-message-recovery"
@@ -33,7 +35,6 @@ import { workspaceRevision } from "./workspace-revision"
 import {
   buildThreadTabs,
   childThreads,
-  dismissSpawnedTab,
   openSpawnedTab,
   selectThreadTab,
   useThreadTabState,
@@ -65,31 +66,6 @@ export interface ChatControls {
   draftFocus?: number
   checkoutRevision?: number
   onCheckoutChanged?: () => void
-}
-
-/** 把 unknown 错误转成可展示文本。 */
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-/** 项目内的文件转成相对路径；项目外的文件不在文件标签里打开。 */
-function projectRelative(path: string | undefined, root: string | undefined): string | undefined {
-  if (!path) return undefined
-  const windows = /^(?:[a-z]:[\\/]|\\\\)/i.test(path)
-  if (!path.startsWith("/") && !windows) return path
-  if (!root) return undefined
-  const absolute = windows ? path.replaceAll("\\", "/") : path
-  const folder = windows ? root.replaceAll("\\", "/") : root
-  const prefix = folder.endsWith("/") ? folder : `${folder}/`
-  return absolute.startsWith(prefix) ? absolute.slice(prefix.length) : undefined
-}
-
-/** 用 Host 返回的线程记录替换 store 里的同 id 线程。 */
-function patchThread(store: AppStore, threadId: string, patch: Partial<Thread>): void {
-  const threads = store
-    .getSnapshot()
-    .threads.map((item) => (item.id === threadId ? { ...item, ...patch } : item))
-  store.update({ threads })
 }
 
 /** 聊天页容器。 */
@@ -177,40 +153,7 @@ export function ChatViewContainer({
     (error: unknown) => deps.store.update({ error: messageOf(error) }),
     [deps.store],
   )
-  const linkActions = useMemo<ChatLinkActions | undefined>(() => {
-    const { browser, popupMenu } = window.pigcodeNative ?? {}
-    if (!browser || !popupMenu || !onOpenLinkTab) return undefined
-
-    const openExternal = (url: string) => {
-      void browser.openExternal(url).catch(() => fail(t("chat.link.openFailed")))
-    }
-    return {
-      openExternal,
-      showMenu: (url, point) => {
-        const web = /^https?:/i.test(url)
-        const items = [
-          ...(web ? [{ id: "new-tab", label: t("chat.link.newTab") }] : []),
-          {
-            id: "open-external",
-            label: t(web ? "chat.link.defaultBrowser" : "chat.link.openEmail"),
-          },
-          { type: "separator" as const },
-          { id: "copy-link", label: t("chat.link.copy") },
-          ...(web ? [{ id: "save-link", label: t("chat.link.saveAs") }] : []),
-        ]
-        void popupMenu(items, point)
-          .then(async (choice) => {
-            if (choice === "new-tab" && web) onOpenLinkTab(url)
-            else if (choice === "open-external") openExternal(url)
-            else if (choice === "copy-link") await copyText(url)
-            else if (choice === "save-link" && web) {
-              await browser.saveLink(url).catch(() => fail(t("chat.link.saveFailed")))
-            }
-          })
-          .catch(fail)
-      },
-    }
-  }, [fail, onOpenLinkTab, t])
+  const linkActions = useChatLinkActions({ onOpenLinkTab, fail, t })
 
   const mainEvents = mainId ? (state.threadStates[mainId]?.events ?? state.events) : state.events
   // 子代理共用主会话的工作目录，详情卡里的 git 状态跟着主会话的改动重读。
@@ -289,73 +232,17 @@ export function ChatViewContainer({
     fail,
   })
 
-  /** 切换 Agent 实例与模型；换了实例时提示上下文以摘要交接。 */
-  function selectModel(choice: ComposerModelChoice): void {
-    if (!thread) return
-    const previousInstance = thread.lastInstanceId ?? thread.defaultInstanceId ?? null
-    void deps.connection
-      .call("thread.switchAgent", {
-        threadId: thread.id,
-        agentId: choice.agentId,
-        instanceId: choice.instanceId,
-        modelId: choice.modelId,
-      })
-      .then((result) => {
-        const modes = result as { permissionMode?: string; planMode?: boolean }
-        patchThread(deps.store, thread.id, {
-          ...(modes.permissionMode ? { permissionMode: modes.permissionMode } : {}),
-          ...(typeof modes.planMode === "boolean" ? { planMode: modes.planMode } : {}),
-          lastAgentId: choice.agentId,
-          lastInstanceId: choice.instanceId,
-          lastModelId: choice.modelId,
-        })
-        if (choice.instanceId !== previousInstance) {
-          const name =
-            agents.find((agent) => agent.id === choice.instanceId)?.label ?? choice.instanceId
-          setNotice(`${t("chat.agent.next")} ${name}`)
-        }
-      })
-      .catch(fail)
-  }
-
-  function setPermissionMode(mode: PermissionMode): void {
-    if (!thread) return
-    patchThread(deps.store, thread.id, { permissionMode: mode })
-    void deps.connection
-      .call("thread.setPermissionMode", { threadId: thread.id, permissionMode: mode })
-      .catch((error: unknown) => {
-        patchThread(deps.store, thread.id, { permissionMode: thread.permissionMode })
-        fail(error)
-      })
-  }
-
-  function setPlanMode(planMode: boolean): void {
-    if (!thread) return
-    void deps.connection
-      .call("thread.setPlanMode", { threadId: thread.id, planMode })
-      .then((updated) => patchThread(deps.store, thread.id, updated as Thread))
-      .catch(fail)
-  }
-
-  /** 关闭子代理标签：用户添加的归档（还在跑的 run 会停下），派生的只是不再显示。 */
-  function closeTab(tabId: string): void {
-    if (!mainId) return
-    if (tabId.startsWith("spawned:")) {
-      dismissSpawnedTab(mainId, tabId.slice("spawned:".length))
-      return
-    }
-    if (!tabId.startsWith("agent:")) return
-    const childId = tabId.slice("agent:".length)
-    if (selected === tabId) selectThreadTab(mainId, "main")
-    void deps.connection
-      .call("thread.archive", { threadId: childId })
-      .then((archived) => {
-        patchThread(deps.store, childId, archived as Thread)
-        deps.store.closeThread(childId)
-        void deps.connection.closeThread(childId).catch(() => undefined)
-      })
-      .catch(fail)
-  }
+  const { selectModel, setPermissionMode, setPlanMode, closeTab } = createChatThreadActions({
+    connection: deps.connection,
+    store: deps.store,
+    thread,
+    mainId,
+    selectedTab: selected,
+    agents,
+    t,
+    setNotice,
+    fail,
+  })
 
   const fileRoot = mainId
   const loadAgentCommands = useAgentCommandsLoader(deps.connection, threadId ? { threadId } : null)
@@ -389,33 +276,9 @@ export function ChatViewContainer({
     [registeredCommands, t],
   )
 
-  const uploadImage = useCallback(
-    (input: ComposerAttachmentUploadInput) =>
-      deps.connection.uploadAttachment({
-        ...input,
-        ...(threadId ? { threadId } : {}),
-      }),
-    [deps.connection, threadId],
-  )
-
-  const readAttachment = useCallback(
-    (attachmentId: string, variant: "thumb" | "full") =>
-      deps.connection.readAttachmentDataUrl({
-        attachmentId,
-        ...(threadId ? { threadId } : {}),
-        variant,
-      }),
-    [deps.connection, threadId],
-  )
-
-  const peekAttachment = useCallback(
-    (attachmentId: string, variant: "thumb" | "full") =>
-      deps.connection.peekAttachmentDataUrl({
-        attachmentId,
-        ...(threadId ? { threadId } : {}),
-        variant,
-      }),
-    [deps.connection, threadId],
+  const { uploadImage, readAttachment, peekAttachment } = useChatAttachmentActions(
+    deps.connection,
+    threadId,
   )
 
   // 没有当前会话就是新会话草稿：发第一条消息时才建会话。

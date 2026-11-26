@@ -193,6 +193,7 @@ describe("Composer image attachments", () => {
 
     fireEvent.change(fileInput, { target: { files: [makePng("slow.png")] } })
     await screen.findByRole("status", { name: "正在上传" })
+    await waitFor(() => expect(onUploadImage).toHaveBeenCalledTimes(1))
     expect(screen.getByRole("button", { name: "发送" }).getAttribute("aria-disabled")).toBe("true")
 
     await act(async () => {

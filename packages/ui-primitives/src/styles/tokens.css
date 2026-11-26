@@ -168,6 +168,25 @@
   /* Claude 的品牌橙：两种主题相同（t3code 的 ClaudeAI 图标） */
   --brand-claude: #d97757;
   --browser-page-bg: #fff;
+
+  /* 附件缩略图遮罩与全屏灯箱：始终落在深色透明背板上，浅深主题共用 */
+  --media-overlay: oklch(14% 0.006 268 / 0.56);
+  --media-overlay-error: oklch(22% 0.08 25 / 0.72);
+  --media-badge-bg: oklch(14% 0.006 268 / 0.72);
+  --media-badge-bg-hover: oklch(14% 0.006 268 / 0.92);
+  --media-fg: #fff;
+  --media-btn-bg: oklch(100% 0 0 / 0.2);
+  --media-btn-bg-hover: oklch(100% 0 0 / 0.34);
+  --lightbox-backdrop: oklch(10% 0.005 268 / 0.88);
+  --lightbox-bar-bg: linear-gradient(to bottom, oklch(0% 0 0 / 0.48), transparent);
+  --lightbox-fg: #f5f5f5;
+  --lightbox-fg-soft: oklch(96% 0 0 / 0.92);
+  --lightbox-fg-muted: oklch(90% 0 0 / 0.85);
+  --lightbox-surface: oklch(100% 0 0 / 0.1);
+  --lightbox-surface-hover: oklch(100% 0 0 / 0.22);
+  --lightbox-pill: oklch(100% 0 0 / 0.14);
+  --lightbox-pill-hover: oklch(100% 0 0 / 0.28);
+  --lightbox-shadow: 0 20px 60px oklch(0% 0 0 / 0.45);
 }
 
 [data-theme="dark"] {
@@ -295,6 +314,25 @@
   /* Claude 的品牌橙：两种主题相同（t3code 的 ClaudeAI 图标） */
   --brand-claude: #d97757;
   --browser-page-bg: #fff;
+
+  /* 附件缩略图遮罩与全屏灯箱：始终落在深色透明背板上，浅深主题共用 */
+  --media-overlay: oklch(14% 0.006 268 / 0.56);
+  --media-overlay-error: oklch(22% 0.08 25 / 0.72);
+  --media-badge-bg: oklch(14% 0.006 268 / 0.72);
+  --media-badge-bg-hover: oklch(14% 0.006 268 / 0.92);
+  --media-fg: #fff;
+  --media-btn-bg: oklch(100% 0 0 / 0.2);
+  --media-btn-bg-hover: oklch(100% 0 0 / 0.34);
+  --lightbox-backdrop: oklch(10% 0.005 268 / 0.88);
+  --lightbox-bar-bg: linear-gradient(to bottom, oklch(0% 0 0 / 0.48), transparent);
+  --lightbox-fg: #f5f5f5;
+  --lightbox-fg-soft: oklch(96% 0 0 / 0.92);
+  --lightbox-fg-muted: oklch(90% 0 0 / 0.85);
+  --lightbox-surface: oklch(100% 0 0 / 0.1);
+  --lightbox-surface-hover: oklch(100% 0 0 / 0.22);
+  --lightbox-pill: oklch(100% 0 0 / 0.14);
+  --lightbox-pill-hover: oklch(100% 0 0 / 0.28);
+  --lightbox-shadow: 0 20px 60px oklch(0% 0 0 / 0.45);
 }
 
 /* Pigcode 浅色：用灰阶区分窗口、内容区和操作。 */
@@ -649,6 +687,9 @@
   --acp-login-terminal-min-height: 120px;
   --turn-nav-item-h: 10px;
   --turn-nav-bar-h: 2px;
+  --attachment-thumb-size: 64px;
+  --attachment-min-h: 72px;
+  --lightbox-nav-size: 40px;
 
   /*
     动效（Cursor 的 --cursor-duration-*）：fast 100 悬停、按下、开关 / med 150 菜单与浮层 /

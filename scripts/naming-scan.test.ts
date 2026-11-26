@@ -94,9 +94,15 @@ const ALLOWED_PATTERNS: ReadonlyArray<{ pattern: RegExp; file?: string; reason: 
     "apps/host/src/agents/fixtures/agy.ts",
   ].map((file) => ({
     file,
-    pattern: /\b(?:clientCapabilities|agentCapabilities|sessionCapabilities|mcpCapabilities)\b/g,
+    pattern:
+      /\b(?:clientCapabilities|agentCapabilities|sessionCapabilities|mcpCapabilities|promptCapabilities)\b/g,
     reason: "ACP 握手与会话的原生协议字段",
   })),
+  {
+    file: "docs/mobile-timeline.md",
+    pattern: /\brequestActionsProvider\b/g,
+    reason: "Flutter Riverpod 的状态 Provider 名称，不是产品术语",
+  },
   {
     file: "packages/agent-codex/src/launch.ts",
     pattern: /\bmodel_provider\b/g,

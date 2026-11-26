@@ -7,26 +7,27 @@ import { instancePermissionOptions } from "./permission-options"
 import { composerCommands } from "./composer-commands"
 // 负责会话输入区：TipTap 正文（@ 文件、/ 命令）、图片附件、agent/模型/思考深度/速度/权限选择，以及发送/停止。
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react"
-import { Image as ImageIcon } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type DragEvent, type ReactNode } from "react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ComposerAttachMenu, ComposerSubmit } from "./composer-actions"
 import {
-  COMPOSER_IMAGE_ACCEPT,
   ComposerAttachmentStrip,
   extractClipboardImageFiles,
-  extractDroppedFiles,
-  hasDraggedFiles,
   useComposerAttachments,
   type ComposerImagePeeker,
   type ComposerImageReader,
   type ComposerImageUploader,
   type ComposerPreviewImage,
 } from "./composer-attachments"
+import { ComposerDropZone } from "./composer-drop-zone"
+import {
+  handleComposerKeyDown,
+  insertComposerTrigger,
+  useComposerEditorSync,
+  type ComposerHistoryState,
+} from "./composer-editor-sync"
 import { formContent, readComposerDraft, type ComposerForm } from "./composer-form"
 import {
-  getComposerKeyAction,
-  nextPermissionMode,
   type ComposerAgent,
   type ComposerModelCatalog,
   type ComposerModelChoice,
@@ -34,22 +35,12 @@ import {
   type PermissionMode,
   type ReasoningEffort,
 } from "./composer-options"
-import {
-  COMPOSER_PREFILL_EVENT,
-  COMPOSER_TAKE_EVENT,
-  loadDraft,
-  prefillKeyOf,
-  rememberSent,
-  saveDraft,
-  sentAt,
-  takeComposerFocus,
-} from "./composer-memory"
+import { rememberSent, saveDraft } from "./composer-memory"
 import {
   composerExtensions,
   editorText,
   firstPerLabel,
   pastePlainText,
-  setPlainText,
   type ComposerCommand,
 } from "./composer-editor"
 import { useAgentCommandSource, type AgentCommandLoader } from "./agent-commands"
@@ -58,9 +49,8 @@ import { ComposerModelControls } from "./composer-model-controls"
 import { useRunPreferences } from "./model-preferences"
 import { SuggestionPanel } from "./suggestion-panel"
 import { SuggestionStore } from "./suggestion-store"
-import { COMPOSER_MENTION_EVENT, mentionOf } from "./composer-mention"
 import { ComposerContextChips, useComposerContexts, withContexts } from "./composer-context"
-import { composerClass, useWrapped } from "./composer-layout"
+import { useWrapped } from "./composer-layout"
 import {
   editorReferences,
   type ComposerReference,
@@ -194,8 +184,6 @@ export function Composer({
 }: ComposerProps) {
   const { t, locale } = useLocale()
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const dragDepthRef = useRef(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [initialContent] = useState(() => (form ? formContent(form.draft) : null))
   const store = useMemo(() => new SuggestionStore(), [])
@@ -269,7 +257,8 @@ export function Composer({
   const attachmentsRef = useRef(imageAttachments)
   attachmentsRef.current = imageAttachments
   /** 正在翻历史时记录位置；内容被改动后退出翻找。 */
-  const historyRef = useRef<{ offset: number; text: string } | null>(null)
+  const historyRef = useRef<ComposerHistoryState | null>(null)
+  const focusedKeyRef = useRef(focusKey)
 
   function send(): void {
     const editor = editorRef.current
@@ -308,23 +297,6 @@ export function Composer({
   const sendRef = useRef(send)
   sendRef.current = send
 
-  /** ↑/↓ 在空输入框里翻找发送过的消息；返回是否处理了按键。 */
-  function browseHistory(editor: Editor, direction: 1 | -1): boolean {
-    const navigating = historyRef.current
-    if (!navigating && (direction < 0 || !editor.isEmpty)) return false
-    const offset = navigating ? navigating.offset + direction : 0
-    if (offset < 0) {
-      historyRef.current = null
-      editor.commands.clearContent(true)
-      return true
-    }
-    const text = sentAt(offset)
-    if (text === null) return Boolean(navigating)
-    historyRef.current = { offset, text }
-    setPlainText(editor, text)
-    return true
-  }
-
   const editor = useEditor({
     immediatelyRender: true,
     ...(initialContent ? { content: initialContent } : {}),
@@ -358,37 +330,19 @@ export function Composer({
         }
         return pastePlainText(editorRef.current, view, event)
       },
-      handleKeyDown: (_view, event) => {
-        const current = editorRef.current
-        if (!current || event.isComposing) return false
-        const suggesting = store.getSnapshot()
-        // 建议列表打开时，方向键、回车、Tab、Esc 交给建议列表。
-        if (suggesting.active && ["ArrowUp", "ArrowDown", "Tab", "Escape"].includes(event.key))
-          return false
-        if (suggesting.active && event.key === "Enter" && suggesting.items.length > 0) return false
-        if ((event.metaKey || event.ctrlKey) && event.key === "/") {
-          event.preventDefault()
-          setPickerOpen((value) => !value)
-          return true
-        }
-        if (event.key === "Tab" && event.shiftKey && latest.current.onPermissionMode) {
-          event.preventDefault()
-          latest.current.onPermissionMode(
-            nextPermissionMode(latest.current.permissionMode, latest.current.availableModes),
-          )
-          return true
-        }
-        const plain = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey
-        if (plain && event.key === "ArrowUp" && browseHistory(current, 1)) return true
-        if (plain && event.key === "ArrowDown" && browseHistory(current, -1)) return true
-        if (latest.current.form && event.key === "Enter" && !(event.metaKey || event.ctrlKey))
-          return false
-        const action = getComposerKeyAction(event.key, event.shiftKey)
-        if (action === "ignore" || action === "newline") return false
-        event.preventDefault()
-        sendRef.current()
-        return true
-      },
+      handleKeyDown: (_view, event) =>
+        handleComposerKeyDown({
+          editor: editorRef.current,
+          event,
+          store,
+          historyRef,
+          isForm: Boolean(latest.current.form),
+          permissionMode: latest.current.permissionMode,
+          availableModes: latest.current.availableModes,
+          onPermissionMode: latest.current.onPermissionMode,
+          onTogglePicker: () => setPickerOpen((value) => !value),
+          onSend: () => sendRef.current(),
+        }),
     },
     onUpdate: ({ editor: updated }) => {
       if (historyRef.current && editorText(updated) !== historyRef.current.text)
@@ -398,89 +352,18 @@ export function Composer({
   })
   editorRef.current = editor
 
-  useEffect(() => {
-    editor?.setEditable(!disabled, false)
-  }, [editor, disabled])
-
-  useEffect(() => {
-    if (autoFocus && !disabled) editor?.commands.focus()
-  }, [autoFocus, disabled, editor])
-
-  const focusedKey = useRef(focusKey)
-  useEffect(() => {
-    if (focusKey === focusedKey.current) return
-    focusedKey.current = focusKey
-    if (!disabled) editor?.commands.focus("end")
-  }, [focusKey, disabled, editor])
-
-  // 预填的正是这个输入框（新会话的建议、「创建插件」）：立刻换上预填的内容。
-  // 要把草稿搬走（新会话草稿建成了会话）：先存下正在写的内容，再清空自己。
-  useEffect(() => {
-    if (!editor) return undefined
-    const onMemory = (event: Event): void => {
-      const key = prefillKeyOf(event)
-      if (!key || key !== draftKeyRef.current || editor.isDestroyed) return
-      if (event.type === COMPOSER_TAKE_EVENT) {
-        saveDraft(key, editor.isEmpty ? null : editor.getJSON())
-        editor.commands.clearContent(false)
-        return
-      }
-      historyRef.current = null
-      editor.commands.setContent(loadDraft(key) ?? "", { emitUpdate: false })
-      takeComposerFocus(key)
-      editor.commands.focus("end")
-    }
-    const types = [COMPOSER_PREFILL_EVENT, COMPOSER_TAKE_EVENT]
-    for (const type of types) window.addEventListener(type, onMemory)
-    return () => types.forEach((type) => window.removeEventListener(type, onMemory))
-  }, [editor])
-
-  // 切换会话时保存旧草稿、恢复新草稿；卸载时也保存一次。
-  useEffect(() => {
-    if (!editor) return
-    const previous = draftKeyRef.current
-    if (previous === draftKey) {
-      const initial = draftKey ? loadDraft(draftKey) : null
-      if (initial && editor.isEmpty) editor.commands.setContent(initial, { emitUpdate: false })
-      if (draftKey && takeComposerFocus(draftKey)) editor.commands.focus("end")
-      return
-    }
-    if (previous) saveDraft(previous, editor.isEmpty ? null : editor.getJSON())
-    draftKeyRef.current = draftKey
-    historyRef.current = null
-    const next = draftKey ? loadDraft(draftKey) : null
-    editor.commands.setContent(next ?? "", { emitUpdate: false })
-    // 从外面预填的会话（「创建插件」）：光标停在预填文字的末尾，接着写。
-    if (draftKey && takeComposerFocus(draftKey)) editor.commands.focus("end")
-  }, [draftKey, editor])
-  useEffect(
-    () => () => {
-      const key = draftKeyRef.current
-      const current = editorRef.current
-      if (key && current && !current.isDestroyed)
-        saveDraft(key, current.isEmpty ? null : current.getJSON())
-    },
-    [],
-  )
-
-  // 文件树的「添加到对话」、侧栏的「在输入框里引用」：在光标处插入引用，与输入 @ 选中的效果相同。
-  useEffect(() => {
-    if (!editor || !acceptsExternalContext) return undefined
-    const onMention = (event: Event): void => {
-      const mention = mentionOf(event)
-      if (!mention || disabled) return
-      editor
-        .chain()
-        .focus()
-        .insertContent([
-          { type: "mention", attrs: mention },
-          { type: "text", text: " " },
-        ])
-        .run()
-    }
-    window.addEventListener(COMPOSER_MENTION_EVENT, onMention)
-    return () => window.removeEventListener(COMPOSER_MENTION_EVENT, onMention)
-  }, [editor, disabled, acceptsExternalContext])
+  useComposerEditorSync({
+    editor,
+    editorRef,
+    draftKey,
+    draftKeyRef,
+    historyRef,
+    disabled,
+    autoFocus,
+    focusKey,
+    focusedKeyRef,
+    acceptsExternalContext,
+  })
 
   const typed =
     useEditorState({
@@ -488,7 +371,8 @@ export function Composer({
       selector: ({ editor: current }) => Boolean(current && !current.isEmpty),
     }) ?? false
   const editorEmpty = !typed && attached.contexts.length === 0
-  const hasContent = typed || attached.contexts.length > 0 || imageAttachments.readyAttachments.length > 0
+  const hasContent =
+    typed || attached.contexts.length > 0 || imageAttachments.readyAttachments.length > 0
   const submitDisabled =
     !hasContent ||
     imageAttachments.uploading ||
@@ -504,98 +388,16 @@ export function Composer({
     imageAttachments.items.length > 0 ||
     Boolean(imageAttachments.error)
 
-  /** 在光标处插入触发字符，打开对应的建议列表。 */
-  function insertTrigger(char: "@" | "/"): void {
-    if (!editor) return
-    const before = editor.state.selection.$from.parent.textContent.slice(
-      0,
-      editor.state.selection.$from.parentOffset,
-    )
-    const prefix = char === "@" && before && !/\s$/.test(before) ? " " : ""
-    editor.chain().focus().insertContent(`${prefix}${char}`).run()
-  }
-
-  function handleCardPaste(event: ReactClipboardEvent<HTMLDivElement>): void {
-    if (event.defaultPrevented || !imageUploadEnabled || disabled) return
-    if (event.target instanceof Element && event.target.closest(".tiptap")) return
-    const files = extractClipboardImageFiles(event.clipboardData)
-    if (files.length === 0) return
-    event.preventDefault()
-    void imageAttachments.addFiles(files)
-  }
-
-  function handleDragEnter(event: DragEvent<HTMLDivElement>): void {
-    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
-    event.preventDefault()
-    dragDepthRef.current += 1
-    setDragging(true)
-  }
-
-  function handleDragOver(event: DragEvent<HTMLDivElement>): void {
-    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
-    event.preventDefault()
-    try {
-      event.dataTransfer.dropEffect = "copy"
-    } catch {
-      // jsdom 等环境里 dataTransfer 可能是只读 mock。
-    }
-    setDragging(true)
-  }
-
-  function handleDragLeave(event: DragEvent<HTMLDivElement>): void {
-    if (!imageUploadEnabled || !dragging) return
-    if (
-      event.relatedTarget instanceof Node &&
-      event.currentTarget.contains(event.relatedTarget)
-    ) {
-      return
-    }
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
-    if (dragDepthRef.current === 0) setDragging(false)
-  }
-
-  function handleDrop(event: DragEvent<HTMLDivElement>): void {
-    dragDepthRef.current = 0
-    setDragging(false)
-    if (!imageUploadEnabled || disabled || !hasDraggedFiles(event.dataTransfer)) return
-    event.preventDefault()
-    event.stopPropagation()
-    const files = extractDroppedFiles(event.dataTransfer)
-    if (files.length > 0) void imageAttachments.addFiles(files)
-  }
-
   const card = (
-    <div
-      className={composerClass({ tall, expanded, meter: Boolean(contextUsage), dragging })}
-      onPaste={handleCardPaste}
-      onDragEnter={handleDragEnter}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+    <ComposerDropZone
+      tall={tall}
+      expanded={expanded}
+      meter={Boolean(contextUsage)}
+      imageUploadEnabled={imageUploadEnabled}
+      disabled={disabled}
+      fileInputRef={fileInputRef}
+      onAddFiles={imageAttachments.addFiles}
     >
-      {dragging ? (
-        <div className="composer-drop-overlay" aria-hidden="true">
-          <ImageIcon className="ic" />
-          <span>{t("composer.image.dropHint")}</span>
-        </div>
-      ) : null}
-      {imageUploadEnabled ? (
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={COMPOSER_IMAGE_ACCEPT}
-          tabIndex={-1}
-          aria-hidden="true"
-          className="sr-only"
-          data-testid="composer-image-input"
-          onChange={(event) => {
-            const files = event.target.files
-            if (files && files.length > 0) void imageAttachments.addFiles(files)
-            event.target.value = ""
-          }}
-        />
-      ) : null}
       <SuggestionPanel store={store} />
       <ComposerAttachmentStrip
         items={imageAttachments.items}
@@ -614,7 +416,7 @@ export function Composer({
         empty={editorEmpty}
         disabled={disabled}
         side={menuSide}
-        onTrigger={insertTrigger}
+        onTrigger={(char) => insertComposerTrigger(editor, char)}
         onPickImages={imageUploadEnabled ? () => fileInputRef.current?.click() : undefined}
         imageCount={imageAttachments.items.length}
         maxImages={MAX_MESSAGE_ATTACHMENTS}
@@ -648,7 +450,7 @@ export function Composer({
         onSubmit={() => sendRef.current()}
         onStop={onStop}
       />
-    </div>
+    </ComposerDropZone>
   )
 
   return (

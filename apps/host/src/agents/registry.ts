@@ -18,6 +18,7 @@ import { launchRun, type LaunchDeps } from "./run-launch"
 import { recoverAfterRestart } from "./restart"
 import { prepareRunEntry, writeRunAdmission } from "./run-admission"
 import { createRunFinisher } from "./run-finish"
+import { createRunCancellation } from "./run-cancel"
 import { createRunRequestResponder } from "./run-requests"
 import type { RunEventHooks } from "./run-events"
 import { disposeSession, switchAgent } from "./switching"
@@ -177,81 +178,19 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     }
   }
 
-  /** 取消排队中的 run；此时尚未创建 Agent 会话，只需写终态并释放线程。 */
-  function cancelQueuedRun(runId: string, recordReceipt?: () => void): boolean {
-    const entry = queue.values().find((item) => item.runId === runId)
-    if (!entry) return false
-    const publish = persistUnstartedStop(entry, recordReceipt)
-    queue.remove((item) => item.runId === runId)
-    activeThreads.delete(entry.threadId)
-    publish()
-    entry.resolveDone()
-    return true
-  }
-
-  function persistUnstartedStop(entry: QueuedRun, recordReceipt?: () => void): () => void {
-    return ctx.sessions.stageEvents(() => {
-      recordReceipt?.()
-      if (runs.get(entry.runId)?.status === "interrupted") return
-      runs.setStatus(entry.runId, "interrupted")
-      append(entry.threadId, entry.runId, "run.interrupted", {})
+  const { interruptRun, interruptAll, stopInstanceRuns, cancelDeviceQueuedRuns, unregisterDriver } =
+    createRunCancellation({
+      ctx,
+      drivers,
+      agents,
+      runs,
+      queue,
+      starting,
+      activeRuns,
+      activeThreads,
+      append,
+      finishRun,
     })
-  }
-
-  /** 中断单个活跃或排队中的 run；未知 run 返回 false。 */
-  function interruptRun(runId: string, recordReceipt?: () => void): boolean {
-    if (cancelQueuedRun(runId, recordReceipt)) return true
-    const launching = starting.get(runId)
-    if (launching && !activeRuns.has(runId)) {
-      const publish = persistUnstartedStop(launching, recordReceipt)
-      launching.controller.abort()
-      publish()
-      return true
-    }
-    const run = activeRuns.get(runId)
-    if (!run) return false
-    finishRun(run, "interrupted", "run.interrupted", {}, undefined, recordReceipt)
-    return true
-  }
-
-  function interruptAll(): void {
-    for (const entry of [...queue.values()]) cancelQueuedRun(entry.runId)
-    for (const runId of starting.keys()) interruptRun(runId)
-    for (const runId of [...activeRuns.keys()]) interruptRun(runId)
-  }
-
-  async function stopInstanceRuns(instanceId: string): Promise<void> {
-    for (const entry of queue.values()) {
-      if (entry.instanceId === instanceId) cancelQueuedRun(entry.runId)
-    }
-    const pending = [...starting.values()].filter((entry) => entry.instanceId === instanceId)
-    for (const entry of pending) interruptRun(entry.runId)
-    for (const run of [...activeRuns.values()]) {
-      if (run.instanceId === instanceId) interruptRun(run.runId)
-    }
-    await Promise.all(pending.map((entry) => entry.done))
-  }
-
-  /** 注销 driver 时取消排队任务，中断活跃任务并释放会话进程。 */
-  function unregisterDriver(driverId: string): void {
-    const driver = drivers.get(driverId)
-    if (!driver) return
-    for (const entry of queue.values()) {
-      if (entry.driver === driver) cancelQueuedRun(entry.runId)
-    }
-    for (const entry of starting.values()) {
-      if (entry.driver === driver) interruptRun(entry.runId)
-    }
-    for (const run of [...activeRuns.values()]) {
-      if (run.driver !== driver) continue
-      interruptRun(run.runId)
-      void driver.dispose(run.session).catch(() => undefined)
-    }
-    drivers.delete(driverId)
-    // 这个 agent 的所有实例的检测与模型目录都重新读取。
-    for (const instance of agents.instances(driverId)) agents.invalidate(instance.instanceId)
-    agents.invalidate(driverId)
-  }
 
   const cliUpdates = createCliUpdates(drivers, agents, (id) =>
     ctx.threads
@@ -436,18 +375,7 @@ export function apply(ctx: Context, config: AgentRunConfig = {}): void {
     cancelRun(runId, recordReceipt) {
       return interruptRun(runId, recordReceipt)
     },
-    cancelDeviceQueuedRuns(deviceKey) {
-      for (const entry of [...queue.values(), ...starting.values()]) {
-        if (activeRuns.has(entry.runId)) continue
-        if (entry.sourceDevice !== deviceKey && entry.isAuthorized?.() !== false) continue
-        entry.controller.abort()
-        try {
-          interruptRun(entry.runId)
-        } catch (error) {
-          console.error("[host] could not record revoked run interruption", error)
-        }
-      }
-    },
+    cancelDeviceQueuedRuns,
     listRuns() {
       return [
         ...[...activeRuns.values()].map((run) => ({

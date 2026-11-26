@@ -8,14 +8,17 @@ import type { TerminalPlacement } from "@pigcode/contracts"
 import type { AgentLoginCommand, AgentLoginPty } from "@pigcode/plugin-sdk"
 import { launchTarget, terminateProcessGroup } from "@pigcode/plugin-sdk/node"
 import { threadCwd } from "./worktrees"
+import {
+  DEFAULT_SCROLLBACK_BYTES,
+  TerminalScrollback,
+  normalizeScrollbackBytes,
+} from "./terminal-scrollback"
 
 export type { TerminalPlacement }
+export { DEFAULT_SCROLLBACK_BYTES }
 
 /** 终端创建来源；桌面窗口创建的为 desktop，手机端创建的为 mobile。 */
 export type TerminalOrigin = "desktop" | "mobile"
-
-/** 每个终端默认保留的最大输出回滚字节数（UTF-8，256 KiB）。 */
-export const DEFAULT_SCROLLBACK_BYTES = 256 * 1024
 
 /** PTY 的最小接口；屏蔽 node-pty 的 IDisposable 等实现细节。 */
 export type PtyLike = AgentLoginPty
@@ -139,21 +142,11 @@ export interface TerminalPlugin {
   inject: string[]
 }
 
-/** 回滚缓冲中的单个输出分片。 */
-interface ScrollbackChunk {
-  start: number
-  data: string
-  bytes: number
-}
-
 /** 内部终端记录：会话、PTY、有界回滚缓冲与当前订阅者。 */
 interface TerminalEntry {
   session: TerminalSession
   pty: PtyLike
-  chunks: ScrollbackChunk[]
-  bufferedBytes: number
-  startCursor: number
-  endCursor: number
+  scrollback: TerminalScrollback
   subscribers: Set<(data: string, cursor: number) => void>
   exitSubscribers: Set<(exitCode: number) => void>
 }
@@ -161,12 +154,7 @@ interface TerminalEntry {
 /** 注册 terminal 服务；Host 卸载时终止所有 PTY，终端不跨重启保留。 */
 export const apply: TerminalPlugin = (ctx, config = {}) => {
   const factory = config.ptyFactory ?? realPtyFactory()
-  const maxScrollbackBytes =
-    config.scrollbackBytes === undefined
-      ? DEFAULT_SCROLLBACK_BYTES
-      : Number.isFinite(config.scrollbackBytes)
-        ? Math.max(0, Math.floor(config.scrollbackBytes))
-        : DEFAULT_SCROLLBACK_BYTES
+  const maxScrollbackBytes = normalizeScrollbackBytes(config.scrollbackBytes)
   const terminals = new Map<string, TerminalEntry>()
   const loginPtys = new Set<PtyLike>()
   /** 正在结束的 PTY；Host 退出前要等它们。 */
@@ -187,111 +175,7 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
 
   /** 返回会话浅拷贝，防止调用方篡改内部状态。 */
   function snapshot(found: TerminalEntry): TerminalSession {
-    return { ...found.session, cursor: found.endCursor }
-  }
-
-  /** 写入一条 PTY 输出并按 maxScrollbackBytes 维护环形回滚缓冲。 */
-  function appendChunk(current: TerminalEntry, data: string): void {
-    if (data.length === 0) return
-    const start = current.endCursor
-    current.endCursor += data.length
-    current.session.cursor = current.endCursor
-
-    if (maxScrollbackBytes <= 0) {
-      current.chunks.length = 0
-      current.bufferedBytes = 0
-      current.startCursor = current.endCursor
-      return
-    }
-
-    const bytes = Buffer.byteLength(data, "utf8")
-    if (bytes > maxScrollbackBytes) {
-      current.chunks.length = 0
-      const { text, droppedUnits } = sliceTailByUtf8Bytes(data, maxScrollbackBytes)
-      current.startCursor = start + droppedUnits
-      if (text.length > 0) {
-        const keptBytes = Buffer.byteLength(text, "utf8")
-        current.chunks.push({ start: current.startCursor, data: text, bytes: keptBytes })
-        current.bufferedBytes = keptBytes
-      } else {
-        current.bufferedBytes = 0
-      }
-      return
-    }
-
-    current.chunks.push({ start, data, bytes })
-    current.bufferedBytes += bytes
-    while (current.bufferedBytes > maxScrollbackBytes && current.chunks.length > 0) {
-      const removed = current.chunks.shift()!
-      current.bufferedBytes -= removed.bytes
-      // 若前一片末尾恰好以高代理结束、下一片以低代理开始，跳过孤立低代理码元避免损坏。
-      const next = current.chunks[0]
-      if (
-        next &&
-        next.data.length > 0 &&
-        isHighSurrogate(removed.data.charCodeAt(removed.data.length - 1)) &&
-        isLowSurrogate(next.data.charCodeAt(0))
-      ) {
-        const trimmed = next.data.slice(1)
-        const nextBytes = Buffer.byteLength(trimmed, "utf8")
-        current.bufferedBytes -= next.bytes - nextBytes
-        if (trimmed.length > 0) {
-          next.start += 1
-          next.data = trimmed
-          next.bytes = nextBytes
-        } else {
-          current.chunks.shift()
-        }
-      }
-    }
-    current.startCursor = current.chunks[0]?.start ?? current.endCursor
-  }
-
-  /** 从回滚缓冲切出 [Math.max(afterCursor, startCursor), endCursor) 的文本，不切裂代理对。 */
-  function readReplay(
-    current: TerminalEntry,
-    afterCursor: number,
-  ): { replay: string; truncated: boolean } {
-    if (!Number.isInteger(afterCursor) || afterCursor < 0) {
-      throw new Error(`invalid terminal cursor: ${afterCursor}`)
-    }
-    const truncated = afterCursor < current.startCursor
-    if (afterCursor >= current.endCursor || current.chunks.length === 0) {
-      return { replay: "", truncated }
-    }
-    const from = Math.max(afterCursor, current.startCursor)
-    const parts: string[] = []
-    for (let i = 0; i < current.chunks.length; i += 1) {
-      const chunk = current.chunks[i]!
-      const chunkEnd = chunk.start + chunk.data.length
-      if (chunkEnd <= from) continue
-      if (chunk.start < from) {
-        let offset = from - chunk.start
-        if (
-          offset < chunk.data.length &&
-          isLowSurrogate(chunk.data.charCodeAt(offset)) &&
-          isHighSurrogate(chunk.data.charCodeAt(offset - 1))
-        ) {
-          offset += 1
-        }
-        parts.push(chunk.data.slice(offset))
-      } else {
-        let slice = chunk.data
-        // 若 from 刚好等于当前分片起点且跨分片落在代理对中间，跳过前导低代理。
-        if (parts.length === 0 && from === chunk.start && i > 0 && slice.length > 0) {
-          const prev = current.chunks[i - 1]!
-          if (
-            prev.data.length > 0 &&
-            isHighSurrogate(prev.data.charCodeAt(prev.data.length - 1)) &&
-            isLowSurrogate(slice.charCodeAt(0))
-          ) {
-            slice = slice.slice(1)
-          }
-        }
-        parts.push(slice)
-      }
-    }
-    return { replay: parts.join(""), truncated }
+    return { ...found.session, cursor: found.scrollback.cursor }
   }
 
   /** 从索引移除并清空订阅者；是否 kill 由调用方决定。 */
@@ -349,18 +233,15 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
       const current: TerminalEntry = {
         session,
         pty,
-        chunks: [],
-        bufferedBytes: 0,
-        startCursor: 0,
-        endCursor: 0,
+        scrollback: new TerminalScrollback(maxScrollbackBytes),
         subscribers: new Set(),
         exitSubscribers: new Set(),
       }
       terminals.set(id, current)
       // 输出先写入有界回滚缓冲并推进单调游标，再广播给当前订阅者。
       pty.onData((data) => {
-        appendChunk(current, data)
-        const cursor = current.endCursor
+        const cursor = current.scrollback.append(data)
+        current.session.cursor = cursor
         for (const listener of [...current.subscribers]) listener(data, cursor)
       })
       pty.onExit(({ exitCode }) => {
@@ -376,7 +257,10 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
         if (owner) {
           if ("threadId" in owner) {
             if (found.session.threadId !== owner.threadId) continue
-          } else if (found.session.threadId !== null || found.session.projectId !== owner.projectId) {
+          } else if (
+            found.session.threadId !== null ||
+            found.session.projectId !== owner.projectId
+          ) {
             continue
           }
         }
@@ -399,8 +283,8 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
     },
     attach(id, listener, onExit, afterCursor = 0) {
       const found = entry(id)
-      const { replay, truncated } = readReplay(found, afterCursor)
-      const cursor = found.endCursor
+      const { replay, truncated } = found.scrollback.readReplay(afterCursor)
+      const cursor = found.scrollback.cursor
       found.subscribers.add(listener)
       if (onExit) found.exitSubscribers.add(onExit)
       return {
@@ -497,43 +381,6 @@ function validateSize(cols: number, rows: number): void {
   if (!Number.isInteger(cols) || cols <= 0 || !Number.isInteger(rows) || rows <= 0) {
     throw new Error(`invalid terminal size: ${cols}x${rows}`)
   }
-}
-
-function isHighSurrogate(code: number): boolean {
-  return code >= 0xd800 && code <= 0xdbff
-}
-
-function isLowSurrogate(code: number): boolean {
-  return code >= 0xdc00 && code <= 0xdfff
-}
-
-/** 截断单片超长文本，保留末尾最多 maxBytes 个 UTF-8 字节且不切裂 UTF-16 代理对。 */
-function sliceTailByUtf8Bytes(
-  data: string,
-  maxBytes: number,
-): { text: string; droppedUnits: number } {
-  if (maxBytes <= 0) return { text: "", droppedUnits: data.length }
-  let usedBytes = 0
-  let index = data.length
-  while (index > 0) {
-    const code = data.charCodeAt(index - 1)
-    let stepUnits = 1
-    let stepBytes: number
-    if (isLowSurrogate(code) && index >= 2 && isHighSurrogate(data.charCodeAt(index - 2))) {
-      stepUnits = 2
-      stepBytes = 4
-    } else if (code <= 0x7f) {
-      stepBytes = 1
-    } else if (code <= 0x7ff) {
-      stepBytes = 2
-    } else {
-      stepBytes = 3
-    }
-    if (usedBytes + stepBytes > maxBytes) break
-    usedBytes += stepBytes
-    index -= stepUnits
-  }
-  return { text: data.slice(index), droppedUnits: index }
 }
 
 /** shell 路径的显示名：/bin/zsh → zsh，C:\\Windows\\System32\\cmd.exe → cmd。 */

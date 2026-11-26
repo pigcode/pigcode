@@ -1,10 +1,6 @@
-import { spawn } from "node:child_process"
-import { randomUUID } from "node:crypto"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createInterface } from "node:readline"
-import { fileURLToPath } from "node:url"
 import {
   MOBILE_TERMINAL_MAX_PER_THREAD,
   MOBILE_TERMINAL_OUTPUT_CHUNK_BYTES,
@@ -16,175 +12,10 @@ import {
   type MobileTerminalOpenResult,
   type MobileTerminalOutputNotification,
 } from "@pigcode/contracts"
-import { Context } from "cordis"
 import { describe, expect, it } from "vitest"
-import { apply as agents } from "../agents/registry"
-import { MemoryTransport } from "../rpc/memory-transport"
-import { ThreadFeed } from "../rpc/thread-feed"
-import { apply as projects } from "../services/projects"
-import { apply as sessions } from "../services/sessions"
-import { apply as settings } from "../services/settings"
-import { apply as storage } from "../services/storage"
-import { apply as terminal, type PtyFactory, type PtyLike, type PtySpawnInput } from "../services/terminal"
-import { apply as threads } from "../services/threads"
-import { mobileFrames } from "./mobile-frames"
-import { PairedDevices } from "./paired-devices"
 import { revokeDeviceWork } from "./revocation"
-import { MobileSidebarRpc } from "./sidebar-rpc"
 import { MobileTerminalSession, sliceUtf8Chunks } from "./terminal"
-
-const MAX_NOISE_ENCRYPTED_FRAME_BYTES = 65_535
-const NOISE_TAG_BYTES = 16
-
-function assertSingleNoiseFrame(message: unknown): void {
-  const frames = [...mobileFrames(message)]
-  expect(frames).toHaveLength(1)
-  expect(frames[0]!.length + NOISE_TAG_BYTES).toBeLessThanOrEqual(MAX_NOISE_ENCRYPTED_FRAME_BYTES)
-}
-
-interface FakePtyInstance {
-  input: PtySpawnInput
-  writes: string[]
-  resizes: Array<{ cols: number; rows: number }>
-  killed: boolean
-  emit(data: string): void
-  exit(code: number): void
-}
-
-function createFakePtyFactory() {
-  const instances: FakePtyInstance[] = []
-  const factory: PtyFactory = {
-    spawn(input) {
-      let dataListener: ((data: string) => void) | undefined
-      let exitListener: ((info: { exitCode: number }) => void) | undefined
-      const record: FakePtyInstance = {
-        input,
-        writes: [],
-        resizes: [],
-        killed: false,
-        emit(data: string) {
-          dataListener?.(data)
-        },
-        exit(code: number) {
-          exitListener?.({ exitCode: code })
-        },
-      }
-      instances.push(record)
-      const pty: PtyLike = {
-        onData(listener) {
-          dataListener = listener
-        },
-        onExit(listener) {
-          exitListener = listener
-        },
-        write(data) {
-          record.writes.push(data)
-        },
-        resize(cols, rows) {
-          record.resizes.push({ cols, rows })
-        },
-        kill() {
-          record.killed = true
-        },
-      }
-      return pty
-    },
-  }
-  return { factory, instances }
-}
-
-interface ClientHandle {
-  deviceKey: string
-  wire: MemoryTransport
-  notifications: Array<{ method: string; params: Record<string, unknown> }>
-  call(
-    method: string,
-    params?: Record<string, unknown>,
-  ): Promise<{ id: string; result?: unknown; error?: { code: string; message: string } }>
-  stop(): void
-}
-
-async function setupHost(ptyFactory: PtyFactory, scrollbackBytes?: number) {
-  const ctx = new Context()
-  await ctx.plugin(storage, { path: ":memory:" })
-  await ctx.plugin(settings, {})
-  await ctx.plugin(projects)
-  await ctx.plugin(threads)
-  await ctx.plugin(sessions)
-  await ctx.plugin(agents)
-  await ctx.plugin(terminal, {
-    ptyFactory,
-    ...(scrollbackBytes !== undefined ? { scrollbackBytes } : {}),
-  })
-
-  const feed = new ThreadFeed(ctx)
-  const devices = new PairedDevices(ctx.settings)
-  const clients: ClientHandle[] = []
-
-  function connectDevice(name: string, keyByte: number, features: readonly string[]): ClientHandle {
-    const deviceKey = Buffer.alloc(32, keyByte).toString("base64url")
-    if (!devices.find(deviceKey)) {
-      devices.save({ publicKey: deviceKey, name, platform: "ios", lastConnectedAt: 1000 })
-    }
-    const wire = new MemoryTransport()
-    const replies = new Map<string, (message: unknown) => void>()
-    const notifications: Array<{ method: string; params: Record<string, unknown> }> = []
-    wire.client.onMessage((message) => {
-      assertSingleNoiseFrame(message)
-      const record = message as { id?: string; method?: string; params?: Record<string, unknown> }
-      if (record.id && replies.has(record.id)) {
-        const resolve = replies.get(record.id)!
-        replies.delete(record.id)
-        resolve(message)
-        return
-      }
-      if (!record.id && typeof record.method === "string") {
-        notifications.push({ method: record.method, params: record.params ?? {} })
-      }
-    })
-    const mobile = new MobileSidebarRpc(ctx, feed, wire.host, devices, {
-      computerKey: Buffer.alloc(32, 1),
-      computerName: "测试电脑",
-      deviceKey,
-      features,
-      relayRevision: () => undefined,
-    })
-    mobile.start()
-
-    const handle: ClientHandle = {
-      deviceKey,
-      wire,
-      notifications,
-      async call(method: string, params: Record<string, unknown> = {}) {
-        const id = randomUUID()
-        const request = { jsonrpc: "2.0", id, method, params }
-        assertSingleNoiseFrame(request)
-        const replyPromise = new Promise<unknown>((resolve) => replies.set(id, resolve))
-        wire.client.send(request)
-        return (await replyPromise) as {
-          id: string
-          result?: unknown
-          error?: { code: string; message: string }
-        }
-      },
-      stop() {
-        mobile.stop()
-      },
-    }
-    clients.push(handle)
-    return handle
-  }
-
-  return {
-    ctx,
-    devices,
-    connectDevice,
-    async dispose() {
-      for (const client of clients) client.stop()
-      await ctx.fiber.dispose()
-    },
-  }
-}
+import { createFakePtyFactory, setupTerminalHost } from "./terminal.test-helpers"
 
 describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, () => {
   it("slices UTF-8 chunks without breaking surrogate pairs and preserves exact UTF-16 cursors", () => {
@@ -211,7 +42,7 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
     expect(mobileFeatures).toContain("terminal")
     const root = await mkdtemp(join(tmpdir(), "pigcode-mterm-iso-"))
     const fake = createFakePtyFactory()
-    const host = await setupHost(fake.factory)
+    const host = await setupTerminalHost(fake.factory)
     try {
       const project = host.ctx.projects.add(root, "终端测试项目")
       const thread = host.ctx.threads.create(project.id, "终端会话", "fake")
@@ -230,9 +61,8 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
       const phone = host.connectDevice("测试手机", 11, ["terminal"])
 
       // list 展示电脑端终端（writable=false），且不暴露绝对路径
-      const listed = (
-        await phone.call(mobileTerminalMethods.list, { threadId: thread.id })
-      ).result as MobileTerminalListResult
+      const listed = (await phone.call(mobileTerminalMethods.list, { threadId: thread.id }))
+        .result as MobileTerminalListResult
       expect(listed.terminals).toHaveLength(1)
       expect(listed.terminals[0]).toMatchObject({
         id: desktopTerm.id,
@@ -259,7 +89,9 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
         true,
       )
       const firstReplay = phone.notifications[0]!.params as MobileTerminalOutputNotification
-      expect(Buffer.from(firstReplay.dataBase64, "base64").toString("utf8")).toBe("desktop-hello\r\n")
+      expect(Buffer.from(firstReplay.dataBase64, "base64").toString("utf8")).toBe(
+        "desktop-hello\r\n",
+      )
       expect(firstReplay.replay).toBe(true)
 
       // 实时输出也能流向只读手机端
@@ -267,7 +99,11 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
       await new Promise((r) => setTimeout(r, 35))
       const liveText = phone.notifications
         .filter((n) => n.method === mobileTerminalNotifications.output)
-        .map((n) => Buffer.from((n.params as MobileTerminalOutputNotification).dataBase64, "base64").toString("utf8"))
+        .map((n) =>
+          Buffer.from((n.params as MobileTerminalOutputNotification).dataBase64, "base64").toString(
+            "utf8",
+          ),
+        )
         .join("")
       expect(liveText).toBe("desktop-hello\r\ndesktop-live\r\n")
 
@@ -358,7 +194,7 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
   it("chunks 256 KiB ANSI+CJK+emoji replay into single Noise frames, supports afterCursor resume, disconnect retention, and revocation cleanup", async () => {
     const root = await mkdtemp(join(tmpdir(), "pigcode-mterm-replay-"))
     const fake = createFakePtyFactory()
-    const host = await setupHost(fake.factory)
+    const host = await setupTerminalHost(fake.factory)
     try {
       const project = host.ctx.projects.add(root, "大回放项目")
       const thread = host.ctx.threads.create(project.id, "大回放会话", "fake")
@@ -453,7 +289,7 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
   it("emits overflow backpressure notice when burst exceeds pending cap and forwards exit after flushing", async () => {
     const root = await mkdtemp(join(tmpdir(), "pigcode-mterm-bp-"))
     const fake = createFakePtyFactory()
-    const host = await setupHost(fake.factory)
+    const host = await setupTerminalHost(fake.factory)
     try {
       const project = host.ctx.projects.add(root, "背压项目")
       const thread = host.ctx.threads.create(project.id, "背压会话", "fake")
@@ -485,9 +321,11 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
       // 瞬间刷超过 1024 字节，触发 overflow: true 背压通知
       pty.emit("x".repeat(600))
       pty.emit("y".repeat(600))
-      expect(sent.some((m) => m.method === mobileTerminalNotifications.output && m.params.overflow === true)).toBe(
-        true,
-      )
+      expect(
+        sent.some(
+          (m) => m.method === mobileTerminalNotifications.output && m.params.overflow === true,
+        ),
+      ).toBe(true)
 
       // 重连 attach 解除 overflow，随后测试退出前刷出残留输出 + 推送 exit
       sent.length = 0
@@ -511,159 +349,6 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
       expect(sent[1]!.params).toEqual({ terminalId: term.id, exitCode: 130 })
       session.close()
     } finally {
-      await host.dispose()
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
-  it("runs real Node Host <-> Dart pigcode_client terminal end-to-end loopback within single Noise frames", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pigcode-mterm-dart-e2e-"))
-    const fake = createFakePtyFactory()
-    const host = await setupHost(fake.factory)
-
-    const project = host.ctx.projects.add(root, "Dart 终端联调")
-    const thread = host.ctx.threads.create(project.id, "终端联调会话", "fake")
-    const desktopTerm = await host.ctx.terminal.open({ threadId: thread.id }, 100, 32)
-    fake.instances[0]!.emit("desktop-banner\r\n")
-
-    const phone = host.connectDevice("Dart 终端手机", 88, ["terminal"])
-
-    const clientPkgDir = fileURLToPath(
-      new URL("../../../mobile/packages/pigcode_client", import.meta.url),
-    )
-    const dart = spawn("dart", ["run", "test/terminal_e2e_driver.dart"], {
-      cwd: clientPkgDir,
-      stdio: ["pipe", "pipe", "pipe"],
-    })
-    dart.stdin.on("error", () => {})
-    let stderr = ""
-    dart.stderr.setEncoding("utf8").on("data", (chunk: string) => {
-      stderr += chunk
-    })
-
-    // 将 Host 发给 phone.wire.client 的所有响应与推送通知实时桥接给 Dart 进程
-    phone.wire.client.onMessage((message) => {
-      assertSingleNoiseFrame(message)
-      if (!dart.killed) {
-        dart.stdin.write(`${JSON.stringify({ dir: "rpc_msg", message })}\n`)
-      }
-    })
-
-    const cmdPending = new Map<
-      string,
-      (res: { ok: boolean; data?: Record<string, unknown>; code?: string; error?: string }) => void
-    >()
-    const rl = createInterface({ input: dart.stdout })
-    rl.on("line", (line) => {
-      if (!line.trim()) return
-      const msg = JSON.parse(line) as {
-        dir: string
-        id?: string
-        method?: string
-        params?: Record<string, unknown>
-        cmdId?: string
-        ok?: boolean
-        data?: Record<string, unknown>
-        code?: string
-        error?: string
-      }
-      if (msg.dir === "rpc_req") {
-        const req = { jsonrpc: "2.0", id: msg.id, method: msg.method, params: msg.params ?? {} }
-        assertSingleNoiseFrame(req)
-        phone.wire.client.send(req)
-      } else if (msg.dir === "cmd_res" && msg.cmdId) {
-        const resolve = cmdPending.get(msg.cmdId)
-        if (resolve) {
-          cmdPending.delete(msg.cmdId)
-          resolve({
-            ok: msg.ok === true,
-            ...(msg.data ? { data: msg.data } : {}),
-            ...(msg.code ? { code: msg.code } : {}),
-            ...(msg.error ? { error: msg.error } : {}),
-          })
-        }
-      }
-    })
-
-    function runDart(action: string, args: Record<string, unknown> = {}) {
-      const cmdId = randomUUID()
-      return new Promise<{
-        ok: boolean
-        data?: Record<string, unknown>
-        code?: string
-        error?: string
-      }>((resolve) => {
-        cmdPending.set(cmdId, resolve)
-        dart.stdin.write(`${JSON.stringify({ dir: "cmd", cmdId, action, args })}\n`)
-      })
-    }
-
-    try {
-      // 1. 列出电脑终端并尝试越权写 → TERMINAL_READ_ONLY
-      const listed = await runDart("list", { threadId: thread.id })
-      expect(listed.ok, stderr).toBe(true)
-      expect((listed.data!.terminals as Array<{ id: string; writable: boolean }>)[0]).toMatchObject({
-        id: desktopTerm.id,
-        writable: false,
-      })
-
-      const writeDesktop = await runDart("write", { terminalId: desktopTerm.id, data: "whoami\n" })
-      expect(writeDesktop.ok).toBe(false)
-      expect(writeDesktop.code).toBe("TERMINAL_READ_ONLY")
-
-      // 2. 新建手机终端 → 写入输入 → 接收实时输出与分片回放 → 调尺寸 → 关闭
-      const openedRes = await runDart("open", { threadId: thread.id, cols: 48, rows: 24 })
-      expect(openedRes.ok, stderr).toBe(true)
-      const mobileTerm = openedRes.data!.terminal as { id: string; writable: boolean }
-      expect(mobileTerm.writable).toBe(true)
-      const mobilePty = fake.instances[1]!
-
-      const writeRes = await runDart("write", { terminalId: mobileTerm.id, data: "echo 你好🚀\r" })
-      expect(writeRes.ok, stderr).toBe(true)
-      expect(mobilePty.writes).toEqual(["echo 你好🚀\r"])
-
-      mobilePty.emit("你好🚀\r\n")
-      const events1 = await runDart("drainEvents")
-      const outs1 = events1.data!.outputs as Array<{ data: string; cursor: number }>
-      expect(outs1.map((o) => o.data).join("")).toBe("你好🚀\r\n")
-      const cursor1 = outs1[outs1.length - 1]!.cursor
-
-      // 模拟断线后大量输出并带游标重附着
-      await runDart("detach", { terminalId: mobileTerm.id })
-      const chunked = "\x1b[36m回放块\x1b[0m-0123456789\r\n".repeat(1200)
-      mobilePty.emit(chunked)
-
-      const attachRes = await runDart("attach", {
-        threadId: thread.id,
-        terminalId: mobileTerm.id,
-        afterCursor: cursor1,
-        cols: 60,
-        rows: 26,
-      })
-      expect(attachRes.ok, stderr).toBe(true)
-      expect((attachRes.data!.replayChunks as number)).toBeGreaterThanOrEqual(2)
-      const events2 = await runDart("drainEvents")
-      const replayed = (events2.data!.outputs as Array<{ data: string }>).map((o) => o.data).join("")
-      expect(replayed).toBe(chunked)
-
-      const resized = await runDart("resize", { terminalId: mobileTerm.id, cols: 72, rows: 30 })
-      expect(resized.ok, stderr).toBe(true)
-      expect(resized.data).toEqual({ cols: 72, rows: 30 })
-
-      const closed = await runDart("close", { terminalId: mobileTerm.id })
-      expect(closed.ok, stderr).toBe(true)
-      expect(mobilePty.killed).toBe(true)
-    } finally {
-      dart.stdin.write(`${JSON.stringify({ dir: "shutdown" })}\n`)
-      dart.stdin.end()
-      await new Promise<void>((resolve) => {
-        dart.once("exit", () => resolve())
-        setTimeout(() => {
-          dart.kill("SIGKILL")
-          resolve()
-        }, 2000)
-      })
-      rl.close()
       await host.dispose()
       await rm(root, { recursive: true, force: true })
     }

@@ -4,67 +4,37 @@ import type { AgentFeatures } from "@pigcode/contracts"
 import { randomUUID } from "node:crypto"
 import { sharedCodexHome } from "./shadow-home"
 import { prepareCodexCliUpdate } from "./cli-update"
+import { codexExecutionModes, createThreadParams } from "./permissions"
 import {
-  codexExecutionModes,
-  createThreadParams,
-  collaborationMode,
-  turnPermissionParams,
-} from "./permissions"
-import { answerCodexQuestions } from "./questions"
-import type {
-  CreateSessionInput,
-  AgentCommandInfo,
-  AgentDriver,
-  AgentModelInfo,
-  AgentRuntime,
-  AgentSessionHandle,
-  AgentInstanceContext,
-  AgentSettingsValues,
-  AgentStatus,
-  UserInput,
+  HOST_VERSION,
+  type CreateSessionInput,
+  type AgentCommandInfo,
+  type AgentDriver,
+  type AgentModelInfo,
+  type AgentRuntime,
+  type AgentSessionHandle,
+  type AgentInstanceContext,
+  type AgentSettingsValues,
+  type AgentStatus,
+  type UserInput,
 } from "@pigcode/plugin-sdk"
 import { ManagedCodexRuntime } from "./managed-runtime"
 import { CodexAccounts } from "./login"
 import { CodexRpcClient } from "./client"
-import { injectHandoff } from "./protocol"
 export { injectHandoff } from "./protocol"
-import { interruptTurn, waitForTurn, type CodexTurnState } from "./turn-wait"
+import { interruptTurn, waitForTurn } from "./turn-wait"
 import { codexStatus, detectCodex, type CodexDetection } from "./detect"
 import { prepareCodexLaunch, launchKey, type CodexLaunch, type PrepareCodexLaunch } from "./launch"
-import { FAST_SERVICE_TIER, parseCodexModels } from "./models"
+import { parseCodexModels } from "./models"
 import { parseCodexSkills } from "./skills"
-import {
-  commandApprovalChoices,
-  mcpToolApproval,
-  toApprovalResponse,
-  toElicitationResponse,
-} from "./approvals"
-import { HOST_VERSION } from "@pigcode/plugin-sdk"
-import { normalizeCodexNotification } from "./normalize"
-import {
-  emitNotice,
-  flushNotices,
-  mcpStartupNotice,
-  rememberNotice,
-  type NoticeState,
-} from "./notice"
+import { flushNotices, mcpStartupNotice, rememberNotice, type NoticeState } from "./notice"
 import { StdioCodexTransport, type CodexTransport } from "./transport"
-
-/** 单个 session 的 app-server 状态；权限与模型在 thread/start 或 thread/resume 时生效。 */
-interface CodexSessionState extends CodexTurnState {
-  /** 本轮是否已经报过终态，用来忽略重复的 turn/completed。 */
-  finished: boolean
-  permissionMode: string
-  model: string | null
-  effectiveModel: string | null
-  /** 启动这个 app-server 的命令指纹；设置改了就不再复用。 */
-  launchKey: string
-  scope?: string | undefined
-  /** 会话提示：MCP 桥起不来时攒下来，下一次 send 时补发。 */
-  notice: NoticeState
-  /** 上一轮用了快速模式；turn/start 的服务档会沿用到之后的轮次，关掉时要显式清回默认。 */
-  fast?: boolean
-}
+import {
+  bindTurnHandlers,
+  buildTurnInput,
+  buildTurnStartParams,
+  type CodexSessionState,
+} from "./turn"
 
 /** driver 的可选依赖；测试替换传输与检测。 */
 export interface CodexDriverOptions {
@@ -289,99 +259,17 @@ export class CodexDriver implements AgentDriver {
     state.finished = false
     // 启动期攒下的提示在这里补发：此刻 run 已经建立，事件有对应的 runId。
     flushNotices(state.notice, runtime)
-    // 之后才到的启动结果直接推送，同样落在本轮；同一问题只报一次。
-    const watchStartup = (params: unknown): void => {
-      const found = mcpStartupNotice(params)
-      if (found) emitNotice(state.notice, runtime, found)
-    }
-    const disposeStartup = client.onNotification("mcpServer/startupStatus/updated", watchStartup)
-
-    const disposers = [
-      client.onNotification("item/agentMessage/delta", (params) =>
-        emit(runtime, "item/agentMessage/delta", params),
-      ),
-      client.onNotification("item/completed", (params) => emit(runtime, "item/completed", params)),
-      client.onNotification("item/started", (params) => emit(runtime, "item/started", params)),
-      client.onNotification("item/commandExecution/outputDelta", (params) =>
-        emit(runtime, "item/commandExecution/outputDelta", params),
-      ),
-      client.onNotification("turn/plan/updated", (params) =>
-        emit(runtime, "turn/plan/updated", params),
-      ),
-      client.onNotification("thread/tokenUsage/updated", (params) =>
-        emit(runtime, "thread/tokenUsage/updated", params),
-      ),
-      client.onNotification("turn/completed", (params) => {
-        const events = normalizeCodexNotification("turn/completed", params)
-        const ends = events.some((event) => event.type.startsWith("run."))
-        // app-server 可能重复通知同一个 turn 的终态；run 的终态只报一次。
-        if (ends && state.finished) return
-        if (ends) state.finished = true
-        for (const event of events) runtime.emit(event)
-      }),
-    ]
-    client.onServerRequest("item/commandExecution/requestApproval", async (params) => {
-      const offered = commandApprovalChoices(params)
-      if (offered && !offered.decisions.length)
-        throw new Error("Codex did not offer a supported approval decision")
-      const decision = await runtime.requestApproval({
-        toolName: "Bash",
-        input: params,
-        ...(offered ? { decisions: offered.decisions } : {}),
-      })
-      return toApprovalResponse(decision, "acceptForSession", offered?.denial)
-    })
-    client.onServerRequest("item/tool/requestUserInput", (params) =>
-      answerCodexQuestions(params, runtime),
-    )
-    client.onServerRequest("item/fileChange/requestApproval", async (params) => {
-      const decision = await runtime.requestApproval({ toolName: "ApplyPatch", input: params })
-      return toApprovalResponse(decision, "acceptForSession")
-    })
-    client.onServerRequest("mcpServer/elicitation/request", async (params) => {
-      const request = mcpToolApproval(params)
-      // 审批卡片填不了表单，也打不开链接，这类请求只能拒绝。
-      if (!request) return { action: "decline" }
-      return toElicitationResponse(await runtime.requestApproval(request))
-    })
-
-    // 交接优先用 thread/inject_items 作为历史消息注入，用户这一轮的消息保持原文；
-    // 不支持时（旧版 app-server）退回拼在用户消息前（#82）。
-    const injected = input.handoff
-      ? await injectHandoff(client, state.nativeThreadId, input.handoff)
-      : false
-    const text =
-      input.handoff && !injected
-        ? input.text
-          ? `${input.handoff}\n\n${input.text}`
-          : input.handoff
-        : input.text
-    const attachments = input.attachments ?? []
-    const turnInput: Array<
-      { type: "text"; text: string } | { type: "localImage"; path: string }
-    > = [
-      ...(text.length > 0 || attachments.length === 0 ? [{ type: "text" as const, text }] : []),
-      ...attachments.map((att) => ({ type: "localImage" as const, path: att.path })),
-    ]
+    const disposeHandlers = bindTurnHandlers(client, state, runtime)
+    const turnInput = await buildTurnInput(client, state.nativeThreadId, input)
     const onAbort = (): void => {
       void interruptTurn(state)
     }
     runtime.signal.addEventListener("abort", onAbort, { once: true })
     try {
-      const started = (await client.request("turn/start", {
-        threadId: state.nativeThreadId,
-        input: turnInput,
-        ...collaborationMode(session.planMode === true, state.effectiveModel, input.effort),
-        ...turnPermissionParams(session.permissionMode, session.cwd),
-        // 思考深度只对本轮及之后的轮次生效；没有选择时沿用 Codex 的默认值。
-        ...(input.effort ? { effort: input.effort } : {}),
-        // 服务档和思考深度一样会沿用；选了快速发 fast，从快速切回标准时发 null 回到默认档。
-        ...(input.fast
-          ? { serviceTier: FAST_SERVICE_TIER }
-          : state.fast
-            ? { serviceTier: null }
-            : {}),
-      })) as { turn?: { id?: string } }
+      const started = (await client.request(
+        "turn/start",
+        buildTurnStartParams(session, state, state.nativeThreadId, input, turnInput),
+      )) as { turn?: { id?: string } }
       state.fast = input.fast === true
       state.turnId = started.turn?.id ?? null
       if (runtime.signal.aborted) {
@@ -392,8 +280,7 @@ export class CodexDriver implements AgentDriver {
       await waitForTurn(client, state.turnId, runtime.signal)
     } finally {
       runtime.signal.removeEventListener("abort", onAbort)
-      disposeStartup()
-      for (const dispose of disposers) dispose()
+      disposeHandlers()
       state.turnId = null
     }
   }
@@ -498,9 +385,4 @@ export class CodexDriver implements AgentDriver {
     const state = this.sessions.get(session.threadId)
     return state?.nativeThreadId === session.nativeSessionId ? state : undefined
   }
-}
-
-/** 把通知映射后逐条交给 run 的实时事件出口。 */
-function emit(runtime: AgentRuntime, method: string, params: unknown): void {
-  for (const event of normalizeCodexNotification(method, params)) runtime.emit(event)
 }

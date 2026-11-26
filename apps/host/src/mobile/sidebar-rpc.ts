@@ -4,13 +4,8 @@ import {
   commandSchemas,
   mobileProjectListParamsSchema,
   mobileProjectListResultSchema,
-  mobileCommandMethods,
-  mobileDraftMethods,
-  mobileReceiptParams,
   mobileRelaySavedSchema,
-  mobileReminderMethods,
   mobileReminderReportSchema,
-  mobileReminderSettingsSchema,
   mobileSidebarChangedSchema,
   mobileSidebarMethods as methods,
   mobileSidebarWrites,
@@ -18,8 +13,6 @@ import {
   mobileSidebarPageSize,
   mobileSidebarSubscribeParamsSchema,
   mobileSidebarSubscribeResultSchema,
-  mobileStatusParamsSchema,
-  mobileStatusResultSchema,
   mobileThreadListParamsSchema,
   mobileThreadListResultSchema,
   rpcFailureSchema,
@@ -27,47 +20,21 @@ import {
   rpcSuccessSchema,
   type RpcRequest,
   type Thread,
-  type MobileReminderSettings,
   type MobileSidebarWrite,
   type MobileThreadSummary,
-  type QueueReceipt,
-  type QueueSnapshot,
 } from "@pigcode/contracts"
 import type { ThreadFeed } from "../rpc/thread-feed"
 import { dispatchThreadCommand } from "../rpc/thread-commands"
 import { QueueOperationError } from "../agents/message-queue"
 import { AttachmentError } from "../services/attachments"
-import { dispatchQueuedMessage, queueRequestNames } from "../rpc/queued-message-commands"
-import { fingerprint, type PairedDevices } from "./paired-devices"
-import { MobileAttachments, mobileAttachmentRequests } from "./attachments"
-import { MobileCommandReceipts, requireMobileThread } from "./command-receipts"
-import { MobileComposerCommands, mobileComposerRequests } from "./composer-commands"
-import { MobileDraftCommands, mobileDraftRequests } from "./draft-commands"
-import { MobileMentionCommands, mobileMentionRequests } from "./mentions"
-import { MobileRequestCommands, mobileRequestCommands } from "./request-commands"
+import type { PairedDevices } from "./paired-devices"
+import { requireMobileThread } from "./command-receipts"
 import { mobileErrorMessages, mobileParams as params, MobileRequestError } from "./request-error"
-import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
-import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
-import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
-import { MobileAgentManage, mobileAgentRequests } from "./agent-manage"
-import { MobilePreview, mobilePreviewRequests } from "./preview"
-import { MobileProjectManage, mobileProjectRequests } from "./project-manage"
-import { MobileTerminalSession, mobileTerminalRequests } from "./terminal"
-import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
-import { MobileWorkbenchWrite, mobileWorkbenchWriteRequests } from "./workbench-write"
+import { MobileDomainRouter, UNHANDLED_MOBILE_REQUEST, type MobileSession } from "./sidebar-domains"
 
 const mobileRequestSchema = rpcRequestSchema.extend({ id: rpcRequestSchema.shape.id.max(128) })
 const pageByteBudget = 48 * 1024
 const sidebarWrites = new Set<string>(Object.values(mobileSidebarWrites))
-
-interface MobileSession {
-  computerKey: Buffer
-  computerName: string
-  deviceKey: string
-  features: readonly string[]
-  relayRevision(): string | undefined
-  configureReminders?(settings: MobileReminderSettings): Promise<boolean>
-}
 
 function page<T>(
   rows: T[],
@@ -110,36 +77,10 @@ function threadSummary(thread: Thread, includeReadTarget: boolean): MobileThread
   }
 }
 
-/** 旧客户端未协商 composer.attachments 时剥离待发队列中的 attachments 字段以保持严格解析兼容。 */
-function stripQueueAttachments(value: QueueSnapshot | QueueReceipt): QueueSnapshot | QueueReceipt {
-  if ("messages" in value) {
-    return {
-      ...value,
-      messages: value.messages.map(({ attachments: _attachments, ...rest }) => rest),
-    }
-  }
-  const { attachments: _attachments, ...rest } = value
-  return rest
-}
-
 /** Mobile allowlist. It never dispatches through the desktop RPC server. */
 export class MobileSidebarRpc {
-  private readonly commands: MobileRunCommands
-  private readonly requests: MobileRequestCommands
-  private readonly drafts: MobileDraftCommands
-  private readonly composer: MobileComposerCommands
-  private readonly mentions: MobileMentionCommands
-  private readonly attachments: MobileAttachments
-  private readonly workbench: MobileWorkbench
-  private readonly workbenchWrite: MobileWorkbenchWrite
-  private readonly preview: MobilePreview
-  private readonly terminal: MobileTerminalSession
-  private readonly projectManage: MobileProjectManage
-  private readonly agentManage: MobileAgentManage
-  private readonly receipts: MobileCommandReceipts
+  private readonly domains: MobileDomainRouter
   private active = false
-  private readonly timeline: MobileTimelineSession
-  private readonly changes: MobileRunChanges
   private stopMessages: (() => void) | undefined
   private stopSidebar: (() => void) | undefined
   private queued = false
@@ -153,71 +94,15 @@ export class MobileSidebarRpc {
     private readonly devices: PairedDevices,
     private readonly session: MobileSession,
   ) {
-    this.receipts = new MobileCommandReceipts(ctx.storage.receipts, session.deviceKey)
-    this.changes = new MobileRunChanges(ctx)
-    const canQueue = session.features.includes("queue.write")
-    const canComposer = session.features.includes("composer.controls")
-    const canAttachments = session.features.includes("composer.attachments")
-    this.commands = new MobileRunCommands(
+    this.domains = new MobileDomainRouter(
       ctx,
-      devices,
-      session.deviceKey,
-      this.receipts,
-      canQueue,
-      canComposer,
-      canAttachments,
-    )
-    this.drafts = new MobileDraftCommands(
-      ctx,
-      devices,
-      session.deviceKey,
-      this.receipts,
-      canComposer,
-      canAttachments,
-    )
-    this.requests = new MobileRequestCommands(
-      ctx,
-      this.receipts,
-      "device:" + fingerprint(Buffer.from(session.deviceKey, "base64url")),
-    )
-    this.timeline = new MobileTimelineSession(
-      ctx,
-      (message) => transport.send(message),
-      canQueue,
-      session.features.includes("timeline.resume"),
-      session.features.includes("changes.read"),
-      canComposer,
       feed,
-      canAttachments,
-    )
-    this.composer = new MobileComposerCommands(
-      ctx,
-      () => this.requirePairedDevice(),
-      (threadId) => {
-        this.feed.changed(threadId)
-        this.timeline.notifyComposer(threadId)
-      },
-      canAttachments,
-    )
-    this.mentions = new MobileMentionCommands(ctx, () => this.requirePairedDevice())
-    this.attachments = new MobileAttachments(ctx, session.deviceKey, () =>
-      this.requirePairedDevice(),
-    )
-    this.workbench = new MobileWorkbench(ctx, () => this.requirePairedDevice())
-    this.workbenchWrite = new MobileWorkbenchWrite(ctx, session.deviceKey, () =>
-      this.requirePairedDevice(),
-    )
-    this.preview = new MobilePreview(ctx, session.deviceKey, () => this.requirePairedDevice())
-    this.terminal = new MobileTerminalSession(
-      ctx,
-      session.deviceKey,
-      (message) => {
-        if (this.active) transport.send(message)
-      },
+      transport,
+      devices,
+      session,
+      () => this.active,
       () => this.requirePairedDevice(),
     )
-    this.projectManage = new MobileProjectManage(ctx, () => this.requirePairedDevice())
-    this.agentManage = new MobileAgentManage(ctx, () => this.requirePairedDevice())
   }
 
   start(): void {
@@ -227,11 +112,7 @@ export class MobileSidebarRpc {
 
   stop(): void {
     this.active = false
-    this.attachments.close()
-    this.workbenchWrite.close()
-    this.preview.close()
-    this.terminal.close()
-    this.timeline.close()
+    this.domains.close()
     this.stopMessages?.()
     this.stopSidebar?.()
     this.stopSidebar = undefined
@@ -306,153 +187,12 @@ export class MobileSidebarRpc {
   }
 
   private dispatch(request: RpcRequest, onReply: (callback: () => void) => void): unknown {
-    if (request.method === mobileReminderMethods.configure &&
-        this.session.features.includes("reminders.apns") && this.session.configureReminders) {
-      this.requirePairedDevice()
-      const settings = params(mobileReminderSettingsSchema, request.params)
-      return this.session.configureReminders(settings).then((saved) => ({ saved }))
-    }
-    if (request.method === methods.status && this.session.features.includes("connection.status")) {
-      params(mobileStatusParamsSchema, request.params)
-      return mobileStatusResultSchema.parse({
-        computerId: fingerprint(this.session.computerKey),
-        computerName: this.session.computerName,
-        deviceId: fingerprint(Buffer.from(this.session.deviceKey, "base64url")),
-      })
-    }
-    if (
-      this.session.features.includes("timeline.read") &&
-      mobileTimelineRequests.has(request.method)
-    )
-      return this.timeline.dispatch(request)
+    const routed = this.domains.dispatch(request, onReply)
+    if (routed !== UNHANDLED_MOBILE_REQUEST) return routed
 
-    if (this.session.features.includes("changes.read") && mobileRunChangesRequests.has(request.method)) {
-      this.requirePairedDevice()
-      return this.changes.dispatch(request)
-    }
-
-    if (
-      this.session.features.includes("workbench.read") &&
-      mobileWorkbenchRequests.has(request.method)
-    ) {
-      this.requirePairedDevice()
-      return this.workbench.dispatch(request)
-    }
-
-    if (
-      this.session.features.includes("workbench.write") &&
-      mobileWorkbenchWriteRequests.has(request.method)
-    ) {
-      this.requirePairedDevice()
-      return this.workbenchWrite.dispatch(request)
-    }
-
-    if (
-      this.session.features.includes("preview.tunnel") &&
-      mobilePreviewRequests.has(request.method)
-    ) {
-      this.requirePairedDevice()
-      return this.preview.dispatch(request)
-    }
-
-    if (
-      this.session.features.includes("terminal") &&
-      mobileTerminalRequests.has(request.method)
-    ) {
-      this.requirePairedDevice()
-      return this.terminal.dispatch(request, onReply)
-    }
-
-    if (
-      this.session.features.includes("projects.manage") &&
-      mobileProjectRequests.has(request.method)
-    ) {
-      return this.projectManage.dispatch(request)
-    }
-
-    if (
-      this.session.features.includes("agents.manage") &&
-      mobileAgentRequests.has(request.method)
-    ) {
-      return this.agentManage.dispatch(request)
-    }
-
-    const canRun = this.session.features.includes("run.write")
-    const canRespond = this.session.features.includes("request.write")
-    const canDraft = this.session.features.includes("draft.write")
-    const canQueue = this.session.features.includes("queue.write")
-    const canComposer = this.session.features.includes("composer.controls")
-    const canMentions = this.session.features.includes("composer.mentions")
-    const canAttachments = this.session.features.includes("composer.attachments")
-    if (canAttachments && mobileAttachmentRequests.has(request.method)) {
-      this.requirePairedDevice()
-      return this.attachments.dispatch(request)
-    }
-    if (canMentions && mobileMentionRequests.has(request.method)) {
-      this.requirePairedDevice()
-      return this.mentions.dispatch(request)
-    }
-    if (canComposer && mobileComposerRequests.has(request.method)) {
-      this.requirePairedDevice()
-      return this.composer.dispatch(request)
-    }
-    if (canRun && mobileRunCommandRequests.has(request.method)) {
-      this.requirePairedDevice()
-      return this.commands.dispatch(request)
-    }
-    if (canRespond && mobileRequestCommands.has(request.method)) {
-      this.requirePairedDevice()
-      return this.requests.dispatch(request)
-    }
-    if (
-      (canDraft && mobileDraftRequests.has(request.method)) ||
-      (canComposer &&
-        (request.method === mobileDraftMethods.options ||
-          request.method === mobileDraftMethods.models))
-    ) {
-      this.requirePairedDevice()
-      return this.drafts.dispatch(request)
-    }
-    if (canQueue && queueRequestNames.has(request.method)) {
-      this.requirePairedDevice()
-      const result = dispatchQueuedMessage(
-        this.ctx,
-        this.receipts,
-        request.method,
-        request.params,
-        (threadId) => requireMobileThread(this.ctx, threadId),
-        this.devices.queueSource(this.session.deviceKey),
-      )
-      return canAttachments ? result : stripQueueAttachments(result)
-    }
-    if (
-      (canRun || canRespond || canDraft || canQueue) &&
-      request.method === mobileCommandMethods.receipt
-    ) {
-      this.requirePairedDevice()
-      const { commandId } = params(mobileReceiptParams, request.params)
-      const receipt = this.receipts.lookup(commandId)
-      if (!receipt) return {}
-      const allowed =
-        receipt.method === mobileDraftMethods.create
-          ? canDraft
-          : queueRequestNames.has(receipt.method)
-            ? canQueue
-            : mobileRunCommandRequests.has(receipt.method)
-              ? canRun
-              : canRespond
-      if (!allowed) return {}
-      requireMobileThread(this.ctx, receipt.threadId)
-      if (!canQueue && "queuedMessageId" in receipt) return { receipt: legacyRunReceipt(receipt) }
-      if (!canAttachments && "attachments" in receipt) {
-        const { attachments: _attachments, ...rest } = receipt
-        return { receipt: rest }
-      }
-      return { receipt }
-    }
-
-    if (!this.session.features.includes("sidebar.read"))
+    if (!this.session.features.includes("sidebar.read")) {
       throw new MobileRequestError("METHOD_NOT_AVAILABLE")
+    }
     if (this.session.features.includes("sidebar.write") && sidebarWrites.has(request.method)) {
       return this.writeSidebar(request.method as MobileSidebarWrite, request.params)
     }
@@ -500,8 +240,8 @@ export class MobileSidebarRpc {
     if (method === methods.markAllRead) {
       params(commandSchemas[method].strict(), input)
       const projects = new Set(this.ctx.projects.list().map((project) => project.id))
-      const changed = this.ctx.threads.markAllRead((thread) =>
-        !thread.parentThreadId && projects.has(thread.projectId),
+      const changed = this.ctx.threads.markAllRead(
+        (thread) => !thread.parentThreadId && projects.has(thread.projectId),
       )
       for (const thread of changed) this.feed.changed(thread.id)
     } else {
