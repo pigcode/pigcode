@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../app_theme.dart';
+import '../computers_hub.dart' show PigcodeColors;
 import '../mobile_glass.dart';
 import '../mobile_sheet.dart';
 import '../theme_colors.dart';
@@ -318,50 +319,121 @@ class _ProjectManageScreenState extends State<ProjectManageScreen> {
                     )
                   : RefreshIndicator.adaptive(
                       onRefresh: _load,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _projects.length,
-                        separatorBuilder: (_, _) => Divider(
-                          height: 1,
-                          indent: 56,
-                          color: colors.divider,
-                        ),
-                        itemBuilder: (context, index) {
-                          final project = _projects[index];
-                          return ListTile(
-                            key: ProjectManageScreen.projectTileKey(project.id),
-                            leading: IconTheme(
-                              data: IconThemeData(color: colors.secondaryText),
-                              child: const WorkspaceIcon(
-                                WorkspaceGlyph.folder,
-                                size: 20,
-                              ),
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
+                        children: [
+                          Material(
+                            color: colors.surface,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(color: colors.border),
                             ),
-                            title: Text(
-                              project.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (var i = 0; i < _projects.length; i++) ...[
+                                  if (i > 0)
+                                    Divider(
+                                      height: 1,
+                                      thickness: 1,
+                                      indent: 62,
+                                      endIndent: 14,
+                                      color: colors.divider,
+                                    ),
+                                  _ManagedProjectRow(
+                                    colors: colors,
+                                    project: _projects[i],
+                                    disabled: _working || _connection == null,
+                                    onTap: () =>
+                                        unawaited(_showActions(_projects[i])),
+                                  ),
+                                ],
+                              ],
                             ),
-                            subtitle: Text(
-                              '${project.displayPath} · ${project.threadCount} 个会话',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TimelineType.metaStyle(colors.muted),
-                            ),
-                            trailing: IconButton(
-                              tooltip: '管理 ${project.name}',
-                              onPressed: _working || _connection == null
-                                  ? null
-                                  : () => unawaited(_showActions(project)),
-                              icon: const Icon(Icons.more_horiz, size: 20),
-                            ),
-                            onTap: _working || _connection == null
-                                ? null
-                                : () => unawaited(_showActions(project)),
-                          );
-                        },
+                          ),
+                        ],
                       ),
                     ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ManagedProjectRow extends StatelessWidget {
+  const _ManagedProjectRow({
+    required this.colors,
+    required this.project,
+    required this.disabled,
+    required this.onTap,
+  });
+
+  final PigcodeColors colors;
+  final MobileManagedProject project;
+  final bool disabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: ProjectManageScreen.projectTileKey(project.id),
+      onTap: disabled ? null : onTap,
+      hoverColor: colors.hover,
+      splashColor: colors.selected,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Center(
+                child: IconTheme(
+                  data: IconThemeData(color: colors.secondaryText),
+                  child: const WorkspaceIcon(WorkspaceGlyph.folder, size: 18),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    project.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: colors.foreground,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${project.displayPath} · ${project.threadCount} 个会话',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TimelineType.metaStyle(colors.muted),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: '管理 ${project.name}',
+              onPressed: disabled ? null : onTap,
+              icon: Icon(
+                Icons.more_horiz_rounded,
+                size: 20,
+                color: colors.muted,
+              ),
             ),
           ],
         ),

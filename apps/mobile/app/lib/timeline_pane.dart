@@ -14,7 +14,6 @@ import 'composer/mention_editing_controller.dart';
 import 'local_drafts.dart';
 import 'mobile_glass.dart';
 import 'offline_cache.dart';
-import 'offline_sync_label.dart';
 import 'preview/preview_tab.dart';
 import 'preview/preview_url_extractor.dart';
 import 'preview/preview_webview_screen.dart';
@@ -159,7 +158,6 @@ class TimelinePane extends ConsumerStatefulWidget {
 class _TimelinePaneState extends ConsumerState<TimelinePane> {
   TimelineSnapshot? _latest;
   TimelineSnapshot? _resumeFrom;
-  DateTime? _syncedAt;
   bool _historyReady = false;
   bool _draftReady = false;
   bool _draftError = false;
@@ -223,7 +221,6 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     if (!identical(oldWidget.cache, widget.cache)) {
       _latest = null;
       _resumeFrom = null;
-      _syncedAt = null;
       _restoreHistory();
     } else if (!identical(oldWidget.connection, widget.connection)) {
       _resumeFrom = _latest;
@@ -252,7 +249,6 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
           _historyReady = true;
           _latest = history?.snapshot;
           _resumeFrom = _latest;
-          _syncedAt = history?.syncedAt;
         });
       }),
     );
@@ -356,7 +352,6 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         if (snapshot == null || !widget.online) return;
         if (!identical(snapshot.events, previous?.value?.snapshot.events)) {
           final now = DateTime.now();
-          _syncedAt = now;
           if (cache != null) {
             unawaited(
               cache
@@ -488,7 +483,6 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         : _draftStore == null
         ? const SizedBox.shrink()
         : _offlineComposer();
-    final syncedAt = _syncedAt;
     final reading = widget.reading;
     final shownResult = synced
         ? current.snapshot.events.reversed
@@ -541,14 +535,6 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!online && syncedAt != null && snapshot != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          offlineSyncLabel(syncedAt),
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
                     if (_draftError) const Text('暂时无法保存本机草稿。'),
                     ConstrainedBox(
                       constraints: BoxConstraints(

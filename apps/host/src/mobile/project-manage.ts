@@ -4,7 +4,7 @@
  * - 添加/重命名/移除项目复用桌面端 ProjectsService 与运行/终端清理语义，永不向手机端暴露原始系统绝对路径。
  */
 import type { Context } from "cordis"
-import { existsSync, readdirSync, realpathSync, statSync } from "node:fs"
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, dirname, join, relative, sep } from "node:path"
 import {
@@ -15,6 +15,8 @@ import {
   mobileProjectAddResult,
   mobileProjectBrowseDirsParams,
   mobileProjectBrowseDirsResult,
+  mobileProjectCreateDirParams,
+  mobileProjectCreateDirResult,
   mobileProjectManageListParams,
   mobileProjectManageListResult,
   mobileProjectMethods,
@@ -120,6 +122,10 @@ export class MobileProjectManage {
       case mobileProjectMethods.browseDirs: {
         const parsed = params(mobileProjectBrowseDirsParams, request.params)
         return this.browseDirs(parsed.relPath ?? "")
+      }
+      case mobileProjectMethods.createDir: {
+        const parsed = params(mobileProjectCreateDirParams, request.params)
+        return this.createDir(parsed.parentRelPath ?? "", parsed.name)
       }
       case mobileProjectMethods.add: {
         const parsed = params(mobileProjectAddParams, request.params)
@@ -277,6 +283,44 @@ export class MobileProjectManage {
       shortcuts: this.buildShortcuts(),
       entries,
       truncated,
+    })
+  }
+
+  private createDir(parentRelPath: string, name: string) {
+    const { absReal, normalizedRel } = this.resolveDirectory(parentRelPath)
+    const cleanName = name.trim()
+    const targetRel = normalizedRel ? `${normalizedRel}/${cleanName}` : cleanName
+    if (!isValidMobileHomeRelPath(targetRel) || isForbiddenRelPath(targetRel)) {
+      throw new MobileRequestError("PROJECT_PATH_FORBIDDEN")
+    }
+    const targetPath = join(absReal, cleanName)
+    let exists = existsSync(targetPath)
+    if (!exists) {
+      try {
+        lstatSync(targetPath)
+        exists = true
+      } catch {
+        // 路径尚不存在，允许创建
+      }
+    }
+    if (exists) {
+      throw new MobileRequestError("PROJECT_DIR_EXISTS")
+    }
+    try {
+      mkdirSync(targetPath, { recursive: false })
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code === "EEXIST") throw new MobileRequestError("PROJECT_DIR_EXISTS")
+      throw new MobileRequestError("PROJECT_PATH_FORBIDDEN")
+    }
+    return mobileProjectCreateDirResult.parse({
+      entry: {
+        name: cleanName,
+        relPath: targetRel,
+        isGitRepo: false,
+        alreadyAddedProjectId: null,
+        hasChildren: false,
+      },
     })
   }
 

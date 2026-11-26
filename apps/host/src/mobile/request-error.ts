@@ -38,6 +38,7 @@ export type MobileErrorCode =
   | "TERMINAL_LIMIT_EXCEEDED"
   | "PROJECT_PATH_FORBIDDEN"
   | "PROJECT_NOT_DIRECTORY"
+  | "PROJECT_DIR_EXISTS"
   | "AGENT_NOT_FOUND"
   | "AGENT_INSTANCE_NOT_FOUND"
   | "AGENT_INSTANCE_ID_TAKEN"
@@ -91,6 +92,7 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   TERMINAL_LIMIT_EXCEEDED: "当前会话手机端同时打开的终端数量已达上限。",
   PROJECT_PATH_FORBIDDEN: "该目录受系统保护或超出允许范围，无法访问。",
   PROJECT_NOT_DIRECTORY: "目标路径不存在或不是文件夹。",
+  PROJECT_DIR_EXISTS: "该目录下已存在同名文件夹。",
   AGENT_NOT_FOUND: "电脑上未找到这个 Agent。",
   AGENT_INSTANCE_NOT_FOUND: "电脑上未找到这个 Agent 实例。",
   AGENT_INSTANCE_ID_TAKEN: "这个实例 ID 已被使用，请换一个名称。",

@@ -199,10 +199,7 @@ void main() {
     testWidgets('离线状态 ${brightness.name}', (tester) async {
       await _openPage(tester, brightness, workspaceFixture(online: false));
       expect(find.text('电脑离线').hitTestable(), findsOneWidget);
-      expect(
-        find.textContaining(RegExp(r'^上次同步 ')).hitTestable(),
-        findsOneWidget,
-      );
+      expect(find.textContaining(RegExp(r'^上次同步 ')), findsNothing);
       expect(find.text('帮我检查一下手机端的连接提示。'), findsOneWidget);
       await _matchScreen('offline-history', brightness);
       await tester.tap(find.byTooltip('打开菜单'));

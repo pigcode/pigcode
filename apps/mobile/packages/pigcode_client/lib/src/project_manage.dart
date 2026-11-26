@@ -4,6 +4,7 @@ import '../sidebar_models.dart';
 abstract final class MobileProjectMethods {
   static const list = 'mobile.project.list';
   static const browseDirs = 'mobile.project.browseDirs';
+  static const createDir = 'mobile.project.createDir';
   static const add = 'mobile.project.add';
   static const rename = 'mobile.project.rename';
   static const remove = 'mobile.project.remove';
@@ -218,6 +219,20 @@ class MobileProjectManageClient {
             )
             as Map<String, dynamic>;
     return MobileProjectBrowseDirsResult.fromJson(raw);
+  }
+
+  Future<MobileProjectDirEntry> createDir({
+    String parentRelPath = '',
+    required String name,
+  }) async {
+    _ensureSupported();
+    final raw =
+        await _rpc.call(MobileProjectMethods.createDir, {
+              if (parentRelPath.isNotEmpty) 'parentRelPath': parentRelPath,
+              'name': name.trim(),
+            })
+            as Map<String, dynamic>;
+    return MobileProjectDirEntry.fromJson(raw['entry'] as Map<String, dynamic>);
   }
 
   Future<MobileManagedProject> add({

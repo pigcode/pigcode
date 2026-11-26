@@ -508,7 +508,7 @@ void main() {
     expect(menuText('审批检查'), findsOneWidget);
     expect(menuText('等你处理'), findsNothing);
     expect(find.bySemanticsLabel(RegExp('未读')), findsNothing);
-    expect(find.textContaining('上次同步'), findsOneWidget);
+    expect(find.textContaining('上次同步'), findsNothing);
   });
 
   testWidgets('shows the agent and distinguishes approvals from questions', (

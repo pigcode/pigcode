@@ -91,6 +91,19 @@ class _ManageHost implements HostRequests {
           ],
           truncated: false,
         ).toJson();
+      case MobileProjectMethods.createDir:
+        final parent = (params['parentRelPath'] as String?) ?? '';
+        final name = params['name'] as String;
+        final rel = parent.isEmpty ? name : '$parent/$name';
+        return {
+          'entry': {
+            'name': name,
+            'relPath': rel,
+            'isGitRepo': false,
+            'alreadyAddedProjectId': null,
+            'hasChildren': false,
+          },
+        };
       case MobileProjectMethods.add:
         final rel = params['relPath'] as String;
         final name = (params['name'] as String?) ?? rel.split('/').last;
@@ -260,6 +273,102 @@ void main() {
         host2.calls.any((c) => c.method == MobileProjectMethods.list),
         isTrue,
       );
+    },
+  );
+
+  testWidgets(
+    'ProjectDirectoryPickerScreen supports breadcrumbs, filtering, and creating a new folder as project',
+    (tester) async {
+      final host = _ManageHost();
+      final conn = _FakeManageConnection(host);
+      final notifier = ValueNotifier<MobileConnection?>(conn);
+      addTearDown(notifier.dispose);
+
+      MobileManagedProject? result;
+      await tester.pumpWidget(
+        _app(
+          Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: FilledButton(
+                  onPressed: () async {
+                    result = await ProjectDirectoryPickerScreen.open(
+                      context,
+                      connectionListenable: notifier,
+                    );
+                  },
+                  child: const Text('打开'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('打开'));
+      await tester.pumpAndSettle();
+
+      // 进入 workspace 快捷路径后搜索过滤
+      await tester.tap(
+        find.byKey(
+          ProjectDirectoryPickerScreen.shortcutKey('Documents/workspace'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ProjectDirectoryPickerScreen.searchToggleButtonKey),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(ProjectDirectoryPickerScreen.searchInputKey),
+        'new-repo',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          ProjectDirectoryPickerScreen.entryKey('Documents/workspace/new-repo'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('pigcode'), findsNothing);
+
+      // 关闭筛选并点击新建文件夹，一步新建并添加为项目
+      await tester.tap(
+        find.byKey(ProjectDirectoryPickerScreen.searchToggleButtonKey),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(ProjectDirectoryPickerScreen.createFolderButtonKey),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('project-create-dir-input')),
+        'my-new-app',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('project-create-dir-confirm')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        host.calls.any(
+          (c) =>
+              c.method == MobileProjectMethods.createDir &&
+              c.params['parentRelPath'] == 'Documents/workspace' &&
+              c.params['name'] == 'my-new-app',
+        ),
+        isTrue,
+      );
+      expect(
+        host.calls.any(
+          (c) =>
+              c.method == MobileProjectMethods.add &&
+              c.params['relPath'] == 'Documents/workspace/my-new-app',
+        ),
+        isTrue,
+      );
+      expect(result?.displayPath, '~/Documents/workspace/my-new-app');
     },
   );
 

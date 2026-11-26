@@ -4,7 +4,6 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
-import 'offline_sync_label.dart';
 import 'sidebar_options.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
@@ -634,14 +633,6 @@ class _SidebarMenuState extends State<SidebarMenu> {
         ),
     ];
     final content = <Widget>[
-      if (!widget.online && snapshot != null)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
-          child: Text(
-            '离线 · ${offlineSyncLabel(snapshot.syncedAt)}',
-            style: labelStyle(12, color: colors.muted),
-          ),
-        ),
       for (final item in <Widget>[
         if (pinned.isNotEmpty) ...[
           groupLabel('置顶'),

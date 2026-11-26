@@ -9,6 +9,7 @@ export const MOBILE_PROJECT_REL_PATH_MAX_LENGTH = 1024
 export const mobileProjectMethods = {
   list: "mobile.project.list",
   browseDirs: "mobile.project.browseDirs",
+  createDir: "mobile.project.createDir",
   add: "mobile.project.add",
   rename: "mobile.project.rename",
   remove: "mobile.project.remove",
@@ -102,6 +103,36 @@ export const mobileProjectBrowseDirsResult = z
   })
   .strict()
 
+export function isValidMobileDirName(value: string): boolean {
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed.length > 255) return false
+  if (trimmed === "." || trimmed === ".." || trimmed.startsWith(".")) return false
+  if (trimmed.includes("/") || trimmed.includes("\\")) return false
+  if (/[\0\r\n]/.test(trimmed)) return false
+  if (/^[A-Za-z]:/.test(trimmed)) return false
+  return true
+}
+
+export const mobileProjectCreateDirParams = z
+  .object({
+    parentRelPath: mobileHomeRelPathSchema.optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(255)
+      .refine(isValidMobileDirName, {
+        message: "dir name must be a non-hidden single path segment",
+      }),
+  })
+  .strict()
+
+export const mobileProjectCreateDirResult = z
+  .object({
+    entry: mobileProjectDirEntrySchema,
+  })
+  .strict()
+
 export const mobileProjectAddParams = z
   .object({
     relPath: mobileNonEmptyHomeRelPathSchema,
@@ -149,6 +180,8 @@ export type MobileProjectManageListParams = z.infer<typeof mobileProjectManageLi
 export type MobileProjectManageListResult = z.infer<typeof mobileProjectManageListResult>
 export type MobileProjectBrowseDirsParams = z.infer<typeof mobileProjectBrowseDirsParams>
 export type MobileProjectBrowseDirsResult = z.infer<typeof mobileProjectBrowseDirsResult>
+export type MobileProjectCreateDirParams = z.infer<typeof mobileProjectCreateDirParams>
+export type MobileProjectCreateDirResult = z.infer<typeof mobileProjectCreateDirResult>
 export type MobileProjectAddParams = z.infer<typeof mobileProjectAddParams>
 export type MobileProjectAddResult = z.infer<typeof mobileProjectAddResult>
 export type MobileProjectRenameParams = z.infer<typeof mobileProjectRenameParams>

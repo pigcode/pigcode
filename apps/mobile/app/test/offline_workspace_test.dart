@@ -90,7 +90,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('缓存会话'), findsWidgets);
       expect(find.text('上次加载的内容'), findsOneWidget);
-      expect(find.textContaining('上次同步'), findsWidgets);
+      expect(find.textContaining('上次同步'), findsNothing);
 
       final input = find.byKey(const ValueKey('run-composer-input'));
       await tester.enterText(input, '离线时写的文字');

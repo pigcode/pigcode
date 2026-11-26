@@ -70,6 +70,17 @@ void main() {
               'threadCount': 0,
             },
           },
+          MobileProjectMethods.createDir: (p) => {
+            'entry': {
+              'name': p['name'],
+              'relPath': p['parentRelPath'] == null
+                  ? p['name']
+                  : '${p['parentRelPath']}/${p['name']}',
+              'isGitRepo': false,
+              'alreadyAddedProjectId': null,
+              'hasChildren': false,
+            },
+          },
           MobileProjectMethods.rename: (p) => {
             'project': {
               'id': p['projectId'],
@@ -97,6 +108,13 @@ void main() {
       expect(dir.displayPath, '~/Documents');
       expect(dir.entries.single.isGitRepo, isTrue);
       expect(dir.entries.single.alreadyAddedProjectId, 'pr_1');
+
+      final created = await client.createDir(
+        parentRelPath: 'Documents',
+        name: '  delta  ',
+      );
+      expect(created.name, 'delta');
+      expect(created.relPath, 'Documents/delta');
 
       final added = await client.add(
         relPath: 'Documents/beta',

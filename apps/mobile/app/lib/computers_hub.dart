@@ -9,7 +9,6 @@ import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
 import 'multi_computer_summary.dart';
-import 'offline_sync_label.dart';
 import 'theme_colors.dart';
 import 'workspace_icon.dart';
 
@@ -27,8 +26,6 @@ class ComputersHub extends StatefulWidget {
     required this.updatingRelay,
     required this.verificationCode,
     required this.feedback,
-    required this.deviceNumber,
-    required this.version,
     required this.onBackToWorkspace,
     required this.onOpenReminderSettings,
     required this.onRefreshAll,
@@ -59,8 +56,6 @@ class ComputersHub extends StatefulWidget {
   final bool updatingRelay;
   final String? verificationCode;
   final String? feedback;
-  final String deviceNumber;
-  final String version;
   final VoidCallback? onBackToWorkspace;
   final VoidCallback onOpenReminderSettings;
   final Future<void> Function() onRefreshAll;
@@ -356,12 +351,6 @@ class _ComputersHubState extends State<ComputersHub>
             working: widget.working,
             onScan: widget.onScanPair,
           ),
-          const SizedBox(height: 24),
-          _FooterMetadata(
-            colors: colors,
-            deviceNumber: widget.deviceNumber,
-            version: widget.version,
-          ),
         ],
       );
     }
@@ -409,7 +398,6 @@ class _ComputersHubState extends State<ComputersHub>
               onlineCount: widget.coordinator.onlineCount,
               computerCount: entries.length,
               isSyncing: isSyncing,
-              latestSyncedAt: widget.coordinator.latestSyncedAt,
             ),
           ),
 
@@ -604,16 +592,6 @@ class _ComputersHubState extends State<ComputersHub>
               ),
             ),
           ],
-
-          const SizedBox(height: 24),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: _FooterMetadata(
-              colors: colors,
-              deviceNumber: widget.deviceNumber,
-              version: widget.version,
-            ),
-          ),
         ],
       ),
     );
@@ -684,7 +662,6 @@ class _SummaryHeroHeader extends StatelessWidget {
     required this.onlineCount,
     required this.computerCount,
     required this.isSyncing,
-    required this.latestSyncedAt,
   });
 
   final PigcodeColors colors;
@@ -692,7 +669,6 @@ class _SummaryHeroHeader extends StatelessWidget {
   final int onlineCount;
   final int computerCount;
   final bool isSyncing;
-  final DateTime? latestSyncedAt;
 
   String get _headline {
     if (totalCounts.attention > 0) {
@@ -712,10 +688,7 @@ class _SummaryHeroHeader extends StatelessWidget {
     final parts = <String>[
       '$onlineCount/$computerCount 台在线',
       if (totalCounts.working > 0) '${totalCounts.working} 项进行中',
-      if (isSyncing)
-        '正在同步…'
-      else if (latestSyncedAt != null)
-        _compactSyncLabel(latestSyncedAt!),
+      if (isSyncing) '正在同步…',
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1316,7 +1289,6 @@ class _ComputerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final counts = entry.counts;
-    final syncedAt = entry.syncedAt;
     return Material(
       key: ValueKey(entry.profile.computerKey),
       color: colors.surface,
@@ -1534,20 +1506,6 @@ class _ComputerCard extends StatelessWidget {
                                   counts: counts,
                                 ),
                         ),
-                        if (syncedAt != null) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            _compactSyncLabel(syncedAt),
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: colors.faint,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
-                              locale: const Locale('zh', 'CN'),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
             ),
@@ -1810,41 +1768,6 @@ class _FeedbackBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-class _FooterMetadata extends StatelessWidget {
-  const _FooterMetadata({
-    required this.colors,
-    required this.deviceNumber,
-    required this.version,
-  });
-
-  final PigcodeColors colors;
-  final String deviceNumber;
-  final String version;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = version.isNotEmpty
-        ? '本机设备编号 $deviceNumber · Pigcode $version'
-        : '本机设备编号 $deviceNumber';
-    return Text(
-      text,
-      style: TextStyle(
-        fontSize: 12,
-        color: colors.faint,
-        fontFeatures: const [FontFeature.tabularFigures()],
-        locale: const Locale('zh', 'CN'),
-      ),
-    );
-  }
-}
-
-String _compactSyncLabel(DateTime syncedAt) {
-  final diff = DateTime.now().difference(syncedAt);
-  if (diff.inMinutes < 1) return '刚刚同步';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前同步';
-  return offlineSyncLabel(syncedAt);
 }
 
 String _formatChineseStamp(DateTime local) {

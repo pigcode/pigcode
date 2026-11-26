@@ -14,6 +14,7 @@ import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workbench/workbench_utils.dart';
 import '../workspace_icon.dart';
+import 'terminal_expanded_keyboard.dart';
 import 'terminal_shortcut_bar.dart';
 import 'terminal_theme.dart';
 
@@ -94,6 +95,8 @@ class MobileTerminalScreen extends StatefulWidget {
   State<MobileTerminalScreen> createState() => _MobileTerminalScreenState();
 }
 
+enum _TerminalInputPanel { bar, expanded, collapsed }
+
 class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
   final Map<String, _LocalTerminalTab> _tabs = {};
   final Map<String, List<MobileTerminalOutputEvent>> _earlyOutputs = {};
@@ -110,7 +113,9 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
   bool _loading = true;
   bool _creating = false;
   bool _offline = false;
-  bool _ctrlArmed = false;
+  TerminalModifierMode _ctrlMode = TerminalModifierMode.off;
+  TerminalModifierMode _altMode = TerminalModifierMode.off;
+  _TerminalInputPanel _inputPanel = _TerminalInputPanel.bar;
   String? _error;
   int _syncSeq = 0;
 
@@ -435,7 +440,8 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         _activeId = tab.summary.id;
         _loading = false;
         _creating = false;
-        _ctrlArmed = false;
+        _ctrlMode = TerminalModifierMode.off;
+        _altMode = TerminalModifierMode.off;
       });
     } catch (error) {
       if (!mounted) return;
@@ -457,7 +463,8 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     final tab = _ensureTab(target);
     setState(() {
       _activeId = target.id;
-      _ctrlArmed = false;
+      _ctrlMode = TerminalModifierMode.off;
+      _altMode = TerminalModifierMode.off;
       _error = null;
     });
     if (!tab.attached && !tab.exited) {
@@ -543,6 +550,25 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     });
   }
 
+  TerminalModifierMode _nextModifierMode(TerminalModifierMode current) =>
+      switch (current) {
+        TerminalModifierMode.off => TerminalModifierMode.once,
+        TerminalModifierMode.once => TerminalModifierMode.locked,
+        TerminalModifierMode.locked => TerminalModifierMode.off,
+      };
+
+  void _consumeOnceModifiers() {
+    final resetCtrl = _ctrlMode == TerminalModifierMode.once;
+    final resetAlt = _altMode == TerminalModifierMode.once;
+    if (!resetCtrl && !resetAlt) return;
+    if (mounted) {
+      setState(() {
+        if (resetCtrl) _ctrlMode = TerminalModifierMode.off;
+        if (resetAlt) _altMode = TerminalModifierMode.off;
+      });
+    }
+  }
+
   void _handleTerminalInput(String terminalId, String raw) {
     final tab = _tabs[terminalId];
     final conn = _boundConnection;
@@ -553,11 +579,12 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         tab.exited) {
       return;
     }
-    var payload = raw;
-    if (_ctrlArmed) {
-      payload = applyStickyCtrl(raw);
-      if (mounted) setState(() => _ctrlArmed = false);
-    }
+    final payload = applyTerminalModifiers(
+      raw,
+      ctrl: _ctrlMode != TerminalModifierMode.off,
+      alt: _altMode != TerminalModifierMode.off,
+    );
+    _consumeOnceModifiers();
     unawaited(
       conn.terminal.write(terminalId: terminalId, data: payload).catchError((
         Object error,
@@ -578,9 +605,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         tab.exited) {
       return;
     }
-    if (_ctrlArmed) {
-      setState(() => _ctrlArmed = false);
-    }
+    _consumeOnceModifiers();
     unawaited(
       conn.terminal.write(terminalId: tab.summary.id, data: seq).catchError((
         Object error,
@@ -589,6 +614,33 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         _showNotice(workbenchErrorMessage(error, fallback: '发送按键失败。'));
       }),
     );
+  }
+
+  void _sendExpandedChar(String ch) {
+    final tab = _activeTab;
+    if (tab == null) return;
+    _handleTerminalInput(tab.summary.id, ch);
+  }
+
+  void _openSystemKeyboard() {
+    setState(() => _inputPanel = _TerminalInputPanel.bar);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _terminalFocus.requestFocus();
+    });
+  }
+
+  void _toggleExpandedKeyboard() {
+    if (_inputPanel == _TerminalInputPanel.expanded) {
+      _openSystemKeyboard();
+      return;
+    }
+    _terminalFocus.unfocus();
+    setState(() => _inputPanel = _TerminalInputPanel.expanded);
+  }
+
+  void _collapseInputControls() {
+    _terminalFocus.unfocus();
+    setState(() => _inputPanel = _TerminalInputPanel.collapsed);
   }
 
   Future<void> _pasteClipboard() async {
@@ -910,19 +962,96 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
                 ],
               ),
             ),
-          Expanded(child: _buildBody(context, termTheme, active)),
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                _buildBody(context, termTheme, active),
+                if (active != null &&
+                    active.summary.writable &&
+                    !active.exited &&
+                    _inputPanel == _TerminalInputPanel.collapsed)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: SafeArea(
+                      top: false,
+                      child: TerminalFloatingPill(
+                        enabled: !_offline && !active.exited,
+                        onShowSystemKeyboard: _openSystemKeyboard,
+                        onShowExpandedKeyboard: _toggleExpandedKeyboard,
+                        onSendCtrlC: () => _sendRawSequence('\x03'),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           if (active != null && active.exited)
             _buildExitedBanner(context, active)
           else if (active != null && !active.summary.writable)
             _buildReadOnlyBanner(context)
-          else if (active != null && active.summary.writable)
-            TerminalShortcutBar(
-              ctrlArmed: _ctrlArmed,
-              enabled: !_offline && !active.exited,
-              onToggleCtrl: () => setState(() => _ctrlArmed = !_ctrlArmed),
-              onSendSequence: _sendRawSequence,
-              onPaste: () => unawaited(_pasteClipboard()),
-              onHideKeyboard: () => _terminalFocus.unfocus(),
+          else if (active != null &&
+              active.summary.writable &&
+              _inputPanel != _TerminalInputPanel.collapsed)
+            SafeArea(
+              top: false,
+              child: _inputPanel == _TerminalInputPanel.expanded
+                  ? TerminalExpandedKeyboard(
+                      ctrlMode: _ctrlMode,
+                      altMode: _altMode,
+                      enabled: !_offline && !active.exited,
+                      onCycleCtrl: () => setState(
+                        () => _ctrlMode = _nextModifierMode(_ctrlMode),
+                      ),
+                      onLockCtrl: () => setState(
+                        () =>
+                            _ctrlMode = _ctrlMode == TerminalModifierMode.locked
+                            ? TerminalModifierMode.off
+                            : TerminalModifierMode.locked,
+                      ),
+                      onCycleAlt: () => setState(
+                        () => _altMode = _nextModifierMode(_altMode),
+                      ),
+                      onLockAlt: () => setState(
+                        () => _altMode = _altMode == TerminalModifierMode.locked
+                            ? TerminalModifierMode.off
+                            : TerminalModifierMode.locked,
+                      ),
+                      onSendChar: _sendExpandedChar,
+                      onSendRaw: _sendRawSequence,
+                      onPaste: () => unawaited(_pasteClipboard()),
+                      onSwitchToSystemKeyboard: _openSystemKeyboard,
+                      onCollapse: _collapseInputControls,
+                    )
+                  : TerminalShortcutBar(
+                      ctrlMode: _ctrlMode,
+                      altMode: _altMode,
+                      expandedOpen: false,
+                      enabled: !_offline && !active.exited,
+                      onCycleCtrl: () => setState(
+                        () => _ctrlMode = _nextModifierMode(_ctrlMode),
+                      ),
+                      onLockCtrl: () => setState(
+                        () =>
+                            _ctrlMode = _ctrlMode == TerminalModifierMode.locked
+                            ? TerminalModifierMode.off
+                            : TerminalModifierMode.locked,
+                      ),
+                      onCycleAlt: () => setState(
+                        () => _altMode = _nextModifierMode(_altMode),
+                      ),
+                      onLockAlt: () => setState(
+                        () => _altMode = _altMode == TerminalModifierMode.locked
+                            ? TerminalModifierMode.off
+                            : TerminalModifierMode.locked,
+                      ),
+                      onToggleExpanded: _toggleExpandedKeyboard,
+                      onShowSystemKeyboard: _openSystemKeyboard,
+                      onSendSequence: _sendRawSequence,
+                      onPaste: () => unawaited(_pasteClipboard()),
+                      onCollapse: _collapseInputControls,
+                    ),
             ),
         ],
       ),
@@ -991,6 +1120,8 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
 
     final brightness = Theme.of(context).brightness;
     final writable = active.summary.writable && !active.exited;
+    final allowSystemIme =
+        writable && _inputPanel != _TerminalInputPanel.expanded;
     final view = TerminalView(
       active.terminal,
       key: ValueKey('xterm-${active.summary.id}'),
@@ -1002,7 +1133,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
       autofocus: false,
       readOnly: !writable,
       autoResize: writable,
-      hardwareKeyboardOnly: !writable,
+      hardwareKeyboardOnly: !allowSystemIme,
       deleteDetection: writable,
       keyboardAppearance: brightness,
       alwaysShowCursor: writable,

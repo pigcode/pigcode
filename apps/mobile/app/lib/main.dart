@@ -61,8 +61,6 @@ bool shouldReconnectForNetworkChange(
   next.intersection(_routableTransports),
 );
 
-const _version = String.fromEnvironment('PIGCODE_PRODUCT_VERSION');
-
 void main() {
   runApp(const ProviderScope(child: PigcodeApp()));
 }
@@ -982,9 +980,6 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       });
     }
     final connectionLabel = _connectionLabel(context);
-    final deviceNumber = computers.hasValue
-        ? ref.read(computersProvider.notifier).deviceNumber
-        : '';
     final manager = ComputersHub(
       coordinator: _coordinator,
       loadingComputers: computers.isLoading && !computers.hasValue,
@@ -996,8 +991,6 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       updatingRelay: _updatingRelay,
       verificationCode: _verification,
       feedback: _feedback,
-      deviceNumber: deviceNumber,
-      version: _version,
       onBackToWorkspace: _selected != null ? () => _showWorkspace(true) : null,
       onOpenReminderSettings: () => unawaited(_openReminderSettings()),
       onRefreshAll: () async {

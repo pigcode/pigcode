@@ -7,6 +7,7 @@ import {
   mobileProjectMethods,
   type MobileProjectAddResult,
   type MobileProjectBrowseDirsResult,
+  type MobileProjectCreateDirResult,
   type MobileProjectManageListResult,
 } from "@pigcode/contracts"
 import { Context } from "cordis"
@@ -214,6 +215,65 @@ describe("MobileProjectManage", () => {
       expect(
         callManager<MobileProjectManageListResult>(manager, mobileProjectMethods.list, {}).projects,
       ).toHaveLength(0)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it("supports createDir safely and rejects duplicates, traversal, and sensitive parents", async () => {
+    const { ctx, manager } = await createHostFixture()
+    try {
+      const created = callManager<MobileProjectCreateDirResult>(
+        manager,
+        mobileProjectMethods.createDir,
+        { parentRelPath: "Documents/workspace", name: "  gamma-app  " },
+      )
+      expect(created.entry).toEqual({
+        name: "gamma-app",
+        relPath: "Documents/workspace/gamma-app",
+        isGitRepo: false,
+        alreadyAddedProjectId: null,
+        hasChildren: false,
+      })
+
+      // Newly created folder can immediately be added as a project.
+      const added = callManager<MobileProjectAddResult>(manager, mobileProjectMethods.add, {
+        relPath: created.entry.relPath,
+      })
+      expect(added.project.name).toBe("gamma-app")
+      expect(added.project.displayPath).toBe("~/Documents/workspace/gamma-app")
+
+      // Duplicate folder throws PROJECT_DIR_EXISTS.
+      try {
+        callManager(manager, mobileProjectMethods.createDir, {
+          parentRelPath: "Documents/workspace",
+          name: "gamma-app",
+        })
+        expect.unreachable()
+      } catch (error) {
+        expect(error).toBeInstanceOf(MobileRequestError)
+        expect((error as MobileRequestError).code).toBe("PROJECT_DIR_EXISTS")
+      }
+
+      // Invalid names & sensitive folders (e.g. Library/Keychains) are rejected.
+      expect(() =>
+        callManager(manager, mobileProjectMethods.createDir, {
+          parentRelPath: "Library",
+          name: "Keychains",
+        }),
+      ).toThrow(MobileRequestError)
+      expect(() =>
+        callManager(manager, mobileProjectMethods.createDir, {
+          parentRelPath: "Documents",
+          name: ".hidden",
+        }),
+      ).toThrow(MobileRequestError)
+      expect(() =>
+        callManager(manager, mobileProjectMethods.createDir, {
+          parentRelPath: "Documents",
+          name: "a/b",
+        }),
+      ).toThrow()
     } finally {
       await ctx.fiber.dispose()
     }

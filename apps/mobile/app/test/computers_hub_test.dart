@@ -80,8 +80,6 @@ void main() {
           updatingRelay: false,
           verificationCode: null,
           feedback: null,
-          deviceNumber: 'AABBCCDD',
-          version: '0.1.0',
           onBackToWorkspace: null,
           onOpenReminderSettings: () {},
           onRefreshAll: () async {},
@@ -96,7 +94,7 @@ void main() {
 
     expect(find.text('连接你的电脑'), findsOneWidget);
     expect(find.text('扫码配对电脑'), findsOneWidget);
-    expect(find.textContaining('AABBCCDD'), findsOneWidget);
+    expect(find.textContaining('本机设备编号'), findsNothing);
 
     await tester.tap(find.byKey(ComputersHub.scanButtonKey));
     await tester.pump();
@@ -217,8 +215,6 @@ void main() {
           updatingRelay: false,
           verificationCode: null,
           feedback: null,
-          deviceNumber: '11223344',
-          version: '0.1.0',
           onBackToWorkspace: () {},
           onOpenReminderSettings: () {},
           onRefreshAll: () => coordinator.refreshAll(force: true),
@@ -326,8 +322,6 @@ void main() {
           updatingRelay: false,
           verificationCode: null,
           feedback: null,
-          deviceNumber: '55667788',
-          version: '0.1.0',
           onBackToWorkspace: () {},
           onOpenReminderSettings: () {},
           onRefreshAll: () async {},

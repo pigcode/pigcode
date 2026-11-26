@@ -47,6 +47,7 @@ String manageErrorMessage(Object error) {
     return switch (error.problem.code) {
       'PROJECT_PATH_FORBIDDEN' => '该目录受系统保护或超出允许范围，无法访问。',
       'PROJECT_NOT_DIRECTORY' => '目标路径不存在或不是文件夹。',
+      'PROJECT_DIR_EXISTS' => '该目录下已存在同名文件夹。',
       'AGENT_NOT_FOUND' => '电脑上未找到这个 Agent。',
       'AGENT_INSTANCE_NOT_FOUND' => '电脑上未找到这个 Agent 实例。',
       'AGENT_INSTANCE_ID_TAKEN' => '这个实例 ID 已被使用，请换一个名称。',
@@ -189,17 +190,29 @@ class _ProjectTextPromptDialogState extends State<_ProjectTextPromptDialog> {
     final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final field = TextField(
-      key: widget.inputKey,
-      controller: _controller,
-      autofocus: true,
-      maxLength: 120,
-      decoration: InputDecoration(
-        labelText: widget.labelText,
-        hintText: widget.hintText,
-        counterText: '',
+    final field = Container(
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
       ),
-      onSubmitted: (_) => _submit(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: TextField(
+        key: widget.inputKey,
+        controller: _controller,
+        autofocus: true,
+        maxLength: 120,
+        style: TextStyle(fontSize: 15, color: colors.foreground),
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          hintText: widget.hintText,
+          counterText: '',
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
     );
     return MobileGlassDialog(
       title: Text(widget.title),
