@@ -5,39 +5,56 @@ import 'package:flutter/services.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
 import '../composer/composer_tokens.dart';
+import '../mobile_glass.dart';
+import '../mobile_sheet.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import 'workbench_utils.dart';
 
-/// 工作台「PR」Tab：只读展示当前会话分支的 GitHub Pull Request 状态与快捷外链操作。
+/// 工作台「PR」Tab：展示当前会话分支的 GitHub Pull Request 状态，并在支持 `workbench.write` 时提供创建、Ready、合并、评论与关闭/重开操作。
 class PrStatusTab extends StatefulWidget {
   const PrStatusTab({
     super.key,
     required this.connection,
     required this.threadId,
     this.active = true,
+    this.revision = 0,
     this.openExternalUrl,
+    this.onWorkspaceMutated,
   });
 
   static const stateBadgeKey = ValueKey('pr-state-badge');
   static const openBrowserButtonKey = ValueKey('pr-open-browser-button');
   static const copyLinkButtonKey = ValueKey('pr-copy-link-button');
+  static const createPrButtonKey = ValueKey('pr-create-button');
+  static const readyPrButtonKey = ValueKey('pr-ready-button');
+  static const mergePrButtonKey = ValueKey('pr-merge-button');
+  static const closePrButtonKey = ValueKey('pr-close-button');
+  static const reopenPrButtonKey = ValueKey('pr-reopen-button');
+  static const commentInputKey = ValueKey('pr-comment-input');
+  static const commentSubmitButtonKey = ValueKey('pr-comment-submit');
 
   final MobileConnection connection;
   final String threadId;
   final bool active;
+  final int revision;
   final ExternalUrlOpener? openExternalUrl;
+  final VoidCallback? onWorkspaceMutated;
 
   @override
   State<PrStatusTab> createState() => _PrStatusTabState();
 }
 
 class _PrStatusTabState extends State<PrStatusTab> {
+  final _commentController = TextEditingController();
   MobilePrStatusResult? _result;
   bool _loading = false;
   bool _hasRequested = false;
+  bool _acting = false;
   String? _error;
   int _requestSeq = 0;
+
+  bool get _canWrite => connectionSupportsWorkbenchWrite(widget.connection);
 
   @override
   void initState() {
@@ -48,9 +65,17 @@ class _PrStatusTabState extends State<PrStatusTab> {
   }
 
   @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
   void didUpdateWidget(covariant PrStatusTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.active && !_hasRequested) {
+    if ((widget.active && !_hasRequested) ||
+        (oldWidget.revision != widget.revision && _hasRequested) ||
+        oldWidget.threadId != widget.threadId) {
       unawaited(_load());
     }
   }
@@ -108,6 +133,174 @@ class _PrStatusTabState extends State<PrStatusTab> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('已复制 PR 链接')),
     );
+  }
+
+  void _showNotice(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Future<void> _showCreatePrSheet() async {
+    if (!_canWrite || _acting) return;
+    final input = await showMobileSheet<_MobilePrCreateDraft>(
+      context,
+      title: '创建 PR',
+      content: (sheet) => SliverToBoxAdapter(
+        child: _CreatePrForm(
+          onSubmit: (draft) => Navigator.pop(sheet, draft),
+        ),
+      ),
+    );
+    if (!mounted || input == null) return;
+    setState(() => _acting = true);
+    try {
+      final created = await widget.connection.workbenchWrite.createPr(
+        threadId: widget.threadId,
+        title: input.title,
+        body: input.body.isEmpty ? null : input.body,
+        base: input.base.isEmpty ? null : input.base,
+        draft: input.draft ? true : null,
+      );
+      if (!mounted) return;
+      setState(() => _result = created);
+      widget.onWorkspaceMutated?.call();
+      _showNotice('已创建 PR');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '创建 PR 失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _markReady() async {
+    if (!_canWrite || _acting) return;
+    setState(() => _acting = true);
+    try {
+      final updated = await widget.connection.workbenchWrite.readyPr(
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      setState(() => _result = updated);
+      _showNotice('已标记为 Ready');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '标记 Ready 失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _showMergeDialog() async {
+    if (!_canWrite || _acting) return;
+    final choice = await showDialog<({MobilePrMergeMethod method, bool deleteBranch})>(
+      context: context,
+      builder: (_) => const _MergePrDialog(),
+    );
+    if (!mounted || choice == null) return;
+    setState(() => _acting = true);
+    try {
+      final updated = await widget.connection.workbenchWrite.mergePr(
+        threadId: widget.threadId,
+        method: choice.method,
+        deleteBranch: choice.deleteBranch ? true : null,
+      );
+      if (!mounted) return;
+      setState(() => _result = updated);
+      if (choice.deleteBranch) {
+        widget.onWorkspaceMutated?.call();
+      }
+      _showNotice('已合并 PR');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '合并 PR 失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _confirmClosePr() async {
+    if (!_canWrite || _acting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final palette = Theme.of(dialogContext).brightness == Brightness.dark
+            ? pigcodeDark
+            : pigcodeLight;
+        return MobileGlassDialog(
+          title: const Text('关闭 PR？'),
+          content: const Text('关闭后 PR 将不再处于打开状态，后续可随时重新打开。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: palette.error,
+                foregroundColor: palette.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('确认关闭'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || confirmed != true) return;
+    setState(() => _acting = true);
+    try {
+      final updated = await widget.connection.workbenchWrite.closePr(
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      setState(() => _result = updated);
+      _showNotice('已关闭 PR');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '关闭 PR 失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _reopenPr() async {
+    if (!_canWrite || _acting) return;
+    setState(() => _acting = true);
+    try {
+      final updated = await widget.connection.workbenchWrite.reopenPr(
+        threadId: widget.threadId,
+      );
+      if (!mounted) return;
+      setState(() => _result = updated);
+      _showNotice('已重新打开 PR');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '重新打开 PR 失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final text = _commentController.text.trim();
+    if (!_canWrite || _acting || text.isEmpty) return;
+    setState(() => _acting = true);
+    try {
+      await widget.connection.workbenchWrite.commentPr(
+        threadId: widget.threadId,
+        body: text,
+      );
+      if (!mounted) return;
+      _commentController.clear();
+      _showNotice('已发表评论');
+    } catch (error) {
+      if (!mounted) return;
+      _showNotice(workbenchErrorMessage(error, fallback: '发表评论失败。'));
+    } finally {
+      if (mounted) setState(() => _acting = false);
+    }
   }
 
   @override
@@ -184,7 +377,12 @@ class _PrStatusTabState extends State<PrStatusTab> {
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(TimelineSpace.x7),
+        padding: const EdgeInsets.fromLTRB(
+          TimelineSpace.x7,
+          TimelineSpace.x7,
+          TimelineSpace.x7,
+          88,
+        ),
         children: [
           _PrCard(
             child: Column(
@@ -354,8 +552,116 @@ class _PrStatusTabState extends State<PrStatusTab> {
               ),
             ],
           ),
+          if (_canWrite) ...[
+            const SizedBox(height: TimelineSpace.x6),
+            _buildPrWriteActions(context, pr),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildPrWriteActions(BuildContext context, MobilePullRequestInfo pr) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final touch = timelineTouchHeight(context);
+    final upperState = pr.state.toUpperCase();
+    final isOpen = upperState == 'OPEN';
+    final isClosed = upperState == 'CLOSED';
+    final isDraft = isOpen && pr.isDraft == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: TimelineSpace.x6,
+      children: [
+        if (isOpen || isClosed)
+          _PrCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: TimelineSpace.x4,
+              children: [
+                Text(
+                  'PR 操作',
+                  style: TimelineType.metaStyle(
+                    colors.muted,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+                if (isOpen && isDraft)
+                  FilledButton.icon(
+                    key: PrStatusTab.readyPrButtonKey,
+                    style: FilledButton.styleFrom(minimumSize: Size(0, touch)),
+                    onPressed: _acting ? null : () => unawaited(_markReady()),
+                    icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                    label: const Text('标记为 Ready'),
+                  ),
+                if (isOpen && !isDraft)
+                  FilledButton.icon(
+                    key: PrStatusTab.mergePrButtonKey,
+                    style: FilledButton.styleFrom(minimumSize: Size(0, touch)),
+                    onPressed: _acting ? null : () => unawaited(_showMergeDialog()),
+                    icon: const Icon(Icons.merge_rounded, size: 18),
+                    label: const Text('合并 PR'),
+                  ),
+                if (isOpen)
+                  OutlinedButton.icon(
+                    key: PrStatusTab.closePrButtonKey,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: Size(0, touch),
+                      foregroundColor: colors.error,
+                      side: BorderSide(color: colors.error),
+                    ),
+                    onPressed: _acting ? null : () => unawaited(_confirmClosePr()),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    label: const Text('关闭 PR'),
+                  ),
+                if (isClosed)
+                  OutlinedButton.icon(
+                    key: PrStatusTab.reopenPrButtonKey,
+                    style: OutlinedButton.styleFrom(minimumSize: Size(0, touch)),
+                    onPressed: _acting ? null : () => unawaited(_reopenPr()),
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: const Text('重新打开 PR'),
+                  ),
+              ],
+            ),
+          ),
+        _PrCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: TimelineSpace.x4,
+            children: [
+              Text(
+                '发表评论',
+                style: TimelineType.metaStyle(
+                  colors.muted,
+                  weight: FontWeight.w500,
+                ),
+              ),
+              TextField(
+                key: PrStatusTab.commentInputKey,
+                controller: _commentController,
+                enabled: !_acting,
+                minLines: 2,
+                maxLines: 5,
+                decoration: const InputDecoration(
+                  hintText: '写下评论…',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: FilledButton(
+                  key: PrStatusTab.commentSubmitButtonKey,
+                  onPressed: _acting ? null : () => unawaited(_submitComment()),
+                  child: const Text('发送评论'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -369,7 +675,12 @@ class _PrStatusTabState extends State<PrStatusTab> {
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(TimelineSpace.x7),
+        padding: const EdgeInsets.fromLTRB(
+          TimelineSpace.x7,
+          TimelineSpace.x7,
+          TimelineSpace.x7,
+          88,
+        ),
         children: [
           const SizedBox(height: TimelineSpace.x9),
           _PrCard(
@@ -422,6 +733,13 @@ class _PrStatusTabState extends State<PrStatusTab> {
                   ),
                 ),
                 const SizedBox(height: TimelineSpace.x2),
+                if (result.status == 'no-pr' && _canWrite)
+                  FilledButton.icon(
+                    key: PrStatusTab.createPrButtonKey,
+                    onPressed: _acting ? null : () => unawaited(_showCreatePrSheet()),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('创建 PR'),
+                  ),
                 TextButton(
                   onPressed: () => unawaited(_load()),
                   child: const Text('刷新状态'),
@@ -702,6 +1020,190 @@ class _CheckCountPill extends StatelessWidget {
               .copyWith(fontFeatures: TimelineType.tabular),
         ),
       ),
+    );
+  }
+}
+
+class _MobilePrCreateDraft {
+  const _MobilePrCreateDraft({
+    required this.title,
+    required this.body,
+    required this.base,
+    required this.draft,
+  });
+
+  final String title;
+  final String body;
+  final String base;
+  final bool draft;
+}
+
+class _CreatePrForm extends StatefulWidget {
+  const _CreatePrForm({required this.onSubmit});
+
+  final ValueChanged<_MobilePrCreateDraft> onSubmit;
+
+  @override
+  State<_CreatePrForm> createState() => _CreatePrFormState();
+}
+
+class _CreatePrFormState extends State<_CreatePrForm> {
+  final _titleController = TextEditingController();
+  final _bodyController = TextEditingController();
+  final _baseController = TextEditingController();
+  bool _draft = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    _baseController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    widget.onSubmit(
+      _MobilePrCreateDraft(
+        title: title,
+        body: _bodyController.text.trim(),
+        base: _baseController.text.trim(),
+        draft: _draft,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: TimelineSpace.x5,
+        children: [
+          TextField(
+            key: const ValueKey('pr-create-title-input'),
+            controller: _titleController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: '标题',
+              hintText: 'PR 标题',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          TextField(
+            key: const ValueKey('pr-create-body-input'),
+            controller: _bodyController,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: '说明（可选）',
+              hintText: '说说这次改了什么',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          TextField(
+            key: const ValueKey('pr-create-base-input'),
+            controller: _baseController,
+            decoration: const InputDecoration(
+              labelText: '目标分支（可选）',
+              hintText: 'main',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          SwitchListTile.adaptive(
+            key: const ValueKey('pr-create-draft-switch'),
+            contentPadding: EdgeInsets.zero,
+            title: const Text('创建为草稿（Draft）'),
+            value: _draft,
+            onChanged: (value) => setState(() => _draft = value),
+          ),
+          FilledButton(
+            key: const ValueKey('pr-create-submit'),
+            onPressed: _submit,
+            child: const Text('确认创建 PR'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MergePrDialog extends StatefulWidget {
+  const _MergePrDialog();
+
+  @override
+  State<_MergePrDialog> createState() => _MergePrDialogState();
+}
+
+class _MergePrDialogState extends State<_MergePrDialog> {
+  MobilePrMergeMethod _method = MobilePrMergeMethod.squash;
+  bool _deleteBranch = false;
+
+  String _label(MobilePrMergeMethod method) => switch (method) {
+    MobilePrMergeMethod.squash => 'Squash 压缩合并',
+    MobilePrMergeMethod.merge => 'Merge 合并提交',
+    MobilePrMergeMethod.rebase => 'Rebase 变基合并',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return MobileGlassDialog(
+      title: const Text('合并 PR'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: TimelineSpace.x2,
+        children: [
+          RadioGroup<MobilePrMergeMethod>(
+            groupValue: _method,
+            onChanged: (value) {
+              if (value != null) setState(() => _method = value);
+            },
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final method in const [
+                  MobilePrMergeMethod.squash,
+                  MobilePrMergeMethod.merge,
+                  MobilePrMergeMethod.rebase,
+                ])
+                  RadioListTile<MobilePrMergeMethod>(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    title: Text(_label(method)),
+                    value: method,
+                  ),
+              ],
+            ),
+          ),
+          SwitchListTile.adaptive(
+            key: const ValueKey('pr-merge-delete-branch'),
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('合并后删除源分支'),
+            value: _deleteBranch,
+            onChanged: (value) => setState(() => _deleteBranch = value),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          key: const ValueKey('pr-merge-confirm'),
+          onPressed: () => Navigator.of(
+            context,
+          ).pop((method: _method, deleteBranch: _deleteBranch)),
+          child: const Text('确认合并'),
+        ),
+      ],
     );
   }
 }

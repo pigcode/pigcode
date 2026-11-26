@@ -265,12 +265,17 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           ? (context, thread) {
               final active = connection;
               if (active == null) return;
+              final threadBusy =
+                  thread.status == MobileThreadStatus.running ||
+                  thread.status == MobileThreadStatus.queued ||
+                  thread.status == MobileThreadStatus.waitingApproval;
               unawaited(
                 MobileWorkbenchScreen.open(
                   context,
                   connection: active,
                   threadId: thread.id,
                   title: thread.title,
+                  threadBusy: threadBusy,
                   initialTab: supportsWorkbench
                       ? MobileWorkbenchTab.files
                       : MobileWorkbenchTab.preview,

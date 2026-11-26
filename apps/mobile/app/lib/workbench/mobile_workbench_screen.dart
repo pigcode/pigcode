@@ -7,15 +7,16 @@ import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'file_browser_tab.dart';
+import 'git_workbench_tab.dart';
 import 'pr_status_tab.dart';
 import 'workbench_utils.dart';
 
-/// 手机端只读工作台顶部 Tab 枚举（为 `#152` 预留 `preview` 插槽）。
-enum MobileWorkbenchTab { files, pr, preview }
+/// 手机端工作台顶部 Tab 枚举（支持 `workbench.write` 时展示「Git」）。
+enum MobileWorkbenchTab { files, git, pr, preview }
 
-/// 手机端全屏只读工作台：
-/// - 顶栏左侧返回，中间紧凑分段切换「文件」/「PR」（若传入 `previewTabBuilder` 则追加「预览」）；
-/// - 使用 `IndexedStack` 保持切换 Tab 时的目录位置与 PR 加载状态不丢失。
+/// 手机端全屏工作台：
+/// - 顶栏左侧返回，中间紧凑液态玻璃分段切换「文件 / Git / PR / 预览」；
+/// - 使用 `IndexedStack` 保持切换 Tab 时的状态，并通过共享 `workspaceRevision` 联动写操作刷新。
 class MobileWorkbenchScreen extends StatefulWidget {
   const MobileWorkbenchScreen({
     super.key,
@@ -26,10 +27,12 @@ class MobileWorkbenchScreen extends StatefulWidget {
     this.initialDirectory = '',
     this.previewTabBuilder,
     this.openExternalUrl,
+    this.threadBusy = false,
     this.searchDebounce = const Duration(milliseconds: 250),
   });
 
   static const filesTabKey = ValueKey('workbench-tab-files');
+  static const gitTabKey = ValueKey('workbench-tab-git');
   static const prTabKey = ValueKey('workbench-tab-pr');
   static const previewTabKey = ValueKey('workbench-tab-preview');
 
@@ -40,6 +43,7 @@ class MobileWorkbenchScreen extends StatefulWidget {
   final String initialDirectory;
   final WidgetBuilder? previewTabBuilder;
   final ExternalUrlOpener? openExternalUrl;
+  final bool threadBusy;
   final Duration searchDebounce;
 
   static Future<void> open(
@@ -51,6 +55,7 @@ class MobileWorkbenchScreen extends StatefulWidget {
     String initialDirectory = '',
     WidgetBuilder? previewTabBuilder,
     ExternalUrlOpener? openExternalUrl,
+    bool threadBusy = false,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => MobileWorkbenchScreen(
@@ -61,6 +66,7 @@ class MobileWorkbenchScreen extends StatefulWidget {
         initialDirectory: initialDirectory,
         previewTabBuilder: previewTabBuilder,
         openExternalUrl: openExternalUrl,
+        threadBusy: threadBusy,
       ),
     ),
   );
@@ -72,16 +78,26 @@ class MobileWorkbenchScreen extends StatefulWidget {
 class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
   late MobileWorkbenchTab _selectedTab;
   bool _previewActivated = false;
+  int _workspaceRevision = 0;
 
   bool get _hasWorkbenchTabs =>
       connectionSupportsWorkbenchRead(widget.connection) ||
       widget.previewTabBuilder == null;
 
+  bool get _hasGitTab =>
+      _hasWorkbenchTabs && connectionSupportsWorkbenchWrite(widget.connection);
+
   List<MobileWorkbenchTab> get _availableTabs => [
     if (_hasWorkbenchTabs) MobileWorkbenchTab.files,
+    if (_hasGitTab) MobileWorkbenchTab.git,
     if (_hasWorkbenchTabs) MobileWorkbenchTab.pr,
     if (widget.previewTabBuilder != null) MobileWorkbenchTab.preview,
   ];
+
+  void _bumpWorkspaceRevision() {
+    if (!mounted) return;
+    setState(() => _workspaceRevision++);
+  }
 
   @override
   void initState() {
@@ -158,7 +174,7 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
             }
           },
         ),
-        actions: [SizedBox(width: touch + 16)],
+        actions: [SizedBox(width: tabs.length >= 4 ? 12 : touch + 16)],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(
@@ -173,7 +189,7 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
         child: IndexedStack(
           index: selectedIndex,
           children: [
-            if (_hasWorkbenchTabs) ...[
+            if (_hasWorkbenchTabs)
               TickerMode(
                 enabled: _selectedTab == MobileWorkbenchTab.files,
                 child: FileBrowserTab(
@@ -181,18 +197,38 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
                   threadId: widget.threadId,
                   initialDirectory: widget.initialDirectory,
                   searchDebounce: widget.searchDebounce,
+                  revision: _workspaceRevision,
+                  threadBusy: widget.threadBusy,
+                  onWorkspaceMutated: _bumpWorkspaceRevision,
+                  onOpenGitTab: _hasGitTab
+                      ? () => setState(() => _selectedTab = MobileWorkbenchTab.git)
+                      : null,
                 ),
               ),
+            if (_hasGitTab)
+              TickerMode(
+                enabled: _selectedTab == MobileWorkbenchTab.git,
+                child: GitWorkbenchTab(
+                  connection: widget.connection,
+                  threadId: widget.threadId,
+                  active: _selectedTab == MobileWorkbenchTab.git,
+                  revision: _workspaceRevision,
+                  threadBusy: widget.threadBusy,
+                  onWorkspaceMutated: _bumpWorkspaceRevision,
+                ),
+              ),
+            if (_hasWorkbenchTabs)
               TickerMode(
                 enabled: _selectedTab == MobileWorkbenchTab.pr,
                 child: PrStatusTab(
                   connection: widget.connection,
                   threadId: widget.threadId,
                   active: _selectedTab == MobileWorkbenchTab.pr,
+                  revision: _workspaceRevision,
                   openExternalUrl: widget.openExternalUrl,
+                  onWorkspaceMutated: _bumpWorkspaceRevision,
                 ),
               ),
-            ],
             if (widget.previewTabBuilder case final buildPreview?)
               TickerMode(
                 enabled: _selectedTab == MobileWorkbenchTab.preview,
@@ -220,18 +256,21 @@ class _WorkbenchSegmentedControl extends StatelessWidget {
 
   String _label(MobileWorkbenchTab tab) => switch (tab) {
     MobileWorkbenchTab.files => '文件',
+    MobileWorkbenchTab.git => 'Git',
     MobileWorkbenchTab.pr => 'PR',
     MobileWorkbenchTab.preview => '预览',
   };
 
   ValueKey<String> _key(MobileWorkbenchTab tab) => switch (tab) {
     MobileWorkbenchTab.files => MobileWorkbenchScreen.filesTabKey,
+    MobileWorkbenchTab.git => MobileWorkbenchScreen.gitTabKey,
     MobileWorkbenchTab.pr => MobileWorkbenchScreen.prTabKey,
     MobileWorkbenchTab.preview => MobileWorkbenchScreen.previewTabKey,
   };
 
   @override
   Widget build(BuildContext context) {
+    final compact = tabs.length >= 4;
     return MobileGlassSurface(
       blurSigma: 16,
       child: Padding(
@@ -244,6 +283,7 @@ class _WorkbenchSegmentedControl extends StatelessWidget {
                 key: _key(tab),
                 label: _label(tab),
                 selected: tab == selected,
+                compact: compact,
                 onTap: () => onSelected(tab),
               ),
           ],
@@ -259,10 +299,12 @@ class _SegmentButton extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   final String label;
   final bool selected;
+  final bool compact;
   final VoidCallback onTap;
 
   @override
@@ -284,9 +326,12 @@ class _SegmentButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: duration,
             curve: TimelineMotion.ease,
-            constraints: const BoxConstraints(minWidth: 64, minHeight: 34),
-            padding: const EdgeInsets.symmetric(
-              horizontal: TimelineSpace.x6,
+            constraints: BoxConstraints(
+              minWidth: compact ? 52 : 64,
+              minHeight: 34,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? TimelineSpace.x4 : TimelineSpace.x6,
               vertical: TimelineSpace.x2,
             ),
             decoration: BoxDecoration(
