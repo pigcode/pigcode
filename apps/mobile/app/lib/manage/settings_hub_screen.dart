@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
@@ -8,6 +10,7 @@ import '../mobile_status_dot.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'agent_manage_screen.dart';
 import 'manage_utils.dart';
 import 'project_manage_screen.dart';
 
@@ -64,10 +67,7 @@ class SettingsHubScreen extends StatelessWidget {
       builder: (context, connection, _) {
         final online = connection != null;
         final canProjects = online && connectionSupportsProjectManage(connection);
-        final canAgents =
-            online &&
-            connectionSupportsAgentManage(connection) &&
-            onOpenAgents != null;
+        final canAgents = online && connectionSupportsAgentManage(connection);
         final activeName = connection?.computerName ?? computerName;
 
         return Scaffold(
@@ -159,35 +159,46 @@ class SettingsHubScreen extends StatelessWidget {
                             )
                           : null,
                     ),
-                    if (onOpenAgents != null) ...[
-                      Divider(height: 1, indent: 56, color: colors.divider),
-                      ListTile(
-                        key: agentsTileKey,
-                        leading: IconTheme(
-                          data: IconThemeData(color: colors.secondaryText),
-                          child: const WorkspaceIcon(
-                            WorkspaceGlyph.bot,
-                            size: 20,
-                          ),
+                    Divider(height: 1, indent: 56, color: colors.divider),
+                    ListTile(
+                      key: agentsTileKey,
+                      leading: IconTheme(
+                        data: IconThemeData(color: colors.secondaryText),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.bot,
+                          size: 20,
                         ),
-                        title: const Text('Agent 实例'),
-                        subtitle: Text(
-                          !online
-                              ? '电脑离线，连接后可管理'
-                              : canAgents
-                              ? '检测状态、默认选择、新建与编辑自定义实例'
-                              : '当前电脑版本不支持手机端 Agent 管理',
-                          style: TimelineType.metaStyle(colors.muted),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: colors.faint,
-                        ),
-                        enabled: canAgents,
-                        onTap: canAgents ? () => onOpenAgents!(context) : null,
                       ),
-                    ],
+                      title: const Text('Agent 实例'),
+                      subtitle: Text(
+                        !online
+                            ? '电脑离线，连接后可管理'
+                            : canAgents
+                            ? '检测状态、默认选择、新建与编辑自定义实例'
+                            : '当前电脑版本不支持手机端 Agent 管理',
+                        style: TimelineType.metaStyle(colors.muted),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: colors.faint,
+                      ),
+                      enabled: canAgents,
+                      onTap: canAgents
+                          ? () {
+                              if (onOpenAgents != null) {
+                                onOpenAgents!(context);
+                              } else {
+                                unawaited(
+                                  AgentManageScreen.open(
+                                    context,
+                                    connectionListenable: connectionListenable,
+                                  ),
+                                );
+                              }
+                            }
+                          : null,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 22),
