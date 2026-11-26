@@ -6,10 +6,7 @@ import 'package:flutter/services.dart';
 import '../mobile_glass.dart';
 import '../theme_colors.dart';
 
-/// 修饰键（Ctrl / Alt）的黏滞模式：仿 UU 远程「组合键模式」。
-/// - [off]：未激活；
-/// - [once]：单次组合有效（发送下一键后自动释放）；
-/// - [locked]：锁定连发（持续生效直至再次点击解除，方便连续操作多个组合键）。
+/// 修饰键状态：用于快捷栏与终端全键盘之间统一状态同步。
 enum TerminalModifierMode { off, once, locked }
 
 /// 根据当前 [ctrl] / [alt] 修饰键把单个 ASCII 字符转换为对应控制/Meta 转义序列。
@@ -50,7 +47,44 @@ String applyStickyCtrl(String input) {
   };
 }
 
-/// 终端快捷控制条：支持长按连发按键、单次/锁定修饰键、切换 UU 风格扩展全键盘或折叠悬浮球。
+/// 为方向键与 Home/End/Del/PgUp/PgDn 等 ANSI 序列叠加 Shift/Alt/Ctrl 修饰参数。
+String encodeModifiedSpecialKey(
+  String baseSequence, {
+  bool shift = false,
+  bool alt = false,
+  bool ctrl = false,
+}) {
+  if (!shift && !alt && !ctrl) return baseSequence;
+  // Tab + Shift -> Backtab
+  if (baseSequence == '\t' && shift && !alt && !ctrl) {
+    return '\x1b[Z';
+  }
+  final mod = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
+  // 方向键与 Home/End: \x1b[A / \x1b[H -> \x1b[1;{mod}A
+  if (baseSequence.length == 3 &&
+      baseSequence.startsWith('\x1b[') &&
+      'ABCDHF'.contains(baseSequence[2])) {
+    return '\x1b[1;$mod${baseSequence[2]}';
+  }
+  // Tilde 键如 \x1b[3~ / \x1b[5~ -> \x1b[3;{mod}~
+  if (baseSequence.startsWith('\x1b[') && baseSequence.endsWith('~')) {
+    final code = baseSequence.substring(2, baseSequence.length - 1);
+    return '\x1b[$code;$mod~';
+  }
+  final isAltSafe =
+      baseSequence == '\r' ||
+      baseSequence == '\t' ||
+      baseSequence == '\x7f' ||
+      (baseSequence.isNotEmpty && baseSequence.codeUnitAt(0) >= 0x20);
+  if (alt && isAltSafe && !baseSequence.startsWith('\x1b')) {
+    return '\x1b$baseSequence';
+  }
+  return baseSequence;
+}
+
+/// 仿 UU 远程顶部悬浮快捷工具胶囊：
+/// - 左侧可横向滑动常用键（↑↓←→、^C、Esc、Tab、⇧Tab、Ctrl、Alt、粘贴、清屏）；
+/// - 右侧固定系统输入法切回钮、UU 双屏全键盘展开/收起钮与向下折叠按钮。
 class TerminalShortcutBar extends StatelessWidget {
   const TerminalShortcutBar({
     super.key,
@@ -101,35 +135,19 @@ class TerminalShortcutBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final brightness = Theme.of(context).brightness;
-    final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(10, 6, 10, expandedOpen ? 4 : 8),
+      padding: EdgeInsets.fromLTRB(10, 6, 10, expandedOpen ? 6 : 8),
       child: MobileGlassSurface(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: SizedBox(
-          height: 44,
+          height: 46,
           child: Row(
             children: [
               const SizedBox(width: 6),
-              // 左侧固定：在「PC 终端扩展键盘」与「系统键盘」间切换
-              _ShortcutActionIcon(
-                key: expandedOpen ? systemKeyboardKey : expandKey,
-                tooltip: expandedOpen ? '切换到系统输入法' : '展开终端扩展键盘',
-                icon: expandedOpen
-                    ? Icons.keyboard_alt_outlined
-                    : Icons.grid_view_rounded,
-                active: expandedOpen,
-                enabled: enabled,
-                onTap: expandedOpen ? onShowSystemKeyboard : onToggleExpanded,
-              ),
-              Container(
-                width: 1,
-                height: 20,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                color: colors.divider,
-              ),
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -137,47 +155,6 @@ class TerminalShortcutBar extends StatelessWidget {
                   child: Row(
                     spacing: 5,
                     children: [
-                      _ShortcutChip(
-                        key: escKey,
-                        label: 'Esc',
-                        enabled: enabled,
-                        onTap: () => onSendSequence('\x1b'),
-                      ),
-                      _ShortcutChip(
-                        key: tabKey,
-                        label: 'Tab',
-                        enabled: enabled,
-                        onTap: () => onSendSequence('\t'),
-                      ),
-                      _ShortcutChip(
-                        key: shiftTabKey,
-                        label: '⇧Tab',
-                        enabled: enabled,
-                        onTap: () => onSendSequence('\x1b[Z'),
-                      ),
-                      _ModifierChip(
-                        key: ctrlKey,
-                        label: 'Ctrl',
-                        mode: ctrlMode,
-                        enabled: enabled,
-                        onTap: onCycleCtrl,
-                        onLongPress: onLockCtrl,
-                      ),
-                      _ModifierChip(
-                        key: altKey,
-                        label: 'Alt',
-                        mode: altMode,
-                        enabled: enabled,
-                        onTap: onCycleAlt,
-                        onLongPress: onLockAlt,
-                      ),
-                      _ShortcutChip(
-                        key: ctrlCKey,
-                        label: '^C',
-                        accentDanger: true,
-                        enabled: enabled,
-                        onTap: () => onSendSequence('\x03'),
-                      ),
                       _ShortcutChip(
                         key: upKey,
                         label: '↑',
@@ -207,6 +184,49 @@ class TerminalShortcutBar extends StatelessWidget {
                         onTap: () => onSendSequence('\x1b[C'),
                       ),
                       _ShortcutChip(
+                        key: ctrlCKey,
+                        label: 'Ctrl+C',
+                        accentDanger: true,
+                        enabled: enabled,
+                        onTap: () => onSendSequence('\x03'),
+                      ),
+                      _ShortcutChip(
+                        key: escKey,
+                        label: 'Esc',
+                        enabled: enabled,
+                        onTap: () => onSendSequence('\x1b'),
+                      ),
+                      _ShortcutChip(
+                        key: tabKey,
+                        label: 'Tab',
+                        enabled: enabled,
+                        onTap: () => onSendSequence('\t'),
+                      ),
+                      _ShortcutChip(
+                        key: shiftTabKey,
+                        label: '⇧Tab',
+                        enabled: enabled,
+                        onTap: () => onSendSequence('\x1b[Z'),
+                      ),
+                      if (!expandedOpen) ...[
+                        _ModifierChip(
+                          key: ctrlKey,
+                          label: 'Ctrl',
+                          mode: ctrlMode,
+                          enabled: enabled,
+                          onTap: onCycleCtrl,
+                          onLongPress: onLockCtrl,
+                        ),
+                        _ModifierChip(
+                          key: altKey,
+                          label: 'Alt',
+                          mode: altMode,
+                          enabled: enabled,
+                          onTap: onCycleAlt,
+                          onLongPress: onLockAlt,
+                        ),
+                      ],
+                      _ShortcutChip(
                         key: pasteKey,
                         label: '粘贴',
                         enabled: enabled,
@@ -229,9 +249,26 @@ class TerminalShortcutBar extends StatelessWidget {
                 color: colors.divider,
               ),
               _ShortcutActionIcon(
+                key: systemKeyboardKey,
+                tooltip: '切换到系统输入法',
+                icon: Icons.keyboard_rounded,
+                active: !expandedOpen,
+                enabled: enabled,
+                onTap: onShowSystemKeyboard,
+              ),
+              const SizedBox(width: 2),
+              _ShortcutActionIcon(
+                key: expandKey,
+                tooltip: expandedOpen ? '关闭全键盘' : '展开电脑全键盘',
+                icon: Icons.keyboard_alt_outlined,
+                active: expandedOpen,
+                enabled: enabled,
+                onTap: onToggleExpanded,
+              ),
+              _ShortcutActionIcon(
                 key: hideKeyboardKey,
-                tooltip: '收起键盘与工具条',
-                icon: Icons.keyboard_hide_rounded,
+                tooltip: '收起键盘栏',
+                icon: Icons.keyboard_arrow_down_rounded,
                 active: false,
                 enabled: true,
                 onTap: onCollapse,
@@ -286,8 +323,8 @@ class TerminalFloatingPill extends StatelessWidget {
             ),
             _PillIconBtn(
               key: openExpandedKey,
-              tooltip: '终端扩展键盘',
-              icon: Icons.grid_view_rounded,
+              tooltip: '展开电脑全键盘',
+              icon: Icons.keyboard_alt_outlined,
               color: colors.foreground,
               onTap: enabled ? onShowExpandedKeyboard : null,
             ),
@@ -385,7 +422,7 @@ class _ShortcutActionIcon extends StatelessWidget {
       message: tooltip,
       child: Material(
         color: bg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: enabled
@@ -395,9 +432,9 @@ class _ShortcutActionIcon extends StatelessWidget {
                 }
               : null,
           child: SizedBox(
-            width: 34,
+            width: 32,
             height: 32,
-            child: Icon(icon, size: 18, color: fg),
+            child: Icon(icon, size: 17, color: fg),
           ),
         ),
       ),

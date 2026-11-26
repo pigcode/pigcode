@@ -1,57 +1,62 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme_colors.dart';
-import 'terminal_shortcut_bar.dart';
+import 'terminal_key_cap.dart';
 
-/// 仿 UU 远程交互设计的终端扩展键盘面板：
-/// - 在不呼出系统输入法的情况下，提供完整高频编程符号、Ctrl/Alt 组合键、
-///   F1-F12 功能键、Home/End/PgUp/PgDn，以及支持长按连发的倒 T 形十字方向键。
+/// 一比一对齐 UU 远程布局逻辑的双屏可左右滑动 PC 终端扩展键盘：
+/// - 顶部共享栏：「[ ] 组合键模式」勾选开关 + `Ctrl` / `Shift` / `Alt` / `Esc` 修饰操控键；
+/// - PageView 第 1 屏（完整 PC 全键盘）：10 列双标符号行 + `1-0` 数字/上档符号行 + `Q-P` / `A-L ⌫` / `Z-M Space Enter`；
+/// - PageView 第 2 屏（左滑切换）：6 列 × 5 行规律网格，集成 `Esc/Tab/~/` / 高频控制 + 3×4 `F1-F12` + `Ins/Del/Home/End/PgUp/PgDn` + `Caps` + 倒 T 方向盘；
+/// - 底部双横条指示器（支持点击切页与手指左右滑动切页）。
 class TerminalExpandedKeyboard extends StatefulWidget {
+  const TerminalExpandedKeyboard({
+    super.key,
+    required this.comboMode,
+    required this.ctrlActive,
+    required this.shiftActive,
+    required this.altActive,
+    required this.capsLock,
+    required this.enabled,
+    required this.onToggleComboMode,
+    required this.onToggleCtrl,
+    required this.onToggleShift,
+    required this.onToggleAlt,
+    required this.onToggleCapsLock,
+    required this.onSendChar,
+    required this.onSendRaw,
+  });
+
   static const panelKey = ValueKey('terminal-expanded-keyboard');
-  static const fnToggleKey = ValueKey('terminal-expanded-fn-toggle');
-  static const systemKeyboardKey = ValueKey('terminal-expanded-system');
-  static const collapseKey = ValueKey('terminal-expanded-collapse');
-  static const shiftTabKey = ValueKey('terminal-expanded-shift-tab');
+  static const pagerKey = ValueKey('terminal-expanded-pager');
+  static const comboModeKey = ValueKey('terminal-expanded-combo-mode');
   static const ctrlKey = ValueKey('terminal-expanded-ctrl');
+  static const shiftKey = ValueKey('terminal-expanded-shift');
   static const altKey = ValueKey('terminal-expanded-alt');
+  static const capsKey = ValueKey('terminal-expanded-caps');
   static const enterKey = ValueKey('terminal-expanded-enter');
   static const backspaceKey = ValueKey('terminal-expanded-backspace');
+  static const pageDot0Key = ValueKey('terminal-expanded-page-0');
+  static const pageDot1Key = ValueKey('terminal-expanded-page-1');
+  static const shiftTabKey = ValueKey('terminal-expanded-shift-tab');
   static const crossUpKey = ValueKey('terminal-cross-up');
   static const crossDownKey = ValueKey('terminal-cross-down');
   static const crossLeftKey = ValueKey('terminal-cross-left');
   static const crossRightKey = ValueKey('terminal-cross-right');
 
-  final TerminalModifierMode ctrlMode;
-  final TerminalModifierMode altMode;
+  final bool comboMode;
+  final bool ctrlActive;
+  final bool shiftActive;
+  final bool altActive;
+  final bool capsLock;
   final bool enabled;
-  final VoidCallback onCycleCtrl;
-  final VoidCallback onLockCtrl;
-  final VoidCallback onCycleAlt;
-  final VoidCallback onLockAlt;
+  final VoidCallback onToggleComboMode;
+  final VoidCallback onToggleCtrl;
+  final VoidCallback onToggleShift;
+  final VoidCallback onToggleAlt;
+  final VoidCallback onToggleCapsLock;
   final ValueChanged<String> onSendChar;
   final ValueChanged<String> onSendRaw;
-  final VoidCallback onPaste;
-  final VoidCallback onSwitchToSystemKeyboard;
-  final VoidCallback onCollapse;
-
-  const TerminalExpandedKeyboard({
-    super.key,
-    required this.ctrlMode,
-    required this.altMode,
-    required this.enabled,
-    required this.onCycleCtrl,
-    required this.onLockCtrl,
-    required this.onCycleAlt,
-    required this.onLockAlt,
-    required this.onSendChar,
-    required this.onSendRaw,
-    required this.onPaste,
-    required this.onSwitchToSystemKeyboard,
-    required this.onCollapse,
-  });
 
   @override
   State<TerminalExpandedKeyboard> createState() =>
@@ -59,63 +64,55 @@ class TerminalExpandedKeyboard extends StatefulWidget {
 }
 
 class _TerminalExpandedKeyboardState extends State<TerminalExpandedKeyboard> {
-  bool _showFunctionKeys = false;
+  final PageController _pageController = PageController();
+  int _page = 0;
 
-  static const _symbolRow1 = [
-    '/',
-    '-',
-    '_',
-    '|',
-    '~',
-    '&',
-    '>',
-    '<',
-    '=',
-    '*',
-    '\$',
+  // 第 1 屏第 1 行：UU 同款 10 列双标符号（upper = Shift 上档, lower = 默认）
+  static const _dualSymbols = [
+    ('_', '-'),
+    ('+', '='),
+    ('{', '['),
+    ('}', ']'),
+    ('|', '\\'),
+    (':', ';'),
+    ('"', "'"),
+    ('<', ','),
+    ('>', '.'),
+    ('?', '/'),
   ];
 
-  static const _symbolRow2 = [
-    '\\',
-    '"',
-    "'",
-    '`',
-    ';',
-    ':',
-    '(',
-    ')',
-    '[',
-    ']',
-    '{',
+  // 第 1 屏第 2 行：10 列数字 + Shift 上档符号
+  static const _numberPairs = [
+    ('!', '1'),
+    ('@', '2'),
+    ('#', '3'),
+    ('\$', '4'),
+    ('%', '5'),
+    ('^', '6'),
+    ('&', '7'),
+    ('*', '8'),
+    ('(', '9'),
+    (')', '0'),
   ];
 
-  static const _fnKeys = [
-    ('F1', '\x1bOP'),
-    ('F2', '\x1bOQ'),
-    ('F3', '\x1bOR'),
-    ('F4', '\x1bOS'),
-    ('F5', '\x1b[15~'),
-    ('F6', '\x1b[17~'),
-    ('F7', '\x1b[18~'),
-    ('F8', '\x1b[19~'),
-    ('F9', '\x1b[20~'),
-    ('F10', '\x1b[21~'),
-    ('F11', '\x1b[23~'),
-    ('F12', '\x1b[24~'),
-  ];
+  static const _qwertyTop = ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'];
+  static const _qwertyMid = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
+  static const _qwertyBot = ['z', 'x', 'c', 'v', 'b', 'n', 'm'];
 
-  static const _comboKeys = [
-    ('Esc', '\x1b', false),
-    ('Tab', '\t', false),
-    ('⇧Tab', '\x1b[Z', false),
-    ('^C', '\x03', true),
-    ('^D', '\x04', false),
-    ('^Z', '\x1a', false),
-    ('^L', '\x0c', false),
-    ('^R', '\x12', false),
-    ('^A', '\x01', false),
-    ('^E', '\x05', false),
-  ];
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _goToPage(int index) {
+    if (_page == index) return;
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,596 +126,507 @@ class _TerminalExpandedKeyboardState extends State<TerminalExpandedKeyboard> {
         color: colors.window,
         border: Border(top: BorderSide(color: colors.divider)),
       ),
-      padding: const EdgeInsets.fromLTRB(8, 7, 8, 10),
+      padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 顶部控制条：系统输入法切回、常用/F1-F12 分段切换、清屏与收起（避免与外层条重复）
-          Padding(
-            padding: const EdgeInsets.only(bottom: 7),
+          _buildModifierHeader(colors),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 224,
+            child: PageView(
+              key: TerminalExpandedKeyboard.pagerKey,
+              controller: _pageController,
+              onPageChanged: (index) => setState(() => _page = index),
+              children: [_buildQwertyPage(), _buildFunctionAndNavPage()],
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildPageIndicator(colors),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModifierHeader(dynamic colors) {
+    return Row(
+      children: [
+        InkWell(
+          key: TerminalExpandedKeyboard.comboModeKey,
+          borderRadius: BorderRadius.circular(8),
+          onTap: widget.enabled
+              ? () {
+                  HapticFeedback.selectionClick();
+                  widget.onToggleComboMode();
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 6,
               children: [
-                _KeyboardKey(
-                  key: TerminalExpandedKeyboard.systemKeyboardKey,
-                  label: '系统键盘',
-                  icon: Icons.keyboard_rounded,
-                  height: 32,
-                  fontSize: 12,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  enabled: widget.enabled,
-                  onTap: widget.onSwitchToSystemKeyboard,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 140),
+                  width: 17,
+                  height: 17,
+                  decoration: BoxDecoration(
+                    color: widget.comboMode
+                        ? colors.primary
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(5),
+                    border: Border.all(
+                      color: widget.comboMode
+                          ? colors.primary
+                          : colors.strongBorder,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: widget.comboMode
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 13,
+                          color: colors.onPrimary,
+                        )
+                      : null,
                 ),
-                const SizedBox(width: 6),
-                _KeyboardKey(
-                  key: TerminalExpandedKeyboard.fnToggleKey,
-                  label: _showFunctionKeys ? '常用控制' : 'F1–F12',
-                  height: 32,
-                  fontSize: 12,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  highlighted: _showFunctionKeys,
-                  enabled: widget.enabled,
-                  onTap: () =>
-                      setState(() => _showFunctionKeys = !_showFunctionKeys),
-                ),
-                const Spacer(),
-                _KeyboardKey(
-                  label: '清屏',
-                  height: 32,
-                  fontSize: 12,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  enabled: widget.enabled,
-                  onTap: () => widget.onSendRaw('\x0c'),
-                ),
-                const SizedBox(width: 6),
-                _KeyboardKey(
-                  key: TerminalExpandedKeyboard.collapseKey,
-                  label: '',
-                  tooltip: '收起键盘',
-                  icon: Icons.keyboard_hide_rounded,
-                  width: 36,
-                  height: 32,
-                  enabled: true,
-                  onTap: widget.onCollapse,
+                Text(
+                  '组合键模式',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: widget.comboMode
+                        ? colors.foreground
+                        : colors.secondaryText,
+                  ),
                 ),
               ],
             ),
           ),
-          // 第 1 行：高频控制/组合键 或 F1-F12 功能键
-          SizedBox(
-            height: 36,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                spacing: 5,
-                children: _showFunctionKeys
-                    ? [
-                        for (final (label, seq) in _fnKeys)
-                          _KeyboardKey(
-                            label: label,
-                            width: 44,
-                            height: 36,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw(seq),
-                          ),
-                      ]
-                    : [
-                        for (final (label, seq, danger) in _comboKeys)
-                          _KeyboardKey(
-                            key: label == '⇧Tab'
-                                ? TerminalExpandedKeyboard.shiftTabKey
-                                : null,
-                            label: label,
-                            width: label.length >= 4 ? 56 : 44,
-                            height: 36,
-                            danger: danger,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw(seq),
-                          ),
-                      ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          // 第 2 行：终端高频编程符号 1
-          _buildSymbolRow(_symbolRow1),
-          const SizedBox(height: 5),
-          // 第 3 行：终端高频编程符号 2
-          _buildSymbolRow(_symbolRow2),
-          const SizedBox(height: 8),
-          // 第 4 行：左（修饰+翻页定位）、中（物理倒 T 十字方向盘）、右（粘贴/退格/回车）
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Row(
+            spacing: 5,
             children: [
-              // 左侧：修饰与定位（两排紧致网格）
               Expanded(
-                flex: 5,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ModifierKeyCap(
-                            key: TerminalExpandedKeyboard.ctrlKey,
-                            label: 'Ctrl',
-                            mode: widget.ctrlMode,
-                            enabled: widget.enabled,
-                            onTap: widget.onCycleCtrl,
-                            onLongPress: widget.onLockCtrl,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _ModifierKeyCap(
-                            key: TerminalExpandedKeyboard.altKey,
-                            label: 'Alt',
-                            mode: widget.altMode,
-                            enabled: widget.enabled,
-                            onTap: widget.onCycleAlt,
-                            onLongPress: widget.onLockAlt,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: 'Home',
-                            height: 38,
-                            fontSize: 11.5,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw('\x1b[H'),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: 'End',
-                            height: 38,
-                            fontSize: 11.5,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw('\x1b[F'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: 'PgUp',
-                            height: 36,
-                            fontSize: 11,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw('\x1b[5~'),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: 'PgDn',
-                            height: 36,
-                            fontSize: 11,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw('\x1b[6~'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                child: TerminalKeyCap(
+                  key: TerminalExpandedKeyboard.ctrlKey,
+                  label: 'Ctrl',
+                  height: 36,
+                  fontSize: 13.5,
+                  active: widget.ctrlActive,
+                  dimmed: true,
+                  enabled: widget.enabled,
+                  onTap: widget.onToggleCtrl,
                 ),
               ),
-              const SizedBox(width: 6),
-              // 中央：实体倒 T 十字方向盘（长按连发）
-              SizedBox(
-                width: 118,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _KeyboardKey(
-                      key: TerminalExpandedKeyboard.crossUpKey,
-                      label: '↑',
-                      width: 37,
-                      height: 38,
-                      repeatable: true,
-                      enabled: widget.enabled,
-                      onTap: () => widget.onSendRaw('\x1b[A'),
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      spacing: 3.5,
-                      children: [
-                        _KeyboardKey(
-                          key: TerminalExpandedKeyboard.crossLeftKey,
-                          label: '←',
-                          width: 37,
-                          height: 38,
-                          repeatable: true,
-                          enabled: widget.enabled,
-                          onTap: () => widget.onSendRaw('\x1b[D'),
-                        ),
-                        _KeyboardKey(
-                          key: TerminalExpandedKeyboard.crossDownKey,
-                          label: '↓',
-                          width: 37,
-                          height: 38,
-                          repeatable: true,
-                          enabled: widget.enabled,
-                          onTap: () => widget.onSendRaw('\x1b[B'),
-                        ),
-                        _KeyboardKey(
-                          key: TerminalExpandedKeyboard.crossRightKey,
-                          label: '→',
-                          width: 37,
-                          height: 38,
-                          repeatable: true,
-                          enabled: widget.enabled,
-                          onTap: () => widget.onSendRaw('\x1b[C'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      spacing: 4,
-                      children: [
-                        _KeyboardKey(
-                          label: '{',
-                          width: 56,
-                          height: 36,
-                          fontSize: 14,
-                          monospace: true,
-                          enabled: widget.enabled,
-                          onTap: () => widget.onSendChar('{'),
-                        ),
-                        _KeyboardKey(
-                          label: '}',
-                          width: 56,
-                          height: 36,
-                          fontSize: 14,
-                          monospace: true,
-                          enabled: widget.enabled,
-                          onTap: () => widget.onSendChar('}'),
-                        ),
-                      ],
-                    ),
-                  ],
+              Expanded(
+                child: TerminalKeyCap(
+                  key: TerminalExpandedKeyboard.shiftKey,
+                  label: 'Shift',
+                  height: 36,
+                  fontSize: 13.5,
+                  active: widget.shiftActive,
+                  dimmed: true,
+                  enabled: widget.enabled,
+                  onTap: widget.onToggleShift,
                 ),
               ),
-              const SizedBox(width: 6),
-              // 右侧：粘贴、长按退格、主回车键
               Expanded(
-                flex: 4,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: '粘贴',
-                            height: 38,
-                            fontSize: 12,
-                            enabled: widget.enabled,
-                            onTap: widget.onPaste,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: _KeyboardKey(
-                            key: TerminalExpandedKeyboard.backspaceKey,
-                            label: '',
-                            tooltip: '退格',
-                            icon: Icons.backspace_outlined,
-                            height: 38,
-                            repeatable: true,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendRaw('\x7f'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _KeyboardKey(
-                            label: 'Space',
-                            height: 36,
-                            fontSize: 11.5,
-                            enabled: widget.enabled,
-                            onTap: () => widget.onSendChar(' '),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    SizedBox(
-                      width: double.infinity,
-                      child: _KeyboardKey(
-                        key: TerminalExpandedKeyboard.enterKey,
-                        label: '回车',
-                        icon: Icons.keyboard_return_rounded,
-                        height: 38,
-                        primary: true,
-                        fontSize: 13,
-                        enabled: widget.enabled,
-                        onTap: () => widget.onSendRaw('\r'),
-                      ),
-                    ),
-                  ],
+                child: TerminalKeyCap(
+                  key: TerminalExpandedKeyboard.altKey,
+                  label: 'Alt',
+                  height: 36,
+                  fontSize: 13.5,
+                  active: widget.altActive,
+                  dimmed: true,
+                  enabled: widget.enabled,
+                  onTap: widget.onToggleAlt,
+                ),
+              ),
+              Expanded(
+                child: TerminalKeyCap(
+                  label: 'Esc',
+                  height: 36,
+                  fontSize: 13.5,
+                  dimmed: true,
+                  enabled: widget.enabled,
+                  onTap: () => widget.onSendRaw('\x1b'),
                 ),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSymbolRow(List<String> symbols) {
-    return Row(
-      children: [
-        for (var i = 0; i < symbols.length; i++) ...[
-          if (i > 0) const SizedBox(width: 4),
-          Expanded(
-            child: _KeyboardKey(
-              label: symbols[i],
-              height: 36,
-              fontSize: 14.5,
-              monospace: true,
-              enabled: widget.enabled,
-              onTap: () => widget.onSendChar(symbols[i]),
-            ),
-          ),
-        ],
+        ),
       ],
     );
   }
-}
 
-class _ModifierKeyCap extends StatelessWidget {
-  const _ModifierKeyCap({
-    super.key,
-    required this.label,
-    required this.mode,
-    required this.enabled,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  final String label;
-  final TerminalModifierMode mode;
-  final bool enabled;
-  final VoidCallback onTap;
-  final VoidCallback onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    final active = mode != TerminalModifierMode.off;
-    final locked = mode == TerminalModifierMode.locked;
-    final bg = active ? colors.primary : colors.surface;
-    final fg = active
-        ? colors.onPrimary
-        : (enabled ? colors.foreground : colors.faint);
-
-    return Material(
-      color: bg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(9),
-        side: BorderSide(
-          color: locked ? colors.statusAccent : colors.border,
-          width: locked ? 1.5 : 1,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: enabled
-            ? () {
-                HapticFeedback.selectionClick();
-                onTap();
-              }
-            : null,
-        onLongPress: enabled
-            ? () {
-                HapticFeedback.mediumImpact();
-                onLongPress();
-              }
-            : null,
-        child: SizedBox(
-          height: 38,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                spacing: 2,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                      color: fg,
-                    ),
-                  ),
-                  if (locked) Icon(Icons.lock_rounded, size: 10, color: fg),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _KeyboardKey extends StatefulWidget {
-  const _KeyboardKey({
-    super.key,
-    required this.label,
-    required this.height,
-    required this.enabled,
-    required this.onTap,
-    this.width,
-    this.padding,
-    this.icon,
-    this.tooltip,
-    this.fontSize = 13,
-    this.monospace = false,
-    this.repeatable = false,
-    this.primary = false,
-    this.highlighted = false,
-    this.danger = false,
-  });
-
-  final String label;
-  final double? width;
-  final EdgeInsetsGeometry? padding;
-  final IconData? icon;
-  final String? tooltip;
-  final double height;
-  final double fontSize;
-  final bool monospace;
-  final bool repeatable;
-  final bool primary;
-  final bool highlighted;
-  final bool danger;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  State<_KeyboardKey> createState() => _KeyboardKeyState();
-}
-
-class _KeyboardKeyState extends State<_KeyboardKey> {
-  Timer? _initialDelay;
-  Timer? _repeatTimer;
-
-  void _stopRepeat() {
-    _initialDelay?.cancel();
-    _initialDelay = null;
-    _repeatTimer?.cancel();
-    _repeatTimer = null;
-  }
-
-  void _startRepeat() {
-    if (!widget.repeatable || !widget.enabled) return;
-    _stopRepeat();
-    _initialDelay = Timer(const Duration(milliseconds: 360), () {
-      _repeatTimer = Timer.periodic(const Duration(milliseconds: 85), (_) {
-        if (!mounted || !widget.enabled) {
-          _stopRepeat();
-          return;
-        }
-        HapticFeedback.selectionClick();
-        widget.onTap();
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _stopRepeat();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-
-    final Color bg;
-    final Color fg;
-    final Color borderColor;
-    if (widget.primary || widget.highlighted) {
-      bg = widget.enabled ? colors.primary : colors.field;
-      fg = widget.enabled ? colors.onPrimary : colors.faint;
-      borderColor = Colors.transparent;
-    } else if (widget.danger) {
-      bg = colors.errorTint;
-      fg = widget.enabled ? colors.error : colors.faint;
-      borderColor = colors.error.withValues(alpha: 0.25);
-    } else {
-      bg = colors.surface;
-      fg = widget.enabled ? colors.foreground : colors.faint;
-      borderColor = colors.border;
-    }
-
-    final content = Row(
+  /// 第 1 屏：UU 远程标准 5 行 PC 全键盘（双标符号 + 1-0 + Q-P + A-L ⌫ + Z-M Space Enter）
+  Widget _buildQwertyPage() {
+    final uppercase = widget.shiftActive ^ widget.capsLock;
+    return Column(
       mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      spacing: 4,
+      spacing: 4.5,
       children: [
-        if (widget.icon != null) Icon(widget.icon, size: 15, color: fg),
-        if (widget.label.isNotEmpty)
-          Text(
-            widget.label,
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-            style: TextStyle(
-              fontSize: widget.fontSize,
-              fontWeight: FontWeight.w500,
-              fontFamily: widget.monospace ? 'Menlo' : null,
-              fontFamilyFallback: widget.monospace
-                  ? const [
-                      'SF Mono',
-                      'JetBrains Mono',
-                      'Noto Sans SC',
-                      'monospace',
-                    ]
-                  : null,
-              color: fg,
-              height: 1.1,
-            ),
-          ),
-      ],
-    );
-
-    final child = SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: Material(
-        color: bg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(9),
-          side: BorderSide(color: borderColor),
+        // Row 1: 10 个双标常用符号
+        Row(
+          spacing: 3.5,
+          children: [
+            for (final (upper, lower) in _dualSymbols)
+              Expanded(
+                child: TerminalKeyCap(
+                  label: lower,
+                  upperLabel: upper,
+                  upperActive: widget.shiftActive,
+                  height: 41,
+                  monospace: true,
+                  enabled: widget.enabled,
+                  onTap: () =>
+                      widget.onSendChar(widget.shiftActive ? upper : lower),
+                ),
+              ),
+          ],
         ),
-        clipBehavior: Clip.antiAlias,
-        child: GestureDetector(
-          onTapDown: widget.enabled ? (_) => _startRepeat() : null,
-          onTapUp: (_) => _stopRepeat(),
-          onTapCancel: _stopRepeat,
-          child: InkWell(
-            onTap: widget.enabled
-                ? () {
-                    HapticFeedback.selectionClick();
-                    widget.onTap();
-                  }
-                : null,
-            child: Padding(
-              padding:
-                  widget.padding ?? const EdgeInsets.symmetric(horizontal: 2),
-              child: Center(
-                child: FittedBox(fit: BoxFit.scaleDown, child: content),
+        // Row 2: 1 - 0（Shift 激活时自动发送上方符号）
+        Row(
+          spacing: 3.5,
+          children: [
+            for (final (upper, digit) in _numberPairs)
+              Expanded(
+                child: TerminalKeyCap(
+                  label: widget.shiftActive ? upper : digit,
+                  height: 41,
+                  fontSize: 15,
+                  monospace: true,
+                  enabled: widget.enabled,
+                  onTap: () =>
+                      widget.onSendChar(widget.shiftActive ? upper : digit),
+                ),
+              ),
+          ],
+        ),
+        // Row 3: Q - P
+        Row(
+          spacing: 3.5,
+          children: [
+            for (final ch in _qwertyTop)
+              Expanded(
+                child: TerminalKeyCap(
+                  label: uppercase ? ch.toUpperCase() : ch,
+                  height: 41,
+                  fontSize: 15.5,
+                  enabled: widget.enabled,
+                  onTap: () =>
+                      widget.onSendChar(uppercase ? ch.toUpperCase() : ch),
+                ),
+              ),
+          ],
+        ),
+        // Row 4: A - L + 退格
+        Row(
+          spacing: 3.5,
+          children: [
+            for (final ch in _qwertyMid)
+              Expanded(
+                child: TerminalKeyCap(
+                  label: uppercase ? ch.toUpperCase() : ch,
+                  height: 41,
+                  fontSize: 15.5,
+                  enabled: widget.enabled,
+                  onTap: () =>
+                      widget.onSendChar(uppercase ? ch.toUpperCase() : ch),
+                ),
+              ),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.backspaceKey,
+                tooltip: '退格',
+                icon: Icons.backspace_outlined,
+                height: 41,
+                dimmed: true,
+                repeatable: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x7f'),
               ),
             ),
+          ],
+        ),
+        // Row 5: Z - M + Space + Enter
+        Row(
+          spacing: 3.5,
+          children: [
+            for (final ch in _qwertyBot)
+              Expanded(
+                flex: 10,
+                child: TerminalKeyCap(
+                  label: uppercase ? ch.toUpperCase() : ch,
+                  height: 41,
+                  fontSize: 15.5,
+                  enabled: widget.enabled,
+                  onTap: () =>
+                      widget.onSendChar(uppercase ? ch.toUpperCase() : ch),
+                ),
+              ),
+            Expanded(
+              flex: 15,
+              child: TerminalKeyCap(
+                label: 'Space',
+                height: 41,
+                fontSize: 12.5,
+                dimmed: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendChar(' '),
+              ),
+            ),
+            Expanded(
+              flex: 15,
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.enterKey,
+                label: 'Enter',
+                height: 41,
+                fontSize: 13,
+                active: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\r'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 第 2 屏：一比一还原 UU 远程 6×5 功能/F键/编辑键/方向十字网格，并对终端补充高频键
+  Widget _buildFunctionAndNavPage() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4.5,
+      children: [
+        // Row 1: Esc | Tab | ~ ` | ⇧Tab | ^D | ^Z
+        Row(
+          spacing: 4,
+          children: [
+            Expanded(
+              child: TerminalKeyCap(
+                label: 'Esc',
+                height: 41,
+                fontSize: 13,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                label: 'Tab',
+                height: 41,
+                fontSize: 13,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\t'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                label: '`',
+                upperLabel: '~',
+                upperActive: widget.shiftActive,
+                height: 41,
+                monospace: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendChar(widget.shiftActive ? '~' : '`'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.shiftTabKey,
+                label: '⇧Tab',
+                height: 41,
+                fontSize: 12.5,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b[Z'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                label: '^D',
+                height: 41,
+                fontSize: 13,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x04'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                label: '^Z',
+                height: 41,
+                fontSize: 13,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1a'),
+              ),
+            ),
+          ],
+        ),
+        // Row 2: F1 | F2 | F3 | Ins | Home | PgUp
+        Row(
+          spacing: 4,
+          children: [
+            _fnCell('F1', '\x1bOP'),
+            _fnCell('F2', '\x1bOQ'),
+            _fnCell('F3', '\x1bOR'),
+            _navCell('Ins', '\x1b[2~'),
+            _navCell('Home', '\x1b[H'),
+            _navCell('PgUp', '\x1b[5~'),
+          ],
+        ),
+        // Row 3: F4 | F5 | F6 | Del | End | PgDn
+        Row(
+          spacing: 4,
+          children: [
+            _fnCell('F4', '\x1bOS'),
+            _fnCell('F5', '\x1b[15~'),
+            _fnCell('F6', '\x1b[17~'),
+            _navCell('Del', '\x1b[3~', repeatable: true),
+            _navCell('End', '\x1b[F'),
+            _navCell('PgDn', '\x1b[6~'),
+          ],
+        ),
+        // Row 4: F7 | F8 | F9 | Caps | ↑ | ^R
+        Row(
+          spacing: 4,
+          children: [
+            _fnCell('F7', '\x1b[18~'),
+            _fnCell('F8', '\x1b[19~'),
+            _fnCell('F9', '\x1b[20~'),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.capsKey,
+                label: 'Caps',
+                height: 41,
+                fontSize: 13,
+                active: widget.capsLock,
+                enabled: widget.enabled,
+                onTap: widget.onToggleCapsLock,
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.crossUpKey,
+                label: '↑',
+                height: 41,
+                fontSize: 16,
+                repeatable: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b[A'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                label: '^R',
+                height: 41,
+                fontSize: 13,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x12'),
+              ),
+            ),
+          ],
+        ),
+        // Row 5: F10 | F11 | F12 | ← | ↓ | →
+        Row(
+          spacing: 4,
+          children: [
+            _fnCell('F10', '\x1b[21~'),
+            _fnCell('F11', '\x1b[23~'),
+            _fnCell('F12', '\x1b[24~'),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.crossLeftKey,
+                label: '←',
+                height: 41,
+                fontSize: 16,
+                repeatable: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b[D'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.crossDownKey,
+                label: '↓',
+                height: 41,
+                fontSize: 16,
+                repeatable: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b[B'),
+              ),
+            ),
+            Expanded(
+              child: TerminalKeyCap(
+                key: TerminalExpandedKeyboard.crossRightKey,
+                label: '→',
+                height: 41,
+                fontSize: 16,
+                repeatable: true,
+                enabled: widget.enabled,
+                onTap: () => widget.onSendRaw('\x1b[C'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _fnCell(String label, String seq) => Expanded(
+    child: TerminalKeyCap(
+      label: label,
+      height: 41,
+      fontSize: 13,
+      enabled: widget.enabled,
+      onTap: () => widget.onSendRaw(seq),
+    ),
+  );
+
+  Widget _navCell(String label, String seq, {bool repeatable = false}) =>
+      Expanded(
+        child: TerminalKeyCap(
+          label: label,
+          height: 41,
+          fontSize: 12.5,
+          repeatable: repeatable,
+          enabled: widget.enabled,
+          onTap: () => widget.onSendRaw(seq),
+        ),
+      );
+
+  Widget _buildPageIndicator(dynamic colors) {
+    Widget bar(Key key, int index) {
+      final selected = _page == index;
+      return InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(4),
+        onTap: () => _goToPage(index),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: selected ? 20 : 16,
+            height: 3.5,
+            decoration: BoxDecoration(
+              color: selected ? colors.foreground : colors.strongBorder,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
-      ),
-    );
-    if (widget.tooltip != null) {
-      return Tooltip(message: widget.tooltip!, child: child);
+      );
     }
-    return child;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      spacing: 2,
+      children: [
+        bar(TerminalExpandedKeyboard.pageDot0Key, 0),
+        bar(TerminalExpandedKeyboard.pageDot1Key, 1),
+      ],
+    );
   }
 }

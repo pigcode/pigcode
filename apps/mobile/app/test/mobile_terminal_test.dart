@@ -184,12 +184,18 @@ void main() {
       expect(host.calls.any((c) => c.$1 == MobileTerminalMethods.open), isTrue);
       expect(find.byKey(TerminalShortcutBar.ctrlCKey), findsOneWidget);
 
-      await tester.tap(find.byKey(TerminalShortcutBar.escKey));
-      await tester.tap(find.byKey(TerminalShortcutBar.tabKey));
-      await tester.tap(find.byKey(TerminalShortcutBar.ctrlCKey));
-      await tester.tap(find.byKey(TerminalShortcutBar.upKey));
-      await tester.tap(find.byKey(TerminalShortcutBar.pasteKey));
-      await tester.tap(find.byKey(TerminalShortcutBar.clearKey));
+      Future<void> tapShortcut(Key key) async {
+        final finder = find.byKey(key);
+        await tester.ensureVisible(finder);
+        await tester.tap(finder);
+      }
+
+      await tapShortcut(TerminalShortcutBar.escKey);
+      await tapShortcut(TerminalShortcutBar.tabKey);
+      await tapShortcut(TerminalShortcutBar.ctrlCKey);
+      await tapShortcut(TerminalShortcutBar.upKey);
+      await tapShortcut(TerminalShortcutBar.pasteKey);
+      await tapShortcut(TerminalShortcutBar.clearKey);
       await tester.pumpAndSettle();
 
       expect(host.writes.map((e) => e.$2).toList(), [
@@ -202,7 +208,7 @@ void main() {
       ]);
 
       // Arm sticky Ctrl once and emit 'd' through Terminal.onOutput -> '\x04'
-      await tester.tap(find.byKey(TerminalShortcutBar.ctrlKey));
+      await tapShortcut(TerminalShortcutBar.ctrlKey);
       await tester.pump();
       final termView = tester.widget<TerminalView>(
         find.byKey(const ValueKey('xterm-term_m_1')),
@@ -219,7 +225,7 @@ void main() {
   );
 
   testWidgets(
-    'expanded UU-style terminal keyboard: symbols, cross-pad, locked Ctrl/Alt, F1-F12, and floating pill on 360px screen',
+    'expanded UU two-screen terminal keyboard: screen1 QWERTY/dual-symbols, screen2 F-keys/nav, comboMode, page swipe & floating pill on 360px screen',
     (tester) async {
       tester.view.physicalSize = const Size(360, 780);
       tester.view.devicePixelRatio = 1.0;
@@ -242,56 +248,96 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Expand UU-style PC terminal keyboard
+      // Expand UU-style 2-screen PC terminal keyboard (pill stays visible above it)
       await tester.tap(find.byKey(TerminalShortcutBar.expandKey));
       await tester.pumpAndSettle();
       expect(find.byKey(TerminalExpandedKeyboard.panelKey), findsOneWidget);
+      expect(find.byKey(TerminalShortcutBar.hideKeyboardKey), findsOneWidget);
 
-      // Tap symbols & physical cross-pad arrows & Shift+Tab
-      await tester.tap(find.text('|'));
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.shiftTabKey));
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.crossUpKey));
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.crossLeftKey));
+      // Screen 1: QWERTY letters, numbers, Space, Enter & dual-symbol Shift behavior
+      await tester.tap(find.text('q'));
+      await tester.tap(find.text('1'));
+      await tester.tap(find.text('-'));
+      await tester.tap(find.text('Space'));
       await tester.tap(find.byKey(TerminalExpandedKeyboard.enterKey));
       await tester.pumpAndSettle();
 
       expect(
         host.writes.map((e) => e.$2).toList(),
-        containsAllInOrder(['|', '\x1b[Z', '\x1b[A', '\x1b[D', '\r']),
+        containsAllInOrder(['q', '1', '-', ' ', '\r']),
       );
 
-      // Toggle F1-F12 and tap F5
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.fnToggleKey));
+      // Single-shot Shift: produces upper symbol '+' and uppercase 'A', then auto-releases
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.shiftKey));
+      await tester.pump();
+      await tester.tap(find.text('='));
+      await tester.pump();
+      await tester.tap(find.text('='));
+      await tester.pump();
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.shiftKey));
+      await tester.pump();
+      await tester.tap(find.text('A'));
+      await tester.pump();
+      await tester.tap(find.text('a'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('F5'));
-      await tester.pumpAndSettle();
-      expect(host.writes.last.$2, '\x1b[15~');
+      expect(
+        host.writes.sublist(host.writes.length - 4).map((e) => e.$2).toList(),
+        ['+', '=', 'A', 'a'],
+      );
 
-      // Double-tap Ctrl on expanded panel -> locked mode; sending '[' twice keeps sending '\x1b'
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.ctrlKey));
+      // Combo mode checkbox keeps Ctrl active across multiple keystrokes
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.comboModeKey));
       await tester.tap(find.byKey(TerminalExpandedKeyboard.ctrlKey));
       await tester.pump();
-      expect(find.byIcon(Icons.lock_rounded), findsWidgets);
-      await tester.tap(find.text('['));
-      await tester.tap(find.text('['));
+      await tester.tap(find.text('c'));
+      await tester.tap(find.text('d'));
       await tester.pumpAndSettle();
       expect(
         host.writes.sublist(host.writes.length - 2).map((e) => e.$2).toList(),
-        ['\x1b', '\x1b'],
+        ['\x03', '\x04'],
       );
-      // Third tap unlocks Ctrl
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.ctrlKey));
+      // Unchecking combo mode clears held single-shot modifiers
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.comboModeKey));
       await tester.pump();
 
-      // Single-tap Alt -> sends ESC + '/'
+      // Swipe left to Screen 2 (F1-F12, Home/End/PgUp/PgDn/Ins/Del, Caps, arrows)
+      await tester.fling(
+        find.byKey(TerminalExpandedKeyboard.pagerKey),
+        const Offset(-300, 0),
+        900,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('F5'), findsOneWidget);
+
+      await tester.tap(find.text('F5'));
+      await tester.tap(find.text('Home'));
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.shiftTabKey));
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.crossUpKey));
+      await tester.tap(find.text('^R'));
+      await tester.pumpAndSettle();
+      expect(
+        host.writes.sublist(host.writes.length - 5).map((e) => e.$2).toList(),
+        ['\x1b[15~', '\x1b[H', '\x1b[Z', '\x1b[A', '\x12'],
+      );
+
+      // Modified arrow key: Ctrl + ↑ -> \x1b[1;5A
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.ctrlKey));
+      await tester.pump();
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.crossUpKey));
+      await tester.pumpAndSettle();
+      expect(host.writes.last.$2, '\x1b[1;5A');
+
+      // Single-shot Alt on Screen 1 -> ESC + '/'
+      await tester.tap(find.byKey(TerminalExpandedKeyboard.pageDot0Key));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(TerminalExpandedKeyboard.altKey));
       await tester.pump();
       await tester.tap(find.text('/'));
       await tester.pumpAndSettle();
       expect(host.writes.last.$2, '\x1b/');
 
-      // Collapse controls from expanded header -> shows floating pill; reopen expanded keyboard from pill
-      await tester.tap(find.byKey(TerminalExpandedKeyboard.collapseKey));
+      // Collapse controls from top pill -> shows floating pill; reopen expanded keyboard from pill
+      await tester.tap(find.byKey(TerminalShortcutBar.hideKeyboardKey));
       await tester.pumpAndSettle();
       expect(find.byKey(TerminalFloatingPill.pillKey), findsOneWidget);
       expect(find.byKey(TerminalExpandedKeyboard.panelKey), findsNothing);
@@ -299,6 +345,14 @@ void main() {
       await tester.tap(find.byKey(TerminalFloatingPill.openExpandedKey));
       await tester.pumpAndSettle();
       expect(find.byKey(TerminalExpandedKeyboard.panelKey), findsOneWidget);
+
+      // Verify modifier encoding helpers
+      expect(
+        encodeModifiedSpecialKey('\x1b[A', ctrl: true, shift: true),
+        '\x1b[1;6A',
+      );
+      expect(encodeModifiedSpecialKey('\x03', alt: true), '\x03');
+      expect(encodeModifiedSpecialKey('\x7f', alt: true), '\x1b\x7f');
     },
   );
 

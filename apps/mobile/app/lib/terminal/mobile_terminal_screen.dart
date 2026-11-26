@@ -115,6 +115,9 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
   bool _offline = false;
   TerminalModifierMode _ctrlMode = TerminalModifierMode.off;
   TerminalModifierMode _altMode = TerminalModifierMode.off;
+  bool _comboMode = false;
+  bool _shiftActive = false;
+  bool _capsLock = false;
   _TerminalInputPanel _inputPanel = _TerminalInputPanel.bar;
   String? _error;
   int _syncSeq = 0;
@@ -442,6 +445,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         _creating = false;
         _ctrlMode = TerminalModifierMode.off;
         _altMode = TerminalModifierMode.off;
+        _shiftActive = false;
       });
     } catch (error) {
       if (!mounted) return;
@@ -465,6 +469,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
       _activeId = target.id;
       _ctrlMode = TerminalModifierMode.off;
       _altMode = TerminalModifierMode.off;
+      _shiftActive = false;
       _error = null;
     });
     if (!tab.attached && !tab.exited) {
@@ -558,15 +563,58 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
       };
 
   void _consumeOnceModifiers() {
+    // 勾选“组合键模式”后修饰键持续保持按下，直到用户再次点灭或取消组合键模式。
+    if (_comboMode) return;
     final resetCtrl = _ctrlMode == TerminalModifierMode.once;
     final resetAlt = _altMode == TerminalModifierMode.once;
-    if (!resetCtrl && !resetAlt) return;
+    final resetShift = _shiftActive;
+    if (!resetCtrl && !resetAlt && !resetShift) return;
     if (mounted) {
       setState(() {
         if (resetCtrl) _ctrlMode = TerminalModifierMode.off;
         if (resetAlt) _altMode = TerminalModifierMode.off;
+        if (resetShift) _shiftActive = false;
       });
     }
+  }
+
+  void _toggleComboMode() {
+    setState(() {
+      _comboMode = !_comboMode;
+      if (!_comboMode) {
+        _shiftActive = false;
+        if (_ctrlMode == TerminalModifierMode.once) {
+          _ctrlMode = TerminalModifierMode.off;
+        }
+        if (_altMode == TerminalModifierMode.once) {
+          _altMode = TerminalModifierMode.off;
+        }
+      }
+    });
+  }
+
+  void _toggleExpandedCtrl() {
+    setState(() {
+      _ctrlMode = _ctrlMode == TerminalModifierMode.off
+          ? TerminalModifierMode.once
+          : TerminalModifierMode.off;
+    });
+  }
+
+  void _toggleExpandedAlt() {
+    setState(() {
+      _altMode = _altMode == TerminalModifierMode.off
+          ? TerminalModifierMode.once
+          : TerminalModifierMode.off;
+    });
+  }
+
+  void _toggleExpandedShift() {
+    setState(() => _shiftActive = !_shiftActive);
+  }
+
+  void _toggleExpandedCapsLock() {
+    setState(() => _capsLock = !_capsLock);
   }
 
   void _handleTerminalInput(String terminalId, String raw) {
@@ -595,7 +643,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     );
   }
 
-  void _sendRawSequence(String seq) {
+  void _sendRawSequence(String seq, {bool applyModifiers = true}) {
     final tab = _activeTab;
     final conn = _boundConnection;
     if (tab == null ||
@@ -605,14 +653,24 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         tab.exited) {
       return;
     }
-    _consumeOnceModifiers();
+    final payload = applyModifiers
+        ? encodeModifiedSpecialKey(
+            seq,
+            shift: _shiftActive,
+            alt: _altMode != TerminalModifierMode.off,
+            ctrl: _ctrlMode != TerminalModifierMode.off,
+          )
+        : seq;
+    if (applyModifiers) {
+      _consumeOnceModifiers();
+    }
     unawaited(
-      conn.terminal.write(terminalId: tab.summary.id, data: seq).catchError((
-        Object error,
-      ) {
-        if (!mounted) return;
-        _showNotice(workbenchErrorMessage(error, fallback: '发送按键失败。'));
-      }),
+      conn.terminal.write(terminalId: tab.summary.id, data: payload).catchError(
+        (Object error) {
+          if (!mounted) return;
+          _showNotice(workbenchErrorMessage(error, fallback: '发送按键失败。'));
+        },
+      ),
     );
   }
 
@@ -647,7 +705,37 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     final reader = widget.readClipboard ?? _defaultReadClipboard;
     final text = await reader();
     if (!mounted || text == null || text.isEmpty) return;
-    _sendRawSequence(text);
+    _sendRawSequence(text, applyModifiers: false);
+  }
+
+  Widget _buildShortcutBar({
+    required bool enabled,
+    required bool expandedOpen,
+  }) {
+    return TerminalShortcutBar(
+      ctrlMode: _ctrlMode,
+      altMode: _altMode,
+      expandedOpen: expandedOpen,
+      enabled: enabled,
+      onCycleCtrl: () =>
+          setState(() => _ctrlMode = _nextModifierMode(_ctrlMode)),
+      onLockCtrl: () => setState(
+        () => _ctrlMode = _ctrlMode == TerminalModifierMode.locked
+            ? TerminalModifierMode.off
+            : TerminalModifierMode.locked,
+      ),
+      onCycleAlt: () => setState(() => _altMode = _nextModifierMode(_altMode)),
+      onLockAlt: () => setState(
+        () => _altMode = _altMode == TerminalModifierMode.locked
+            ? TerminalModifierMode.off
+            : TerminalModifierMode.locked,
+      ),
+      onToggleExpanded: _toggleExpandedKeyboard,
+      onShowSystemKeyboard: _openSystemKeyboard,
+      onSendSequence: _sendRawSequence,
+      onPaste: () => unawaited(_pasteClipboard()),
+      onCollapse: _collapseInputControls,
+    );
   }
 
   void _scheduleResize(String terminalId, int cols, int rows) {
@@ -997,60 +1085,33 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
             SafeArea(
               top: false,
               child: _inputPanel == _TerminalInputPanel.expanded
-                  ? TerminalExpandedKeyboard(
-                      ctrlMode: _ctrlMode,
-                      altMode: _altMode,
-                      enabled: !_offline && !active.exited,
-                      onCycleCtrl: () => setState(
-                        () => _ctrlMode = _nextModifierMode(_ctrlMode),
-                      ),
-                      onLockCtrl: () => setState(
-                        () =>
-                            _ctrlMode = _ctrlMode == TerminalModifierMode.locked
-                            ? TerminalModifierMode.off
-                            : TerminalModifierMode.locked,
-                      ),
-                      onCycleAlt: () => setState(
-                        () => _altMode = _nextModifierMode(_altMode),
-                      ),
-                      onLockAlt: () => setState(
-                        () => _altMode = _altMode == TerminalModifierMode.locked
-                            ? TerminalModifierMode.off
-                            : TerminalModifierMode.locked,
-                      ),
-                      onSendChar: _sendExpandedChar,
-                      onSendRaw: _sendRawSequence,
-                      onPaste: () => unawaited(_pasteClipboard()),
-                      onSwitchToSystemKeyboard: _openSystemKeyboard,
-                      onCollapse: _collapseInputControls,
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildShortcutBar(
+                          enabled: !_offline && !active.exited,
+                          expandedOpen: true,
+                        ),
+                        TerminalExpandedKeyboard(
+                          comboMode: _comboMode,
+                          ctrlActive: _ctrlMode != TerminalModifierMode.off,
+                          shiftActive: _shiftActive,
+                          altActive: _altMode != TerminalModifierMode.off,
+                          capsLock: _capsLock,
+                          enabled: !_offline && !active.exited,
+                          onToggleComboMode: _toggleComboMode,
+                          onToggleCtrl: _toggleExpandedCtrl,
+                          onToggleShift: _toggleExpandedShift,
+                          onToggleAlt: _toggleExpandedAlt,
+                          onToggleCapsLock: _toggleExpandedCapsLock,
+                          onSendChar: _sendExpandedChar,
+                          onSendRaw: _sendRawSequence,
+                        ),
+                      ],
                     )
-                  : TerminalShortcutBar(
-                      ctrlMode: _ctrlMode,
-                      altMode: _altMode,
-                      expandedOpen: false,
+                  : _buildShortcutBar(
                       enabled: !_offline && !active.exited,
-                      onCycleCtrl: () => setState(
-                        () => _ctrlMode = _nextModifierMode(_ctrlMode),
-                      ),
-                      onLockCtrl: () => setState(
-                        () =>
-                            _ctrlMode = _ctrlMode == TerminalModifierMode.locked
-                            ? TerminalModifierMode.off
-                            : TerminalModifierMode.locked,
-                      ),
-                      onCycleAlt: () => setState(
-                        () => _altMode = _nextModifierMode(_altMode),
-                      ),
-                      onLockAlt: () => setState(
-                        () => _altMode = _altMode == TerminalModifierMode.locked
-                            ? TerminalModifierMode.off
-                            : TerminalModifierMode.locked,
-                      ),
-                      onToggleExpanded: _toggleExpandedKeyboard,
-                      onShowSystemKeyboard: _openSystemKeyboard,
-                      onSendSequence: _sendRawSequence,
-                      onPaste: () => unawaited(_pasteClipboard()),
-                      onCollapse: _collapseInputControls,
+                      expandedOpen: false,
                     ),
             ),
         ],
