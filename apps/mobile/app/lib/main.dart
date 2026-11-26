@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show setEquals, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show listEquals, setEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -36,9 +37,14 @@ typedef ComputerReconnectFactory =
     );
 
 final computerReconnectFactoryProvider = Provider<ComputerReconnectFactory>(
-  (_) =>
+  (ref) =>
       (computer, identity, onChange) => ComputerReconnect(
-        dial: () => MobileConnection.resume(computer, identity),
+        dial: () {
+          final latest = (ref.read(computersProvider).value ?? const [])
+              .where((entry) => entry.computerKey == computer.computerKey)
+              .firstOrNull;
+          return MobileConnection.resume(latest ?? computer, identity);
+        },
         observe: () => RelayStatusWatch.open(computer),
         onChange: onChange,
       ),
@@ -630,16 +636,25 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   }) {
     final identity = ref.read(computersProvider.notifier).identity;
     final createReconnect = ref.read(computerReconnectFactoryProvider);
+    var savedLan = computer.lanAddresses;
     late final ComputerReconnect session;
     session = createReconnect(computer, identity, () {
       if (!mounted || !identical(_session, session)) return;
       if (session.error == 'device-revoked') {
         unawaited(_confirmedRevocation(computer));
       } else {
+        final activeConn = session.connection;
+        if (activeConn != null &&
+            !listEquals(activeConn.computer.lanAddresses, savedLan)) {
+          savedLan = activeConn.computer.lanAddresses;
+          unawaited(
+            ref.read(computersProvider.notifier).remember(activeConn.computer),
+          );
+        }
         setState(() {});
         _reportReminderSettings();
         _syncActiveCoordinatorState();
-        if (session.connection != null) _refreshActiveSummary();
+        if (activeConn != null) _refreshActiveSummary();
         _notifyShareSheet();
       }
     });

@@ -122,6 +122,7 @@ class MobileConnection {
   ) : _rpc = HostRpc(_link);
 
   final SecureLink _link;
+  bool get isDirect => _link.isDirect;
   final String computerId;
   final String computerName;
   final ComputerProfile computer;
@@ -498,6 +499,49 @@ class MobileConnection {
     handshake: {'type': 'device.connect', 'revocationNotice': true},
   );
 
+  static List<String> _parseLanAddresses(Object? raw) {
+    if (raw is! List) return const [];
+    return raw.whereType<String>().toList(growable: false);
+  }
+
+  static bool _sameStrings(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  static Future<({Map<String, dynamic> welcome, List<String> lanAddresses})>
+  _hello(SecureLink link) async {
+    await link.send({
+      'type': 'mobile.hello',
+      'minVersion': mobileProtocolVersion,
+      'maxVersion': mobileProtocolVersion,
+      'features': mobileClientFeatures,
+    });
+    final welcome = await link.receive();
+    if (welcome['type'] == 'mobile.incompatible') {
+      final min = welcome['minVersion'];
+      final max = welcome['maxVersion'];
+      if (min is int && min > mobileProtocolVersion) {
+        throw const ConnectionFailure('update-phone');
+      }
+      if (max is int && max < mobileProtocolVersion) {
+        throw const ConnectionFailure('update-desktop');
+      }
+    }
+    if (welcome['type'] != 'mobile.welcome' ||
+        welcome['version'] != mobileProtocolVersion ||
+        !(welcome['features'] as List).contains('connection.status')) {
+      throw const ConnectionFailure('incompatible');
+    }
+    return (
+      welcome: welcome,
+      lanAddresses: _parseLanAddresses(welcome['lanAddresses']),
+    );
+  }
+
   static Future<MobileConnection> _connect(
     ComputerProfile computer,
     NoiseIdentity identity, {
@@ -505,7 +549,7 @@ class MobileConnection {
     required HttpClient? client,
     Future<String?> Function(SecureLink)? confirm,
   }) async {
-    final link = await SecureLink.connect(
+    var link = await SecureLink.connect(
       computer,
       identity,
       handshake,
@@ -515,28 +559,43 @@ class MobileConnection {
       final revision = confirm == null
           ? computer.relayRevision
           : await confirm(link);
-      await link.send({
-        'type': 'mobile.hello',
-        'minVersion': mobileProtocolVersion,
-        'maxVersion': mobileProtocolVersion,
-        'features': mobileClientFeatures,
-      });
-      final welcome = await link.receive();
-      if (welcome['type'] == 'mobile.incompatible') {
-        final min = welcome['minVersion'];
-        final max = welcome['maxVersion'];
-        if (min is int && min > mobileProtocolVersion) {
-          throw const ConnectionFailure('update-phone');
-        }
-        if (max is int && max < mobileProtocolVersion) {
-          throw const ConnectionFailure('update-desktop');
+      var negotiated = await _hello(link);
+      final discoveredLan = negotiated.lanAddresses;
+
+      // 若本次走的是中继且 Host 通告了新的局域网地址，立即尝试 450ms 内切换为局域网 Noise 直连。
+      if (client == null &&
+          !link.isDirect &&
+          discoveredLan.isNotEmpty &&
+          !_sameStrings(discoveredLan, computer.lanAddresses)) {
+        try {
+          final directLink = await SecureLink.connectDirect(
+            discoveredLan,
+            computerKey: computer.computerKey,
+            identity: identity,
+            handshake: const {
+              'type': 'device.connect',
+              'revocationNotice': true,
+            },
+            timeout: const Duration(milliseconds: 450),
+          );
+          try {
+            negotiated = await _hello(directLink);
+            await link.close();
+            link = directLink;
+          } catch (_) {
+            await directLink.close();
+          }
+        } on ConnectionFailure catch (failure) {
+          if (failure.code == 'device-revoked') rethrow;
+        } catch (_) {
+          // 局域网不可达时继续平滑使用已建好的中继连接。
         }
       }
-      if (welcome['type'] != 'mobile.welcome' ||
-          welcome['version'] != mobileProtocolVersion ||
-          !(welcome['features'] as List).contains('connection.status')) {
-        throw const ConnectionFailure('incompatible');
-      }
+
+      final welcome = negotiated.welcome;
+      final finalLan = negotiated.lanAddresses.isNotEmpty
+          ? negotiated.lanAddresses
+          : discoveredLan;
       await link.send({
         'jsonrpc': '2.0',
         'id': 'status',
@@ -550,11 +609,14 @@ class MobileConnection {
       final status = MobileStatus.fromJson(
         response['result'] as Map<String, dynamic>,
       );
+      final updatedProfile = computer
+          .withRelayRevision(revision)
+          .withLanAddresses(finalLan);
       final connection = MobileConnection._(
         link,
         status.computerId,
         status.computerName,
-        computer.withRelayRevision(revision),
+        updatedProfile,
         (welcome['features'] as List).contains('relay.saveReceipt'),
         (welcome['features'] as List).contains('sidebar.read'),
         (welcome['features'] as List).contains('sidebar.write'),

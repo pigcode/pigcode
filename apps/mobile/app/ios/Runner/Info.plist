@@ -31,6 +31,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>扫描电脑上的 Pigcode 配对二维码，或拍照发送给 Agent。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于同局域网下低延迟直连电脑，以获得接近本地响应的终端和工作区体验。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>选择相册中的图片或截图发送给 Agent。</string>
 	<key>CFBundleURLTypes</key>

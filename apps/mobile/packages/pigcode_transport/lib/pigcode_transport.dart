@@ -43,6 +43,31 @@ Future<String> publicKeyFingerprint(List<int> key) async {
       .join();
 }
 
+List<String> _cleanLanAddresses(Iterable<String>? raw) {
+  if (raw == null) return const [];
+  final out = <String>[];
+  final seen = <String>{};
+  for (final item in raw) {
+    final trimmed = item.trim();
+    if (trimmed.isEmpty || trimmed.length > 256) continue;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null ||
+        uri.scheme != 'ws' ||
+        uri.host.isEmpty ||
+        !uri.hasPort ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment) {
+      continue;
+    }
+    final normalized = uri.toString();
+    if (seen.add(normalized)) {
+      out.add(normalized);
+      if (out.length >= 8) break;
+    }
+  }
+  return List.unmodifiable(out);
+}
+
 class ComputerProfile {
   ComputerProfile({
     required String address,
@@ -50,7 +75,9 @@ class ComputerProfile {
     required this.computerKey,
     required this.name,
     this.relayRevision,
-  }) : address = _endpoint(address) {
+    List<String> lanAddresses = const [],
+  }) : address = _endpoint(address),
+       lanAddresses = _cleanLanAddresses(lanAddresses) {
     _decodeKey(computerKey);
     if (token.trim().isEmpty ||
         token.length > 4096 ||
@@ -65,6 +92,7 @@ class ComputerProfile {
   final String computerKey;
   final String name;
   final String? relayRevision;
+  final List<String> lanAddresses;
 
   factory ComputerProfile.fromJson(Map<String, dynamic> json) =>
       ComputerProfile(
@@ -73,6 +101,9 @@ class ComputerProfile {
         computerKey: json['computerKey'] as String,
         name: json['computerName'] as String,
         relayRevision: json['relayRevision'] as String?,
+        lanAddresses: json['lanAddresses'] is List
+            ? (json['lanAddresses'] as List).whereType<String>().toList()
+            : const [],
       );
 
   ComputerProfile withRelayRevision(String? revision) => ComputerProfile(
@@ -81,6 +112,16 @@ class ComputerProfile {
     computerKey: computerKey,
     name: name,
     relayRevision: revision,
+    lanAddresses: lanAddresses,
+  );
+
+  ComputerProfile withLanAddresses(List<String> addresses) => ComputerProfile(
+    address: address.toString(),
+    token: token,
+    computerKey: computerKey,
+    name: name,
+    relayRevision: relayRevision,
+    lanAddresses: addresses,
   );
 
   Map<String, Object> toJson() => {
@@ -89,6 +130,7 @@ class ComputerProfile {
     'computerKey': computerKey,
     'computerName': name,
     'relayRevision': ?relayRevision,
+    if (lanAddresses.isNotEmpty) 'lanAddresses': lanAddresses,
   };
 }
 
@@ -152,20 +194,21 @@ class _RelayUpgradeClient implements HttpClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Future<WebSocket> _openRelaySocket(
-  ComputerProfile computer,
-  HttpClient? client,
-) async {
+Future<WebSocket> _openSocket(
+  Uri uri,
+  HttpClient? client, {
+  Duration timeout = const Duration(seconds: 8),
+}) async {
   // 每次建连使用独立 HttpClient，避免 iOS 在 Wi-Fi / 蜂窝切换后复用旧接口的陈旧池或半开连接。
   final owned = client == null ? HttpClient() : null;
-  owned?.connectionTimeout = const Duration(seconds: 8);
+  owned?.connectionTimeout = timeout;
   try {
     final opening = WebSocket.connect(
-      computer.address.toString(),
+      uri.toString(),
       customClient: _RelayUpgradeClient(client ?? owned!),
     );
     final socket = await opening.timeout(
-      const Duration(seconds: 8),
+      timeout,
       onTimeout: () {
         owned?.close(force: true);
         unawaited(
@@ -185,6 +228,11 @@ Future<WebSocket> _openRelaySocket(
     throw const ConnectionFailure('unreachable');
   }
 }
+
+Future<WebSocket> _openRelaySocket(
+  ComputerProfile computer,
+  HttpClient? client,
+) => _openSocket(computer.address, client);
 
 enum RelayComputerState { online, offline, sleeping, exited, restarting }
 
@@ -343,18 +391,136 @@ class _RelayInbox {
 }
 
 class SecureLink {
-  SecureLink._(this._socket, this._inbox, this._noise);
+  SecureLink._(
+    this._socket,
+    this._inbox,
+    this._noise, {
+    required this.isDirect,
+  });
 
   final WebSocket _socket;
   final _RelayInbox _inbox;
   final NoiseSession _noise;
+  final bool isDirect;
   bool _closed = false;
   Future<void> _writes = Future.value();
 
   String get verificationCode => _noise.verificationCode;
   Future<void> get done => _inbox.done;
 
-  static Future<SecureLink> connect(
+  static Future<SecureLink> _completeHandshake(
+    WebSocket socket,
+    _RelayInbox inbox,
+    NoiseIdentity identity,
+    List<int> hostKey,
+    Map<String, Object> handshake, {
+    required bool isDirect,
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    final initiation = await NoiseInitiation.start(
+      identity,
+      hostKey,
+      utf8.encode(jsonEncode(handshake)),
+    );
+    socket.add(initiation.message);
+    final response = await inbox.next(timeout);
+    final result = await initiation.finish(response as List<int>);
+    if (handshake['revocationNotice'] == true && result.payload.isNotEmpty) {
+      final notice = _map(utf8.decode(result.payload));
+      if (notice.length == 1 && notice['type'] == 'device.revoked') {
+        throw const ConnectionFailure('device-revoked');
+      }
+    }
+    return SecureLink._(socket, inbox, result.session, isDirect: isDirect);
+  }
+
+  static Future<SecureLink> _dialDirectUrl(
+    Uri uri,
+    List<int> hostKey,
+    NoiseIdentity identity,
+    Map<String, Object> handshake,
+    Duration timeout,
+  ) async {
+    final socket = await _openSocket(uri, null, timeout: timeout);
+    final inbox = _RelayInbox(socket);
+    try {
+      return await _completeHandshake(
+        socket,
+        inbox,
+        identity,
+        hostKey,
+        handshake,
+        isDirect: true,
+        timeout: timeout,
+      );
+    } on ConnectionFailure {
+      await inbox.close();
+      rethrow;
+    } on TimeoutException {
+      await inbox.close();
+      throw const ConnectionFailure('unreachable');
+    } on IOException {
+      await inbox.close();
+      throw const ConnectionFailure('unreachable');
+    } catch (_) {
+      await inbox.close();
+      throw const ConnectionFailure('authentication-failed');
+    }
+  }
+
+  /// 并发竞速尝试局域网内全部直连地址，同样走 Noise IK 双向认证与全链路加密。
+  static Future<SecureLink> connectDirect(
+    List<String> addresses, {
+    required String computerKey,
+    required NoiseIdentity identity,
+    required Map<String, Object> handshake,
+    Duration timeout = const Duration(milliseconds: 500),
+  }) async {
+    final clean = _cleanLanAddresses(addresses);
+    if (clean.isEmpty) throw const ConnectionFailure('unreachable');
+    final hostKey = _decodeKey(computerKey);
+    final winner = Completer<SecureLink>();
+    var remaining = clean.length;
+    Object? lastError;
+
+    for (final raw in clean) {
+      unawaited(
+        _dialDirectUrl(
+          Uri.parse(raw),
+          hostKey,
+          identity,
+          handshake,
+          timeout,
+        ).then(
+          (link) {
+            if (!winner.isCompleted) {
+              winner.complete(link);
+            } else {
+              unawaited(link.close());
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            lastError = error;
+            remaining -= 1;
+            if (error is ConnectionFailure &&
+                error.code == 'device-revoked' &&
+                !winner.isCompleted) {
+              winner.completeError(error, stack);
+              return;
+            }
+            if (remaining == 0 && !winner.isCompleted) {
+              winner.completeError(
+                lastError ?? const ConnectionFailure('unreachable'),
+              );
+            }
+          },
+        ),
+      );
+    }
+    return winner.future;
+  }
+
+  static Future<SecureLink> _connectRelay(
     ComputerProfile computer,
     NoiseIdentity identity,
     Map<String, Object> handshake, {
@@ -384,21 +550,14 @@ class SecureLink {
           _ => 'incompatible',
         });
       }
-      final initiation = await NoiseInitiation.start(
+      return await _completeHandshake(
+        socket,
+        inbox,
         identity,
         hostKey,
-        utf8.encode(jsonEncode(handshake)),
+        handshake,
+        isDirect: false,
       );
-      socket.add(initiation.message);
-      final response = await inbox.next(const Duration(seconds: 8));
-      final result = await initiation.finish(response as List<int>);
-      if (handshake['revocationNotice'] == true && result.payload.isNotEmpty) {
-        final notice = _map(utf8.decode(result.payload));
-        if (notice.length == 1 && notice['type'] == 'device.revoked') {
-          throw const ConnectionFailure('device-revoked');
-        }
-      }
-      return SecureLink._(socket, inbox, result.session);
     } on ConnectionFailure {
       await inbox.close();
       rethrow;
@@ -412,6 +571,92 @@ class SecureLink {
       await inbox.close();
       throw const ConnectionFailure('authentication-failed');
     }
+  }
+
+  static Future<SecureLink> connect(
+    ComputerProfile computer,
+    NoiseIdentity identity,
+    Map<String, Object> handshake, {
+    HttpClient? client,
+    Duration lanHeadStart = const Duration(milliseconds: 220),
+    Duration lanTimeout = const Duration(milliseconds: 500),
+  }) async {
+    if (client != null ||
+        computer.lanAddresses.isEmpty ||
+        handshake['type'] != 'device.connect') {
+      return _connectRelay(computer, identity, handshake, client: client);
+    }
+
+    // 同局域网优先抢跑 220ms：成功即直连且不建中继会话；外网或失败时自动无缝走回中继。
+    final winner = Completer<SecureLink>();
+    var relayStarted = false;
+    var activeBranches = 1;
+    Object? relayError;
+    Timer? stagger;
+
+    void finishErrorIfDone(Object error, StackTrace stack) {
+      if (winner.isCompleted) return;
+      if (error is ConnectionFailure && error.code == 'device-revoked') {
+        stagger?.cancel();
+        winner.completeError(error, stack);
+        return;
+      }
+      if (activeBranches == 0) {
+        winner.completeError(relayError ?? error, stack);
+      }
+    }
+
+    void startRelay() {
+      if (relayStarted || winner.isCompleted) return;
+      relayStarted = true;
+      activeBranches += 1;
+      unawaited(
+        _connectRelay(computer, identity, handshake).then(
+          (link) {
+            if (!winner.isCompleted) {
+              winner.complete(link);
+            } else {
+              unawaited(link.close());
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            activeBranches -= 1;
+            relayError = error;
+            finishErrorIfDone(error, stack);
+          },
+        ),
+      );
+    }
+
+    stagger = Timer(lanHeadStart, startRelay);
+    unawaited(
+      connectDirect(
+        computer.lanAddresses,
+        computerKey: computer.computerKey,
+        identity: identity,
+        handshake: handshake,
+        timeout: lanTimeout,
+      ).then(
+        (link) {
+          stagger?.cancel();
+          if (!winner.isCompleted) {
+            winner.complete(link);
+          } else {
+            unawaited(link.close());
+          }
+        },
+        onError: (Object error, StackTrace stack) {
+          stagger?.cancel();
+          activeBranches -= 1;
+          if (!(error is ConnectionFailure && error.code == 'device-revoked')) {
+            startRelay();
+          }
+          finishErrorIfDone(error, stack);
+        },
+      ),
+    );
+
+    return winner.future;
   }
 
   Future<void> send(Map<String, Object?> value) {

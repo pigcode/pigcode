@@ -139,7 +139,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
     ctx.get("attachments")?.setThumbnailer(desktopAttachmentThumbnailer(controlTransport))
     const cipher = desktopRelayCipher(controlTransport)
     const relay = new RelaySettings(ctx.settings, cipher)
-    const mobile = new MobileConnections(ctx, relay, cipher, feed)
+    const mobile = new MobileConnections(ctx, relay, cipher, feed, { lanPort: 39871 })
     mobileLifecycle = mobile
     mobile.setSuspended(suspended)
     ctx.provide("relaySettings", relay)

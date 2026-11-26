@@ -1,37 +1,35 @@
-import { mobileFrames } from "./mobile-frames"
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto"
+import { randomBytes, randomUUID } from "node:crypto"
 import { hostname } from "node:os"
 import {
-  deviceHandshakeSchema,
-  mobileFeatures,
-  mobileHelloSchema,
-  mobileProtocolVersion,
   type MobilePairingView,
   type MobileRevokeResult,
-  type PairedDevice,
 } from "@pigcode/contracts"
 import type { RelayCredentialCipher, RelaySettings } from "../services/relay-settings"
 import type { Context } from "cordis"
 import type { ThreadFeed } from "../rpc/thread-feed"
-import { acceptNoise, type NoiseKeyPair, type NoiseSession } from "./noise"
+import type { NoiseKeyPair } from "./noise"
 import { loadComputerIdentity } from "./computer-identity"
+import {
+  authenticatePeer,
+  negotiatePeer,
+  requestPeerApproval,
+  sendPeerMessage,
+  type Peer,
+  type PeerHostContext,
+} from "./connections-peer"
+import { openLanServer, type LanConnection, type LanServer } from "./lan-server"
 import { fingerprint, PairedDevices } from "./paired-devices"
 import { pairingAttemptView, pairingQRCode, pairingValidityMs, type Attempt } from "./pairing-attempt"
 import { MobilePushReminders } from "./push-reminders"
 import { openRelayHost, type RelayHost } from "./relay-host"
-import { serveMobileSidebar } from "./sidebar-rpc"
-import { denyUnpairedDevice, deviceRevokedNotice, revokeDeviceWork, tellRevokedDevice } from "./revocation"
+import { deviceRevokedNotice, revokeDeviceWork, tellRevokedDevice } from "./revocation"
 
 type Status = MobilePairingView["status"]
 
-interface Peer {
-  phase: "handshake" | "proof" | "approval" | "hello" | "ready"
-  timer?: ReturnType<typeof setTimeout>
-  noise?: NoiseSession
-  device?: PairedDevice | undefined
-  attempt?: Attempt | undefined
-  rpc?: ReturnType<typeof serveMobileSidebar>
-  revocationNotice?: boolean
+export interface MobileConnectionsOptions {
+  now?: () => number
+  /** 局域网直连监听端口：0 表示临时端口，false 表示不启用局域网直连服务。 */
+  lanPort?: number | false
 }
 
 declare module "cordis" {
@@ -45,14 +43,20 @@ export class MobileConnections {
   private peers = new Map<number, Peer>()
   private readonly devices: PairedDevices
   private readonly push: MobilePushReminders
+  private readonly now: () => number
+  private readonly lanPort: number | null
   private status: Status = "idle"
   private attempt: Attempt | undefined
   private identity: Promise<NoiseKeyPair> | undefined
   private connection: RelayHost | undefined
   private opening: Promise<RelayHost> | undefined
   private registration: AbortController | undefined
+  private lanServer: LanServer | undefined
+  private lanStarting: Promise<LanServer | undefined> | undefined
+  private nextLanSession = 0
   private retry: ReturnType<typeof setTimeout> | undefined
   private generation = 0
+  private lanGeneration = 0
   private disposed = false
   private suspended = false
   private unsubscribe: () => void
@@ -62,8 +66,12 @@ export class MobileConnections {
     private readonly relay: RelaySettings,
     private readonly cipher: RelayCredentialCipher,
     private readonly feed: ThreadFeed,
-    private readonly now = Date.now,
+    nowOrOptions?: (() => number) | MobileConnectionsOptions,
   ) {
+    const options =
+      typeof nowOrOptions === "function" ? { now: nowOrOptions } : (nowOrOptions ?? {})
+    this.now = options.now ?? Date.now
+    this.lanPort = options.lanPort === false ? null : (options.lanPort ?? 0)
     this.devices = new PairedDevices(ctx.settings)
     this.push = new MobilePushReminders(ctx, this.devices, cipher, () => this.connection)
     this.unsubscribe = relay.onConnectionChange(() => {
@@ -72,6 +80,7 @@ export class MobileConnections {
       this.scheduleReconnect(0)
     })
     this.scheduleReconnect(0)
+    void this.startLan()
   }
 
   view(): MobilePairingView {
@@ -195,7 +204,8 @@ export class MobileConnections {
     this.disposed = true
     this.unsubscribe()
     this.finish("cancelled")
-    this.disconnect()
+    this.disconnect(true)
+    this.stopLan()
   }
 
   announceExit(state: "exited" | "restarting"): void {
@@ -208,9 +218,85 @@ export class MobileConnections {
     if (suspended) {
       this.connection?.announce("sleeping")
       if (this.attempt) this.finish("cancelled", false)
+      this.disconnect(true)
+      this.stopLan()
+    } else {
+      this.disconnect(false)
+      this.scheduleReconnect(0)
+      void this.startLan()
     }
-    this.disconnect()
-    if (!suspended) this.scheduleReconnect(0)
+  }
+
+  /** 返回当前可用的局域网直连地址列表；若 LAN 服务仍在启动中会等待其就绪。 */
+  async readyLanAddresses(): Promise<string[]> {
+    const server = this.lanServer ?? (await this.startLan())
+    return server?.addresses() ?? []
+  }
+
+  private async startLan(): Promise<LanServer | undefined> {
+    if (this.disposed || this.suspended || this.lanPort === null) return undefined
+    if (this.lanServer) return this.lanServer
+    if (this.lanStarting) return this.lanStarting
+    const lanGen = ++this.lanGeneration
+    const port = this.lanPort
+    this.lanStarting = this.computerIdentity()
+      .then((identity) =>
+        openLanServer(
+          {
+            onConnection: (conn) => this.acceptLanConnection(identity, lanGen, conn),
+          },
+          { port },
+        ),
+      )
+      .then((server) => {
+        if (this.disposed || this.suspended || lanGen !== this.lanGeneration) {
+          server.close()
+          return undefined
+        }
+        this.lanServer = server
+        return server
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (lanGen === this.lanGeneration) this.lanStarting = undefined
+      })
+    return this.lanStarting
+  }
+
+  private stopLan(): void {
+    ++this.lanGeneration
+    this.lanStarting = undefined
+    const server = this.lanServer
+    this.lanServer = undefined
+    server?.close()
+  }
+
+  private acceptLanConnection(identity: NoiseKeyPair, lanGen: number, conn: LanConnection) {
+    if (this.disposed || this.suspended || lanGen !== this.lanGeneration) {
+      conn.close()
+      return { onMessage: () => {}, onClose: () => {} }
+    }
+    const session = -(++this.nextLanSession)
+    const peer: Peer = {
+      phase: "handshake",
+      transport: {
+        channel: "lan",
+        send: (payload) => conn.send(payload),
+        close: () => conn.close(),
+      },
+    }
+    this.peers.set(session, peer)
+    this.armPeer(session, peer)
+    return {
+      onMessage: (ciphertext: Buffer) => {
+        if (!this.disposed && !this.suspended && lanGen === this.lanGeneration) {
+          this.receive(identity, session, ciphertext)
+        }
+      },
+      onClose: () => {
+        this.dropPeer(session, false)
+      },
+    }
   }
 
   private expire(): void {
@@ -257,7 +343,14 @@ export class MobileConnections {
       {
         sessionOpened: (session) => {
           if (!current()) return
-          const peer: Peer = { phase: "handshake" }
+          const peer: Peer = {
+            phase: "handshake",
+            transport: {
+              channel: "relay",
+              send: (payload) => this.connection?.send(session, payload),
+              close: () => this.connection?.closeSession(session),
+            },
+          }
           this.peers.set(session, peer)
           this.armPeer(session, peer)
         },
@@ -294,7 +387,7 @@ export class MobileConnections {
     return this.opening
   }
 
-  private disconnect(): void {
+  private disconnect(includeLan = false): void {
     ++this.generation
     this.registration?.abort()
     this.registration = undefined
@@ -304,7 +397,11 @@ export class MobileConnections {
     connection?.close()
     clearTimeout(this.retry)
     this.retry = undefined
-    for (const [session] of this.peers) this.dropPeer(session)
+    for (const [session, peer] of [...this.peers]) {
+      if (includeLan || peer.transport.channel === "relay") {
+        this.dropPeer(session, peer.transport.channel === "lan")
+      }
+    }
   }
 
   private scheduleReconnect(delay = 2500): void {
@@ -342,14 +439,30 @@ export class MobileConnections {
       this.attempt.candidate = null
       this.status = "waiting"
     }
-    if (close) this.connection?.closeSession(session)
+    if (close) peer.transport.close()
   }
 
-  private send(session: number, peer: Peer, message: unknown): void {
-    if (!peer.noise || !this.connection) throw new Error("mobile session closed")
-    for (const frame of mobileFrames(message)) {
-      this.connection.send(session, peer.noise.encrypt(frame))
+  private peerHost(): PeerHostContext {
+    return {
+      ctx: this.ctx,
+      feed: this.feed,
+      devices: this.devices,
+      relay: this.relay,
+      push: this.push,
+      computerName: this.computerName,
+      now: this.now,
+      currentAttempt: () => this.attempt,
+      lanAddresses: () => this.lanServer?.addresses() ?? [],
+      armPeer: (session, peer) => this.armPeer(session, peer),
+      dropPeer: (session, close) => this.dropPeer(session, close),
+      onVerifyStatus: () => {
+        this.status = "verify"
+      },
     }
+  }
+
+  private send(_session: number, peer: Peer, message: unknown): void {
+    sendPeerMessage(peer, message)
   }
 
   private receive(identity: NoiseKeyPair, session: number, ciphertext: Buffer): void {
@@ -358,20 +471,20 @@ export class MobileConnections {
     if (!peer) return
     try {
       if (peer.phase === "handshake") {
-        this.authenticate(identity, session, peer, ciphertext)
+        authenticatePeer(this.peerHost(), identity, session, peer, ciphertext)
         return
       }
       if (!peer.noise) throw new Error("missing Noise session")
       const message: unknown = JSON.parse(peer.noise.decrypt(ciphertext).toString("utf8"))
       switch (peer.phase) {
         case "proof":
-          this.requestApproval(session, peer, message)
+          requestPeerApproval(this.peerHost(), session, peer, message)
           break
         case "approval":
           this.dropPeer(session, true)
           break
         case "hello":
-          this.negotiate(identity, session, peer, message)
+          negotiatePeer(this.peerHost(), identity, session, peer, message)
           break
         case "ready":
           peer.rpc?.receive(message)
@@ -380,117 +493,5 @@ export class MobileConnections {
     } catch {
       this.dropPeer(session, true)
     }
-  }
-
-  private authenticate(
-    identity: NoiseKeyPair,
-    session: number,
-    peer: Peer,
-    ciphertext: Buffer,
-  ): void {
-    const handshake = acceptNoise(identity, ciphertext)
-    const request = deviceHandshakeSchema.parse(JSON.parse(handshake.payload.toString("utf8")))
-    const publicKey = handshake.publicKey.toString("base64url")
-    const registered = this.devices.find(publicKey)
-    if (request.type === "device.connect") {
-      if (!registered) {
-        denyUnpairedDevice(request.revocationNotice, handshake, (message) => this.connection?.send(session, message))
-        return this.dropPeer(session, true)
-      }
-      peer.device = registered
-      peer.phase = "hello"
-    } else {
-      const attempt = this.attempt
-      const supplied = Buffer.from(request.secret, "base64url")
-      if (!attempt?.qr || supplied.length !== 32 || !timingSafeEqual(attempt.secret, supplied)) {
-        throw new Error("unknown pairing attempt")
-      }
-      let device = registered
-      if (!device) {
-        if (request.type !== "device.pair") throw new Error("unpaired device")
-        device = {
-          name: request.name,
-          platform: request.platform,
-          publicKey,
-          lastConnectedAt: null,
-        }
-      }
-      peer.device = device
-      peer.attempt = attempt
-      peer.phase = "proof"
-    }
-    const response = handshake.reply()
-    peer.noise = response.session
-    this.armPeer(session, peer)
-    this.connection?.send(session, response.message)
-  }
-
-  private requestApproval(session: number, peer: Peer, message: unknown): void {
-    const attempt = this.attempt
-    if (
-      !attempt ||
-      peer.attempt !== attempt ||
-      attempt.candidate ||
-      !peer.noise ||
-      !peer.device ||
-      typeof message !== "object" ||
-      message === null ||
-      !("type" in message) ||
-      message.type !== "device.confirm"
-    ) {
-      throw new Error("invalid pairing confirmation")
-    }
-    clearTimeout(peer.timer)
-    peer.phase = "approval"
-    attempt.candidate = {
-      session,
-      confirmation: randomUUID(),
-      code: peer.noise.verificationCode,
-      name: peer.device.name,
-      mode: this.devices.find(peer.device.publicKey) ? "update" : "pair",
-    }
-    this.send(session, peer, { type: "device.check" })
-    this.status = "verify"
-  }
-
-  private negotiate(identity: NoiseKeyPair, session: number, peer: Peer, message: unknown): void {
-    const hello = mobileHelloSchema.parse(message)
-    if (hello.minVersion > mobileProtocolVersion || hello.maxVersion < mobileProtocolVersion) {
-      this.send(session, peer, {
-        type: "mobile.incompatible",
-        minVersion: mobileProtocolVersion,
-        maxVersion: mobileProtocolVersion,
-      })
-      this.dropPeer(session, true)
-      return
-    }
-    const device = peer.device && this.devices.find(peer.device.publicKey)
-    if (!device) throw new Error("device not authorized")
-    const features = mobileFeatures.filter((feature) => hello.features.includes(feature))
-    peer.revocationNotice = features.includes("connection.revocation")
-    peer.device = { ...device, lastConnectedAt: this.now() }
-    this.devices.save(peer.device)
-    peer.rpc = serveMobileSidebar(
-      this.ctx,
-      this.feed,
-      this.devices,
-      {
-        computerKey: identity.publicKey,
-        computerName: this.computerName,
-        deviceKey: device.publicKey,
-        features,
-        relayRevision: () => this.relay.revision,
-        configureReminders: (settings) => this.push.report(device.publicKey, settings),
-      },
-      (message) => this.send(session, peer, message),
-    )
-    peer.phase = "ready"
-    clearTimeout(peer.timer)
-    this.send(session, peer, {
-      type: "mobile.welcome",
-      version: mobileProtocolVersion,
-      features,
-      computerName: this.computerName,
-    })
   }
 }
