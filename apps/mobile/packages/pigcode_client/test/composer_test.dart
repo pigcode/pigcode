@@ -7,9 +7,8 @@ import 'package:test/test.dart';
 const _time = '2026-11-25T10:00:00.000Z';
 
 class _ComposerRpc implements HostRequests {
-  final notificationsController = StreamController<Map<String, dynamic>>.broadcast(
-    sync: true,
-  );
+  final notificationsController =
+      StreamController<Map<String, dynamic>>.broadcast(sync: true);
   final calls = <(String, Map<String, Object?>)>[];
   Map<String, Object?>? nextSubscribeComposer;
   void Function()? onSubscribe;
@@ -147,10 +146,8 @@ void main() {
       throwsFormatException,
     );
     expect(
-      () => MobileThreadComposerState.fromJson({
-        ...composerJson,
-        'extra': true,
-      }),
+      () =>
+          MobileThreadComposerState.fromJson({...composerJson, 'extra': true}),
       throwsFormatException,
     );
 
@@ -262,148 +259,162 @@ void main() {
     });
   });
 
-  test('MobileComposerCommands calls Host RPC methods and decodes updated state', () async {
-    final rpc = _ComposerRpc();
-    final commands = MobileComposerCommands(rpc);
+  test(
+    'MobileComposerCommands calls Host RPC methods and decodes updated state',
+    () async {
+      final rpc = _ComposerRpc();
+      final commands = MobileComposerCommands(rpc);
 
-    final switched = await commands.switchAgent(
-      threadId: 'th_1',
-      instanceId: 'claude-work',
-      modelId: 'claude-sonnet-4-5',
-    );
-    expect(switched.instanceId, 'claude-work');
-    expect(switched.modelId, 'claude-sonnet-4-5');
+      final switched = await commands.switchAgent(
+        threadId: 'th_1',
+        instanceId: 'claude-work',
+        modelId: 'claude-sonnet-4-5',
+      );
+      expect(switched.instanceId, 'claude-work');
+      expect(switched.modelId, 'claude-sonnet-4-5');
 
-    final perm = await commands.setPermissionMode(
-      threadId: 'th_1',
-      permissionMode: MobileDraftPermission.approvalRequired,
-    );
-    expect(perm.permissionMode, MobileDraftPermission.approvalRequired);
-    expect(perm.contextUsage?.usedTokens, 12000);
+      final perm = await commands.setPermissionMode(
+        threadId: 'th_1',
+        permissionMode: MobileDraftPermission.approvalRequired,
+      );
+      expect(perm.permissionMode, MobileDraftPermission.approvalRequired);
+      expect(perm.contextUsage?.usedTokens, 12000);
 
-    final plan = await commands.setPlanMode(threadId: 'th_1', planMode: true);
-    expect(plan.planMode, isTrue);
+      final plan = await commands.setPlanMode(threadId: 'th_1', planMode: true);
+      expect(plan.planMode, isTrue);
 
-    expect(
-      rpc.calls.map((call) => {'method': call.$1, 'params': call.$2}).toList(),
-      [
-        {
-          'method': MobileComposerMethods.switchAgent,
-          'params': {
-            'threadId': 'th_1',
-            'instanceId': 'claude-work',
-            'modelId': 'claude-sonnet-4-5',
+      expect(
+        rpc.calls
+            .map((call) => {'method': call.$1, 'params': call.$2})
+            .toList(),
+        [
+          {
+            'method': MobileComposerMethods.switchAgent,
+            'params': {
+              'threadId': 'th_1',
+              'instanceId': 'claude-work',
+              'modelId': 'claude-sonnet-4-5',
+            },
           },
-        },
-        {
-          'method': MobileComposerMethods.setPermissionMode,
-          'params': {
-            'threadId': 'th_1',
-            'permissionMode': 'approval-required',
+          {
+            'method': MobileComposerMethods.setPermissionMode,
+            'params': {
+              'threadId': 'th_1',
+              'permissionMode': 'approval-required',
+            },
           },
-        },
-        {
-          'method': MobileComposerMethods.setPlanMode,
-          'params': {'threadId': 'th_1', 'planMode': true},
-        },
-      ],
-    );
+          {
+            'method': MobileComposerMethods.setPlanMode,
+            'params': {'threadId': 'th_1', 'planMode': true},
+          },
+        ],
+      );
 
-    await rpc.notificationsController.close();
-  });
+      await rpc.notificationsController.close();
+    },
+  );
 
-  test('MobileTimeline tracks composer state from subscribe, live thread.composer notices, and history loads', () async {
-    final rpc = _ComposerRpc()
-      ..nextSubscribeComposer = {
-        'instanceId': 'fake',
-        'agentId': 'fake',
-        'modelId': 'fake-sage',
-        'permissionMode': 'full-access',
-        'planMode': false,
-        'supportsPlanMode': true,
-        'contextUsage': {
-          'usedTokens': 5000,
-          'maxTokens': 200000,
-          'autoCompactTokens': null,
-        },
-      };
+  test(
+    'MobileTimeline tracks composer state from subscribe, live thread.composer notices, and history loads',
+    () async {
+      final rpc = _ComposerRpc()
+        ..nextSubscribeComposer = {
+          'instanceId': 'fake',
+          'agentId': 'fake',
+          'modelId': 'fake-sage',
+          'permissionMode': 'full-access',
+          'planMode': false,
+          'supportsPlanMode': true,
+          'contextUsage': {
+            'usedTokens': 5000,
+            'maxTokens': 200000,
+            'autoCompactTokens': null,
+          },
+        };
 
-    final timeline = await MobileTimeline.open(rpc, 'th_1');
-    expect(timeline.snapshot?.composer?.modelId, 'fake-sage');
-    expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 5000);
+      final timeline = await MobileTimeline.open(rpc, 'th_1');
+      expect(timeline.snapshot?.composer?.modelId, 'fake-sage');
+      expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 5000);
 
-    // Loading earlier history preserves composer.
-    await timeline.loadEarlier();
-    expect(timeline.snapshot?.events.map((e) => e.seq), [2, 10]);
-    expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 5000);
+      // Loading earlier history preserves composer.
+      await timeline.loadEarlier();
+      expect(timeline.snapshot?.events.map((e) => e.seq), [2, 10]);
+      expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 5000);
 
-    // Notice for another thread is ignored.
-    rpc.pushComposer('th_other', {
-      'instanceId': 'other',
-      'agentId': 'other',
-      'modelId': null,
-      'permissionMode': 'approval-required',
-      'planMode': true,
-      'supportsPlanMode': true,
-      'contextUsage': null,
-    });
-    expect(timeline.snapshot?.composer?.instanceId, 'fake');
-
-    // Live thread.composer notice updates snapshot and emits on updates stream.
-    final nextUpdate = timeline.updates.first;
-    rpc.pushComposer('th_1', {
-      'instanceId': 'claude-work',
-      'agentId': 'claude',
-      'modelId': 'claude-opus',
-      'permissionMode': 'auto-accept-edits',
-      'planMode': true,
-      'supportsPlanMode': true,
-      'contextUsage': null,
-    });
-    final updated = await nextUpdate;
-    expect(updated.composer?.instanceId, 'claude-work');
-    expect(updated.composer?.modelId, 'claude-opus');
-    expect(updated.composer?.permissionMode, MobileDraftPermission.autoAcceptEdits);
-    expect(updated.composer?.planMode, isTrue);
-    expect(updated.composer?.contextUsage, isNull);
-    expect(updated.events.map((e) => e.seq), [2, 10]);
-
-    await timeline.close();
-    await rpc.notificationsController.close();
-  });
-
-  test('MobileTimeline buffers thread.composer notices arriving during subscribe load', () async {
-    final rpc = _ComposerRpc()
-      ..nextSubscribeComposer = {
-        'instanceId': 'fake',
-        'agentId': 'fake',
-        'modelId': 'fake-sage',
-        'permissionMode': 'full-access',
-        'planMode': false,
-        'supportsPlanMode': true,
-        'contextUsage': null,
-      };
-    rpc.onSubscribe = () {
-      rpc.pushComposer('th_1', {
-        'instanceId': 'fake',
-        'agentId': 'fake',
-        'modelId': 'fake-swift',
+      // Notice for another thread is ignored.
+      rpc.pushComposer('th_other', {
+        'instanceId': 'other',
+        'agentId': 'other',
+        'modelId': null,
         'permissionMode': 'approval-required',
         'planMode': true,
         'supportsPlanMode': true,
-        'contextUsage': {'usedTokens': 9000, 'maxTokens': 100000},
+        'contextUsage': null,
       });
-    };
+      expect(timeline.snapshot?.composer?.instanceId, 'fake');
 
-    final timeline = await MobileTimeline.open(rpc, 'th_1');
-    expect(timeline.snapshot?.composer?.modelId, 'fake-swift');
-    expect(
-      timeline.snapshot?.composer?.permissionMode,
-      MobileDraftPermission.approvalRequired,
-    );
-    expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 9000);
+      // Live thread.composer notice updates snapshot and emits on updates stream.
+      final nextUpdate = timeline.updates.first;
+      rpc.pushComposer('th_1', {
+        'instanceId': 'claude-work',
+        'agentId': 'claude',
+        'modelId': 'claude-opus',
+        'permissionMode': 'auto-accept-edits',
+        'planMode': true,
+        'supportsPlanMode': true,
+        'contextUsage': null,
+      });
+      final updated = await nextUpdate;
+      expect(updated.composer?.instanceId, 'claude-work');
+      expect(updated.composer?.modelId, 'claude-opus');
+      expect(
+        updated.composer?.permissionMode,
+        MobileDraftPermission.autoAcceptEdits,
+      );
+      expect(updated.composer?.planMode, isTrue);
+      expect(updated.composer?.contextUsage, isNull);
+      expect(updated.events.map((e) => e.seq), [2, 10]);
 
-    await timeline.close();
-    await rpc.notificationsController.close();
-  });
+      await timeline.close();
+      await rpc.notificationsController.close();
+    },
+  );
+
+  test(
+    'MobileTimeline buffers thread.composer notices arriving during subscribe load',
+    () async {
+      final rpc = _ComposerRpc()
+        ..nextSubscribeComposer = {
+          'instanceId': 'fake',
+          'agentId': 'fake',
+          'modelId': 'fake-sage',
+          'permissionMode': 'full-access',
+          'planMode': false,
+          'supportsPlanMode': true,
+          'contextUsage': null,
+        };
+      rpc.onSubscribe = () {
+        rpc.pushComposer('th_1', {
+          'instanceId': 'fake',
+          'agentId': 'fake',
+          'modelId': 'fake-swift',
+          'permissionMode': 'approval-required',
+          'planMode': true,
+          'supportsPlanMode': true,
+          'contextUsage': {'usedTokens': 9000, 'maxTokens': 100000},
+        });
+      };
+
+      final timeline = await MobileTimeline.open(rpc, 'th_1');
+      expect(timeline.snapshot?.composer?.modelId, 'fake-swift');
+      expect(
+        timeline.snapshot?.composer?.permissionMode,
+        MobileDraftPermission.approvalRequired,
+      );
+      expect(timeline.snapshot?.composer?.contextUsage?.usedTokens, 9000);
+
+      await timeline.close();
+      await rpc.notificationsController.close();
+    },
+  );
 }

@@ -396,7 +396,9 @@ class _TimelineToolViewState extends State<TimelineToolView> {
         (record['new_string'] ?? record['newString']) as String? ??
         (record['content'] as String?) ??
         (record['new_source'] as String?);
-    final edits = source is List ? source : (record['edits'] ?? record['changes']);
+    final edits = source is List
+        ? source
+        : (record['edits'] ?? record['changes']);
     if (oldText != null || newText != null) {
       return TimelineInlineDiff(oldText: oldText, newText: newText);
     }
@@ -523,9 +525,7 @@ class _TimelinePlanCardState extends State<TimelinePlanCard> {
               ),
               const SizedBox(width: TimelineSpace.x2),
               Icon(
-                _expanded
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
+                _expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                 size: TimelineIcon.meta,
                 color: colors.foreground,
               ),

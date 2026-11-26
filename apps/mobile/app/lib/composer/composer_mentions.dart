@@ -456,15 +456,18 @@ List<ComposerSuggestionItem> buildSlashCommandSuggestions({
   ];
 
   final seenLabels = <String>{};
-  final candidates = <({
-    ComposerSuggestionItem item,
-    String primaryName,
-    String? displayName,
-    String? shortDescription,
-    String? description,
-    List<String> keywords,
-    List<String> scopes,
-  })>[];
+  final candidates =
+      <
+        ({
+          ComposerSuggestionItem item,
+          String primaryName,
+          String? displayName,
+          String? shortDescription,
+          String? description,
+          List<String> keywords,
+          List<String> scopes,
+        })
+      >[];
 
   for (final builtin in builtins) {
     final key = builtin.label.toLowerCase();
@@ -537,7 +540,10 @@ List<ComposerSuggestionItem> buildSlashCommandSuggestions({
         _rankField(keyword, normalizedQuery, 10, fuzzy: true),
       );
     }
-    best = math.min(best, _rankField(entry.shortDescription, normalizedQuery, 20));
+    best = math.min(
+      best,
+      _rankField(entry.shortDescription, normalizedQuery, 20),
+    );
     best = math.min(best, _rankField(entry.description, normalizedQuery, 30));
     for (final scope in entry.scopes) {
       best = math.min(best, _rankField(scope, normalizedQuery, 40));
@@ -592,7 +598,10 @@ List<ComposerSuggestionItem> buildSkillSuggestions({
       best,
       _rankField(skill.displayName, normalizedQuery, 1, fuzzy: true),
     );
-    best = math.min(best, _rankField(skill.shortDescription, normalizedQuery, 20));
+    best = math.min(
+      best,
+      _rankField(skill.shortDescription, normalizedQuery, 20),
+    );
     best = math.min(best, _rankField(skill.description, normalizedQuery, 30));
     for (final scope in _sourceSearchTerms(skill.source)) {
       best = math.min(best, _rankField(scope, normalizedQuery, 40));

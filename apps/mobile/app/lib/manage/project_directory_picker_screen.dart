@@ -272,7 +272,9 @@ class _ProjectDirectoryPickerScreenState
                   Expanded(
                     child: Text(
                       listing?.displayPath ??
-                          (_currentRelPath.isEmpty ? '~' : '~/$_currentRelPath'),
+                          (_currentRelPath.isEmpty
+                              ? '~'
+                              : '~/$_currentRelPath'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TimelineType.metaMonoStyle(colors.secondaryText),
@@ -323,11 +325,8 @@ class _ProjectDirectoryPickerScreenState
                   : ListView.separated(
                       itemCount:
                           listing.entries.length + (listing.truncated ? 1 : 0),
-                      separatorBuilder: (_, _) => Divider(
-                        height: 1,
-                        indent: 52,
-                        color: colors.divider,
-                      ),
+                      separatorBuilder: (_, _) =>
+                          Divider(height: 1, indent: 52, color: colors.divider),
                       itemBuilder: (context, index) {
                         if (index >= listing.entries.length) {
                           return Padding(

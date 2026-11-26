@@ -66,7 +66,8 @@ class SettingsHubScreen extends StatelessWidget {
       valueListenable: connectionListenable,
       builder: (context, connection, _) {
         final online = connection != null;
-        final canProjects = online && connectionSupportsProjectManage(connection);
+        final canProjects =
+            online && connectionSupportsProjectManage(connection);
         final canAgents = online && connectionSupportsAgentManage(connection);
         final activeName = connection?.computerName ?? computerName;
 

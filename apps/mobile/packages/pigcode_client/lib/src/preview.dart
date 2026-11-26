@@ -46,17 +46,18 @@ bool _listEquals<T>(List<T> a, List<T> b) {
 }
 
 final class MobilePreviewStatus {
-  const MobilePreviewStatus({
-    required this.enabled,
-    required this.desktopUrls,
-  });
+  const MobilePreviewStatus({required this.enabled, required this.desktopUrls});
 
   final bool enabled;
   final List<String> desktopUrls;
 
   factory MobilePreviewStatus.fromJson(Map<String, dynamic> json) {
-    if (json.keys.any((key) => !const {'enabled', 'desktopUrls'}.contains(key))) {
-      throw const FormatException('MobilePreviewStatus contains an unknown field');
+    if (json.keys.any(
+      (key) => !const {'enabled', 'desktopUrls'}.contains(key),
+    )) {
+      throw const FormatException(
+        'MobilePreviewStatus contains an unknown field',
+      );
     }
     final enabled = json['enabled'] as bool;
     final rawUrls = json['desktopUrls'] as List<dynamic>;
@@ -99,7 +100,9 @@ final class MobilePreviewHeader {
 
   factory MobilePreviewHeader.fromJson(Map<String, dynamic> json) {
     if (json.keys.any((key) => !const {'name', 'value'}.contains(key))) {
-      throw const FormatException('MobilePreviewHeader contains an unknown field');
+      throw const FormatException(
+        'MobilePreviewHeader contains an unknown field',
+      );
     }
     final name = json['name'] as String;
     if (name.isEmpty || name.length > mobilePreviewHeaderNameMax) {
@@ -199,7 +202,8 @@ final class MobilePreviewFetchResponse {
         ? json['bodyStreamId'] as String
         : null;
     if (bodyStreamId != null &&
-        (bodyStreamId.isEmpty || bodyStreamId.length > mobilePreviewStreamIdMax)) {
+        (bodyStreamId.isEmpty ||
+            bodyStreamId.length > mobilePreviewStreamIdMax)) {
       throw const FormatException('Invalid bodyStreamId');
     }
     final totalBytes = json['totalBytes'] as int;
@@ -284,7 +288,8 @@ final class MobilePreviewBodyChunk {
       );
     }
     final bodyStreamId = json['bodyStreamId'] as String;
-    if (bodyStreamId.isEmpty || bodyStreamId.length > mobilePreviewStreamIdMax) {
+    if (bodyStreamId.isEmpty ||
+        bodyStreamId.length > mobilePreviewStreamIdMax) {
       throw const FormatException('Invalid bodyStreamId');
     }
     final dataBase64 = json['dataBase64'] as String;

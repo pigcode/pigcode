@@ -13,13 +13,14 @@ Future<T> _withPreviewHistory<T>(Future<T> Function() body) =>
 /// 清除指定电脑的最近预览历史（用于删除电脑 / 撤销配对清理）。
 Future<void> clearComputerPreviewHistory(String computerKey) =>
     _withPreviewHistory(() async {
-      await mobileSecureStorage.delete(key: '$_previewHistoryPrefix$computerKey');
+      await mobileSecureStorage.delete(
+        key: '$_previewHistoryPrefix$computerKey',
+      );
     });
 
 /// 重装初始化时清理所有残留的本机预览历史。
-Future<void> clearPreviewHistoryOnInstall() => _withPreviewHistory(
-  () => deleteSecurePrefix(_previewHistoryPrefix),
-);
+Future<void> clearPreviewHistoryOnInstall() =>
+    _withPreviewHistory(() => deleteSecurePrefix(_previewHistoryPrefix));
 
 /// 按 `computerKey` 隔离持久化最近打开过的最多 [previewHistoryLimit] 条本机预览地址。
 class PreviewHistoryStorage {

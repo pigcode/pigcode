@@ -161,7 +161,9 @@ class _Draft {
         } else {
           final existing = work[index];
           final trimmed = (event.text ?? '').trim();
-          if (existing.result == null && trimmed.isNotEmpty && trimmed != '{}') {
+          if (existing.result == null &&
+              trimmed.isNotEmpty &&
+              trimmed != '{}') {
             work[index] = TimelineWork(
               TimelineWorkKind.tool,
               event,

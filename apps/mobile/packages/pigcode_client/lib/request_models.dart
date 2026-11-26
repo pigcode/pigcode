@@ -26,15 +26,15 @@ final class MobileRequestTarget {
         'MobileRequestTarget contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
-    final requestId = json['requestId'] as String;
+    final requestId = (json['requestId'] as String);
     if (requestId.isEmpty || requestId.length > 128) {
       throw const FormatException('Invalid requestId');
     }
@@ -80,27 +80,27 @@ final class MobileApproveParams {
         'MobileApproveParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
-    final requestId = json['requestId'] as String;
+    final requestId = (json['requestId'] as String);
     if (requestId.isEmpty || requestId.length > 128) {
       throw const FormatException('Invalid requestId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final decision = MobileApprovalDecision.fromWire(
+    final decision = (MobileApprovalDecision.fromWire(
       json['decision'] as String,
-    );
+    ));
     return MobileApproveParams(
       threadId: threadId,
       runId: runId,
@@ -147,29 +147,29 @@ final class MobileAnswerParams {
         'MobileAnswerParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
-    final requestId = json['requestId'] as String;
+    final requestId = (json['requestId'] as String);
     if (requestId.isEmpty || requestId.length > 128) {
       throw const FormatException('Invalid requestId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final answers = List<MobileQuestionAnswer>.unmodifiable(
+    final answers = (List<MobileQuestionAnswer>.unmodifiable(
       (json['answers'] as List<dynamic>).map(
         (item) => MobileQuestionAnswer.fromJson(item as Map<String, dynamic>),
       ),
-    );
+    ));
     return MobileAnswerParams(
       threadId: threadId,
       runId: runId,
@@ -217,21 +217,21 @@ final class MobileApproval {
     )) {
       throw const FormatException('MobileApproval contains an unknown field');
     }
-    final toolName = json['toolName'] as String;
+    final toolName = (json['toolName'] as String);
     if (toolName.isEmpty) {
       throw const FormatException('Invalid toolName');
     }
-    final title = json.containsKey('title') ? json['title'] as String : null;
-    final description = json.containsKey('description')
+    final title = json['title'] != null ? json['title'] as String : null;
+    final description = json['description'] != null
         ? json['description'] as String
         : null;
-    final detail = json.containsKey('detail') ? json['detail'] as String : null;
-    final plan = json.containsKey('plan') ? json['plan'] as String : null;
-    final decisions = List<MobileApprovalDecision>.unmodifiable(
+    final detail = json['detail'] != null ? json['detail'] as String : null;
+    final plan = json['plan'] != null ? json['plan'] as String : null;
+    final decisions = (List<MobileApprovalDecision>.unmodifiable(
       (json['decisions'] as List<dynamic>).map(
         (item) => MobileApprovalDecision.fromWire(item as String),
       ),
-    );
+    ));
     return MobileApproval(
       toolName: toolName,
       title: title,
@@ -279,11 +279,11 @@ final class MobileQuestionOption {
         'MobileQuestionOption contains an unknown field',
       );
     }
-    final label = json['label'] as String;
+    final label = (json['label'] as String);
     if (label.isEmpty) {
       throw const FormatException('Invalid label');
     }
-    final description = json.containsKey('description')
+    final description = json['description'] != null
         ? json['description'] as String
         : null;
     return MobileQuestionOption(label: label, description: description);
@@ -321,18 +321,18 @@ final class MobileQuestion {
     )) {
       throw const FormatException('MobileQuestion contains an unknown field');
     }
-    final header = json.containsKey('header') ? json['header'] as String : null;
-    final question = json['question'] as String;
+    final header = json['header'] != null ? json['header'] as String : null;
+    final question = (json['question'] as String);
     if (question.isEmpty) {
       throw const FormatException('Invalid question');
     }
-    final options = List<MobileQuestionOption>.unmodifiable(
+    final options = (List<MobileQuestionOption>.unmodifiable(
       (json['options'] as List<dynamic>).map(
         (item) => MobileQuestionOption.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final multiSelect = json['multiSelect'] as bool;
-    final allowCustomAnswer = json['allowCustomAnswer'] as bool;
+    ));
+    final multiSelect = (json['multiSelect'] as bool);
+    final allowCustomAnswer = (json['allowCustomAnswer'] as bool);
     return MobileQuestion(
       header: header,
       question: question,
@@ -362,15 +362,15 @@ final class MobileQuestionAnswer {
         'MobileQuestionAnswer contains an unknown field',
       );
     }
-    final selected = List<String>.unmodifiable(
+    final selected = (List<String>.unmodifiable(
       (json['selected'] as List<dynamic>).map((item) => item as String),
-    );
-    final custom = json.containsKey('custom') ? json['custom'] as String : null;
+    ));
+    final custom = json['custom'] != null ? json['custom'] as String : null;
     return MobileQuestionAnswer(selected: selected, custom: custom);
   }
 
   Map<String, Object?> toJson() => {
-    'selected': selected.map((item) => item).toList(),
+    'selected': selected.toList(),
     'custom': ?custom,
   };
 }
@@ -403,22 +403,22 @@ final class MobileRequestDetails {
         'MobileRequestDetails contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
-    final requestId = json['requestId'] as String;
+    final requestId = (json['requestId'] as String);
     if (requestId.isEmpty || requestId.length > 128) {
       throw const FormatException('Invalid requestId');
     }
-    final approval = json.containsKey('approval')
+    final approval = json['approval'] != null
         ? MobileApproval.fromJson(json['approval'] as Map<String, dynamic>)
         : null;
-    final questions = json.containsKey('questions')
+    final questions = json['questions'] != null
         ? List<MobileQuestion>.unmodifiable(
             (json['questions'] as List<dynamic>).map(
               (item) => MobileQuestion.fromJson(item as Map<String, dynamic>),
@@ -484,16 +484,16 @@ final class MobileRequestOutcome {
         'MobileRequestOutcome contains an unknown field',
       );
     }
-    final state = MobileRequestState.fromWire(json['state'] as String);
-    final decision = json.containsKey('decision')
+    final state = (MobileRequestState.fromWire(json['state'] as String));
+    final decision = json['decision'] != null
         ? MobileApprovalDecision.fromWire(json['decision'] as String)
         : null;
-    final answers = json.containsKey('answers')
+    final answers = json['answers'] != null
         ? List<String>.unmodifiable(
             (json['answers'] as List<dynamic>).map((item) => item as String),
           )
         : null;
-    final answersTruncated = json.containsKey('answersTruncated')
+    final answersTruncated = json['answersTruncated'] != null
         ? json['answersTruncated'] as bool
         : null;
     return MobileRequestOutcome(
@@ -507,7 +507,7 @@ final class MobileRequestOutcome {
   Map<String, Object?> toJson() => {
     'state': state.wire,
     'decision': ?decision?.wire,
-    'answers': ?answers?.map((item) => item).toList(),
+    'answers': ?answers?.toList(),
     'answersTruncated': ?answersTruncated,
   };
 }
@@ -558,28 +558,28 @@ final class MobileRequestReceipt {
         'MobileRequestReceipt contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
-    final requestId = json['requestId'] as String;
+    final requestId = (json['requestId'] as String);
     if (requestId.isEmpty || requestId.length > 128) {
       throw const FormatException('Invalid requestId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final method = MobileRequestMethod.fromWire(json['method'] as String);
-    final outcome = MobileRequestOutcome.fromJson(
+    final method = (MobileRequestMethod.fromWire(json['method'] as String));
+    final outcome = (MobileRequestOutcome.fromJson(
       json['outcome'] as Map<String, dynamic>,
-    );
+    ));
     return MobileRequestReceipt(
       threadId: threadId,
       runId: runId,
@@ -610,7 +610,7 @@ final class MobileRequestReceiptResult {
         'MobileRequestReceiptResult contains an unknown field',
       );
     }
-    final receipt = json.containsKey('receipt')
+    final receipt = json['receipt'] != null
         ? MobileRequestReceipt.fromJson(json['receipt'] as Map<String, dynamic>)
         : null;
     return MobileRequestReceiptResult(receipt: receipt);

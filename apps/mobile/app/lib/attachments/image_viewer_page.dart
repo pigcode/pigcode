@@ -39,7 +39,8 @@ final class ImageViewerItem {
   final int? height;
 }
 
-typedef AttachmentBytesLoader = Future<Uint8List?> Function(String attachmentId);
+typedef AttachmentBytesLoader =
+    Future<Uint8List?> Function(String attachmentId);
 
 /// 黑色背景全屏图片查看器：
 /// - `PageView` 支持左右滑动切换同一消息内的多张图片，顶部显示页码、文件名与关闭按钮；
@@ -131,7 +132,9 @@ class _ImageViewerPageState extends State<ImageViewerPage> {
               _currentZoomed = false;
             }),
             itemBuilder: (context, index) => _ImageViewerSlide(
-              key: ValueKey('image-viewer-slide-$index-${widget.items[index].attachmentId ?? widget.items[index].fileName}'),
+              key: ValueKey(
+                'image-viewer-slide-$index-${widget.items[index].attachmentId ?? widget.items[index].fileName}',
+              ),
               item: widget.items[index],
               loadThumb: widget.loadThumb,
               loadFull: widget.loadFull,
@@ -177,12 +180,13 @@ class _ImageViewerPageState extends State<ImageViewerPage> {
                               children: [
                                 Text(
                                   '${_currentIndex + 1} / ${widget.items.length}',
-                                  style: TimelineType.metaStyle(
-                                    Colors.white,
-                                    weight: FontWeight.w500,
-                                  ).copyWith(
-                                    fontFeatures: TimelineType.tabular,
-                                  ),
+                                  style:
+                                      TimelineType.metaStyle(
+                                        Colors.white,
+                                        weight: FontWeight.w500,
+                                      ).copyWith(
+                                        fontFeatures: TimelineType.tabular,
+                                      ),
                                 ),
                                 if (current.fileName.isNotEmpty) ...[
                                   const SizedBox(width: TimelineSpace.x4),
@@ -413,9 +417,8 @@ class _ImageViewerSlideState extends State<_ImageViewerSlide> {
                       ),
                       fit: BoxFit.contain,
                       gaplessPlayback: true,
-                      errorBuilder: (_, _, _) => const _ViewerFallbackMessage(
-                        text: '无法解码图片内容',
-                      ),
+                      errorBuilder: (_, _, _) =>
+                          const _ViewerFallbackMessage(text: '无法解码图片内容'),
                     ),
                   ),
                 ),
@@ -488,7 +491,10 @@ class _ImageViewerSlideState extends State<_ImageViewerSlide> {
               ),
             ),
           ),
-        if (hasImage && _failed && attachmentId != null && widget.loadFull != null)
+        if (hasImage &&
+            _failed &&
+            attachmentId != null &&
+            widget.loadFull != null)
           Positioned(
             left: TimelineSpace.x7,
             right: TimelineSpace.x7,
@@ -544,8 +550,6 @@ class _ViewerFallbackMessage extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(
-    text,
-    style: TimelineType.metaStyle(Colors.white70),
-  );
+  Widget build(BuildContext context) =>
+      Text(text, style: TimelineType.metaStyle(Colors.white70));
 }

@@ -35,7 +35,7 @@ final class MobileDraftModelParams {
         'MobileDraftModelParams contains an unknown field',
       );
     }
-    final instanceId = json['instanceId'] as String;
+    final instanceId = (json['instanceId'] as String);
     if (instanceId.isEmpty) {
       throw const FormatException('Invalid instanceId');
     }
@@ -94,53 +94,58 @@ final class MobileDraftCreateParams {
         'MobileDraftCreateParams contains an unknown field',
       );
     }
-    final instanceId = json['instanceId'] as String;
+    final instanceId = (json['instanceId'] as String);
     if (instanceId.isEmpty) {
       throw const FormatException('Invalid instanceId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final projectId = json['projectId'] as String;
+    final projectId = (json['projectId'] as String);
     if (projectId.isEmpty) {
       throw const FormatException('Invalid projectId');
     }
-    final modelId = json['modelId'] as String?;
+    final modelId = json['modelId'] != null ? json['modelId'] as String : null;
     if (modelId != null && (modelId.isEmpty)) {
       throw const FormatException('Invalid modelId');
     }
-    final permissionMode = MobileDraftPermission.fromWire(
+    final permissionMode = (MobileDraftPermission.fromWire(
       json['permissionMode'] as String,
-    );
-    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
-    final text = json['text'] as String;
-    final hasText = RegExp('\\S').hasMatch(text);
-    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
-    if (text.length > 10000 || (!hasText && !hasAttachments)) {
+    ));
+    final text = (json['text'] as String);
+    if (text.length > 10000) {
       throw const FormatException('Invalid text');
     }
-    final rawEffort = json['effort'] as String?;
-    final effort = rawEffort?.trim();
+    final effort = json['effort'] != null
+        ? (json['effort'] as String).trim()
+        : null;
     if (effort != null && (effort.isEmpty || effort.length > 64)) {
       throw const FormatException('Invalid effort');
     }
-    final fast = json['fast'] as bool?;
-    final ultracode = json['ultracode'] as bool?;
-    final planMode = json['planMode'] as bool?;
-    final rawReferences = json['references'];
-    final references = rawReferences == null
-        ? null
-        : List<MobileThreadReference>.unmodifiable(
-            (rawReferences as List<dynamic>).map(
+    final fast = json['fast'] != null ? json['fast'] as bool : null;
+    final ultracode = json['ultracode'] != null
+        ? json['ultracode'] as bool
+        : null;
+    final planMode = json['planMode'] != null ? json['planMode'] as bool : null;
+    final references = json['references'] != null
+        ? List<MobileThreadReference>.unmodifiable(
+            (json['references'] as List<dynamic>).map(
               (item) =>
                   MobileThreadReference.fromJson(item as Map<String, dynamic>),
             ),
-          );
-    if (references != null && references.length > 10) {
+          )
+        : null;
+    if (references != null && (references.length > 10)) {
       throw const FormatException('Invalid references');
+    }
+    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
+    final hasText = RegExp('\\S').hasMatch(text);
+    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
+    if (!hasText && !hasAttachments) {
+      throw const FormatException('Invalid text');
     }
     return MobileDraftCreateParams(
       instanceId: instanceId,
@@ -195,8 +200,6 @@ final class MobileDraftInstance {
   final String? accentColor;
   final bool? supportsPlanMode;
   final bool? _supportsImages;
-
-  /// 旧电脑未下发该字段时默认按支持原生看图处理，避免误提示降级。
   bool get supportsImages => _supportsImages ?? true;
 
   factory MobileDraftInstance.fromJson(Map<String, dynamic> json) {
@@ -217,37 +220,46 @@ final class MobileDraftInstance {
         'MobileDraftInstance contains an unknown field',
       );
     }
-    final instanceId = json['instanceId'] as String;
+    final instanceId = (json['instanceId'] as String);
     if (instanceId.isEmpty) {
       throw const FormatException('Invalid instanceId');
     }
-    final label = json['label'] as String;
+    final label = (json['label'] as String);
     if (label.isEmpty) {
       throw const FormatException('Invalid label');
     }
-    final agentName = json['agentName'] as String;
+    final agentName = (json['agentName'] as String);
     if (agentName.isEmpty) {
       throw const FormatException('Invalid agentName');
     }
-    final permissionModes = List<MobileDraftPermission>.unmodifiable(
+    final permissionModes = (List<MobileDraftPermission>.unmodifiable(
       (json['permissionModes'] as List<dynamic>).map(
         (item) => MobileDraftPermission.fromWire(item as String),
       ),
-    );
-    final defaultPermissionMode = MobileDraftPermission.fromWire(
+    ));
+    if (permissionModes.isEmpty) {
+      throw const FormatException('Invalid permissionModes');
+    }
+    final defaultPermissionMode = (MobileDraftPermission.fromWire(
       json['defaultPermissionMode'] as String,
-    );
-    final agentId = json['agentId'] as String?;
-    if (agentId != null && agentId.isEmpty) {
+    ));
+    final agentId = json['agentId'] != null ? json['agentId'] as String : null;
+    if (agentId != null && (agentId.isEmpty)) {
       throw const FormatException('Invalid agentId');
     }
-    final accentColor = json['accentColor'] as String?;
+    final accentColor = json['accentColor'] != null
+        ? json['accentColor'] as String
+        : null;
     if (accentColor != null &&
-        !RegExp(r'^#[\da-fA-F]{6}$').hasMatch(accentColor)) {
+        (!RegExp('^#[\\da-f]{6}\$').hasMatch(accentColor))) {
       throw const FormatException('Invalid accentColor');
     }
-    final supportsPlanMode = json['supportsPlanMode'] as bool?;
-    final supportsImages = json['supportsImages'] as bool?;
+    final supportsPlanMode = json['supportsPlanMode'] != null
+        ? json['supportsPlanMode'] as bool
+        : null;
+    final supportsImages = json['supportsImages'] != null
+        ? json['supportsImages'] as bool
+        : null;
     return MobileDraftInstance(
       instanceId: instanceId,
       label: label,
@@ -287,12 +299,12 @@ final class MobileDraftOptions {
         'MobileDraftOptions contains an unknown field',
       );
     }
-    final instances = List<MobileDraftInstance>.unmodifiable(
+    final instances = (List<MobileDraftInstance>.unmodifiable(
       (json['instances'] as List<dynamic>).map(
         (item) => MobileDraftInstance.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final defaultInstanceId = json.containsKey('defaultInstanceId')
+    ));
+    final defaultInstanceId = json['defaultInstanceId'] != null
         ? json['defaultInstanceId'] as String
         : null;
     if (defaultInstanceId != null && (defaultInstanceId.isEmpty)) {
@@ -326,38 +338,34 @@ final class MobileDraftModel {
 
   factory MobileDraftModel.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {
-        'id',
-        'label',
-        'efforts',
-        'fast',
-        'ultracode',
-      }.contains(key),
+      (key) =>
+          !const {'id', 'label', 'efforts', 'fast', 'ultracode'}.contains(key),
     )) {
       throw const FormatException('MobileDraftModel contains an unknown field');
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty) {
       throw const FormatException('Invalid id');
     }
-    final label = json['label'] as String;
+    final label = (json['label'] as String);
     if (label.isEmpty) {
       throw const FormatException('Invalid label');
     }
-    final rawEfforts = json['efforts'];
-    final efforts = rawEfforts == null
-        ? null
-        : List<String>.unmodifiable(
-            (rawEfforts as List<dynamic>).map((item) {
+    final efforts = json['efforts'] != null
+        ? List<String>.unmodifiable(
+            (json['efforts'] as List<dynamic>).map((item) {
               final value = (item as String).trim();
               if (value.isEmpty || value.length > 64) {
-                throw const FormatException('Invalid efforts');
+                throw const FormatException('Invalid item');
               }
               return value;
             }),
-          );
-    final fast = json['fast'] as bool?;
-    final ultracode = json['ultracode'] as bool?;
+          )
+        : null;
+    final fast = json['fast'] != null ? json['fast'] as bool : null;
+    final ultracode = json['ultracode'] != null
+        ? json['ultracode'] as bool
+        : null;
     return MobileDraftModel(
       id: id,
       label: label,
@@ -389,12 +397,12 @@ final class MobileDraftModels {
         'MobileDraftModels contains an unknown field',
       );
     }
-    final models = List<MobileDraftModel>.unmodifiable(
+    final models = (List<MobileDraftModel>.unmodifiable(
       (json['models'] as List<dynamic>).map(
         (item) => MobileDraftModel.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final defaultModelId = json.containsKey('defaultModelId')
+    ));
+    final defaultModelId = json['defaultModelId'] != null
         ? json['defaultModelId'] as String
         : null;
     if (defaultModelId != null && (defaultModelId.isEmpty)) {
@@ -440,26 +448,26 @@ final class MobileDraftReceipt {
         'MobileDraftReceipt contains an unknown field',
       );
     }
-    final method = json['method'] as String;
-    final commandId = json['commandId'] as String;
+    final method = (json['method'] as String);
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final projectId = json['projectId'] as String;
+    final projectId = (json['projectId'] as String);
     if (projectId.isEmpty) {
       throw const FormatException('Invalid projectId');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final title = json['title'] as String;
+    final title = (json['title'] as String);
     if (title.isEmpty) {
       throw const FormatException('Invalid title');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
@@ -493,7 +501,7 @@ final class MobileDraftReceiptResult {
         'MobileDraftReceiptResult contains an unknown field',
       );
     }
-    final receipt = json.containsKey('receipt')
+    final receipt = json['receipt'] != null
         ? MobileDraftReceipt.fromJson(json['receipt'] as Map<String, dynamic>)
         : null;
     return MobileDraftReceiptResult(receipt: receipt);

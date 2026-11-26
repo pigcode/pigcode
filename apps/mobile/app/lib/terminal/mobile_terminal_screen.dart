@@ -252,19 +252,17 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
       existing.summary = summary;
       return existing;
     }
-    final terminal = Terminal(
-      maxLines: 5000,
-      reflowEnabled: summary.writable,
-    );
+    final terminal = Terminal(maxLines: 5000, reflowEnabled: summary.writable);
     terminal.resize(summary.cols, summary.rows);
     final controller = TerminalController();
-    final tab = _LocalTerminalTab(
-      summary: summary,
-      terminal: terminal,
-      controller: controller,
-    )
-      ..lastSentCols = summary.cols
-      ..lastSentRows = summary.rows;
+    final tab =
+        _LocalTerminalTab(
+            summary: summary,
+            terminal: terminal,
+            controller: controller,
+          )
+          ..lastSentCols = summary.cols
+          ..lastSentRows = summary.rows;
 
     terminal.onOutput = (data) => _handleTerminalInput(summary.id, data);
     terminal.onResize = (width, height, pixelWidth, pixelHeight) {
@@ -286,7 +284,9 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     final seq = ++_syncSeq;
     try {
       final list = await connection.terminal.list(threadId: widget.threadId);
-      if (!mounted || seq != _syncSeq || !identical(_boundConnection, connection)) {
+      if (!mounted ||
+          seq != _syncSeq ||
+          !identical(_boundConnection, connection)) {
         return;
       }
       _remoteList = list;
@@ -418,7 +418,9 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
         cols: size.cols,
         rows: size.rows,
       );
-      if (!mounted || seq != _syncSeq || !identical(_boundConnection, connection)) {
+      if (!mounted ||
+          seq != _syncSeq ||
+          !identical(_boundConnection, connection)) {
         return;
       }
       final tab = _ensureTab(created)
@@ -507,7 +509,10 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     _applyOutputEvent(tab, event);
   }
 
-  void _applyOutputEvent(_LocalTerminalTab tab, MobileTerminalOutputEvent event) {
+  void _applyOutputEvent(
+    _LocalTerminalTab tab,
+    MobileTerminalOutputEvent event,
+  ) {
     if (event.overflow) {
       _showNotice('终端输出过快，正在重新同步…');
       final conn = _boundConnection;
@@ -625,7 +630,11 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
       current.lastSentRows = clampedRows;
       unawaited(
         conn.terminal
-            .resize(terminalId: terminalId, cols: clampedCols, rows: clampedRows)
+            .resize(
+              terminalId: terminalId,
+              cols: clampedCols,
+              rows: clampedRows,
+            )
             .catchError((Object _) {
               return MobileTerminalResizeResult(
                 cols: clampedCols,
@@ -670,10 +679,7 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
               ListTile(
                 key: ValueKey('terminal-sheet-item-${item.id}'),
                 contentPadding: EdgeInsets.zero,
-                leading: WorkspaceIcon(
-                  WorkspaceGlyph.terminal,
-                  size: 20,
-                ),
+                leading: WorkspaceIcon(WorkspaceGlyph.terminal, size: 20),
                 title: Row(
                   spacing: 6,
                   children: [

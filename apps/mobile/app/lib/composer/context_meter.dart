@@ -65,11 +65,7 @@ String? contextUsageCompactSummary(MobileContextUsage usage) {
 
 /// 手机端输入框底栏的上下文占用圆环，点按后展示详情弹层。
 class MobileContextMeter extends StatelessWidget {
-  const MobileContextMeter({
-    super.key,
-    required this.usage,
-    this.onTap,
-  });
+  const MobileContextMeter({super.key, required this.usage, this.onTap});
 
   static const ringKey = ValueKey('composer-context-meter-ring');
 
@@ -89,14 +85,12 @@ class MobileContextMeter extends StatelessWidget {
     final level = computeContextLevel(usage);
     final summary = contextUsageSummary(usage);
     final compact = contextUsageCompactSummary(usage);
-    final semanticsLabel = [
-      '上下文占用',
-      summary,
-      ?compact,
-    ].join('，');
+    final semanticsLabel = ['上下文占用', summary, ?compact].join('，');
     final touch = timelineTouchHeight(context);
     final trackColor = ComposerSurface.contextRingTrack(brightness);
-    final fillColor = level == null ? null : _levelColor(brightness, level.level);
+    final fillColor = level == null
+        ? null
+        : _levelColor(brightness, level.level);
 
     return Tooltip(
       message: '上下文占用',
@@ -182,9 +176,8 @@ Future<void> showMobileContextUsageSheet(
 ) => showMobileSheet<void>(
   context,
   title: '上下文占用',
-  content: (sheetContext) => SliverToBoxAdapter(
-    child: _ContextUsageDetailBody(usage: usage),
-  ),
+  content: (sheetContext) =>
+      SliverToBoxAdapter(child: _ContextUsageDetailBody(usage: usage)),
 );
 
 class _ContextUsageDetailBody extends StatelessWidget {

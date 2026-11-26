@@ -11,8 +11,7 @@ class _AttachmentRpc implements HostRequests {
   final notificationsController =
       StreamController<Map<String, dynamic>>.broadcast(sync: true);
   final calls = <(String, Map<String, Object?>)>[];
-  Future<Object?> Function(String method, Map<String, Object?> params)?
-  onCall;
+  Future<Object?> Function(String method, Map<String, Object?> params)? onCall;
 
   @override
   Stream<Map<String, dynamic>> get notifications =>
@@ -40,175 +39,184 @@ Uint8List _fakePngBytes(int totalBytes) {
 }
 
 void main() {
-  test('declares composer.attachments capability and validates attachment models', () {
-    expect(mobileClientFeatures, contains('composer.attachments'));
-    expect(MobileAttachmentMethods.uploadStart, 'mobile.attachment.uploadStart');
-    expect(MobileAttachmentMethods.uploadChunk, 'mobile.attachment.uploadChunk');
-    expect(
-      MobileAttachmentMethods.uploadCancel,
-      'mobile.attachment.uploadCancel',
-    );
-    expect(
-      MobileAttachmentMethods.uploadFinish,
-      'mobile.attachment.uploadFinish',
-    );
-    expect(MobileAttachmentMethods.read, 'mobile.attachment.read');
+  test(
+    'declares composer.attachments capability and validates attachment models',
+    () {
+      expect(mobileClientFeatures, contains('composer.attachments'));
+      expect(
+        MobileAttachmentMethods.uploadStart,
+        'mobile.attachment.uploadStart',
+      );
+      expect(
+        MobileAttachmentMethods.uploadChunk,
+        'mobile.attachment.uploadChunk',
+      );
+      expect(
+        MobileAttachmentMethods.uploadCancel,
+        'mobile.attachment.uploadCancel',
+      );
+      expect(
+        MobileAttachmentMethods.uploadFinish,
+        'mobile.attachment.uploadFinish',
+      );
+      expect(MobileAttachmentMethods.read, 'mobile.attachment.read');
 
-    final refJson = {
-      'id': 'att_1',
-      'mimeType': 'image/png',
-      'fileName': 'screen.png',
-      'sizeBytes': 4096,
-      'width': 1170,
-      'height': 2532,
-    };
-    final ref = MobileAttachmentRef.fromJson(refJson);
-    expect(ref.toJson(), refJson);
-    expect(
-      () => MobileAttachmentRef.fromJson({...refJson, 'path': '/tmp/x.png'}),
-      throwsFormatException,
-    );
-    expect(
-      () => MobileAttachmentRef.fromJson({
-        ...refJson,
-        'mimeType': 'image/svg+xml',
-      }),
-      throwsFormatException,
-    );
-    expect(
-      () => MobileAttachmentRef.fromJson({...refJson, 'sizeBytes': 0}),
-      throwsFormatException,
-    );
+      final refJson = {
+        'id': 'att_1',
+        'mimeType': 'image/png',
+        'fileName': 'screen.png',
+        'sizeBytes': 4096,
+        'width': 1170,
+        'height': 2532,
+      };
+      final ref = MobileAttachmentRef.fromJson(refJson);
+      expect(ref.toJson(), refJson);
+      expect(
+        () => MobileAttachmentRef.fromJson({...refJson, 'path': '/tmp/x.png'}),
+        throwsFormatException,
+      );
+      expect(
+        () => MobileAttachmentRef.fromJson({
+          ...refJson,
+          'mimeType': 'image/svg+xml',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => MobileAttachmentRef.fromJson({...refJson, 'sizeBytes': 0}),
+        throwsFormatException,
+      );
 
-    // Timeline event with attachments + image-only turn projection.
-    final event = MobileTimelineEvent.fromJson({
-      'seq': 1,
-      'runId': 'r1',
-      'kind': 'message.user',
-      'createdAt': '2026-11-25T10:00:00.000Z',
-      'text': '',
-      'attachments': [refJson],
-    });
-    expect(event.attachments, [ref]);
-    expect(event.toJson()['attachments'], [refJson]);
-    final turns = timelineTurns([event]);
-    expect(turns, hasLength(1));
-    expect(turns.single.user?.attachments, [ref]);
+      // Timeline event with attachments + image-only turn projection.
+      final event = MobileTimelineEvent.fromJson({
+        'seq': 1,
+        'runId': 'r1',
+        'kind': 'message.user',
+        'createdAt': '2026-11-25T10:00:00.000Z',
+        'text': '',
+        'attachments': [refJson],
+      });
+      expect(event.attachments, [ref]);
+      expect(event.toJson()['attachments'], [refJson]);
+      final turns = timelineTurns([event]);
+      expect(turns, hasLength(1));
+      expect(turns.single.user?.attachments, [ref]);
 
-    // Queued message and withdraw receipt attachments.
-    final queued = QueuedMessage.fromJson({
-      'id': 'qm_1',
-      'text': '',
-      'selected': false,
-      'attachments': [refJson],
-    });
-    expect(queued.attachments, [ref]);
-    expect(queued.toJson()['attachments'], [refJson]);
-    final receipt = QueueReceipt.fromJson({
-      'threadId': 'th_1',
-      'commandId': '11111111-1111-4111-8111-111111111111',
-      'method': 'queue.withdraw',
-      'effect': 'withdrawn',
-      'messageId': 'qm_1',
-      'text': '',
-      'attachments': [refJson],
-    });
-    expect(receipt.attachments, [ref]);
-    expect(receipt.toJson()['attachments'], [refJson]);
-
-    // supportsImages defaults to true for legacy desktops and preserves explicit false.
-    final legacyComposer = MobileThreadComposerState.fromJson({
-      'instanceId': 'fake',
-      'agentId': 'fake',
-      'permissionMode': 'full-access',
-      'planMode': false,
-      'supportsPlanMode': true,
-    });
-    expect(legacyComposer.supportsImages, isTrue);
-    expect(legacyComposer.toJson().containsKey('supportsImages'), isFalse);
-
-    final noVisionComposer = MobileThreadComposerState.fromJson({
-      'instanceId': 'pi',
-      'agentId': 'pi',
-      'permissionMode': 'full-access',
-      'planMode': false,
-      'supportsPlanMode': false,
-      'supportsImages': false,
-    });
-    expect(noVisionComposer.supportsImages, isFalse);
-    expect(noVisionComposer.toJson()['supportsImages'], isFalse);
-
-    final legacyInstance = MobileDraftInstance.fromJson({
-      'instanceId': 'fake',
-      'label': 'Fake',
-      'agentName': 'Fake',
-      'permissionModes': ['full-access'],
-      'defaultPermissionMode': 'full-access',
-    });
-    expect(legacyInstance.supportsImages, isTrue);
-    expect(legacyInstance.toJson().containsKey('supportsImages'), isFalse);
-
-    final visionInstance = MobileDraftInstance.fromJson({
-      'instanceId': 'claude',
-      'label': 'Claude',
-      'agentName': 'Claude',
-      'permissionModes': ['full-access'],
-      'defaultPermissionMode': 'full-access',
-      'supportsImages': false,
-    });
-    expect(visionInstance.supportsImages, isFalse);
-    expect(visionInstance.toJson()['supportsImages'], isFalse);
-
-    // startRun / createDraftThread allow empty text when attachmentIds is non-empty.
-    final startParams = MobileStartRunParams.fromJson({
-      'commandId': '11111111-1111-4111-8111-111111111111',
-      'threadId': 'th_1',
-      'text': '',
-      'attachmentIds': ['att_1'],
-    });
-    expect(startParams.text, '');
-    expect(startParams.attachmentIds, ['att_1']);
-    expect(startParams.toJson()['attachmentIds'], ['att_1']);
-    expect(
-      () => MobileStartRunParams.fromJson({
-        'commandId': '11111111-1111-4111-8111-111111111111',
+      // Queued message and withdraw receipt attachments.
+      final queued = QueuedMessage.fromJson({
+        'id': 'qm_1',
+        'text': '',
+        'selected': false,
+        'attachments': [refJson],
+      });
+      expect(queued.attachments, [ref]);
+      expect(queued.toJson()['attachments'], [refJson]);
+      final receipt = QueueReceipt.fromJson({
         'threadId': 'th_1',
-        'text': '   ',
-      }),
-      throwsFormatException,
-    );
-    expect(
-      () => MobileStartRunParams.fromJson({
+        'commandId': '11111111-1111-4111-8111-111111111111',
+        'method': 'queue.withdraw',
+        'effect': 'withdrawn',
+        'messageId': 'qm_1',
+        'text': '',
+        'attachments': [refJson],
+      });
+      expect(receipt.attachments, [ref]);
+      expect(receipt.toJson()['attachments'], [refJson]);
+
+      // supportsImages defaults to true for legacy desktops and preserves explicit false.
+      final legacyComposer = MobileThreadComposerState.fromJson({
+        'instanceId': 'fake',
+        'agentId': 'fake',
+        'permissionMode': 'full-access',
+        'planMode': false,
+        'supportsPlanMode': true,
+      });
+      expect(legacyComposer.supportsImages, isTrue);
+      expect(legacyComposer.toJson().containsKey('supportsImages'), isFalse);
+
+      final noVisionComposer = MobileThreadComposerState.fromJson({
+        'instanceId': 'pi',
+        'agentId': 'pi',
+        'permissionMode': 'full-access',
+        'planMode': false,
+        'supportsPlanMode': false,
+        'supportsImages': false,
+      });
+      expect(noVisionComposer.supportsImages, isFalse);
+      expect(noVisionComposer.toJson()['supportsImages'], isFalse);
+
+      final legacyInstance = MobileDraftInstance.fromJson({
+        'instanceId': 'fake',
+        'label': 'Fake',
+        'agentName': 'Fake',
+        'permissionModes': ['full-access'],
+        'defaultPermissionMode': 'full-access',
+      });
+      expect(legacyInstance.supportsImages, isTrue);
+      expect(legacyInstance.toJson().containsKey('supportsImages'), isFalse);
+
+      final visionInstance = MobileDraftInstance.fromJson({
+        'instanceId': 'claude',
+        'label': 'Claude',
+        'agentName': 'Claude',
+        'permissionModes': ['full-access'],
+        'defaultPermissionMode': 'full-access',
+        'supportsImages': false,
+      });
+      expect(visionInstance.supportsImages, isFalse);
+      expect(visionInstance.toJson()['supportsImages'], isFalse);
+
+      // startRun / createDraftThread allow empty text when attachmentIds is non-empty.
+      final startParams = MobileStartRunParams.fromJson({
         'commandId': '11111111-1111-4111-8111-111111111111',
         'threadId': 'th_1',
         'text': '',
-        'attachmentIds': ['1', '2', '3', '4', '5', '6', '7'],
-      }),
-      throwsFormatException,
-    );
+        'attachmentIds': ['att_1'],
+      });
+      expect(startParams.text, '');
+      expect(startParams.attachmentIds, ['att_1']);
+      expect(startParams.toJson()['attachmentIds'], ['att_1']);
+      expect(
+        () => MobileStartRunParams.fromJson({
+          'commandId': '11111111-1111-4111-8111-111111111111',
+          'threadId': 'th_1',
+          'text': '   ',
+        }),
+        throwsFormatException,
+      );
+      expect(
+        () => MobileStartRunParams.fromJson({
+          'commandId': '11111111-1111-4111-8111-111111111111',
+          'threadId': 'th_1',
+          'text': '',
+          'attachmentIds': ['1', '2', '3', '4', '5', '6', '7'],
+        }),
+        throwsFormatException,
+      );
 
-    final draftParams = MobileDraftCreateParams.fromJson({
-      'commandId': '22222222-2222-4222-8222-222222222222',
-      'projectId': 'pr_1',
-      'instanceId': 'claude',
-      'permissionMode': 'full-access',
-      'text': '',
-      'attachmentIds': ['att_1'],
-    });
-    expect(draftParams.text, '');
-    expect(draftParams.attachmentIds, ['att_1']);
-    expect(draftParams.toJson()['attachmentIds'], ['att_1']);
-    expect(
-      () => MobileDraftCreateParams.fromJson({
+      final draftParams = MobileDraftCreateParams.fromJson({
         'commandId': '22222222-2222-4222-8222-222222222222',
         'projectId': 'pr_1',
         'instanceId': 'claude',
         'permissionMode': 'full-access',
         'text': '',
-      }),
-      throwsFormatException,
-    );
-  });
+        'attachmentIds': ['att_1'],
+      });
+      expect(draftParams.text, '');
+      expect(draftParams.attachmentIds, ['att_1']);
+      expect(draftParams.toJson()['attachmentIds'], ['att_1']);
+      expect(
+        () => MobileDraftCreateParams.fromJson({
+          'commandId': '22222222-2222-4222-8222-222222222222',
+          'projectId': 'pr_1',
+          'instanceId': 'claude',
+          'permissionMode': 'full-access',
+          'text': '',
+        }),
+        throwsFormatException,
+      );
+    },
+  );
 
   test(
     'uploadAttachment uses 4-way concurrent sliding window, tracks monotonic progress, and verifies SHA-256',
@@ -307,7 +315,10 @@ void main() {
       expect(peakInFlight, 4);
       expect(progress, hasLength(6));
       for (var i = 1; i < progress.length; i++) {
-        expect(progress[i].uploadedBytes, greaterThan(progress[i - 1].uploadedBytes));
+        expect(
+          progress[i].uploadedBytes,
+          greaterThan(progress[i - 1].uploadedBytes),
+        );
       }
       expect(progress.last.uploadedBytes, payload.length);
       expect(progress.last.totalBytes, payload.length);
@@ -423,7 +434,9 @@ void main() {
         ),
       );
       expect(
-        failRpc.calls.where((c) => c.$1 == MobileAttachmentMethods.uploadCancel),
+        failRpc.calls.where(
+          (c) => c.$1 == MobileAttachmentMethods.uploadCancel,
+        ),
         hasLength(1),
       );
 
@@ -465,10 +478,7 @@ void main() {
       };
 
       final client = MobileAttachmentCommands(rpc);
-      final thumb = await client.readAttachmentThumb(
-        'att_1',
-        threadId: 'th_1',
-      );
+      final thumb = await client.readAttachmentThumb('att_1', threadId: 'th_1');
       expect(thumb.mimeType, 'image/jpeg');
       expect(thumb.bytes, thumbBytes);
       expect(rpc.calls.single.$2.containsKey('offset'), isFalse);

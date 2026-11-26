@@ -161,8 +161,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     final remaining = _attachments.remainingSlots;
     if (remaining <= 0) {
       setState(
-        () => _attachmentNotice =
-            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+        () => _attachmentNotice = '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
       );
       return;
     }
@@ -172,9 +171,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
           .pickFromGallery(limit: remaining);
       if (!mounted || picked.isEmpty) return;
       if (_attachmentNotice != null) setState(() => _attachmentNotice = null);
-      await _attachments.addLocalFiles([
-        for (final file in picked) file.path,
-      ]);
+      await _attachments.addLocalFiles([for (final file in picked) file.path]);
     } on PlatformException {
       if (mounted) {
         setState(() => _attachmentNotice = '无法访问相册，请在系统设置中允许 Pigcode 访问照片。');
@@ -189,8 +186,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
   Future<void> _takePhoto() async {
     if (_attachments.remainingSlots <= 0) {
       setState(
-        () => _attachmentNotice =
-            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+        () => _attachmentNotice = '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
       );
       return;
     }
@@ -253,10 +249,10 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         fast: runOptions.fast,
         ultracode: runOptions.ultracode,
         planMode: effectivePlanMode ? true : null,
-        references:
-            supportsControls && references.isNotEmpty ? references : null,
-        attachmentIds:
-            attachmentIds != null && attachmentIds.isNotEmpty
+        references: supportsControls && references.isNotEmpty
+            ? references
+            : null,
+        attachmentIds: attachmentIds != null && attachmentIds.isNotEmpty
             ? attachmentIds
             : null,
       ),
@@ -386,8 +382,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
     final link = widget.connection;
     final online = widget.online;
     final projects = widget.projects;
-    final supportsControls =
-        online && connectionSupportsComposerControls(link);
+    final supportsControls = online && connectionSupportsComposerControls(link);
     final provider = newThreadDraftProvider(target);
     final draft = ref.watch(provider);
     ref.listen(provider, (previous, next) {
@@ -675,14 +670,10 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
         tooltip: '草稿权限',
         warning: permission == MobileDraftPermission.fullAccess,
         onTap: !view.working && instance != null
-            ? () => pick(
-                '选择权限模式',
-                [
-                  for (final item in instance.permissionModes)
-                    (item, composerPermissionLabel(item)),
-                ],
-                (current, mode) => current.copyWith(permissionMode: mode),
-              )
+            ? () => pick('选择权限模式', [
+                for (final item in instance.permissionModes)
+                  (item, composerPermissionLabel(item)),
+              ], (current, mode) => current.copyWith(permissionMode: mode))
             : null,
       );
 
@@ -817,8 +808,7 @@ class _NewThreadDraftState extends ConsumerState<NewThreadDraft> {
               trailing: trailingControls,
               offline: !online,
               working: view.working,
-              onChanged: (text) =>
-                  actions.edit(displayed.copyWith(text: text)),
+              onChanged: (text) => actions.edit(displayed.copyWith(text: text)),
               onSend: allowed
                   ? () => unawaited(
                       _handleSubmit(
@@ -912,10 +902,8 @@ class _DraftNotice extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => ComposerStatusBanner(
-    tone: ComposerStatusTone.attention,
-    title: text,
-  );
+  Widget build(BuildContext context) =>
+      ComposerStatusBanner(tone: ComposerStatusTone.attention, title: text);
 }
 
 class _DraftComposer extends StatelessWidget {

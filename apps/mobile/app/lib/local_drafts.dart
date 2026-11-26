@@ -153,13 +153,10 @@ Future<void> clearDraftsOnInstall({AttachmentCacheStore? attachmentCache}) =>
     });
 
 class ThreadDraftStorage {
-  ThreadDraftStorage(
-    this._computerKey,
-    String threadId, {
-    this._attachmentCache,
-  }) : _lease = ComputerStorageLease(_computerKey),
-       _key =
-           '$_threadDraftPrefix$_computerKey.${base64Url.encode(utf8.encode(threadId))}';
+  ThreadDraftStorage(this._computerKey, String threadId, {this._attachmentCache})
+    : _lease = ComputerStorageLease(_computerKey),
+      _key =
+          '$_threadDraftPrefix$_computerKey.${base64Url.encode(utf8.encode(threadId))}';
 
   final String _computerKey;
   final AttachmentCacheStore? _attachmentCache;
@@ -219,8 +216,7 @@ class ThreadDraftStorage {
         );
       });
 
-  Future<void> clearIfMatches(String text) =>
-      clearIfMatchesContent(text);
+  Future<void> clearIfMatches(String text) => clearIfMatchesContent(text);
 
   Future<void> clearIfMatchesContent(
     String text, {
@@ -272,13 +268,7 @@ class ThreadDraftStorage {
     return (text: result.text, appended: result.appended);
   }
 
-  Future<
-    ({
-      String text,
-      List<MobileAttachmentRef> attachments,
-      bool appended,
-    })
-  >
+  Future<({String text, List<MobileAttachmentRef> attachments, bool appended})>
   restoreWithdrawalWithAttachments(
     String commandId,
     String text, {
@@ -303,11 +293,11 @@ class ThreadDraftStorage {
       attachments,
     );
     await _write(
-      _ThreadDraft(
-        nextText,
-        (id: commandId, text: text, attachments: attachments),
-        mergedAttachments,
-      ),
+      _ThreadDraft(nextText, (
+        id: commandId,
+        text: text,
+        attachments: attachments,
+      ), mergedAttachments),
     );
     return (text: nextText, attachments: attachments, appended: true);
   });
@@ -383,11 +373,7 @@ typedef _Withdrawal = ({
 });
 
 class _ThreadDraft {
-  const _ThreadDraft(
-    this.text, [
-    this.withdrawal,
-    this.attachments = const [],
-  ]);
+  const _ThreadDraft(this.text, [this.withdrawal, this.attachments = const []]);
 
   final String text;
   final _Withdrawal? withdrawal;
@@ -417,7 +403,9 @@ class _ThreadDraft {
         'id': value.id,
         'text': value.text,
         if (value.attachments.isNotEmpty)
-          'attachments': value.attachments.map((item) => item.toJson()).toList(),
+          'attachments': value.attachments
+              .map((item) => item.toJson())
+              .toList(),
       },
     if (attachments.isNotEmpty)
       'attachments': attachments.map((item) => item.toJson()).toList(),

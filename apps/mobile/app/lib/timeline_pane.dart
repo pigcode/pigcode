@@ -312,9 +312,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       return;
     }
     unawaited(
-      attachments
-          .stageSharedImages(share.paths)
-          .whenComplete(share.complete),
+      attachments.stageSharedImages(share.paths).whenComplete(share.complete),
     );
   }
 
@@ -441,7 +439,8 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
                 connectionSupportsWorkbenchRead(connection)
             ? (path, {line}) => _openWorkbenchFile(connection, path, line: line)
             : null,
-        onOpenLink: (url, title) => unawaited(_handleTimelineLinkTap(url, title)),
+        onOpenLink: (url, title) =>
+            unawaited(_handleTimelineLinkTap(url, title)),
         changesCard: online && connection?.supportsRunChanges == true
             ? (turn) => _changes(connection!, turn)
             : null,
@@ -988,9 +987,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     final targetLine = line ?? parsed.line;
     if (path.isEmpty) return;
     if (path.length > mobileWorkbenchPathMax) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('文件路径过长，暂不支持预览。')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('文件路径过长，暂不支持预览。')));
       return;
     }
     if (path.endsWith('/')) {
@@ -1005,15 +1004,15 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
         openExternalUrl: widget.openExternalUrl,
         previewTabBuilder: supportsPreview
             ? (_) => PreviewTab(
-                  connection: connection,
-                  threadId: widget.threadId,
-                  computerKey: _effectiveComputerKey,
-                  timelineUrls: extractPreviewUrlsFromSnapshot(_latest),
-                  timelineUrlsProvider: () =>
-                      extractPreviewUrlsFromSnapshot(_latest),
-                  openExternalUrl: widget.openExternalUrl,
-                  webViewBuilder: widget.previewWebViewBuilder,
-                )
+                connection: connection,
+                threadId: widget.threadId,
+                computerKey: _effectiveComputerKey,
+                timelineUrls: extractPreviewUrlsFromSnapshot(_latest),
+                timelineUrlsProvider: () =>
+                    extractPreviewUrlsFromSnapshot(_latest),
+                openExternalUrl: widget.openExternalUrl,
+                webViewBuilder: widget.previewWebViewBuilder,
+              )
             : null,
       );
       return;
@@ -1067,9 +1066,7 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
       if (!widget.online || connection == null) {
         ScaffoldMessenger.maybeOf(context)
           ?..hideCurrentSnackBar()
-          ..showSnackBar(
-            const SnackBar(content: Text('电脑当前离线，连接后再打开本机预览')),
-          );
+          ..showSnackBar(const SnackBar(content: Text('电脑当前离线，连接后再打开本机预览')));
         return;
       }
       if (!connectionSupportsPreviewTunnel(connection)) {
@@ -1228,7 +1225,9 @@ class _TimelinePaneState extends ConsumerState<TimelinePane> {
     runProvider,
   }) async {
     const method = MobileRunMethod.runStart;
-    final controller = runProvider == null ? null : ref.read(runProvider.notifier);
+    final controller = runProvider == null
+        ? null
+        : ref.read(runProvider.notifier);
     await showOptimisticMessageActionsSheet(
       context,
       message: message,

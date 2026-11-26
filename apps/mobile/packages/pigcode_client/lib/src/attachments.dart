@@ -496,14 +496,12 @@ class MobileAttachmentCommands {
           chunk.offset + chunk.length,
         );
         try {
-          final chunkRaw = await _rpc.call(
-            MobileAttachmentMethods.uploadChunk,
-            {
-              'uploadId': uploadId,
-              'offset': chunk.offset,
-              'dataBase64': base64Encode(slice),
-            },
-          );
+          final chunkRaw = await _rpc
+              .call(MobileAttachmentMethods.uploadChunk, {
+                'uploadId': uploadId,
+                'offset': chunk.offset,
+                'dataBase64': base64Encode(slice),
+              });
           final result = MobileAttachmentUploadChunkResult.fromJson(
             chunkRaw as Map<String, dynamic>,
           );

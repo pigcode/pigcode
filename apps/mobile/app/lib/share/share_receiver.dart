@@ -220,7 +220,10 @@ class ShareReceiverController extends Notifier<IncomingShareBatch?> {
   @override
   IncomingShareBatch? build() {
     _channel = ref.watch(mobileShareChannelProvider);
-    _subscription = _channel.batches.listen(_acceptBatch, onError: (Object _) {});
+    _subscription = _channel.batches.listen(
+      _acceptBatch,
+      onError: (Object _) {},
+    );
     ref.onDispose(() => unawaited(_subscription?.cancel()));
     unawaited(Future<void>.microtask(checkPending));
     return null;

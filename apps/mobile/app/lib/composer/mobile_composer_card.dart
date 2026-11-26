@@ -149,8 +149,7 @@ class _MobileComposerCardState extends State<MobileComposerCard> {
                 if (widget.actions.isNotEmpty) ...[
                   const SizedBox(width: ComposerSpace.toolbarActionGap),
                   for (var i = 0; i < widget.actions.length; i++) ...[
-                    if (i > 0)
-                      const SizedBox(width: ComposerSpace.toolbarGap),
+                    if (i > 0) const SizedBox(width: ComposerSpace.toolbarGap),
                     widget.actions[i],
                   ],
                 ],

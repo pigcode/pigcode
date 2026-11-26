@@ -38,9 +38,10 @@ String manageErrorMessage(Object error) {
       'RESOURCE_NOT_AVAILABLE' => '电脑上的这个项目或记录已不可用。',
       'DEVICE_REVOKED' => '这部手机的配对已失效，请重新扫码。',
       'METHOD_NOT_AVAILABLE' => '当前电脑版本暂不支持这项管理功能，请升级电脑端 Pigcode。',
-      _ => error.problem.message.isNotEmpty
-          ? error.problem.message
-          : '电脑暂时无法处理此请求，请重试。',
+      _ =>
+        error.problem.message.isNotEmpty
+            ? error.problem.message
+            : '电脑暂时无法处理此请求，请重试。',
     };
   }
   if (error is ConnectionFailure) {
@@ -70,10 +71,7 @@ class ManageOfflineBanner extends StatelessWidget {
         color: colors.surface,
         border: Border(bottom: BorderSide(color: colors.divider)),
       ),
-      child: Text(
-        '电脑连接已断开，正在重连…',
-        style: TimelineType.metaStyle(colors.muted),
-      ),
+      child: Text('电脑连接已断开，正在重连…', style: TimelineType.metaStyle(colors.muted)),
     );
   }
 }
@@ -219,9 +217,7 @@ Future<bool> confirmRemoveProjectDialog(
           : pigcodeLight;
       return MobileGlassDialog(
         title: Text('移除「$projectName」？'),
-        content: const Text(
-          '仅从项目列表移除，不会删除电脑上的文件夹和历史会话；该项目下正在运行的任务与终端会被停止。',
-        ),
+        content: const Text('仅从项目列表移除，不会删除电脑上的文件夹和历史会话；该项目下正在运行的任务与终端会被停止。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),

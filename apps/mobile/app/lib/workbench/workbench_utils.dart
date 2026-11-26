@@ -44,9 +44,9 @@ Future<void> confirmAndOpenExternalUrl(
   if (scheme != 'http' && scheme != 'https') {
     await Clipboard.setData(ClipboardData(text: uri.toString()));
     if (!context.mounted) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text('已复制链接 ${uri.toString()}')),
-    );
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text('已复制链接 ${uri.toString()}')));
     return;
   }
 
@@ -81,8 +81,9 @@ Future<void> confirmAndOpenExternalUrl(
         ),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(_ExternalLinkDialogAction.cancel),
+            onPressed: () => Navigator.of(
+              dialogContext,
+            ).pop(_ExternalLinkDialogAction.cancel),
             child: const Text('取消'),
           ),
           TextButton(
@@ -105,9 +106,9 @@ Future<void> confirmAndOpenExternalUrl(
     case _ExternalLinkDialogAction.copy:
       await Clipboard.setData(ClipboardData(text: uri.toString()));
       if (!context.mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text('已复制链接 ${uri.toString()}')),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(SnackBar(content: Text('已复制链接 ${uri.toString()}')));
     case _ExternalLinkDialogAction.open:
       final opener = openExternalUrl ?? launchExternalUrl;
       var opened = false;
@@ -117,9 +118,9 @@ Future<void> confirmAndOpenExternalUrl(
         opened = false;
       }
       if (!context.mounted || opened) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('无法在外部浏览器打开此链接')),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('无法在外部浏览器打开此链接')));
     case _ExternalLinkDialogAction.cancel || null:
       break;
   }
@@ -445,9 +446,9 @@ List<TextSpan> highlightCodeLines({
     baseStyle,
     brightness == Brightness.dark ? atomOneDarkTheme : atomOneLightTheme,
   );
-  _workbenchHighlight.highlight(code: normalized, language: language).render(
-    renderer,
-  );
+  _workbenchHighlight
+      .highlight(code: normalized, language: language)
+      .render(renderer);
   final root = renderer.span;
   if (root == null) {
     return [

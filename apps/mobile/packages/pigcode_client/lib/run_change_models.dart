@@ -23,15 +23,15 @@ final class MobileRunChangesParams {
         'MobileRunChangesParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final offset = json.containsKey('offset') ? json['offset'] as int : null;
+    final offset = json['offset'] != null ? json['offset'] as int : null;
     if (offset != null && (offset < 0 || offset > 9007199254740991)) {
       throw const FormatException('Invalid offset');
     }
@@ -69,19 +69,19 @@ final class MobileRunDiffParams {
         'MobileRunDiffParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final offset = json.containsKey('offset') ? json['offset'] as int : null;
+    final offset = json['offset'] != null ? json['offset'] as int : null;
     if (offset != null && (offset < 0 || offset > 9007199254740991)) {
       throw const FormatException('Invalid offset');
     }
-    final path = json['path'] as String;
+    final path = (json['path'] as String);
     if (path.isEmpty || path.length > 4096) {
       throw const FormatException('Invalid path');
     }
@@ -121,19 +121,19 @@ final class MobileRunChangedFile {
         'MobileRunChangedFile contains an unknown field',
       );
     }
-    final path = json['path'] as String;
+    final path = (json['path'] as String);
     if (path.isEmpty || path.length > 4096) {
       throw const FormatException('Invalid path');
     }
-    final added = json.containsKey('added') ? json['added'] as int : null;
+    final added = json['added'] != null ? json['added'] as int : null;
     if (added != null && (added < 0 || added > 9007199254740991)) {
       throw const FormatException('Invalid added');
     }
-    final removed = json.containsKey('removed') ? json['removed'] as int : null;
+    final removed = json['removed'] != null ? json['removed'] as int : null;
     if (removed != null && (removed < 0 || removed > 9007199254740991)) {
       throw const FormatException('Invalid removed');
     }
-    final binary = json.containsKey('binary') ? json['binary'] as bool : null;
+    final binary = json['binary'] != null ? json['binary'] as bool : null;
     return MobileRunChangedFile(
       path: path,
       added: added,
@@ -175,16 +175,16 @@ final class MobileRunChangesPage {
         'MobileRunChangesPage contains an unknown field',
       );
     }
-    final files = List<MobileRunChangedFile>.unmodifiable(
+    final files = (List<MobileRunChangedFile>.unmodifiable(
       (json['files'] as List<dynamic>).map(
         (item) => MobileRunChangedFile.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final diffAvailable = json['diffAvailable'] as bool;
-    final sharedWorktree = json.containsKey('sharedWorktree')
+    ));
+    final diffAvailable = (json['diffAvailable'] as bool);
+    final sharedWorktree = json['sharedWorktree'] != null
         ? json['sharedWorktree'] as bool
         : null;
-    final nextOffset = json.containsKey('nextOffset')
+    final nextOffset = json['nextOffset'] != null
         ? json['nextOffset'] as int
         : null;
     if (nextOffset != null &&
@@ -218,8 +218,8 @@ final class MobileRunDiffPage {
         'MobileRunDiffPage contains an unknown field',
       );
     }
-    final text = json['text'] as String;
-    final nextOffset = json.containsKey('nextOffset')
+    final text = (json['text'] as String);
+    final nextOffset = json['nextOffset'] != null
         ? json['nextOffset'] as int
         : null;
     if (nextOffset != null &&

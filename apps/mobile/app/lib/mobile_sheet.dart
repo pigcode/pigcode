@@ -62,8 +62,9 @@ Future<T?> showMobileSheet<T>(
                           fontSize: 17,
                           fontWeight: FontWeight.w500,
                           height: 1.45,
-                          letterSpacing:
-                              theme.platform == TargetPlatform.iOS ? -.24 : 0,
+                          letterSpacing: theme.platform == TargetPlatform.iOS
+                              ? -.24
+                              : 0,
                           leadingDistribution: TextLeadingDistribution.even,
                           locale: const Locale('zh', 'CN'),
                         ),
@@ -102,12 +103,7 @@ Future<T?> showMobileSheet<T>(
                     slivers: [
                       if (scrollHeader) SliverToBoxAdapter(child: header),
                       SliverPadding(
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          6 - overhang,
-                          20,
-                          20,
-                        ),
+                        padding: EdgeInsets.fromLTRB(20, 6 - overhang, 20, 20),
                         sliver: content(sheet),
                       ),
                     ],

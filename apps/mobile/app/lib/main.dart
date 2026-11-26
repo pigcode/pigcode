@@ -34,11 +34,12 @@ typedef ComputerReconnectFactory =
     );
 
 final computerReconnectFactoryProvider = Provider<ComputerReconnectFactory>(
-  (_) => (computer, identity, onChange) => ComputerReconnect(
-    dial: () => MobileConnection.resume(computer, identity),
-    observe: () => RelayStatusWatch.open(computer),
-    onChange: onChange,
-  ),
+  (_) =>
+      (computer, identity, onChange) => ComputerReconnect(
+        dial: () => MobileConnection.resume(computer, identity),
+        observe: () => RelayStatusWatch.open(computer),
+        onChange: onChange,
+      ),
 );
 
 const _routableTransports = {
@@ -890,9 +891,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
                   padding: const EdgeInsetsDirectional.only(start: 10),
                   child: SizedBox.square(
                     dimension: 40,
-                    child: BackButton(
-                      onPressed: () => _showWorkspace(true),
-                    ),
+                    child: BackButton(onPressed: () => _showWorkspace(true)),
                   ),
                 ),
               )

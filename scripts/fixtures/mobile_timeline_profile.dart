@@ -57,10 +57,7 @@ void main() {
 
     await tester.tap(find.text(_tool).hitTestable());
     final openFullDetails = find.text('查看完整内容');
-    await _waitUntil(
-      tester,
-      () => openFullDetails.evaluate().isNotEmpty,
-    );
+    await _waitUntil(tester, () => openFullDetails.evaluate().isNotEmpty);
     await tester.ensureVisible(openFullDetails);
     await _pumpFrames(tester, const Duration(milliseconds: 200));
     await tester.tap(openFullDetails.hitTestable());
@@ -132,7 +129,10 @@ void main() {
 
     await tester.drag(scroll, const Offset(0, 440));
     final backToTail = find.byTooltip('回到底部');
-    await _waitUntil(tester, () => backToTail.hitTestable().evaluate().isNotEmpty);
+    await _waitUntil(
+      tester,
+      () => backToTail.hitTestable().evaluate().isNotEmpty,
+    );
     await _pumpFrames(tester, const Duration(milliseconds: 450));
     expect(backToTail, findsOneWidget);
     final anchor = _visibleAnchor(tester, scroll);

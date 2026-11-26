@@ -104,7 +104,8 @@ class ComposerAttachmentStrip extends StatelessWidget {
                           item: items[i],
                           onTap: () {
                             final item = items[i];
-                            if (item.status == ComposerAttachmentStatus.failed) {
+                            if (item.status ==
+                                ComposerAttachmentStatus.failed) {
                               controller.retry(item.localId);
                               return;
                             }
@@ -114,9 +115,8 @@ class ComposerAttachmentStrip extends StatelessWidget {
                               _openDefaultPreview(context, items, i);
                             }
                           },
-                          onRemove: () => unawaited(
-                            controller.remove(items[i].localId),
-                          ),
+                          onRemove: () =>
+                              unawaited(controller.remove(items[i].localId)),
                         ),
                     ],
                   ),
@@ -225,8 +225,7 @@ class _AttachmentThumbTile extends StatelessWidget {
       ComposerAttachmentStatus.uploaded => '已上传图片 ${item.fileName}，点按全屏预览',
       ComposerAttachmentStatus.localOffline =>
         '离线暂存图片 ${item.fileName}，恢复连接后自动上传',
-      ComposerAttachmentStatus.failed =>
-        '图片 ${item.fileName} 上传失败，点按重试',
+      ComposerAttachmentStatus.failed => '图片 ${item.fileName} 上传失败，点按重试',
     };
 
     final radius = BorderRadius.circular(10);

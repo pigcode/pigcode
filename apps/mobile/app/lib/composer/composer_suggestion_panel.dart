@@ -14,13 +14,7 @@ import 'composer_tokens.dart';
 import 'mention_editing_controller.dart';
 
 /// `+` 插入底部菜单的可选动作。
-enum ComposerAttachAction {
-  pickPhotos,
-  takePhoto,
-  mention,
-  command,
-  skill,
-}
+enum ComposerAttachAction { pickPhotos, takePhoto, mention, command, skill }
 
 /// 手机端工具栏左下角灰色圆底 `+` 插入按钮（视觉圆 32px，触区 >= 44/48px）。
 class MobileComposerAttachButton extends StatelessWidget {
@@ -197,10 +191,8 @@ Future<ComposerAttachAction?> showMobileComposerAttachMenu(
             label: '引用文件或会话',
             trigger: '@',
             dividerAbove: rows.isNotEmpty,
-            onTap: () => Navigator.pop(
-              sheetContext,
-              ComposerAttachAction.mention,
-            ),
+            onTap: () =>
+                Navigator.pop(sheetContext, ComposerAttachAction.mention),
           ),
           _AttachOptionRow(
             key: MobileComposerAttachButton.commandOptionKey,
@@ -208,10 +200,8 @@ Future<ComposerAttachAction?> showMobileComposerAttachMenu(
             label: '运行命令',
             trigger: '/',
             dividerAbove: true,
-            onTap: () => Navigator.pop(
-              sheetContext,
-              ComposerAttachAction.command,
-            ),
+            onTap: () =>
+                Navigator.pop(sheetContext, ComposerAttachAction.command),
           ),
           _AttachOptionRow(
             key: MobileComposerAttachButton.skillOptionKey,
@@ -219,10 +209,8 @@ Future<ComposerAttachAction?> showMobileComposerAttachMenu(
             label: '使用 Skill',
             trigger: r'$',
             dividerAbove: true,
-            onTap: () => Navigator.pop(
-              sheetContext,
-              ComposerAttachAction.skill,
-            ),
+            onTap: () =>
+                Navigator.pop(sheetContext, ComposerAttachAction.skill),
           ),
         ]);
       }
@@ -745,7 +733,10 @@ class _MobileComposerMentionHostState extends State<MobileComposerMentionHost> {
       _resetAllState(notify: false);
       return;
     }
-    final connectionChanged = !identical(oldWidget.connection, widget.connection);
+    final connectionChanged = !identical(
+      oldWidget.connection,
+      widget.connection,
+    );
     final scopeChanged =
         oldWidget.threadId != widget.threadId ||
         oldWidget.projectId != widget.projectId;
@@ -784,7 +775,10 @@ class _MobileComposerMentionHostState extends State<MobileComposerMentionHost> {
     _pathRequestSeq++;
     _commandRequestSeq++;
     final hadActive =
-        _trigger != null || _loadingPaths || _loadingCommands || _paths.isNotEmpty;
+        _trigger != null ||
+        _loadingPaths ||
+        _loadingCommands ||
+        _paths.isNotEmpty;
     _trigger = null;
     _dismissed = null;
     _paths = const [];

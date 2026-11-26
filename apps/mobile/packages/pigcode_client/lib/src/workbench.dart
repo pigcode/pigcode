@@ -102,11 +102,15 @@ final class MobileDirectoryEntry {
     if (!_entryKinds.contains(kind)) {
       throw const FormatException('Invalid kind');
     }
-    final ignored = json.containsKey('ignored') ? json['ignored'] as bool : false;
+    final ignored = json.containsKey('ignored')
+        ? json['ignored'] as bool
+        : false;
     if (json.containsKey('ignored') && !ignored) {
       throw const FormatException('Invalid ignored');
     }
-    final symlink = json.containsKey('symlink') ? json['symlink'] as bool : false;
+    final symlink = json.containsKey('symlink')
+        ? json['symlink'] as bool
+        : false;
     if (json.containsKey('symlink') && !symlink) {
       throw const FormatException('Invalid symlink');
     }
@@ -163,12 +167,8 @@ final class MobileDirectoryListing {
 
   factory MobileDirectoryListing.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {
-        'path',
-        'entries',
-        'truncated',
-        'nextOffset',
-      }.contains(key),
+      (key) =>
+          !const {'path', 'entries', 'truncated', 'nextOffset'}.contains(key),
     )) {
       throw const FormatException(
         'MobileDirectoryListing contains an unknown field',
@@ -687,7 +687,9 @@ final class MobilePullRequestInfo {
     if (baseRefName.isEmpty) {
       throw const FormatException('Invalid baseRefName');
     }
-    final isDraft = json.containsKey('isDraft') ? json['isDraft'] as bool : null;
+    final isDraft = json.containsKey('isDraft')
+        ? json['isDraft'] as bool
+        : null;
     final additions = json.containsKey('additions')
         ? json['additions'] as int
         : null;
@@ -845,10 +847,7 @@ final class MobilePrStatusResult {
 }
 
 class MobileWorkbenchCommands {
-  const MobileWorkbenchCommands(
-    this._rpc, {
-    this.supportsWorkbenchRead = true,
-  });
+  const MobileWorkbenchCommands(this._rpc, {this.supportsWorkbenchRead = true});
 
   final HostRequests _rpc;
   final bool supportsWorkbenchRead;
@@ -905,7 +904,8 @@ class MobileWorkbenchCommands {
     if (offset < 0) {
       throw RangeError.value(offset, 'offset', 'Must be non-negative');
     }
-    if (length != null && (length < 1 || length > mobileWorkbenchReadMaxLength)) {
+    if (length != null &&
+        (length < 1 || length > mobileWorkbenchReadMaxLength)) {
       throw RangeError.range(length, 1, mobileWorkbenchReadMaxLength, 'length');
     }
     if (!_readRequestModes.contains(mode)) {

@@ -132,7 +132,9 @@ final class MobileAgentSettingField {
               json['integerRange'] as Map<String, dynamic>,
             )
           : null,
-      pathKind: json['pathKind'] is String ? json['pathKind'] as String : 'file',
+      pathKind: json['pathKind'] is String
+          ? json['pathKind'] as String
+          : 'file',
       defaultBool: json['default'] is bool ? json['default'] as bool : null,
       defaultString: json['default'] is String
           ? json['default'] as String
@@ -368,10 +370,7 @@ final class MobileAgentModelItem {
 }
 
 final class MobileAgentDefaultResult {
-  const MobileAgentDefaultResult({
-    this.defaultAgentId,
-    this.defaultInstanceId,
-  });
+  const MobileAgentDefaultResult({this.defaultAgentId, this.defaultInstanceId});
 
   final String? defaultAgentId;
   final String? defaultInstanceId;

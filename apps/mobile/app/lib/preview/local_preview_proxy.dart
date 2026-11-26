@@ -664,7 +664,8 @@ class LocalPreviewProxy {
             final fragment = resolved.hasFragment
                 ? '#${resolved.fragment}'
                 : '';
-            rewrittenLocation = 'http://127.0.0.1:$activePort$pathAndQuery$fragment';
+            rewrittenLocation =
+                'http://127.0.0.1:$activePort$pathAndQuery$fragment';
           } else {
             // 跨端口或外部公网域名重定向：绝不静默跟进，立即关闭远端流并回调上层处理。
             if (fetched.hasMore && fetched.bodyStreamId != null) {

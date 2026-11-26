@@ -128,7 +128,8 @@ class MobileModelPickerChip extends StatelessWidget {
     final showPermissionBadge =
         mode != null &&
         (isElevated ||
-            mode != (defaultPermissionMode ?? MobileDraftPermission.fullAccess));
+            mode !=
+                (defaultPermissionMode ?? MobileDraftPermission.fullAccess));
 
     final effortText = effort == null ? null : composerEffortLabel(effort!);
     final semanticsParts = <String>[
@@ -308,9 +309,7 @@ Future<bool> showFullAccessConfirmDialog(BuildContext context) async {
       ),
       actions: [
         TextButton(
-          style: TextButton.styleFrom(
-            minimumSize: Size(touch, touch),
-          ),
+          style: TextButton.styleFrom(minimumSize: Size(touch, touch)),
           onPressed: () => Navigator.pop(dialogContext, false),
           child: const Text('取消'),
         ),
@@ -637,8 +636,7 @@ class _ModelPickerSheetBodyState extends ConsumerState<_ModelPickerSheetBody> {
               })();
 
         final availablePermissions =
-            currentInstance?.permissionModes ??
-            const <MobileDraftPermission>[];
+            currentInstance?.permissionModes ?? const <MobileDraftPermission>[];
         final showPlanToggle =
             widget.onPlanMode != null &&
             (current.supportsPlanMode || current.planMode);
@@ -786,10 +784,7 @@ class _ModelPickerSheetBodyState extends ConsumerState<_ModelPickerSheetBody> {
                 key: const ValueKey('composer-model-notice-banner'),
                 padding: ComposerSpace.lockedBannerPadding,
                 color: colors.errorTint,
-                child: Text(
-                  notice,
-                  style: ComposerType.notice(colors.error),
-                ),
+                child: Text(notice, style: ComposerType.notice(colors.error)),
               ),
             _ModelPickerFooter(
               currentModel: currentModel,
@@ -803,7 +798,9 @@ class _ModelPickerSheetBodyState extends ConsumerState<_ModelPickerSheetBody> {
               },
               onToggleFast: () {
                 if (currentKey == null) return;
-                unawaited(preferencesNotifier.setFast(currentKey, !currentFast));
+                unawaited(
+                  preferencesNotifier.setFast(currentKey, !currentFast),
+                );
               },
               onToggleUltracode: () {
                 if (currentKey == null) return;
@@ -1177,9 +1174,7 @@ class _ModelListSection extends StatelessWidget {
                 ),
               ),
             Text(
-              isFavoritesTab && !hasQuery
-                  ? '点模型右边的星星，常用的就会放到这里'
-                  : '没找到模型',
+              isFavoritesTab && !hasQuery ? '点模型右边的星星，常用的就会放到这里' : '没找到模型',
               textAlign: TextAlign.center,
               style: ComposerType.modelRowSubtitle(colors.muted),
             ),
@@ -1317,9 +1312,7 @@ class _ModelListRow extends StatelessWidget {
                       ),
                       tooltip: favorite ? '取消收藏' : '收藏',
                       onPressed: onToggleFavorite,
-                      color: favorite
-                          ? ComposerSurface.favorite
-                          : colors.faint,
+                      color: favorite ? ComposerSurface.favorite : colors.faint,
                       icon: WorkspaceIcon(
                         favorite
                             ? WorkspaceGlyph.starFilled
@@ -1437,10 +1430,7 @@ class _ModelPickerFooter extends StatelessWidget {
                     spacing: ComposerSpace.footerControlGap,
                     children: [
                       if (showPlanToggle)
-                        _PlanModeButton(
-                          active: planMode,
-                          onTap: onTogglePlan,
-                        ),
+                        _PlanModeButton(active: planMode, onTap: onTogglePlan),
                       if (showPermissionButton && permissionMode != null)
                         Flexible(
                           child: _PermissionSwitchButton(
@@ -1601,7 +1591,8 @@ class _EffortSliderRow extends StatelessWidget {
                 final trackWidth = constraints.maxWidth;
                 const thumbSize = ComposerControl.effortThumbDiameter;
                 final span = math.max(0.0, trackWidth - thumbSize);
-                final fillWidth = !enabled || maxIndex <= 0 || selectedIndex == 0
+                final fillWidth =
+                    !enabled || maxIndex <= 0 || selectedIndex == 0
                     ? 0.0
                     : thumbSize + span * (selectedIndex / maxIndex);
                 final thumbLeft = maxIndex <= 0
@@ -1689,11 +1680,10 @@ class _EffortSliderRow extends StatelessWidget {
                                                 shape: BoxShape.circle,
                                                 border: Border.all(
                                                   color: i < selectedIndex
-                                                      ? colors.onPrimary
-                                                            .withValues(
-                                                              alpha: ComposerControl
-                                                                  .effortOnDotOpacity,
-                                                            )
+                                                      ? colors.onPrimary.withValues(
+                                                          alpha: ComposerControl
+                                                              .effortOnDotOpacity,
+                                                        )
                                                       : colors.strongBorder,
                                                   width: ComposerBorder
                                                       .effortDefaultRing,
@@ -1702,11 +1692,10 @@ class _EffortSliderRow extends StatelessWidget {
                                             : BoxDecoration(
                                                 shape: BoxShape.circle,
                                                 color: i < selectedIndex
-                                                    ? colors.onPrimary
-                                                          .withValues(
-                                                            alpha: ComposerControl
-                                                                .effortOnDotOpacity,
-                                                          )
+                                                    ? colors.onPrimary.withValues(
+                                                        alpha: ComposerControl
+                                                            .effortOnDotOpacity,
+                                                      )
                                                     : colors.strongBorder,
                                               ),
                                       ),
@@ -1778,10 +1767,7 @@ class _PlanModeButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: radius,
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: touch,
-              minHeight: touch,
-            ),
+            constraints: BoxConstraints(minWidth: touch, minHeight: touch),
             child: Center(
               child: Container(
                 height: ComposerControl.planToggleVisualHeight,
@@ -1852,10 +1838,7 @@ class _PermissionSwitchButton extends StatelessWidget {
           onTap: onTap,
           borderRadius: radius,
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: touch,
-              minHeight: touch,
-            ),
+            constraints: BoxConstraints(minWidth: touch, minHeight: touch),
             child: Center(
               child: Container(
                 height: ComposerControl.permissionButtonVisualHeight,

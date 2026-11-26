@@ -414,16 +414,16 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                   openExternalUrl: widget.openExternalUrl,
                   connectionPreviewTabBuilder: supportsPreview
                       ? (_, liveConnection) => PreviewTab(
-                            connection: liveConnection,
-                            threadId: thread.id,
-                            computerKey: computer?.computerKey,
-                            timelineUrls:
-                                _timelinePreviewUrls[thread.id] ?? const [],
-                            timelineUrlsProvider: () =>
-                                _timelinePreviewUrls[thread.id] ?? const [],
-                            openExternalUrl: widget.openExternalUrl,
-                            webViewBuilder: widget.previewWebViewBuilder,
-                          )
+                          connection: liveConnection,
+                          threadId: thread.id,
+                          computerKey: computer?.computerKey,
+                          timelineUrls:
+                              _timelinePreviewUrls[thread.id] ?? const [],
+                          timelineUrlsProvider: () =>
+                              _timelinePreviewUrls[thread.id] ?? const [],
+                          openExternalUrl: widget.openExternalUrl,
+                          webViewBuilder: widget.previewWebViewBuilder,
+                        )
                       : null,
                 ),
               );
@@ -889,7 +889,10 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (action == null || !mounted) return;
     await _runThreadAction(
       (commands) => switch (action) {
-        _HeaderThreadAction.pin => commands.setPinned(thread.id, !thread.pinned),
+        _HeaderThreadAction.pin => commands.setPinned(
+          thread.id,
+          !thread.pinned,
+        ),
         _HeaderThreadAction.read => commands.markRead(thread.id, thread.unread),
         _HeaderThreadAction.archive => commands.archive(
           thread.id,
@@ -1044,10 +1047,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
             child: const WorkspaceIcon(WorkspaceGlyph.chevronDown, size: 12),
           ),
         ],
-        if (statusBadge != null) ...[
-          const SizedBox(width: 6),
-          statusBadge,
-        ],
+        if (statusBadge != null) ...[const SizedBox(width: 6), statusBadge],
       ],
     );
 

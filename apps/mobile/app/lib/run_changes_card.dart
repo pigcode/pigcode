@@ -132,7 +132,9 @@ class _RunChangesCardState extends State<RunChangesCard> {
                         if (added > 0)
                           Text(
                             '+$added',
-                            style: TimelineType.diffCountStyle(colors.diffAdded),
+                            style: TimelineType.diffCountStyle(
+                              colors.diffAdded,
+                            ),
                           ),
                         if (added > 0 && removed > 0)
                           const SizedBox(width: TimelineSpace.x2),
@@ -288,7 +290,10 @@ class _ChangeRow extends StatelessWidget {
             ),
           ),
           if (file.added case final added? when added > 0)
-            Text('+$added', style: TimelineType.diffCountStyle(colors.diffAdded)),
+            Text(
+              '+$added',
+              style: TimelineType.diffCountStyle(colors.diffAdded),
+            ),
           if (file.removed case final removed? when removed > 0) ...[
             const SizedBox(width: TimelineSpace.x2),
             Text(

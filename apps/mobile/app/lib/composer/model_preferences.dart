@@ -102,7 +102,11 @@ class ModelPreferences {
 
   factory ModelPreferences.fromJson(Map<String, dynamic> json) {
     List<String> readList(Object? raw) => raw is List
-        ? raw.whereType<String>().where((item) => item.isNotEmpty).toSet().toList()
+        ? raw
+              .whereType<String>()
+              .where((item) => item.isNotEmpty)
+              .toSet()
+              .toList()
         : const [];
     final rawEfforts = json['efforts'];
     final parsedEfforts = <String, String>{};
@@ -131,26 +135,24 @@ class ModelPreferences {
 class ModelPreferencesStorage {
   const ModelPreferencesStorage();
 
-  Future<ModelPreferences> read() => withComputerStorage(
-    _modelPreferencesMutex,
-    () async {
-      final raw = await mobileSecureStorage.read(
-        key: modelPreferencesStorageKey,
-      );
-      if (raw == null || raw.isEmpty) return ModelPreferences.empty;
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map<String, dynamic>) {
-          return ModelPreferences.fromJson(decoded);
+  Future<ModelPreferences> read() =>
+      withComputerStorage(_modelPreferencesMutex, () async {
+        final raw = await mobileSecureStorage.read(
+          key: modelPreferencesStorageKey,
+        );
+        if (raw == null || raw.isEmpty) return ModelPreferences.empty;
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, dynamic>) {
+            return ModelPreferences.fromJson(decoded);
+          }
+        } on FormatException {
+          // 忽略损坏的本地缓存。
+        } on TypeError {
+          // 忽略结构不匹配的本地缓存。
         }
-      } on FormatException {
-        // 忽略损坏的本地缓存。
-      } on TypeError {
-        // 忽略结构不匹配的本地缓存。
-      }
-      return ModelPreferences.empty;
-    },
-  );
+        return ModelPreferences.empty;
+      });
 
   Future<void> write(ModelPreferences preferences) => withComputerStorage(
     _modelPreferencesMutex,
@@ -168,11 +170,7 @@ class ModelPreferencesStorage {
 
 /// 发送时经能力安全过滤后的运行选项；不支持或未开启的字段一律为 `null`。
 final class ResolvedComposerRunOptions {
-  const ResolvedComposerRunOptions({
-    this.effort,
-    this.fast,
-    this.ultracode,
-  });
+  const ResolvedComposerRunOptions({this.effort, this.fast, this.ultracode});
 
   final String? effort;
   final bool? fast;
@@ -241,8 +239,7 @@ final modelPreferencesProvider =
 class ModelPreferencesController extends Notifier<ModelPreferences> {
   static const _storage = ModelPreferencesStorage();
 
-  final _pendingBeforeHydrate =
-      <ModelPreferences Function(ModelPreferences)>[];
+  final _pendingBeforeHydrate = <ModelPreferences Function(ModelPreferences)>[];
   bool _hydrated = false;
   Future<void>? _hydration;
 
@@ -285,7 +282,9 @@ class ModelPreferencesController extends Notifier<ModelPreferences> {
   Future<void> setUltracode(String key, bool enabled) =>
       _mutate((current) => current.withUltracode(key, enabled));
 
-  Future<void> _mutate(ModelPreferences Function(ModelPreferences) update) async {
+  Future<void> _mutate(
+    ModelPreferences Function(ModelPreferences) update,
+  ) async {
     final next = update(state);
     state = next;
     if (!_hydrated) {

@@ -15,7 +15,9 @@ Color? parseAgentAccentColor(String? hex) {
 final _wideScriptPattern = RegExp(
   r'[\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\uAC00-\uD7AF]',
 );
-final _wordSplitPattern = RegExp(r'[^0-9A-Za-z\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]+');
+final _wordSplitPattern = RegExp(
+  r'[^0-9A-Za-z\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]+',
+);
 
 /// 对齐桌面端 `entityMark(id, name)`：
 /// 多个词取前两词首字母，单个词取前两字母；汉字/假名/谚文开头取首字。
@@ -239,11 +241,7 @@ class _ClaudeMarkPainter extends CustomPainter {
         paint,
       );
     }
-    canvas.drawCircle(
-      center,
-      radius * 0.2,
-      Paint()..color = color,
-    );
+    canvas.drawCircle(center, radius * 0.2, Paint()..color = color);
   }
 
   @override
@@ -335,7 +333,11 @@ class _AntigravityMarkPainter extends CustomPainter {
       false,
       topPaint,
     );
-    canvas.drawCircle(Offset(w * 0.50, h * 0.20), strokeWidth * 0.45, accentPaint);
+    canvas.drawCircle(
+      Offset(w * 0.50, h * 0.20),
+      strokeWidth * 0.45,
+      accentPaint,
+    );
   }
 
   @override

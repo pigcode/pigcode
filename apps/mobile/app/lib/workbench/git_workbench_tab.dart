@@ -237,9 +237,7 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
             : pigcodeLight;
         return MobileGlassDialog(
           title: const Text('恢复到此检查点？'),
-          content: const Text(
-            '仅恢复工作区文件到该时刻的状态，不会回滚对话记录，Agent 也不会自动得知文件已变化。',
-          ),
+          content: const Text('仅恢复工作区文件到该时刻的状态，不会回滚对话记录，Agent 也不会自动得知文件已变化。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -347,8 +345,7 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
     final worktrees = _worktrees?.worktrees ?? const <MobileWorktreeItem>[];
     final mainActive = _worktrees?.mainActive ?? true;
     final checkpoints =
-        (_checkpoints?.checkpoints ?? const <MobileCheckpointItem>[])
-            .reversed
+        (_checkpoints?.checkpoints ?? const <MobileCheckpointItem>[]).reversed
             .toList(growable: false);
 
     return RefreshIndicator(
@@ -442,7 +439,9 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
                             ),
                           ),
                           Text(
-                            mainActive ? '当前会话正在项目主目录工作' : '移除活动 Worktree 后切回主工作区',
+                            mainActive
+                                ? '当前会话正在项目主目录工作'
+                                : '移除活动 Worktree 后切回主工作区',
                             style: TimelineType.smallStyle(colors.muted),
                           ),
                         ],
@@ -513,11 +512,7 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      Icons.history_rounded,
-                      size: 18,
-                      color: colors.muted,
-                    ),
+                    Icon(Icons.history_rounded, size: 18, color: colors.muted),
                     const SizedBox(width: TimelineSpace.x3),
                     Expanded(
                       child: Text(

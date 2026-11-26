@@ -144,7 +144,9 @@ stageSharedImagesToDraft({
   ImageCompressor? compressor,
   int existingCount = 0,
 }) async {
-  if (paths.isEmpty) return (records: const <DraftAttachmentRecord>[], error: null);
+  if (paths.isEmpty) {
+    return (records: const <DraftAttachmentRecord>[], error: null);
+  }
   final store = cache ?? AttachmentCacheStore.defaultInstance;
   final processor = compressor ?? const ImageCompressor();
   final remaining = mobileMaxMessageAttachments - existingCount;
@@ -155,7 +157,9 @@ stageSharedImagesToDraft({
     );
   }
   String? error;
-  final accepted = paths.length > remaining ? paths.sublist(0, remaining) : paths;
+  final accepted = paths.length > remaining
+      ? paths.sublist(0, remaining)
+      : paths;
   if (paths.length > remaining) {
     error = '每条消息最多添加 $mobileMaxMessageAttachments 张图片，已忽略超出部分。';
   }
@@ -188,7 +192,10 @@ stageSharedImagesToDraft({
       error ??= '部分图片无法读取或处理失败。';
     }
   }
-  return (records: List<DraftAttachmentRecord>.unmodifiable(records), error: error);
+  return (
+    records: List<DraftAttachmentRecord>.unmodifiable(records),
+    error: error,
+  );
 }
 
 /// 管理单个输入框（已有会话或新会话草稿）的待发图片列表、后台上传、取消、重试与离线草稿同步。
@@ -213,17 +220,15 @@ class ComposerAttachmentsController extends ChangeNotifier {
   String? _bannerError;
   bool _disposed = false;
 
-  List<ComposerAttachmentItem> get items => List<ComposerAttachmentItem>.unmodifiable(
-    _entries.map((entry) => entry.snapshot()),
-  );
+  List<ComposerAttachmentItem> get items =>
+      List<ComposerAttachmentItem>.unmodifiable(
+        _entries.map((entry) => entry.snapshot()),
+      );
 
   String? get bannerError => _bannerError;
   int get count => _entries.length;
-  int get remainingSlots =>
-      (mobileMaxMessageAttachments - _entries.length).clamp(
-        0,
-        mobileMaxMessageAttachments,
-      );
+  int get remainingSlots => (mobileMaxMessageAttachments - _entries.length)
+      .clamp(0, mobileMaxMessageAttachments);
   bool get isFull => _entries.length >= mobileMaxMessageAttachments;
   bool get hasItems => _entries.isNotEmpty;
   bool get hasSendableItems => _entries.any(
@@ -290,10 +295,7 @@ class ComposerAttachmentsController extends ChangeNotifier {
         status: ComposerAttachmentStatus.preparing,
       );
       _entries.add(entry);
-      final task = _prepareEntry(
-        entry,
-        () => _compressor.compressFile(path),
-      );
+      final task = _prepareEntry(entry, () => _compressor.compressFile(path));
       entry.prepareTask = task;
       tasks.add(task);
     }
@@ -436,7 +438,8 @@ class ComposerAttachmentsController extends ChangeNotifier {
       if (bytes == null || bytes.isEmpty) {
         throw const ImageProcessingException('本地图片副本已丢失，请重新选择。');
       }
-      final mimeType = entry.mimeType ?? detectImageMimeType(bytes) ?? 'image/jpeg';
+      final mimeType =
+          entry.mimeType ?? detectImageMimeType(bytes) ?? 'image/jpeg';
       final ref = await connection.uploadAttachment(
         bytes: bytes,
         mimeType: mimeType,
@@ -537,9 +540,7 @@ class ComposerAttachmentsController extends ChangeNotifier {
     if (_disposed) return null;
     if (_entries.isEmpty) return const [];
 
-    final prepareTasks = [
-      for (final entry in _entries) ?entry.prepareTask,
-    ];
+    final prepareTasks = [for (final entry in _entries) ?entry.prepareTask];
     if (prepareTasks.isNotEmpty) {
       await Future.wait(prepareTasks);
     }
@@ -553,15 +554,15 @@ class ComposerAttachmentsController extends ChangeNotifier {
       }
     }
 
-    final uploadTasks = [
-      for (final entry in _entries) ?entry.uploadTask,
-    ];
+    final uploadTasks = [for (final entry in _entries) ?entry.uploadTask];
     if (uploadTasks.isNotEmpty) {
       await Future.wait(uploadTasks);
     }
     if (_disposed) return null;
 
-    if (_entries.any((entry) => entry.status == ComposerAttachmentStatus.failed)) {
+    if (_entries.any(
+      (entry) => entry.status == ComposerAttachmentStatus.failed,
+    )) {
       _bannerError = '有图片上传失败，请点按失败图片重试或移除后再发送。';
       _notify();
       return null;
@@ -661,7 +662,8 @@ class ComposerAttachmentsController extends ChangeNotifier {
       added.add(entry);
     }
     if (truncated) {
-      _bannerError = '撤回的附件超出 $mobileMaxMessageAttachments 张上限，已保留前 $mobileMaxMessageAttachments 张。';
+      _bannerError =
+          '撤回的附件超出 $mobileMaxMessageAttachments 张上限，已保留前 $mobileMaxMessageAttachments 张。';
     }
     if (added.isEmpty && !truncated) return;
     _notify();
@@ -748,7 +750,8 @@ class ComposerAttachmentsController extends ChangeNotifier {
           height: record.height,
           draftFileName: bytes != null ? record.draftFileName : null,
           previewBytes:
-              bytes ?? _cache.peekThumbMemory(computerKey, record.remoteRef!.id),
+              bytes ??
+              _cache.peekThumbMemory(computerKey, record.remoteRef!.id),
           remoteRef: record.remoteRef,
           status: ComposerAttachmentStatus.uploaded,
           progress: 1.0,

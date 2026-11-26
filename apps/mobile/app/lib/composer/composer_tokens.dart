@@ -72,12 +72,7 @@ abstract final class ComposerSpace {
     bottom: TimelineSpace.x2,
   );
   static const EdgeInsetsDirectional sheetHeaderPadding =
-      EdgeInsetsDirectional.fromSTEB(
-        TimelineSpace.x7,
-        0,
-        TimelineSpace.x2,
-        0,
-      );
+      EdgeInsetsDirectional.fromSTEB(TimelineSpace.x7, 0, TimelineSpace.x2, 0);
   static const EdgeInsets railPadding = EdgeInsets.symmetric(
     horizontal: TimelineSpace.x6,
     vertical: TimelineSpace.x2,
@@ -166,12 +161,7 @@ abstract final class ComposerSpace {
     TimelineSpace.x3,
   );
   static const EdgeInsetsDirectional suggestionHeaderPadding =
-      EdgeInsetsDirectional.fromSTEB(
-        TimelineSpace.x4,
-        0,
-        TimelineSpace.x1,
-        0,
-      );
+      EdgeInsetsDirectional.fromSTEB(TimelineSpace.x4, 0, TimelineSpace.x1, 0);
   static const double suggestionHeaderGap = TimelineSpace.x3;
   static const EdgeInsets suggestionGroupPadding = EdgeInsets.fromLTRB(
     TimelineSpace.x4,
@@ -585,7 +575,8 @@ abstract final class ComposerSurface {
     brightness,
   ).withValues(alpha: brightness == Brightness.dark ? 0.24 : 0.15);
 
-  static Color accentText(Brightness brightness) => brightness == Brightness.dark
+  static Color accentText(Brightness brightness) =>
+      brightness == Brightness.dark
       ? const Color(0xFF8FB8F8)
       : const Color(0xFF1A62C6);
 
@@ -652,10 +643,7 @@ abstract final class ComposerSurface {
   }
 
   /// 工具栏左下角 `+` 圆形插入按钮底色与图标色（对齐桌面 `.composer-attach` 灰色圆底）。
-  static Color attachFill(
-    Brightness brightness, {
-    bool offline = false,
-  }) {
+  static Color attachFill(Brightness brightness, {bool offline = false}) {
     final colors = palette(brightness);
     return offline
         ? Color.alphaBlend(colors.selected, cardFill(brightness, offline: true))
@@ -685,10 +673,7 @@ abstract final class ComposerSurface {
     return BoxDecoration(
       color: colors.popover,
       borderRadius: BorderRadius.circular(ComposerRadius.suggestionPanel),
-      border: Border.all(
-        color: colors.border,
-        width: ComposerBorder.regular,
-      ),
+      border: Border.all(color: colors.border, width: ComposerBorder.regular),
       boxShadow: suggestionShadow(brightness),
     );
   }
@@ -697,10 +682,7 @@ abstract final class ComposerSurface {
     final colors = palette(brightness);
     return BoxDecoration(
       borderRadius: BorderRadius.circular(ComposerRadius.suggestionTag),
-      border: Border.all(
-        color: colors.border,
-        width: ComposerBorder.regular,
-      ),
+      border: Border.all(color: colors.border, width: ComposerBorder.regular),
     );
   }
 }

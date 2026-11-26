@@ -240,11 +240,7 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
         actions: [SizedBox(width: tabs.length >= 4 ? 12 : touch + 16)],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Divider(
-            height: 1,
-            thickness: 1,
-            color: colors.divider,
-          ),
+          child: Divider(height: 1, thickness: 1, color: colors.divider),
         ),
       ),
       body: SafeArea(

@@ -309,9 +309,7 @@ GptMarkdownThemeData _markdownTheme(Brightness brightness) =>
         linkColor: palette.link,
         hrLineColor: palette.timelineBorder,
         hrLineThickness: TimelineBorder.regular,
-        hrLinePadding: const EdgeInsets.symmetric(
-          vertical: TimelineSpace.x2,
-        ),
+        hrLinePadding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
         autoAddDividerLineAfterH1: false,
         styleSheet: GptMarkdownStyleSheet(
           heading: const HeadingStyle(
@@ -758,7 +756,9 @@ class TimelineWorkLine extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(TimelineRadius.xs),
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: timelineTouchHeight(context)),
+            constraints: BoxConstraints(
+              minHeight: timelineTouchHeight(context),
+            ),
             child: Align(
               alignment: AlignmentDirectional.centerStart,
               heightFactor: 1,

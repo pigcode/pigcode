@@ -246,7 +246,10 @@ class TimelineInlineDiff extends StatelessWidget {
             width: TimelineToolCard.inlineDiffMarkerWidth,
             child: Padding(
               padding: const EdgeInsets.only(left: TimelineSpace.x4),
-              child: Text(line.marker, style: TimelineType.codeStyle(markerColor)),
+              child: Text(
+                line.marker,
+                style: TimelineType.codeStyle(markerColor),
+              ),
             ),
           ),
           Padding(

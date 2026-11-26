@@ -80,7 +80,10 @@ class _PreviewTabState extends State<PreviewTab> {
   @override
   void didUpdateWidget(covariant PreviewTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final connectionChanged = !identical(oldWidget.connection, widget.connection);
+    final connectionChanged = !identical(
+      oldWidget.connection,
+      widget.connection,
+    );
     if (oldWidget.computerKey != widget.computerKey ||
         oldWidget.historyStorage != widget.historyStorage ||
         connectionChanged) {
@@ -146,7 +149,9 @@ class _PreviewTabState extends State<PreviewTab> {
   Future<void> _reloadHistory() async {
     final storage = _historyStorage;
     if (storage == null) return;
-    final history = await storage.read().catchError((Object _) => const <String>[]);
+    final history = await storage.read().catchError(
+      (Object _) => const <String>[],
+    );
     if (!mounted) return;
     setState(() => _historyUrls = history);
   }
@@ -237,11 +242,7 @@ class _PreviewTabState extends State<PreviewTab> {
     return formatPreviewDisplayAddress(uri);
   }
 
-  ({
-    List<String> desktop,
-    List<String> timeline,
-    List<String> history,
-  })
+  ({List<String> desktop, List<String> timeline, List<String> history})
   _deduplicatedGroups() {
     final seen = <String>{};
 
@@ -295,10 +296,7 @@ class _PreviewTabState extends State<PreviewTab> {
             const SizedBox(height: TimelineSpace.x6),
           ],
           if (_loadError case final message?) ...[
-            _LoadErrorCard(
-              message: message,
-              onRetry: () => unawaited(_load()),
-            ),
+            _LoadErrorCard(message: message, onRetry: () => unawaited(_load())),
             const SizedBox(height: TimelineSpace.x6),
           ],
           _buildQuickInput(context),

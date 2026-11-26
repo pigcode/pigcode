@@ -26,7 +26,7 @@ final class MobileTimelineThreadParams {
         'MobileTimelineThreadParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
@@ -47,11 +47,11 @@ final class MobileTimelineSubscribeParams {
         'MobileTimelineSubscribeParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final after = json.containsKey('after') ? json['after'] as int : null;
+    final after = json['after'] != null ? json['after'] as int : null;
     if (after != null && (after < 0 || after > 9007199254740991)) {
       throw const FormatException('Invalid after');
     }
@@ -79,15 +79,15 @@ final class MobileTimelineCatchUpParams {
         'MobileTimelineCatchUpParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final through = json['through'] as int;
+    final through = (json['through'] as int);
     if (through < 0 || through > 9007199254740991) {
       throw const FormatException('Invalid through');
     }
-    final after = json['after'] as int;
+    final after = (json['after'] as int);
     if (after < 0 || after > 9007199254740991) {
       throw const FormatException('Invalid after');
     }
@@ -123,15 +123,15 @@ final class MobileTimelineHistoryParams {
         'MobileTimelineHistoryParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final through = json['through'] as int;
+    final through = (json['through'] as int);
     if (through < 0 || through > 9007199254740991) {
       throw const FormatException('Invalid through');
     }
-    final before = json['before'] as int;
+    final before = (json['before'] as int);
     if (before > 9007199254740991) {
       throw const FormatException('Invalid before');
     }
@@ -180,24 +180,26 @@ final class MobileTimelineContentParams {
         'MobileTimelineContentParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final seq = json.containsKey('seq') ? json['seq'] as int : null;
+    final seq = json['seq'] != null ? json['seq'] as int : null;
     if (seq != null && (seq > 9007199254740991)) {
       throw const FormatException('Invalid seq');
     }
-    final runId = json.containsKey('runId') ? json['runId'] as String : null;
+    final runId = json['runId'] != null ? json['runId'] as String : null;
     if (runId != null && (runId.isEmpty)) {
       throw const FormatException('Invalid runId');
     }
-    final toolId = json.containsKey('toolId') ? json['toolId'] as String : null;
+    final toolId = json['toolId'] != null ? json['toolId'] as String : null;
     if (toolId != null && (toolId.isEmpty)) {
       throw const FormatException('Invalid toolId');
     }
-    final field = MobileTimelineContentField.fromWire(json['field'] as String);
-    final offset = json.containsKey('offset') ? json['offset'] as int : null;
+    final field = (MobileTimelineContentField.fromWire(
+      json['field'] as String,
+    ));
+    final offset = json['offset'] != null ? json['offset'] as int : null;
     if (offset != null && (offset < 0 || offset > 9007199254740991)) {
       throw const FormatException('Invalid offset');
     }
@@ -319,36 +321,36 @@ final class MobileTimelineEvent {
         'MobileTimelineEvent contains an unknown field',
       );
     }
-    final seq = json['seq'] as int;
+    final seq = (json['seq'] as int);
     if (seq < 0 || seq > 9007199254740991) {
       throw const FormatException('Invalid seq');
     }
-    final runId = json.containsKey('runId') ? json['runId'] as String : null;
+    final runId = json['runId'] != null ? json['runId'] as String : null;
     if (runId != null && (runId.isEmpty)) {
       throw const FormatException('Invalid runId');
     }
-    final kind = MobileTimelineKind.fromWire(json['kind'] as String);
-    final createdAt = json['createdAt'] as String;
+    final kind = (MobileTimelineKind.fromWire(json['kind'] as String));
+    final createdAt = (json['createdAt'] as String);
     if (!RegExp(
       '^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))\$',
     ).hasMatch(createdAt)) {
       throw const FormatException('Invalid createdAt');
     }
-    final text = json.containsKey('text') ? json['text'] as String : null;
-    final truncated = json.containsKey('truncated')
+    final text = json['text'] != null ? json['text'] as String : null;
+    final truncated = json['truncated'] != null
         ? json['truncated'] as bool
         : null;
-    final itemId = json.containsKey('itemId') ? json['itemId'] as String : null;
-    final name = json.containsKey('name') ? json['name'] as String : null;
-    final failed = json.containsKey('failed') ? json['failed'] as bool : null;
-    final finishedSteps = json.containsKey('finishedSteps')
+    final itemId = json['itemId'] != null ? json['itemId'] as String : null;
+    final name = json['name'] != null ? json['name'] as String : null;
+    final failed = json['failed'] != null ? json['failed'] as bool : null;
+    final finishedSteps = json['finishedSteps'] != null
         ? json['finishedSteps'] as int
         : null;
     if (finishedSteps != null &&
         (finishedSteps < 0 || finishedSteps > 9007199254740991)) {
       throw const FormatException('Invalid finishedSteps');
     }
-    final totalSteps = json.containsKey('totalSteps')
+    final totalSteps = json['totalSteps'] != null
         ? json['totalSteps'] as int
         : null;
     if (totalSteps != null &&
@@ -407,12 +409,12 @@ final class MobileTimelineToolPreview {
         'MobileTimelineToolPreview contains an unknown field',
       );
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty) {
       throw const FormatException('Invalid id');
     }
-    final text = json['text'] as String;
-    final truncated = json['truncated'] as bool;
+    final text = (json['text'] as String);
+    final truncated = (json['truncated'] as bool);
     return MobileTimelineToolPreview(id: id, text: text, truncated: truncated);
   }
 
@@ -449,11 +451,11 @@ final class MobileTimelinePending {
         'MobileTimelinePending contains an unknown field',
       );
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty) {
       throw const FormatException('Invalid id');
     }
-    final kind = MobileTimelinePendingKind.fromWire(json['kind'] as String);
+    final kind = (MobileTimelinePendingKind.fromWire(json['kind'] as String));
     return MobileTimelinePending(id: id, kind: kind);
   }
 
@@ -507,44 +509,44 @@ final class MobileActiveRun {
     )) {
       throw const FormatException('MobileActiveRun contains an unknown field');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final startedAt = json['startedAt'] as String;
+    final startedAt = (json['startedAt'] as String);
     if (!RegExp(
       '^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))\$',
     ).hasMatch(startedAt)) {
       throw const FormatException('Invalid startedAt');
     }
-    final revision = json['revision'] as int;
+    final revision = (json['revision'] as int);
     if (revision < 0 || revision > 9007199254740991) {
       throw const FormatException('Invalid revision');
     }
-    final text = json['text'] as String;
-    final textTruncated = json['textTruncated'] as bool;
-    final reasoning = json['reasoning'] as String;
-    final reasoningTruncated = json['reasoningTruncated'] as bool;
-    final tools = List<MobileTimelineToolPreview>.unmodifiable(
+    final text = (json['text'] as String);
+    final textTruncated = (json['textTruncated'] as bool);
+    final reasoning = (json['reasoning'] as String);
+    final reasoningTruncated = (json['reasoningTruncated'] as bool);
+    final tools = (List<MobileTimelineToolPreview>.unmodifiable(
       (json['tools'] as List<dynamic>).map(
         (item) =>
             MobileTimelineToolPreview.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final pending = List<MobileTimelinePending>.unmodifiable(
+    ));
+    final pending = (List<MobileTimelinePending>.unmodifiable(
       (json['pending'] as List<dynamic>).map(
         (item) => MobileTimelinePending.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final step = json.containsKey('step') ? json['step'] as String : null;
-    final finishedSteps = json.containsKey('finishedSteps')
+    ));
+    final step = json['step'] != null ? json['step'] as String : null;
+    final finishedSteps = json['finishedSteps'] != null
         ? json['finishedSteps'] as int
         : null;
     if (finishedSteps != null &&
         (finishedSteps < 0 || finishedSteps > 9007199254740991)) {
       throw const FormatException('Invalid finishedSteps');
     }
-    final totalSteps = json.containsKey('totalSteps')
+    final totalSteps = json['totalSteps'] != null
         ? json['totalSteps'] as int
         : null;
     if (totalSteps != null &&
@@ -604,22 +606,22 @@ final class MobileTimelinePage {
         'MobileTimelinePage contains an unknown field',
       );
     }
-    final events = List<MobileTimelineEvent>.unmodifiable(
+    final events = (List<MobileTimelineEvent>.unmodifiable(
       (json['events'] as List<dynamic>).map(
         (item) => MobileTimelineEvent.fromJson(item as Map<String, dynamic>),
       ),
-    );
-    final through = json['through'] as int;
+    ));
+    final through = (json['through'] as int);
     if (through < 0 || through > 9007199254740991) {
       throw const FormatException('Invalid through');
     }
-    final nextBefore = json.containsKey('nextBefore')
+    final nextBefore = json['nextBefore'] != null
         ? json['nextBefore'] as int
         : null;
     if (nextBefore != null && (nextBefore > 9007199254740991)) {
       throw const FormatException('Invalid nextBefore');
     }
-    final nextAfter = json.containsKey('nextAfter')
+    final nextAfter = json['nextAfter'] != null
         ? json['nextAfter'] as int
         : null;
     if (nextAfter != null && (nextAfter > 9007199254740991)) {
@@ -661,20 +663,18 @@ final class MobileTimelineSubscription {
         'MobileTimelineSubscription contains an unknown field',
       );
     }
-    final page = MobileTimelinePage.fromJson(
+    final page = (MobileTimelinePage.fromJson(
       json['page'] as Map<String, dynamic>,
-    );
-    final rawLive = json['live'];
-    final live = rawLive == null
-        ? null
-        : MobileActiveRun.fromJson(rawLive as Map<String, dynamic>);
-    final resumed = json['resumed'] as bool?;
-    final rawComposer = json['composer'];
-    final composer = rawComposer == null
-        ? null
-        : MobileThreadComposerState.fromJson(
-            rawComposer as Map<String, dynamic>,
-          );
+    ));
+    final live = json['live'] != null
+        ? MobileActiveRun.fromJson(json['live'] as Map<String, dynamic>)
+        : null;
+    final resumed = json['resumed'] != null ? json['resumed'] as bool : null;
+    final composer = json['composer'] != null
+        ? MobileThreadComposerState.fromJson(
+            json['composer'] as Map<String, dynamic>,
+          )
+        : null;
     return MobileTimelineSubscription(
       page: page,
       live: live,
@@ -702,10 +702,10 @@ final class MobileTimelineLiveResult {
         'MobileTimelineLiveResult contains an unknown field',
       );
     }
-    final live = json.containsKey('live')
+    final live = json['live'] != null
         ? MobileActiveRun.fromJson(json['live'] as Map<String, dynamic>)
         : null;
-    final through = json['through'] as int;
+    final through = (json['through'] as int);
     if (through < 0 || through > 9007199254740991) {
       throw const FormatException('Invalid through');
     }
@@ -728,7 +728,7 @@ final class MobileTimelineUnsubscribed {
         'MobileTimelineUnsubscribed contains an unknown field',
       );
     }
-    final ok = json['ok'] as bool;
+    final ok = (json['ok'] as bool);
     return MobileTimelineUnsubscribed(ok: ok);
   }
 
@@ -746,8 +746,8 @@ final class MobileTimelineContentResult {
         'MobileTimelineContentResult contains an unknown field',
       );
     }
-    final text = json['text'] as String;
-    final nextOffset = json.containsKey('nextOffset')
+    final text = (json['text'] as String);
+    final nextOffset = json['nextOffset'] != null
         ? json['nextOffset'] as int
         : null;
     if (nextOffset != null &&
@@ -778,17 +778,17 @@ final class MobileTimelineNotice {
         'MobileTimelineNotice contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final previousSeq = json['previousSeq'] as int;
+    final previousSeq = (json['previousSeq'] as int);
     if (previousSeq < 0 || previousSeq > 9007199254740991) {
       throw const FormatException('Invalid previousSeq');
     }
-    final event = MobileTimelineEvent.fromJson(
+    final event = (MobileTimelineEvent.fromJson(
       json['event'] as Map<String, dynamic>,
-    );
+    ));
     return MobileTimelineNotice(
       threadId: threadId,
       previousSeq: previousSeq,
@@ -851,24 +851,24 @@ final class MobileRunDelta {
     )) {
       throw const FormatException('MobileRunDelta contains an unknown field');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final revision = json['revision'] as int;
+    final revision = (json['revision'] as int);
     if (revision > 9007199254740991) {
       throw const FormatException('Invalid revision');
     }
-    final kind = MobileRunDeltaKind.fromWire(json['kind'] as String);
-    final text = json['text'] as String;
-    final truncated = json.containsKey('truncated')
+    final kind = (MobileRunDeltaKind.fromWire(json['kind'] as String));
+    final text = (json['text'] as String);
+    final truncated = json['truncated'] != null
         ? json['truncated'] as bool
         : null;
-    final toolId = json.containsKey('toolId') ? json['toolId'] as String : null;
+    final toolId = json['toolId'] != null ? json['toolId'] as String : null;
     return MobileRunDelta(
       threadId: threadId,
       runId: runId,

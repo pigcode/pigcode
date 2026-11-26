@@ -100,10 +100,7 @@ class _PrStatusTabState extends State<PrStatusTab> {
       if (!mounted || seq != _requestSeq) return;
       setState(() {
         _loading = false;
-        _error = workbenchErrorMessage(
-          error,
-          fallback: '暂时无法读取 PR 状态，请重试。',
-        );
+        _error = workbenchErrorMessage(error, fallback: '暂时无法读取 PR 状态，请重试。');
       });
     }
   }
@@ -121,18 +118,18 @@ class _PrStatusTabState extends State<PrStatusTab> {
     }
     if (!mounted) return;
     if (!opened) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法在外部浏览器打开此链接')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法在外部浏览器打开此链接')));
     }
   }
 
   Future<void> _copyLink(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制 PR 链接')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制 PR 链接')));
   }
 
   void _showNotice(String text) {
@@ -147,9 +144,7 @@ class _PrStatusTabState extends State<PrStatusTab> {
       context,
       title: '创建 PR',
       content: (sheet) => SliverToBoxAdapter(
-        child: _CreatePrForm(
-          onSubmit: (draft) => Navigator.pop(sheet, draft),
-        ),
+        child: _CreatePrForm(onSubmit: (draft) => Navigator.pop(sheet, draft)),
       ),
     );
     if (!mounted || input == null) return;
@@ -194,10 +189,11 @@ class _PrStatusTabState extends State<PrStatusTab> {
 
   Future<void> _showMergeDialog() async {
     if (!_canWrite || _acting) return;
-    final choice = await showDialog<({MobilePrMergeMethod method, bool deleteBranch})>(
-      context: context,
-      builder: (_) => const _MergePrDialog(),
-    );
+    final choice =
+        await showDialog<({MobilePrMergeMethod method, bool deleteBranch})>(
+          context: context,
+          builder: (_) => const _MergePrDialog(),
+        );
     if (!mounted || choice == null) return;
     setState(() => _acting = true);
     try {
@@ -468,9 +464,9 @@ class _PrStatusTabState extends State<PrStatusTab> {
                         if (pr.changedFiles != null)
                           Text(
                             '· ${pr.changedFiles} 个文件',
-                            style: TimelineType.metaStyle(colors.muted).copyWith(
-                              fontFeatures: TimelineType.tabular,
-                            ),
+                            style: TimelineType.metaStyle(
+                              colors.muted,
+                            ).copyWith(fontFeatures: TimelineType.tabular),
                           ),
                       ],
                     ),
@@ -593,14 +589,19 @@ class _PrStatusTabState extends State<PrStatusTab> {
                     key: PrStatusTab.readyPrButtonKey,
                     style: FilledButton.styleFrom(minimumSize: Size(0, touch)),
                     onPressed: _acting ? null : () => unawaited(_markReady()),
-                    icon: const Icon(Icons.check_circle_outline_rounded, size: 18),
+                    icon: const Icon(
+                      Icons.check_circle_outline_rounded,
+                      size: 18,
+                    ),
                     label: const Text('标记为 Ready'),
                   ),
                 if (isOpen && !isDraft)
                   FilledButton.icon(
                     key: PrStatusTab.mergePrButtonKey,
                     style: FilledButton.styleFrom(minimumSize: Size(0, touch)),
-                    onPressed: _acting ? null : () => unawaited(_showMergeDialog()),
+                    onPressed: _acting
+                        ? null
+                        : () => unawaited(_showMergeDialog()),
                     icon: const Icon(Icons.merge_rounded, size: 18),
                     label: const Text('合并 PR'),
                   ),
@@ -612,14 +613,18 @@ class _PrStatusTabState extends State<PrStatusTab> {
                       foregroundColor: colors.error,
                       side: BorderSide(color: colors.error),
                     ),
-                    onPressed: _acting ? null : () => unawaited(_confirmClosePr()),
+                    onPressed: _acting
+                        ? null
+                        : () => unawaited(_confirmClosePr()),
                     icon: const Icon(Icons.close_rounded, size: 18),
                     label: const Text('关闭 PR'),
                   ),
                 if (isClosed)
                   OutlinedButton.icon(
                     key: PrStatusTab.reopenPrButtonKey,
-                    style: OutlinedButton.styleFrom(minimumSize: Size(0, touch)),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: Size(0, touch),
+                    ),
                     onPressed: _acting ? null : () => unawaited(_reopenPr()),
                     icon: const Icon(Icons.refresh_rounded, size: 18),
                     label: const Text('重新打开 PR'),
@@ -736,7 +741,9 @@ class _PrStatusTabState extends State<PrStatusTab> {
                 if (result.status == 'no-pr' && _canWrite)
                   FilledButton.icon(
                     key: PrStatusTab.createPrButtonKey,
-                    onPressed: _acting ? null : () => unawaited(_showCreatePrSheet()),
+                    onPressed: _acting
+                        ? null
+                        : () => unawaited(_showCreatePrSheet()),
                     icon: const Icon(Icons.add_rounded, size: 18),
                     label: const Text('创建 PR'),
                   ),
@@ -887,10 +894,7 @@ class _PrCard extends StatelessWidget {
 }
 
 class _BranchFlowPill extends StatelessWidget {
-  const _BranchFlowPill({
-    required this.headRefName,
-    required this.baseRefName,
-  });
+  const _BranchFlowPill({required this.headRefName, required this.baseRefName});
 
   final String headRefName;
   final String baseRefName;
@@ -958,9 +962,9 @@ class _ChecksSummaryRow extends StatelessWidget {
             const Spacer(),
             Text(
               checks.total == 0 ? '暂无检查' : '共 ${checks.total} 项',
-              style: TimelineType.smallStyle(colors.muted).copyWith(
-                fontFeatures: TimelineType.tabular,
-              ),
+              style: TimelineType.smallStyle(
+                colors.muted,
+              ).copyWith(fontFeatures: TimelineType.tabular),
             ),
           ],
         ),
@@ -1016,8 +1020,10 @@ class _CheckCountPill extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: TimelineType.smallStyle(color, weight: FontWeight.w500)
-              .copyWith(fontFeatures: TimelineType.tabular),
+          style: TimelineType.smallStyle(
+            color,
+            weight: FontWeight.w500,
+          ).copyWith(fontFeatures: TimelineType.tabular),
         ),
       ),
     );
@@ -1077,9 +1083,7 @@ class _CreatePrFormState extends State<_CreatePrForm> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -365,7 +365,9 @@ class ComposerTextEditingController extends TextEditingController {
     );
     // 跳过与正在输入组合区重叠的片段，绝不在 IME 组合期间切碎或改写组合区。
     final safeSpans = spans
-        .where((span) => span.end <= composingStart || span.start >= composingEnd)
+        .where(
+          (span) => span.end <= composingStart || span.start >= composingEnd,
+        )
         .toList();
 
     final children = <InlineSpan>[];
@@ -417,10 +419,7 @@ class ComposerTextEditingController extends TextEditingController {
       }
       if (end > start) {
         out.add(
-          TextSpan(
-            text: fullText.substring(start, end),
-            style: highlightStyle,
-          ),
+          TextSpan(text: fullText.substring(start, end), style: highlightStyle),
         );
       }
       cursor = end;

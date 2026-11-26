@@ -20,7 +20,7 @@ final class QueueThreadParams {
         'QueueThreadParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
@@ -48,17 +48,17 @@ final class QueueWithdrawParams {
         'QueueWithdrawParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final messageId = json['messageId'] as String;
+    final messageId = (json['messageId'] as String);
     if (messageId.isEmpty || messageId.length > 128) {
       throw const FormatException('Invalid messageId');
     }
@@ -97,21 +97,21 @@ final class QueueStopAndSendParams {
         'QueueStopAndSendParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final messageId = json['messageId'] as String;
+    final messageId = (json['messageId'] as String);
     if (messageId.isEmpty || messageId.length > 128) {
       throw const FormatException('Invalid messageId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty || runId.length > 128) {
       throw const FormatException('Invalid runId');
     }
@@ -144,11 +144,11 @@ final class QueueResumeParams {
         'QueueResumeParams contains an unknown field',
       );
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
@@ -181,12 +181,12 @@ final class QueuedMessage {
     )) {
       throw const FormatException('QueuedMessage contains an unknown field');
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty || id.length > 128) {
       throw const FormatException('Invalid id');
     }
-    final text = json['text'] as String;
-    final selected = json['selected'] as bool;
+    final text = (json['text'] as String);
+    final selected = (json['selected'] as bool);
     final attachments = parseMobileAttachmentRefs(json['attachments']);
     return QueuedMessage(
       id: id,
@@ -228,23 +228,23 @@ final class QueueSnapshot {
     )) {
       throw const FormatException('QueueSnapshot contains an unknown field');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final paused = json['paused'] as bool;
-    final activeRunId = json.containsKey('activeRunId')
+    final paused = (json['paused'] as bool);
+    final activeRunId = json['activeRunId'] != null
         ? json['activeRunId'] as String
         : null;
     if (activeRunId != null &&
         (activeRunId.isEmpty || activeRunId.length > 128)) {
       throw const FormatException('Invalid activeRunId');
     }
-    final messages = List<QueuedMessage>.unmodifiable(
+    final messages = (List<QueuedMessage>.unmodifiable(
       (json['messages'] as List<dynamic>).map(
         (item) => QueuedMessage.fromJson(item as Map<String, dynamic>),
       ),
-    );
+    ));
     return QueueSnapshot(
       threadId: threadId,
       paused: paused,
@@ -332,36 +332,36 @@ final class QueueReceipt {
     )) {
       throw const FormatException('QueueReceipt contains an unknown field');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final method = QueueMethod.fromWire(json['method'] as String);
-    final effect = QueueEffect.fromWire(json['effect'] as String);
-    final messageId = json.containsKey('messageId')
+    final method = (QueueMethod.fromWire(json['method'] as String));
+    final effect = (QueueEffect.fromWire(json['effect'] as String));
+    final messageId = json['messageId'] != null
         ? json['messageId'] as String
         : null;
     if (messageId != null && (messageId.isEmpty || messageId.length > 128)) {
       throw const FormatException('Invalid messageId');
     }
-    final runId = json.containsKey('runId') ? json['runId'] as String : null;
+    final runId = json['runId'] != null ? json['runId'] as String : null;
     if (runId != null && (runId.isEmpty || runId.length > 128)) {
       throw const FormatException('Invalid runId');
     }
-    final stoppedRunId = json.containsKey('stoppedRunId')
+    final stoppedRunId = json['stoppedRunId'] != null
         ? json['stoppedRunId'] as String
         : null;
     if (stoppedRunId != null &&
         (stoppedRunId.isEmpty || stoppedRunId.length > 128)) {
       throw const FormatException('Invalid stoppedRunId');
     }
-    final text = json.containsKey('text') ? json['text'] as String : null;
+    final text = json['text'] != null ? json['text'] as String : null;
     final attachments = parseMobileAttachmentRefs(json['attachments']);
     return QueueReceipt(
       threadId: threadId,
@@ -400,7 +400,7 @@ final class QueueReceiptResult {
         'QueueReceiptResult contains an unknown field',
       );
     }
-    final receipt = json.containsKey('receipt')
+    final receipt = json['receipt'] != null
         ? QueueReceipt.fromJson(json['receipt'] as Map<String, dynamic>)
         : null;
     return QueueReceiptResult(receipt: receipt);

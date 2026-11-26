@@ -20,11 +20,8 @@ final class MobileContextUsage {
 
   factory MobileContextUsage.fromJson(Map<String, dynamic> json) {
     if (json.keys.any(
-      (key) => !const {
-        'usedTokens',
-        'maxTokens',
-        'autoCompactTokens',
-      }.contains(key),
+      (key) =>
+          !const {'usedTokens', 'maxTokens', 'autoCompactTokens'}.contains(key),
     )) {
       throw const FormatException(
         'MobileContextUsage contains an unknown field',

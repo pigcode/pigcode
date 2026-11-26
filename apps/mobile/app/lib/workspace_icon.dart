@@ -778,10 +778,7 @@ class _WorkspaceIconPainter extends CustomPainter {
           Path()
             ..moveTo(7, 11)
             ..lineTo(7, 7)
-            ..arcToPoint(
-              const Offset(17, 7),
-              radius: const Radius.circular(5),
-            )
+            ..arcToPoint(const Offset(17, 7), radius: const Radius.circular(5))
             ..lineTo(17, 11),
           stroke,
         );

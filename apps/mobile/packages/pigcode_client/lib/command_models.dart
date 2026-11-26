@@ -47,41 +47,46 @@ final class MobileStartRunParams {
         'MobileStartRunParams contains an unknown field',
       );
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
-    final text = json['text'] as String;
-    final hasText = RegExp('\\S').hasMatch(text);
-    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
-    if (text.length > 10000 || (!hasText && !hasAttachments)) {
+    final text = (json['text'] as String);
+    if (text.length > 10000) {
       throw const FormatException('Invalid text');
     }
-    final rawEffort = json['effort'] as String?;
-    final effort = rawEffort?.trim();
+    final effort = json['effort'] != null
+        ? (json['effort'] as String).trim()
+        : null;
     if (effort != null && (effort.isEmpty || effort.length > 64)) {
       throw const FormatException('Invalid effort');
     }
-    final fast = json['fast'] as bool?;
-    final ultracode = json['ultracode'] as bool?;
-    final rawReferences = json['references'];
-    final references = rawReferences == null
-        ? null
-        : List<MobileThreadReference>.unmodifiable(
-            (rawReferences as List<dynamic>).map(
+    final fast = json['fast'] != null ? json['fast'] as bool : null;
+    final ultracode = json['ultracode'] != null
+        ? json['ultracode'] as bool
+        : null;
+    final references = json['references'] != null
+        ? List<MobileThreadReference>.unmodifiable(
+            (json['references'] as List<dynamic>).map(
               (item) =>
                   MobileThreadReference.fromJson(item as Map<String, dynamic>),
             ),
-          );
-    if (references != null && references.length > 10) {
+          )
+        : null;
+    if (references != null && (references.length > 10)) {
       throw const FormatException('Invalid references');
+    }
+    final attachmentIds = parseMobileAttachmentIds(json['attachmentIds']);
+    final hasText = RegExp('\\S').hasMatch(text);
+    final hasAttachments = attachmentIds != null && attachmentIds.isNotEmpty;
+    if (!hasText && !hasAttachments) {
+      throw const FormatException('Invalid text');
     }
     return MobileStartRunParams(
       commandId: commandId,
@@ -125,17 +130,17 @@ final class MobileInterruptRunParams {
         'MobileInterruptRunParams contains an unknown field',
       );
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
@@ -163,7 +168,7 @@ final class MobileReceiptParams {
         'MobileReceiptParams contains an unknown field',
       );
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
@@ -216,22 +221,22 @@ final class MobileRunReceipt {
     )) {
       throw const FormatException('MobileRunReceipt contains an unknown field');
     }
-    final commandId = json['commandId'] as String;
+    final commandId = (json['commandId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(commandId)) {
       throw const FormatException('Invalid commandId');
     }
-    final method = MobileRunMethod.fromWire(json['method'] as String);
-    final threadId = json['threadId'] as String;
+    final method = (MobileRunMethod.fromWire(json['method'] as String));
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty) {
       throw const FormatException('Invalid threadId');
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final queuedMessageId = json.containsKey('queuedMessageId')
+    final queuedMessageId = json['queuedMessageId'] != null
         ? json['queuedMessageId'] as String
         : null;
     return MobileRunReceipt(
@@ -262,7 +267,7 @@ final class MobileReceiptResult {
         'MobileReceiptResult contains an unknown field',
       );
     }
-    final receipt = json.containsKey('receipt')
+    final receipt = json['receipt'] != null
         ? MobileRunReceipt.fromJson(json['receipt'] as Map<String, dynamic>)
         : null;
     return MobileReceiptResult(receipt: receipt);

@@ -144,7 +144,8 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
   void initState() {
     super.initState();
     _canonicalPath = widget.path.trim();
-    _markdownPreview = isMarkdownPath(_canonicalPath) && widget.initialLine == null;
+    _markdownPreview =
+        isMarkdownPath(_canonicalPath) && widget.initialLine == null;
     if (widget.initialLine != null && widget.initialLine! > 0) {
       _targetLineKey = GlobalKey();
     }
@@ -373,7 +374,11 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
 
   int _countLines(String value) {
     if (value.isEmpty) return 0;
-    return value.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n').length;
+    return value
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split('\n')
+        .length;
   }
 
   void _scheduleScrollToLine(int targetLine) {
@@ -430,9 +435,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
   Future<void> _copyPath() async {
     await Clipboard.setData(ClipboardData(text: _canonicalPath));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已复制路径 $_canonicalPath')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已复制路径 $_canonicalPath')));
   }
 
   Future<void> _copyContent() async {
@@ -580,8 +585,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
         },
       );
       if (!mounted) return;
-      final storedText =
-          _eol == 'crlf' ? draftText.replaceAll('\n', '\r\n') : draftText;
+      final storedText = _eol == 'crlf'
+          ? draftText.replaceAll('\n', '\r\n')
+          : draftText;
       setState(() {
         _saving = false;
         _editing = false;
@@ -593,9 +599,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
         _invalidateHighlightCache();
       });
       widget.onFileChanged?.call();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已保存')));
     } on MobileRpcFailure catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -640,9 +646,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
             : pigcodeLight;
         return MobileGlassDialog(
           title: const Text('文件已被修改'),
-          content: const Text(
-            '自你打开以来，电脑端或 Agent 已修改过这个文件。请选择要保留的版本：',
-          ),
+          content: const Text('自你打开以来，电脑端或 Agent 已修改过这个文件。请选择要保留的版本：'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop('keep'),
@@ -668,9 +672,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
     if (choice == 'reload') {
       await _loadInitial();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已重新加载电脑端最新内容')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已重新加载电脑端最新内容')));
     } else if (choice == 'overwrite') {
       await _save(ignoreConflict: true);
     }
@@ -775,7 +779,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
                                 horizontal: 10,
                               ),
                             ),
-                            onPressed: _saving ? null : () => unawaited(_cancelEdit()),
+                            onPressed: _saving
+                                ? null
+                                : () => unawaited(_cancelEdit()),
                             child: const Text('取消'),
                           ),
                           TextButton(
@@ -924,11 +930,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: colors.divider,
-            ),
+            child: Divider(height: 1, thickness: 1, color: colors.divider),
           ),
         ),
         body: SafeArea(
@@ -1009,7 +1011,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
           spacing: TimelineSpace.x4,
           children: [
             const CircularProgressIndicator.adaptive(),
-            if (_mode == 'image' && _imageTotalBytes > 0 && _imageReceivedBytes > 0)
+            if (_mode == 'image' &&
+                _imageTotalBytes > 0 &&
+                _imageReceivedBytes > 0)
               Text(
                 '正在加载图片（${formatFileSize(_imageReceivedBytes)} / ${formatFileSize(_imageTotalBytes)}）',
                 style: TimelineType.smallStyle(colors.muted),
@@ -1027,11 +1031,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
             mainAxisSize: MainAxisSize.min,
             spacing: TimelineSpace.x4,
             children: [
-              Icon(
-                Icons.error_outline_rounded,
-                size: 32,
-                color: colors.muted,
-              ),
+              Icon(Icons.error_outline_rounded, size: 32, color: colors.muted),
               Text(
                 message,
                 textAlign: TextAlign.center,
@@ -1050,9 +1050,10 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
     return switch (_mode) {
       'binary' => _buildBinaryView(context),
       'image' => _buildImageView(context),
-      'text' => _showingMarkdownPreview
-          ? _buildMarkdownPreview(context)
-          : _buildSourceView(context),
+      'text' =>
+        _showingMarkdownPreview
+            ? _buildMarkdownPreview(context)
+            : _buildSourceView(context),
       _ => const SizedBox.shrink(),
     };
   }
@@ -1163,9 +1164,9 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
                     metaParts.join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TimelineType.smallStyle(colors.muted).copyWith(
-                      fontFeatures: TimelineType.tabular,
-                    ),
+                    style: TimelineType.smallStyle(
+                      colors.muted,
+                    ).copyWith(fontFeatures: TimelineType.tabular),
                   ),
                 ),
                 TextButton(
@@ -1369,10 +1370,7 @@ class _MobileFileViewerScreenState extends State<MobileFileViewerScreen> {
                           Expanded(
                             child: Padding(
                               padding: const EdgeInsets.only(right: 16),
-                              child: Text.rich(
-                                lines[index],
-                                softWrap: _wrap,
-                              ),
+                              child: Text.rich(lines[index], softWrap: _wrap),
                             ),
                           ),
                         ],

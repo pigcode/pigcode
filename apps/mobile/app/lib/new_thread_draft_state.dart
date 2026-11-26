@@ -332,24 +332,22 @@ class NewThreadDraftController extends AsyncNotifier<NewThreadDraftState> {
         modelId: form.modelId,
         permissionMode: form.permissionMode!,
         text: form.text,
-        effort: supported &&
-                normalizedEffort != null &&
-                normalizedEffort.isNotEmpty
+        effort:
+            supported && normalizedEffort != null && normalizedEffort.isNotEmpty
             ? normalizedEffort
             : null,
         fast: supported && fast == true ? true : null,
         ultracode: supported && ultracode == true ? true : null,
         planMode: effectivePlanMode ? true : null,
-        references:
-            supported && references != null && references.isNotEmpty
-                ? references
-                : null,
+        references: supported && references != null && references.isNotEmpty
+            ? references
+            : null,
         attachmentIds:
             supportsAttachments &&
-                    attachmentIds != null &&
-                    attachmentIds.isNotEmpty
-                ? attachmentIds
-                : null,
+                attachmentIds != null &&
+                attachmentIds.isNotEmpty
+            ? attachmentIds
+            : null,
       );
       final retained = await _store._update(
         (draft) => draft.pending == null ? _DraftRecord(form, command) : draft,

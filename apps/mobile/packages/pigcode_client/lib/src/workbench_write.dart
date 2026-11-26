@@ -94,7 +94,9 @@ final class MobileWriteFileResult {
   final double mtimeMs;
 
   factory MobileWriteFileResult.fromJson(Map<String, dynamic> json) {
-    if (json.keys.any((key) => !const {'path', 'size', 'mtimeMs'}.contains(key))) {
+    if (json.keys.any(
+      (key) => !const {'path', 'size', 'mtimeMs'}.contains(key),
+    )) {
       throw const FormatException(
         'MobileWriteFileResult contains an unknown field',
       );
@@ -165,10 +167,7 @@ final class MobileCreateFileResult {
 }
 
 final class MobileRenamePathResult {
-  const MobileRenamePathResult({
-    required this.oldPath,
-    required this.newPath,
-  });
+  const MobileRenamePathResult({required this.oldPath, required this.newPath});
 
   final String oldPath;
   final String newPath;
@@ -190,10 +189,7 @@ final class MobileRenamePathResult {
     return MobileRenamePathResult(oldPath: oldPath, newPath: newPath);
   }
 
-  Map<String, Object?> toJson() => {
-    'oldPath': oldPath,
-    'newPath': newPath,
-  };
+  Map<String, Object?> toJson() => {'oldPath': oldPath, 'newPath': newPath};
 
   @override
   bool operator ==(Object other) =>
@@ -207,10 +203,7 @@ final class MobileRenamePathResult {
 }
 
 final class MobileDeletePathResult {
-  const MobileDeletePathResult({
-    required this.path,
-    required this.deleted,
-  });
+  const MobileDeletePathResult({required this.path, required this.deleted});
 
   final String path;
   final bool deleted;
@@ -232,10 +225,7 @@ final class MobileDeletePathResult {
     return MobileDeletePathResult(path: path, deleted: deleted);
   }
 
-  Map<String, Object?> toJson() => {
-    'path': path,
-    'deleted': deleted,
-  };
+  Map<String, Object?> toJson() => {'path': path, 'deleted': deleted};
 
   @override
   bool operator ==(Object other) =>
@@ -691,7 +681,8 @@ class MobileWorkbenchWriteClient {
     _requireSupported();
     _requireNonEmpty(threadId, 'threadId');
     _requireValidPath(path, 'path');
-    if (text != null && utf8.encode(text).length > mobileWorkbenchWriteInlineMax) {
+    if (text != null &&
+        utf8.encode(text).length > mobileWorkbenchWriteInlineMax) {
       throw RangeError.range(
         utf8.encode(text).length,
         0,
@@ -859,7 +850,8 @@ class MobileWorkbenchWriteClient {
     _requireSupported();
     _requireNonEmpty(threadId, 'threadId');
     final trimmedTitle = title.trim();
-    if (trimmedTitle.isEmpty || trimmedTitle.length > mobileWorkbenchPrTitleMax) {
+    if (trimmedTitle.isEmpty ||
+        trimmedTitle.length > mobileWorkbenchPrTitleMax) {
       throw ArgumentError.value(title, 'title', 'Invalid PR title');
     }
     if (body != null && utf8.encode(body).length > mobileWorkbenchPrBodyMax) {
@@ -871,7 +863,8 @@ class MobileWorkbenchWriteClient {
       );
     }
     final trimmedBase = base?.trim();
-    if (trimmedBase != null && (trimmedBase.isEmpty || trimmedBase.length > 256)) {
+    if (trimmedBase != null &&
+        (trimmedBase.isEmpty || trimmedBase.length > 256)) {
       throw ArgumentError.value(base, 'base', 'Invalid base branch');
     }
     final raw = await _rpc.call(MobileWorkbenchWriteMethods.prCreate, {

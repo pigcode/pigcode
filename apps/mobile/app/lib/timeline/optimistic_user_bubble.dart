@@ -207,7 +207,13 @@ class TimelineOptimisticUserBubble extends StatelessWidget {
   }
 }
 
-enum OptimisticMessageAction { resend, checkReceipt, restoreToInput, copy, delete }
+enum OptimisticMessageAction {
+  resend,
+  checkReceipt,
+  restoreToInput,
+  copy,
+  delete,
+}
 
 /// 点按失败/未确认气泡或感叹号弹出的聊天式处理菜单。
 Future<void> showOptimisticMessageActionsSheet(
@@ -228,36 +234,49 @@ Future<void> showOptimisticMessageActionsSheet(
       ? '重发会复用原编号，不会重复触发两轮回复。'
       : '当前电脑离线，连上后可重试发送或查回执。';
 
-  final actions = <(WorkspaceGlyph?, IconData?, String, OptimisticMessageAction, bool)>[
-    if (onResend != null && online)
-      (null, Icons.refresh_rounded, '重新发送', OptimisticMessageAction.resend, false),
-    if (!isRejected && onCheckReceipt != null && online)
-      (
-        null,
-        Icons.fact_check_outlined,
-        '检查是否已送达',
-        OptimisticMessageAction.checkReceipt,
-        false,
-      ),
-    if (message.text.trim().isNotEmpty && onRestoreToInput != null)
-      (
-        WorkspaceGlyph.compose,
-        null,
-        '放回输入框编辑',
-        OptimisticMessageAction.restoreToInput,
-        false,
-      ),
-    if (message.text.isNotEmpty)
-      (null, Icons.copy_rounded, '复制文字', OptimisticMessageAction.copy, false),
-    if (onDelete != null)
-      (
-        null,
-        Icons.delete_outline_rounded,
-        '删除这条未发消息',
-        OptimisticMessageAction.delete,
-        true,
-      ),
-  ];
+  final actions =
+      <(WorkspaceGlyph?, IconData?, String, OptimisticMessageAction, bool)>[
+        if (onResend != null && online)
+          (
+            null,
+            Icons.refresh_rounded,
+            '重新发送',
+            OptimisticMessageAction.resend,
+            false,
+          ),
+        if (!isRejected && onCheckReceipt != null && online)
+          (
+            null,
+            Icons.fact_check_outlined,
+            '检查是否已送达',
+            OptimisticMessageAction.checkReceipt,
+            false,
+          ),
+        if (message.text.trim().isNotEmpty && onRestoreToInput != null)
+          (
+            WorkspaceGlyph.compose,
+            null,
+            '放回输入框编辑',
+            OptimisticMessageAction.restoreToInput,
+            false,
+          ),
+        if (message.text.isNotEmpty)
+          (
+            null,
+            Icons.copy_rounded,
+            '复制文字',
+            OptimisticMessageAction.copy,
+            false,
+          ),
+        if (onDelete != null)
+          (
+            null,
+            Icons.delete_outline_rounded,
+            '删除这条未发消息',
+            OptimisticMessageAction.delete,
+            true,
+          ),
+      ];
 
   final chosen = await showMobileSheet<OptimisticMessageAction>(
     context,
@@ -270,10 +289,7 @@ Future<void> showOptimisticMessageActionsSheet(
         delegate: SliverChildListDelegate([
           Padding(
             padding: const EdgeInsets.only(bottom: TimelineSpace.x5),
-            child: Text(
-              subtitle,
-              style: TimelineType.metaStyle(colors.muted),
-            ),
+            child: Text(subtitle, style: TimelineType.metaStyle(colors.muted)),
           ),
           for (var i = 0; i < actions.length; i++)
             MobileSheetAction(

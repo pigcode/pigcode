@@ -167,7 +167,8 @@ class _RunComposerState extends ConsumerState<RunComposer> {
     } else if (!identical(oldWidget.composer, widget.composer)) {
       _composerOverride = null;
     }
-    if (targetChanged || !identical(oldWidget.attachments, widget.attachments)) {
+    if (targetChanged ||
+        !identical(oldWidget.attachments, widget.attachments)) {
       _draftStore = ThreadDraftStorage(
         widget.connection.computer.computerKey,
         widget.threadId,
@@ -191,8 +192,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
     final remaining = _attachments.remainingSlots;
     if (remaining <= 0) {
       setState(
-        () => _composerNotice =
-            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+        () => _composerNotice = '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
       );
       return;
     }
@@ -201,9 +201,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
           .read(mobileImagePickerProvider)
           .pickFromGallery(limit: remaining);
       if (!mounted || picked.isEmpty) return;
-      await _attachments.addLocalFiles([
-        for (final file in picked) file.path,
-      ]);
+      await _attachments.addLocalFiles([for (final file in picked) file.path]);
     } on PlatformException {
       if (mounted) {
         setState(() => _composerNotice = '无法访问相册，请在系统设置中允许 Pigcode 访问照片。');
@@ -218,8 +216,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   Future<void> _takePhoto() async {
     if (_attachments.remainingSlots <= 0) {
       setState(
-        () => _composerNotice =
-            '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
+        () => _composerNotice = '每条消息最多添加 $mobileMaxMessageAttachments 张图片。',
       );
       return;
     }
@@ -294,8 +291,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         references: supportsControls && references.isNotEmpty
             ? references
             : null,
-        attachmentIds:
-            attachmentIds != null && attachmentIds.isNotEmpty
+        attachmentIds: attachmentIds != null && attachmentIds.isNotEmpty
             ? attachmentIds
             : null,
         clearDraftImmediately: widget.optimisticBubbles,
@@ -400,7 +396,8 @@ class _RunComposerState extends ConsumerState<RunComposer> {
   );
 
   Future<void> _openModelPicker() async {
-    if (!widget.online || !connectionSupportsComposerControls(widget.connection)) {
+    if (!widget.online ||
+        !connectionSupportsComposerControls(widget.connection)) {
       return;
     }
     _selectionNotifier.value = _latestSelection;
@@ -498,8 +495,7 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         ),
       );
       if (effectiveTrailing == null) {
-        final instanceLabel =
-            currentInstance?.label ?? activeComposer.agentId;
+        final instanceLabel = currentInstance?.label ?? activeComposer.agentId;
         final modelLabel =
             currentModel?.label ??
             activeComposer.modelId ??
@@ -587,8 +583,12 @@ class _RunComposerState extends ConsumerState<RunComposer> {
         externalLeading: widget.leading,
         supportsAttachments: _supportsAttachments,
         attachmentCount: _attachments.count,
-        onPickPhotos: _supportsAttachments ? () => unawaited(_pickPhotos()) : null,
-        onTakePhoto: _supportsAttachments ? () => unawaited(_takePhoto()) : null,
+        onPickPhotos: _supportsAttachments
+            ? () => unawaited(_pickPhotos())
+            : null,
+        onTakePhoto: _supportsAttachments
+            ? () => unawaited(_takePhoto())
+            : null,
         builder: (context, leading) => RunComposerView(
           draft: _draft,
           focusNode: _focusNode,
@@ -755,10 +755,7 @@ class RunComposerView extends StatelessWidget {
         ComposerStatusBanner(
           tone: ComposerStatusTone.error,
           title: '无法读取发送状态。',
-          trailing: ComposerBannerAction(
-            label: '重试读取',
-            onPressed: onRetryLoad,
-          ),
+          trailing: ComposerBannerAction(label: '重试读取', onPressed: onRetryLoad),
         ),
       if (state case final view?)
         for (final kind in MobileRunMethod.values)
@@ -925,10 +922,7 @@ class _PendingRunRow extends StatelessWidget {
             ? _previewText(pending, value.text, working: working)
             : null;
         final canCopyRejected = switch (outcome) {
-          RunCommandOutcome(
-            receipt: null,
-            command: PendingSend(:final params),
-          )
+          RunCommandOutcome(receipt: null, command: PendingSend(:final params))
               when params.text.isNotEmpty && value.text != params.text =>
             params.text,
           _ => null,

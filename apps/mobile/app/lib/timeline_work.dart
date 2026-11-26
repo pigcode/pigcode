@@ -212,7 +212,8 @@ summarizeTimelineWork(List<TimelineWork> items, {required bool finished}) {
         : 3;
     if (rank < iconRank) {
       iconRank = rank;
-      icon = category == TimelineSummaryCategory.explore &&
+      icon =
+          category == TimelineSummaryCategory.explore &&
               tool == TimelineToolKind.mcp
           ? TimelineToolKind.search
           : tool;

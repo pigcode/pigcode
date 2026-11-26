@@ -177,7 +177,9 @@ class _MobilePreviewWebViewScreenState
           return key == null ? null : PreviewHistoryStorage(key);
         })();
     if (storage == null) return;
-    unawaited(storage.record(uri.toString()).catchError((Object _) => const <String>[]));
+    unawaited(
+      storage.record(uri.toString()).catchError((Object _) => const <String>[]),
+    );
   }
 
   void _watchConnectionDone() {
@@ -383,9 +385,9 @@ class _MobilePreviewWebViewScreenState
     if (!mounted || _externalDialogOpen) return;
     final scheme = uri.scheme.toLowerCase();
     if (scheme != 'http' && scheme != 'https') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已拦截非网页链接：${uri.toString()}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已拦截非网页链接：${uri.toString()}')));
       return;
     }
 
@@ -442,9 +444,9 @@ class _MobilePreviewWebViewScreenState
         opened = false;
       }
       if (!mounted || opened) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法在外部浏览器打开此链接')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('无法在外部浏览器打开此链接')));
     } finally {
       _externalDialogOpen = false;
     }
@@ -476,7 +478,9 @@ class _MobilePreviewWebViewScreenState
     final path = displayUri.path.isEmpty ? '/' : displayUri.path;
     final query = displayUri.hasQuery ? '?${displayUri.query}' : '';
     final fragment = displayUri.hasFragment ? '#${displayUri.fragment}' : '';
-    return Uri.parse('http://127.0.0.1:${proxyEntryUri.port}$path$query$fragment');
+    return Uri.parse(
+      'http://127.0.0.1:${proxyEntryUri.port}$path$query$fragment',
+    );
   }
 
   Future<void> _goBack() async {
@@ -513,9 +517,9 @@ class _MobilePreviewWebViewScreenState
     final text = _displayUri.toString();
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已复制地址 $text')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已复制地址 $text')));
   }
 
   @override
@@ -630,8 +634,9 @@ class _MobilePreviewWebViewScreenState
                       child: IconButton(
                         key: MobilePreviewWebViewScreen.backButtonKey,
                         tooltip: '后退',
-                        onPressed:
-                            _canGoBack ? () => unawaited(_goBack()) : null,
+                        onPressed: _canGoBack
+                            ? () => unawaited(_goBack())
+                            : null,
                         color: colors.foreground,
                         disabledColor: colors.faint,
                         icon: const Icon(
@@ -673,7 +678,10 @@ class _MobilePreviewWebViewScreenState
                         tooltip: '复制地址',
                         onPressed: () => unawaited(_copyRealAddress()),
                         color: colors.foreground,
-                        icon: const WorkspaceIcon(WorkspaceGlyph.copy, size: 18),
+                        icon: const WorkspaceIcon(
+                          WorkspaceGlyph.copy,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],
@@ -894,7 +902,9 @@ class _PreviewErrorOverlay extends StatelessWidget {
                     DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.field,
-                        borderRadius: BorderRadius.circular(TimelineRadius.full),
+                        borderRadius: BorderRadius.circular(
+                          TimelineRadius.full,
+                        ),
                         border: Border.all(color: colors.border),
                       ),
                       child: Padding(

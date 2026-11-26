@@ -164,11 +164,7 @@ Future<void> main() async {
           _replyCmd(cmdId, error: 'unknown action: $action');
       }
     } on MobileRpcFailure catch (error) {
-      _replyCmd(
-        cmdId,
-        error: error.problem.message,
-        code: error.problem.code,
-      );
+      _replyCmd(cmdId, error: error.problem.message, code: error.problem.code);
     } catch (error) {
       _replyCmd(cmdId, error: error.toString());
     }

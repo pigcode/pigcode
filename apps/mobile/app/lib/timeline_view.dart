@@ -518,7 +518,9 @@ class _TimelineViewState extends State<TimelineView> {
                   SliverPadding(
                     padding: _turnInsets,
                     sliver: SliverToBoxAdapter(
-                      key: ValueKey('optimistic-${visibleOptimistic.commandId}'),
+                      key: ValueKey(
+                        'optimistic-${visibleOptimistic.commandId}',
+                      ),
                       child: TimelineOptimisticUserBubble(
                         message: visibleOptimistic,
                         online: widget.online,
@@ -777,12 +779,7 @@ class _TimelineViewState extends State<TimelineView> {
                           ? 'work-member-live-reasoning-${turn.key}'
                           : 'work-member-${item.event.seq}',
                     ),
-                    child: _work(
-                      turn,
-                      item,
-                      showIcon: false,
-                      compact: true,
-                    ),
+                    child: _work(turn, item, showIcon: false, compact: true),
                   ),
               ]
             : const [],
@@ -812,9 +809,7 @@ class _TimelineViewState extends State<TimelineView> {
         onLoadFull: widget.online
             ? (offset) => _loadReasoningChunk(
                 seq: item.streaming ? null : item.event.seq,
-                runId: item.streaming
-                    ? (item.event.runId ?? turn.runId)
-                    : null,
+                runId: item.streaming ? (item.event.runId ?? turn.runId) : null,
                 field: item.streaming
                     ? MobileTimelineContentField.reasoning
                     : MobileTimelineContentField.text,
@@ -922,7 +917,8 @@ class _TimelineViewState extends State<TimelineView> {
       TimelineToolKind.task => '处理',
       _ => '执行',
     };
-    final isFile = tool == TimelineToolKind.read || tool == TimelineToolKind.edit;
+    final isFile =
+        tool == TimelineToolKind.read || tool == TimelineToolKind.edit;
     final filePath = isFile ? timelineToolFilePath(item, tool) : null;
     final fileLine = isFile ? timelineToolFileLine(item, tool) : null;
     final openFile = widget.onOpenFile;

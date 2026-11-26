@@ -2,7 +2,11 @@ import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, ValueListenable, defaultTargetPlatform, visibleForTesting;
+    show
+        TargetPlatform,
+        ValueListenable,
+        defaultTargetPlatform,
+        visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
@@ -317,16 +321,8 @@ class _SpecularGlassRimPainter extends CustomPainter {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: dark
-            ? const [
-                Color(0x47FFFFFF),
-                Color(0x14FFFFFF),
-                Color(0x24FFFFFF),
-              ]
-            : const [
-                Color(0xEBFFFFFF),
-                Color(0x52FFFFFF),
-                Color(0xB8FFFFFF),
-              ],
+            ? const [Color(0x47FFFFFF), Color(0x14FFFFFF), Color(0x24FFFFFF)]
+            : const [Color(0xEBFFFFFF), Color(0x52FFFFFF), Color(0xB8FFFFFF)],
         stops: const [0.0, 0.52, 1.0],
       ).createShader(rect);
     canvas.drawRRect(innerRRect, innerPaint);
@@ -353,11 +349,7 @@ class _SpecularGlassRimPainter extends CustomPainter {
 /// 避免 Flutter `BackdropFilter` 与上层原生 `UIGlassEffect` 平台视图产生采样接缝，
 /// 顶部状态栏柔化保护系统时间，顶栏悬浮胶囊背后保持清透以呈现真实光学折射。
 class MobileTopGlassVeil extends StatelessWidget {
-  const MobileTopGlassVeil({
-    super.key,
-    required this.height,
-    this.color,
-  });
+  const MobileTopGlassVeil({super.key, required this.height, this.color});
 
   final double height;
   final Color? color;
@@ -528,7 +520,8 @@ class MobileSheetCloseButton extends StatelessWidget {
         ? pigcodeDark
         : pigcodeLight;
     final touch =
-        touchDimension ?? (theme.platform == TargetPlatform.android ? 48.0 : 44.0);
+        touchDimension ??
+        (theme.platform == TargetPlatform.android ? 48.0 : 44.0);
     return SizedBox.square(
       dimension: touch,
       child: IconButton(
@@ -544,9 +537,7 @@ class MobileSheetCloseButton extends StatelessWidget {
           ),
           child: const SizedBox.square(
             dimension: 32,
-            child: Center(
-              child: WorkspaceIcon(WorkspaceGlyph.close, size: 18),
-            ),
+            child: Center(child: WorkspaceIcon(WorkspaceGlyph.close, size: 18)),
           ),
         ),
       ),
@@ -635,11 +626,7 @@ class MobileGlassDialog extends StatelessWidget {
 
 /// 底部输入框或侧栏底栏背后的柔和渐变托底：让滚动内容在悬浮卡片下方自然淡出。
 class MobileBottomGlassVeil extends StatelessWidget {
-  const MobileBottomGlassVeil({
-    super.key,
-    required this.height,
-    this.color,
-  });
+  const MobileBottomGlassVeil({super.key, required this.height, this.color});
 
   final double height;
   final Color? color;

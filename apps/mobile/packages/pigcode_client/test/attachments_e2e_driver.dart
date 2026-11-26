@@ -191,7 +191,9 @@ Future<void> main() async {
                       (t) => {
                         'userText': t.user?.text,
                         'userAttachments':
-                            t.user?.attachments.map((a) => a.toJson()).toList() ??
+                            t.user?.attachments
+                                .map((a) => a.toJson())
+                                .toList() ??
                             const [],
                       },
                     )
@@ -231,11 +233,7 @@ Future<void> main() async {
           _replyCmd(cmdId, error: 'unknown action: $action');
       }
     } on MobileRpcFailure catch (error) {
-      _replyCmd(
-        cmdId,
-        error: error.problem.message,
-        code: error.problem.code,
-      );
+      _replyCmd(cmdId, error: error.problem.message, code: error.problem.code);
     } on MobileAttachmentUploadCancelled {
       _replyCmd(cmdId, error: 'cancelled', code: 'UPLOAD_CANCELLED');
     } catch (error) {

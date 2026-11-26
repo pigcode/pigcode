@@ -162,9 +162,7 @@ Future<void> main() async {
     }
   }
 
-  final lines = stdin
-      .transform(utf8.decoder)
-      .transform(const LineSplitter());
+  final lines = stdin.transform(utf8.decoder).transform(const LineSplitter());
   await for (final line in lines) {
     if (line.trim().isEmpty) continue;
     final msg = jsonDecode(line) as Map<String, dynamic>;

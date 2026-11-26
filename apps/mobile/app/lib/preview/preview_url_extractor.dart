@@ -3,11 +3,7 @@ import 'package:pigcode_client/pigcode_client.dart';
 import '../timeline_work.dart';
 
 /// 手机端本机预览允许访问的 loopback 主机名白名单（严格字面量匹配，与电脑端 Host 一致）。
-const mobilePreviewAllowedHosts = <String>{
-  'localhost',
-  '127.0.0.1',
-  '[::1]',
-};
+const mobilePreviewAllowedHosts = <String>{'localhost', '127.0.0.1', '[::1]'};
 
 /// 禁止通过本机预览隧道探测的常见非 HTTP 基础服务端口（与电脑端 Host 一致）。
 const mobilePreviewBlockedPorts = <int>{
@@ -51,7 +47,8 @@ final _hostPortAuthorityPattern = RegExp(r'^([^:]+)(?::(\d+))?$');
 
 /// 时间线文本中可提取的本机 HTTP/HTTPS 预览地址匹配模式（要求带显式端口）。
 final _extractableLocalhostUrlPattern = RegExp(
-  r'https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):[1-9]\d{0,4}(?:[^\s<>"`''\u3000\u3001\u3002\uFF0C\uFF1B\uFF1A\uFF01\uFF1F\uFF09\u3011\u300B\u300D\u300F\u201D\u2019]*)',
+  r'https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]):[1-9]\d{0,4}(?:[^\s<>"`'
+  '\u3000\u3001\u3002\uFF0C\uFF1B\uFF1A\uFF01\uFF1F\uFF09\u3011\u300B\u300D\u300F\u201D\u2019]*)',
   caseSensitive: false,
 );
 

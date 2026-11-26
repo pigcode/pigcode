@@ -339,10 +339,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       if (!mounted || seq != _searchRequestSeq) return;
       setState(() {
         _searching = false;
-        _searchError = workbenchErrorMessage(
-          error,
-          fallback: '搜索失败，请稍后重试。',
-        );
+        _searchError = workbenchErrorMessage(error, fallback: '搜索失败，请稍后重试。');
       });
     }
   }
@@ -429,7 +426,11 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
                 style: TimelineType.smallStyle(colors.muted),
               ),
               trailing: (list?.mainActive ?? true)
-                  ? Icon(Icons.check_rounded, color: colors.foreground, size: 18)
+                  ? Icon(
+                      Icons.check_rounded,
+                      color: colors.foreground,
+                      size: 18,
+                    )
                   : null,
             ),
             for (final item in worktrees)
@@ -491,9 +492,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       );
       if (!mounted) return;
       _onWorkspaceChanged();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已切换 Worktree')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已切换 Worktree')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -615,7 +616,10 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
         confirmLabel: '确认',
       ),
     );
-    if (!mounted || newPath == null || newPath.isEmpty || newPath == entry.path) {
+    if (!mounted ||
+        newPath == null ||
+        newPath.isEmpty ||
+        newPath == entry.path) {
       return;
     }
     setState(() => _mutating = true);
@@ -627,19 +631,15 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       );
       if (!mounted) return;
       _onWorkspaceChanged();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已重命名')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已重命名')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            workbenchErrorMessage(
-              error,
-              path: newPath,
-              fallback: '重命名失败，请重试。',
-            ),
+            workbenchErrorMessage(error, path: newPath, fallback: '重命名失败，请重试。'),
           ),
         ),
       );
@@ -690,9 +690,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       );
       if (!mounted) return;
       _onWorkspaceChanged();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已删除 ${entry.name}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已删除 ${entry.name}')));
     } on MobileRpcFailure catch (error) {
       if (!mounted) return;
       if (error.problem.code == 'WORKBENCH_DIR_NOT_EMPTY') {
@@ -766,9 +766,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       );
       if (!mounted) return;
       _onWorkspaceChanged();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已删除 ${entry.name}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已删除 ${entry.name}')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -825,11 +825,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
           child: Row(
             spacing: TimelineSpace.x3,
             children: [
-              Icon(
-                Icons.account_tree_outlined,
-                size: 15,
-                color: colors.muted,
-              ),
+              Icon(Icons.account_tree_outlined, size: 15, color: colors.muted),
               Expanded(
                 child: Text(
                   label,
@@ -1027,7 +1023,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
               child: IconButton(
                 key: FileBrowserTab.createFileButtonKey,
                 tooltip: '新建文件',
-                onPressed: _mutating ? null : () => unawaited(_showCreateFileDialog()),
+                onPressed: _mutating
+                    ? null
+                    : () => unawaited(_showCreateFileDialog()),
                 color: colors.foreground,
                 icon: const Icon(Icons.note_add_outlined, size: 19),
               ),
@@ -1068,8 +1066,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
                         style: TimelineType.contentStyle(colors.muted),
                       ),
                       TextButton(
-                        onPressed: () =>
-                            unawaited(_loadDirectory(_currentPath, forceRefresh: true)),
+                        onPressed: () => unawaited(
+                          _loadDirectory(_currentPath, forceRefresh: true),
+                        ),
                         child: const Text('重试'),
                       ),
                     ],
@@ -1110,12 +1109,8 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
         itemCount: entries.length + (hasPagination ? 1 : 0),
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          thickness: 1,
-          indent: 48,
-          color: colors.divider,
-        ),
+        separatorBuilder: (context, index) =>
+            Divider(height: 1, thickness: 1, indent: 48, color: colors.divider),
         itemBuilder: (context, index) {
           if (index == entries.length) {
             return Padding(
@@ -1128,10 +1123,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
                 spacing: TimelineSpace.x2,
                 children: [
                   if (_loadMoreError case final err?)
-                    Text(
-                      err,
-                      style: TimelineType.smallStyle(colors.error),
-                    ),
+                    Text(err, style: TimelineType.smallStyle(colors.error)),
                   if (cached?.nextOffset != null)
                     OutlinedButton(
                       key: FileBrowserTab.loadMoreKey,
@@ -1148,7 +1140,9 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
           return _DirectoryEntryRow(
             entry: entry,
             showMore: _canWrite,
-            onMore: _canWrite ? () => unawaited(_openEntryActions(entry)) : null,
+            onMore: _canWrite
+                ? () => unawaited(_openEntryActions(entry))
+                : null,
             onLongPress: _canWrite
                 ? () => unawaited(_openEntryActions(entry))
                 : null,
@@ -1209,12 +1203,8 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
       return ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
         itemCount: _pathResults.length + (_pathResultsTruncated ? 1 : 0),
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          thickness: 1,
-          indent: 48,
-          color: colors.divider,
-        ),
+        separatorBuilder: (context, index) =>
+            Divider(height: 1, thickness: 1, indent: 48, color: colors.divider),
         itemBuilder: (context, index) {
           if (index == _pathResults.length) {
             return Padding(
@@ -1261,11 +1251,8 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: TimelineSpace.x2),
       itemCount: _contentResults.length + (_contentResultsTruncated ? 1 : 0),
-      separatorBuilder: (context, index) => Divider(
-        height: 1,
-        thickness: 1,
-        color: colors.divider,
-      ),
+      separatorBuilder: (context, index) =>
+          Divider(height: 1, thickness: 1, color: colors.divider),
       itemBuilder: (context, index) {
         if (index == _contentResults.length) {
           return Padding(
@@ -1397,7 +1384,10 @@ class _DirectoryEntryRow extends StatelessWidget {
         ? pigcodeDark
         : pigcodeLight;
     final touch = timelineTouchHeight(context);
-    final glyph = workbenchFileGlyph(entry.path, isDirectory: entry.isDirectory);
+    final glyph = workbenchFileGlyph(
+      entry.path,
+      isDirectory: entry.isDirectory,
+    );
     final iconColor = entry.isDirectory
         ? colors.timelineFile
         : colors.secondaryText;
@@ -1445,28 +1435,23 @@ class _DirectoryEntryRow extends StatelessWidget {
             if (!entry.isDirectory && entry.size != null)
               Text(
                 formatFileSize(entry.size!),
-                style: TimelineType.smallStyle(colors.faint).copyWith(
-                  fontFeatures: TimelineType.tabular,
-                ),
+                style: TimelineType.smallStyle(
+                  colors.faint,
+                ).copyWith(fontFeatures: TimelineType.tabular),
               ),
             if (entry.isDirectory)
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 18,
-                color: colors.faint,
-              ),
+              Icon(Icons.chevron_right_rounded, size: 18, color: colors.faint),
             if (showMore)
               IconButton(
                 key: FileBrowserTab.entryMoreKey(entry.path),
                 tooltip: '更多操作',
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-                onPressed: onMore,
-                icon: Icon(
-                  Icons.more_horiz,
-                  size: 18,
-                  color: colors.muted,
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
                 ),
+                onPressed: onMore,
+                icon: Icon(Icons.more_horiz, size: 18, color: colors.muted),
               ),
           ],
         ),
@@ -1739,10 +1724,7 @@ class _TextPromptDialogState extends State<_TextPromptDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: Text(widget.confirmLabel),
-        ),
+        FilledButton(onPressed: _submit, child: Text(widget.confirmLabel)),
       ],
     );
   }

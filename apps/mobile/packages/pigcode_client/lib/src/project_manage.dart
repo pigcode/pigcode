@@ -151,12 +151,14 @@ final class MobileProjectBrowseDirsResult {
       parentRelPath: json['parentRelPath'] as String?,
       shortcuts: List.unmodifiable(
         shortcutsRaw.map(
-          (item) => MobileProjectShortcut.fromJson(item as Map<String, dynamic>),
+          (item) =>
+              MobileProjectShortcut.fromJson(item as Map<String, dynamic>),
         ),
       ),
       entries: List.unmodifiable(
         entriesRaw.map(
-          (item) => MobileProjectDirEntry.fromJson(item as Map<String, dynamic>),
+          (item) =>
+              MobileProjectDirEntry.fromJson(item as Map<String, dynamic>),
         ),
       ),
       truncated: _reqBool(json['truncated'], 'truncated'),
@@ -174,10 +176,7 @@ final class MobileProjectBrowseDirsResult {
 }
 
 class MobileProjectManageClient {
-  MobileProjectManageClient(
-    this._rpc, {
-    required this.supportsProjectManage,
-  });
+  MobileProjectManageClient(this._rpc, {required this.supportsProjectManage});
 
   final HostRequests _rpc;
   final bool supportsProjectManage;
@@ -208,7 +207,9 @@ class MobileProjectManageClient {
     );
   }
 
-  Future<MobileProjectBrowseDirsResult> browseDirs({String relPath = ''}) async {
+  Future<MobileProjectBrowseDirsResult> browseDirs({
+    String relPath = '',
+  }) async {
     _ensureSupported();
     final raw =
         await _rpc.call(

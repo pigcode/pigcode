@@ -160,6 +160,7 @@ export const mobileTimelineModels = {
   MobileTimelineContentField: mobileTimelineContentField,
   MobileTimelineKind: mobileTimelineKind,
   ImageAttachment: imageAttachmentSchema,
+  MobileThreadComposerState: mobileThreadComposerState,
   MobileTimelineEvent: mobileTimelineEvent,
   MobileTimelineToolPreview: mobileTimelineToolPreview,
   MobileTimelinePendingKind: mobileTimelinePendingKind,

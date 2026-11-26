@@ -188,9 +188,7 @@ ProcessedImage _compressSync(
   }
   final detectedMime = detectImageMimeType(bytes);
   if (detectedMime == null) {
-    throw const ImageProcessingException(
-      '不支持的图片格式，仅支持 PNG、JPEG、WebP 或 GIF。',
-    );
+    throw const ImageProcessingException('不支持的图片格式，仅支持 PNG、JPEG、WebP 或 GIF。');
   }
   final decoded = _decodeByMime(bytes, detectedMime);
   if (decoded == null || decoded.width <= 0 || decoded.height <= 0) {
@@ -367,9 +365,7 @@ class SystemMobileImagePicker implements MobileImagePicker {
       return [(path: file.path, name: file.name)];
     }
     final files = await _picker.pickMultiImage(limit: limit);
-    return [
-      for (final file in files) (path: file.path, name: file.name),
-    ];
+    return [for (final file in files) (path: file.path, name: file.name)];
   }
 
   @override

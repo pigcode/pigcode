@@ -179,10 +179,7 @@ class ComposerBannerAction extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(ComposerRadius.block),
         ),
-        textStyle: TimelineType.smallStyle(
-          foreground,
-          weight: FontWeight.w500,
-        ),
+        textStyle: TimelineType.smallStyle(foreground, weight: FontWeight.w500),
       ),
       child: Text(label),
     );

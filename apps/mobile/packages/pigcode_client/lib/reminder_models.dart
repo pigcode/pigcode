@@ -48,20 +48,20 @@ final class MobileReminder {
     )) {
       throw const FormatException('MobileReminder contains an unknown field');
     }
-    final version = json['version'] as int;
+    final version = (json['version'] as int);
     if (version < 1 || version > 1) {
       throw const FormatException('Invalid version');
     }
-    final eventId = json['eventId'] as String;
+    final eventId = (json['eventId'] as String);
     if (eventId.isEmpty || eventId.length > 256) {
       throw const FormatException('Invalid eventId');
     }
-    final threadId = json['threadId'] as String;
+    final threadId = (json['threadId'] as String);
     if (threadId.isEmpty || threadId.length > 128) {
       throw const FormatException('Invalid threadId');
     }
-    final kind = ReminderKind.fromWire(json['kind'] as String);
-    final computerId = json['computerId'] as String;
+    final kind = (ReminderKind.fromWire(json['kind'] as String));
+    final computerId = (json['computerId'] as String);
     if (!RegExp('^[0-9a-f]{64}\$').hasMatch(computerId)) {
       throw const FormatException('Invalid computerId');
     }
@@ -132,12 +132,14 @@ final class MobileApnsRegistration {
         'MobileApnsRegistration contains an unknown field',
       );
     }
-    final token = json['token'] as String;
+    final token = (json['token'] as String);
     if (!RegExp('^(?:[0-9a-f]{2}){1,128}\$').hasMatch(token)) {
       throw const FormatException('Invalid token');
     }
-    final environment = ApnsEnvironment.fromWire(json['environment'] as String);
-    final observationId = json['observationId'] as String;
+    final environment = (ApnsEnvironment.fromWire(
+      json['environment'] as String,
+    ));
+    final observationId = (json['observationId'] as String);
     if (!RegExp(
       '^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)\$',
     ).hasMatch(observationId)) {
@@ -175,11 +177,11 @@ final class MobileReminderSettings {
         'MobileReminderSettings contains an unknown field',
       );
     }
-    final enabled = json['enabled'] as bool;
-    final permission = MobileReminderPermission.fromWire(
+    final enabled = (json['enabled'] as bool);
+    final permission = (MobileReminderPermission.fromWire(
       json['permission'] as String,
-    );
-    final apns = json.containsKey('apns')
+    ));
+    final apns = json['apns'] != null
         ? MobileApnsRegistration.fromJson(json['apns'] as Map<String, dynamic>)
         : null;
     return MobileReminderSettings(

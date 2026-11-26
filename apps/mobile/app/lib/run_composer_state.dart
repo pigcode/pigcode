@@ -103,23 +103,23 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
           commandId: const Uuid().v4(),
           threadId: target.$2,
           text: text,
-          effort: supported &&
+          effort:
+              supported &&
                   normalizedEffort != null &&
                   normalizedEffort.isNotEmpty
               ? normalizedEffort
               : null,
           fast: supported && fast == true ? true : null,
           ultracode: supported && ultracode == true ? true : null,
-          references:
-              supported && references != null && references.isNotEmpty
-                  ? references
-                  : null,
+          references: supported && references != null && references.isNotEmpty
+              ? references
+              : null,
           attachmentIds:
               supportsAttachments &&
-                      attachmentIds != null &&
-                      attachmentIds.isNotEmpty
-                  ? attachmentIds
-                  : null,
+                  attachmentIds != null &&
+                  attachmentIds.isNotEmpty
+              ? attachmentIds
+              : null,
         ),
       ),
       clearDraftImmediately: clearDraftImmediately,
@@ -138,11 +138,7 @@ class RunComposerController extends AsyncNotifier<RunComposerState> {
     final nextPending = {...?state.value?.pending}..remove(method);
     final nextNotices = {...?state.value?.notices}..remove(method);
     final nextOutcomes = {...?state.value?.outcomes}..remove(method);
-    _change(
-      pending: nextPending,
-      notices: nextNotices,
-      outcomes: nextOutcomes,
-    );
+    _change(pending: nextPending, notices: nextNotices, outcomes: nextOutcomes);
   }
 
   void clearOutcome(MobileRunMethod method) {

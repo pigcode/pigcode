@@ -91,7 +91,9 @@ class AgentInstanceEditorScreen extends StatefulWidget {
   static const instanceIdInputKey = ValueKey('agent-editor-instance-id');
   static const copyFromDropdownKey = ValueKey('agent-editor-copy-from');
   static const clearColorChipKey = ValueKey('agent-editor-color-clear');
-  static const customModelInputKey = ValueKey('agent-editor-custom-model-input');
+  static const customModelInputKey = ValueKey(
+    'agent-editor-custom-model-input',
+  );
   static const customModelAddButtonKey = ValueKey(
     'agent-editor-custom-model-add',
   );
@@ -547,9 +549,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
     if (widget.isCreate) {
       final rawId = _instanceIdController.text.trim();
       if (rawId.isNotEmpty && !_customInstanceIdPattern.hasMatch(rawId)) {
-        setState(
-          () => _validationError = '实例 ID 必须以字母开头，仅可包含字母、数字、下划线和短横线。',
-        );
+        setState(() => _validationError = '实例 ID 必须以字母开头，仅可包含字母、数字、下划线和短横线。');
         return;
       }
       final values = (_copyFrom != null && !_fieldsTouched)
@@ -621,7 +621,11 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
   Future<void> _deleteInstance() async {
     final conn = _connection;
     final inst = widget.instance;
-    if (conn == null || inst == null || inst.isDefault || _saving || _deleting) {
+    if (conn == null ||
+        inst == null ||
+        inst.isDefault ||
+        _saving ||
+        _deleting) {
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -632,9 +636,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
             : pigcodeLight;
         return MobileGlassDialog(
           title: Text('删除「${inst.label}」？'),
-          content: const Text(
-            '将删除此自定义实例及其保存的配置与密钥。如果仍有历史会话使用该实例，删除会被阻止。',
-          ),
+          content: const Text('将删除此自定义实例及其保存的配置与密钥。如果仍有历史会话使用该实例，删除会被阻止。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -760,8 +762,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                     _EditorCard(
                       children: [
                         for (var i = 0; i < _visibleFields.length; i++) ...[
-                          if (i > 0)
-                            Divider(height: 1, color: colors.divider),
+                          if (i > 0) Divider(height: 1, color: colors.divider),
                           _buildFieldWidget(context, _visibleFields[i]),
                         ],
                       ],
@@ -911,9 +912,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                     DropdownButtonFormField<String?>(
                       key: AgentInstanceEditorScreen.copyFromDropdownKey,
                       initialValue: _copyFrom,
-                      decoration: const InputDecoration(
-                        labelText: '复制配置自（可选）',
-                      ),
+                      decoration: const InputDecoration(labelText: '复制配置自（可选）'),
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,
@@ -1033,7 +1032,8 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                 keyboardType: range != null
                     ? TextInputType.number
                     : TextInputType.text,
-                style: field.monospace || field.type == MobileAgentFieldType.path
+                style:
+                    field.monospace || field.type == MobileAgentFieldType.path
                     ? TimelineType.metaMonoStyle(colors.foreground)
                     : null,
                 decoration: InputDecoration(
@@ -1212,10 +1212,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                   style: TimelineType.metaStyle(colors.muted),
                 ),
               if (controllers.isEmpty)
-                Text(
-                  '暂无自定义启动参数',
-                  style: TimelineType.metaStyle(colors.muted),
-                ),
+                Text('暂无自定义启动参数', style: TimelineType.metaStyle(colors.muted)),
               for (var i = 0; i < controllers.length; i++)
                 Row(
                   children: [
@@ -1557,9 +1554,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
               onPressed: () =>
                   setState(() => _modelsExpanded = !_modelsExpanded),
               child: Text(
-                _modelsExpanded
-                    ? '收起模型列表'
-                    : '展开全部 ${allItems.length} 个模型',
+                _modelsExpanded ? '收起模型列表' : '展开全部 ${allItems.length} 个模型',
               ),
             ),
           ],

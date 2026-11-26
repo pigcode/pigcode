@@ -27,11 +27,11 @@ final class MobileProjectListParams {
         'MobileProjectListParams contains an unknown field',
       );
     }
-    final offset = json.containsKey('offset') ? json['offset'] as int : null;
+    final offset = json['offset'] != null ? json['offset'] as int : null;
     if (offset != null && (offset < 0 || offset > 9007199254740991)) {
       throw const FormatException('Invalid offset');
     }
-    final limit = json.containsKey('limit') ? json['limit'] as int : null;
+    final limit = json['limit'] != null ? json['limit'] as int : null;
     if (limit != null && (limit < 1 || limit > 64)) {
       throw const FormatException('Invalid limit');
     }
@@ -55,15 +55,15 @@ final class MobileThreadListParams {
         'MobileThreadListParams contains an unknown field',
       );
     }
-    final offset = json.containsKey('offset') ? json['offset'] as int : null;
+    final offset = json['offset'] != null ? json['offset'] as int : null;
     if (offset != null && (offset < 0 || offset > 9007199254740991)) {
       throw const FormatException('Invalid offset');
     }
-    final limit = json.containsKey('limit') ? json['limit'] as int : null;
+    final limit = json['limit'] != null ? json['limit'] as int : null;
     if (limit != null && (limit < 1 || limit > 64)) {
       throw const FormatException('Invalid limit');
     }
-    final projectId = json.containsKey('projectId')
+    final projectId = json['projectId'] != null
         ? json['projectId'] as String
         : null;
     if (projectId != null && (projectId.isEmpty)) {
@@ -159,15 +159,15 @@ final class MobileStatus {
     )) {
       throw const FormatException('MobileStatus contains an unknown field');
     }
-    final computerId = json['computerId'] as String;
+    final computerId = (json['computerId'] as String);
     if (!RegExp('^[0-9a-f]{64}\$').hasMatch(computerId)) {
       throw const FormatException('Invalid computerId');
     }
-    final computerName = json['computerName'] as String;
+    final computerName = (json['computerName'] as String);
     if (computerName.isEmpty) {
       throw const FormatException('Invalid computerName');
     }
-    final deviceId = json['deviceId'] as String;
+    final deviceId = (json['deviceId'] as String);
     if (!RegExp('^[0-9a-f]{64}\$').hasMatch(deviceId)) {
       throw const FormatException('Invalid deviceId');
     }
@@ -201,15 +201,15 @@ final class MobileRpcProblem {
     )) {
       throw const FormatException('MobileRpcProblem contains an unknown field');
     }
-    final code = json['code'] as String;
+    final code = (json['code'] as String);
     if (code.isEmpty) {
       throw const FormatException('Invalid code');
     }
-    final message = json['message'] as String;
+    final message = (json['message'] as String);
     if (message.isEmpty) {
       throw const FormatException('Invalid message');
     }
-    final retryable = json.containsKey('retryable')
+    final retryable = json['retryable'] != null
         ? json['retryable'] as bool
         : null;
     return MobileRpcProblem(code: code, message: message, retryable: retryable);
@@ -233,11 +233,11 @@ final class MobileProjectSummary {
         'MobileProjectSummary contains an unknown field',
       );
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty) {
       throw const FormatException('Invalid id');
     }
-    final name = json['name'] as String;
+    final name = (json['name'] as String);
     if (name.isEmpty || name.length > 512) {
       throw const FormatException('Invalid name');
     }
@@ -296,45 +296,45 @@ final class MobileThreadSummary {
         'MobileThreadSummary contains an unknown field',
       );
     }
-    final id = json['id'] as String;
+    final id = (json['id'] as String);
     if (id.isEmpty) {
       throw const FormatException('Invalid id');
     }
-    final projectId = json['projectId'] as String;
+    final projectId = (json['projectId'] as String);
     if (projectId.isEmpty) {
       throw const FormatException('Invalid projectId');
     }
-    final title = json['title'] as String;
+    final title = (json['title'] as String);
     if (title.isEmpty || title.length > 512) {
       throw const FormatException('Invalid title');
     }
-    final updatedAt = json['updatedAt'] as String;
+    final updatedAt = (json['updatedAt'] as String);
     if (!RegExp(
       '^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))\$',
     ).hasMatch(updatedAt)) {
       throw const FormatException('Invalid updatedAt');
     }
-    final readTarget = json.containsKey('readTarget')
+    final readTarget = json['readTarget'] != null
         ? MobileThreadReadTarget.fromJson(
             json['readTarget'] as Map<String, dynamic>,
           )
         : null;
-    final manualUnread = json.containsKey('manualUnread')
+    final manualUnread = json['manualUnread'] != null
         ? MobileThreadReadTarget.fromJson(
             json['manualUnread'] as Map<String, dynamic>,
           )
         : null;
-    final archived = json['archived'] as bool;
-    final pinned = json['pinned'] as bool;
-    final status = MobileThreadStatus.fromWire(json['status'] as String);
-    final unread = json['unread'] as bool;
-    final agentName = json.containsKey('agentName')
+    final archived = (json['archived'] as bool);
+    final pinned = (json['pinned'] as bool);
+    final status = (MobileThreadStatus.fromWire(json['status'] as String));
+    final unread = (json['unread'] as bool);
+    final agentName = json['agentName'] != null
         ? json['agentName'] as String
         : null;
     if (agentName != null && (agentName.isEmpty || agentName.length > 512)) {
       throw const FormatException('Invalid agentName');
     }
-    final pendingKind = json.containsKey('pendingKind')
+    final pendingKind = json['pendingKind'] != null
         ? MobileThreadPendingKind.fromWire(json['pendingKind'] as String)
         : null;
     return MobileThreadSummary(
@@ -415,11 +415,11 @@ final class MobileThreadReadTarget {
         'MobileThreadReadTarget contains an unknown field',
       );
     }
-    final runId = json['runId'] as String;
+    final runId = (json['runId'] as String);
     if (runId.isEmpty) {
       throw const FormatException('Invalid runId');
     }
-    final revision = json['revision'] as int;
+    final revision = (json['revision'] as int);
     if (revision < 0 || revision > 9007199254740991) {
       throw const FormatException('Invalid revision');
     }

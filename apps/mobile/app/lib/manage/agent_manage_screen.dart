@@ -203,31 +203,32 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
       }
     }
 
-    final picked = await showMobileSheet<({String? agentId, String? instanceId})>(
-      context,
-      title: '新会话默认 Agent',
-      content: (sheetContext) => SliverList.list(
-        children: [
-          for (var i = 0; i < choices.length; i++)
-            MobileSheetAction(
-              key: choices[i].agentId == null
-                  ? AgentManageScreen.defaultAutoOptionKey
-                  : AgentManageScreen.defaultOptionKey(
-                      choices[i].instanceId ?? choices[i].agentId!,
-                    ),
-              glyph: choices[i].selected
-                  ? WorkspaceGlyph.check
-                  : WorkspaceGlyph.bot,
-              label: choices[i].label,
-              dividerAbove: i > 0,
-              onTap: () => Navigator.pop(sheetContext, (
-                agentId: choices[i].agentId,
-                instanceId: choices[i].instanceId,
-              )),
-            ),
-        ],
-      ),
-    );
+    final picked =
+        await showMobileSheet<({String? agentId, String? instanceId})>(
+          context,
+          title: '新会话默认 Agent',
+          content: (sheetContext) => SliverList.list(
+            children: [
+              for (var i = 0; i < choices.length; i++)
+                MobileSheetAction(
+                  key: choices[i].agentId == null
+                      ? AgentManageScreen.defaultAutoOptionKey
+                      : AgentManageScreen.defaultOptionKey(
+                          choices[i].instanceId ?? choices[i].agentId!,
+                        ),
+                  glyph: choices[i].selected
+                      ? WorkspaceGlyph.check
+                      : WorkspaceGlyph.bot,
+                  label: choices[i].label,
+                  dividerAbove: i > 0,
+                  onTap: () => Navigator.pop(sheetContext, (
+                    agentId: choices[i].agentId,
+                    instanceId: choices[i].instanceId,
+                  )),
+                ),
+            ],
+          ),
+        );
     if (!mounted || picked == null) return;
 
     setState(() => _updating = true);
