@@ -139,7 +139,7 @@ describe("Composer image attachments", () => {
     const { editor, onUploadImage } = renderComposer()
     await user.type(editor, "保留这段文字")
 
-    // 打开 + 菜单验证顶部的「添加图片」条目存在。
+    // 打开 + 菜单验证顶部的「添加图片」条目存在，再收起菜单避免后续点击触发按钮反而把菜单关掉。
     await user.click(screen.getByRole("button", { name: "添加" }))
     const addImageItem = await screen.findByRole(
       "menuitem",
@@ -147,6 +147,8 @@ describe("Composer image attachments", () => {
       { timeout: 5000 },
     )
     expect(addImageItem).toBeTruthy()
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("menuitem", { name: /添加图片/ })).toBeNull())
 
     const fileInput = screen.getByTestId("composer-image-input") as HTMLInputElement
     const sevenFiles = Array.from({ length: 7 }, (_, i) => makePng(`img-${i + 1}.png`))
@@ -156,9 +158,13 @@ describe("Composer image attachments", () => {
     expect(screen.getByRole("alert").textContent).toContain("最多添加 6 张图片")
     expect(editor.textContent).toBe("保留这段文字")
 
-    // 达到 6 张上限时，+ 菜单中的「添加图片」条目禁用。
+    // 达到 6 张上限时，重新打开 + 菜单验证「添加图片」条目禁用。
     await user.click(screen.getByRole("button", { name: "添加" }))
-    const disabledItem = await screen.findByRole("menuitem", { name: /添加图片/ })
+    const disabledItem = await screen.findByRole(
+      "menuitem",
+      { name: /添加图片/ },
+      { timeout: 5000 },
+    )
     expect(disabledItem.getAttribute("aria-disabled")).toBe("true")
   })
 
