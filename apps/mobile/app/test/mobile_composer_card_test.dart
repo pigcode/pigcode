@@ -156,12 +156,11 @@ void main() {
           await tester.pumpAndSettle();
 
           expect(find.byKey(MobileComposerCard.frameKey), findsNothing);
-          expect(
-            _cardDecoration(tester).border?.top.color,
-            colors.border,
-          );
+          expect(_cardDecoration(tester).border?.top.color, colors.border);
 
-          final inputRect = tester.getRect(find.byKey(const ValueKey('card-input')));
+          final inputRect = tester.getRect(
+            find.byKey(const ValueKey('card-input')),
+          );
           final leadingRect = tester.getRect(find.byTooltip('添加内容'));
           final trailingRect = tester.getRect(find.byTooltip('模型选择'));
           final sendRect = tester.getRect(find.byTooltip('发送'));
@@ -198,81 +197,79 @@ void main() {
 
           focusNode.unfocus();
           await tester.pumpAndSettle();
-          expect(
-            _cardDecoration(tester).border?.top.color,
-            colors.border,
-          );
+          expect(_cardDecoration(tester).border?.top.color, colors.border);
         },
       );
     }
 
-    testWidgets('wraps header and card in composer-frame with offline sunken fill', (
-      tester,
-    ) async {
-      final controller = TextEditingController();
-      addTearDown(controller.dispose);
+    testWidgets(
+      'wraps header and card in composer-frame with offline sunken fill',
+      (tester) async {
+        final controller = TextEditingController();
+        addTearDown(controller.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: pigcodeTheme(
-            Brightness.light,
-          ).copyWith(platform: TargetPlatform.iOS),
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child: MobileComposerCard(
-                controller: controller,
-                inputKey: const ValueKey('offline-input'),
-                hintText: '离线输入',
-                offline: true,
-                header: const MobileComposerChip(
-                  label: '主项目',
-                  tooltip: '顶部项目',
-                  icon: WorkspaceGlyph.folder,
-                  variant: MobileComposerChipVariant.header,
-                ),
-                actions: const [
-                  MobileComposerActionButton(
-                    tooltip: '发送',
-                    glyph: WorkspaceGlyph.arrowUp,
-                    offline: true,
-                    onPressed: null,
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: pigcodeTheme(
+              Brightness.light,
+            ).copyWith(platform: TargetPlatform.iOS),
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.bottomCenter,
+                child: MobileComposerCard(
+                  controller: controller,
+                  inputKey: const ValueKey('offline-input'),
+                  hintText: '离线输入',
+                  offline: true,
+                  header: const MobileComposerChip(
+                    label: '主项目',
+                    tooltip: '顶部项目',
+                    icon: WorkspaceGlyph.folder,
+                    variant: MobileComposerChipVariant.header,
                   ),
-                ],
+                  actions: const [
+                    MobileComposerActionButton(
+                      tooltip: '发送',
+                      glyph: WorkspaceGlyph.arrowUp,
+                      offline: true,
+                      onPressed: null,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      final frame = tester.widget<DecoratedBox>(
-        find.byKey(MobileComposerCard.frameKey),
-      );
-      final frameDecoration = frame.decoration as BoxDecoration;
-      expect(frameDecoration.color, pigcodeLight.field);
-      expect(frameDecoration.border?.top.width, ComposerBorder.frame);
+        final frame = tester.widget<DecoratedBox>(
+          find.byKey(MobileComposerCard.frameKey),
+        );
+        final frameDecoration = frame.decoration as BoxDecoration;
+        expect(frameDecoration.color, pigcodeLight.field);
+        expect(frameDecoration.border?.top.width, ComposerBorder.frame);
 
-      final cardDecoration = _cardDecoration(tester);
-      final expectedOfflineFill = Color.alphaBlend(
-        pigcodeLight.surfaceSunken,
-        pigcodeLight.background,
-      );
-      expect(cardDecoration.color, expectedOfflineFill);
+        final cardDecoration = _cardDecoration(tester);
+        final expectedOfflineFill = Color.alphaBlend(
+          pigcodeLight.surfaceSunken,
+          pigcodeLight.background,
+        );
+        expect(cardDecoration.color, expectedOfflineFill);
 
-      final sendButton = find.byWidgetPredicate(
-        (widget) => widget is IconButton && widget.tooltip == '发送',
-      );
-      expect(
-        _actionCircleDecoration(tester, sendButton).color,
-        Color.alphaBlend(pigcodeLight.selected, expectedOfflineFill),
-      );
-      expect(_actionIconColor(tester, sendButton), pigcodeLight.faint);
+        final sendButton = find.byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == '发送',
+        );
+        expect(
+          _actionCircleDecoration(tester, sendButton).color,
+          Color.alphaBlend(pigcodeLight.selected, expectedOfflineFill),
+        );
+        expect(_actionIconColor(tester, sendButton), pigcodeLight.faint);
 
-      final headerRect = tester.getRect(find.byTooltip('顶部项目'));
-      final cardRect = tester.getRect(find.byKey(MobileComposerCard.cardKey));
-      expect(headerRect.bottom, lessThanOrEqualTo(cardRect.top));
-    });
+        final headerRect = tester.getRect(find.byTooltip('顶部项目'));
+        final cardRect = tester.getRect(find.byKey(MobileComposerCard.cardKey));
+        expect(headerRect.bottom, lessThanOrEqualTo(cardRect.top));
+      },
+    );
   });
 
   group('RunComposerView unified composer', () {
@@ -326,14 +323,8 @@ void main() {
           (widget) => widget is IconButton && widget.tooltip == '停止本轮运行',
         );
 
-        expect(
-          tester.getCenter(input).dy,
-          lessThan(tester.getCenter(send).dy),
-        );
-        expect(
-          tester.getCenter(input).dy,
-          lessThan(tester.getCenter(stop).dy),
-        );
+        expect(tester.getCenter(input).dy, lessThan(tester.getCenter(send).dy));
+        expect(tester.getCenter(input).dy, lessThan(tester.getCenter(stop).dy));
         expect(
           _actionCircleDecoration(tester, send).color,
           pigcodeLight.foreground,
@@ -378,10 +369,7 @@ void main() {
                   body: NewThreadDraft(
                     connection: phone,
                     projects: const [
-                      MobileProjectSummary(
-                        id: 'one',
-                        name: '主项目工作区很长的名字测试截断',
-                      ),
+                      MobileProjectSummary(id: 'one', name: '主项目工作区很长的名字测试截断'),
                     ],
                     projectId: 'one',
                     online: true,
@@ -403,11 +391,19 @@ void main() {
           final send = find.byWidgetPredicate(
             (widget) => widget is IconButton && widget.tooltip == '发送首条消息',
           );
-          final cardRect = tester.getRect(find.byKey(MobileComposerCard.cardKey));
+          final cardRect = tester.getRect(
+            find.byKey(MobileComposerCard.cardKey),
+          );
 
           // 项目条贴合在抬起卡片上方
-          expect(tester.getRect(project).bottom, lessThanOrEqualTo(cardRect.top));
-          expect(tester.getCenter(project).dy, lessThan(tester.getCenter(input).dy));
+          expect(
+            tester.getRect(project).bottom,
+            lessThanOrEqualTo(cardRect.top),
+          );
+          expect(
+            tester.getCenter(project).dy,
+            lessThan(tester.getCenter(input).dy),
+          );
 
           // 实例、模型、权限与发送键全部收进输入区下方的底栏同一行
           final inputCenterY = tester.getCenter(input).dy;

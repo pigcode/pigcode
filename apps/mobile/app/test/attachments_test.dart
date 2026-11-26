@@ -107,41 +107,61 @@ void main() {
         0x56, 0x50, 0x38, 0x20,
       ]);
       expect(detectImageMimeType(webpHeader), 'image/webp');
-      expect(detectImageMimeType(Uint8List.fromList(utf8.encode('hello'))), isNull);
+      expect(
+        detectImageMimeType(Uint8List.fromList(utf8.encode('hello'))),
+        isNull,
+      );
       expect(detectImageMimeType(Uint8List(0)), isNull);
     });
 
-    test('rejects non-image payloads and corrupted images with clear Chinese error', () async {
-      await expectLater(
-        () => compressor.compressBytes(
-          Uint8List.fromList(utf8.encode('not an image file')),
-          fileName: 'notes.txt',
-        ),
-        throwsA(
-          isA<ImageProcessingException>().having(
-            (e) => e.message,
-            'message',
-            contains('不支持的图片格式'),
+    test(
+      'rejects non-image payloads and corrupted images with clear Chinese error',
+      () async {
+        await expectLater(
+          () => compressor.compressBytes(
+            Uint8List.fromList(utf8.encode('not an image file')),
+            fileName: 'notes.txt',
           ),
-        ),
-      );
+          throwsA(
+            isA<ImageProcessingException>().having(
+              (e) => e.message,
+              'message',
+              contains('不支持的图片格式'),
+            ),
+          ),
+        );
 
-      // 合法 PNG 魔数 + 损坏载荷
-      final brokenPng = Uint8List.fromList([
-        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-        0x00, 0x00, 0x00, 0x0D, 0xFF, 0xFF, 0xFF, 0xFF,
-      ]);
-      await expectLater(
-        () => compressor.compressBytes(brokenPng, fileName: 'broken.png'),
-        throwsA(
-          isA<ImageProcessingException>().having(
-            (e) => e.message,
-            'message',
-            contains('损坏'),
+        // 合法 PNG 魔数 + 损坏载荷
+        final brokenPng = Uint8List.fromList([
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x0D,
+          0x0A,
+          0x1A,
+          0x0A,
+          0x00,
+          0x00,
+          0x00,
+          0x0D,
+          0xFF,
+          0xFF,
+          0xFF,
+          0xFF,
+        ]);
+        await expectLater(
+          () => compressor.compressBytes(brokenPng, fileName: 'broken.png'),
+          throwsA(
+            isA<ImageProcessingException>().having(
+              (e) => e.message,
+              'message',
+              contains('损坏'),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
 
     test('passes small valid images through without re-encoding', () async {
       final png = _solidPng(320, 180);
@@ -156,180 +176,230 @@ void main() {
       expect(processed.bytes, png);
     });
 
-    test('resizes oversized opaque image (>2048px) proportionally to JPEG', () async {
-      final large = _solidPng(2600, 1300);
-      final processed = await compressor.compressBytes(
-        large,
-        fileName: 'screenshot.png',
-      );
-      expect(processed.width, 2048);
-      expect(processed.height, 1024);
-      expect(processed.mimeType, 'image/jpeg');
-      expect(processed.fileName, 'screenshot.jpg');
-      expect(detectImageMimeType(processed.bytes), 'image/jpeg');
-    });
-
-    test('preserves PNG format and alpha channel for oversized transparent PNG', () async {
-      final largeTransparent = _solidPng(2400, 1200, transparent: true);
-      final processed = await compressor.compressBytes(
-        largeTransparent,
-        fileName: 'logo.png',
-      );
-      expect(processed.width, 2048);
-      expect(processed.height, 1024);
-      expect(processed.mimeType, 'image/png');
-      expect(processed.fileName, 'logo.png');
-      final decoded = img.decodePng(processed.bytes);
-      expect(decoded, isNotNull);
-      expect(decoded!.hasAlpha, isTrue);
-    });
-
-    test('rejects image when compressed bytes still exceed maxBytes limit', () async {
-      final strictCompressor = const ImageCompressor(
-        maxDimension: 2048,
-        maxBytes: 1024, // 严格限制触发超限异常
-        runInIsolate: false,
-      );
-      final noisy = _noisyJpeg(400, 400);
-      await expectLater(
-        () => strictCompressor.compressBytes(noisy, fileName: 'huge.jpg'),
-        throwsA(
-          isA<ImageProcessingException>().having(
-            (e) => e.message,
-            'message',
-            '单张图片压缩后仍超过 4 MB',
-          ),
-        ),
-      );
-    });
-
-    test('stageSharedImagesToDraft compresses, writes draft copies, and caps at 6', () async {
-      final root = await Directory.systemTemp.createTemp('pigcode-share-stage-');
-      addTearDown(() => root.delete(recursive: true));
-      final cache = AttachmentCacheStore(directory: () async => root);
-
-      final sourceDir = await Directory.systemTemp.createTemp('pigcode-share-src-');
-      addTearDown(() => sourceDir.delete(recursive: true));
-      final paths = <String>[];
-      final sample = _solidPng(120, 80);
-      for (var i = 0; i < 7; i++) {
-        final file = File('${sourceDir.path}/shared-$i.png');
-        await file.writeAsBytes(sample);
-        paths.add(file.path);
-      }
-
-      final staged = await stageSharedImagesToDraft(
-        computerKey: 'computer-share',
-        paths: paths,
-        cache: cache,
-        compressor: compressor,
-      );
-      expect(staged.records, hasLength(6));
-      expect(staged.error, contains('最多添加 6 张'));
-      for (final record in staged.records) {
-        expect(record.status, 'localOffline');
-        expect(record.draftFileName, isNotNull);
-        final savedBytes = await cache.readDraftFile(
-          'computer-share',
-          record.draftFileName!,
+    test(
+      'resizes oversized opaque image (>2048px) proportionally to JPEG',
+      () async {
+        final large = _solidPng(2600, 1300);
+        final processed = await compressor.compressBytes(
+          large,
+          fileName: 'screenshot.png',
         );
-        expect(savedBytes, isNotNull);
-        expect(savedBytes, isNotEmpty);
-      }
-    });
+        expect(processed.width, 2048);
+        expect(processed.height, 1024);
+        expect(processed.mimeType, 'image/jpeg');
+        expect(processed.fileName, 'screenshot.jpg');
+        expect(detectImageMimeType(processed.bytes), 'image/jpeg');
+      },
+    );
+
+    test(
+      'preserves PNG format and alpha channel for oversized transparent PNG',
+      () async {
+        final largeTransparent = _solidPng(2400, 1200, transparent: true);
+        final processed = await compressor.compressBytes(
+          largeTransparent,
+          fileName: 'logo.png',
+        );
+        expect(processed.width, 2048);
+        expect(processed.height, 1024);
+        expect(processed.mimeType, 'image/png');
+        expect(processed.fileName, 'logo.png');
+        final decoded = img.decodePng(processed.bytes);
+        expect(decoded, isNotNull);
+        expect(decoded!.hasAlpha, isTrue);
+      },
+    );
+
+    test(
+      'rejects image when compressed bytes still exceed maxBytes limit',
+      () async {
+        final strictCompressor = const ImageCompressor(
+          maxDimension: 2048,
+          maxBytes: 1024, // 严格限制触发超限异常
+          runInIsolate: false,
+        );
+        final noisy = _noisyJpeg(400, 400);
+        await expectLater(
+          () => strictCompressor.compressBytes(noisy, fileName: 'huge.jpg'),
+          throwsA(
+            isA<ImageProcessingException>().having(
+              (e) => e.message,
+              'message',
+              '单张图片压缩后仍超过 4 MB',
+            ),
+          ),
+        );
+      },
+    );
+
+    test(
+      'stageSharedImagesToDraft compresses, writes draft copies, and caps at 6',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'pigcode-share-stage-',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final cache = AttachmentCacheStore(directory: () async => root);
+
+        final sourceDir = await Directory.systemTemp.createTemp(
+          'pigcode-share-src-',
+        );
+        addTearDown(() => sourceDir.delete(recursive: true));
+        final paths = <String>[];
+        final sample = _solidPng(120, 80);
+        for (var i = 0; i < 7; i++) {
+          final file = File('${sourceDir.path}/shared-$i.png');
+          await file.writeAsBytes(sample);
+          paths.add(file.path);
+        }
+
+        final staged = await stageSharedImagesToDraft(
+          computerKey: 'computer-share',
+          paths: paths,
+          cache: cache,
+          compressor: compressor,
+        );
+        expect(staged.records, hasLength(6));
+        expect(staged.error, contains('最多添加 6 张'));
+        for (final record in staged.records) {
+          expect(record.status, 'localOffline');
+          expect(record.draftFileName, isNotNull);
+          final savedBytes = await cache.readDraftFile(
+            'computer-share',
+            record.draftFileName!,
+          );
+          expect(savedBytes, isNotNull);
+          expect(savedBytes, isNotEmpty);
+        }
+      },
+    );
   });
 
   group('AttachmentCacheStore isolation and cleanup chain', () {
-    test('isolates thumbs, full, and drafts per computerKey and cleans up on computer removal', () async {
-      final root = await Directory.systemTemp.createTemp('pigcode-att-cache-');
-      addTearDown(() => root.delete(recursive: true));
-      final cache = AttachmentCacheStore(directory: () async => root);
-      final computerA = _computer(1);
-      final computerB = _computer(2);
-      final payloadA = _solidPng(20, 20);
-      final payloadB = _solidJpeg(24, 24);
+    test(
+      'isolates thumbs, full, and drafts per computerKey and cleans up on computer removal',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'pigcode-att-cache-',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final cache = AttachmentCacheStore(directory: () async => root);
+        final computerA = _computer(1);
+        final computerB = _computer(2);
+        final payloadA = _solidPng(20, 20);
+        final payloadB = _solidJpeg(24, 24);
 
-      await cache.writeThumb(computerA.computerKey, 'att-1', payloadA);
-      await cache.writeFull(computerA.computerKey, 'att-1', payloadA);
-      final draftA = await cache.writeDraftFile(
-        computerA.computerKey,
-        'local-a',
-        'png',
-        payloadA,
-      );
+        await cache.writeThumb(computerA.computerKey, 'att-1', payloadA);
+        await cache.writeFull(computerA.computerKey, 'att-1', payloadA);
+        final draftA = await cache.writeDraftFile(
+          computerA.computerKey,
+          'local-a',
+          'png',
+          payloadA,
+        );
 
-      await cache.writeThumb(computerB.computerKey, 'att-1', payloadB);
-      await cache.writeFull(computerB.computerKey, 'att-1', payloadB);
-      final draftB = await cache.writeDraftFile(
-        computerB.computerKey,
-        'local-b',
-        'jpg',
-        payloadB,
-      );
+        await cache.writeThumb(computerB.computerKey, 'att-1', payloadB);
+        await cache.writeFull(computerB.computerKey, 'att-1', payloadB);
+        final draftB = await cache.writeDraftFile(
+          computerB.computerKey,
+          'local-b',
+          'jpg',
+          payloadB,
+        );
 
-      // 确认不同电脑使用不同哈希目录，互不干扰。
-      final hashA = await cache.computerHash(computerA.computerKey);
-      final hashB = await cache.computerHash(computerB.computerKey);
-      expect(hashA, isNot(hashB));
-      expect(await cache.readThumb(computerA.computerKey, 'att-1'), payloadA);
-      expect(await cache.readThumb(computerB.computerKey, 'att-1'), payloadB);
-      expect(await cache.readFull(computerA.computerKey, 'att-1'), payloadA);
-      expect(await cache.readDraftFile(computerA.computerKey, draftA), payloadA);
+        // 确认不同电脑使用不同哈希目录，互不干扰。
+        final hashA = await cache.computerHash(computerA.computerKey);
+        final hashB = await cache.computerHash(computerB.computerKey);
+        expect(hashA, isNot(hashB));
+        expect(await cache.readThumb(computerA.computerKey, 'att-1'), payloadA);
+        expect(await cache.readThumb(computerB.computerKey, 'att-1'), payloadB);
+        expect(await cache.readFull(computerA.computerKey, 'att-1'), payloadA);
+        expect(
+          await cache.readDraftFile(computerA.computerKey, draftA),
+          payloadA,
+        );
 
-      // 模拟删除电脑 / 撤销配对流程（Computers.forget）彻底清理 A 电脑，保留 B 电脑。
-      final offlineDir = await Directory.systemTemp.createTemp('pigcode-off-');
-      addTearDown(() => offlineDir.delete(recursive: true));
-      final offlineCache = OfflineCacheStore(directory: () async => offlineDir);
-      final container = ProviderContainer(
-        overrides: [
-          attachmentCacheProvider.overrideWithValue(cache),
-          offlineCacheProvider.overrideWithValue(offlineCache),
-          computersProvider.overrideWith(
-            () => Computers(preferences: _FakePreferences(installed: true)),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
+        // 模拟删除电脑 / 撤销配对流程（Computers.forget）彻底清理 A 电脑，保留 B 电脑。
+        final offlineDir = await Directory.systemTemp.createTemp(
+          'pigcode-off-',
+        );
+        addTearDown(() => offlineDir.delete(recursive: true));
+        final offlineCache = OfflineCacheStore(
+          directory: () async => offlineDir,
+        );
+        final container = ProviderContainer(
+          overrides: [
+            attachmentCacheProvider.overrideWithValue(cache),
+            offlineCacheProvider.overrideWithValue(offlineCache),
+            computersProvider.overrideWith(
+              () => Computers(preferences: _FakePreferences(installed: true)),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
 
-      await container.read(computersProvider.future);
-      await container.read(computersProvider.notifier).remember(computerA);
-      await container.read(computersProvider.notifier).remember(computerB);
-      // remember 首次添加会清理历史残留，因此重新写入测试数据后再调用 forget。
-      await cache.writeThumb(computerA.computerKey, 'att-1', payloadA);
-      await cache.writeFull(computerA.computerKey, 'att-1', payloadA);
-      await cache.writeDraftFile(computerA.computerKey, 'local-a', 'png', payloadA);
-      await cache.writeThumb(computerB.computerKey, 'att-1', payloadB);
-      await cache.writeFull(computerB.computerKey, 'att-1', payloadB);
-      await cache.writeDraftFile(computerB.computerKey, 'local-b', 'jpg', payloadB);
+        await container.read(computersProvider.future);
+        await container.read(computersProvider.notifier).remember(computerA);
+        await container.read(computersProvider.notifier).remember(computerB);
+        // remember 首次添加会清理历史残留，因此重新写入测试数据后再调用 forget。
+        await cache.writeThumb(computerA.computerKey, 'att-1', payloadA);
+        await cache.writeFull(computerA.computerKey, 'att-1', payloadA);
+        await cache.writeDraftFile(
+          computerA.computerKey,
+          'local-a',
+          'png',
+          payloadA,
+        );
+        await cache.writeThumb(computerB.computerKey, 'att-1', payloadB);
+        await cache.writeFull(computerB.computerKey, 'att-1', payloadB);
+        await cache.writeDraftFile(
+          computerB.computerKey,
+          'local-b',
+          'jpg',
+          payloadB,
+        );
 
-      final forgotten = await container
-          .read(computersProvider.notifier)
-          .forget(computerA);
-      expect(forgotten, isTrue);
+        final forgotten = await container
+            .read(computersProvider.notifier)
+            .forget(computerA);
+        expect(forgotten, isTrue);
 
-      // A 电脑的目录与内存缩略图均被彻底清除。
-      expect(cache.peekThumbMemory(computerA.computerKey, 'att-1'), isNull);
-      expect(await cache.readThumb(computerA.computerKey, 'att-1'), isNull);
-      expect(await cache.readFull(computerA.computerKey, 'att-1'), isNull);
-      expect(await cache.readDraftFile(computerA.computerKey, draftA), isNull);
-      expect(
-        await (await cache.computerDirectory(computerA.computerKey))!.exists(),
-        isFalse,
-      );
+        // A 电脑的目录与内存缩略图均被彻底清除。
+        expect(cache.peekThumbMemory(computerA.computerKey, 'att-1'), isNull);
+        expect(await cache.readThumb(computerA.computerKey, 'att-1'), isNull);
+        expect(await cache.readFull(computerA.computerKey, 'att-1'), isNull);
+        expect(
+          await cache.readDraftFile(computerA.computerKey, draftA),
+          isNull,
+        );
+        expect(
+          await (await cache.computerDirectory(
+            computerA.computerKey,
+          ))!.exists(),
+          isFalse,
+        );
 
-      // B 电脑数据丝毫无损。
-      expect(await cache.readThumb(computerB.computerKey, 'att-1'), payloadB);
-      expect(await cache.readFull(computerB.computerKey, 'att-1'), payloadB);
-      expect(await cache.readDraftFile(computerB.computerKey, draftB), payloadB);
-    });
+        // B 电脑数据丝毫无损。
+        expect(await cache.readThumb(computerB.computerKey, 'att-1'), payloadB);
+        expect(await cache.readFull(computerB.computerKey, 'att-1'), payloadB);
+        expect(
+          await cache.readDraftFile(computerB.computerKey, draftB),
+          payloadB,
+        );
+      },
+    );
 
     test('fresh install clears all cached attachments and drafts', () async {
-      final root = await Directory.systemTemp.createTemp('pigcode-install-att-');
+      final root = await Directory.systemTemp.createTemp(
+        'pigcode-install-att-',
+      );
       addTearDown(() async {
         if (await root.exists()) await root.delete(recursive: true);
       });
       final cache = AttachmentCacheStore(directory: () async => root);
-      final offlineDir = await Directory.systemTemp.createTemp('pigcode-install-off-');
+      final offlineDir = await Directory.systemTemp.createTemp(
+        'pigcode-install-off-',
+      );
       addTearDown(() async {
         if (await offlineDir.exists()) await offlineDir.delete(recursive: true);
       });
@@ -360,54 +430,59 @@ void main() {
       expect(cache.peekThumbMemory(computer.computerKey, 'stale'), isNull);
     });
 
-    test('ThreadDraftStorage persists attachments and deletes draft files on clearComputerDrafts', () async {
-      final root = await Directory.systemTemp.createTemp('pigcode-draft-att-');
-      addTearDown(() => root.delete(recursive: true));
-      final cache = AttachmentCacheStore(directory: () async => root);
+    test(
+      'ThreadDraftStorage persists attachments and deletes draft files on clearComputerDrafts',
+      () async {
+        final root = await Directory.systemTemp.createTemp(
+          'pigcode-draft-att-',
+        );
+        addTearDown(() => root.delete(recursive: true));
+        final cache = AttachmentCacheStore(directory: () async => root);
 
-      final store = ThreadDraftStorage(
-        'comp-1',
-        'thread-1',
-        attachmentCache: cache,
-      );
-      final draftFile = await cache.writeDraftFile(
-        'comp-1',
-        'loc-1',
-        'png',
-        _solidPng(32, 32),
-      );
-      await store.save('配图说明');
-      await store.saveAttachments([
-        DraftAttachmentRecord(
-          localId: 'loc-1',
-          fileName: 'shot.png',
-          mimeType: 'image/png',
-          sizeBytes: 123,
-          width: 32,
-          height: 32,
-          draftFileName: draftFile,
-          status: 'localOffline',
-        ),
-      ]);
+        final store = ThreadDraftStorage(
+          'comp-1',
+          'thread-1',
+          attachmentCache: cache,
+        );
+        final draftFile = await cache.writeDraftFile(
+          'comp-1',
+          'loc-1',
+          'png',
+          _solidPng(32, 32),
+        );
+        await store.save('配图说明');
+        await store.saveAttachments([
+          DraftAttachmentRecord(
+            localId: 'loc-1',
+            fileName: 'shot.png',
+            mimeType: 'image/png',
+            sizeBytes: 123,
+            width: 32,
+            height: 32,
+            draftFileName: draftFile,
+            status: 'localOffline',
+          ),
+        ]);
 
-      final restored = await ThreadDraftStorage(
-        'comp-1',
-        'thread-1',
-        attachmentCache: cache,
-      ).readFull();
-      expect(restored.text, '配图说明');
-      expect(restored.attachments, hasLength(1));
-      expect(restored.attachments.single.draftFileName, draftFile);
+        final restored = await ThreadDraftStorage(
+          'comp-1',
+          'thread-1',
+          attachmentCache: cache,
+        ).readFull();
+        expect(restored.text, '配图说明');
+        expect(restored.attachments, hasLength(1));
+        expect(restored.attachments.single.draftFileName, draftFile);
 
-      await clearComputerDrafts('comp-1', attachmentCache: cache);
-      expect(await cache.readDraftFile('comp-1', draftFile), isNull);
-      final afterClear = await ThreadDraftStorage(
-        'comp-1',
-        'thread-1',
-        attachmentCache: cache,
-      ).readFull();
-      expect(afterClear.text, isEmpty);
-      expect(afterClear.attachments, isEmpty);
-    });
+        await clearComputerDrafts('comp-1', attachmentCache: cache);
+        expect(await cache.readDraftFile('comp-1', draftFile), isNull);
+        final afterClear = await ThreadDraftStorage(
+          'comp-1',
+          'thread-1',
+          attachmentCache: cache,
+        ).readFull();
+        expect(afterClear.text, isEmpty);
+        expect(afterClear.attachments, isEmpty);
+      },
+    );
   });
 }

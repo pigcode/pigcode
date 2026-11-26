@@ -544,242 +544,275 @@ void main() {
       );
     });
 
-    test('connectionSupportsComposerMentions degrades safely on legacy stub', () {
-      expect(connectionSupportsComposerMentions(null), isFalse);
-      expect(
-        connectionSupportsComposerMentions(_LegacyStubConnection()),
-        isFalse,
-      );
-    });
+    test(
+      'connectionSupportsComposerMentions degrades safely on legacy stub',
+      () {
+        expect(connectionSupportsComposerMentions(null), isFalse);
+        expect(
+          connectionSupportsComposerMentions(_LegacyStubConnection()),
+          isFalse,
+        );
+      },
+    );
 
     test('splitComposerPath splits filename and directory cleanly', () {
-      expect(
-        splitComposerPath('lib/composer/composer_tokens.dart'),
-        (name: 'composer_tokens.dart', dir: 'lib/composer'),
-      );
+      expect(splitComposerPath('lib/composer/composer_tokens.dart'), (
+        name: 'composer_tokens.dart',
+        dir: 'lib/composer',
+      ));
       expect(splitComposerPath('README.md'), (name: 'README.md', dir: ''));
-      expect(splitComposerPath('lib/composer/'), (name: 'composer/', dir: 'lib'));
+      expect(splitComposerPath('lib/composer/'), (
+        name: 'composer/',
+        dir: 'lib',
+      ));
     });
 
-    test('matchComposerThreads prioritizes same-project unarchived and searches globally with query', () {
-      final emptyQuery = matchComposerThreads(
-        threads: _threads,
-        projects: _projects,
-        currentProjectId: 'proj-a',
-        currentThreadId: 'thread-current',
-        query: '',
-      );
-      // 自动排除当前会话、归档会话与跨项目会话，最多 5 条。
-      expect(emptyQuery.map((t) => t.id), [
-        'thread-1',
-        'thread-2',
-        'thread-3',
-        'thread-4',
-        'thread-5',
-      ]);
+    test(
+      'matchComposerThreads prioritizes same-project unarchived and searches globally with query',
+      () {
+        final emptyQuery = matchComposerThreads(
+          threads: _threads,
+          projects: _projects,
+          currentProjectId: 'proj-a',
+          currentThreadId: 'thread-current',
+          query: '',
+        );
+        // 自动排除当前会话、归档会话与跨项目会话，最多 5 条。
+        expect(emptyQuery.map((t) => t.id), [
+          'thread-1',
+          'thread-2',
+          'thread-3',
+          'thread-4',
+          'thread-5',
+        ]);
 
-      // 输入关键词后跨项目且包含已归档会话。
-      final searched = matchComposerThreads(
-        threads: _threads,
-        projects: _projects,
-        currentProjectId: 'proj-a',
-        currentThreadId: 'thread-current',
-        query: '配对',
-      );
-      expect(searched.map((t) => t.id), [
-        'thread-archived',
-        'thread-other-project',
-      ]);
-      expect(searched[0].archived, isTrue);
-      expect(searched[1].sameProject, isFalse);
-      expect(searched[1].projectName, '文档仓库');
-    });
+        // 输入关键词后跨项目且包含已归档会话。
+        final searched = matchComposerThreads(
+          threads: _threads,
+          projects: _projects,
+          currentProjectId: 'proj-a',
+          currentThreadId: 'thread-current',
+          query: '配对',
+        );
+        expect(searched.map((t) => t.id), [
+          'thread-archived',
+          'thread-other-project',
+        ]);
+        expect(searched[0].archived, isTrue);
+        expect(searched[1].sameProject, isFalse);
+        expect(searched[1].projectName, '文档仓库');
+      },
+    );
 
-    test('buildSlashCommandSuggestions merges builtins first and excludes fullAccess', () {
-      final builtins = buildComposerBuiltinCommands(
-        canOpenModelPicker: true,
-        supportsPlanMode: true,
-        permissionModes: const [
-          MobileDraftPermission.approvalRequired,
-          MobileDraftPermission.autoAcceptEdits,
-          MobileDraftPermission.auto,
-          MobileDraftPermission.fullAccess,
-        ],
-      );
-      expect(builtins.map((b) => b.label), [
-        '/plan',
-        '/model',
-        '/approval-required',
-        '/auto-accept-edits',
-        '/auto',
-      ]);
+    test(
+      'buildSlashCommandSuggestions merges builtins first and excludes fullAccess',
+      () {
+        final builtins = buildComposerBuiltinCommands(
+          canOpenModelPicker: true,
+          supportsPlanMode: true,
+          permissionModes: const [
+            MobileDraftPermission.approvalRequired,
+            MobileDraftPermission.autoAcceptEdits,
+            MobileDraftPermission.auto,
+            MobileDraftPermission.fullAccess,
+          ],
+        );
+        expect(builtins.map((b) => b.label), [
+          '/plan',
+          '/model',
+          '/approval-required',
+          '/auto-accept-edits',
+          '/auto',
+        ]);
 
-      final merged = buildSlashCommandSuggestions(
-        builtins: builtins,
-        agentCommands: _defaultAgentCommands,
-        query: '',
-      );
-      // 同名 /model 内置优先且去重；非 builtin 远程命令 /deploy 排在 /compact 前。
-      expect(merged.where((item) => item.label == '/model'), hasLength(1));
-      expect(
-        merged.firstWhere((item) => item.label == '/model').builtinCommand,
-        isNotNull,
-      );
-      final deployIndex = merged.indexWhere((i) => i.label == '/deploy');
-      final compactIndex = merged.indexWhere((i) => i.label == '/compact');
-      expect(deployIndex, greaterThan(0));
-      expect(compactIndex, greaterThan(deployIndex));
+        final merged = buildSlashCommandSuggestions(
+          builtins: builtins,
+          agentCommands: _defaultAgentCommands,
+          query: '',
+        );
+        // 同名 /model 内置优先且去重；非 builtin 远程命令 /deploy 排在 /compact 前。
+        expect(merged.where((item) => item.label == '/model'), hasLength(1));
+        expect(
+          merged.firstWhere((item) => item.label == '/model').builtinCommand,
+          isNotNull,
+        );
+        final deployIndex = merged.indexWhere((i) => i.label == '/deploy');
+        final compactIndex = merged.indexWhere((i) => i.label == '/compact');
+        expect(deployIndex, greaterThan(0));
+        expect(compactIndex, greaterThan(deployIndex));
 
-      // 支持中文关键词搜索内置命令。
-      final cnSearch = buildSlashCommandSuggestions(
-        builtins: builtins,
-        agentCommands: _defaultAgentCommands,
-        query: '模型',
-      );
-      expect(cnSearch.first.label, '/model');
-    });
+        // 支持中文关键词搜索内置命令。
+        final cnSearch = buildSlashCommandSuggestions(
+          builtins: builtins,
+          agentCommands: _defaultAgentCommands,
+          query: '模型',
+        );
+        expect(cnSearch.first.label, '/model');
+      },
+    );
 
-    test('buildSkillSuggestions ranks by name, displayName, description, and source', () {
-      final byName = buildSkillSuggestions(
-        agentCommands: _defaultAgentCommands,
-        query: 'code-review',
-      );
-      expect(byName.first.agentCommand?.name, 'code-review');
+    test(
+      'buildSkillSuggestions ranks by name, displayName, description, and source',
+      () {
+        final byName = buildSkillSuggestions(
+          agentCommands: _defaultAgentCommands,
+          query: 'code-review',
+        );
+        expect(byName.first.agentCommand?.name, 'code-review');
 
-      final byDisplay = buildSkillSuggestions(
-        agentCommands: _defaultAgentCommands,
-        query: '代码审查',
-      );
-      expect(byDisplay.first.agentCommand?.name, 'code-review');
-      expect(byDisplay.map((i) => i.agentCommand?.name), contains('write-tests'));
+        final byDisplay = buildSkillSuggestions(
+          agentCommands: _defaultAgentCommands,
+          query: '代码审查',
+        );
+        expect(byDisplay.first.agentCommand?.name, 'code-review');
+        expect(
+          byDisplay.map((i) => i.agentCommand?.name),
+          contains('write-tests'),
+        );
 
-      final bySource = buildSkillSuggestions(
-        agentCommands: _defaultAgentCommands,
-        query: '插件',
-      );
-      expect(bySource.first.agentCommand?.name, 'plugin-lint');
-      expect(bySource.first.tag, '插件');
-    });
+        final bySource = buildSkillSuggestions(
+          agentCommands: _defaultAgentCommands,
+          query: '插件',
+        );
+        expect(bySource.first.agentCommand?.name, 'plugin-lint');
+        expect(bySource.first.tag, '插件');
+      },
+    );
   });
 
-  group('ComposerTextEditingController highlight, IME composing & reference cleanup', () {
-    testWidgets('highlights @thread, @file, \$skill in accentText without font metric shift and preserves IME composing underline', (
-      tester,
-    ) async {
-      final controller = ComposerTextEditingController();
-      addTearDown(controller.dispose);
-      controller.recordThreadReference(
-        const MobileThreadReference(threadId: 't1', title: '排查 连接超时'),
-      );
-      controller.recordFileMention('Makefile');
-      const sampleText =
-          r'参考 @排查 连接超时 和 @lib/app.dart 以及 @Makefile 用 $code-review，邮箱 a@b.com 价格 $100 正在输入';
-      final composingStart = sampleText.indexOf('正在输入');
-      controller.value = TextEditingValue(
-        text: sampleText,
-        selection: TextSelection.collapsed(offset: sampleText.length),
-        composing: TextRange(start: composingStart, end: sampleText.length),
-      );
+  group(
+    'ComposerTextEditingController highlight, IME composing & reference cleanup',
+    () {
+      testWidgets(
+        'highlights @thread, @file, \$skill in accentText without font metric shift and preserves IME composing underline',
+        (tester) async {
+          final controller = ComposerTextEditingController();
+          addTearDown(controller.dispose);
+          controller.recordThreadReference(
+            const MobileThreadReference(threadId: 't1', title: '排查 连接超时'),
+          );
+          controller.recordFileMention('Makefile');
+          const sampleText =
+              r'参考 @排查 连接超时 和 @lib/app.dart 以及 @Makefile 用 $code-review，邮箱 a@b.com 价格 $100 正在输入';
+          final composingStart = sampleText.indexOf('正在输入');
+          controller.value = TextEditingValue(
+            text: sampleText,
+            selection: TextSelection.collapsed(offset: sampleText.length),
+            composing: TextRange(start: composingStart, end: sampleText.length),
+          );
 
-      late TextSpan built;
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: pigcodeTheme(Brightness.light),
-          home: Builder(
-            builder: (context) {
-              built = controller.buildTextSpan(
-                context: context,
-                style: ComposerType.input.copyWith(
-                  color: ComposerSurface.palette(Brightness.light).foreground,
-                ),
-                withComposing: true,
-              );
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-      );
+          late TextSpan built;
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: pigcodeTheme(Brightness.light),
+              home: Builder(
+                builder: (context) {
+                  built = controller.buildTextSpan(
+                    context: context,
+                    style: ComposerType.input.copyWith(
+                      color: ComposerSurface.palette(
+                        Brightness.light,
+                      ).foreground,
+                    ),
+                    withComposing: true,
+                  );
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          );
 
-      final expectedAccent = ComposerSurface.mentionHighlight(Brightness.light);
-      final spans = _flattenSpans(built);
-      // 完整保留全部文本字符，绝不吞字。
-      expect(spans.map((s) => s.text!).join(), controller.text);
+          final expectedAccent = ComposerSurface.mentionHighlight(
+            Brightness.light,
+          );
+          final spans = _flattenSpans(built);
+          // 完整保留全部文本字符，绝不吞字。
+          expect(spans.map((s) => s.text!).join(), controller.text);
 
-      TextSpan spanOf(String text) => spans.singleWhere((s) => s.text == text);
+          TextSpan spanOf(String text) =>
+              spans.singleWhere((s) => s.text == text);
 
-      for (final highlighted in [
-        '@排查 连接超时',
-        '@lib/app.dart',
-        '@Makefile',
-        r'$code-review',
-      ]) {
-        final s = spanOf(highlighted);
-        expect(s.style?.color, expectedAccent);
-        expect(s.style?.fontSize, ComposerType.input.fontSize);
-        expect(s.style?.fontWeight, ComposerType.input.fontWeight);
-        expect(s.style?.height, ComposerType.input.height);
-      }
+          for (final highlighted in [
+            '@排查 连接超时',
+            '@lib/app.dart',
+            '@Makefile',
+            r'$code-review',
+          ]) {
+            final s = spanOf(highlighted);
+            expect(s.style?.color, expectedAccent);
+            expect(s.style?.fontSize, ComposerType.input.fontSize);
+            expect(s.style?.fontWeight, ComposerType.input.fontWeight);
+            expect(s.style?.height, ComposerType.input.height);
+          }
 
-      // 邮箱与价格不高亮。
-      expect(
-        spans.any(
-          (s) => s.text!.contains('a@b.com') && s.style?.color == expectedAccent,
-        ),
-        isFalse,
-      );
-      expect(
-        spans.any(
-          (s) => s.text!.contains(r'$100') && s.style?.color == expectedAccent,
-        ),
-        isFalse,
-      );
+          // 邮箱与价格不高亮。
+          expect(
+            spans.any(
+              (s) =>
+                  s.text!.contains('a@b.com') &&
+                  s.style?.color == expectedAccent,
+            ),
+            isFalse,
+          );
+          expect(
+            spans.any(
+              (s) =>
+                  s.text!.contains(r'$100') && s.style?.color == expectedAccent,
+            ),
+            isFalse,
+          );
 
-      // 组合区保留完整下划线且文本未被切碎。
-      final composingSpan = spanOf('正在输入');
-      expect(composingSpan.style?.decoration, TextDecoration.underline);
-    });
-
-    test('resolveReferences deduplicates in order, caps at 10, and drops edited/deleted references', () {
-      final controller = ComposerTextEditingController();
-      addTearDown(controller.dispose);
-      const refA = MobileThreadReference(threadId: 'a', title: '排查连接超时');
-      const refB = MobileThreadReference(threadId: 'b', title: '修复列表滚动');
-      controller.recordThreadReference(refA);
-      controller.recordThreadReference(refB);
-      controller.text = '先看 @修复列表滚动 再看 @排查连接超时 和 @修复列表滚动。';
-
-      expect(
-        controller.resolveReferences().map((r) => r.threadId),
-        ['b', 'a'],
+          // 组合区保留完整下划线且文本未被切碎。
+          final composingSpan = spanOf('正在输入');
+          expect(composingSpan.style?.decoration, TextDecoration.underline);
+        },
       );
 
-      // 删掉一个字 -> 对应引用立即被剔除。
-      controller.text = '先看 @修复列表滚动 再看 @排查连接超';
-      expect(controller.resolveReferences().map((r) => r.threadId), ['b']);
+      test(
+        'resolveReferences deduplicates in order, caps at 10, and drops edited/deleted references',
+        () {
+          final controller = ComposerTextEditingController();
+          addTearDown(controller.dispose);
+          const refA = MobileThreadReference(threadId: 'a', title: '排查连接超时');
+          const refB = MobileThreadReference(threadId: 'b', title: '修复列表滚动');
+          controller.recordThreadReference(refA);
+          controller.recordThreadReference(refB);
+          controller.text = '先看 @修复列表滚动 再看 @排查连接超时 和 @修复列表滚动。';
 
-      // 尾部粘连字母破坏边界 -> 自动剔除。
-      controller.text = '先看 @修复列表滚动abc';
-      expect(controller.resolveReferences(), isEmpty);
+          expect(controller.resolveReferences().map((r) => r.threadId), [
+            'b',
+            'a',
+          ]);
 
-      // 超过 10 条唯一会话引用时截断至 10 条。
-      controller.clear();
-      expect(controller.trackedThreadReferences, isEmpty);
-      final parts = <String>[];
-      for (var i = 0; i < 12; i++) {
-        final ref = MobileThreadReference(threadId: 't$i', title: '会话$i');
-        controller.recordThreadReference(ref);
-        parts.add('@会话$i');
-      }
-      controller.text = parts.join(' ');
-      expect(controller.resolveReferences(), hasLength(10));
-      expect(controller.resolveReferences().first.threadId, 't0');
-      expect(controller.resolveReferences().last.threadId, 't9');
+          // 删掉一个字 -> 对应引用立即被剔除。
+          controller.text = '先看 @修复列表滚动 再看 @排查连接超';
+          expect(controller.resolveReferences().map((r) => r.threadId), ['b']);
 
-      // 文本清空同步清理内部跟踪记录。
-      controller.text = '';
-      expect(controller.trackedThreadReferences, isEmpty);
-    });
-  });
+          // 尾部粘连字母破坏边界 -> 自动剔除。
+          controller.text = '先看 @修复列表滚动abc';
+          expect(controller.resolveReferences(), isEmpty);
+
+          // 超过 10 条唯一会话引用时截断至 10 条。
+          controller.clear();
+          expect(controller.trackedThreadReferences, isEmpty);
+          final parts = <String>[];
+          for (var i = 0; i < 12; i++) {
+            final ref = MobileThreadReference(threadId: 't$i', title: '会话$i');
+            controller.recordThreadReference(ref);
+            parts.add('@会话$i');
+          }
+          controller.text = parts.join(' ');
+          expect(controller.resolveReferences(), hasLength(10));
+          expect(controller.resolveReferences().first.threadId, 't0');
+          expect(controller.resolveReferences().last.threadId, 't9');
+
+          // 文本清空同步清理内部跟踪记录。
+          controller.text = '';
+          expect(controller.trackedThreadReferences, isEmpty);
+        },
+      );
+    },
+  );
 
   group('RunComposer & TimelinePane mentions UI integration', () {
     testWidgets(
@@ -823,7 +856,9 @@ void main() {
         expect(find.text('运行命令'), findsOneWidget);
         expect(find.text('使用 Skill'), findsOneWidget);
 
-        await tester.tap(find.byKey(MobileComposerAttachButton.mentionOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.mentionOptionKey),
+        );
         await tester.pumpAndSettle();
 
         // 联想面板出现在输入框卡片正上方，标题为「引用」且含「会话」「文件」分组。
@@ -949,7 +984,9 @@ void main() {
         // 点击 + -> 运行命令，立即弹出 / 联想面板。
         await tester.tap(attach);
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.commandOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.commandOptionKey),
+        );
         await tester.pumpAndSettle();
 
         final panel = find.byKey(MobileComposerSuggestionPanel.panelKey);
@@ -1079,7 +1116,10 @@ void main() {
         fastSecond.complete(
           const MobileSearchPathsResult(
             entries: [
-              MobilePathEntry(path: 'lib/ab.dart', kind: MobilePathEntryKind.file),
+              MobilePathEntry(
+                path: 'lib/ab.dart',
+                kind: MobilePathEntryKind.file,
+              ),
             ],
             truncated: false,
           ),

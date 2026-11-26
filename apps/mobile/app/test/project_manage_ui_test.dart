@@ -38,7 +38,11 @@ class _ManageHost implements HostRequests {
             displayPath: '~',
             parentRelPath: null,
             shortcuts: [
-              MobileProjectShortcut(label: '主目录', relPath: '', displayPath: '~'),
+              MobileProjectShortcut(
+                label: '主目录',
+                relPath: '',
+                displayPath: '~',
+              ),
               MobileProjectShortcut(
                 label: 'workspace',
                 relPath: 'Documents/workspace',
@@ -190,7 +194,10 @@ void main() {
       await tester.tap(find.byKey(SettingsHubScreen.projectsTileKey));
       await tester.pumpAndSettle();
       expect(find.text('Pigcode'), findsOneWidget);
-      expect(find.textContaining('~/Documents/workspace/pigcode'), findsOneWidget);
+      expect(
+        find.textContaining('~/Documents/workspace/pigcode'),
+        findsOneWidget,
+      );
 
       // Open directory picker, tap shortcut, quick-add new-repo with custom name.
       await tester.tap(find.byKey(ProjectManageScreen.addButtonKey));
@@ -206,7 +213,9 @@ void main() {
 
       await tester.tap(
         find.byKey(
-          ProjectDirectoryPickerScreen.quickAddKey('Documents/workspace/new-repo'),
+          ProjectDirectoryPickerScreen.quickAddKey(
+            'Documents/workspace/new-repo',
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -254,54 +263,55 @@ void main() {
     },
   );
 
-  testWidgets('SidebarMenu exposes add-project button and long-press project actions', (
-    tester,
-  ) async {
-    var addedTapped = false;
-    String? renamedId;
-    String? removedId;
-    final focus = FocusNode();
-    addTearDown(focus.dispose);
+  testWidgets(
+    'SidebarMenu exposes add-project button and long-press project actions',
+    (tester) async {
+      var addedTapped = false;
+      String? renamedId;
+      String? removedId;
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
 
-    const project = MobileProjectSummary(id: 'pr_1', name: 'AlphaRepo');
-    final snapshot = SidebarSnapshot(
-      projects: const [project],
-      threads: const [],
-      syncedAt: DateTime(2026, 11, 26),
-    );
+      const project = MobileProjectSummary(id: 'pr_1', name: 'AlphaRepo');
+      final snapshot = SidebarSnapshot(
+        projects: const [project],
+        threads: const [],
+        syncedAt: DateTime(2026, 11, 26),
+      );
 
-    await tester.pumpWidget(
-      _app(
-        SidebarMenu(
-          snapshot: snapshot,
-          selectedId: null,
-          computerName: 'TestMac',
-          online: true,
-          onSelect: (_) {},
-          onComputers: () {},
-          focusNode: focus,
-          onNewThread: (_) {},
-          onAddProject: () => addedTapped = true,
-          onRenameProject: (p) => renamedId = p.id,
-          onRemoveProject: (p) => removedId = p.id,
+      await tester.pumpWidget(
+        _app(
+          SidebarMenu(
+            snapshot: snapshot,
+            selectedId: null,
+            computerName: 'TestMac',
+            online: true,
+            onSelect: (_) {},
+            onComputers: () {},
+            focusNode: focus,
+            onNewThread: (_) {},
+            onAddProject: () => addedTapped = true,
+            onRenameProject: (p) => renamedId = p.id,
+            onRemoveProject: (p) => removedId = p.id,
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byKey(SidebarMenu.addProjectButtonKey));
-    expect(addedTapped, isTrue);
+      await tester.tap(find.byKey(SidebarMenu.addProjectButtonKey));
+      expect(addedTapped, isTrue);
 
-    await tester.longPress(find.text('AlphaRepo'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('重命名项目'));
-    await tester.pumpAndSettle();
-    expect(renamedId, 'pr_1');
+      await tester.longPress(find.text('AlphaRepo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('重命名项目'));
+      await tester.pumpAndSettle();
+      expect(renamedId, 'pr_1');
 
-    await tester.longPress(find.text('AlphaRepo'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('从列表移除'));
-    await tester.pumpAndSettle();
-    expect(removedId, 'pr_1');
-  });
+      await tester.longPress(find.text('AlphaRepo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('从列表移除'));
+      await tester.pumpAndSettle();
+      expect(removedId, 'pr_1');
+    },
+  );
 }

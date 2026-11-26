@@ -23,7 +23,13 @@ import 'package:pigcode_mobile/timeline_view.dart';
 import 'package:pigcode_mobile/timeline_widgets.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
-Uint8List _testPng({int width = 40, int height = 30, int r = 60, int g = 140, int b = 220}) {
+Uint8List _testPng({
+  int width = 40,
+  int height = 30,
+  int r = 60,
+  int g = 140,
+  int b = 220,
+}) {
   final image = img.Image(width: width, height: height, numChannels: 3);
   img.fill(image, color: img.ColorRgb8(r, g, b));
   return Uint8List.fromList(img.encodePng(image));
@@ -73,13 +79,17 @@ class _AttachmentHost implements HostRequests {
   final readThumbCalls = <String>[];
   final readFullCalls = <String>[];
 
-  final _inFlight = <String, ({
-    String mimeType,
-    String fileName,
-    int? width,
-    int? height,
-    BytesBuilder buffer,
-  })>{};
+  final _inFlight =
+      <
+        String,
+        ({
+          String mimeType,
+          String fileName,
+          int? width,
+          int? height,
+          BytesBuilder buffer,
+        })
+      >{};
 
   final queuedMessages = <QueuedMessage>[];
 
@@ -114,7 +124,10 @@ class _AttachmentHost implements HostRequests {
         final entry = _inFlight[uploadId];
         final data = base64Decode(params['dataBase64'] as String);
         entry?.buffer.add(data);
-        return {'uploadId': uploadId, 'receivedBytes': entry?.buffer.length ?? 0};
+        return {
+          'uploadId': uploadId,
+          'receivedBytes': entry?.buffer.length ?? 0,
+        };
 
       case MobileAttachmentMethods.uploadCancel:
         final uploadId = params['uploadId'] as String;
@@ -169,7 +182,8 @@ class _AttachmentHost implements HostRequests {
           failFullReadOnce = false;
           throw const ConnectionFailure('closed');
         }
-        final bytes = fullBytesById[attachmentId] ?? _testPng(width: 80, height: 60);
+        final bytes =
+            fullBytesById[attachmentId] ?? _testPng(width: 80, height: 60);
         return {
           'attachment': MobileAttachmentRef(
             id: attachmentId,
@@ -391,28 +405,37 @@ void main() {
         final modern = _AttachmentConnection(host, supportsAttachments: true);
         await tester.pumpWidget(
           scoped(
-            RunComposer(
-              connection: modern,
-              threadId: 'thread-1',
-              online: true,
-            ),
+            RunComposer(connection: modern, threadId: 'thread-1', online: true),
           ),
         );
         await tester.pumpAndSettle();
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        expect(find.byKey(MobileComposerAttachButton.galleryOptionKey), findsOneWidget);
-        expect(find.byKey(MobileComposerAttachButton.cameraOptionKey), findsOneWidget);
+        expect(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(MobileComposerAttachButton.cameraOptionKey),
+          findsOneWidget,
+        );
         expect(find.text('相册选图'), findsOneWidget);
         expect(find.text('拍照'), findsOneWidget);
-        expect(find.byKey(MobileComposerAttachButton.mentionOptionKey), findsOneWidget);
+        expect(
+          find.byKey(MobileComposerAttachButton.mentionOptionKey),
+          findsOneWidget,
+        );
 
         // 关闭弹窗后切换为不支持附件的旧版电脑。
         Navigator.of(tester.element(find.text('相册选图'))).pop();
         await tester.pumpAndSettle();
 
-        final legacy = _AttachmentConnection(host, supportsAttachments: false, seed: 8);
+        final legacy = _AttachmentConnection(
+          host,
+          supportsAttachments: false,
+          seed: 8,
+        );
         await tester.pumpWidget(
           scoped(
             RunComposer(
@@ -427,9 +450,18 @@ void main() {
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        expect(find.byKey(MobileComposerAttachButton.galleryOptionKey), findsNothing);
-        expect(find.byKey(MobileComposerAttachButton.cameraOptionKey), findsNothing);
-        expect(find.byKey(MobileComposerAttachButton.mentionOptionKey), findsOneWidget);
+        expect(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+          findsNothing,
+        );
+        expect(
+          find.byKey(MobileComposerAttachButton.cameraOptionKey),
+          findsNothing,
+        );
+        expect(
+          find.byKey(MobileComposerAttachButton.mentionOptionKey),
+          findsOneWidget,
+        );
       },
     );
 
@@ -440,10 +472,7 @@ void main() {
         final conn = _AttachmentConnection(host);
         final paths = <PickedLocalImage>[];
         for (var i = 0; i < 7; i++) {
-          final p = addFakeFile(
-            'pic-$i.png',
-            _testPng(r: 20 + i * 20),
-          );
+          final p = addFakeFile('pic-$i.png', _testPng(r: 20 + i * 20));
           paths.add((path: p, name: 'pic-$i.png'));
         }
         picker.nextGallery = paths;
@@ -461,11 +490,16 @@ void main() {
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.galleryOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+        );
         await tester.pumpAndSettle();
 
         expect(picker.lastGalleryLimit, 6);
-        expect(find.byKey(ComposerAttachmentStrip.errorBannerKey), findsOneWidget);
+        expect(
+          find.byKey(ComposerAttachmentStrip.errorBannerKey),
+          findsOneWidget,
+        );
         expect(find.textContaining('最多添加 6 张'), findsOneWidget);
         expect(
           find.byWidgetPredicate(
@@ -482,7 +516,9 @@ void main() {
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
         expect(find.text('已达上限'), findsNWidgets(2));
-        await tester.tap(find.byKey(MobileComposerAttachButton.cameraOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.cameraOptionKey),
+        );
         await tester.pumpAndSettle();
         expect(picker.cameraCalls, 0);
       },
@@ -496,10 +532,7 @@ void main() {
         final gate = Completer<void>();
         final host = _AttachmentHost(chunkGate: gate);
         final conn = _AttachmentConnection(host);
-        final path = addFakeFile(
-          'uploading.png',
-          _testPng(),
-        );
+        final path = addFakeFile('uploading.png', _testPng());
         picker.nextCamera = (path: path, name: 'uploading.png');
 
         await tester.pumpWidget(
@@ -515,7 +548,9 @@ void main() {
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.cameraOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.cameraOptionKey),
+        );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 50));
 
@@ -544,10 +579,7 @@ void main() {
       (tester) async {
         final host = _AttachmentHost(failUploadOnce: true);
         final conn = _AttachmentConnection(host);
-        final path = addFakeFile(
-          'retry.png',
-          _testPng(),
-        );
+        final path = addFakeFile('retry.png', _testPng());
         picker.nextGallery = [(path: path, name: 'retry.png')];
 
         await tester.pumpWidget(
@@ -567,7 +599,9 @@ void main() {
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.galleryOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+        );
         await tester.pumpAndSettle();
 
         // 首次上传失败，展示失败遮罩与重试入口。
@@ -605,10 +639,7 @@ void main() {
       (tester) async {
         final host = _AttachmentHost(supportsImages: false);
         final conn = _AttachmentConnection(host);
-        final path = addFakeFile(
-          'pure.png',
-          _testPng(),
-        );
+        final path = addFakeFile('pure.png', _testPng());
         picker.nextGallery = [(path: path, name: 'pure.png')];
 
         await tester.pumpWidget(
@@ -639,7 +670,9 @@ void main() {
 
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.galleryOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+        );
         await tester.pumpAndSettle();
 
         // 不支持原生看图的 Agent 展示降级轻提示。
@@ -735,9 +768,7 @@ void main() {
           scoped(
             NewThreadDraft(
               connection: conn,
-              projects: const [
-                MobileProjectSummary(id: 'proj-1', name: '主项目'),
-              ],
+              projects: const [MobileProjectSummary(id: 'proj-1', name: '主项目')],
               online: true,
               onAccepted: (receipt) => accepted = receipt,
             ),
@@ -748,7 +779,9 @@ void main() {
         expect(find.text('做点什么？'), findsOneWidget);
         await tester.tap(find.byKey(MobileComposerAttachButton.buttonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.byKey(MobileComposerAttachButton.galleryOptionKey));
+        await tester.tap(
+          find.byKey(MobileComposerAttachButton.galleryOptionKey),
+        );
         await tester.pumpAndSettle();
 
         expect(find.text('做点什么？'), findsNothing);
@@ -884,32 +917,35 @@ void main() {
   });
 
   group('timeline attachment grid & full-screen viewer', () {
-    test('computes bounded single image aspect size and 2/3-column grid counts', () {
-      final tallScreenshot = computeSingleAttachmentSize(
-        width: 800,
-        height: 4000,
-        maxWidth: 260,
-        maxHeight: 280,
-      );
-      expect(tallScreenshot.height, lessThanOrEqualTo(280));
-      expect(tallScreenshot.width, greaterThanOrEqualTo(96));
+    test(
+      'computes bounded single image aspect size and 2/3-column grid counts',
+      () {
+        final tallScreenshot = computeSingleAttachmentSize(
+          width: 800,
+          height: 4000,
+          maxWidth: 260,
+          maxHeight: 280,
+        );
+        expect(tallScreenshot.height, lessThanOrEqualTo(280));
+        expect(tallScreenshot.width, greaterThanOrEqualTo(96));
 
-      final widePhoto = computeSingleAttachmentSize(
-        width: 1920,
-        height: 1080,
-        maxWidth: 260,
-        maxHeight: 280,
-      );
-      expect(widePhoto.width, closeTo(260, 0.1));
-      expect(widePhoto.height, closeTo(146.25, 0.5));
+        final widePhoto = computeSingleAttachmentSize(
+          width: 1920,
+          height: 1080,
+          maxWidth: 260,
+          maxHeight: 280,
+        );
+        expect(widePhoto.width, closeTo(260, 0.1));
+        expect(widePhoto.height, closeTo(146.25, 0.5));
 
-      expect(timelineAttachmentGridColumns(1), 1);
-      expect(timelineAttachmentGridColumns(2), 2);
-      expect(timelineAttachmentGridColumns(3), 3);
-      expect(timelineAttachmentGridColumns(4), 2);
-      expect(timelineAttachmentGridColumns(5), 3);
-      expect(timelineAttachmentGridColumns(6), 3);
-    });
+        expect(timelineAttachmentGridColumns(1), 1);
+        expect(timelineAttachmentGridColumns(2), 2);
+        expect(timelineAttachmentGridColumns(3), 3);
+        expect(timelineAttachmentGridColumns(4), 2);
+        expect(timelineAttachmentGridColumns(5), 3);
+        expect(timelineAttachmentGridColumns(6), 3);
+      },
+    );
 
     testWidgets(
       'renders 3-image user bubble grid, opens full-screen viewer at tapped index, transitions thumb -> full, swipes pages, and retries failed full load',
@@ -1013,38 +1049,55 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byKey(TimelineUserAttachmentGrid.gridKey), findsOneWidget);
-        expect(find.byKey(const ValueKey('timeline-attachment-img-1')), findsOneWidget);
-        expect(find.byKey(const ValueKey('timeline-attachment-img-2')), findsOneWidget);
-        expect(find.byKey(const ValueKey('timeline-attachment-img-3')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('timeline-attachment-img-1')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('timeline-attachment-img-2')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('timeline-attachment-img-3')),
+          findsOneWidget,
+        );
         // 纯图消息不显示空文本复制按钮。
         expect(find.byTooltip('复制'), findsNothing);
         expect(host.readThumbCalls, containsAll(['img-1', 'img-2', 'img-3']));
 
         // 点击第 2 张图片，打开全屏查看器并定位到 2 / 3，先展示已缓存的缩略图。
-        await tester.tap(find.byKey(const ValueKey('timeline-attachment-img-2')));
+        await tester.tap(
+          find.byKey(const ValueKey('timeline-attachment-img-2')),
+        );
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 300));
 
         expect(find.byKey(ImageViewerPage.pageKey), findsOneWidget);
         expect(find.text('2 / 3'), findsOneWidget);
         expect(find.text('second.png'), findsOneWidget);
-        expect(find.byKey(const ValueKey('image-viewer-thumb-img-2')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('image-viewer-thumb-img-2')),
+          findsOneWidget,
+        );
         expect(find.text('加载原图中…'), findsOneWidget);
 
         // 放行首次原图请求（配置为失败一次）：缩略图保持可见，显示重试按钮。
         fullGate.complete();
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('image-viewer-thumb-img-2')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('image-viewer-thumb-img-2')),
+          findsOneWidget,
+        );
         expect(find.byKey(ImageViewerPage.retryButtonKey), findsOneWidget);
 
         // 点击重试，加载高清原图成功并平滑切换为 full，且写入 attachment_cache。
         await tester.tap(find.byKey(ImageViewerPage.retryButtonKey));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('image-viewer-full-img-2')), findsOneWidget);
         expect(
-          await cache.readFull(conn.computer.computerKey, 'img-2'),
-          full2,
+          find.byKey(const ValueKey('image-viewer-full-img-2')),
+          findsOneWidget,
         );
+        expect(await cache.readFull(conn.computer.computerKey, 'img-2'), full2);
 
         // 左右滑动切换到第 3 张，页码与文件名更新为 3 / 3 / third.png。
         await tester.fling(
@@ -1055,7 +1108,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('3 / 3'), findsOneWidget);
         expect(find.text('third.png'), findsOneWidget);
-        expect(find.byKey(const ValueKey('image-viewer-full-img-3')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('image-viewer-full-img-3')),
+          findsOneWidget,
+        );
 
         // 点关闭按钮返回时间线。
         await tester.tap(find.byKey(ImageViewerPage.closeButtonKey));

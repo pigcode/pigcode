@@ -118,14 +118,12 @@ class _WriteHost implements HostRequests {
 }
 
 class _FakeWriteConnection implements MobileConnection {
-  _FakeWriteConnection(
-    HostRequests rpc, {
-    this.supportsWorkbenchWrite = true,
-  }) : workbench = MobileWorkbenchCommands(rpc, supportsWorkbenchRead: true),
-       workbenchWrite = MobileWorkbenchWriteClient(
-         rpc,
-         supportsWorkbenchWrite: supportsWorkbenchWrite,
-       );
+  _FakeWriteConnection(HostRequests rpc, {this.supportsWorkbenchWrite = true})
+    : workbench = MobileWorkbenchCommands(rpc, supportsWorkbenchRead: true),
+      workbenchWrite = MobileWorkbenchWriteClient(
+        rpc,
+        supportsWorkbenchWrite: supportsWorkbenchWrite,
+      );
 
   @override
   final bool supportsWorkbenchWrite;
@@ -143,10 +141,8 @@ class _FakeWriteConnection implements MobileConnection {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _app(Widget child) => MaterialApp(
-  theme: pigcodeTheme(Brightness.light),
-  home: child,
-);
+Widget _app(Widget child) =>
+    MaterialApp(theme: pigcodeTheme(Brightness.light), home: child);
 
 void main() {
   testWidgets(
@@ -316,7 +312,10 @@ void main() {
       await tester.pumpWidget(
         _app(
           MobileFileViewerScreen(
-            connection: _FakeWriteConnection(host, supportsWorkbenchWrite: true),
+            connection: _FakeWriteConnection(
+              host,
+              supportsWorkbenchWrite: true,
+            ),
             threadId: 'th_1',
             path: 'big.log',
           ),

@@ -274,7 +274,10 @@ void main() {
 
       expect(find.text('Claude Code'), findsWidgets);
       expect(find.text('公司号'), findsOneWidget);
-      expect(find.textContaining('已安装 2.0.0 · Max · claude.ai'), findsOneWidget);
+      expect(
+        find.textContaining('已安装 2.0.0 · Max · claude.ai'),
+        findsOneWidget,
+      );
 
       // Default instance hides enable toggle; custom instance exposes toggle.
       expect(find.byKey(AgentManageScreen.toggleKey('claude')), findsNothing);
@@ -380,13 +383,13 @@ void main() {
       final defaultUpdate = host.calls.lastWhere(
         (c) => c.method == MobileAgentMethods.updateInstance,
       );
-      final defaultPatch = defaultUpdate.params['patch']! as Map<String, Object?>;
+      final defaultPatch =
+          defaultUpdate.params['patch']! as Map<String, Object?>;
       expect(defaultPatch.containsKey('label'), isFalse);
       expect(defaultPatch.containsKey('accentColor'), isFalse);
-      expect(
-        (defaultPatch['values']! as Map)['apiKey'],
-        const {'configured': true},
-      );
+      expect((defaultPatch['values']! as Map)['apiKey'], const {
+        'configured': true,
+      });
 
       // 3. Edit custom instance: replace secret, add custom model, hide builtin model, then delete.
       await tester.tap(
@@ -450,8 +453,7 @@ void main() {
             c.method == MobileAgentMethods.updateInstance &&
             c.params['instanceId'] == 'claude-work',
       );
-      final workValues =
-          (workUpdate.params['patch']! as Map)['values']! as Map;
+      final workValues = (workUpdate.params['patch']! as Map)['values']! as Map;
       expect(workValues['apiKey'], const {'secret': 'sk-new-secret'});
       expect(
         workValues[mobileAgentCustomModelsKey],
@@ -491,56 +493,59 @@ void main() {
     },
   );
 
-  testWidgets('AgentInstanceEditorScreen collapses long model catalogs until expanded', (
-    tester,
-  ) async {
-    final host = _LargeModelCatalogHost();
-    final conn = _FakeAgentConnection(host);
-    final notifier = ValueNotifier<MobileConnection?>(conn);
-    addTearDown(notifier.dispose);
+  testWidgets(
+    'AgentInstanceEditorScreen collapses long model catalogs until expanded',
+    (tester) async {
+      final host = _LargeModelCatalogHost();
+      final conn = _FakeAgentConnection(host);
+      final notifier = ValueNotifier<MobileConnection?>(conn);
+      addTearDown(notifier.dispose);
 
-    await tester.pumpWidget(
-      _wrap(
-        AgentInstanceEditorScreen(
-          connectionListenable: notifier,
-          agent: const MobileAgentSummary(
-            agentId: 'claude',
-            displayName: 'Claude Code',
-            builtin: true,
-            enabled: true,
-            registered: true,
-            requiresInstance: false,
-            acpRegistry: false,
-            secretReferences: false,
-            customModels: true,
-            fields: [],
-            instances: [],
-          ),
-          instance: const MobileAgentInstance(
-            instanceId: 'claude-extra',
-            agentId: 'claude',
-            label: '多模型实例',
-            enabled: true,
-            isDefault: false,
-            values: {},
+      await tester.pumpWidget(
+        _wrap(
+          AgentInstanceEditorScreen(
+            connectionListenable: notifier,
+            agent: const MobileAgentSummary(
+              agentId: 'claude',
+              displayName: 'Claude Code',
+              builtin: true,
+              enabled: true,
+              registered: true,
+              requiresInstance: false,
+              acpRegistry: false,
+              secretReferences: false,
+              customModels: true,
+              fields: [],
+              instances: [],
+            ),
+            instance: const MobileAgentInstance(
+              instanceId: 'claude-extra',
+              agentId: 'claude',
+              label: '多模型实例',
+              enabled: true,
+              isDefault: false,
+              values: {},
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('展开全部 10 个模型'), findsOneWidget);
-    expect(find.text('Model 9'), findsNothing);
+      expect(find.text('展开全部 10 个模型'), findsOneWidget);
+      expect(find.text('Model 9'), findsNothing);
 
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('agent-editor-models-toggle')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('agent-editor-models-toggle')));
-    await tester.pumpAndSettle();
-    expect(find.text('收起模型列表'), findsOneWidget);
-    expect(find.text('Model 9'), findsOneWidget);
-  });
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('agent-editor-models-toggle')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('agent-editor-models-toggle')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('收起模型列表'), findsOneWidget);
+      expect(find.text('Model 9'), findsOneWidget);
+    },
+  );
 }
 
 class _LargeModelCatalogHost implements HostRequests {

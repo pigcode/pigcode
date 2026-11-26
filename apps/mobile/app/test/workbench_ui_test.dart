@@ -85,7 +85,10 @@ class _FakeHost implements HostRequests {
           return (await onReadFile!(params)).toJson();
         }
         throw const MobileRpcFailure(
-          MobileRpcProblem(code: 'RESOURCE_NOT_AVAILABLE', message: 'Not found'),
+          MobileRpcProblem(
+            code: 'RESOURCE_NOT_AVAILABLE',
+            message: 'Not found',
+          ),
         );
       case MobileWorkbenchMethods.search:
         if (onSearchFiles != null) {
@@ -108,8 +111,10 @@ class _FakeHost implements HostRequests {
         if (onPrStatus != null) {
           return (await onPrStatus!(params)).toJson();
         }
-        return const MobilePrStatusResult(status: 'no-pr', branch: 'main')
-            .toJson();
+        return const MobilePrStatusResult(
+          status: 'no-pr',
+          branch: 'main',
+        ).toJson();
       case QueueMethods.get:
         return QueueSnapshot(
           threadId: (params['threadId'] as String?) ?? 'thread-1',
@@ -253,19 +258,17 @@ class _LegacyStubConnection implements MobileConnection {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _wrapApp(
-  Widget child, {
-  Brightness brightness = Brightness.light,
-}) => ProviderScope(
-  child: MaterialApp(
-    theme: pigcodeTheme(brightness),
-    builder: (context, inner) => MediaQuery(
-      data: MediaQuery.of(context).copyWith(disableAnimations: true),
-      child: inner!,
-    ),
-    home: child,
-  ),
-);
+Widget _wrapApp(Widget child, {Brightness brightness = Brightness.light}) =>
+    ProviderScope(
+      child: MaterialApp(
+        theme: pigcodeTheme(brightness),
+        builder: (context, inner) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(disableAnimations: true),
+          child: inner!,
+        ),
+        home: child,
+      ),
+    );
 
 void main() {
   setUp(() {
@@ -275,29 +278,26 @@ void main() {
   group('workbench utils', () {
     test('connectionSupportsWorkbenchRead degrades safely on legacy stub', () {
       expect(connectionSupportsWorkbenchRead(null), isFalse);
-      expect(
-        connectionSupportsWorkbenchRead(_LegacyStubConnection()),
-        isFalse,
-      );
+      expect(connectionSupportsWorkbenchRead(_LegacyStubConnection()), isFalse);
     });
 
     test('parseFileReference handles mentions, line numbers and formats', () {
-      expect(
-        parseFileReference('@lib/main.dart:42'),
-        (path: 'lib/main.dart', line: 42),
-      );
-      expect(
-        parseFileReference('main.dart:18:4'),
-        (path: 'main.dart', line: 18),
-      );
-      expect(
-        parseFileReference('./docs/guide.md#L7'),
-        (path: 'docs/guide.md', line: 7),
-      );
-      expect(
-        parseFileReference('src\\app\\index.ts'),
-        (path: 'src/app/index.ts', line: null),
-      );
+      expect(parseFileReference('@lib/main.dart:42'), (
+        path: 'lib/main.dart',
+        line: 42,
+      ));
+      expect(parseFileReference('main.dart:18:4'), (
+        path: 'main.dart',
+        line: 18,
+      ));
+      expect(parseFileReference('./docs/guide.md#L7'), (
+        path: 'docs/guide.md',
+        line: 7,
+      ));
+      expect(parseFileReference('src\\app\\index.ts'), (
+        path: 'src/app/index.ts',
+        line: null,
+      ));
     });
 
     test('formatFileSize formats bytes, KB and MB cleanly', () {
@@ -626,7 +626,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.text('main.dart'), findsOneWidget);
-        expect(find.byKey(const ValueKey('workbench-crumb-src')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('workbench-crumb-src')),
+          findsOneWidget,
+        );
         expect(
           find.byKey(const ValueKey('workbench-crumb-src/mobile')),
           findsOneWidget,
@@ -744,10 +747,9 @@ void main() {
         );
         expect(targetLineFinder, findsOneWidget);
         final targetContainer = tester.widget<Container>(
-          find.ancestor(
-            of: targetLineFinder,
-            matching: find.byType(Container),
-          ).first,
+          find
+              .ancestor(of: targetLineFinder, matching: find.byType(Container))
+              .first,
         );
         expect(targetContainer.decoration, isA<BoxDecoration>());
         expect((targetContainer.decoration! as BoxDecoration).color, isNotNull);
@@ -858,7 +860,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(GptMarkdown), findsNothing);
         expect(find.text('预览'), findsOneWidget);
-        expect(find.byKey(const ValueKey('file-viewer-line-1')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-viewer-line-1')),
+          findsOneWidget,
+        );
 
         // 带 initialLine 跳入时默认切到源码并高亮对应行。
         await tester.pumpWidget(
@@ -873,7 +878,10 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.byType(GptMarkdown), findsNothing);
-        expect(find.byKey(const ValueKey('file-viewer-line-3')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-viewer-line-3')),
+          findsOneWidget,
+        );
       },
     );
 
@@ -1103,7 +1111,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(MobileFileViewerScreen), findsOneWidget);
         expect(find.text('lib/main.dart'), findsOneWidget);
-        expect(find.byKey(const ValueKey('file-viewer-line-42')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('file-viewer-line-42')),
+          findsOneWidget,
+        );
         await tester.tap(find.byTooltip('返回'));
         await tester.pumpAndSettle();
 
@@ -1213,10 +1224,9 @@ void main() {
 
         await tester.tap(find.byKey(PrStatusTab.openBrowserButtonKey));
         await tester.pumpAndSettle();
-        expect(
-          openedUris,
-          [Uri.parse('https://github.com/pigcode/pigcode/pull/151')],
-        );
+        expect(openedUris, [
+          Uri.parse('https://github.com/pigcode/pigcode/pull/151'),
+        ]);
 
         await tester.tap(find.byKey(PrStatusTab.copyLinkButtonKey));
         await tester.pumpAndSettle();
@@ -1229,11 +1239,7 @@ void main() {
     );
 
     for (final testCase in const [
-      (
-        status: 'no-pr',
-        branch: 'feat/no-pr-branch',
-        expectedText: '尚未创建 PR',
-      ),
+      (status: 'no-pr', branch: 'feat/no-pr-branch', expectedText: '尚未创建 PR'),
       (status: 'not-git', branch: null, expectedText: '当前项目不是 Git 仓库'),
       (status: 'no-remote', branch: 'main', expectedText: '未配置 GitHub 远端'),
       (

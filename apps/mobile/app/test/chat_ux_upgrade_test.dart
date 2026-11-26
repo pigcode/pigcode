@@ -19,11 +19,7 @@ const _threadId = 'optimistic-thread';
 final _input = find.byKey(const ValueKey('run-composer-input'));
 
 class _FakeHost implements HostRequests {
-  _FakeHost({
-    this.dropStart = false,
-    this.rejectStart = false,
-    this.startGate,
-  });
+  _FakeHost({this.dropStart = false, this.rejectStart = false, this.startGate});
 
   bool dropStart;
   bool rejectStart;
@@ -84,10 +80,7 @@ class _FakeHost implements HostRequests {
     switch (method) {
       case MobileTimelineMethods.subscribe:
         return {
-          'page': {
-            'events': _events,
-            'through': _nextSeq - 1,
-          },
+          'page': {'events': _events, 'through': _nextSeq - 1},
         };
       case MobileTimelineMethods.unsubscribe:
         return <String, dynamic>{};
@@ -121,7 +114,9 @@ class _FakeConnection implements MobileConnection {
       computer = ComputerProfile(
         address: 'wss://localhost/ws/v1/connect',
         token: 'fixture',
-        computerKey: base64Url.encode(List<int>.filled(32, 7)).replaceAll('=', ''),
+        computerKey: base64Url
+            .encode(List<int>.filled(32, 7))
+            .replaceAll('=', ''),
         name: '测试电脑',
       );
 
@@ -161,9 +156,9 @@ class _FakeConnection implements MobileConnection {
 Widget _panePage(MobileConnection connection, {bool online = true}) =>
     ProviderScope(
       child: MaterialApp(
-        theme: pigcodeTheme(Brightness.light).copyWith(
-          platform: TargetPlatform.iOS,
-        ),
+        theme: pigcodeTheme(
+          Brightness.light,
+        ).copyWith(platform: TargetPlatform.iOS),
         home: Scaffold(
           body: TimelinePane(
             connection: connection,
@@ -178,46 +173,45 @@ Widget _panePage(MobileConnection connection, {bool online = true}) =>
 void main() {
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
-  testWidgets(
-    'tightens cursorHeight and wires QQ-style keyboard send action',
-    (tester) async {
-      final controller = TextEditingController();
-      String? submitted;
-      addTearDown(controller.dispose);
+  testWidgets('tightens cursorHeight and wires QQ-style keyboard send action', (
+    tester,
+  ) async {
+    final controller = TextEditingController();
+    String? submitted;
+    addTearDown(controller.dispose);
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: pigcodeTheme(Brightness.light).copyWith(
-            platform: TargetPlatform.iOS,
-          ),
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child: MobileComposerCard(
-                controller: controller,
-                inputKey: const ValueKey('qq-input'),
-                hintText: '回复…',
-                onSubmitted: (value) => submitted = value,
-                actions: const [],
-              ),
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: pigcodeTheme(
+          Brightness.light,
+        ).copyWith(platform: TargetPlatform.iOS),
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.bottomCenter,
+            child: MobileComposerCard(
+              controller: controller,
+              inputKey: const ValueKey('qq-input'),
+              hintText: '回复…',
+              onSubmitted: (value) => submitted = value,
+              actions: const [],
             ),
           ),
         ),
-      );
+      ),
+    );
 
-      final field = tester.widget<TextField>(
-        find.byKey(const ValueKey('qq-input')),
-      );
-      expect(field.cursorHeight, ComposerControl.cursorHeight);
-      expect(field.textInputAction, TextInputAction.send);
-      expect(field.keyboardType, TextInputType.text);
+    final field = tester.widget<TextField>(
+      find.byKey(const ValueKey('qq-input')),
+    );
+    expect(field.cursorHeight, ComposerControl.cursorHeight);
+    expect(field.textInputAction, TextInputAction.send);
+    expect(field.keyboardType, TextInputType.text);
 
-      await tester.enterText(find.byKey(const ValueKey('qq-input')), '你好');
-      await tester.testTextInput.receiveAction(TextInputAction.send);
-      await tester.pump();
-      expect(submitted, '你好');
-    },
-  );
+    await tester.enterText(find.byKey(const ValueKey('qq-input')), '你好');
+    await tester.testTextInput.receiveAction(TextInputAction.send);
+    await tester.pump();
+    expect(submitted, '你好');
+  });
 
   testWidgets(
     'clears input immediately on keyboard send, shows optimistic bubble, and reconciles without duplication',
@@ -239,13 +233,19 @@ void main() {
 
       expect(tester.widget<TextField>(_input).controller!.text, isEmpty);
       expect(find.text('直接键盘发送'), findsOneWidget);
-      expect(find.byKey(TimelineOptimisticUserBubble.sendingSpinnerKey), findsOneWidget);
+      expect(
+        find.byKey(TimelineOptimisticUserBubble.sendingSpinnerKey),
+        findsOneWidget,
+      );
 
       gate.complete();
       await tester.pumpAndSettle();
       // Host 已确认但时间线尚未推回 message.user 时，气泡仍保持可见且转圈消失。
       expect(find.text('直接键盘发送'), findsOneWidget);
-      expect(find.byKey(TimelineOptimisticUserBubble.sendingSpinnerKey), findsNothing);
+      expect(
+        find.byKey(TimelineOptimisticUserBubble.sendingSpinnerKey),
+        findsNothing,
+      );
 
       // 正式事件推回后无缝接管，不出现重复气泡。
       host.emitUserEvent(runId: 'run-new', text: '直接键盘发送');
@@ -358,9 +358,7 @@ void main() {
         const MaterialApp(
           home: Scaffold(
             body: Center(
-              child: MobileGlassSurface(
-                child: SizedBox(width: 44, height: 44),
-              ),
+              child: MobileGlassSurface(child: SizedBox(width: 44, height: 44)),
             ),
           ),
         ),
@@ -392,37 +390,38 @@ void main() {
     },
   );
 
-  testWidgets('keeps glass surface on offline MobileComposerCard when glass is enabled', (
-    tester,
-  ) async {
-    addTearDown(() => MobileNativeGlass.instance.setSupportedForTest(false));
-    MobileNativeGlass.instance.setSupportedForTest(true);
-    final controller = TextEditingController();
-    addTearDown(controller.dispose);
+  testWidgets(
+    'keeps glass surface on offline MobileComposerCard when glass is enabled',
+    (tester) async {
+      addTearDown(() => MobileNativeGlass.instance.setSupportedForTest(false));
+      MobileNativeGlass.instance.setSupportedForTest(true);
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: pigcodeTheme(Brightness.light).copyWith(
-          platform: TargetPlatform.iOS,
-        ),
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.bottomCenter,
-            child: MobileComposerCard(
-              controller: controller,
-              hintText: '电脑离线，消息发不出去',
-              offline: true,
-              glass: true,
-              actions: const [],
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: pigcodeTheme(
+            Brightness.light,
+          ).copyWith(platform: TargetPlatform.iOS),
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.bottomCenter,
+              child: MobileComposerCard(
+                controller: controller,
+                hintText: '电脑离线，消息发不出去',
+                offline: true,
+                glass: true,
+                actions: const [],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    expect(find.byType(MobileGlassSurface), findsOneWidget);
-    expect(find.byType(UiKitView), findsOneWidget);
-  });
+      expect(find.byType(MobileGlassSurface), findsOneWidget);
+      expect(find.byType(UiKitView), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'MobileGlassSheetSurface, MobileGlassChromeButton, and MobileGlassDialog pass expected native shapes',
@@ -455,7 +454,9 @@ void main() {
         ),
       );
 
-      final views = tester.widgetList<UiKitView>(find.byType(UiKitView)).toList();
+      final views = tester
+          .widgetList<UiKitView>(find.byType(UiKitView))
+          .toList();
       expect(views, hasLength(3));
       expect((views[0].creationParams as Map)['shape'], 'capsule');
       expect((views[1].creationParams as Map)['shape'], 'topRounded');

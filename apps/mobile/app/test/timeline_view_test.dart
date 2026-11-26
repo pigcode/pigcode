@@ -312,7 +312,8 @@ void main() {
             kind: MobileTimelineKind.toolStarted,
             itemId: 'e-ok',
             name: 'Edit',
-            text: '{"file_path":"lib/b.dart","old_string":"x","new_string":"y"}',
+            text:
+                '{"file_path":"lib/b.dart","old_string":"x","new_string":"y"}',
             createdAt: '2026-11-25T10:00:09.000Z',
           ),
           MobileTimelineEvent(
@@ -360,7 +361,10 @@ void main() {
       expect(find.text('结果'), findsNothing);
 
       // 2. Search / Fetch：无展开箭头 + 点按不弹参数/结果框。
-      for (final label in const ['TimelineToolRow', 'https://example.com/spec']) {
+      for (final label in const [
+        'TimelineToolRow',
+        'https://example.com/spec',
+      ]) {
         final row = rowFor(label);
         expect(
           find.descendant(of: row, matching: find.byIcon(Icons.chevron_right)),
@@ -857,7 +861,8 @@ void main() {
             kind: MobileTimelineKind.toolStarted,
             itemId: 'e2',
             name: 'Edit',
-            text: '{"file_path":"lib/b.dart","old_string":"a","new_string":"b"}',
+            text:
+                '{"file_path":"lib/b.dart","old_string":"a","new_string":"b"}',
             createdAt: '2026-11-25T10:00:06.000Z',
           ),
           MobileTimelineEvent(
@@ -893,9 +898,8 @@ void main() {
                 ),
                 online: true,
                 loadEarlier: () async {},
-                content:
-                    ({seq, runId, toolId, required field, offset}) async =>
-                        const MobileTimelineContentResult(text: ''),
+                content: ({seq, runId, toolId, required field, offset}) async =>
+                    const MobileTimelineContentResult(text: ''),
               ),
             ),
           ),
@@ -912,13 +916,19 @@ void main() {
           of: summaryRow,
           matching: find.byType(InkWell),
         );
-        expect(tester.getSize(summaryInk).height, greaterThanOrEqualTo(minTouch));
+        expect(
+          tester.getSize(summaryInk).height,
+          greaterThanOrEqualTo(minTouch),
+        );
         for (var i = 0; i < 2; i++) {
           final toolInk = find.descendant(
             of: toolRows.at(i),
             matching: find.byType(InkWell),
           );
-          expect(tester.getSize(toolInk).height, greaterThanOrEqualTo(minTouch));
+          expect(
+            tester.getSize(toolInk).height,
+            greaterThanOrEqualTo(minTouch),
+          );
         }
 
         // 2. 相邻两个单行工作项（待审批 Bash -> 独立 Read）之间不叠加 16px 冗余留白：
@@ -954,8 +964,10 @@ void main() {
   testWidgets(
     'clamps long user bubbles with mask and leaves short bubbles unmasked',
     (tester) async {
-      final longText = List.generate(12, (i) => '第 ${i + 1} 行用于测试超长气泡折叠行为。')
-          .join('\n');
+      final longText = List.generate(
+        12,
+        (i) => '第 ${i + 1} 行用于测试超长气泡折叠行为。',
+      ).join('\n');
       await tester.pumpWidget(
         MaterialApp(
           builder: (context, child) => MediaQuery(
@@ -1071,7 +1083,8 @@ void main() {
             kind: MobileTimelineKind.toolStarted,
             itemId: 'e1',
             name: 'Edit',
-            text: '{"file_path":"lib/a.dart","old_string":"a","new_string":"b"}',
+            text:
+                '{"file_path":"lib/a.dart","old_string":"a","new_string":"b"}',
             createdAt: '2026-11-22T10:00:00.000Z',
           ),
           MobileTimelineEvent(
@@ -1162,10 +1175,7 @@ void main() {
       expect(find.text('第一行思考\n核对摘要分组逻辑'), findsOneWidget);
 
       await tester.pumpWidget(
-        page(
-          events,
-          live: live('第一行思考\n核对摘要分组逻辑\n准备继续执行', truncated: true),
-        ),
+        page(events, live: live('第一行思考\n核对摘要分组逻辑\n准备继续执行', truncated: true)),
       );
       await tester.pumpAndSettle();
       // 不再单独换行渲染「查看完整过程」，展开态自动原地拉取完整内容。
@@ -1400,7 +1410,10 @@ void main() {
       expect(find.text('<!DOCTYPE html>'), findsOneWidget);
       expect(find.text('<body>ok</body>'), findsOneWidget);
       expect(find.text('</html>'), findsOneWidget);
-      expect(find.text('File created successfully at: web/index.html'), findsNothing);
+      expect(
+        find.text('File created successfully at: web/index.html'),
+        findsNothing,
+      );
       expect(find.text('查看完整内容'), findsNothing);
     },
   );
@@ -1607,154 +1620,166 @@ void main() {
     },
   );
 
-  test('timeline_work helpers cover active item, empty shell, and approval splits', () {
-    const readEvent = MobileTimelineEvent(
-      seq: 1,
-      runId: 'r1',
-      kind: MobileTimelineKind.toolStarted,
-      itemId: 'r1',
-      name: 'Read',
-      text: '{"file_path":"a.dart"}',
-      createdAt: '2026-11-25T10:00:00Z',
-    );
-    const readDone = MobileTimelineEvent(
-      seq: 2,
-      runId: 'r1',
-      kind: MobileTimelineKind.toolCompleted,
-      itemId: 'r1',
-      name: 'Read',
-      text: 'ok',
-      createdAt: '2026-11-25T10:00:01Z',
-    );
-    const emptyBash = TimelineWork(
-      TimelineWorkKind.tool,
-      MobileTimelineEvent(
-        seq: 3,
+  test(
+    'timeline_work helpers cover active item, empty shell, and approval splits',
+    () {
+      const readEvent = MobileTimelineEvent(
+        seq: 1,
         runId: 'r1',
         kind: MobileTimelineKind.toolStarted,
-        itemId: 'b1',
-        name: 'Bash',
-        text: '{"command":"   "}',
-        createdAt: '2026-11-25T10:00:02Z',
-      ),
-    );
-    const describedBash = TimelineWork(
-      TimelineWorkKind.tool,
-      MobileTimelineEvent(
-        seq: 4,
+        itemId: 'r1',
+        name: 'Read',
+        text: '{"file_path":"a.dart"}',
+        createdAt: '2026-11-25T10:00:00Z',
+      );
+      const readDone = MobileTimelineEvent(
+        seq: 2,
         runId: 'r1',
-        kind: MobileTimelineKind.toolStarted,
-        itemId: 'b2',
-        name: 'Bash',
-        text: '{"description":"跑校验"}',
-        createdAt: '2026-11-25T10:00:03Z',
-      ),
-    );
-    const pendingBash = TimelineWork(
-      TimelineWorkKind.tool,
-      MobileTimelineEvent(
-        seq: 5,
-        runId: 'r1',
-        kind: MobileTimelineKind.toolStarted,
-        itemId: 'b3',
-        name: 'Bash',
-        text: '{"command":"rm -rf tmp"}',
-        createdAt: '2026-11-25T10:00:04Z',
-      ),
-      pendingApproval: true,
-    );
-    const liveReasoning = TimelineWork(
-      TimelineWorkKind.reasoning,
-      MobileTimelineEvent(
-        seq: 6,
-        runId: 'r1',
-        kind: MobileTimelineKind.reasoning,
-        text: '思考中',
-        createdAt: '2026-11-25T10:00:05Z',
-      ),
-      streaming: true,
-    );
-    const readWork = TimelineWork(
-      TimelineWorkKind.tool,
-      readEvent,
-      result: readDone,
-    );
+        kind: MobileTimelineKind.toolCompleted,
+        itemId: 'r1',
+        name: 'Read',
+        text: 'ok',
+        createdAt: '2026-11-25T10:00:01Z',
+      );
+      const emptyBash = TimelineWork(
+        TimelineWorkKind.tool,
+        MobileTimelineEvent(
+          seq: 3,
+          runId: 'r1',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'b1',
+          name: 'Bash',
+          text: '{"command":"   "}',
+          createdAt: '2026-11-25T10:00:02Z',
+        ),
+      );
+      const describedBash = TimelineWork(
+        TimelineWorkKind.tool,
+        MobileTimelineEvent(
+          seq: 4,
+          runId: 'r1',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'b2',
+          name: 'Bash',
+          text: '{"description":"跑校验"}',
+          createdAt: '2026-11-25T10:00:03Z',
+        ),
+      );
+      const pendingBash = TimelineWork(
+        TimelineWorkKind.tool,
+        MobileTimelineEvent(
+          seq: 5,
+          runId: 'r1',
+          kind: MobileTimelineKind.toolStarted,
+          itemId: 'b3',
+          name: 'Bash',
+          text: '{"command":"rm -rf tmp"}',
+          createdAt: '2026-11-25T10:00:04Z',
+        ),
+        pendingApproval: true,
+      );
+      const liveReasoning = TimelineWork(
+        TimelineWorkKind.reasoning,
+        MobileTimelineEvent(
+          seq: 6,
+          runId: 'r1',
+          kind: MobileTimelineKind.reasoning,
+          text: '思考中',
+          createdAt: '2026-11-25T10:00:05Z',
+        ),
+        streaming: true,
+      );
+      const readWork = TimelineWork(
+        TimelineWorkKind.tool,
+        readEvent,
+        result: readDone,
+      );
 
-    expect(isEmptyStreamingCommand(emptyBash, ended: false), isTrue);
-    expect(isEmptyStreamingCommand(emptyBash, ended: true), isFalse);
-    expect(isEmptyStreamingCommand(describedBash, ended: false), isFalse);
+      expect(isEmptyStreamingCommand(emptyBash, ended: false), isTrue);
+      expect(isEmptyStreamingCommand(emptyBash, ended: true), isFalse);
+      expect(isEmptyStreamingCommand(describedBash, ended: false), isFalse);
 
-    expect(timelineJoinsSummary(pendingBash), isFalse);
-    final groups = groupTimelineWork(
-      [readWork, describedBash, pendingBash, readWork, liveReasoning],
-      0,
-    );
-    expect(groups.map((g) => g.length).toList(), [2, 1, 2]);
-    expect(groups[1].single.pendingApproval, isTrue);
+      expect(timelineJoinsSummary(pendingBash), isFalse);
+      final groups = groupTimelineWork([
+        readWork,
+        describedBash,
+        pendingBash,
+        readWork,
+        liveReasoning,
+      ], 0);
+      expect(groups.map((g) => g.length).toList(), [2, 1, 2]);
+      expect(groups[1].single.pendingApproval, isTrue);
 
-    expect(activeSummaryWorkItem([readWork, liveReasoning]), liveReasoning);
-    expect(activeSummaryWorkItem([describedBash, liveReasoning]), liveReasoning);
-    expect(activeSummaryWorkItem([readWork]), isNull);
-  });
+      expect(activeSummaryWorkItem([readWork, liveReasoning]), liveReasoning);
+      expect(
+        activeSummaryWorkItem([describedBash, liveReasoning]),
+        liveReasoning,
+      );
+      expect(activeSummaryWorkItem([readWork]), isNull);
+    },
+  );
 
-  test('fitSummaryFileCount handles all-fit, partial-fit with +N, and zero-fit widths', () {
-    double moreWidth(int hidden) => hidden >= 10 ? 28.0 : 20.0;
-    const chips = [60.0, 60.0, 60.0, 60.0];
+  test(
+    'fitSummaryFileCount handles all-fit, partial-fit with +N, and zero-fit widths',
+    () {
+      double moreWidth(int hidden) => hidden >= 10 ? 28.0 : 20.0;
+      const chips = [60.0, 60.0, 60.0, 60.0];
 
-    // 全放得下（100 + 4 * (8 + 60) = 372）时返回全部 4 枚。
-    expect(
-      fitSummaryFileCount(
-        availableWidth: 380,
-        labelWidth: 100,
-        chipWidths: chips,
-        moreWidthForHidden: moreWidth,
-        gap: 8,
-      ),
-      4,
-    );
-    // 刚好放不下全部 4 枚（372 > 340），3 枚 + +1 需要 100 + 3*68 + 28 = 332 <= 340。
-    expect(
-      fitSummaryFileCount(
-        availableWidth: 340,
-        labelWidth: 100,
-        chipWidths: chips,
-        moreWidthForHidden: moreWidth,
-        gap: 8,
-      ),
-      3,
-    );
-    // 只能放下 1 枚 + +3（100 + 68 + 28 = 196 <= 210，2 枚需要 264 > 210）。
-    expect(
-      fitSummaryFileCount(
-        availableWidth: 210,
-        labelWidth: 100,
-        chipWidths: chips,
-        moreWidthForHidden: moreWidth,
-        gap: 8,
-      ),
-      1,
-    );
-    // 连 1 枚 + +3 都放不下时返回 0。
-    expect(
-      fitSummaryFileCount(
-        availableWidth: 180,
-        labelWidth: 100,
-        chipWidths: chips,
-        moreWidthForHidden: moreWidth,
-        gap: 8,
-      ),
-      0,
-    );
-    // 单文件始终返回 1。
-    expect(
-      fitSummaryFileCount(
-        availableWidth: 50,
-        labelWidth: 40,
-        chipWidths: const [80.0],
-        moreWidthForHidden: moreWidth,
-        gap: 8,
-      ),
-      1,
-    );
-  });
+      // 全放得下（100 + 4 * (8 + 60) = 372）时返回全部 4 枚。
+      expect(
+        fitSummaryFileCount(
+          availableWidth: 380,
+          labelWidth: 100,
+          chipWidths: chips,
+          moreWidthForHidden: moreWidth,
+          gap: 8,
+        ),
+        4,
+      );
+      // 刚好放不下全部 4 枚（372 > 340），3 枚 + +1 需要 100 + 3*68 + 28 = 332 <= 340。
+      expect(
+        fitSummaryFileCount(
+          availableWidth: 340,
+          labelWidth: 100,
+          chipWidths: chips,
+          moreWidthForHidden: moreWidth,
+          gap: 8,
+        ),
+        3,
+      );
+      // 只能放下 1 枚 + +3（100 + 68 + 28 = 196 <= 210，2 枚需要 264 > 210）。
+      expect(
+        fitSummaryFileCount(
+          availableWidth: 210,
+          labelWidth: 100,
+          chipWidths: chips,
+          moreWidthForHidden: moreWidth,
+          gap: 8,
+        ),
+        1,
+      );
+      // 连 1 枚 + +3 都放不下时返回 0。
+      expect(
+        fitSummaryFileCount(
+          availableWidth: 180,
+          labelWidth: 100,
+          chipWidths: chips,
+          moreWidthForHidden: moreWidth,
+          gap: 8,
+        ),
+        0,
+      );
+      // 单文件始终返回 1。
+      expect(
+        fitSummaryFileCount(
+          availableWidth: 50,
+          labelWidth: 40,
+          chipWidths: const [80.0],
+          moreWidthForHidden: moreWidth,
+          gap: 8,
+        ),
+        1,
+      );
+    },
+  );
 }

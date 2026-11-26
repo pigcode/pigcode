@@ -14,9 +14,7 @@ import 'package:pigcode_mobile/run_composer.dart';
 import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
-const _projects = [
-  MobileProjectSummary(id: 'proj-1', name: '核心仓库'),
-];
+const _projects = [MobileProjectSummary(id: 'proj-1', name: '核心仓库')];
 
 const _claudeInstance = MobileDraftInstance(
   instanceId: 'claude',
@@ -219,13 +217,11 @@ class _ControlsTimeline implements MobileTimeline {
 }
 
 class _ControlsConnection implements MobileConnection {
-  _ControlsConnection(
-    this.host, {
-    this.supportsComposerControls = true,
-  }) : drafts = MobileDraftCommands(host),
-       composer = MobileComposerCommands(host),
-       runCommands = MobileRunCommands(host),
-       queue = MobileQueueCommands(host);
+  _ControlsConnection(this.host, {this.supportsComposerControls = true})
+    : drafts = MobileDraftCommands(host),
+      composer = MobileComposerCommands(host),
+      runCommands = MobileRunCommands(host),
+      queue = MobileQueueCommands(host);
 
   final _ControlsHost host;
 
@@ -383,7 +379,9 @@ void main() {
         // 思考深度：stops = [默认, 低, 中, 高, 最高]，选 index 3 -> 「高」。
         await _tapEffortStop(tester, index: 3, maxIndex: 4);
         expect(
-          tester.widget<Text>(find.byKey(const ValueKey('composer-effort-value'))).data,
+          tester
+              .widget<Text>(find.byKey(const ValueKey('composer-effort-value')))
+              .data,
           '高',
         );
 
@@ -399,7 +397,9 @@ void main() {
         await tester.tap(find.byKey(const ValueKey('composer-plan-toggle')));
         await tester.pumpAndSettle();
         expect(
-          host.calls.where((c) => c.method == MobileComposerMethods.setPlanMode),
+          host.calls.where(
+            (c) => c.method == MobileComposerMethods.setPlanMode,
+          ),
           hasLength(1),
         );
         expect(
@@ -455,7 +455,9 @@ void main() {
           containsPair('modelId', 'haiku'),
         );
         expect(
-          tester.widget<Text>(find.byKey(const ValueKey('composer-effort-value'))).data,
+          tester
+              .widget<Text>(find.byKey(const ValueKey('composer-effort-value')))
+              .data,
           '—',
         );
 
@@ -528,16 +530,15 @@ void main() {
           find.byKey(const ValueKey('composer-model-locked-banner')),
           findsOneWidget,
         );
-        expect(
-          find.text('运行中不可切换 Agent 或模型，其他参数将在下一轮生效'),
-          findsOneWidget,
-        );
+        expect(find.text('运行中不可切换 Agent 或模型，其他参数将在下一轮生效'), findsOneWidget);
 
         // 点击模型行被锁定，不会触发 switchAgent。
         await tester.tap(find.text('Claude Haiku 4.5'));
         await tester.pumpAndSettle();
         expect(
-          host.calls.where((c) => c.method == MobileComposerMethods.switchAgent),
+          host.calls.where(
+            (c) => c.method == MobileComposerMethods.switchAgent,
+          ),
           isEmpty,
         );
 
@@ -594,92 +595,94 @@ void main() {
       },
     );
 
-    testWidgets('shows gentle inline notice when switchAgent RPC fails without crashing', (
-      tester,
-    ) async {
-      final host = _ControlsHost(rejectSwitchAgent: true);
-      addTearDown(host.dispose);
-      final connection = _ControlsConnection(host);
+    testWidgets(
+      'shows gentle inline notice when switchAgent RPC fails without crashing',
+      (tester) async {
+        final host = _ControlsHost(rejectSwitchAgent: true);
+        addTearDown(host.dispose);
+        final connection = _ControlsConnection(host);
 
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: pigcodeTheme(Brightness.light),
-            home: Scaffold(
-              body: Align(
-                alignment: Alignment.bottomCenter,
-                child: RunComposer(
-                  connection: connection,
-                  threadId: 'thread-busy',
-                  online: true,
-                  composer: host.composerState,
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: pigcodeTheme(Brightness.light),
+              home: Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: RunComposer(
+                    connection: connection,
+                    threadId: 'thread-busy',
+                    online: true,
+                    composer: host.composerState,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(MobileModelPickerChip.chipKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Claude Haiku 4.5'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.byKey(MobileModelPickerChip.chipKey));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Claude Haiku 4.5'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('当前会话正在运行，暂时无法切换模型。'), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('当前会话正在运行，暂时无法切换模型。'), findsWidgets);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('gracefully degrades for legacy computers without composer controls', (
-      tester,
-    ) async {
-      final host = _ControlsHost();
-      addTearDown(host.dispose);
-      final legacy = _ControlsConnection(
-        host,
-        supportsComposerControls: false,
-      );
+    testWidgets(
+      'gracefully degrades for legacy computers without composer controls',
+      (tester) async {
+        final host = _ControlsHost();
+        addTearDown(host.dispose);
+        final legacy = _ControlsConnection(
+          host,
+          supportsComposerControls: false,
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: pigcodeTheme(Brightness.light),
-            home: Scaffold(
-              body: Align(
-                alignment: Alignment.bottomCenter,
-                child: RunComposer(
-                  connection: legacy,
-                  threadId: 'thread-legacy',
-                  online: true,
-                  composer: host.composerState,
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: pigcodeTheme(Brightness.light),
+              home: Scaffold(
+                body: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: RunComposer(
+                    connection: legacy,
+                    threadId: 'thread-legacy',
+                    online: true,
+                    composer: host.composerState,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(MobileModelPickerChip.chipKey), findsNothing);
-      expect(find.byTooltip('上下文占用'), findsNothing);
-      expect(host.loadedModelInstances, isEmpty);
+        expect(find.byKey(MobileModelPickerChip.chipKey), findsNothing);
+        expect(find.byTooltip('上下文占用'), findsNothing);
+        expect(host.loadedModelInstances, isEmpty);
 
-      await tester.enterText(
-        find.byKey(const ValueKey('run-composer-input')),
-        '发给旧版电脑',
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('发送消息'));
-      await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('run-composer-input')),
+          '发给旧版电脑',
+        );
+        await tester.pump();
+        await tester.tap(find.byTooltip('发送消息'));
+        await tester.pumpAndSettle();
 
-      final startCall = host.calls.lastWhere(
-        (c) => c.method == MobileCommandMethods.start,
-      );
-      expect(startCall.params.containsKey('effort'), isFalse);
-      expect(startCall.params.containsKey('fast'), isFalse);
-      expect(startCall.params.containsKey('ultracode'), isFalse);
-      expect(startCall.params.containsKey('references'), isFalse);
-    });
+        final startCall = host.calls.lastWhere(
+          (c) => c.method == MobileCommandMethods.start,
+        );
+        expect(startCall.params.containsKey('effort'), isFalse);
+        expect(startCall.params.containsKey('fast'), isFalse);
+        expect(startCall.params.containsKey('ultracode'), isFalse);
+        expect(startCall.params.containsKey('references'), isFalse);
+      },
+    );
   });
 
   group('NewThreadDraft composer controls & persistence', () {
@@ -732,7 +735,10 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('GPT-5.4 Codex'));
         await tester.pumpAndSettle();
-        expect(find.byKey(const ValueKey('composer-plan-toggle')), findsNothing);
+        expect(
+          find.byKey(const ValueKey('composer-plan-toggle')),
+          findsNothing,
+        );
 
         // 切回 Claude Opus 并再次开启计划模式，然后重建 ProviderScope 验证持久化。
         await tester.tap(find.byKey(const ValueKey('composer-rail-claude')));
@@ -778,50 +784,54 @@ void main() {
       },
     );
 
-    testWidgets('legacy computer on NewThreadDraft degrades without sending extended fields', (
-      tester,
-    ) async {
-      final host = _ControlsHost();
-      addTearDown(host.dispose);
-      final legacy = _ControlsConnection(host, supportsComposerControls: false);
+    testWidgets(
+      'legacy computer on NewThreadDraft degrades without sending extended fields',
+      (tester) async {
+        final host = _ControlsHost();
+        addTearDown(host.dispose);
+        final legacy = _ControlsConnection(
+          host,
+          supportsComposerControls: false,
+        );
 
-      await tester.pumpWidget(
-        ProviderScope(
-          child: MaterialApp(
-            theme: pigcodeTheme(Brightness.light),
-            home: Scaffold(
-              body: NewThreadDraft(
-                connection: legacy,
-                projects: _projects,
-                projectId: 'proj-1',
-                online: true,
-                onAccepted: (_) {},
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              theme: pigcodeTheme(Brightness.light),
+              home: Scaffold(
+                body: NewThreadDraft(
+                  connection: legacy,
+                  projects: _projects,
+                  projectId: 'proj-1',
+                  online: true,
+                  onAccepted: (_) {},
+                ),
               ),
             ),
           ),
-        ),
-      );
-      await tester.pumpAndSettle();
+        );
+        await tester.pumpAndSettle();
 
-      expect(find.byKey(MobileModelPickerChip.chipKey), findsNothing);
-      expect(find.byTooltip('草稿 Agent 实例'), findsOneWidget);
+        expect(find.byKey(MobileModelPickerChip.chipKey), findsNothing);
+        expect(find.byTooltip('草稿 Agent 实例'), findsOneWidget);
 
-      await tester.enterText(
-        find.byKey(const ValueKey('first-message-input')),
-        '旧版电脑新建会话',
-      );
-      await tester.pump();
-      await tester.tap(find.byTooltip('发送首条消息'));
-      await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const ValueKey('first-message-input')),
+          '旧版电脑新建会话',
+        );
+        await tester.pump();
+        await tester.tap(find.byTooltip('发送首条消息'));
+        await tester.pumpAndSettle();
 
-      final createCall = host.calls.lastWhere(
-        (c) => c.method == MobileDraftMethods.create,
-      );
-      expect(createCall.params.containsKey('effort'), isFalse);
-      expect(createCall.params.containsKey('fast'), isFalse);
-      expect(createCall.params.containsKey('ultracode'), isFalse);
-      expect(createCall.params.containsKey('planMode'), isFalse);
-    });
+        final createCall = host.calls.lastWhere(
+          (c) => c.method == MobileDraftMethods.create,
+        );
+        expect(createCall.params.containsKey('effort'), isFalse);
+        expect(createCall.params.containsKey('fast'), isFalse);
+        expect(createCall.params.containsKey('ultracode'), isFalse);
+        expect(createCall.params.containsKey('planMode'), isFalse);
+      },
+    );
 
     testWidgets(
       'shows inline spinner inside model chip instead of a top progress bar while catalog loads',
@@ -922,9 +932,9 @@ void main() {
           await tester.pumpWidget(
             ProviderScope(
               child: MaterialApp(
-                theme: pigcodeTheme(Brightness.dark).copyWith(
-                  platform: platform,
-                ),
+                theme: pigcodeTheme(
+                  Brightness.dark,
+                ).copyWith(platform: platform),
                 home: Scaffold(
                   body: Align(
                     alignment: Alignment.bottomCenter,

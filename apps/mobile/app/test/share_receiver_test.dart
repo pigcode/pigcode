@@ -160,7 +160,10 @@ class _FakeHost implements HostRequests {
           fileName: prev.fileName,
           size: prev.size + chunk.length,
         );
-        return {'uploadId': uploadId, 'receivedBytes': prev.size + chunk.length};
+        return {
+          'uploadId': uploadId,
+          'receivedBytes': prev.size + chunk.length,
+        };
       case MobileAttachmentMethods.uploadFinish:
         final uploadId = params['uploadId'] as String;
         final item = _inFlight.remove(uploadId)!;
@@ -405,121 +408,125 @@ void main() {
   });
 
   group('MethodChannelMobileShareChannel & ShareReceiverController', () {
-    test('pulls cold-start batch via consumePendingBatch and cleans up', () async {
-      const channel = MethodChannel('pigcode/share');
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      final calls = <MethodCall>[];
-      var pendingDelivered = false;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        calls.add(call);
-        if (call.method == 'consumePendingBatch') {
-          if (pendingDelivered) return null;
-          pendingDelivered = true;
-          return <String, Object?>{
-            'batchId': 'cold-batch-1',
-            'paths': ['/tmp/0_a.png', '/tmp/1_b.png'],
-            'truncatedCount': 2,
-          };
-        }
-        return null;
-      });
-      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    test(
+      'pulls cold-start batch via consumePendingBatch and cleans up',
+      () async {
+        const channel = MethodChannel('pigcode/share');
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        final calls = <MethodCall>[];
+        var pendingDelivered = false;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          if (call.method == 'consumePendingBatch') {
+            if (pendingDelivered) return null;
+            pendingDelivered = true;
+            return <String, Object?>{
+              'batchId': 'cold-batch-1',
+              'paths': ['/tmp/0_a.png', '/tmp/1_b.png'],
+              'truncatedCount': 2,
+            };
+          }
+          return null;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      // 触发首次读取并等待微任务拉取冷启动批次
-      container.read(shareReceiverProvider);
-      await Future<void>.delayed(Duration.zero);
+        // 触发首次读取并等待微任务拉取冷启动批次
+        container.read(shareReceiverProvider);
+        await Future<void>.delayed(Duration.zero);
 
-      final batch = container.read(pendingShareBatchProvider);
-      expect(batch, isNotNull);
-      expect(batch!.batchId, 'cold-batch-1');
-      expect(batch.paths, ['/tmp/0_a.png', '/tmp/1_b.png']);
-      expect(batch.truncatedCount, 2);
+        final batch = container.read(pendingShareBatchProvider);
+        expect(batch, isNotNull);
+        expect(batch!.batchId, 'cold-batch-1');
+        expect(batch.paths, ['/tmp/0_a.png', '/tmp/1_b.png']);
+        expect(batch.truncatedCount, 2);
 
-      // 删除第一张图后剩余 1 张，不提前清理
-      container.read(shareReceiverProvider.notifier).removeImageAt(0);
-      expect(container.read(pendingShareBatchProvider)?.paths, ['/tmp/1_b.png']);
-      expect(calls.where((c) => c.method == 'cleanupBatch'), isEmpty);
+        // 删除第一张图后剩余 1 张，不提前清理
+        container.read(shareReceiverProvider.notifier).removeImageAt(0);
+        expect(container.read(pendingShareBatchProvider)?.paths, [
+          '/tmp/1_b.png',
+        ]);
+        expect(calls.where((c) => c.method == 'cleanupBatch'), isEmpty);
 
-      // 删除最后一张图自动关闭并清理原生目录
-      container.read(shareReceiverProvider.notifier).removeImageAt(0);
-      await Future<void>.delayed(Duration.zero);
-      expect(container.read(pendingShareBatchProvider), isNull);
-      expect(
-        calls
-            .where((c) => c.method == 'cleanupBatch')
-            .map((c) => (c.arguments as Map)['batchId']),
-        ['cold-batch-1'],
-      );
-    });
-
-    test('receives warm-start onShareBatch push, deduplicates, and cleans old batch', () async {
-      const channel = MethodChannel('pigcode/share');
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      final cleaned = <String>[];
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'cleanupBatch') {
-          cleaned.add((call.arguments as Map)['batchId'] as String);
-        }
-        return null;
-      });
-      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-
-      container.read(shareReceiverProvider);
-      await Future<void>.delayed(Duration.zero);
-
-      Future<void> sendNativePush(Map<String, Object?> payload) async {
-        final encoded = const StandardMethodCodec().encodeMethodCall(
-          MethodCall('onShareBatch', payload),
+        // 删除最后一张图自动关闭并清理原生目录
+        container.read(shareReceiverProvider.notifier).removeImageAt(0);
+        await Future<void>.delayed(Duration.zero);
+        expect(container.read(pendingShareBatchProvider), isNull);
+        expect(
+          calls
+              .where((c) => c.method == 'cleanupBatch')
+              .map((c) => (c.arguments as Map)['batchId']),
+          ['cold-batch-1'],
         );
-        await messenger.handlePlatformMessage(
-          channel.name,
-          encoded,
-          (_) {},
-        );
-      }
+      },
+    );
 
-      await sendNativePush({
-        'batchId': 'warm-1',
-        'paths': ['/tmp/warm_1.jpg'],
-        'truncatedCount': 0,
-      });
-      expect(container.read(pendingShareBatchProvider)?.batchId, 'warm-1');
+    test(
+      'receives warm-start onShareBatch push, deduplicates, and cleans old batch',
+      () async {
+        const channel = MethodChannel('pigcode/share');
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        final cleaned = <String>[];
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'cleanupBatch') {
+            cleaned.add((call.arguments as Map)['batchId'] as String);
+          }
+          return null;
+        });
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-      // 同一 batchId 重复推送不会覆盖/重复触发
-      await sendNativePush({
-        'batchId': 'warm-1',
-        'paths': ['/tmp/warm_1.jpg'],
-        'truncatedCount': 0,
-      });
-      expect(cleaned, isEmpty);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      // 新的 batchId 到来时自动清理旧批次
-      await sendNativePush({
-        'batchId': 'warm-2',
-        'paths': ['/tmp/warm_2.png'],
-        'truncatedCount': 0,
-      });
-      expect(container.read(pendingShareBatchProvider)?.batchId, 'warm-2');
-      expect(cleaned, ['warm-1']);
+        container.read(shareReceiverProvider);
+        await Future<void>.delayed(Duration.zero);
 
-      // completeBatch 幂等清理
-      await container
-          .read(shareReceiverProvider.notifier)
-          .completeBatch('warm-2');
-      await container
-          .read(shareReceiverProvider.notifier)
-          .completeBatch('warm-2');
-      expect(container.read(pendingShareBatchProvider), isNull);
-      expect(cleaned, ['warm-1', 'warm-2']);
-    });
+        Future<void> sendNativePush(Map<String, Object?> payload) async {
+          final encoded = const StandardMethodCodec().encodeMethodCall(
+            MethodCall('onShareBatch', payload),
+          );
+          await messenger.handlePlatformMessage(channel.name, encoded, (_) {});
+        }
+
+        await sendNativePush({
+          'batchId': 'warm-1',
+          'paths': ['/tmp/warm_1.jpg'],
+          'truncatedCount': 0,
+        });
+        expect(container.read(pendingShareBatchProvider)?.batchId, 'warm-1');
+
+        // 同一 batchId 重复推送不会覆盖/重复触发
+        await sendNativePush({
+          'batchId': 'warm-1',
+          'paths': ['/tmp/warm_1.jpg'],
+          'truncatedCount': 0,
+        });
+        expect(cleaned, isEmpty);
+
+        // 新的 batchId 到来时自动清理旧批次
+        await sendNativePush({
+          'batchId': 'warm-2',
+          'paths': ['/tmp/warm_2.png'],
+          'truncatedCount': 0,
+        });
+        expect(container.read(pendingShareBatchProvider)?.batchId, 'warm-2');
+        expect(cleaned, ['warm-1']);
+
+        // completeBatch 幂等清理
+        await container
+            .read(shareReceiverProvider.notifier)
+            .completeBatch('warm-2');
+        await container
+            .read(shareReceiverProvider.notifier)
+            .completeBatch('warm-2');
+        expect(container.read(pendingShareBatchProvider), isNull);
+        expect(cleaned, ['warm-1', 'warm-2']);
+      },
+    );
   });
 
   group('ShareTargetSheet widget behavior', () {
@@ -568,11 +575,7 @@ void main() {
         final pcA = _computer(1, '主力电脑');
         final pcB = _computer(2, '办公电脑');
         final threads = [
-          _thread(
-            't-old',
-            '修复登录问题',
-            updatedAt: '2026-11-24T08:00:00.000Z',
-          ),
+          _thread('t-old', '修复登录问题', updatedAt: '2026-11-24T08:00:00.000Z'),
           _thread(
             't-active',
             '当前正在调试的会话',
@@ -630,8 +633,14 @@ void main() {
         expect(find.text('每条消息最多添加 6 张图片，已忽略超出部分'), findsOneWidget);
 
         // 多电脑切换器可见
-        expect(find.byKey(ShareTargetSheet.computerChipKey(pcA.computerKey)), findsOneWidget);
-        expect(find.byKey(ShareTargetSheet.computerChipKey(pcB.computerKey)), findsOneWidget);
+        expect(
+          find.byKey(ShareTargetSheet.computerChipKey(pcA.computerKey)),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ShareTargetSheet.computerChipKey(pcB.computerKey)),
+          findsOneWidget,
+        );
 
         // 已归档会话不展示
         expect(find.text('已归档旧会话'), findsNothing);
@@ -671,8 +680,14 @@ void main() {
           '上传',
         );
         await tester.pump();
-        expect(find.byKey(ShareTargetSheet.threadTileKey('t-newest')), findsOneWidget);
-        expect(find.byKey(ShareTargetSheet.threadTileKey('t-old')), findsNothing);
+        expect(
+          find.byKey(ShareTargetSheet.threadTileKey('t-newest')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(ShareTargetSheet.threadTileKey('t-old')),
+          findsNothing,
+        );
         expect(find.byKey(ShareTargetSheet.currentThreadTileKey), findsNothing);
 
         // 点选目标会话
@@ -724,11 +739,11 @@ void main() {
           ),
         );
 
-        expect(find.byKey(ShareTargetSheet.unsupportedBannerKey), findsOneWidget);
         expect(
-          find.text('这台电脑的 Pigcode 版本暂不支持发送图片，请先更新电脑端'),
+          find.byKey(ShareTargetSheet.unsupportedBannerKey),
           findsOneWidget,
         );
+        expect(find.text('这台电脑的 Pigcode 版本暂不支持发送图片，请先更新电脑端'), findsOneWidget);
 
         // 禁用状态下点击目标不触发选择
         await tester.tap(find.byKey(ShareTargetSheet.currentThreadTileKey));
@@ -830,7 +845,10 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(find.byKey(ShareTargetSheet.sheetKey), findsOneWidget);
-        expect(find.byKey(ShareTargetSheet.currentThreadTileKey), findsOneWidget);
+        expect(
+          find.byKey(ShareTargetSheet.currentThreadTileKey),
+          findsOneWidget,
+        );
 
         // 选择当前会话
         await tester.tap(find.byKey(ShareTargetSheet.currentThreadTileKey));
@@ -858,9 +876,7 @@ void main() {
         final conn = _FakeConnection(
           computer: pc,
           host: host,
-          sidebarSnapshot: _sidebar([
-            _thread('t-1', '已有会话'),
-          ]),
+          sidebarSnapshot: _sidebar([_thread('t-1', '已有会话')]),
         );
         final cache = AttachmentCacheStore.inMemory();
         final png = _pngBytes(r: 90, g: 180, b: 90);
@@ -896,7 +912,10 @@ void main() {
         expect(shareChannel.cleanedBatchIds, ['batch-cold-draft']);
 
         // 已跳转到新会话草稿，且缩略图条已显示，绝不自动调用 createDraftThread
-        expect(find.byKey(const ValueKey('first-message-input')), findsOneWidget);
+        expect(
+          find.byKey(const ValueKey('first-message-input')),
+          findsOneWidget,
+        );
         expect(find.byKey(ComposerAttachmentStrip.stripKey), findsOneWidget);
         expect(host.uploadedIds.length, 1);
         expect(host.draftCreateCalls, isEmpty);
@@ -914,7 +933,11 @@ void main() {
           host: host,
           sidebarSnapshot: _sidebar([
             _thread('t-1', '第一个会话', updatedAt: '2026-11-25T11:00:00.000Z'),
-            _thread('t-target', '草稿已有5图会话', updatedAt: '2026-11-25T10:00:00.000Z'),
+            _thread(
+              't-target',
+              '草稿已有5图会话',
+              updatedAt: '2026-11-25T10:00:00.000Z',
+            ),
           ]),
         );
         final cache = AttachmentCacheStore.inMemory();
@@ -1027,7 +1050,10 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        expect(find.byKey(ShareTargetSheet.unsupportedBannerKey), findsOneWidget);
+        expect(
+          find.byKey(ShareTargetSheet.unsupportedBannerKey),
+          findsOneWidget,
+        );
         await tester.tap(find.byKey(ShareTargetSheet.closeButtonKey));
         await tester.pumpAndSettle();
 
@@ -1088,7 +1114,10 @@ void main() {
         await tester.pumpAndSettle();
 
         // 当前旧电脑不支持图片
-        expect(find.byKey(ShareTargetSheet.unsupportedBannerKey), findsOneWidget);
+        expect(
+          find.byKey(ShareTargetSheet.unsupportedBannerKey),
+          findsOneWidget,
+        );
 
         // 在弹窗内切换到新电脑后，提示消失且展示新电脑的会话列表
         await tester.tap(

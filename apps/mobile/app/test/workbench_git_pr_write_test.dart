@@ -221,10 +221,8 @@ class _FakeGitPrConnection implements MobileConnection {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _app(Widget child) => MaterialApp(
-  theme: pigcodeTheme(Brightness.light),
-  home: child,
-);
+Widget _app(Widget child) =>
+    MaterialApp(theme: pigcodeTheme(Brightness.light), home: child);
 
 void main() {
   testWidgets(
@@ -255,7 +253,10 @@ void main() {
       // Switch worktree -> then remove active worktree with confirm.
       await tester.tap(find.byKey(GitWorkbenchTab.switchWorktreeKey('wt-1')));
       await tester.pumpAndSettle();
-      expect(find.byKey(GitWorkbenchTab.removeWorktreeButtonKey), findsOneWidget);
+      expect(
+        find.byKey(GitWorkbenchTab.removeWorktreeButtonKey),
+        findsOneWidget,
+      );
 
       await tester.tap(find.byKey(GitWorkbenchTab.removeWorktreeButtonKey));
       await tester.pumpAndSettle();
@@ -273,7 +274,9 @@ void main() {
       expect(find.text('重构前'), findsOneWidget);
 
       // Restore checkpoint verifies ADR 0003 copy & reports affected count.
-      await tester.tap(find.byKey(GitWorkbenchTab.restoreCheckpointKey('ck-1')));
+      await tester.tap(
+        find.byKey(GitWorkbenchTab.restoreCheckpointKey('ck-1')),
+      );
       await tester.pumpAndSettle();
       expect(find.textContaining('不会回滚对话记录'), findsOneWidget);
       await tester.tap(find.text('确认恢复'));
@@ -282,39 +285,40 @@ void main() {
     },
   );
 
-  testWidgets('disables worktree switch/remove and checkpoint restore when threadBusy', (
-    tester,
-  ) async {
-    final host = _GitPrHost();
-    final conn = _FakeGitPrConnection(host);
+  testWidgets(
+    'disables worktree switch/remove and checkpoint restore when threadBusy',
+    (tester) async {
+      final host = _GitPrHost();
+      final conn = _FakeGitPrConnection(host);
 
-    await tester.pumpWidget(
-      _app(
-        Scaffold(
-          body: GitWorkbenchTab(
-            connection: conn,
-            threadId: 'th_1',
-            threadBusy: true,
+      await tester.pumpWidget(
+        _app(
+          Scaffold(
+            body: GitWorkbenchTab(
+              connection: conn,
+              threadId: 'th_1',
+              threadBusy: true,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.textContaining('会话运行中'), findsOneWidget);
-    final createBtn = tester.widget<TextButton>(
-      find.byKey(GitWorkbenchTab.createWorktreeButtonKey),
-    );
-    expect(createBtn.onPressed, isNull);
-    final switchBtn = tester.widget<OutlinedButton>(
-      find.byKey(GitWorkbenchTab.switchWorktreeKey('wt-1')),
-    );
-    expect(switchBtn.onPressed, isNull);
-    final restoreBtn = tester.widget<OutlinedButton>(
-      find.byKey(GitWorkbenchTab.restoreCheckpointKey('ck-1')),
-    );
-    expect(restoreBtn.onPressed, isNull);
-  });
+      expect(find.textContaining('会话运行中'), findsOneWidget);
+      final createBtn = tester.widget<TextButton>(
+        find.byKey(GitWorkbenchTab.createWorktreeButtonKey),
+      );
+      expect(createBtn.onPressed, isNull);
+      final switchBtn = tester.widget<OutlinedButton>(
+        find.byKey(GitWorkbenchTab.switchWorktreeKey('wt-1')),
+      );
+      expect(switchBtn.onPressed, isNull);
+      final restoreBtn = tester.widget<OutlinedButton>(
+        find.byKey(GitWorkbenchTab.restoreCheckpointKey('ck-1')),
+      );
+      expect(restoreBtn.onPressed, isNull);
+    },
+  );
 
   testWidgets(
     'supports full PR write lifecycle: create draft -> ready -> comment -> close -> reopen -> merge',
@@ -353,7 +357,10 @@ void main() {
       // Comment.
       await tester.drag(find.byType(ListView), const Offset(0, -320));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byKey(PrStatusTab.commentInputKey), 'Ship it');
+      await tester.enterText(
+        find.byKey(PrStatusTab.commentInputKey),
+        'Ship it',
+      );
       await tester.pump();
       await tester.tap(find.byKey(PrStatusTab.commentSubmitButtonKey));
       await tester.pumpAndSettle();
@@ -419,7 +426,10 @@ void main() {
       // Simulate desktop restart / network drop -> offline banner appears.
       notifier.value = null;
       await tester.pump();
-      expect(find.byKey(MobileWorkbenchScreen.offlineBannerKey), findsOneWidget);
+      expect(
+        find.byKey(MobileWorkbenchScreen.offlineBannerKey),
+        findsOneWidget,
+      );
 
       // Reconnect with fresh connection -> banner clears and subsequent writes use host2.
       notifier.value = conn2;

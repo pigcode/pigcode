@@ -59,7 +59,9 @@ class _FakeTerminalHost implements HostRequests {
     switch (method) {
       case MobileTerminalMethods.list:
         return {
-          'terminals': terminals.map((t) => Map<String, dynamic>.from(t)).toList(),
+          'terminals': terminals
+              .map((t) => Map<String, dynamic>.from(t))
+              .toList(),
         };
       case MobileTerminalMethods.open:
         final id = 'term_m_${_nextNum++}';
@@ -92,7 +94,9 @@ class _FakeTerminalHost implements HostRequests {
         return {'ok': true};
       case MobileTerminalMethods.write:
         final id = params['terminalId'] as String;
-        final decoded = utf8.decode(base64Decode(params['dataBase64'] as String));
+        final decoded = utf8.decode(
+          base64Decode(params['dataBase64'] as String),
+        );
         writes.add((id, decoded));
         return {'ok': true};
       case MobileTerminalMethods.resize:
@@ -137,20 +141,21 @@ class _FakeTerminalConnection implements MobileConnection {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-Widget _app(Widget child) => MaterialApp(
-  theme: pigcodeTheme(Brightness.light),
-  home: child,
-);
+Widget _app(Widget child) =>
+    MaterialApp(theme: pigcodeTheme(Brightness.light), home: child);
 
 void main() {
-  test('applyStickyCtrl converts ASCII letters and brackets to control codes', () {
-    expect(applyStickyCtrl('c'), '\x03');
-    expect(applyStickyCtrl('C'), '\x03');
-    expect(applyStickyCtrl('d'), '\x04');
-    expect(applyStickyCtrl('z'), '\x1a');
-    expect(applyStickyCtrl('['), '\x1b');
-    expect(applyStickyCtrl('ab'), 'ab');
-  });
+  test(
+    'applyStickyCtrl converts ASCII letters and brackets to control codes',
+    () {
+      expect(applyStickyCtrl('c'), '\x03');
+      expect(applyStickyCtrl('C'), '\x03');
+      expect(applyStickyCtrl('d'), '\x04');
+      expect(applyStickyCtrl('z'), '\x1a');
+      expect(applyStickyCtrl('['), '\x1b');
+      expect(applyStickyCtrl('ab'), 'ab');
+    },
+  );
 
   testWidgets(
     'auto-opens mobile terminal on empty list and sends shortcut bar sequences + sticky Ctrl',
@@ -173,10 +178,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(
-        host.calls.any((c) => c.$1 == MobileTerminalMethods.open),
-        isTrue,
-      );
+      expect(host.calls.any((c) => c.$1 == MobileTerminalMethods.open), isTrue);
       expect(find.byKey(TerminalShortcutBar.ctrlCKey), findsOneWidget);
 
       await tester.tap(find.byKey(TerminalShortcutBar.escKey));
@@ -187,10 +189,14 @@ void main() {
       await tester.tap(find.byKey(TerminalShortcutBar.clearKey));
       await tester.pumpAndSettle();
 
-      expect(
-        host.writes.map((e) => e.$2).toList(),
-        ['\x1b', '\t', '\x03', '\x1b[A', 'pasted-cmd', '\x0c'],
-      );
+      expect(host.writes.map((e) => e.$2).toList(), [
+        '\x1b',
+        '\t',
+        '\x03',
+        '\x1b[A',
+        'pasted-cmd',
+        '\x0c',
+      ]);
 
       // Arm sticky Ctrl and emit 'd' through Terminal.onOutput -> '\x04'
       await tester.tap(find.byKey(TerminalShortcutBar.ctrlKey));
@@ -239,7 +245,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byKey(MobileTerminalScreen.readOnlyBannerKey), findsOneWidget);
+      expect(
+        find.byKey(MobileTerminalScreen.readOnlyBannerKey),
+        findsOneWidget,
+      );
       expect(find.text('只读'), findsOneWidget);
       expect(find.byKey(TerminalShortcutBar.ctrlCKey), findsNothing);
       expect(host.resizes, isEmpty);
