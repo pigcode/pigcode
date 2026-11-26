@@ -829,7 +829,7 @@ class _PrStatusTabState extends State<PrStatusTab> {
         icon: Icons.merge_type_rounded,
         title: '尚未创建 PR',
         description: branch != null && branch.isNotEmpty
-            ? '当前分支 `$branch` 尚未创建 Pull Request。'
+            ? '当前分支「$branch」尚未创建 Pull Request。'
             : '当前分支尚未创建 Pull Request。',
       ),
       'not-git' => (
@@ -845,12 +845,12 @@ class _PrStatusTabState extends State<PrStatusTab> {
       'gh-unavailable' => (
         icon: Icons.terminal_rounded,
         title: '电脑未安装 GitHub CLI (gh)',
-        description: '请先在电脑上安装 GitHub CLI (`gh`) 后再查看 PR 状态。',
+        description: '请先在电脑上安装 GitHub CLI（gh）后再查看 PR 状态。',
       ),
       'gh-unauthenticated' => (
         icon: Icons.lock_outline_rounded,
         title: 'GitHub CLI 尚未登录',
-        description: '电脑上的 `gh` 尚未登录，请先在电脑终端运行 `gh auth login`。',
+        description: '电脑上的 gh 尚未登录，请先在电脑终端运行 gh auth login。',
       ),
       _ => (
         icon: Icons.info_outline_rounded,

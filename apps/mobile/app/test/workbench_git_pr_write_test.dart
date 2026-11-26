@@ -302,6 +302,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('会话运行中'), findsOneWidget);
+    final createBtn = tester.widget<TextButton>(
+      find.byKey(GitWorkbenchTab.createWorktreeButtonKey),
+    );
+    expect(createBtn.onPressed, isNull);
     final switchBtn = tester.widget<OutlinedButton>(
       find.byKey(GitWorkbenchTab.switchWorktreeKey('wt-1')),
     );

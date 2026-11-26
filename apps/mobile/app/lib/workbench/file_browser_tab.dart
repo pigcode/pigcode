@@ -414,7 +414,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(
-                  '会话运行中，结束后才可切换或移除 Worktree。',
+                  '会话运行中，结束后才可新建、切换或移除 Worktree。',
                   style: TimelineType.smallStyle(colors.attention),
                 ),
               ),
@@ -457,14 +457,15 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
                 },
               ),
             const Divider(height: 16),
-            MobileSheetAction(
-              label: '新建 Worktree',
-              glyph: WorkspaceGlyph.plus,
-              onTap: () {
-                Navigator.pop(sheet);
-                unawaited(_createWorktree());
-              },
-            ),
+            if (!widget.threadBusy)
+              MobileSheetAction(
+                label: '新建 Worktree',
+                glyph: WorkspaceGlyph.plus,
+                onTap: () {
+                  Navigator.pop(sheet);
+                  unawaited(_createWorktree());
+                },
+              ),
             if (widget.onOpenGitTab != null)
               MobileSheetAction(
                 label: '打开 Git 页管理全部',
@@ -508,7 +509,7 @@ class _FileBrowserTabState extends State<FileBrowserTab> {
   }
 
   Future<void> _createWorktree() async {
-    if (_mutating) return;
+    if (_mutating || widget.threadBusy) return;
     setState(() => _mutating = true);
     try {
       final created = await widget.connection.workbenchWrite.createWorktree(

@@ -112,7 +112,7 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
   }
 
   Future<void> _createWorktree() async {
-    if (_acting) return;
+    if (_acting || widget.threadBusy) return;
     setState(() => _acting = true);
     try {
       final created = await widget.connection.workbenchWrite.createWorktree(
@@ -384,7 +384,7 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
                     ),
                     Expanded(
                       child: Text(
-                        '会话运行中，结束后才可切换/移除 Worktree 或恢复检查点。',
+                        '会话运行中，结束后才可新建/切换/移除 Worktree 或恢复检查点。',
                         style: TimelineType.smallStyle(colors.attention),
                       ),
                     ),
@@ -418,7 +418,9 @@ class _GitWorkbenchTabState extends State<GitWorkbenchTab> {
                     ),
                     TextButton.icon(
                       key: GitWorkbenchTab.createWorktreeButtonKey,
-                      onPressed: _acting ? null : () => unawaited(_createWorktree()),
+                      onPressed: (_acting || widget.threadBusy)
+                          ? null
+                          : () => unawaited(_createWorktree()),
                       icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('新建'),
                     ),

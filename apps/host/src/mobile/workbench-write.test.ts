@@ -608,11 +608,14 @@ describe("mobile workbench.write protocol & Host implementation", { timeout: 30_
       )
       expect(await readFile(join(activePath, "README.md"), "utf8")).toBe("# pigcode\n")
 
-      // 3. Active run blocks worktreeSwitch, worktreeRemove, and checkpointRestore with THREAD_BUSY
+      // 3. Active run blocks worktreeCreate, worktreeSwitch, worktreeRemove, and checkpointRestore with THREAD_BUSY
       const started = await host.ctx.agents.startRun(thread.id, FAKE_LONG_RUN_TEXT)
       await vi.waitFor(() => {
         expect(host.ctx.agents.listRuns().some((r) => r.threadId === thread.id)).toBe(true)
       })
+      expect(
+        await phone.call(mobileWorkbenchWriteMethods.worktreeCreate, { threadId: thread.id }),
+      ).toMatchObject({ error: { code: "THREAD_BUSY" } })
       expect(
         await phone.call(mobileWorkbenchWriteMethods.worktreeSwitch, {
           threadId: thread.id,
@@ -642,6 +645,9 @@ describe("mobile workbench.write protocol & Host implementation", { timeout: 30_
       await vi.waitFor(() => {
         expect(host.ctx.agents.listRuns().some((r) => r.threadId === subagent.id)).toBe(true)
       })
+      expect(
+        await phone.call(mobileWorkbenchWriteMethods.worktreeCreate, { threadId: thread.id }),
+      ).toMatchObject({ error: { code: "THREAD_BUSY" } })
       expect(
         await phone.call(mobileWorkbenchWriteMethods.worktreeSwitch, {
           threadId: thread.id,

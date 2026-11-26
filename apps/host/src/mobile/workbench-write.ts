@@ -689,6 +689,7 @@ export class MobileWorkbenchWrite {
     params: MobileWorktreeCreateParams,
   ): Promise<MobileWorktreeCreateResult> {
     requireMobileThread(this.ctx, params.threadId)
+    this.assertThreadNotBusy(params.threadId)
     const worktrees = this.requireWorktrees()
     const created = await worktrees.create(params.threadId)
 
