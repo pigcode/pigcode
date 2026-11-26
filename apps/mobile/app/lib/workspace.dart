@@ -302,6 +302,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
           ? (context, thread) {
               final active = connection;
               if (active == null) return;
+              _connectionNotifier.value = active;
               final threadBusy =
                   thread.status == MobileThreadStatus.running ||
                   thread.status == MobileThreadStatus.queued ||
@@ -310,6 +311,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 MobileWorkbenchScreen.open(
                   context,
                   connection: active,
+                  connectionListenable: _connectionNotifier,
                   threadId: thread.id,
                   title: thread.title,
                   threadBusy: threadBusy,
@@ -317,9 +319,9 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                       ? MobileWorkbenchTab.files
                       : MobileWorkbenchTab.preview,
                   openExternalUrl: widget.openExternalUrl,
-                  previewTabBuilder: supportsPreview
-                      ? (_) => PreviewTab(
-                            connection: active,
+                  connectionPreviewTabBuilder: supportsPreview
+                      ? (_, liveConnection) => PreviewTab(
+                            connection: liveConnection,
                             threadId: thread.id,
                             computerKey: computer?.computerKey,
                             timelineUrls:

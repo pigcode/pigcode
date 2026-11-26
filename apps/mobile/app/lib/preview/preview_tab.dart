@@ -80,13 +80,14 @@ class _PreviewTabState extends State<PreviewTab> {
   @override
   void didUpdateWidget(covariant PreviewTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final connectionChanged = !identical(oldWidget.connection, widget.connection);
     if (oldWidget.computerKey != widget.computerKey ||
         oldWidget.historyStorage != widget.historyStorage ||
-        !identical(oldWidget.connection, widget.connection)) {
+        connectionChanged) {
       _historyStorage = _resolveHistoryStorage();
     }
     _timelineUrls = _readLatestTimelineUrls();
-    if (widget.active && !_hasRequested) {
+    if (widget.active && (!_hasRequested || connectionChanged)) {
       unawaited(_load());
     }
   }

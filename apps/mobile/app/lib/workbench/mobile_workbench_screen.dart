@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
 
@@ -11,21 +12,27 @@ import 'git_workbench_tab.dart';
 import 'pr_status_tab.dart';
 import 'workbench_utils.dart';
 
+typedef WorkbenchPreviewTabBuilder =
+    Widget Function(BuildContext context, MobileConnection connection);
+
 /// 手机端工作台顶部 Tab 枚举（支持 `workbench.write` 时展示「Git」）。
 enum MobileWorkbenchTab { files, git, pr, preview }
 
 /// 手机端全屏工作台：
 /// - 顶栏左侧返回，中间紧凑液态玻璃分段切换「文件 / Git / PR / 预览」；
-/// - 使用 `IndexedStack` 保持切换 Tab 时的状态，并通过共享 `workspaceRevision` 联动写操作刷新。
+/// - 使用 `IndexedStack` 保持切换 Tab 时的状态，并通过共享 `workspaceRevision` 联动写操作刷新；
+/// - 传入 `connectionListenable` 时，电脑端重启或网络切换重连后自动切换到新连接并刷新。
 class MobileWorkbenchScreen extends StatefulWidget {
   const MobileWorkbenchScreen({
     super.key,
     required this.connection,
+    this.connectionListenable,
     required this.threadId,
     this.title,
     this.initialTab = MobileWorkbenchTab.files,
     this.initialDirectory = '',
     this.previewTabBuilder,
+    this.connectionPreviewTabBuilder,
     this.openExternalUrl,
     this.threadBusy = false,
     this.searchDebounce = const Duration(milliseconds: 250),
@@ -35,13 +42,16 @@ class MobileWorkbenchScreen extends StatefulWidget {
   static const gitTabKey = ValueKey('workbench-tab-git');
   static const prTabKey = ValueKey('workbench-tab-pr');
   static const previewTabKey = ValueKey('workbench-tab-preview');
+  static const offlineBannerKey = ValueKey('workbench-offline-banner');
 
   final MobileConnection connection;
+  final ValueListenable<MobileConnection?>? connectionListenable;
   final String threadId;
   final String? title;
   final MobileWorkbenchTab initialTab;
   final String initialDirectory;
   final WidgetBuilder? previewTabBuilder;
+  final WorkbenchPreviewTabBuilder? connectionPreviewTabBuilder;
   final ExternalUrlOpener? openExternalUrl;
   final bool threadBusy;
   final Duration searchDebounce;
@@ -49,22 +59,26 @@ class MobileWorkbenchScreen extends StatefulWidget {
   static Future<void> open(
     BuildContext context, {
     required MobileConnection connection,
+    ValueListenable<MobileConnection?>? connectionListenable,
     required String threadId,
     String? title,
     MobileWorkbenchTab initialTab = MobileWorkbenchTab.files,
     String initialDirectory = '',
     WidgetBuilder? previewTabBuilder,
+    WorkbenchPreviewTabBuilder? connectionPreviewTabBuilder,
     ExternalUrlOpener? openExternalUrl,
     bool threadBusy = false,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => MobileWorkbenchScreen(
         connection: connection,
+        connectionListenable: connectionListenable,
         threadId: threadId,
         title: title,
         initialTab: initialTab,
         initialDirectory: initialDirectory,
         previewTabBuilder: previewTabBuilder,
+        connectionPreviewTabBuilder: connectionPreviewTabBuilder,
         openExternalUrl: openExternalUrl,
         threadBusy: threadBusy,
       ),
@@ -76,22 +90,27 @@ class MobileWorkbenchScreen extends StatefulWidget {
 }
 
 class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
+  late MobileConnection _connection;
+  bool _offline = false;
   late MobileWorkbenchTab _selectedTab;
   bool _previewActivated = false;
   int _workspaceRevision = 0;
 
+  bool get _hasPreviewBuilder =>
+      widget.connectionPreviewTabBuilder != null ||
+      widget.previewTabBuilder != null;
+
   bool get _hasWorkbenchTabs =>
-      connectionSupportsWorkbenchRead(widget.connection) ||
-      widget.previewTabBuilder == null;
+      connectionSupportsWorkbenchRead(_connection) || !_hasPreviewBuilder;
 
   bool get _hasGitTab =>
-      _hasWorkbenchTabs && connectionSupportsWorkbenchWrite(widget.connection);
+      _hasWorkbenchTabs && connectionSupportsWorkbenchWrite(_connection);
 
   List<MobileWorkbenchTab> get _availableTabs => [
     if (_hasWorkbenchTabs) MobileWorkbenchTab.files,
     if (_hasGitTab) MobileWorkbenchTab.git,
     if (_hasWorkbenchTabs) MobileWorkbenchTab.pr,
-    if (widget.previewTabBuilder != null) MobileWorkbenchTab.preview,
+    if (_hasPreviewBuilder) MobileWorkbenchTab.preview,
   ];
 
   void _bumpWorkspaceRevision() {
@@ -102,6 +121,10 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
   @override
   void initState() {
     super.initState();
+    final current = widget.connectionListenable?.value;
+    _connection = current ?? widget.connection;
+    _offline = widget.connectionListenable != null && current == null;
+    widget.connectionListenable?.addListener(_handleConnectionChanged);
     _selectedTab = _resolveInitialTab(widget.initialTab);
     _previewActivated = _selectedTab == MobileWorkbenchTab.preview;
   }
@@ -109,11 +132,51 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
   @override
   void didUpdateWidget(covariant MobileWorkbenchScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.connectionListenable != widget.connectionListenable) {
+      oldWidget.connectionListenable?.removeListener(_handleConnectionChanged);
+      widget.connectionListenable?.addListener(_handleConnectionChanged);
+      _syncFromListenable(bumpRevision: false);
+    } else if (widget.connectionListenable == null &&
+        !identical(oldWidget.connection, widget.connection)) {
+      _connection = widget.connection;
+      _offline = false;
+      _workspaceRevision++;
+    }
     if (!_availableTabs.contains(_selectedTab)) {
       _selectedTab = _availableTabs.first;
     }
     if (_selectedTab == MobileWorkbenchTab.preview) {
       _previewActivated = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.connectionListenable?.removeListener(_handleConnectionChanged);
+    super.dispose();
+  }
+
+  void _handleConnectionChanged() {
+    if (!mounted) return;
+    setState(() => _syncFromListenable(bumpRevision: true));
+  }
+
+  void _syncFromListenable({required bool bumpRevision}) {
+    final listenable = widget.connectionListenable;
+    if (listenable == null) return;
+    final next = listenable.value;
+    if (next == null) {
+      _offline = true;
+      return;
+    }
+    final changed = !identical(next, _connection);
+    _connection = next;
+    _offline = false;
+    if (changed && bumpRevision) {
+      _workspaceRevision++;
+    }
+    if (!_availableTabs.contains(_selectedTab)) {
+      _selectedTab = _availableTabs.first;
     }
   }
 
@@ -186,56 +249,88 @@ class _MobileWorkbenchScreenState extends State<MobileWorkbenchScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: IndexedStack(
-          index: selectedIndex,
+        child: Column(
           children: [
-            if (_hasWorkbenchTabs)
-              TickerMode(
-                enabled: _selectedTab == MobileWorkbenchTab.files,
-                child: FileBrowserTab(
-                  connection: widget.connection,
-                  threadId: widget.threadId,
-                  initialDirectory: widget.initialDirectory,
-                  searchDebounce: widget.searchDebounce,
-                  revision: _workspaceRevision,
-                  threadBusy: widget.threadBusy,
-                  onWorkspaceMutated: _bumpWorkspaceRevision,
-                  onOpenGitTab: _hasGitTab
-                      ? () => setState(() => _selectedTab = MobileWorkbenchTab.git)
-                      : null,
+            if (_offline)
+              Container(
+                key: MobileWorkbenchScreen.offlineBannerKey,
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: TimelineSpace.x6,
+                  vertical: TimelineSpace.x2,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.surface,
+                  border: Border(bottom: BorderSide(color: colors.divider)),
+                ),
+                child: Text(
+                  '电脑连接已断开，正在重连…',
+                  style: TimelineType.metaStyle(colors.muted),
                 ),
               ),
-            if (_hasGitTab)
-              TickerMode(
-                enabled: _selectedTab == MobileWorkbenchTab.git,
-                child: GitWorkbenchTab(
-                  connection: widget.connection,
-                  threadId: widget.threadId,
-                  active: _selectedTab == MobileWorkbenchTab.git,
-                  revision: _workspaceRevision,
-                  threadBusy: widget.threadBusy,
-                  onWorkspaceMutated: _bumpWorkspaceRevision,
-                ),
+            Expanded(
+              child: IndexedStack(
+                index: selectedIndex,
+                children: [
+                  if (_hasWorkbenchTabs)
+                    TickerMode(
+                      enabled: _selectedTab == MobileWorkbenchTab.files,
+                      child: FileBrowserTab(
+                        connection: _connection,
+                        threadId: widget.threadId,
+                        initialDirectory: widget.initialDirectory,
+                        searchDebounce: widget.searchDebounce,
+                        revision: _workspaceRevision,
+                        threadBusy: widget.threadBusy,
+                        onWorkspaceMutated: _bumpWorkspaceRevision,
+                        onOpenGitTab: _hasGitTab
+                            ? () => setState(
+                                () => _selectedTab = MobileWorkbenchTab.git,
+                              )
+                            : null,
+                      ),
+                    ),
+                  if (_hasGitTab)
+                    TickerMode(
+                      enabled: _selectedTab == MobileWorkbenchTab.git,
+                      child: GitWorkbenchTab(
+                        connection: _connection,
+                        threadId: widget.threadId,
+                        active: _selectedTab == MobileWorkbenchTab.git,
+                        revision: _workspaceRevision,
+                        threadBusy: widget.threadBusy,
+                        onWorkspaceMutated: _bumpWorkspaceRevision,
+                      ),
+                    ),
+                  if (_hasWorkbenchTabs)
+                    TickerMode(
+                      enabled: _selectedTab == MobileWorkbenchTab.pr,
+                      child: PrStatusTab(
+                        connection: _connection,
+                        threadId: widget.threadId,
+                        active: _selectedTab == MobileWorkbenchTab.pr,
+                        revision: _workspaceRevision,
+                        openExternalUrl: widget.openExternalUrl,
+                        onWorkspaceMutated: _bumpWorkspaceRevision,
+                      ),
+                    ),
+                  if (_hasPreviewBuilder)
+                    TickerMode(
+                      enabled: _selectedTab == MobileWorkbenchTab.preview,
+                      child: _previewActivated
+                          ? Builder(
+                              builder: (ctx) =>
+                                  widget.connectionPreviewTabBuilder?.call(
+                                    ctx,
+                                    _connection,
+                                  ) ??
+                                  widget.previewTabBuilder!(ctx),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                ],
               ),
-            if (_hasWorkbenchTabs)
-              TickerMode(
-                enabled: _selectedTab == MobileWorkbenchTab.pr,
-                child: PrStatusTab(
-                  connection: widget.connection,
-                  threadId: widget.threadId,
-                  active: _selectedTab == MobileWorkbenchTab.pr,
-                  revision: _workspaceRevision,
-                  openExternalUrl: widget.openExternalUrl,
-                  onWorkspaceMutated: _bumpWorkspaceRevision,
-                ),
-              ),
-            if (widget.previewTabBuilder case final buildPreview?)
-              TickerMode(
-                enabled: _selectedTab == MobileWorkbenchTab.preview,
-                child: _previewActivated
-                    ? Builder(builder: buildPreview)
-                    : const SizedBox.shrink(),
-              ),
+            ),
           ],
         ),
       ),

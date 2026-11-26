@@ -1045,7 +1045,10 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           onComputers: () => _showWorkspace(false),
           onSettings: _openReminderSettings,
         ),
-        manager,
+        // Keep manager's hidden Scaffold isolated from MaterialApp's root
+        // ScaffoldMessenger so pushed routes (Workbench/Terminal) popping with
+        // an active SnackBar don't trigger duplicate SnackBar Hero tags.
+        ScaffoldMessenger(child: manager),
       ],
     );
   }

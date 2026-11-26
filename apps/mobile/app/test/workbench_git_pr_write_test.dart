@@ -393,4 +393,55 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'MobileWorkbenchScreen switches to new connection after disconnect and reconnect',
+    (tester) async {
+      final host1 = _GitPrHost();
+      final host2 = _GitPrHost();
+      final conn1 = _FakeGitPrConnection(host1);
+      final conn2 = _FakeGitPrConnection(host2);
+      final notifier = ValueNotifier<MobileConnection?>(conn1);
+      addTearDown(notifier.dispose);
+
+      await tester.pumpWidget(
+        _app(
+          MobileWorkbenchScreen(
+            connection: conn1,
+            connectionListenable: notifier,
+            threadId: 'th_1',
+            initialTab: MobileWorkbenchTab.git,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Simulate desktop restart / network drop -> offline banner appears.
+      notifier.value = null;
+      await tester.pump();
+      expect(find.byKey(MobileWorkbenchScreen.offlineBannerKey), findsOneWidget);
+
+      // Reconnect with fresh connection -> banner clears and subsequent writes use host2.
+      notifier.value = conn2;
+      await tester.pumpAndSettle();
+      expect(find.byKey(MobileWorkbenchScreen.offlineBannerKey), findsNothing);
+
+      final calls1Before = host1.calls.length;
+      await tester.tap(find.byKey(GitWorkbenchTab.createCheckpointButtonKey));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField).last, 'after-reconnect');
+      await tester.tap(find.text('创建'));
+      await tester.pumpAndSettle();
+
+      expect(host1.calls.length, calls1Before);
+      expect(
+        host2.calls.any(
+          (c) =>
+              c.method == MobileWorkbenchWriteMethods.checkpointCreate &&
+              c.params['label'] == 'after-reconnect',
+        ),
+        isTrue,
+      );
+    },
+  );
 }
