@@ -46,8 +46,15 @@ class TerminalKeyCap extends StatefulWidget {
 }
 
 class _TerminalKeyCapState extends State<TerminalKeyCap> {
+  static const double _dragCancelDistance = 18;
+
   Timer? _initialDelay;
   Timer? _repeatTimer;
+  int? _activePointer;
+  Offset? _downPosition;
+  bool _pressed = false;
+  bool _movedOut = false;
+  bool _repeatFired = false;
 
   void _stopRepeat() {
     _initialDelay?.cancel();
@@ -60,15 +67,71 @@ class _TerminalKeyCapState extends State<TerminalKeyCap> {
     if (!widget.repeatable || !widget.enabled) return;
     _stopRepeat();
     _initialDelay = Timer(const Duration(milliseconds: 360), () {
-      _repeatTimer = Timer.periodic(const Duration(milliseconds: 85), (_) {
-        if (!mounted || !widget.enabled) {
+      _repeatTimer = Timer.periodic(const Duration(milliseconds: 75), (_) {
+        if (!mounted || !widget.enabled || _movedOut) {
           _stopRepeat();
           return;
         }
+        _repeatFired = true;
         HapticFeedback.selectionClick();
         widget.onTap();
       });
     });
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!widget.enabled || _activePointer != null) return;
+    _activePointer = event.pointer;
+    _downPosition = event.position;
+    _movedOut = false;
+    _repeatFired = false;
+    setState(() => _pressed = true);
+    _startRepeat();
+  }
+
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (event.pointer != _activePointer || _downPosition == null || _movedOut) {
+      return;
+    }
+    if ((event.position - _downPosition!).distance > _dragCancelDistance) {
+      _movedOut = true;
+      _stopRepeat();
+      if (_pressed) setState(() => _pressed = false);
+    }
+  }
+
+  void _handlePointerUp(PointerUpEvent event) {
+    if (event.pointer != _activePointer) return;
+    final shouldFire = widget.enabled && !_movedOut && !_repeatFired;
+    _activePointer = null;
+    _downPosition = null;
+    _stopRepeat();
+    if (_pressed) setState(() => _pressed = false);
+    if (shouldFire) {
+      HapticFeedback.selectionClick();
+      widget.onTap();
+    }
+  }
+
+  void _handlePointerCancel(PointerCancelEvent event) {
+    if (event.pointer != _activePointer) return;
+    _activePointer = null;
+    _downPosition = null;
+    _stopRepeat();
+    if (_pressed) setState(() => _pressed = false);
+  }
+
+  @override
+  void didUpdateWidget(covariant TerminalKeyCap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.enabled || !widget.repeatable) {
+      _stopRepeat();
+    }
+    if (!widget.enabled && _pressed) {
+      _activePointer = null;
+      _downPosition = null;
+      _pressed = false;
+    }
   }
 
   @override
@@ -89,6 +152,14 @@ class _TerminalKeyCapState extends State<TerminalKeyCap> {
       bg = widget.enabled ? colors.primary : colors.field;
       fg = widget.enabled ? colors.onPrimary : colors.faint;
       borderColor = Colors.transparent;
+    } else if (_pressed) {
+      bg = widget.danger
+          ? colors.errorTint
+          : (isDark ? colors.field : colors.panel);
+      fg = widget.danger ? colors.error : colors.foreground;
+      borderColor = widget.danger
+          ? colors.error.withValues(alpha: 0.45)
+          : colors.primary.withValues(alpha: 0.45);
     } else if (widget.danger) {
       bg = colors.errorTint;
       fg = widget.enabled ? colors.error : colors.faint;
@@ -179,26 +250,23 @@ class _TerminalKeyCapState extends State<TerminalKeyCap> {
       );
     }
 
-    final box = SizedBox(
-      height: widget.height,
-      child: Material(
-        color: bg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: borderColor),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: GestureDetector(
-          onTapDown: widget.enabled ? (_) => _startRepeat() : null,
-          onTapUp: (_) => _stopRepeat(),
-          onTapCancel: _stopRepeat,
-          child: InkWell(
-            onTap: widget.enabled
-                ? () {
-                    HapticFeedback.selectionClick();
-                    widget.onTap();
-                  }
-                : null,
+    // 直连底层指针事件绕过 PageView 内 InkWell 的 100ms 延迟与多指手势竞争，按下瞬间即高亮。
+    final cap = Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: _handlePointerDown,
+      onPointerMove: _handlePointerMove,
+      onPointerUp: _handlePointerUp,
+      onPointerCancel: _handlePointerCancel,
+      child: Transform.scale(
+        scale: _pressed ? 0.94 : 1.0,
+        child: SizedBox(
+          height: widget.height,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: borderColor),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 2),
               child: Center(
@@ -210,8 +278,8 @@ class _TerminalKeyCapState extends State<TerminalKeyCap> {
       ),
     );
     if (widget.tooltip != null) {
-      return Tooltip(message: widget.tooltip!, child: box);
+      return Tooltip(message: widget.tooltip!, child: cap);
     }
-    return box;
+    return cap;
   }
 }

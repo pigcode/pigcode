@@ -129,6 +129,7 @@ export function createTerminalSubscription(options: {
   let pendingChunks: Array<{ data: string; cursor: number; bytes: number }> = []
   let pendingBytes = 0
   let flushTimer: ReturnType<typeof setTimeout> | undefined
+  let cooldownUntil = 0
 
   const emitOutput = (
     data: string,
@@ -174,6 +175,9 @@ export function createTerminalSubscription(options: {
       pendingBytes = 0
       return
     }
+    if (settings.coalesceMs > 0) {
+      cooldownUntil = Date.now() + settings.coalesceMs
+    }
     const lastCursor = pendingChunks[pendingChunks.length - 1]!.cursor
     const combined = pendingChunks.map((item) => item.data).join("")
     pendingChunks = []
@@ -198,8 +202,17 @@ export function createTerminalSubscription(options: {
     pendingBytes += bytes
     if (settings.coalesceMs <= 0) {
       flushPending()
-    } else if (flushTimer === undefined) {
-      flushTimer = setTimeout(flushPending, settings.coalesceMs)
+      return
+    }
+    // 空闲时的小包交互回显立即首包直发（0ms 等待），仅在突发刷屏窗口内做合并限流。
+    const now = Date.now()
+    if (pendingChunks.length === 1 && flushTimer === undefined && bytes <= 128 && now >= cooldownUntil) {
+      flushPending()
+      return
+    }
+    if (flushTimer === undefined) {
+      const waitMs = cooldownUntil > now ? cooldownUntil - now : settings.coalesceMs
+      flushTimer = setTimeout(flushPending, waitMs)
       flushTimer.unref?.()
     }
   }

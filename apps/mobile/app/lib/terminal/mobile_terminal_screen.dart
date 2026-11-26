@@ -1183,21 +1183,23 @@ class _MobileTerminalScreenState extends State<MobileTerminalScreen> {
     final writable = active.summary.writable && !active.exited;
     final allowSystemIme =
         writable && _inputPanel != _TerminalInputPanel.expanded;
-    final view = TerminalView(
-      active.terminal,
-      key: ValueKey('xterm-${active.summary.id}'),
-      controller: active.controller,
-      theme: termTheme,
-      textStyle: pigcodeTerminalStyle(),
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-      focusNode: writable ? _terminalFocus : null,
-      autofocus: false,
-      readOnly: !writable,
-      autoResize: writable,
-      hardwareKeyboardOnly: !allowSystemIme,
-      deleteDetection: writable,
-      keyboardAppearance: brightness,
-      alwaysShowCursor: writable,
+    final view = RepaintBoundary(
+      child: TerminalView(
+        active.terminal,
+        key: ValueKey('xterm-${active.summary.id}'),
+        controller: active.controller,
+        theme: termTheme,
+        textStyle: pigcodeTerminalStyle(),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        focusNode: writable ? _terminalFocus : null,
+        autofocus: false,
+        readOnly: !writable,
+        autoResize: writable,
+        hardwareKeyboardOnly: !allowSystemIme,
+        deleteDetection: writable,
+        keyboardAppearance: brightness,
+        alwaysShowCursor: writable,
+      ),
     );
 
     if (active.summary.writable) {

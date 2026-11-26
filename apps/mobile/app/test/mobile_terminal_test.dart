@@ -346,6 +346,27 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(TerminalExpandedKeyboard.panelKey), findsOneWidget);
 
+      // Multi-finger rollover (overlap pressing 'w' then 'e') fires both without GestureArena stall
+      final wCenter = tester.getCenter(find.text('w'));
+      final eCenter = tester.getCenter(find.text('e'));
+      final g1 = await tester.startGesture(wCenter);
+      final g2 = await tester.startGesture(eCenter);
+      await tester.pump();
+      await g1.up();
+      await g2.up();
+      await tester.pumpAndSettle();
+      expect(
+        host.writes.sublist(host.writes.length - 2).map((e) => e.$2).toList(),
+        ['w', 'e'],
+      );
+
+      // Dragging horizontally directly from a key switches pages cleanly without misfiring that key
+      final writeCountBeforeSwipe = host.writes.length;
+      await tester.drag(find.text('t'), const Offset(-260, 0));
+      await tester.pumpAndSettle();
+      expect(find.text('F5'), findsOneWidget);
+      expect(host.writes.length, writeCountBeforeSwipe);
+
       // Verify modifier encoding helpers
       expect(
         encodeModifiedSpecialKey('\x1b[A', ctrl: true, shift: true),

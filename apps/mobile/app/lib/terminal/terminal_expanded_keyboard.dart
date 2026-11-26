@@ -66,6 +66,14 @@ class TerminalExpandedKeyboard extends StatefulWidget {
 class _TerminalExpandedKeyboardState extends State<TerminalExpandedKeyboard> {
   final PageController _pageController = PageController();
   int _page = 0;
+  final Map<int, Offset> _swipeStarts = {};
+  int? _swipePointer;
+  int _swipeStartPage = 0;
+  double _swipeOriginOffset = 0;
+  double _lastDeltaX = 0;
+  int _lastMoveMicros = 0;
+  double _lastVelocityX = 0;
+  bool _swipeDragging = false;
 
   // 第 1 屏第 1 行：UU 同款 10 列双标符号（upper = Shift 上档, lower = 默认）
   static const _dualSymbols = [
@@ -114,6 +122,77 @@ class _TerminalExpandedKeyboardState extends State<TerminalExpandedKeyboard> {
     );
   }
 
+  void _handlePagerPointerDown(PointerDownEvent event) {
+    _swipeStarts[event.pointer] = event.position;
+  }
+
+  void _handlePagerPointerMove(PointerMoveEvent event) {
+    final start = _swipeStarts[event.pointer];
+    if (start == null || !_pageController.hasClients) return;
+    final pos = _pageController.position;
+    final dx = event.position.dx - start.dx;
+    final dy = event.position.dy - start.dy;
+
+    if (!_swipeDragging) {
+      // 仅在单指明显横向滑屏（>24px）时接管翻页，彻底避免 PageView 锁定双指快速连敲。
+      if (_swipePointer == null &&
+          dx.abs() > 24 &&
+          dx.abs() > dy.abs() * 1.25) {
+        _swipePointer = event.pointer;
+        _swipeDragging = true;
+        _swipeStartPage = _page;
+        // 只扣掉 24px 触发阈值而非整段 dx，避免高速单帧大跨度滑动位移被归零。
+        _swipeOriginOffset = pos.pixels + dx.sign * 24;
+        _lastDeltaX = dx;
+        _lastMoveMicros = event.timeStamp.inMicroseconds;
+        _lastVelocityX = 0;
+      } else {
+        return;
+      }
+    }
+    if (event.pointer != _swipePointer) return;
+
+    final nowMicros = event.timeStamp.inMicroseconds;
+    final dtSec = (nowMicros - _lastMoveMicros) / 1e6;
+    if (dtSec > 0.001) {
+      _lastVelocityX = (dx - _lastDeltaX) / dtSec;
+    }
+    _lastDeltaX = dx;
+    _lastMoveMicros = nowMicros;
+
+    pos.jumpTo(
+      (_swipeOriginOffset - dx).clamp(pos.minScrollExtent, pos.maxScrollExtent),
+    );
+  }
+
+  void _finishPagerSwipe(int pointer) {
+    _swipeStarts.remove(pointer);
+    if (pointer != _swipePointer || !_swipeDragging) return;
+    _swipePointer = null;
+    _swipeDragging = false;
+    if (!_pageController.hasClients) return;
+    final pos = _pageController.position;
+    final width = pos.viewportDimension;
+    final int targetPage;
+    if (_lastVelocityX < -280) {
+      targetPage = 1;
+    } else if (_lastVelocityX > 280) {
+      targetPage = 0;
+    } else if (width > 0) {
+      final progress = pos.pixels / width;
+      targetPage = (_swipeStartPage == 0 ? progress > 0.25 : progress > 0.75)
+          ? 1
+          : 0;
+    } else {
+      targetPage = _swipeStartPage;
+    }
+    _pageController.animateToPage(
+      targetPage,
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).brightness == Brightness.dark
@@ -132,13 +211,20 @@ class _TerminalExpandedKeyboardState extends State<TerminalExpandedKeyboard> {
         children: [
           _buildModifierHeader(colors),
           const SizedBox(height: 8),
-          SizedBox(
-            height: 224,
-            child: PageView(
-              key: TerminalExpandedKeyboard.pagerKey,
-              controller: _pageController,
-              onPageChanged: (index) => setState(() => _page = index),
-              children: [_buildQwertyPage(), _buildFunctionAndNavPage()],
+          Listener(
+            onPointerDown: _handlePagerPointerDown,
+            onPointerMove: _handlePagerPointerMove,
+            onPointerUp: (e) => _finishPagerSwipe(e.pointer),
+            onPointerCancel: (e) => _finishPagerSwipe(e.pointer),
+            child: SizedBox(
+              height: 224,
+              child: PageView(
+                key: TerminalExpandedKeyboard.pagerKey,
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (index) => setState(() => _page = index),
+                children: [_buildQwertyPage(), _buildFunctionAndNavPage()],
+              ),
             ),
           ),
           const SizedBox(height: 8),

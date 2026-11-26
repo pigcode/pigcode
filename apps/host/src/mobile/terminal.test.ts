@@ -353,4 +353,64 @@ describe("mobile terminal protocol & Host implementation", { timeout: 30_000 }, 
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it("flushes small interactive keystroke echoes immediately on leading edge while coalescing bursts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pigcode-mterm-lead-"))
+    const fake = createFakePtyFactory()
+    const host = await setupTerminalHost(fake.factory)
+    try {
+      const project = host.ctx.projects.add(root, "零等待回显项目")
+      const thread = host.ctx.threads.create(project.id, "零等待回显会话", "fake")
+      const term = await host.ctx.terminal.open({ threadId: thread.id }, 48, 20, {
+        origin: "mobile",
+      })
+      const pty = fake.instances[0]!
+
+      const sent: Array<{ method: string; params: Record<string, unknown> }> = []
+      const session = new MobileTerminalSession(
+        host.ctx,
+        "dev-lead",
+        (msg) => sent.push(msg as { method: string; params: Record<string, unknown> }),
+        () => {},
+        { coalesceMs: 60, maxPendingBytes: 4096, outputChunkBytes: 512 },
+      )
+      const afterReplies: Array<() => void> = []
+      session.dispatch(
+        {
+          jsonrpc: "2.0",
+          id: "1",
+          method: mobileTerminalMethods.attach,
+          params: { threadId: thread.id, terminalId: term.id },
+        },
+        (cb) => afterReplies.push(cb),
+      )
+      for (const cb of afterReplies) cb()
+
+      // 空闲时单个回显字符不等待 60ms 定时器，同步直发
+      pty.emit("a")
+      expect(sent).toHaveLength(1)
+      expect(
+        Buffer.from((sent[0]!.params as MobileTerminalOutputNotification).dataBase64, "base64").toString(
+          "utf8",
+        ),
+      ).toBe("a")
+
+      // 冷却窗口内的连续输出则合并为一帧后再发送
+      pty.emit("b")
+      pty.emit("c")
+      expect(sent).toHaveLength(1)
+      await new Promise((r) => setTimeout(r, 80))
+      expect(sent).toHaveLength(2)
+      expect(
+        Buffer.from((sent[1]!.params as MobileTerminalOutputNotification).dataBase64, "base64").toString(
+          "utf8",
+        ),
+      ).toBe("bc")
+
+      session.close()
+    } finally {
+      await host.dispose()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })
