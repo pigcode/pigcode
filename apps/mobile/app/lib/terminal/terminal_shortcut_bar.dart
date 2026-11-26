@@ -220,11 +220,16 @@ class _ShortcutChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = active ? foreground : field.withValues(alpha: 0.72);
+    final brightness = Theme.of(context).brightness;
+    final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
+    final bg = active ? foreground : field;
     final fg = active ? background : (enabled ? foreground : muted);
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(14),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: active ? BorderSide.none : BorderSide(color: colors.border),
+      ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: enabled ? onTap : null,
