@@ -6,6 +6,9 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'manage/manage_utils.dart';
+import 'manage/project_directory_picker_screen.dart';
+import 'manage/settings_hub_screen.dart';
 import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
@@ -262,10 +265,13 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     final supportsWorkbench = connectionSupportsWorkbenchRead(connection);
     final supportsPreview = connectionSupportsPreviewTunnel(connection);
     final supportsTerminal = connectionSupportsTerminal(connection);
+    final supportsProjectManage = connectionSupportsProjectManage(connection);
     final canOpenWorkbench = online && (supportsWorkbench || supportsPreview);
     final canOpenTerminal = online && supportsTerminal;
+    final canManageProjects = online && supportsProjectManage;
     _syncConnectionNotifier(connected ? connection : null);
     final computer = widget.computer;
+    final computerName = connection?.computerName ?? computer?.name ?? '电脑';
     final localDrafts = computer != null && widget.deviceId != null;
     return WorkspaceView(
       snapshot: _lastSidebar,
@@ -275,7 +281,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
       connectionLabel: connected && !online
           ? data?.error ?? '正在恢复会话…'
           : widget.connectionLabel,
-      computerName: connection?.computerName ?? computer?.name ?? '电脑',
+      computerName: computerName,
       error: connected ? data?.error : null,
       onRetry: connected
           ? (connection?.supportsSidebar == true && provider != null
@@ -283,7 +289,94 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 : null)
           : widget.reconnect,
       onComputers: widget.onComputers,
-      onSettings: widget.onSettings,
+      onSettings: () {
+        unawaited(
+          SettingsHubScreen.open(
+            context,
+            connectionListenable: _connectionNotifier,
+            computerName: computerName,
+            onOpenReminders: widget.onSettings,
+            onComputers: widget.onComputers,
+          ),
+        );
+      },
+      onAddProject: canManageProjects
+          ? (viewContext) async {
+              final active = connection;
+              if (active == null) return;
+              _connectionNotifier.value = active;
+              final added = await ProjectDirectoryPickerScreen.open(
+                viewContext,
+                connectionListenable: _connectionNotifier,
+              );
+              if (added == null || !viewContext.mounted) return;
+              ScaffoldMessenger.maybeOf(
+                viewContext,
+              )?.showSnackBar(SnackBar(content: Text('已添加项目「${added.name}」')));
+              if (provider != null) {
+                unawaited(ref.read(provider.notifier).refresh());
+              }
+            }
+          : null,
+      onRenameProject: canManageProjects
+          ? (viewContext, project) async {
+              final active = _connectionNotifier.value ?? connection;
+              if (active == null) return;
+              final nextName = await showRenameProjectDialog(
+                viewContext,
+                currentName: project.name,
+              );
+              if (nextName == null ||
+                  nextName == project.name ||
+                  !viewContext.mounted) {
+                return;
+              }
+              try {
+                await active.projects.rename(
+                  projectId: project.id,
+                  name: nextName,
+                );
+                if (!viewContext.mounted) return;
+                ScaffoldMessenger.maybeOf(
+                  viewContext,
+                )?.showSnackBar(const SnackBar(content: Text('项目已重命名')));
+                if (provider != null) {
+                  unawaited(ref.read(provider.notifier).refresh());
+                }
+              } catch (error) {
+                if (!viewContext.mounted) return;
+                ScaffoldMessenger.maybeOf(viewContext)?.showSnackBar(
+                  SnackBar(content: Text(manageErrorMessage(error))),
+                );
+              }
+            }
+          : null,
+      onRemoveProject: canManageProjects
+          ? (viewContext, project) async {
+              final active = _connectionNotifier.value ?? connection;
+              if (active == null) return;
+              final confirmed = await confirmRemoveProjectDialog(
+                viewContext,
+                projectName: project.name,
+              );
+              if (!confirmed || !viewContext.mounted) return;
+              try {
+                await active.projects.remove(projectId: project.id);
+                if (!viewContext.mounted) return;
+                ScaffoldMessenger.maybeOf(viewContext)?.showSnackBar(
+                  SnackBar(content: Text('已移除项目「${project.name}」')),
+                );
+                if (provider != null) {
+                  unawaited(ref.read(provider.notifier).refresh());
+                }
+              } catch (error) {
+                if (!viewContext.mounted) return;
+                ScaffoldMessenger.maybeOf(viewContext)?.showSnackBar(
+                  SnackBar(content: Text(manageErrorMessage(error))),
+                );
+              }
+            }
+          : null,
       onOpenTerminal: canOpenTerminal
           ? (context, thread) {
               if (connection == null) return;
@@ -420,6 +513,9 @@ class WorkspaceView extends StatefulWidget {
     this.sidebarCommands,
     this.onOpenTerminal,
     this.onOpenWorkbench,
+    this.onAddProject,
+    this.onRenameProject,
+    this.onRemoveProject,
   });
 
   final SidebarSnapshot? snapshot;
@@ -437,6 +533,17 @@ class WorkspaceView extends StatefulWidget {
   onOpenTerminal;
   final void Function(BuildContext context, MobileThreadSummary thread)?
   onOpenWorkbench;
+  final Future<void> Function(BuildContext context)? onAddProject;
+  final Future<void> Function(
+    BuildContext context,
+    MobileProjectSummary project,
+  )?
+  onRenameProject;
+  final Future<void> Function(
+    BuildContext context,
+    MobileProjectSummary project,
+  )?
+  onRemoveProject;
   final String computerName;
   final String? connectionLabel;
   final String? error;
@@ -1251,6 +1358,27 @@ class _WorkspaceViewState extends State<WorkspaceView> {
                                   _menu(false);
                                 },
                                 onNewThread: canOpenDraft ? _openDraft : null,
+                                onAddProject: widget.onAddProject != null
+                                    ? () => unawaited(
+                                        widget.onAddProject!(context),
+                                      )
+                                    : null,
+                                onRenameProject: widget.onRenameProject != null
+                                    ? (project) => unawaited(
+                                        widget.onRenameProject!(
+                                          context,
+                                          project,
+                                        ),
+                                      )
+                                    : null,
+                                onRemoveProject: widget.onRemoveProject != null
+                                    ? (project) => unawaited(
+                                        widget.onRemoveProject!(
+                                          context,
+                                          project,
+                                        ),
+                                      )
+                                    : null,
                                 onSettings: widget.onSettings,
                                 onComputers: () {
                                   _menu(false);

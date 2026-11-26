@@ -12,6 +12,8 @@ import 'workspace_icon.dart';
 
 enum _ThreadAction { pin, read, archive }
 
+enum _ProjectAction { newThread, rename, remove }
+
 const _timeGroups = ['今天', '昨天', '最近 7 天', '最近 30 天', '更早'];
 
 SidebarCategory _category(MobileThreadSummary thread) =>
@@ -47,10 +49,15 @@ class SidebarMenu extends StatefulWidget {
     required this.onComputers,
     required this.focusNode,
     this.onNewThread,
+    this.onAddProject,
+    this.onRenameProject,
+    this.onRemoveProject,
     this.onSettings,
     this.commands,
     this.active = true,
   });
+
+  static const addProjectButtonKey = ValueKey('sidebar-add-project');
 
   final SidebarSnapshot? snapshot;
   final String? selectedId;
@@ -61,6 +68,9 @@ class SidebarMenu extends StatefulWidget {
   final VoidCallback onComputers;
   final FocusNode focusNode;
   final ValueChanged<String?>? onNewThread;
+  final VoidCallback? onAddProject;
+  final ValueChanged<MobileProjectSummary>? onRenameProject;
+  final ValueChanged<MobileProjectSummary>? onRemoveProject;
   final VoidCallback? onSettings;
   final MobileSidebarCommands? commands;
   final bool active;
@@ -150,6 +160,43 @@ class _SidebarMenuState extends State<SidebarMenu> {
         _ThreadAction.archive => commands.archive(thread.id, !thread.archived),
       },
     );
+  }
+
+  Future<void> _showProjectActions(MobileProjectSummary project) async {
+    final items = [
+      if (widget.onNewThread != null)
+        (WorkspaceGlyph.compose, '新建会话', _ProjectAction.newThread),
+      if (widget.onRenameProject != null)
+        (WorkspaceGlyph.pencil, '重命名项目', _ProjectAction.rename),
+      if (widget.onRemoveProject != null)
+        (WorkspaceGlyph.archive, '从列表移除', _ProjectAction.remove),
+    ];
+    if (items.isEmpty) return;
+    final action = await showMobileSheet<_ProjectAction>(
+      context,
+      title: project.name,
+      content: (sheet) => SliverList.builder(
+        itemCount: items.length,
+        itemBuilder: (_, index) {
+          final (glyph, label, value) = items[index];
+          return MobileSheetAction(
+            glyph: glyph,
+            label: label,
+            dividerAbove: index > 0,
+            onTap: () => Navigator.pop(sheet, value),
+          );
+        },
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _ProjectAction.newThread:
+        widget.onNewThread?.call(project.id);
+      case _ProjectAction.rename:
+        widget.onRenameProject?.call(project);
+      case _ProjectAction.remove:
+        widget.onRemoveProject?.call(project);
+    }
   }
 
   Future<void> _showOptions() async {
@@ -423,6 +470,26 @@ class _SidebarMenuState extends State<SidebarMenu> {
                       ),
               ),
             ),
+            if (withOptions &&
+                widget.online &&
+                widget.onAddProject != null &&
+                !_arrangement.archived &&
+                _arrangement.grouping == SidebarGrouping.project)
+              SizedBox.square(
+                dimension: size < 46 ? size : 46,
+                child: IconButton(
+                  key: SidebarMenu.addProjectButtonKey,
+                  tooltip: '添加项目',
+                  color: colors.muted,
+                  padding: EdgeInsetsDirectional.only(
+                    end: 4,
+                    bottom: size == 48 ? 10 : 9,
+                  ),
+                  alignment: AlignmentDirectional.bottomEnd,
+                  icon: const WorkspaceIcon(WorkspaceGlyph.plus, size: 18),
+                  onPressed: widget.onAddProject,
+                ),
+              ),
             if (withOptions)
               SizedBox.square(
                 // 原型的分组标题高 46，图标保持原位置。
@@ -601,6 +668,12 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             _collapsed.add(project.id);
                           }
                         }),
+                        onLongPress:
+                            widget.online &&
+                                (widget.onRenameProject != null ||
+                                    widget.onRemoveProject != null)
+                            ? () => _showProjectActions(project)
+                            : null,
                         child: ConstrainedBox(
                           // 原型项目行高 44；Android 的 48 触区由相邻留白承担。
                           constraints: const BoxConstraints(minHeight: 44),
