@@ -50,6 +50,7 @@ import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from ".
 import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
 import { MobilePreview, mobilePreviewRequests } from "./preview"
+import { MobileTerminalSession, mobileTerminalRequests } from "./terminal"
 import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
 import { MobileWorkbenchWrite, mobileWorkbenchWriteRequests } from "./workbench-write"
 
@@ -130,6 +131,7 @@ export class MobileSidebarRpc {
   private readonly workbench: MobileWorkbench
   private readonly workbenchWrite: MobileWorkbenchWrite
   private readonly preview: MobilePreview
+  private readonly terminal: MobileTerminalSession
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -202,6 +204,14 @@ export class MobileSidebarRpc {
       this.requirePairedDevice(),
     )
     this.preview = new MobilePreview(ctx, session.deviceKey, () => this.requirePairedDevice())
+    this.terminal = new MobileTerminalSession(
+      ctx,
+      session.deviceKey,
+      (message) => {
+        if (this.active) transport.send(message)
+      },
+      () => this.requirePairedDevice(),
+    )
   }
 
   start(): void {
@@ -214,6 +224,7 @@ export class MobileSidebarRpc {
     this.attachments.close()
     this.workbenchWrite.close()
     this.preview.close()
+    this.terminal.close()
     this.timeline.close()
     this.stopMessages?.()
     this.stopSidebar?.()
@@ -255,10 +266,13 @@ export class MobileSidebarRpc {
 
   private async reply(request: RpcRequest): Promise<void> {
     const { id } = request
+    const afterReplies: Array<() => void> = []
     let response: unknown
+    let ok = false
     try {
-      const result = await this.dispatch(request)
+      const result = await this.dispatch(request, (callback) => afterReplies.push(callback))
       response = rpcSuccessSchema.parse({ jsonrpc: "2.0", id, result })
+      ok = true
     } catch (error) {
       const code =
         error instanceof MobileRequestError ||
@@ -274,9 +288,18 @@ export class MobileSidebarRpc {
       })
     }
     if (this.active) this.transport.send(response)
+    if (ok && this.active) {
+      for (const callback of afterReplies) {
+        try {
+          callback()
+        } catch (error) {
+          console.error("[host] mobile afterReply hook failed", error)
+        }
+      }
+    }
   }
 
-  private dispatch(request: RpcRequest): unknown {
+  private dispatch(request: RpcRequest, onReply: (callback: () => void) => void): unknown {
     if (request.method === mobileReminderMethods.configure &&
         this.session.features.includes("reminders.apns") && this.session.configureReminders) {
       this.requirePairedDevice()
@@ -324,6 +347,14 @@ export class MobileSidebarRpc {
     ) {
       this.requirePairedDevice()
       return this.preview.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("terminal") &&
+      mobileTerminalRequests.has(request.method)
+    ) {
+      this.requirePairedDevice()
+      return this.terminal.dispatch(request, onReply)
     }
 
     const canRun = this.session.features.includes("run.write")

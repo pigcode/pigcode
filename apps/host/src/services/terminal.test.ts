@@ -540,4 +540,25 @@ describe("terminal service", () => {
     expect(midSurrogate.cursor).toBe(35)
     midSurrogate.unsubscribe()
   })
+
+  it("defaults origin to desktop and preserves explicit mobile origin across list and attach", async () => {
+    const pty = fakePty()
+    const { ctx, thread } = await setupTerminal(pty)
+
+    const desktopTerm = await ctx.terminal.open({ threadId: thread.id }, 80, 24)
+    const mobileTerm = await ctx.terminal.open({ threadId: thread.id }, 48, 20, {
+      origin: "mobile",
+    })
+
+    expect(desktopTerm.origin).toBe("desktop")
+    expect(mobileTerm.origin).toBe("mobile")
+    expect(ctx.terminal.list({ threadId: thread.id }).map((t) => [t.id, t.origin])).toEqual([
+      [desktopTerm.id, "desktop"],
+      [mobileTerm.id, "mobile"],
+    ])
+
+    const attached = ctx.terminal.attach(mobileTerm.id, () => undefined)
+    expect(attached.session.origin).toBe("mobile")
+    attached.unsubscribe()
+  })
 })

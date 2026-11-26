@@ -33,6 +33,9 @@ export type MobileErrorCode =
   | "WORKBENCH_WRITE_SESSION_NOT_FOUND"
   | "WORKBENCH_HASH_MISMATCH"
   | "PR_ACTION_FAILED"
+  | "TERMINAL_NOT_FOUND"
+  | "TERMINAL_READ_ONLY"
+  | "TERMINAL_LIMIT_EXCEEDED"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -69,6 +72,9 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   WORKBENCH_WRITE_SESSION_NOT_FOUND: "文件保存会话已过期，请重试保存。",
   WORKBENCH_HASH_MISMATCH: "文件传输校验失败，请重试保存。",
   PR_ACTION_FAILED: "执行 GitHub PR 操作失败，请检查仓库、权限或合并冲突。",
+  TERMINAL_NOT_FOUND: "这个终端已关闭或不再可用。",
+  TERMINAL_READ_ONLY: "电脑端打开的终端在手机上仅支持只读查看。",
+  TERMINAL_LIMIT_EXCEEDED: "当前会话手机端同时打开的终端数量已达上限。",
 }
 
 export class MobileRequestError extends Error {

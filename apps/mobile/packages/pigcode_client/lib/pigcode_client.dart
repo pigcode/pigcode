@@ -15,6 +15,7 @@ import 'sidebar.dart';
 import 'sidebar_models.dart';
 import 'src/attachments.dart';
 import 'src/preview.dart';
+import 'src/terminal.dart';
 import 'src/workbench.dart';
 import 'src/workbench_write.dart';
 import 'timeline.dart';
@@ -39,6 +40,7 @@ export 'sidebar.dart';
 export 'sidebar_models.dart';
 export 'src/attachments.dart';
 export 'src/preview.dart';
+export 'src/terminal.dart';
 export 'src/workbench.dart';
 export 'src/workbench_write.dart';
 export 'timeline.dart';
@@ -68,6 +70,7 @@ const mobileClientFeatures = <String>[
   'workbench.read',
   'workbench.write',
   'preview.tunnel',
+  'terminal',
 ];
 
 class MobileConnection {
@@ -91,6 +94,7 @@ class MobileConnection {
     this.supportsWorkbenchRead,
     this.supportsWorkbenchWrite,
     this.supportsPreviewTunnel,
+    this.supportsTerminal,
     this._reportsReminderSettings,
     this._registersApns,
     this.deviceId,
@@ -115,6 +119,7 @@ class MobileConnection {
   final bool supportsWorkbenchRead;
   final bool supportsWorkbenchWrite;
   final bool supportsPreviewTunnel;
+  final bool supportsTerminal;
   final bool _reportsReminderSettings;
   final bool _registersApns;
   final String deviceId;
@@ -142,6 +147,10 @@ class MobileConnection {
   late final MobilePreviewCommands preview = MobilePreviewCommands(
     _rpc,
     supportsPreviewTunnel: supportsPreviewTunnel,
+  );
+  late final MobileTerminalClient terminal = MobileTerminalClient(
+    _rpc,
+    supportsTerminal: supportsTerminal,
   );
   late final MobileQueueCommands queue = MobileQueueCommands(_rpc);
   late final MobilePendingRequests pendingRequests = MobilePendingRequests(
@@ -512,6 +521,7 @@ class MobileConnection {
         (welcome['features'] as List).contains('workbench.read'),
         (welcome['features'] as List).contains('workbench.write'),
         (welcome['features'] as List).contains('preview.tunnel'),
+        (welcome['features'] as List).contains('terminal'),
         (welcome['features'] as List).contains('reminders.status'),
         (welcome['features'] as List).contains('reminders.apns'),
         status.deviceId,

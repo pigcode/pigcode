@@ -11,6 +11,9 @@ import { threadCwd } from "./worktrees"
 
 export type { TerminalPlacement }
 
+/** 终端创建来源；桌面窗口创建的为 desktop，手机端创建的为 mobile。 */
+export type TerminalOrigin = "desktop" | "mobile"
+
 /** 每个终端默认保留的最大输出回滚字节数（UTF-8，256 KiB）。 */
 export const DEFAULT_SCROLLBACK_BYTES = 256 * 1024
 
@@ -42,6 +45,8 @@ export type TerminalOwner = { threadId: string } | { projectId: string }
 export interface TerminalOpenOptions {
   /** 终端在窗口里打开的位置，用于页面刷新后放回原位置。 */
   placement?: TerminalPlacement | undefined
+  /** 终端创建来源；缺省为 desktop，手机端创建时传 mobile。 */
+  origin?: TerminalOrigin | undefined
 }
 
 /** 打开的终端会话；id 用于后续 write/resize/close/subscribe/attach。 */
@@ -59,6 +64,8 @@ export interface TerminalSession {
   cwd: string
   /** 当前累计输出的单调游标（UTF-16 字符偏移），初始为 0。 */
   cursor: number
+  /** 终端创建来源：桌面端为 desktop，手机端为 mobile。 */
+  origin: TerminalOrigin
   /** 终端打开的位置；缺省兼容旧调用方。 */
   placement?: TerminalPlacement | undefined
   /** ISO 创建时间。 */
@@ -335,6 +342,7 @@ export const apply: TerminalPlugin = (ctx, config = {}) => {
         shell: shellName(shell),
         cwd,
         cursor: 0,
+        origin: options?.origin ?? "desktop",
         ...(options?.placement ? { placement: options.placement } : {}),
         createdAt: new Date().toISOString(),
       }

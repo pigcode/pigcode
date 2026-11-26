@@ -1,6 +1,7 @@
 import type { Context } from "cordis"
 import { cleanupDeviceMobileAttachments } from "./attachments"
 import { cleanupDeviceMobilePreviews } from "./preview"
+import { cleanupDeviceMobileTerminals } from "./terminal"
 import { cleanupDeviceMobileWorkbenchWrites } from "./workbench-write"
 import type { acceptNoise } from "./noise"
 
@@ -46,5 +47,10 @@ export function revokeDeviceWork(ctx: Context, publicKey: string): void {
     cleanupDeviceMobileWorkbenchWrites(ctx, publicKey)
   } catch (error) {
     console.error("[host] could not clean up workbench write sessions of revoked device", error)
+  }
+  try {
+    cleanupDeviceMobileTerminals(ctx, publicKey)
+  } catch (error) {
+    console.error("[host] could not clean up terminal subscriptions of revoked device", error)
   }
 }
