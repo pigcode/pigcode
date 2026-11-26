@@ -49,7 +49,9 @@ import { mobileErrorMessages, mobileParams as params, MobileRequestError } from 
 import { legacyRunReceipt, MobileRunCommands, mobileRunCommandRequests } from "./run-commands"
 import { MobileRunChanges, mobileRunChangesRequests } from "./run-changes"
 import { MobileTimelineSession, mobileTimelineRequests } from "./timeline"
+import { MobileAgentManage, mobileAgentRequests } from "./agent-manage"
 import { MobilePreview, mobilePreviewRequests } from "./preview"
+import { MobileProjectManage, mobileProjectRequests } from "./project-manage"
 import { MobileTerminalSession, mobileTerminalRequests } from "./terminal"
 import { MobileWorkbench, mobileWorkbenchRequests } from "./workbench"
 import { MobileWorkbenchWrite, mobileWorkbenchWriteRequests } from "./workbench-write"
@@ -132,6 +134,8 @@ export class MobileSidebarRpc {
   private readonly workbenchWrite: MobileWorkbenchWrite
   private readonly preview: MobilePreview
   private readonly terminal: MobileTerminalSession
+  private readonly projectManage: MobileProjectManage
+  private readonly agentManage: MobileAgentManage
   private readonly receipts: MobileCommandReceipts
   private active = false
   private readonly timeline: MobileTimelineSession
@@ -212,6 +216,8 @@ export class MobileSidebarRpc {
       },
       () => this.requirePairedDevice(),
     )
+    this.projectManage = new MobileProjectManage(ctx, () => this.requirePairedDevice())
+    this.agentManage = new MobileAgentManage(ctx, () => this.requirePairedDevice())
   }
 
   start(): void {
@@ -355,6 +361,20 @@ export class MobileSidebarRpc {
     ) {
       this.requirePairedDevice()
       return this.terminal.dispatch(request, onReply)
+    }
+
+    if (
+      this.session.features.includes("projects.manage") &&
+      mobileProjectRequests.has(request.method)
+    ) {
+      return this.projectManage.dispatch(request)
+    }
+
+    if (
+      this.session.features.includes("agents.manage") &&
+      mobileAgentRequests.has(request.method)
+    ) {
+      return this.agentManage.dispatch(request)
     }
 
     const canRun = this.session.features.includes("run.write")

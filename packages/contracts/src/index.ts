@@ -32,5 +32,7 @@ export * from "./mobile-workbench"
 export * from "./mobile-workbench-write"
 export * from "./mobile-preview"
 export * from "./mobile-terminal"
+export * from "./mobile-projects"
+export * from "./mobile-agents"
 
 export * from "./queued-messages"

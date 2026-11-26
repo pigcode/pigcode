@@ -34,6 +34,8 @@ export const mobileFeatures = [
   "workbench.write",
   "preview.tunnel",
   "terminal",
+  "projects.manage",
+  "agents.manage",
 ] as const
 export const publicKeySchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 

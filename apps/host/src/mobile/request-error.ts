@@ -36,6 +36,14 @@ export type MobileErrorCode =
   | "TERMINAL_NOT_FOUND"
   | "TERMINAL_READ_ONLY"
   | "TERMINAL_LIMIT_EXCEEDED"
+  | "PROJECT_PATH_FORBIDDEN"
+  | "PROJECT_NOT_DIRECTORY"
+  | "AGENT_NOT_FOUND"
+  | "AGENT_INSTANCE_NOT_FOUND"
+  | "AGENT_INSTANCE_ID_TAKEN"
+  | "AGENT_INSTANCE_IN_USE"
+  | "AGENT_DEFAULT_INSTANCE_IMMUTABLE"
+  | "AGENT_SETTINGS_INVALID"
 
 export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   METHOD_NOT_AVAILABLE: "手机端暂时无法使用此操作。",
@@ -75,6 +83,14 @@ export const mobileErrorMessages: Record<MobileErrorCode, string> = {
   TERMINAL_NOT_FOUND: "这个终端已关闭或不再可用。",
   TERMINAL_READ_ONLY: "电脑端打开的终端在手机上仅支持只读查看。",
   TERMINAL_LIMIT_EXCEEDED: "当前会话手机端同时打开的终端数量已达上限。",
+  PROJECT_PATH_FORBIDDEN: "该目录受系统保护或超出允许范围，无法访问。",
+  PROJECT_NOT_DIRECTORY: "目标路径不存在或不是文件夹。",
+  AGENT_NOT_FOUND: "电脑上未找到这个 Agent。",
+  AGENT_INSTANCE_NOT_FOUND: "电脑上未找到这个 Agent 实例。",
+  AGENT_INSTANCE_ID_TAKEN: "这个实例 ID 已被使用，请换一个名称。",
+  AGENT_INSTANCE_IN_USE: "这个 Agent 实例正被现有会话使用，无法删除。",
+  AGENT_DEFAULT_INSTANCE_IMMUTABLE: "默认实例不可删除或修改名称。",
+  AGENT_SETTINGS_INVALID: "设置格式不正确，请检查填写内容。",
 }
 
 export class MobileRequestError extends Error {
