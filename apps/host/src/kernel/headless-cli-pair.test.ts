@@ -238,6 +238,8 @@ describe("runHeadlessCli - pair", () => {
     const confirmation = randomUUID()
     let superseded = false
     let failConfirm = false
+    let confirmReturnsWaiting = false
+    const cancelSpy = vi.fn(() => ({ status: "cancelled" as const, attempt: null, devices: [] }))
 
     const { server, socketPath } = await startFixtureAdminServer(profileDir, {
       "mobile.pairing.start": () => ({
@@ -274,8 +276,16 @@ describe("runHeadlessCli - pair", () => {
             },
       "mobile.pairing.confirm": () => {
         if (failConfirm) throw new Error("confirm rpc lost")
+        if (confirmReturnsWaiting) {
+          return {
+            status: "waiting",
+            attempt: { id: attemptId, expiresAt: Date.now() + 60_000, qr: "{}", candidate: null },
+            devices: [],
+          }
+        }
         return { status: "paired", attempt: null, devices: [] }
       },
+      "mobile.pairing.cancel": cancelSpy,
     })
     cleanups.push(() => server.close())
     const lock = await acquireHostLock(profileDir, { runtime: "headless", socketPath })
@@ -303,6 +313,18 @@ describe("runHeadlessCli - pair", () => {
     ).toBe(1)
     const lastLine = ioConfirmFail.readStdout().trim().split("\n").pop()!
     expect(JSON.parse(lastLine)).toMatchObject({ event: "error", code: "confirm_failed" })
+
+    failConfirm = false
+    confirmReturnsWaiting = true
+    const ioConfirmWaiting = createCapturedIo()
+    expect(
+      await runHeadlessCli(["--profile-dir", profileDir, "pair", "--json"], {
+        ...ioConfirmWaiting,
+        pollIntervalMs: 10,
+        confirmPrompt: async () => "y",
+      }),
+    ).toBe(1)
+    expect(cancelSpy).toHaveBeenCalledWith({ id: attemptId })
   })
 })
 

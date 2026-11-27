@@ -3,7 +3,18 @@
  * 进程在任何一步被杀，目标文件要么是旧内容，要么是完整的新内容，不会是空的或半截的。
  * settings.json 与 plugins.yml 都经这里写。
  */
-import { closeSync, fsyncSync, mkdirSync, openSync, renameSync, rmSync, writeSync } from "node:fs"
+import {
+  closeSync,
+  fchmodSync,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeSync,
+} from "node:fs"
 import { mkdir, open, rename, rm } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
 import { dirname } from "node:path"
@@ -116,6 +127,50 @@ export async function writeFileAtomic(
   await fsyncDir(dir)
 }
 
+function writeFullBuffer(fd: number, payload: Uint8Array): void {
+  let offset = 0
+  while (offset < payload.byteLength) {
+    offset += writeSync(fd, payload, offset, payload.byteLength - offset)
+  }
+}
+
+/**
+ * 创建并独占落盘私有文件（`0o600`）：在同目录以 `"wx"`、`0o600` 写入临时文件、收紧权限并 `fsync`，
+ * 再通过 `linkSync` 原子抢占目标路径。返回 `true` 表示当前调用创建成功，`false` 表示目标已存在（`EEXIST`）。
+ */
+export function writePrivateFileExclusive(
+  targetPath: string,
+  content: string | Uint8Array,
+): boolean {
+  const payload = typeof content === "string" ? Buffer.from(content, "utf8") : content
+  const tmpPath = tempPathFor(targetPath)
+  try {
+    const fd = openSync(tmpPath, "wx", 0o600)
+    try {
+      writeFullBuffer(fd, payload)
+      if (process.platform !== "win32") {
+        fchmodSync(fd, 0o600)
+      }
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    try {
+      linkSync(tmpPath, targetPath)
+      return true
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") return false
+      throw error
+    }
+  } finally {
+    try {
+      unlinkSync(tmpPath)
+    } catch {
+      // 临时文件可能已删或不再存在。
+    }
+  }
+}
+
 /** 同步原子写二进制文件；用于图片附件与缩略图缓存落盘。 */
 export function writeBufferAtomicSync(path: string, data: Uint8Array): void {
   const dir = dirname(path)
@@ -124,10 +179,7 @@ export function writeBufferAtomicSync(path: string, data: Uint8Array): void {
   try {
     const fd = openSync(temp, "w")
     try {
-      let written = 0
-      while (written < data.byteLength) {
-        written += writeSync(fd, data, written, data.byteLength - written)
-      }
+      writeFullBuffer(fd, data)
       fsyncSync(fd)
     } finally {
       closeSync(fd)

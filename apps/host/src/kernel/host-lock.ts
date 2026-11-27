@@ -3,19 +3,7 @@
  * 使用临时文件 + fsync + linkSync 原子抢锁，防止桌面端与无窗口后台服务共用同一 profileDir 时并发写库。
  */
 import { createHash, randomUUID } from "node:crypto"
-import {
-  chmodSync,
-  closeSync,
-  fchmodSync,
-  fsyncSync,
-  linkSync,
-  lstatSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  unlinkSync,
-  writeSync,
-} from "node:fs"
+import { chmodSync, lstatSync, mkdirSync, readFileSync, unlinkSync } from "node:fs"
 import { createConnection } from "node:net"
 import { tmpdir } from "node:os"
 import { join, posix, resolve, win32 } from "node:path"
@@ -26,6 +14,7 @@ import {
   type HostLockMetadata,
   type HostRuntimeKind,
 } from "@pigcode/contracts"
+import { writePrivateFileExclusive } from "../services/atomic-write"
 import { ensureProfileDir } from "./profile-paths"
 
 /** 产品版本：构建时由 scripts/build-host.ts 与 electron.vite.config.ts 注入，未注入时回退开发版本。 */
@@ -217,13 +206,6 @@ function readLockFile(lockPath: string): { raw: string; metadata: HostLockMetada
   }
 }
 
-function writeFullBuffer(fd: number, payload: Buffer): void {
-  let offset = 0
-  while (offset < payload.length) {
-    offset += writeSync(fd, payload, offset, payload.length - offset)
-  }
-}
-
 function removeStaleLockIfUnchanged(lockPath: string, expectedRaw: string): void {
   const current = readLockFile(lockPath)
   if (!current || current.raw !== expectedRaw) return
@@ -300,84 +282,61 @@ export async function acquireHostLock(
   }
 
   const payload = Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`, "utf8")
-  const tmpPath = join(resolved, `${HOST_LOCK_FILE}.${process.pid}.${randomUUID()}.tmp`)
   const staleSocketCandidates = new Set<string>()
 
-  try {
-    const fd = openSync(tmpPath, "wx", 0o600)
-    try {
-      writeFullBuffer(fd, payload)
-      if (process.platform !== "win32") {
-        fchmodSync(fd, 0o600)
+  for (let attempt = 0; attempt < MAX_LOCK_ATTEMPTS; attempt++) {
+    if (writePrivateFileExclusive(lockPath, payload)) {
+      for (const candidate of staleSocketCandidates) {
+        if (candidate !== socketPath && !(await checkSocket(candidate))) {
+          unlinkStalePosixSocketBestEffort(candidate)
+        }
       }
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
-    }
-
-    for (let attempt = 0; attempt < MAX_LOCK_ATTEMPTS; attempt++) {
-      try {
-        linkSync(tmpPath, lockPath)
-        for (const candidate of staleSocketCandidates) {
-          if (candidate !== socketPath && !(await checkSocket(candidate))) {
-            unlinkStalePosixSocketBestEffort(candidate)
+      let released = false
+      return {
+        lockPath,
+        socketPath,
+        metadata,
+        release() {
+          if (released) return
+          released = true
+          const current = readLockFile(lockPath)
+          if (current?.metadata?.instanceId !== metadata.instanceId) return
+          try {
+            unlinkSync(lockPath)
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
           }
-        }
-        let released = false
-        return {
-          lockPath,
-          socketPath,
-          metadata,
-          release() {
-            if (released) return
-            released = true
-            const current = readLockFile(lockPath)
-            if (current?.metadata?.instanceId !== metadata.instanceId) return
-            try {
-              unlinkSync(lockPath)
-            } catch (error) {
-              if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
-            }
-          },
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
+        },
       }
-
-      const existing = readLockFile(lockPath)
-      if (!existing) continue
-
-      if (existing.metadata) {
-        const alive = await isLockOwnerAlive(existing.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
-          checkSocket: (endpoint) => checkSocket(endpoint),
-          isPidAlive: checkPid,
-          now,
-          graceMs,
-        })
-        if (alive) {
-          throw new HostAlreadyRunningError(existing.metadata)
-        }
-        staleSocketCandidates.add(existing.metadata.socketPath)
-      }
-      removeStaleLockIfUnchanged(lockPath, existing.raw)
     }
 
-    const latest = readLockFile(lockPath)
-    if (latest?.metadata) {
-      const alive = await isLockOwnerAlive(latest.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
+    const existing = readLockFile(lockPath)
+    if (!existing) continue
+
+    if (existing.metadata) {
+      const alive = await isLockOwnerAlive(existing.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
         checkSocket: (endpoint) => checkSocket(endpoint),
         isPidAlive: checkPid,
         now,
         graceMs,
       })
-      if (alive) throw new HostAlreadyRunningError(latest.metadata)
+      if (alive) {
+        throw new HostAlreadyRunningError(existing.metadata)
+      }
+      staleSocketCandidates.add(existing.metadata.socketPath)
     }
-    throw new Error(`Failed to acquire host lock at ${lockPath}`)
-  } finally {
-    try {
-      unlinkSync(tmpPath)
-    } catch {
-      // 临时文件可能已删或不再存在。
-    }
+    removeStaleLockIfUnchanged(lockPath, existing.raw)
   }
+
+  const latest = readLockFile(lockPath)
+  if (latest?.metadata) {
+    const alive = await isLockOwnerAlive(latest.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
+      checkSocket: (endpoint) => checkSocket(endpoint),
+      isPidAlive: checkPid,
+      now,
+      graceMs,
+    })
+    if (alive) throw new HostAlreadyRunningError(latest.metadata)
+  }
+  throw new Error(`Failed to acquire host lock at ${lockPath}`)
 }

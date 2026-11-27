@@ -3,21 +3,11 @@
  * 优先级：环境变量 `PIGCODE_CREDENTIAL_KEY`（32 字节 hex 或 base64/base64url）>
  * `<profileDir>/credential.key`（临时文件写入 + fsync + `linkSync` 原子落盘，`0o600`）。
  */
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto"
-import {
-  chmodSync,
-  closeSync,
-  fchmodSync,
-  fsyncSync,
-  linkSync,
-  openSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeSync,
-} from "node:fs"
+import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto"
+import { chmodSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { ensureProfileDir } from "../kernel/profile-paths"
+import { writePrivateFileExclusive } from "./atomic-write"
 import type { RelayCredentialCipher } from "./relay-settings"
 
 export const LOCAL_CREDENTIAL_KEY_ENV = "PIGCODE_CREDENTIAL_KEY"
@@ -84,13 +74,6 @@ function readExistingFileKey(keyPath: string): Buffer {
   return parseMasterKey(raw, CREDENTIAL_KEY_FILENAME)
 }
 
-function writeFullBuffer(fd: number, payload: Buffer): void {
-  let offset = 0
-  while (offset < payload.length) {
-    offset += writeSync(fd, payload, offset, payload.length - offset)
-  }
-}
-
 function readOrCreateFileKey(profileDir: string): Buffer {
   ensureProfileDir(profileDir)
   const keyPath = join(profileDir, CREDENTIAL_KEY_FILENAME)
@@ -101,35 +84,10 @@ function readOrCreateFileKey(profileDir: string): Buffer {
   }
 
   const generated = randomBytes(KEY_BYTES)
-  const payload = Buffer.from(`${generated.toString("hex")}\n`, "utf8")
-  const tmpPath = join(profileDir, `${CREDENTIAL_KEY_FILENAME}.${process.pid}.${randomUUID()}.tmp`)
-  try {
-    const fd = openSync(tmpPath, "wx", 0o600)
-    try {
-      writeFullBuffer(fd, payload)
-      if (process.platform !== "win32") {
-        fchmodSync(fd, 0o600)
-      }
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
-    }
-    try {
-      linkSync(tmpPath, keyPath)
-      return generated
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-        return readExistingFileKey(keyPath)
-      }
-      throw error
-    }
-  } finally {
-    try {
-      unlinkSync(tmpPath)
-    } catch {
-      // 忽略临时文件清理失败
-    }
+  if (writePrivateFileExclusive(keyPath, `${generated.toString("hex")}\n`)) {
+    return generated
   }
+  return readExistingFileKey(keyPath)
 }
 
 export function resolveLocalCredentialKey(

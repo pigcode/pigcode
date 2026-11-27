@@ -1,10 +1,15 @@
 /** 验证原子写：成功时整份替换；中途失败时原文件原样保留，也不留下临时文件。 */
 import { closeSync, fsyncSync, openSync, renameSync, writeSync } from "node:fs"
-import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises"
+import { mkdtemp, readFile, readdir, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, it } from "vitest"
-import { writeFileAtomic, writeFileAtomicSync, type SyncFileOps } from "./atomic-write"
+import {
+  writeFileAtomic,
+  writeFileAtomicSync,
+  writePrivateFileExclusive,
+  type SyncFileOps,
+} from "./atomic-write"
 
 async function existing(): Promise<{ dir: string; path: string }> {
   const dir = await mkdtemp(join(tmpdir(), "pigcode-atomic-"))
@@ -62,5 +67,18 @@ describe("atomic writes", () => {
     ).toThrow("ENOSPC")
     expect(await readFile(path, "utf8")).toBe("old content\n")
     expect(await readdir(dir)).toEqual(["plugins.yml"])
+  })
+
+  it("exclusively writes 0600 private files and leaves existing targets untouched on EEXIST", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pigcode-private-write-"))
+    const target = join(dir, "secret.key")
+
+    expect(writePrivateFileExclusive(target, "first-secret\n")).toBe(true)
+    expect(writePrivateFileExclusive(target, "second-secret\n")).toBe(false)
+    expect(await readFile(target, "utf8")).toBe("first-secret\n")
+    expect(await readdir(dir)).toEqual(["secret.key"])
+    if (process.platform !== "win32") {
+      expect((await stat(target)).mode & 0o777).toBe(0o600)
+    }
   })
 })

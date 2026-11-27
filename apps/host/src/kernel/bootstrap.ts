@@ -125,18 +125,20 @@ export async function bootstrapHostKernel(
 
     const startedAt = lock?.metadata.startedAt ?? Date.now()
     // 拿到单实例锁后再设置环境变量、清理孤儿进程与打开 SQLite，避免竞争进程互相干扰。
-    process.env.PIGCODE_PROFILE_DIR = profileDir
+    process.env.PIGCODE_PROFILE_DIR = resolvedProfileDir
     envSet = true
 
     // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
     await sweepOrphanedProcesses()
     const profile = await loadProfile(runtimeRoot, profileName)
     ctx = await createHostAppFromProfile(profile, {
-      "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
-      "core.settings": { path: join(profileDir, "settings.json") },
+      "core.storage": {
+        path: process.env.PIGCODE_DB_PATH ?? join(resolvedProfileDir, "pigcode.db"),
+      },
+      "core.settings": { path: join(resolvedProfileDir, "settings.json") },
       "core.agents": {
         fake: process.env.PIGCODE_AGENT === "fake",
-        dataDir: join(profileDir, "agents"),
+        dataDir: join(resolvedProfileDir, "agents"),
       },
     })
 
@@ -152,18 +154,21 @@ export async function bootstrapHostKernel(
     // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
     await ctx.agents.recoverAfterRestart()
     // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 Agent。
-    await ctx.plugin(pluginsPlugin, { profileDir, builtin: profile.builtinPlugins })
+    await ctx.plugin(pluginsPlugin, {
+      profileDir: resolvedProfileDir,
+      builtin: profile.builtinPlugins,
+    })
     await ctx.plugins.loadAll()
     // Host 入口加载失败的插件也不加载界面代码；它的错误显示在插件页。
     await writeBootGraph(
-      { profileDir, builtin: profile.builtinPlugins },
+      { profileDir: resolvedProfileDir, builtin: profile.builtinPlugins },
       ctx.plugins.hostFailures(),
     )
 
     const feed = new ThreadFeed(ctx)
     if (onReminder) attachHostReminders(ctx, onReminder)
 
-    const cipher = createLocalCredentialCipher(profileDir)
+    const cipher = createLocalCredentialCipher(resolvedProfileDir)
     const relay = new RelaySettings(ctx.settings, cipher)
     ctx.provide("relaySettings", relay)
 
@@ -256,7 +261,7 @@ export async function bootstrapHostKernel(
     }
 
     return {
-      profileDir,
+      profileDir: resolvedProfileDir,
       runtime,
       socketPath: lock?.socketPath ?? socketPath,
       ctx,

@@ -322,6 +322,9 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
             }
             return 0
           }
+          if (confirmed.status === "waiting") {
+            await cancelAttemptBestEffort(meta.socketPath, attemptId)
+          }
           emitPairingFailure(
             json,
             stdout,

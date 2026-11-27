@@ -4,7 +4,13 @@ export const RELAY_PROTOCOL_VERSION = 1
 export const RELAY_CONNECT_PATH = "/ws/v1/connect"
 export const RELAY_HEARTBEAT_SECONDS = 25
 
-export const relayComputerStateSchema = z.enum(["online", "offline", "sleeping", "exited", "restarting"])
+export const relayComputerStateSchema = z.enum([
+  "online",
+  "offline",
+  "sleeping",
+  "exited",
+  "restarting",
+])
 export const relayComputerStatusSchema = z.object({
   type: z.literal("relay.status"),
   state: relayComputerStateSchema,
