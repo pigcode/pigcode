@@ -24,8 +24,14 @@ import {
   type HostLockMetadata,
   type HostRuntimeKind,
 } from "@pigcode/contracts"
-import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { ensureProfileDir } from "./profile-paths"
+
+/** 产品版本：构建时由 scripts/build-host.ts 与 electron.vite.config.ts 注入，未注入时回退开发版本。 */
+declare const __PIGCODE_VERSION__: string | undefined
+
+function defaultHostVersion(): string {
+  return typeof __PIGCODE_VERSION__ === "string" ? __PIGCODE_VERSION__ : "0.0.0-dev"
+}
 
 /** POSIX `sun_path` 长度上限 104 字节，保留安全余量避免 EINVAL / ENAMETOOLONG。 */
 const MAX_POSIX_SOCKET_BYTES = 96
@@ -217,7 +223,7 @@ export async function acquireHostLock(
     runtime: options.runtime,
     socketPath,
     startedAt: Date.now(),
-    version: options.version ?? HOST_VERSION,
+    version: options.version ?? defaultHostVersion(),
   }
 
   const payload = Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`, "utf8")
@@ -268,6 +274,8 @@ export async function acquireHostLock(
         if (alive) {
           throw new HostAlreadyRunningError(existing.metadata)
         }
+        // 异步探测期间若其他竞争进程已接管并写入新锁，立即重试，避免误删新实例刚创建的 socket。
+        if (readLockFile(lockPath)?.raw !== existing.raw) continue
         removeStaleSocketBestEffort(existing.metadata.socketPath)
       }
       removeStaleLockIfUnchanged(lockPath, existing.raw)

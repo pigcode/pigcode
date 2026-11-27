@@ -228,6 +228,57 @@ describe("acquireHostLock", () => {
     expect(rejected).toHaveLength(1)
     expect(rejected[0]!.reason).toBeInstanceOf(HostAlreadyRunningError)
   })
+
+  it("does not delete a concurrent winner's socket when host.lock changes during stale probe", async () => {
+    const profileDir = await makeTempDir()
+    const socketPath = hostControlEndpoint(profileDir)
+    const lockPath = join(profileDir, HOST_LOCK_FILE)
+    const deadPid = getDeadPid()
+
+    const staleMeta = {
+      pid: deadPid,
+      instanceId: randomUUID(),
+      runtime: "headless" as const,
+      socketPath,
+      startedAt: Date.now() - 60_000,
+      version: "0.0.1",
+    }
+    await writeFile(lockPath, `${JSON.stringify(staleMeta)}\n`, "utf8")
+
+    const winnerMeta = {
+      pid: process.pid,
+      instanceId: randomUUID(),
+      runtime: "desktop" as const,
+      socketPath,
+      startedAt: Date.now(),
+      version: "0.1.0",
+    }
+    let probes = 0
+    await expect(
+      acquireHostLock(profileDir, {
+        runtime: "headless",
+        checkSocket: async () => {
+          probes += 1
+          if (probes === 1) {
+            // 模拟另一竞争者在探测期间抢先接管锁并建好新 socket
+            await writeFile(lockPath, `${JSON.stringify(winnerMeta)}\n`, "utf8")
+            await writeFile(socketPath, "winner-socket", "utf8")
+            return false
+          }
+          return true
+        },
+      }),
+    ).rejects.toMatchObject({
+      name: "HostAlreadyRunningError",
+      owner: winnerMeta,
+    })
+
+    // 竞争胜利者建好的 socket 文件与锁文件必须保持完好
+    expect(await readFile(socketPath, "utf8")).toBe("winner-socket")
+    expect(hostLockMetadataSchema.parse(JSON.parse(await readFile(lockPath, "utf8")))).toEqual(
+      winnerMeta,
+    )
+  })
 })
 
 describe("probeLiveHost", () => {
