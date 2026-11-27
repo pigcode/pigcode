@@ -1,18 +1,26 @@
 /**
  * 构建无窗口独立 Host 部署包（`apps/host/out/headless/`），供 Linux 服务器 / NAS 或本机纯 Node 常驻部署。
  *
- * 复用 `scripts/build-host.ts` 产出的 `headless.mjs`、核心服务、内置插件、stdio MCP 桥、profile 与
- * `@cursor/...` 平台运行时，并补齐独立运行时 manifest、CLI 入口、postinstall 权限修复脚本、
- * `systemd --user` 单元模板与中文部署说明。
+ * 直接通过 `buildHost({ outDir, entry: "headless", cursorRuntime: false })` 将 `headless.mjs`、
+ * 核心服务、内置插件、stdio MCP 桥与 profile 输出到部署目录（不改动 `apps/desktop/out/host`），
+ * 并编译独立 `bin/pigcode-host.mjs`、生成 postinstall 权限修复脚本、`package.json`、`systemd --user`
+ * 单元模板与中文部署说明。
  */
 import { realpathSync } from "node:fs"
-import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { appVersion, buildHost, outDir as hostOutDir, root } from "./build-host.ts"
+import { build } from "esbuild"
+import { appVersion, buildHost, root } from "./build-host.ts"
 
 /** 无窗口独立部署包输出目录（位于 .gitignore 忽略的 out/ 下）。 */
 export const HEADLESS_OUT_DIR = join(root, "apps/host/out/headless")
+
+/** `buildHeadlessHost` 的运行选项。 */
+export interface BuildHeadlessHostOptions {
+  /** 自定义输出目录（测试用于隔离工作区 `apps/host/out/headless`）。 */
+  outDir?: string
+}
 
 interface PackageManifest {
   dependencies?: Record<string, string>
@@ -36,9 +44,25 @@ function renderFixNodePtyHelperScript(): string {
     "/**",
     " * 修复 node-pty 预编译包中 POSIX spawn-helper 缺少可执行权限的问题，避免打开终端时报错。",
     " */",
-    'import { chmodSync, existsSync, readdirSync } from "node:fs"',
+    'import { chmodSync, existsSync, readdirSync, statSync } from "node:fs"',
     'import { createRequire } from "node:module"',
     'import { dirname, join } from "node:path"',
+    "",
+    "function ensureExecutable(filePath) {",
+    "  let info",
+    "  try {",
+    "    info = statSync(filePath)",
+    "  } catch {",
+    "    return",
+    "  }",
+    "  if (!info.isFile() || (info.mode & 0o111) !== 0) return",
+    "  try {",
+    "    chmodSync(filePath, 0o755)",
+    "  } catch (error) {",
+    '    const code = error && typeof error === "object" ? error.code : undefined',
+    '    if (code !== "EPERM" && code !== "EROFS") throw error',
+    "  }",
+    "}",
     "",
     'if (process.platform !== "win32") {',
     '  const require = createRequire(new URL("../package.json", import.meta.url))',
@@ -51,13 +75,16 @@ function renderFixNodePtyHelperScript(): string {
     '  const prebuildsDir = join(nodePtyDir, "prebuilds")',
     "  if (existsSync(prebuildsDir)) {",
     "    for (const entry of readdirSync(prebuildsDir, { withFileTypes: true })) {",
-    "      if (!entry.isDirectory()) continue",
-    '      const helper = join(prebuildsDir, entry.name, "spawn-helper")',
-    "      if (existsSync(helper)) chmodSync(helper, 0o755)",
+    "      const candidateDir = join(prebuildsDir, entry.name)",
+    "      try {",
+    "        if (!statSync(candidateDir).isDirectory()) continue",
+    "      } catch {",
+    "        continue",
+    "      }",
+    '      ensureExecutable(join(candidateDir, "spawn-helper"))',
     "    }",
     "  }",
-    '  const releaseHelper = join(nodePtyDir, "build", "Release", "spawn-helper")',
-    "  if (existsSync(releaseHelper)) chmodSync(releaseHelper, 0o755)",
+    '  ensureExecutable(join(nodePtyDir, "build", "Release", "spawn-helper"))',
     "}",
     "",
   ].join("\n")
@@ -208,34 +235,33 @@ function renderReadme(): string {
   ].join("\n")
 }
 
-/** 构建 `apps/host/out/headless/` 独立部署包。 */
-export async function buildHeadlessHost(): Promise<void> {
-  await buildHost({ cursorRuntime: true })
+/** 构建无窗口独立部署包（默认输出到 `apps/host/out/headless/`）。 */
+export async function buildHeadlessHost(options: BuildHeadlessHostOptions = {}): Promise<void> {
+  const targetOutDir = options.outDir ?? HEADLESS_OUT_DIR
 
-  await rm(HEADLESS_OUT_DIR, { recursive: true, force: true })
-  await mkdir(HEADLESS_OUT_DIR, { recursive: true })
+  await rm(targetOutDir, { recursive: true, force: true })
+  await mkdir(targetOutDir, { recursive: true })
 
-  const targetHostDir = join(HEADLESS_OUT_DIR, "host")
-  await mkdir(targetHostDir, { recursive: true })
-  for (const entry of [
-    "headless.mjs",
-    "headless.mjs.map",
-    "core",
-    "plugins",
-    "mcp",
-    "profile",
-    "node_modules",
-  ]) {
-    await cp(join(hostOutDir, entry), join(targetHostDir, entry), { recursive: true })
-  }
+  await buildHost({
+    outDir: join(targetOutDir, "host"),
+    entry: "headless",
+    cursorRuntime: false,
+  })
 
-  const binDir = join(HEADLESS_OUT_DIR, "bin")
+  const binDir = join(targetOutDir, "bin")
   await mkdir(binDir, { recursive: true })
   const targetBin = join(binDir, "pigcode-host.mjs")
-  await cp(join(root, "apps/host/bin/pigcode-host.mjs"), targetBin)
+  await build({
+    entryPoints: [join(root, "apps/host/bin/pigcode-host.ts")],
+    outfile: targetBin,
+    bundle: false,
+    format: "esm",
+    platform: "node",
+    target: "node22",
+  })
   await chmod(targetBin, 0o755)
 
-  const scriptsDir = join(HEADLESS_OUT_DIR, "scripts")
+  const scriptsDir = join(targetOutDir, "scripts")
   await mkdir(scriptsDir, { recursive: true })
   await writeFile(
     join(scriptsDir, "fix-node-pty-helper.mjs"),
@@ -278,25 +304,31 @@ export async function buildHeadlessHost(): Promise<void> {
     },
   }
   await writeFile(
-    join(HEADLESS_OUT_DIR, "package.json"),
+    join(targetOutDir, "package.json"),
     `${JSON.stringify(manifest, null, 2)}\n`,
     "utf8",
   )
 
-  const examplesDir = join(HEADLESS_OUT_DIR, "examples")
+  const examplesDir = join(targetOutDir, "examples")
   await mkdir(examplesDir, { recursive: true })
   await writeFile(join(examplesDir, "pigcode-host.service"), renderSystemdUnit(), "utf8")
-  await writeFile(join(HEADLESS_OUT_DIR, "README.md"), renderReadme(), "utf8")
+  await writeFile(join(targetOutDir, "README.md"), renderReadme(), "utf8")
+}
+
+function normalizeForCompare(target: string): string {
+  let resolved: string
+  try {
+    resolved = realpathSync(target)
+  } catch {
+    resolved = resolve(target)
+  }
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved
 }
 
 function isDirectEntry(): boolean {
   const entry = process.argv[1]
   if (!entry) return false
-  try {
-    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
-  } catch {
-    return resolve(entry) === resolve(fileURLToPath(import.meta.url))
-  }
+  return normalizeForCompare(entry) === normalizeForCompare(fileURLToPath(import.meta.url))
 }
 
 if (isDirectEntry()) {

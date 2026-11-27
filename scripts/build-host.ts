@@ -103,6 +103,10 @@ const builtinPlugins = [
 
 /** `buildHost` 的运行选项。 */
 export interface BuildHostOptions {
+  /** 构建输出目录（默认 `apps/desktop/out/host`）。 */
+  outDir?: string
+  /** 要打出的 Host 入口（默认 `"desktop"`）。 */
+  entry?: "desktop" | "headless" | "both"
   /** 构建完成后是否继续监听源码变更并按需重启。 */
   watch?: boolean
   /** 是否将当前平台的 `@cursor/sdk-*` 运行时复制到产物 `node_modules/`（默认仅监听模式开启）。 */
@@ -112,8 +116,10 @@ export interface BuildHostOptions {
 /** 保存往往连着几次写入（编辑器、格式化）；停下这么久再构建。 */
 const SETTLE_MS = 150
 
-/** 构建 Host 全量 bundle（utilityProcess 入口、headless 入口、核心服务、内置插件与 stdio 桥）。 */
+/** 构建 Host 全量 bundle（按 `entry` 输出 `index.mjs` / `headless.mjs`、核心服务、内置插件与 stdio 桥）。 */
 export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
+  const targetOutDir = options.outDir ?? outDir
+  const entry = options.entry ?? "desktop"
   const watching = options.watch ?? false
   const includeCursorRuntime = options.cursorRuntime ?? watching
 
@@ -160,13 +166,16 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
       return
     }
     rounds.building = true
-    if (await rebuildAll()) {
-      await writeFile(join(outDir, "build-id"), `${Date.now()}\n`, "utf8")
-      console.log("[host] rebuilt, restarting the Host")
-    } else {
-      console.log("[host] rebuild failed; the running Host keeps the previous build")
+    try {
+      if (await rebuildAll()) {
+        await writeFile(join(targetOutDir, "build-id"), `${Date.now()}\n`, "utf8")
+        console.log("[host] rebuilt, restarting the Host")
+      } else {
+        console.log("[host] rebuild failed; the running Host keeps the previous build")
+      }
+    } finally {
+      rounds.building = false
     }
-    rounds.building = false
     if (rounds.again) {
       rounds.again = false
       void rebuildRound()
@@ -184,20 +193,24 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
     }
   }
 
-  await rm(outDir, { recursive: true, force: true })
-  if (includeCursorRuntime) await copyCursorRuntime(outDir, process.platform, process.arch)
+  await rm(targetOutDir, { recursive: true, force: true })
+  if (includeCursorRuntime) await copyCursorRuntime(targetOutDir, process.platform, process.arch)
 
-  await bundle({
-    entryPoints: [join(root, "apps/host/src/entry.ts")],
-    outfile: join(outDir, "index.mjs"),
-    ...shared,
-  })
-  await bundle({
-    entryPoints: [join(root, "apps/host/src/headless.ts")],
-    outfile: join(outDir, "headless.mjs"),
-    ...shared,
-  })
-  await bundle({ entryPoints: coreEntries, outdir: join(outDir, "core"), ...shared })
+  if (entry === "desktop" || entry === "both") {
+    await bundle({
+      entryPoints: [join(root, "apps/host/src/entry.ts")],
+      outfile: join(targetOutDir, "index.mjs"),
+      ...shared,
+    })
+  }
+  if (entry === "headless" || entry === "both") {
+    await bundle({
+      entryPoints: [join(root, "apps/host/src/headless.ts")],
+      outfile: join(targetOutDir, "headless.mjs"),
+      ...shared,
+    })
+  }
+  await bundle({ entryPoints: coreEntries, outdir: join(targetOutDir, "core"), ...shared })
 
   /**
    * 每个内置插件打成一个 index.mjs，旁边放一份 manifest：入口改指向产物，去掉只对源码有意义的
@@ -205,7 +218,7 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
    */
   for (const name of builtinPlugins) {
     const sourceDir = join(root, "packages", name)
-    const targetDir = join(outDir, "plugins", name)
+    const targetDir = join(targetOutDir, "plugins", name)
     await bundle({
       entryPoints: [join(sourceDir, "src/index.ts")],
       outfile: join(targetDir, "index.mjs"),
@@ -236,7 +249,7 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
   // stdio 桥由 Codex 以子进程启动，安装包里不带源码；单独编成 .mjs。
   await bundle({
     entryPoints: [join(root, "apps/host/src/mcp/stdio-bridge.ts")],
-    outfile: join(outDir, "mcp/stdio-bridge.mjs"),
+    outfile: join(targetOutDir, "mcp/stdio-bridge.mjs"),
     bundle: true,
     platform: "node",
     format: "esm",
@@ -244,7 +257,7 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
   })
 
   /** 与 core bundle 对应的核心 profile；相对 entry 由 loader 按 profile 目录解析。 */
-  const profileDir = join(outDir, "profile")
+  const profileDir = join(targetOutDir, "profile")
   await mkdir(profileDir, { recursive: true })
   await writeFile(
     join(profileDir, "desktop.yml"),
@@ -272,14 +285,20 @@ export async function buildHost(options: BuildHostOptions = {}): Promise<void> {
   }
 }
 
+function normalizeForCompare(target: string): string {
+  let resolved: string
+  try {
+    resolved = realpathSync(target)
+  } catch {
+    resolved = resolve(target)
+  }
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved
+}
+
 function isDirectEntry(): boolean {
   const entry = process.argv[1]
   if (!entry) return false
-  try {
-    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url))
-  } catch {
-    return resolve(entry) === resolve(fileURLToPath(import.meta.url))
-  }
+  return normalizeForCompare(entry) === normalizeForCompare(fileURLToPath(import.meta.url))
 }
 
 if (isDirectEntry()) {

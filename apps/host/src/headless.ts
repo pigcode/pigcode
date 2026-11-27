@@ -1,4 +1,4 @@
-/** Pigcode 无窗口常驻 Host 与 CLI 统一入口（供 `bin/pigcode-host.mjs` 与直接导入运行）。 */
+/** Pigcode 无窗口常驻 Host 与 CLI 统一入口（供 `bin/pigcode-host.ts` 与直接导入运行）。 */
 import { realpathSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"

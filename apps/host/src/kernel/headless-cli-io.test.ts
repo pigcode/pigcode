@@ -144,20 +144,20 @@ describe("TOCTOU prompt ordering and bin entrypoint hardening", () => {
   })
 
   it("resolves symlinked bin path and exits 1 when bundle lacks main export or is missing", async () => {
-    const binSource = fileURLToPath(new URL("../../bin/pigcode-host.mjs", import.meta.url))
+    const binSource = fileURLToPath(new URL("../../bin/pigcode-host.ts", import.meta.url))
     const tempDir = await temps.makeDir("pigcode-bin-test-")
     const tempBinDir = join(tempDir, "bin")
     const tempHostDir = join(tempDir, "host")
     const linkDir = join(tempDir, "links")
     await mkdir(tempBinDir, { recursive: true })
     await mkdir(linkDir, { recursive: true })
-    await writeFile(join(tempBinDir, "pigcode-host.mjs"), readFileSync(binSource, "utf8"))
+    await writeFile(join(tempBinDir, "pigcode-host.ts"), readFileSync(binSource, "utf8"))
     const symlinkPath = join(linkDir, "pigcode-host")
-    await symlink(join(tempBinDir, "pigcode-host.mjs"), symlinkPath)
+    await symlink(join(tempBinDir, "pigcode-host.ts"), symlinkPath)
 
     const missingRes = spawnSync(process.execPath, [symlinkPath, "--help"], { encoding: "utf8" })
     expect(missingRes.status).toBe(1)
-    expect(missingRes.stderr).toContain("Pigcode Host 尚未构建，请先运行 pnpm build:host")
+    expect(missingRes.stderr).toContain("Pigcode Host 尚未构建，请先运行 pnpm build:headless")
 
     await mkdir(tempHostDir, { recursive: true })
     await writeFile(join(tempHostDir, "headless.mjs"), "export const notMain = 1\n")
