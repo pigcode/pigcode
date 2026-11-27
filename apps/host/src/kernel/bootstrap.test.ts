@@ -2,15 +2,21 @@
 import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import * as lanServer from "../mobile/lan-server"
 import { bootstrapHostKernel, resolveHostRuntimeRoot } from "./bootstrap"
 
 const dirs: string[] = []
+const originalProfileDirEnv = process.env.PIGCODE_PROFILE_DIR
 
 afterEach(async () => {
+  if (originalProfileDirEnv === undefined) {
+    delete process.env.PIGCODE_PROFILE_DIR
+  } else {
+    process.env.PIGCODE_PROFILE_DIR = originalProfileDirEnv
+  }
   vi.restoreAllMocks()
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
@@ -22,7 +28,7 @@ async function makeTempDir(): Promise<string> {
 }
 
 describe("resolveHostRuntimeRoot", () => {
-  it("prefers PIGCODE_CORE_PROFILE_DIR when set and non-empty", async () => {
+  it("prefers PIGCODE_CORE_PROFILE_DIR when set and resolves relative paths", async () => {
     const root = await makeTempDir()
     const envDir = join(root, "custom-core")
     expect(
@@ -30,17 +36,25 @@ describe("resolveHostRuntimeRoot", () => {
         PIGCODE_CORE_PROFILE_DIR: `  ${envDir}  `,
       }),
     ).toBe(envDir)
+
+    expect(
+      resolveHostRuntimeRoot(pathToFileURL(join(root, "index.mjs")).href, {
+        PIGCODE_CORE_PROFILE_DIR: "./relative-core",
+      }),
+    ).toBe(resolve("./relative-core"))
   })
 
-  it("finds desktop.yml across built bundle, src entry, and src/kernel locations, or falls back", async () => {
+  it("ignores blank PIGCODE_CORE_PROFILE_DIR and finds desktop.yml across built bundle, src entry, and src/kernel locations, or falls back", async () => {
     const root = await makeTempDir()
 
     const bundleDir = join(root, "bundle")
     await mkdir(join(bundleDir, "profile"), { recursive: true })
     await writeFile(join(bundleDir, "profile", "desktop.yml"), "plugins: []\n")
-    expect(resolveHostRuntimeRoot(pathToFileURL(join(bundleDir, "index.mjs")).href, {})).toBe(
-      join(bundleDir, "profile"),
-    )
+    expect(
+      resolveHostRuntimeRoot(pathToFileURL(join(bundleDir, "index.mjs")).href, {
+        PIGCODE_CORE_PROFILE_DIR: "   \t ",
+      }),
+    ).toBe(join(bundleDir, "profile"))
 
     const repoDir = join(root, "repo")
     const outProfile = join(repoDir, "apps", "desktop", "out", "host", "profile")
@@ -267,13 +281,14 @@ describe("bootstrapHostKernel", () => {
     expect(stateAfter.disposed).toContain("agents")
   })
 
-  it("cleans up mounted services when initialization fails mid-boot", async () => {
+  it("cleans up mounted services and restores PIGCODE_PROFILE_DIR when initialization fails mid-boot", async () => {
     const root = await makeTempDir()
     const profileDir = join(root, "user-profile")
     const runtimeRoot = join(root, "runtime")
     await mkdir(runtimeRoot, { recursive: true })
     const statePath = await writeMinimalRuntimeProfile(runtimeRoot, { failStorage: true })
 
+    delete process.env.PIGCODE_PROFILE_DIR
     await expect(
       bootstrapHostKernel({
         profileDir,
@@ -282,6 +297,7 @@ describe("bootstrapHostKernel", () => {
       }),
     ).rejects.toThrow("core.storage failed to start: boom")
 
+    expect(process.env.PIGCODE_PROFILE_DIR).toBeUndefined()
     const stateAfter = JSON.parse(await readFile(statePath, "utf8")) as { disposed: string[] }
     expect(stateAfter.disposed).toContain("settings")
   })
@@ -305,5 +321,34 @@ describe("bootstrapHostKernel", () => {
     } finally {
       await host.dispose()
     }
+  })
+
+  it("always disposes ctx.fiber and restores PIGCODE_PROFILE_DIR even if announceExit throws", async () => {
+    const root = await makeTempDir()
+    const profileDir = join(root, "user-profile")
+    const runtimeRoot = join(root, "runtime")
+    await mkdir(runtimeRoot, { recursive: true })
+    const statePath = await writeMinimalRuntimeProfile(runtimeRoot)
+
+    process.env.PIGCODE_PROFILE_DIR = "/tmp/previous-profile"
+    const host = await bootstrapHostKernel({
+      profileDir,
+      runtimeRoot,
+      lanPort: false,
+    })
+    expect(process.env.PIGCODE_PROFILE_DIR).toBe(profileDir)
+
+    vi.spyOn(host.mobile, "announceExit").mockImplementation(() => {
+      throw new Error("announce failed")
+    })
+    const mobileDisposeSpy = vi.spyOn(host.mobile, "dispose")
+
+    await expect(host.dispose("exited")).rejects.toThrow("announce failed")
+
+    expect(mobileDisposeSpy).toHaveBeenCalledTimes(1)
+    expect(process.env.PIGCODE_PROFILE_DIR).toBe("/tmp/previous-profile")
+    const stateAfter = JSON.parse(await readFile(statePath, "utf8")) as { disposed: string[] }
+    expect(stateAfter.disposed).toContain("settings")
+    expect(stateAfter.disposed).toContain("agents")
   })
 })

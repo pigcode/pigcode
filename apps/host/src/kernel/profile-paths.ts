@@ -1,5 +1,5 @@
 /** Profile 目录解析、权限落盘与无窗口 Host 常见 CLI PATH 补全。 */
-import { chmodSync, existsSync, mkdirSync } from "node:fs"
+import { chmodSync, mkdirSync } from "node:fs"
 import { homedir } from "node:os"
 import { posix, resolve, win32 } from "node:path"
 
@@ -53,9 +53,8 @@ export function resolveProfileDir(options: ResolveProfileDirOptions = {}): strin
  * 只读文件系统或非属主目录的 `EPERM`/`EROFS` 静默忽略。
  */
 export function ensureProfileDir(profileDir: string): void {
-  const existed = existsSync(profileDir)
-  mkdirSync(profileDir, { recursive: true, mode: 0o700 })
-  if (existed || process.platform === "win32") return
+  const created = mkdirSync(profileDir, { recursive: true, mode: 0o700 })
+  if (created === undefined || process.platform === "win32") return
   try {
     chmodSync(profileDir, 0o700)
   } catch (error) {

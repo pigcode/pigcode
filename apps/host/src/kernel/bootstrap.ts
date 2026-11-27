@@ -3,7 +3,7 @@
  * 供 Electron utilityProcess 与无窗口常驻进程共用。
  */
 import { existsSync } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Context } from "cordis"
 import type { HostReminder } from "@pigcode/contracts"
@@ -52,7 +52,7 @@ export function resolveHostRuntimeRoot(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
   const override = env.PIGCODE_CORE_PROFILE_DIR?.trim()
-  if (override) return override
+  if (override) return resolve(override)
   const candidates = [
     fileURLToPath(new URL("./profile", moduleUrl)),
     fileURLToPath(new URL("../../desktop/out/host/profile", moduleUrl)),
@@ -79,20 +79,35 @@ export async function bootstrapHostKernel(
     onReminder,
   } = options
 
-  ensureProfileDir(profileDir)
-  // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
-  await sweepOrphanedProcesses()
-  const profile = await loadProfile(runtimeRoot, profileName)
-  const ctx = await createHostAppFromProfile(profile, {
-    "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
-    "core.settings": { path: join(profileDir, "settings.json") },
-    "core.agents": {
-      fake: process.env.PIGCODE_AGENT === "fake",
-      dataDir: join(profileDir, "agents"),
-    },
-  })
+  const previousProfileDirEnv = process.env.PIGCODE_PROFILE_DIR
+  let envRestored = false
+  const restoreProfileDirEnv = (): void => {
+    if (envRestored) return
+    envRestored = true
+    if (previousProfileDirEnv === undefined) {
+      delete process.env.PIGCODE_PROFILE_DIR
+    } else {
+      process.env.PIGCODE_PROFILE_DIR = previousProfileDirEnv
+    }
+  }
+  // sweepOrphanedProcesses 与运行期子进程记录通过 PIGCODE_PROFILE_DIR 定位目标目录。
+  process.env.PIGCODE_PROFILE_DIR = profileDir
 
+  let ctx: Context | undefined
   try {
+    ensureProfileDir(profileDir)
+    // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
+    await sweepOrphanedProcesses()
+    const profile = await loadProfile(runtimeRoot, profileName)
+    ctx = await createHostAppFromProfile(profile, {
+      "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
+      "core.settings": { path: join(profileDir, "settings.json") },
+      "core.agents": {
+        fake: process.env.PIGCODE_AGENT === "fake",
+        dataDir: join(profileDir, "agents"),
+      },
+    })
+
     // 核心服务缺席时在这里带着真正的原因失败，而不是等到后面报 TypeError。
     await requireCoreService(ctx, "core.storage", "storage")
     await requireCoreService(ctx, "core.settings", "settings")
@@ -133,22 +148,37 @@ export async function bootstrapHostKernel(
     // 装好提醒订阅后再恢复定时任务，过期任务也使用相同的提醒事件。
     await ctx.get("schedules")?.start()
 
+    const bootedCtx = ctx
     let disposing: Promise<void> | undefined
     const dispose = (reason?: "exited" | "restarting"): Promise<void> => {
       disposing ??= (async () => {
-        if (reason) {
-          mobile.announceExit(reason)
-          await new Promise((resolve) => setTimeout(resolve, EXIT_FLUSH_DELAY_MS))
+        try {
+          if (reason) {
+            mobile.announceExit(reason)
+            await new Promise((resolveDelay) => setTimeout(resolveDelay, EXIT_FLUSH_DELAY_MS))
+          }
+        } finally {
+          try {
+            disposeMobile()
+          } finally {
+            try {
+              await bootedCtx.fiber.dispose()
+            } finally {
+              restoreProfileDirEnv()
+            }
+          }
         }
-        disposeMobile()
-        await ctx.fiber.dispose()
       })()
       return disposing
     }
 
     return { profileDir, ctx, feed, relay, mobile, dispose }
   } catch (error) {
-    await ctx.fiber.dispose().catch(() => undefined)
+    try {
+      await ctx?.fiber.dispose().catch(() => undefined)
+    } finally {
+      restoreProfileDirEnv()
+    }
     throw error
   }
 }
