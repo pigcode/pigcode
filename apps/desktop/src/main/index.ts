@@ -11,7 +11,6 @@ import { preferencesPath, profileDir, resolveAppPath } from "./app-paths"
 import { createDesktopReminders } from "./desktop-reminders"
 import { createHostSupervisor } from "./host-supervisor"
 import { attachAttachmentThumbnails } from "./attachment-thumbnail"
-import { attachRelayCredentials } from "./relay-credential"
 import { hidesOnClose } from "./lifecycle"
 import { DEFAULT_PREFERENCES, readPreferences, type Preferences } from "./preferences"
 import { monitorPower, setKeepAwake, watchHostActivity } from "./keep-awake"
@@ -135,7 +134,6 @@ const hosts = createHostSupervisor({
   onStart(host) {
     watchHostActivity(host)
     browser.attachControlPort(host.controlPort)
-    attachRelayCredentials(host.controlPort, profileDir())
     attachAttachmentThumbnails(host.controlPort)
     reminders.attach(host.controlPort)
     syncDesktopPreviewUrls(host.controlPort)

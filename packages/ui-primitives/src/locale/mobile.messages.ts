@@ -42,7 +42,7 @@ export const mobileZhCN = {
   "settings.pairing.status.cancelled": "已取消配对。",
   "settings.pairing.status.relay-unavailable": "配对时连不上中继，请检查中继配置和版本。",
   "settings.pairing.status.needs-relay": "请先测试并保存中继配置。",
-  "settings.pairing.status.storage-unavailable": "系统凭据存储不可用，无法完成配对。",
+  "settings.pairing.status.storage-unavailable": "本机凭据密钥不可用，无法完成配对。",
   "settings.mobileRelay": "手机连接",
   "settings.mobileRelay.relay": "中继配置",
   "settings.mobileRelay.address": "中继地址",
@@ -57,7 +57,7 @@ export const mobileZhCN = {
   "settings.mobileRelay.status.token-rejected": "中继拒绝了访问令牌，请检查后重试。",
   "settings.mobileRelay.status.unreachable": "连不上中继，请检查地址、网络和证书。",
   "settings.mobileRelay.status.incompatible": "中继的探测协议不兼容，请检查中继版本。",
-  "settings.mobileRelay.status.storage-unavailable": "系统凭据存储不可用，配置未保存。",
+  "settings.mobileRelay.status.storage-unavailable": "本机凭据密钥不可用，配置未保存。",
   "settings.mobileRelay.status.busy": "已有中继测试正在进行。",
   "settings.mobileRelay.status.host-unavailable": "无法读取或更新中继配置，请检查本机 Host 连接。",
   "settings.mobilePreview.title": "本机预览",
@@ -116,7 +116,7 @@ export const mobileEnUS = {
     "Could not reach the relay for pairing. Check its settings and version.",
   "settings.pairing.status.needs-relay": "Test and save a relay configuration first.",
   "settings.pairing.status.storage-unavailable":
-    "System credential storage is unavailable. Pairing could not finish.",
+    "Local credential key is unavailable. Pairing could not finish.",
   "settings.mobileRelay": "Phone Connections",
   "settings.mobileRelay.relay": "Relay Configuration",
   "settings.mobileRelay.address": "Relay address",
@@ -135,7 +135,7 @@ export const mobileEnUS = {
   "settings.mobileRelay.status.incompatible":
     "The relay probe protocol is incompatible. Check the relay version.",
   "settings.mobileRelay.status.storage-unavailable":
-    "System credential storage is unavailable. Settings were not saved.",
+    "Local credential key is unavailable. Settings were not saved.",
   "settings.mobileRelay.status.busy": "A relay test is already in progress.",
   "settings.mobileRelay.status.host-unavailable":
     "Couldn't read or update relay settings. Check the local Host connection.",

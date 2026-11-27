@@ -13,7 +13,7 @@ import { attachQuitState } from "./rpc/quit-state"
 import { attachHostActivity } from "./rpc/host-activity"
 import { attachHostReminders } from "./rpc/host-reminders"
 import { desktopAttachmentThumbnailer } from "./services/attachment-thumbnail"
-import { desktopRelayCipher } from "./services/relay-credential"
+import { createLocalCredentialCipher } from "./services/local-credential"
 import { MobileConnections } from "./mobile/connections"
 import { RelaySettings } from "./services/relay-settings"
 import { apply as pluginsPlugin } from "./services/plugins"
@@ -137,7 +137,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   if (control) {
     const controlTransport = new MessagePortTransport(control)
     ctx.get("attachments")?.setThumbnailer(desktopAttachmentThumbnailer(controlTransport))
-    const cipher = desktopRelayCipher(controlTransport)
+    const cipher = createLocalCredentialCipher(profileDir)
     const relay = new RelaySettings(ctx.settings, cipher)
     const mobile = new MobileConnections(ctx, relay, cipher, feed, { lanPort: 39871 })
     mobileLifecycle = mobile

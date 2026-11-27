@@ -49,17 +49,3 @@ export const relayTestResultSchema = z.discriminatedUnion("status", [
 export type RelaySettingsView = z.infer<typeof relaySettingsSchema>
 export type RelayTestAndSaveParams = z.infer<typeof relayTestAndSaveParamsSchema>
 export type RelayTestResult = z.infer<typeof relayTestResultSchema>
-
-/** Only used on the private Electron main ↔ Host control port. */
-export const relayCredentialRequestSchema = z.object({
-  type: z.literal("relay.credential"),
-  id: z.string(),
-  action: z.enum(["seal", "open"]),
-  value: z.string().max(16384),
-})
-
-export const relayCredentialResultSchema = z.object({
-  type: z.literal("relay.credential.result"),
-  id: z.string(),
-  value: z.string().nullable(),
-})
