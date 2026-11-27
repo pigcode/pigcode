@@ -180,7 +180,7 @@ async function runStart(
 
     const lanAddresses = await host.mobile.readyLanAddresses()
     const relay = host.relay.view()
-    const lanWaitStop = flushPendingStop()
+    const lanWaitStop = flushPendingStop() ?? stopPromise
     if (lanWaitStop) return await lanWaitStop
 
     if (json) {
@@ -342,6 +342,7 @@ export async function runHeadlessCli(argv: string[], deps: HeadlessCliDeps = {})
         stderr,
         stdin,
         env,
+        signalSource,
         readHiddenInput: deps.readHiddenInput,
         relayProbe: deps.relayProbe,
       })
@@ -365,6 +366,7 @@ export async function runHeadlessCli(argv: string[], deps: HeadlessCliDeps = {})
         stderr,
         stdin,
         env,
+        signalSource,
         confirmPrompt: deps.confirmPrompt,
       })
   }

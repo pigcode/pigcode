@@ -2,11 +2,15 @@
 import { existsSync, readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { Context } from "cordis"
-import type { MobileRevokeResult, RelaySettingsView } from "@pigcode/contracts"
+import {
+  relayTestAndSaveParamsSchema,
+  type MobileRevokeResult,
+  type RelaySettingsView,
+} from "@pigcode/contracts"
 import { PairedDevices } from "../mobile/paired-devices"
 import { createLocalCredentialCipher } from "../services/local-credential"
 import type { RelayProbe } from "../services/relay-probe"
-import { RelaySettings } from "../services/relay-settings"
+import { normalizeRelayAddress, RelaySettings } from "../services/relay-settings"
 import { apply as settingsPlugin, type SettingsService } from "../services/settings"
 import { callAdminSocket } from "./admin-socket"
 import {
@@ -21,6 +25,7 @@ import {
   resolveDeviceTarget,
   type PairingDeviceView,
   type ReadableInputLike,
+  type SignalSource,
   type WritableStreamLike,
 } from "./headless-cli-format"
 import type { ConfirmPromptFn } from "./headless-cli-pair"
@@ -82,6 +87,179 @@ async function withOfflineSettings<T>(
   }
 }
 
+async function runRelayStatus(
+  resolved: string,
+  json: boolean,
+  stdout: WritableStreamLike,
+  stderr: WritableStreamLike,
+): Promise<number> {
+  const meta = await probeLiveHost(resolved)
+  let view: RelaySettingsView
+  if (meta) {
+    try {
+      view = await callAdminSocket(meta.socketPath, "relay.view", {})
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      stderr.write(`读取运行中的中继配置失败: ${message}\n`)
+      return 1
+    }
+  } else {
+    view = readOfflineSummary(resolved).relay
+  }
+  if (json) {
+    stdout.write(`${JSON.stringify({ running: Boolean(meta), profileDir: resolved, ...view })}\n`)
+  } else {
+    stdout.write(`${formatRelayStatus(view, Boolean(meta))}\n`)
+  }
+  return 0
+}
+
+async function runRelayClear(
+  resolved: string,
+  json: boolean,
+  stdout: WritableStreamLike,
+  stderr: WritableStreamLike,
+  env: NodeJS.ProcessEnv,
+): Promise<number> {
+  const meta = await probeLiveHost(resolved)
+  let view: RelaySettingsView
+  if (meta) {
+    try {
+      view = await callAdminSocket(meta.socketPath, "relay.clear", {})
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      stderr.write(`清除运行中的中继配置失败: ${message}\n`)
+      return 1
+    }
+  } else if (existsSync(join(resolved, "settings.json"))) {
+    view = await withOfflineSettings(resolved, (settings) =>
+      new RelaySettings(settings, createLocalCredentialCipher(resolved, env)).clear(),
+    )
+  } else {
+    view = { address: null, tokenConfigured: false }
+  }
+  if (json) stdout.write(`${JSON.stringify(view)}\n`)
+  else stdout.write("已清除中继配置。\n")
+  return 0
+}
+
+async function resolveRelaySetToken(
+  command: { token?: string | undefined; tokenStdin: boolean },
+  json: boolean,
+  deps: {
+    stdout: WritableStreamLike
+    stderr: WritableStreamLike
+    stdin: ReadableInputLike
+    signalSource: SignalSource
+    readHiddenInput?: ((prompt: string) => Promise<string | null>) | undefined
+  },
+): Promise<{ ok: true; token: string | undefined } | { ok: false; code: number }> {
+  const { stdout, stderr, stdin, signalSource } = deps
+  if (command.tokenStdin) {
+    let fromStdin: string
+    try {
+      fromStdin = await readAllStdin(stdin)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      stderr.write(`${message}\n`)
+      return { ok: false, code: 2 }
+    }
+    if (!fromStdin.trim()) {
+      stderr.write("未从标准输入读取到有效的中继访问令牌。\n")
+      return { ok: false, code: 2 }
+    }
+    return { ok: true, token: fromStdin }
+  }
+  if (command.token !== undefined) {
+    return { ok: true, token: command.token }
+  }
+  if (!stdin.isTTY) {
+    stderr.write("非交互终端下请使用 --token 或 --token-stdin 提供中继访问令牌。\n")
+    return { ok: false, code: 2 }
+  }
+  const promptOut = json ? stderr : stdout
+  let entered: string | null
+  try {
+    entered = deps.readHiddenInput
+      ? await deps.readHiddenInput("请输入中继访问令牌: ")
+      : await readHiddenInputDefault("请输入中继访问令牌: ", stdin, promptOut, signalSource)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    stderr.write(`${message}\n`)
+    return { ok: false, code: 2 }
+  }
+  if (entered === null) {
+    stderr.write("已取消中继配置。\n")
+    return { ok: false, code: 1 }
+  }
+  return { ok: true, token: entered.trim() || undefined }
+}
+
+async function runRelaySet(
+  command: { address: string; token?: string | undefined; tokenStdin: boolean },
+  resolved: string,
+  json: boolean,
+  deps: {
+    stdout: WritableStreamLike
+    stderr: WritableStreamLike
+    stdin: ReadableInputLike
+    env: NodeJS.ProcessEnv
+    signalSource: SignalSource
+    readHiddenInput?: ((prompt: string) => Promise<string | null>) | undefined
+    relayProbe?: RelayProbe | undefined
+  },
+): Promise<number> {
+  const { stdout, stderr, env } = deps
+  const tokenResult = await resolveRelaySetToken(command, json, deps)
+  if (!tokenResult.ok) return tokenResult.code
+
+  const params = {
+    address: command.address,
+    ...(tokenResult.token !== undefined ? { token: tokenResult.token } : {}),
+  }
+  const validated = relayTestAndSaveParamsSchema.safeParse(params)
+  if (!validated.success) {
+    const reason = validated.error.issues[0]?.message || "中继配置参数格式无效或超出 4096 字符限制"
+    stderr.write(`${reason}\n`)
+    return 2
+  }
+
+  // 完成用户输入与参数校验后再探测 Host，避免输入等待期间产生状态竞态。
+  const meta = await probeLiveHost(resolved)
+  let result
+  if (meta) {
+    try {
+      result = await callAdminSocket(meta.socketPath, "relay.testAndSave", validated.data)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      stderr.write(`更新运行中的中继配置失败: ${message}\n`)
+      return 1
+    }
+  } else {
+    if (!normalizeRelayAddress(validated.data.address)) {
+      result = { status: "invalid-address" as const }
+    } else {
+      result = await withOfflineSettings(resolved, (settings) =>
+        new RelaySettings(
+          settings,
+          createLocalCredentialCipher(resolved, env),
+          deps.relayProbe,
+        ).testAndSave(validated.data),
+      )
+    }
+  }
+
+  if (result.status === "saved") {
+    if (json) stdout.write(`${JSON.stringify(result)}\n`)
+    else stdout.write("中继连接测试通过，配置已保存。\n")
+    return 0
+  }
+
+  if (json) stdout.write(`${JSON.stringify(result)}\n`)
+  else stderr.write(`${formatRelayError(result.status)}\n`)
+  return 1
+}
+
 export async function runRelayCommand(
   command:
     | { kind: "relay-status" }
@@ -94,113 +272,20 @@ export async function runRelayCommand(
     stderr: WritableStreamLike
     stdin: ReadableInputLike
     env: NodeJS.ProcessEnv
+    signalSource: SignalSource
     readHiddenInput?: ((prompt: string) => Promise<string | null>) | undefined
     relayProbe?: RelayProbe | undefined
   },
 ): Promise<number> {
-  const { stdout, stderr, stdin, env } = deps
   const resolved = resolve(profileDir)
-  const meta = await probeLiveHost(resolved)
-
-  if (command.kind === "relay-status") {
-    let view: RelaySettingsView
-    if (meta) {
-      try {
-        view = await callAdminSocket(meta.socketPath, "relay.view", {})
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        stderr.write(`读取运行中的中继配置失败: ${message}\n`)
-        return 1
-      }
-    } else {
-      view = readOfflineSummary(resolved).relay
-    }
-    if (json) {
-      stdout.write(`${JSON.stringify({ running: Boolean(meta), profileDir: resolved, ...view })}\n`)
-    } else {
-      stdout.write(`${formatRelayStatus(view, Boolean(meta))}\n`)
-    }
-    return 0
+  switch (command.kind) {
+    case "relay-status":
+      return runRelayStatus(resolved, json, deps.stdout, deps.stderr)
+    case "relay-clear":
+      return runRelayClear(resolved, json, deps.stdout, deps.stderr, deps.env)
+    case "relay-set":
+      return runRelaySet(command, resolved, json, deps)
   }
-
-  if (command.kind === "relay-clear") {
-    let view: RelaySettingsView
-    if (meta) {
-      try {
-        view = await callAdminSocket(meta.socketPath, "relay.clear", {})
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        stderr.write(`清除运行中的中继配置失败: ${message}\n`)
-        return 1
-      }
-    } else if (existsSync(join(resolved, "settings.json"))) {
-      view = await withOfflineSettings(resolved, (settings) =>
-        new RelaySettings(settings, createLocalCredentialCipher(resolved, env)).clear(),
-      )
-    } else {
-      view = { address: null, tokenConfigured: false }
-    }
-    if (json) stdout.write(`${JSON.stringify(view)}\n`)
-    else stdout.write("已清除中继配置。\n")
-    return 0
-  }
-
-  let resolvedToken = command.token
-  if (command.tokenStdin) {
-    const fromStdin = await readAllStdin(stdin)
-    if (!fromStdin.trim()) {
-      stderr.write("未从标准输入读取到有效的中继访问令牌。\n")
-      return 2
-    }
-    resolvedToken = fromStdin
-  } else if (resolvedToken === undefined) {
-    if (!stdin.isTTY) {
-      stderr.write("非交互终端下请使用 --token 或 --token-stdin 提供中继访问令牌。\n")
-      return 2
-    }
-    const promptOut = json ? stderr : stdout
-    const entered = deps.readHiddenInput
-      ? await deps.readHiddenInput("请输入中继访问令牌: ")
-      : await readHiddenInputDefault("请输入中继访问令牌: ", stdin, promptOut)
-    if (entered === null) {
-      stderr.write("已取消中继配置。\n")
-      return 1
-    }
-    resolvedToken = entered.trim() || undefined
-  }
-
-  const params = {
-    address: command.address,
-    ...(resolvedToken !== undefined ? { token: resolvedToken } : {}),
-  }
-  let result
-  if (meta) {
-    try {
-      result = await callAdminSocket(meta.socketPath, "relay.testAndSave", params)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      stderr.write(`更新运行中的中继配置失败: ${message}\n`)
-      return 1
-    }
-  } else {
-    result = await withOfflineSettings(resolved, (settings) =>
-      new RelaySettings(
-        settings,
-        createLocalCredentialCipher(resolved, env),
-        deps.relayProbe,
-      ).testAndSave(params),
-    )
-  }
-
-  if (result.status === "saved") {
-    if (json) stdout.write(`${JSON.stringify(result)}\n`)
-    else stdout.write("中继连接测试通过，配置已保存。\n")
-    return 0
-  }
-
-  if (json) stdout.write(`${JSON.stringify(result)}\n`)
-  else stderr.write(`${formatRelayError(result.status)}\n`)
-  return 1
 }
 
 async function loadPairedDevices(
@@ -253,16 +338,16 @@ export async function runRevokeCommand(
     stderr: WritableStreamLike
     stdin: ReadableInputLike
     env: NodeJS.ProcessEnv
+    signalSource: SignalSource
     confirmPrompt?: ConfirmPromptFn | undefined
   },
 ): Promise<number> {
-  const { stdout, stderr, stdin, env } = deps
+  const { stdout, stderr, stdin, env, signalSource } = deps
   const resolved = resolve(profileDir)
   const loaded = await loadPairedDevices(resolved, stderr)
   if (!loaded) return 1
-  const { meta, devices } = loaded
 
-  const targetResult = resolveDeviceTarget(devices, idOrPrefix)
+  const targetResult = resolveDeviceTarget(loaded.devices, idOrPrefix)
   if (!targetResult.ok) {
     if (targetResult.reason === "missing") {
       stderr.write(`未找到匹配的已配对设备: ${idOrPrefix}\n`)
@@ -282,10 +367,25 @@ export async function runRevokeCommand(
       return 2
     }
     const controller = new AbortController()
-    const prompt = `确认撤销「${target.name}」（设备编号 ${deviceNumber(target.id)}）的配对？[y/N] `
-    const answer = deps.confirmPrompt
-      ? await deps.confirmPrompt({ prompt, signal: controller.signal })
-      : await promptLineDefault(json ? "" : prompt, stdin, stdout, controller.signal)
+    let interrupted = false
+    const onSigInt = (): void => {
+      interrupted = true
+      controller.abort()
+    }
+    signalSource.on("SIGINT", onSigInt)
+    let answer: string | null
+    try {
+      const prompt = `确认撤销「${target.name}」（设备编号 ${deviceNumber(target.id)}）的配对？[y/N] `
+      answer = deps.confirmPrompt
+        ? await deps.confirmPrompt({ prompt, signal: controller.signal })
+        : await promptLineDefault(json ? "" : prompt, stdin, stdout, controller.signal)
+    } finally {
+      signalSource.off("SIGINT", onSigInt)
+    }
+    if (interrupted) {
+      stderr.write("已取消撤销配对。\n")
+      return 130
+    }
     const normalized = answer?.trim().toLowerCase() ?? ""
     if (normalized !== "y" && normalized !== "yes") {
       stderr.write("已取消撤销配对。\n")
@@ -293,10 +393,12 @@ export async function runRevokeCommand(
     }
   }
 
+  // 在确认完成之后重新探测存活 Host，消除输入等待期间 Host 启停带来的 TOCTOU。
+  const liveMeta = await probeLiveHost(resolved)
   let revokeResult: MobileRevokeResult
-  if (meta) {
+  if (liveMeta) {
     try {
-      revokeResult = await callAdminSocket(meta.socketPath, "mobile.devices.revoke", {
+      revokeResult = await callAdminSocket(liveMeta.socketPath, "mobile.devices.revoke", {
         deviceId: target.id,
       })
     } catch (error) {
@@ -308,33 +410,21 @@ export async function runRevokeCommand(
     revokeResult = await withOfflineSettings(resolved, (settings) => {
       const paired = new PairedDevices(settings)
       const relay = new RelaySettings(settings, createLocalCredentialCipher(resolved, env))
+      const offlinePairing = () => ({
+        status: "idle" as const,
+        attempt: null,
+        devices: paired.view(relay.revision, new Set()),
+      })
       const found = paired.findById(target.id)
       if (!found) {
-        return {
-          status: "missing-device",
-          pairing: {
-            status: "idle",
-            attempt: null,
-            devices: paired.view(relay.revision, new Set()),
-          },
-        }
+        return { status: "missing-device", pairing: offlinePairing() }
       }
       try {
         paired.remove(found)
       } catch {
-        return {
-          status: "storage-unavailable",
-          pairing: {
-            status: "idle",
-            attempt: null,
-            devices: paired.view(relay.revision, new Set()),
-          },
-        }
+        return { status: "storage-unavailable", pairing: offlinePairing() }
       }
-      return {
-        status: "revoked",
-        pairing: { status: "idle", attempt: null, devices: paired.view(relay.revision, new Set()) },
-      }
+      return { status: "revoked", pairing: offlinePairing() }
     })
   }
 

@@ -27,7 +27,7 @@ declare module "cordis" {
   }
 }
 
-function relayAddress(input: string): string | undefined {
+export function normalizeRelayAddress(input: string): string | undefined {
   try {
     const address = new URL(input.trim())
     if (
@@ -95,7 +95,7 @@ export class RelaySettings {
   }
 
   async testAndSave(input: RelayTestAndSaveParams): Promise<RelayTestResult> {
-    const address = relayAddress(input.address)
+    const address = normalizeRelayAddress(input.address)
     if (!address) return { status: "invalid-address" }
     if (this.saving) return { status: "busy" }
 

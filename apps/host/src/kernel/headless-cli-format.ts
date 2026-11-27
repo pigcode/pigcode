@@ -135,6 +135,8 @@ export function formatPairingError(status: string): string {
       return "配对已取消。"
     case "disconnected":
       return "手机端连接已断开，配对核对已取消。"
+    case "superseded":
+      return "当前配对会话已被新的配对操作取代，已取消。"
     case "host-unavailable":
       return "与本机 Host 控制通道断开连接。"
     default:
@@ -204,14 +206,42 @@ export function resolveDeviceTarget(
   return { ok: false, reason: "ambiguous", matches }
 }
 
-/** 读取 stdin 全量文本并裁掉末尾换行。 */
-export async function readAllStdin(stdin: ReadableInputLike): Promise<string> {
+const DEFAULT_MAX_STDIN_BYTES = 16_384
+
+/** 读取 stdin 全量文本（带字节上限保护）并裁掉末尾换行。 */
+export async function readAllStdin(
+  stdin: ReadableInputLike,
+  maxBytes: number = DEFAULT_MAX_STDIN_BYTES,
+): Promise<string> {
   return new Promise((resolvePromise, rejectPromise) => {
     const chunks: Buffer[] = []
+    let totalBytes = 0
+    let settled = false
+    const cleanup = (): void => {
+      stdin.off("data", onData)
+      stdin.off("end", onEnd)
+      stdin.off("error", onError)
+    }
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      stdin.pause()
+      rejectPromise(error)
+    }
     const onData = (chunk: string | Buffer): void => {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk)
+      if (settled) return
+      const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk
+      totalBytes += buf.length
+      if (totalBytes > maxBytes) {
+        fail(new Error(`标准输入内容超过 ${maxBytes} 字节上限`))
+        return
+      }
+      chunks.push(buf)
     }
     const onEnd = (): void => {
+      if (settled) return
+      settled = true
       cleanup()
       resolvePromise(
         Buffer.concat(chunks)
@@ -219,58 +249,75 @@ export async function readAllStdin(stdin: ReadableInputLike): Promise<string> {
           .replace(/(?:\r?\n)+$/, ""),
       )
     }
-    const onError = (error: Error): void => {
-      cleanup()
-      rejectPromise(error)
-    }
-    const cleanup = (): void => {
-      stdin.off("data", onData)
-      stdin.off("end", onEnd)
-      stdin.off("error", onError)
-    }
+    const onError = (error: Error): void => fail(error)
     stdin.on("data", onData)
     stdin.once("end", onEnd)
     stdin.once("error", onError)
-    stdin.resume?.()
+    stdin.resume()
   })
 }
 
-/** 从 TTY 无回显读取密码/令牌；非 raw 模式支持时退回到普通行读取。 */
+type EscState = "none" | "esc" | "csi" | "ss3"
+
+/** 从 TTY raw 模式无回显读取密码/令牌；不支持 raw 模式时直接拒绝，防止明文回显。 */
 export async function readHiddenInputDefault(
   prompt: string,
   stdin: ReadableInputLike,
   promptOut: WritableStreamLike,
+  signalSource: SignalSource = process,
 ): Promise<string | null> {
-  promptOut.write(prompt)
-  if (!stdin.setRawMode) {
-    const answer = await promptLineDefault("", stdin, promptOut)
-    return answer
+  if (typeof stdin.setRawMode !== "function") {
+    throw new Error("当前终端不支持隐藏输入，请改用 --token-stdin")
   }
 
+  promptOut.write(prompt)
   const wasRaw = stdin.isRaw ?? false
   stdin.setRawMode(true)
-  stdin.resume?.()
+  stdin.resume()
 
   return new Promise((resolveInput) => {
-    let buffer = ""
+    const chars: string[] = []
+    let escState: EscState = "none"
     let settled = false
-    const finish = (value: string | null): void => {
-      if (settled) return
-      settled = true
+    let cleanupDone = false
+
+    const restoreTerminal = (): void => {
+      if (cleanupDone) return
+      cleanupDone = true
       stdin.off("data", onData)
       stdin.off("end", onEnd)
+      stdin.off("close", onClose)
       stdin.off("error", onError)
+      signalSource.off("SIGINT", onSignal)
+      signalSource.off("SIGTERM", onSignal)
       try {
         stdin.setRawMode?.(wasRaw)
       } catch {
         // 忽略恢复终端模式时的异常。
       }
-      if (stdin === process.stdin) stdin.pause?.()
-      promptOut.write("\n")
-      resolveInput(value)
+      try {
+        stdin.pause()
+      } catch {
+        // 忽略暂停流时的异常。
+      }
     }
-    const onEnd = (): void => finish(buffer.length > 0 ? buffer : null)
+
+    const finish = (value: string | null): void => {
+      if (settled) return
+      settled = true
+      try {
+        restoreTerminal()
+      } finally {
+        promptOut.write("\n")
+        resolveInput(value)
+      }
+    }
+
+    const onSignal = (): void => finish(null)
+    const onEnd = (): void => finish(null)
+    const onClose = (): void => finish(null)
     const onError = (): void => finish(null)
+
     const onData = (chunk: string | Buffer): void => {
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8")
       for (const ch of text) {
@@ -278,26 +325,54 @@ export async function readHiddenInputDefault(
           finish(null)
           return
         }
+        if (escState === "esc") {
+          if (ch === "[") escState = "csi"
+          else if (ch === "O") escState = "ss3"
+          else escState = "none"
+          continue
+        }
+        if (escState === "csi") {
+          const code = ch.codePointAt(0) ?? 0
+          if (code >= 0x20 && code <= 0x3f) continue
+          if (code >= 0x40 && code <= 0x7e) {
+            escState = "none"
+            continue
+          }
+          escState = "none"
+        } else if (escState === "ss3") {
+          escState = "none"
+          continue
+        }
+
+        if (ch === "\x1b") {
+          escState = "esc"
+          continue
+        }
         if (ch === "\u0004") {
-          finish(buffer.length > 0 ? buffer : null)
+          finish(chars.length > 0 ? chars.join("") : null)
           return
         }
         if (ch === "\r" || ch === "\n") {
-          finish(buffer)
+          finish(chars.join(""))
           return
         }
         if (ch === "\u007f" || ch === "\b") {
-          buffer = buffer.slice(0, -1)
+          chars.pop()
           continue
         }
-        if (ch.charCodeAt(0) >= 32) {
-          buffer += ch
+        const code = ch.codePointAt(0) ?? 0
+        if (code >= 32) {
+          chars.push(ch)
         }
       }
     }
+
     stdin.on("data", onData)
     stdin.once("end", onEnd)
+    stdin.once("close", onClose)
     stdin.once("error", onError)
+    signalSource.on("SIGINT", onSignal)
+    signalSource.on("SIGTERM", onSignal)
   })
 }
 

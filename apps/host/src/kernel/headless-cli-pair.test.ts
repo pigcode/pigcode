@@ -1,5 +1,6 @@
 /** 验证 pigcode-host CLI 的终端扫码配对、竞态中止、设备列表与撤销配对流程。 */
 import { randomUUID } from "node:crypto"
+import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -132,6 +133,7 @@ describe("runHeadlessCli - pair", () => {
       }),
     ).toBe(0)
     expect(ioUpdate.readStdout()).toContain("更新中继配置")
+    expect(ioUpdate.readStdout()).not.toContain(qrPayload)
 
     mode = "pair"
     const ioJson = createCapturedIo()
@@ -228,14 +230,92 @@ describe("runHeadlessCli - pair", () => {
     ).toBe(130)
     expect(signals.listenerCount("SIGINT")).toBe(0)
   })
+
+  it("handles superseded attempt ID and mobile.pairing.confirm RPC failure cleanly", async () => {
+    const profileDir = await temps.makeDir()
+    const attemptId = randomUUID()
+    const otherAttemptId = randomUUID()
+    const confirmation = randomUUID()
+    let superseded = false
+    let failConfirm = false
+
+    const { server, socketPath } = await startFixtureAdminServer(profileDir, {
+      "mobile.pairing.start": () => ({
+        status: "waiting",
+        attempt: { id: attemptId, expiresAt: Date.now() + 60_000, qr: "{}", candidate: null },
+        devices: [],
+      }),
+      "mobile.pairing.view": () =>
+        superseded
+          ? {
+              status: "verify",
+              attempt: {
+                id: otherAttemptId,
+                expiresAt: Date.now() + 60_000,
+                qr: "{}",
+                candidate: {
+                  confirmation: randomUUID(),
+                  code: "999999",
+                  name: "Other",
+                  mode: "pair",
+                },
+              },
+              devices: [],
+            }
+          : {
+              status: "verify",
+              attempt: {
+                id: attemptId,
+                expiresAt: Date.now() + 60_000,
+                qr: "{}",
+                candidate: { confirmation, code: "123456", name: "Pixel", mode: "pair" },
+              },
+              devices: [],
+            },
+      "mobile.pairing.confirm": () => {
+        if (failConfirm) throw new Error("confirm rpc lost")
+        return { status: "paired", attempt: null, devices: [] }
+      },
+    })
+    cleanups.push(() => server.close())
+    const lock = await acquireHostLock(profileDir, { runtime: "headless", socketPath })
+    cleanups.push(() => lock.release())
+
+    superseded = true
+    const ioSuperseded = createCapturedIo()
+    expect(
+      await runHeadlessCli(["--profile-dir", profileDir, "pair"], {
+        ...ioSuperseded,
+        pollIntervalMs: 10,
+      }),
+    ).toBe(1)
+    expect(ioSuperseded.readStderr()).toContain("取代")
+
+    superseded = false
+    failConfirm = true
+    const ioConfirmFail = createCapturedIo()
+    expect(
+      await runHeadlessCli(["--profile-dir", profileDir, "pair", "--json"], {
+        ...ioConfirmFail,
+        pollIntervalMs: 10,
+        confirmPrompt: async () => "y",
+      }),
+    ).toBe(1)
+    const lastLine = ioConfirmFail.readStdout().trim().split("\n").pop()!
+    expect(JSON.parse(lastLine)).toMatchObject({ event: "error", code: "confirm_failed" })
+  })
 })
 
 describe("runHeadlessCli - devices and revoke", () => {
-  it("lists devices and revokes by prefix or name (online/offline) with ambiguity & TTY checks", async () => {
-    const profileDir = await temps.makeDir()
+  it("lists devices without creating missing profileDir and revokes with TTY/SIGINT/TOCTOU guards", async () => {
+    const root = await temps.makeDir()
+    const missingDir = join(root, "missing-devices-dir")
     const ioEmpty = createCapturedIo()
-    expect(await runHeadlessCli(["--profile-dir", profileDir, "devices"], ioEmpty)).toBe(0)
+    expect(await runHeadlessCli(["--profile-dir", missingDir, "devices"], ioEmpty)).toBe(0)
     expect(ioEmpty.readStdout()).toContain("还没有已配对设备")
+    expect(existsSync(missingDir)).toBe(false)
+
+    const profileDir = await temps.makeDir()
 
     const d1 = makePairedDevice(1, "Work iPhone", "ios")
     const d2 = makePairedDevice(2, "Backup Pixel", "android")
@@ -321,5 +401,20 @@ describe("runHeadlessCli - devices and revoke", () => {
       ),
     ).toBe(0)
     expect(revokeSpy).toHaveBeenCalledWith({ deviceId: id1 })
+
+    const signals = new TestSignalSource()
+    const ioRevokeSigInt = createCapturedIo(true)
+    expect(
+      await runHeadlessCli(["--profile-dir", profileDir, "revoke", id1.slice(0, 10)], {
+        ...ioRevokeSigInt,
+        signalSource: signals,
+        confirmPrompt: async ({ signal }) =>
+          await new Promise((resolvePrompt) => {
+            signal.addEventListener("abort", () => resolvePrompt(null), { once: true })
+            signals.emit("SIGINT")
+          }),
+      }),
+    ).toBe(130)
+    expect(signals.listenerCount("SIGINT")).toBe(0)
   })
 })

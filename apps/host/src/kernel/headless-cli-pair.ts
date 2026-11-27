@@ -43,8 +43,12 @@ function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
+const ADMIN_POLL_TIMEOUT_MS = 2_000
+
 async function cancelAttemptBestEffort(socketPath: string, id: string): Promise<void> {
-  await callAdminSocket(socketPath, "mobile.pairing.cancel", { id }, 2_000).catch(() => undefined)
+  await callAdminSocket(socketPath, "mobile.pairing.cancel", { id }, ADMIN_POLL_TIMEOUT_MS).catch(
+    () => undefined,
+  )
 }
 
 function emitPairingFailure(
@@ -122,11 +126,19 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
       })}\n`,
     )
   } else {
-    const qrTerminal = await QRCode.toString(qrPayload, {
-      type: "terminal",
-      small: true,
-      errorCorrectionLevel: "L",
-    })
+    let qrTerminal: string
+    try {
+      qrTerminal = await QRCode.toString(qrPayload, {
+        type: "terminal",
+        small: true,
+        errorCorrectionLevel: "L",
+      })
+    } catch (error) {
+      await cancelAttemptBestEffort(meta.socketPath, attemptId)
+      const message = error instanceof Error ? error.message : String(error)
+      emitPairingFailure(json, stdout, stderr, "qr-unavailable", `生成终端二维码失败: ${message}`)
+      return 1
+    }
     stdout.write("请使用 Pigcode 手机端扫描以下二维码（按 Ctrl+C 取消）：\n")
     stdout.write(qrTerminal)
     if (!qrTerminal.endsWith("\n")) stdout.write("\n")
@@ -160,7 +172,12 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
       let view
       try {
-        view = await callAdminSocket(meta.socketPath, "mobile.pairing.view", {})
+        view = await callAdminSocket(
+          meta.socketPath,
+          "mobile.pairing.view",
+          {},
+          ADMIN_POLL_TIMEOUT_MS,
+        )
       } catch {
         emitPairingFailure(
           json,
@@ -174,7 +191,11 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
       if (interrupted) return await cancelAndExitInterrupted()
 
-      if (view.attempt?.id !== attemptId) {
+      if (view.attempt?.id && view.attempt.id !== attemptId) {
+        emitPairingFailure(json, stdout, stderr, "superseded", formatPairingError("superseded"))
+        return 1
+      }
+      if (!view.attempt) {
         const reason = view.status === "waiting" ? "cancelled" : view.status
         emitPairingFailure(json, stdout, stderr, reason, formatPairingError(reason))
         return 1
@@ -215,10 +236,24 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
             await sleepAbortable(pollIntervalMs, abortController.signal)
             if (abortController.signal.aborted || interrupted) break
             try {
-              const nextView = await callAdminSocket(meta.socketPath, "mobile.pairing.view", {})
+              const nextView = await callAdminSocket(
+                meta.socketPath,
+                "mobile.pairing.view",
+                {},
+                ADMIN_POLL_TIMEOUT_MS,
+              )
               if (abortController.signal.aborted || interrupted) break
+              if (nextView.attempt?.id && nextView.attempt.id !== attemptId) {
+                droppedReason = "superseded"
+                abortController.abort()
+                break
+              }
+              if (!nextView.attempt) {
+                droppedReason = nextView.status === "waiting" ? "cancelled" : nextView.status
+                abortController.abort()
+                break
+              }
               if (
-                nextView.attempt?.id !== attemptId ||
                 nextView.status !== "verify" ||
                 nextView.attempt.candidate?.confirmation !== candidate.confirmation
               ) {
@@ -256,10 +291,17 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
         const normalized = answer?.trim().toLowerCase() ?? ""
         if (normalized === "y" || normalized === "yes") {
-          const confirmed = await callAdminSocket(meta.socketPath, "mobile.pairing.confirm", {
-            id: attemptId,
-            confirmation: candidate.confirmation,
-          })
+          let confirmed
+          try {
+            confirmed = await callAdminSocket(meta.socketPath, "mobile.pairing.confirm", {
+              id: attemptId,
+              confirmation: candidate.confirmation,
+            })
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            emitPairingFailure(json, stdout, stderr, "confirm_failed", `确认配对失败: ${message}`)
+            return 1
+          }
           if (confirmed.status === "paired" || confirmed.status === "update-approved") {
             if (json) {
               stdout.write(

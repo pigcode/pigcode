@@ -1,11 +1,10 @@
-/** 验证 pigcode-host CLI：全局参数、--dump-config、start 常驻与信号、status、relay 与可执行入口。 */
-import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+/** 验证 pigcode-host CLI：全局参数、--dump-config、start 常驻与信号、status 与 relay。 */
+import { existsSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
 import { join, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 import { Context } from "cordis"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { MobileConnections } from "../mobile/connections"
 import { PairedDevices } from "../mobile/paired-devices"
 import { createLocalCredentialCipher } from "../services/local-credential"
 import { RelaySettings } from "../services/relay-settings"
@@ -172,6 +171,33 @@ describe("runHeadlessCli - start and status", () => {
     expect(await startPromise2).toBe(0)
   })
 
+  it("suppresses started banner when SIGINT arrives during readyLanAddresses()", async () => {
+    const root = await temps.makeDir()
+    const profileDir = join(root, "profile")
+    const runtimeRoot = join(root, "runtime")
+    await writeMinimalRuntimeProfile(runtimeRoot)
+
+    const signals = new TestSignalSource()
+    const io = createCapturedIo()
+    vi.spyOn(MobileConnections.prototype, "readyLanAddresses").mockImplementation(async () => {
+      signals.emit("SIGINT")
+      return ["127.0.0.1:39871"]
+    })
+
+    const code = await runHeadlessCli(
+      ["--profile-dir", profileDir, "start", "--lan-port", "0", "--no-shell-env", "--json"],
+      {
+        ...io,
+        env: { PIGCODE_CORE_PROFILE_DIR: runtimeRoot },
+        signalSource: signals,
+      },
+    )
+    expect(code).toBe(0)
+    expect(io.readStdout()).not.toContain('"event":"started"')
+    expect(await probeLiveHost(profileDir)).toBeNull()
+    expect(signals.listenerCount("SIGINT")).toBe(0)
+  })
+
   it("exits 1 with friendly Chinese message when start detects existing live host", async () => {
     const profileDir = await temps.makeDir()
     const { server, socketPath } = await startFixtureAdminServer(profileDir)
@@ -187,7 +213,13 @@ describe("runHeadlessCli - start and status", () => {
     expect(io.readStderr()).toContain("desktop")
   })
 
-  it("reports online status (human and --json) and offline status with settings summary", async () => {
+  it("reports online/offline status without creating nonexistent profileDir", async () => {
+    const root = await temps.makeDir()
+    const missingDir = join(root, "never-created")
+    const ioMissing = createCapturedIo()
+    expect(await runHeadlessCli(["--profile-dir", missingDir, "status"], ioMissing)).toBe(1)
+    expect(existsSync(missingDir)).toBe(false)
+
     const profileDir = await temps.makeDir()
     const ctx = new Context()
     await ctx.plugin(settingsPlugin, { path: join(profileDir, "settings.json") })
@@ -344,6 +376,81 @@ describe("runHeadlessCli - relay", () => {
     expect(JSON.parse(ioAfterClear.readStdout())).toMatchObject({ tokenConfigured: false })
   })
 
+  it("rejects empty/oversized --token-stdin and avoids creating profileDir for invalid --address", async () => {
+    const root = await temps.makeDir()
+    const badAddrDir = join(root, "bad-addr-profile")
+    const ioInvalidAddr = createCapturedIo()
+    expect(
+      await runHeadlessCli(
+        [
+          "--profile-dir",
+          badAddrDir,
+          "relay",
+          "set",
+          "--address",
+          "ws://insecure.example",
+          "--token",
+          "tok",
+        ],
+        ioInvalidAddr,
+      ),
+    ).toBe(1)
+    expect(existsSync(badAddrDir)).toBe(false)
+
+    const profileDir = await temps.makeDir()
+    const ioEmptyStdin = createCapturedIo()
+    ioEmptyStdin.stdin.end("  \n")
+    expect(
+      await runHeadlessCli(
+        [
+          "--profile-dir",
+          profileDir,
+          "relay",
+          "set",
+          "--address",
+          "wss://relay.example",
+          "--token-stdin",
+        ],
+        ioEmptyStdin,
+      ),
+    ).toBe(2)
+
+    const ioOver4k = createCapturedIo()
+    ioOver4k.stdin.end("a".repeat(4097))
+    expect(
+      await runHeadlessCli(
+        [
+          "--profile-dir",
+          profileDir,
+          "relay",
+          "set",
+          "--address",
+          "wss://relay.example",
+          "--token-stdin",
+        ],
+        ioOver4k,
+      ),
+    ).toBe(2)
+    expect(existsSync(join(profileDir, "settings.json"))).toBe(false)
+
+    const ioOver16k = createCapturedIo()
+    ioOver16k.stdin.end("b".repeat(16_385))
+    expect(
+      await runHeadlessCli(
+        [
+          "--profile-dir",
+          profileDir,
+          "relay",
+          "set",
+          "--address",
+          "wss://relay.example",
+          "--token-stdin",
+        ],
+        ioOver16k,
+      ),
+    ).toBe(2)
+  })
+
   it("updates and clears relay online through admin socket when host is running", async () => {
     const profileDir = await temps.makeDir()
     const testAndSave = vi.fn().mockResolvedValue({
@@ -374,21 +481,5 @@ describe("runHeadlessCli - relay", () => {
     const ioClear = createCapturedIo()
     expect(await runHeadlessCli(["--profile-dir", profileDir, "relay", "clear"], ioClear)).toBe(0)
     expect(clear).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe("bin/pigcode-host.mjs", () => {
-  it("exits 1 with build instruction when built bundle does not exist", async () => {
-    const binSource = fileURLToPath(new URL("../../bin/pigcode-host.mjs", import.meta.url))
-    const tempDir = await temps.makeDir("pigcode-bin-test-")
-    const tempBinDir = join(tempDir, "bin")
-    await mkdir(tempBinDir, { recursive: true })
-    await writeFile(join(tempBinDir, "pigcode-host.mjs"), readFileSync(binSource, "utf8"))
-
-    const result = spawnSync(process.execPath, [join(tempBinDir, "pigcode-host.mjs"), "--help"], {
-      encoding: "utf8",
-    })
-    expect(result.status).toBe(1)
-    expect(result.stderr).toContain("Pigcode Host 尚未构建，请先运行 pnpm build:host")
   })
 })

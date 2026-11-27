@@ -1,7 +1,7 @@
 /** Pigcode 无窗口常驻 Host 与 CLI 统一入口（供 `bin/pigcode-host.mjs` 与直接导入运行）。 */
 import { realpathSync } from "node:fs"
 import { resolve } from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 import { runHeadlessCli, type HeadlessCliDeps } from "./kernel/headless-cli"
 
 export { runHeadlessCli, type HeadlessCliDeps }
@@ -14,14 +14,20 @@ export async function main(
   return runHeadlessCli(argv, deps)
 }
 
+function normalizePathForCompare(target: string): string {
+  try {
+    const real = realpathSync(target)
+    return process.platform === "win32" ? real.toLowerCase() : real
+  } catch {
+    const resolved = resolve(target)
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved
+  }
+}
+
 function isDirectEntry(): boolean {
   const entry = process.argv[1]
   if (!entry) return false
-  try {
-    return pathToFileURL(realpathSync(entry)).href === import.meta.url
-  } catch {
-    return pathToFileURL(resolve(entry)).href === import.meta.url
-  }
+  return normalizePathForCompare(entry) === normalizePathForCompare(fileURLToPath(import.meta.url))
 }
 
 if (isDirectEntry()) {
