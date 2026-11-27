@@ -1,22 +1,15 @@
-/** Host utilityProcess 入口：接收 main 转交的端口，启动服务，在页面的连接上提供 RPC。 */
-import { join } from "node:path"
-import { fileURLToPath } from "node:url"
-import { createHostAppFromProfile, requireCoreService } from "./kernel/app"
-import { sweepOrphanedProcesses } from "@pigcode/plugin-sdk/node"
-import { writeBootGraph } from "./kernel/boot"
-import { loadProfile } from "./kernel/profile"
+/** Host utilityProcess 入口：接收 main 转交的端口，引导公共内核并挂载桌面适配层。 */
+import {
+  bootstrapHostKernel,
+  resolveHostRuntimeRoot,
+  type BootstrappedHost,
+} from "./kernel/bootstrap"
 import { MessagePortTransport, type HostMessagePort } from "./rpc/message-port-transport"
 import { PageTransport } from "./rpc/page-transport"
 import { RpcServer } from "./rpc/server"
-import { ThreadFeed } from "./rpc/thread-feed"
 import { attachQuitState } from "./rpc/quit-state"
 import { attachHostActivity } from "./rpc/host-activity"
-import { attachHostReminders } from "./rpc/host-reminders"
 import { desktopAttachmentThumbnailer } from "./services/attachment-thumbnail"
-import { createLocalCredentialCipher } from "./services/local-credential"
-import { MobileConnections } from "./mobile/connections"
-import { RelaySettings } from "./services/relay-settings"
-import { apply as pluginsPlugin } from "./services/plugins"
 
 /** utilityProcess 注入的 parentPort 事件形状。 */
 interface ParentPortMessageEvent {
@@ -36,9 +29,10 @@ if (!parentPort) {
   throw new Error("host entry must run inside an Electron utilityProcess")
 }
 
-/** 已经创建的应用；退出时要运行它所有服务的清理。 */
-let hostApp: { fiber: { dispose(): Promise<unknown> } } | undefined
-let mobileLifecycle: MobileConnections | undefined
+/** 已经引导完成的 Host 实例；退出时通过 dispose() 运行清理。 */
+let host: BootstrappedHost | undefined
+let bootstrapping: Promise<void> | undefined
+let stopPromise: Promise<void> | undefined
 let suspended = false
 
 /** 页面连接；页面每次加载（包括刷新）main 都会新开一条，换上以后 RPC 服务不变。 */
@@ -61,13 +55,13 @@ function servePage(port: HostMessagePort): void {
 
 parentPort.on("message", (event) => {
   if (event.data?.type === "shutdown") {
-    mobileLifecycle?.announceExit(event.data.reason === "restarting" ? "restarting" : "exited")
-    void shutdown()
+    const reason = event.data.reason === "restarting" ? "restarting" : "exited"
+    void shutdown(reason)
     return
   }
   if (event.data?.type === "power" && typeof event.data.suspended === "boolean") {
     suspended = event.data.suspended
-    mobileLifecycle?.setSuspended(suspended)
+    host?.mobile.setSuspended(suspended)
     return
   }
   if (event.data?.type === "page") {
@@ -75,7 +69,9 @@ parentPort.on("message", (event) => {
     if (port) servePage(port)
     return
   }
-  void bootstrap(event).catch((error: unknown) => {
+  if (event.data?.type !== "ports" || bootstrapping) return
+  bootstrapping = bootstrap(event).catch((error: unknown) => {
+    if (stopPromise) return
     // 启动失败要留下原因再退出；静默的未处理拒绝无从排查。原因同时交给 main：连续失败时 main 停止重启，
     // 把它显示在错误对话框里。稍等一下再退出，让这条消息送到 main。
     console.error("[host] bootstrap failed:", error)
@@ -86,74 +82,51 @@ parentPort.on("message", (event) => {
 })
 
 /** main 要退出了：运行清理，结束 Agent 和终端的进程树，然后退出。卡住时 main 会强制结束本进程。 */
-async function shutdown(): Promise<void> {
-  try {
-    await hostApp?.fiber.dispose()
-  } catch (error) {
-    console.error("[host] shutdown failed:", error)
-  }
-  process.exit(0)
+async function shutdown(reason: "exited" | "restarting"): Promise<void> {
+  stopPromise ??= (async () => {
+    try {
+      await bootstrapping?.catch(() => undefined)
+      rpc?.stop()
+      await host?.dispose(reason)
+    } catch (error) {
+      console.error("[host] shutdown failed:", error)
+    }
+    process.exit(0)
+  })()
+  await stopPromise
 }
 
-/**
- * 两个目录：核心 profile 随应用发布、只读，列出核心服务与内置插件（与本文件同在 out/host 下）；
- * 用户 profile 由 main 通过 PIGCODE_PROFILE_DIR 传入，存放安装的插件、设置与数据库。
- */
-function coreProfileDir(): string {
-  return (
-    process.env.PIGCODE_CORE_PROFILE_DIR ?? fileURLToPath(new URL("./profile", import.meta.url))
-  )
-}
-
-/** 收到控制端口后创建 kernel；完成后接上已经在等的页面连接。 */
+/** 收到控制端口后引导 kernel；完成后接上已经在等的页面连接与桌面控制通道。 */
 async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
-  if (event.data?.type !== "ports") return
   const [control] = event.ports
   const profileDir = process.env.PIGCODE_PROFILE_DIR
   if (!profileDir) throw new Error("PIGCODE_PROFILE_DIR is required")
-  const profile = await loadProfile(coreProfileDir(), "desktop")
-  // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
-  await sweepOrphanedProcesses()
-  const ctx = await createHostAppFromProfile(profile, {
-    "core.storage": { path: process.env.PIGCODE_DB_PATH ?? join(profileDir, "pigcode.db") },
-    "core.settings": { path: join(profileDir, "settings.json") },
-    "core.agents": { fake: false, dataDir: join(profileDir, "agents") },
+
+  const bootstrapped = await bootstrapHostKernel({
+    profileDir,
+    profileName: "desktop",
+    runtimeRoot: resolveHostRuntimeRoot(import.meta.url),
+    lanPort: 39871,
+    ...(control
+      ? { onReminder: (reminder) => control.postMessage({ type: "host.reminder", reminder }) }
+      : {}),
   })
-  hostApp = ctx
-  // 数据库打不开（备份或迁移失败、数据库比应用新）时 storage 不会起来，其后的服务也都缺席；
-  // 在这里带着真正的原因失败，而不是等到下面 ctx.agents 报 TypeError。
-  await requireCoreService(ctx, "core.storage", "storage")
-  await requireCoreService(ctx, "core.attachments", "attachments")
-  await requireCoreService(ctx, "core.agents", "agents")
-  // 上一个 Host 进程遗留的审批与运行状态在新进程启动时统一失效。
-  ctx.agents.recoverAfterRestart()
-  // agent 都是插件；要在补跑定时任务之前注册好，否则过期任务找不到 Agent。
-  await ctx.plugin(pluginsPlugin, { profileDir, builtin: profile.builtinPlugins })
-  await ctx.plugins.loadAll()
-  // Host 入口加载失败的插件也不加载界面代码；它的错误显示在插件页。
-  await writeBootGraph({ profileDir, builtin: profile.builtinPlugins }, ctx.plugins.hostFailures())
-  if (control) attachHostReminders(ctx, (reminder) => control.postMessage({ type: "host.reminder", reminder }))
-  const feed = new ThreadFeed(ctx)
+  host = bootstrapped
+  bootstrapped.mobile.setSuspended(suspended)
+
+  const { ctx, feed } = bootstrapped
   if (control) {
     const controlTransport = new MessagePortTransport(control)
     ctx.get("attachments")?.setThumbnailer(desktopAttachmentThumbnailer(controlTransport))
-    const cipher = createLocalCredentialCipher(profileDir)
-    const relay = new RelaySettings(ctx.settings, cipher)
-    const mobile = new MobileConnections(ctx, relay, cipher, feed, { lanPort: 39871 })
-    mobileLifecycle = mobile
-    mobile.setSuspended(suspended)
-    ctx.provide("relaySettings", relay)
-    ctx.provide("mobileConnections", mobile)
-    ctx.effect(() => () => mobile.dispose())
   }
-  // 装好提醒订阅后再恢复定时任务，过期任务也使用相同的提醒事件。
-  ctx.get("schedules")?.start()
+
   rpc = new RpcServer(ctx, page, feed)
   rpc.start()
   if (waitingPage) {
     servePage(waitingPage)
     waitingPage = undefined
   }
+
   // 控制端口承载内置浏览器动作、退出检查、本机预览地址同步和桌面的电源管理。
   if (control) {
     ctx.get("browser")?.attach(control)

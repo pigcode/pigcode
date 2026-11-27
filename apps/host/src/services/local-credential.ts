@@ -10,7 +10,6 @@ import {
   fchmodSync,
   fsyncSync,
   linkSync,
-  mkdirSync,
   openSync,
   readFileSync,
   statSync,
@@ -18,6 +17,7 @@ import {
   writeSync,
 } from "node:fs"
 import { join } from "node:path"
+import { ensureProfileDir } from "../kernel/profile-paths"
 import type { RelayCredentialCipher } from "./relay-settings"
 
 export const LOCAL_CREDENTIAL_KEY_ENV = "PIGCODE_CREDENTIAL_KEY"
@@ -64,17 +64,6 @@ function decodeStrictBase64Url(segment: string, allowEmpty: boolean, label: stri
     throw new Error(`Non-canonical local credential ${label}`)
   }
   return decoded
-}
-
-function ensureProfileDir(profileDir: string): void {
-  const created = mkdirSync(profileDir, { recursive: true, mode: 0o700 })
-  if (process.platform === "win32" || !created) return
-  try {
-    chmodSync(profileDir, 0o700)
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code !== "EPERM" && code !== "EROFS") throw error
-  }
 }
 
 function tightenFilePermissions(keyPath: string): void {

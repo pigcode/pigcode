@@ -70,7 +70,9 @@ export default defineConfig({
     define,
     build: {
       outDir: "out/main",
-      externalizeDeps: { exclude: ["@pigcode/ui-primitives", "@pigcode/contracts"] },
+      externalizeDeps: {
+        exclude: ["@pigcode/ui-primitives", "@pigcode/contracts", "@pigcode/host"],
+      },
     },
   },
   // sandbox 渲染器只能加载 CJS preload，因此显式输出 .cjs。
