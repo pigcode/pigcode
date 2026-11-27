@@ -1,10 +1,22 @@
 /**
  * 本机凭据加密器：脱离操作系统钥匙串，桌面端与无窗口 Host 共用同一实现。
  * 优先级：环境变量 `PIGCODE_CREDENTIAL_KEY`（32 字节 hex 或 base64/base64url）>
- * `<profileDir>/credential.key`（`O_CREAT | O_EXCL` + `0o600` 自动生成并持久化）。
+ * `<profileDir>/credential.key`（临时文件写入 + fsync + `linkSync` 原子落盘，`0o600`）。
  */
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto"
-import { chmodSync, closeSync, mkdirSync, openSync, readFileSync, writeSync } from "node:fs"
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID } from "node:crypto"
+import {
+  chmodSync,
+  closeSync,
+  fchmodSync,
+  fsyncSync,
+  linkSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from "node:fs"
 import { join } from "node:path"
 import type { RelayCredentialCipher } from "./relay-settings"
 
@@ -17,16 +29,24 @@ const KEY_BYTES = 32
 const IV_BYTES = 12
 const TAG_BYTES = 16
 const KEY_HEX_RE = /^[0-9a-fA-F]{64}$/
-const KEY_B64_RE = /^[A-Za-z0-9+/_-]{43,44}=*$/
+const KEY_STD_B64_RE = /^[A-Za-z0-9+/]{43}=?$/
+const KEY_URL_B64_RE = /^[A-Za-z0-9_-]{43}=?$/
+const BASE64URL_NON_EMPTY_RE = /^[A-Za-z0-9_-]+$/
+const BASE64URL_MAYBE_EMPTY_RE = /^[A-Za-z0-9_-]*$/
 
 function parseMasterKey(raw: string, source: string): Buffer {
   const trimmed = raw.trim()
   if (KEY_HEX_RE.test(trimmed)) {
     return Buffer.from(trimmed, "hex")
   }
-  if (KEY_B64_RE.test(trimmed)) {
-    const normalized = trimmed.replace(/-/g, "+").replace(/_/g, "/")
-    const decoded = Buffer.from(normalized, "base64")
+  if (KEY_STD_B64_RE.test(trimmed)) {
+    const decoded = Buffer.from(trimmed, "base64")
+    if (decoded.length === KEY_BYTES) {
+      return decoded
+    }
+  }
+  if (KEY_URL_B64_RE.test(trimmed)) {
+    const decoded = Buffer.from(trimmed, "base64url")
     if (decoded.length === KEY_BYTES) {
       return decoded
     }
@@ -34,32 +54,92 @@ function parseMasterKey(raw: string, source: string): Buffer {
   throw new Error(`${source} must encode a 32-byte key in hex or base64/base64url`)
 }
 
-function readOrCreateFileKey(profileDir: string): Buffer {
-  mkdirSync(profileDir, { recursive: true, mode: 0o700 })
-  if (process.platform !== "win32") {
-    chmodSync(profileDir, 0o700)
+function decodeStrictBase64Url(segment: string, allowEmpty: boolean, label: string): Buffer {
+  const pattern = allowEmpty ? BASE64URL_MAYBE_EMPTY_RE : BASE64URL_NON_EMPTY_RE
+  if (!pattern.test(segment)) {
+    throw new Error(`Malformed local credential ${label}`)
   }
+  const decoded = Buffer.from(segment, "base64url")
+  if (decoded.toString("base64url") !== segment) {
+    throw new Error(`Non-canonical local credential ${label}`)
+  }
+  return decoded
+}
+
+function ensureProfileDir(profileDir: string): void {
+  const created = mkdirSync(profileDir, { recursive: true, mode: 0o700 })
+  if (process.platform === "win32" || !created) return
+  try {
+    chmodSync(profileDir, 0o700)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== "EPERM" && code !== "EROFS") throw error
+  }
+}
+
+function tightenFilePermissions(keyPath: string): void {
+  if (process.platform === "win32") return
+  try {
+    const mode = statSync(keyPath).mode & 0o777
+    if ((mode & 0o077) !== 0) {
+      chmodSync(keyPath, 0o600)
+    }
+  } catch {
+    // 最佳努力收紧权限：外部只读挂载或非属主文件等情况不阻塞读取
+  }
+}
+
+function readExistingFileKey(keyPath: string): Buffer {
+  const raw = readFileSync(keyPath, "utf8")
+  tightenFilePermissions(keyPath)
+  return parseMasterKey(raw, CREDENTIAL_KEY_FILENAME)
+}
+
+function writeFullBuffer(fd: number, payload: Buffer): void {
+  let offset = 0
+  while (offset < payload.length) {
+    offset += writeSync(fd, payload, offset, payload.length - offset)
+  }
+}
+
+function readOrCreateFileKey(profileDir: string): Buffer {
+  ensureProfileDir(profileDir)
   const keyPath = join(profileDir, CREDENTIAL_KEY_FILENAME)
   try {
-    return parseMasterKey(readFileSync(keyPath, "utf8"), CREDENTIAL_KEY_FILENAME)
+    return readExistingFileKey(keyPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
   }
 
   const generated = randomBytes(KEY_BYTES)
+  const payload = Buffer.from(`${generated.toString("hex")}\n`, "utf8")
+  const tmpPath = join(profileDir, `${CREDENTIAL_KEY_FILENAME}.${process.pid}.${randomUUID()}.tmp`)
   try {
-    const fd = openSync(keyPath, "wx", 0o600)
+    const fd = openSync(tmpPath, "wx", 0o600)
     try {
-      writeSync(fd, `${generated.toString("hex")}\n`)
+      writeFullBuffer(fd, payload)
+      if (process.platform !== "win32") {
+        fchmodSync(fd, 0o600)
+      }
+      fsyncSync(fd)
     } finally {
       closeSync(fd)
     }
-    return generated
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      return parseMasterKey(readFileSync(keyPath, "utf8"), CREDENTIAL_KEY_FILENAME)
+    try {
+      linkSync(tmpPath, keyPath)
+      return generated
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+        return readExistingFileKey(keyPath)
+      }
+      throw error
     }
-    throw error
+  } finally {
+    try {
+      unlinkSync(tmpPath)
+    } catch {
+      // 忽略临时文件清理失败
+    }
   }
 }
 
@@ -105,9 +185,9 @@ export function createLocalCredentialCipher(
         throw new Error("Malformed local credential envelope")
       }
       const [ivB64, tagB64, dataB64] = segments as [string, string, string]
-      const iv = Buffer.from(ivB64, "base64url")
-      const tag = Buffer.from(tagB64, "base64url")
-      const ciphertext = Buffer.from(dataB64, "base64url")
+      const iv = decodeStrictBase64Url(ivB64, false, "iv")
+      const tag = decodeStrictBase64Url(tagB64, false, "tag")
+      const ciphertext = decodeStrictBase64Url(dataB64, true, "ciphertext")
       if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) {
         throw new Error("Malformed local credential metadata lengths")
       }
