@@ -4,6 +4,7 @@
  * 打包后的应用和 E2E 都不走这里：它们没有这些环境变量，照常加载 out/ 里的构建产物。
  */
 import { unwatchFile, watchFile, type Stats } from "node:fs"
+import type { HostLockMetadata } from "@pigcode/contracts"
 
 /** 构建好的页面；打包后与 E2E 都从这里加载。 */
 export const BUILT_RENDERER_URL = "pigcode://app/index.html"
@@ -60,5 +61,38 @@ export async function acquireInstanceLock(
     if (request()) return true
     if (Date.now() >= deadline) return false
     await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
+/**
+ * 轮询检查目标 profileDir 的 `host.lock` 是否已释放；超时后仍被占用时返回当前持锁实例元数据。
+ */
+export async function waitForHostLockFree(
+  probe: () => Promise<HostLockMetadata | null>,
+  waitMs: number,
+  intervalMs = 250,
+): Promise<HostLockMetadata | null> {
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    const owner = await probe()
+    if (!owner) return null
+    if (Date.now() >= deadline) return owner
+    await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  }
+}
+
+/** 生成 `host.lock` 冲突提示框的中文文案，区分无窗口后台服务与另一桌面实例。 */
+export function hostConflictDialogText(
+  owner: HostLockMetadata,
+  dir: string,
+): { type: "error"; message: string; detail: string } {
+  const detail =
+    owner.runtime === "headless"
+      ? `无窗口后台服务（headless，PID ${owner.pid}）正在使用数据目录：\n${dir}\n\n请先停止该后台服务，或改用其他数据目录后再启动桌面端。`
+      : `另一个桌面实例（PID ${owner.pid}）正在使用数据目录：\n${dir}\n\n请先关闭该实例后再重试。`
+  return {
+    type: "error",
+    message: "Pigcode 无法启动：数据目录已被占用",
+    detail,
   }
 }

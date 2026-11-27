@@ -127,6 +127,7 @@ async function bootstrap(event: ParentPortMessageEvent): Promise<void> {
   const bootstrapped = await bootstrapHostKernel({
     profileDir,
     profileName: "desktop",
+    runtime: "desktop",
     runtimeRoot: resolveHostRuntimeRoot(import.meta.url),
     ...(control
       ? { onReminder: (reminder) => control.postMessage({ type: "host.reminder", reminder }) }

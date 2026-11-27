@@ -64,6 +64,12 @@ export class RelaySettings {
     return { address: saved?.address ?? null, tokenConfigured: saved !== undefined }
   }
 
+  /** 清空已保存的中继连接配置，使连接监听者主动断开中继。 */
+  clear(): RelaySettingsView {
+    this.settings.set(key, undefined)
+    return this.view()
+  }
+
   get revision(): string | undefined {
     return this.stored()?.revision
   }

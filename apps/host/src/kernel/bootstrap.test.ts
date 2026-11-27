@@ -5,8 +5,12 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { HOST_LOCK_FILE, type HostLockMetadata } from "@pigcode/contracts"
+import * as pluginSdkNode from "@pigcode/plugin-sdk/node"
 import * as lanServer from "../mobile/lan-server"
+import { callAdminSocket } from "./admin-socket"
 import { bootstrapHostKernel, resolveHostRuntimeRoot } from "./bootstrap"
+import { HostAlreadyRunningError, probeLiveHost } from "./host-lock"
 
 const dirs: string[] = []
 const originalProfileDirEnv = process.env.PIGCODE_PROFILE_DIR
@@ -158,6 +162,10 @@ export function createAgents(ctx, config) {
   ctx.provide("agents", {
     recoverAfterRestart: () => updateState((s) => { s.recovered = true }),
     listPendingRequests: () => [],
+    listRuns: () => [
+      { runId: "r1", threadId: "t1", status: "running" },
+      { runId: "r2", threadId: "t1", status: "completed" },
+    ],
     getRunStatus: () => "failed",
   })
   ctx.effect(() => () => updateState((s) => { s.disposed.push("agents") }))
@@ -166,6 +174,7 @@ export function createAgents(ctx, config) {
 export function createSchedules(ctx) {
   ctx.provide("schedules", {
     start: () => updateState((s) => { s.schedulesStarted = true }),
+    list: () => [],
   })
   ctx.effect(() => () => updateState((s) => { s.disposed.push("schedules") }))
 }
@@ -298,6 +307,7 @@ describe("bootstrapHostKernel", () => {
     ).rejects.toThrow("core.storage failed to start: boom")
 
     expect(process.env.PIGCODE_PROFILE_DIR).toBeUndefined()
+    expect(existsSync(join(profileDir, HOST_LOCK_FILE))).toBe(false)
     const stateAfter = JSON.parse(await readFile(statePath, "utf8")) as { disposed: string[] }
     expect(stateAfter.disposed).toContain("settings")
   })
@@ -350,5 +360,106 @@ describe("bootstrapHostKernel", () => {
     const stateAfter = JSON.parse(await readFile(statePath, "utf8")) as { disposed: string[] }
     expect(stateAfter.disposed).toContain("settings")
     expect(stateAfter.disposed).toContain("agents")
+  })
+
+  it("acquires host.lock before sweeping/SQLite, exposes admin socket RPCs, and releases on dispose", async () => {
+    const root = await makeTempDir()
+    const profileDir = join(root, "user-profile")
+    const runtimeRoot = join(root, "runtime")
+    await mkdir(runtimeRoot, { recursive: true })
+    await writeMinimalRuntimeProfile(runtimeRoot)
+
+    const sweepSpy = vi.spyOn(pluginSdkNode, "sweepOrphanedProcesses").mockResolvedValue(0)
+    const onStopRequested = vi.fn()
+    const host = await bootstrapHostKernel({
+      profileDir,
+      runtime: "headless",
+      runtimeRoot,
+      lanPort: false,
+      onStopRequested,
+    })
+
+    try {
+      expect(sweepSpy).toHaveBeenCalledTimes(1)
+      const liveMeta: HostLockMetadata | null = await probeLiveHost(profileDir)
+      expect(liveMeta?.runtime).toBe("headless")
+      expect(liveMeta?.socketPath).toBe(host.socketPath)
+
+      const status = await callAdminSocket(host.socketPath, "host.status", {})
+      expect(status).toMatchObject({
+        pid: process.pid,
+        runtime: "headless",
+        profileDir: resolve(profileDir),
+        activeRuns: 1,
+        pendingApprovals: 0,
+        pairedDevices: 0,
+        lanAddresses: [],
+        relay: { address: null, tokenConfigured: false },
+      })
+
+      expect(await callAdminSocket(host.socketPath, "relay.view", {})).toEqual({
+        address: null,
+        tokenConfigured: false,
+      })
+      expect(await callAdminSocket(host.socketPath, "relay.clear", {})).toEqual({
+        address: null,
+        tokenConfigured: false,
+      })
+      expect(await callAdminSocket(host.socketPath, "mobile.pairing.view", {})).toMatchObject({
+        status: "idle",
+        devices: [],
+      })
+      expect(await callAdminSocket(host.socketPath, "mobile.devices.list", {})).toEqual([])
+      expect(
+        await callAdminSocket(host.socketPath, "mobile.devices.revoke", {
+          deviceId: "0".repeat(64),
+        }),
+      ).toMatchObject({ status: "missing-device" })
+
+      // 第二实例在 sweepOrphanedProcesses 与 SQLite 之前即被拒绝，且不破坏原锁
+      await expect(
+        bootstrapHostKernel({
+          profileDir,
+          runtime: "desktop",
+          runtimeRoot,
+          lanPort: false,
+        }),
+      ).rejects.toBeInstanceOf(HostAlreadyRunningError)
+      expect(sweepSpy).toHaveBeenCalledTimes(1)
+      expect(await probeLiveHost(profileDir)).toEqual(liveMeta)
+
+      expect(await callAdminSocket(host.socketPath, "host.stop", { reason: "restarting" })).toEqual(
+        { stopping: true },
+      )
+      await vi.waitFor(() => expect(onStopRequested).toHaveBeenCalledWith("restarting"))
+    } finally {
+      await host.dispose("exited")
+    }
+
+    expect(await probeLiveHost(profileDir)).toBeNull()
+    expect(existsSync(join(profileDir, HOST_LOCK_FILE))).toBe(false)
+  })
+
+  it("rejects host.stop with UNSUPPORTED_RUNTIME when onStopRequested is not provided", async () => {
+    const root = await makeTempDir()
+    const profileDir = join(root, "user-profile")
+    const runtimeRoot = join(root, "runtime")
+    await mkdir(runtimeRoot, { recursive: true })
+    await writeMinimalRuntimeProfile(runtimeRoot)
+
+    const host = await bootstrapHostKernel({
+      profileDir,
+      runtime: "desktop",
+      runtimeRoot,
+      lanPort: false,
+    })
+
+    try {
+      await expect(callAdminSocket(host.socketPath, "host.stop", {})).rejects.toMatchObject({
+        code: "UNSUPPORTED_RUNTIME",
+      })
+    } finally {
+      await host.dispose()
+    }
   })
 })

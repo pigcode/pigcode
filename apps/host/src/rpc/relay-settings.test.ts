@@ -1,6 +1,8 @@
 import { Context } from "cordis"
 import { expect, it, vi } from "vitest"
 import { apply as agents } from "../agents/registry"
+import { MobileConnections } from "../mobile/connections"
+import * as relayHost from "../mobile/relay-host"
 import { apply as projects } from "../services/projects"
 import { apply as sessions } from "../services/sessions"
 import { apply as settings } from "../services/settings"
@@ -10,6 +12,7 @@ import { RelaySettings } from "../services/relay-settings"
 import type { RelayProbe } from "../services/relay-probe"
 import { MemoryTransport } from "./memory-transport"
 import { RpcServer } from "./server"
+import { ThreadFeed } from "./thread-feed"
 
 async function startHost(probe?: RelayProbe) {
   const ctx = new Context()
@@ -149,5 +152,64 @@ it("requires a newly entered token when the relay address changes", async () => 
     })
   } finally {
     await host.stop()
+  }
+})
+
+it("clears relay settings, notifies listeners, and disconnects MobileConnections cleanly", async () => {
+  const ctx = new Context()
+  await ctx.plugin(storage, { path: ":memory:" })
+  await ctx.plugin(settings, {})
+  await ctx.plugin(projects)
+  await ctx.plugin(threads)
+  await ctx.plugin(sessions)
+  await ctx.plugin(agents)
+
+  const probe = vi.fn<RelayProbe>().mockResolvedValue("ok")
+  const cipher = {
+    seal: async (value: string) => Buffer.from(value).toString("base64"),
+    open: async (value: string) => Buffer.from(value, "base64").toString(),
+  }
+  const relay = new RelaySettings(ctx.settings, cipher, probe)
+  const feed = new ThreadFeed(ctx)
+  const fakeConnection: relayHost.RelayHost = {
+    send: vi.fn(),
+    closeSession: vi.fn(),
+    announce: vi.fn(),
+    supportsPush: vi.fn(() => false),
+    sendReminder: vi.fn(),
+    close: vi.fn(),
+  }
+  const openRelaySpy = vi.spyOn(relayHost, "openRelayHost").mockResolvedValue(fakeConnection)
+  const mobile = new MobileConnections(ctx, relay, cipher, feed, { lanPort: false })
+  const onChange = vi.fn()
+  const unsubscribe = relay.onConnectionChange(onChange)
+
+  try {
+    expect(
+      await relay.testAndSave({
+        address: "wss://relay.example/ws/v1/connect",
+        token: "secret-token",
+      }),
+    ).toMatchObject({ status: "saved" })
+    expect(onChange).toHaveBeenCalledTimes(1)
+
+    const started = await mobile.start()
+    expect(started.status).toBe("waiting")
+    expect(openRelaySpy).toHaveBeenCalledTimes(1)
+
+    expect(relay.clear()).toEqual({ address: null, tokenConfigured: false })
+    expect(onChange).toHaveBeenCalledTimes(2)
+    expect(await relay.connectionConfig()).toBeUndefined()
+    expect(fakeConnection.close).toHaveBeenCalledTimes(1)
+    expect(mobile.view()).toMatchObject({ status: "cancelled", attempt: null })
+
+    // 已经清空时再次调用保持幂等，不重复触发 onConnectionChange
+    expect(relay.clear()).toEqual({ address: null, tokenConfigured: false })
+    expect(onChange).toHaveBeenCalledTimes(2)
+  } finally {
+    unsubscribe()
+    mobile.dispose()
+    openRelaySpy.mockRestore()
+    await ctx.fiber.dispose()
   }
 })

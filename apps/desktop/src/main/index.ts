@@ -23,11 +23,14 @@ import { createUpdates } from "./updates"
 import {
   DEV_LOCK_WAIT_MS,
   acquireInstanceLock,
+  hostConflictDialogText,
   rendererUrl,
   restartedByElectronVite,
+  waitForHostLockFree,
   watchHostBuild,
   watchesHostBuild,
 } from "./dev-mode"
+import { probeLiveHost } from "@pigcode/host/kernel/host-lock"
 import { hostFailureDetail, hostFailureText } from "./locale/host-failure"
 import { installTextContextMenu } from "./text-context-menu"
 import { setupBrowser } from "./browser-host"
@@ -252,13 +255,24 @@ const singleInstance = process.env.PIGCODE_PROFILE_DIR === undefined
 // electron-vite 重启 Electron 时旧进程可能还没放开锁，开发时多等一会儿（dev-mode.ts）。
 const lockWaitMs = restartedByElectronVite(process.env, app.isPackaged) ? DEV_LOCK_WAIT_MS : 0
 void acquireInstanceLock(() => !singleInstance || app.requestSingleInstanceLock(), lockWaitMs).then(
-  (locked) => {
-    if (locked) start()
-    else {
+  async (locked) => {
+    if (!locked) {
       // 从终端启动（pnpm dev）时说明一下，否则进程一声不响就退出了。
       console.log(`Pigcode is already running with ${profileDir()}; switched to that window.`)
       app.quit()
+      return
     }
+    const dir = profileDir()
+    const owner = await waitForHostLockFree(() => probeLiveHost(dir), lockWaitMs)
+    if (owner) {
+      await app.whenReady()
+      dialog.showMessageBoxSync(hostConflictDialogText(owner, dir))
+      quitting = true
+      quitConfirmed = true
+      app.quit()
+      return
+    }
+    start()
   },
 )
 

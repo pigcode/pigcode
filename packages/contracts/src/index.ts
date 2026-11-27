@@ -11,6 +11,7 @@ export * from "./updates"
 export * from "./runtime-modes"
 export * from "./runtime-mode-options"
 export * from "./relay"
+export * from "./host-admin"
 
 export * from "./mobile"
 

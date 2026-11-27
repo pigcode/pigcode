@@ -1,21 +1,25 @@
 /**
- * Host 公共引导层：解析运行时 profile、初始化核心服务与插件、挂载手机连接与定时任务，
- * 供 Electron utilityProcess 与无窗口常驻进程共用。
+ * Host 公共引导层：解析运行时 profile、抢占单实例锁、初始化核心服务与插件、
+ * 挂载手机连接、定时任务与本机控制通道，供 Electron utilityProcess 与无窗口常驻进程共用。
  */
 import { existsSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { Context } from "cordis"
-import type { HostReminder } from "@pigcode/contracts"
+import type { HostReminder, HostRuntimeKind } from "@pigcode/contracts"
+import { HOST_VERSION } from "@pigcode/plugin-sdk"
 import { sweepOrphanedProcesses } from "@pigcode/plugin-sdk/node"
 import { MobileConnections, type MobileConnectionsOptions } from "../mobile/connections"
 import { attachHostReminders } from "../rpc/host-reminders"
+import { readQuitState } from "../rpc/quit-state"
 import { ThreadFeed } from "../rpc/thread-feed"
 import { createLocalCredentialCipher } from "../services/local-credential"
 import { apply as pluginsPlugin } from "../services/plugins"
 import { RelaySettings } from "../services/relay-settings"
+import { AdminHandlerError, startAdminSocketServer, type AdminSocketServer } from "./admin-socket"
 import { createHostAppFromProfile, requireCoreService } from "./app"
 import { writeBootGraph } from "./boot"
+import { acquireHostLock, hostControlEndpoint, type HostLockHandle } from "./host-lock"
 import { loadProfile } from "./profile"
 import { ensureProfileDir } from "./profile-paths"
 
@@ -23,6 +27,10 @@ import { ensureProfileDir } from "./profile-paths"
 export interface BootstrapHostOptions {
   profileDir: string
   profileName?: string | undefined
+  runtime?: HostRuntimeKind | undefined
+  instanceLock?: boolean | undefined
+  adminServer?: boolean | undefined
+  onStopRequested?: ((reason: "exited" | "restarting") => void) | undefined
   runtimeRoot?: string | undefined
   lanPort?: MobileConnectionsOptions["lanPort"] | undefined
   onReminder?: ((reminder: HostReminder) => void) | undefined
@@ -31,6 +39,8 @@ export interface BootstrapHostOptions {
 /** 已完成引导的 Host 内核实例与幂等释放入口。 */
 export interface BootstrappedHost {
   profileDir: string
+  runtime: HostRuntimeKind
+  socketPath: string
   ctx: Context
   feed: ThreadFeed
   relay: RelaySettings
@@ -65,8 +75,8 @@ export function resolveHostRuntimeRoot(
 }
 
 /**
- * 引导 Host 内核：准备用户 profile 目录、清理遗留进程、加载核心服务与插件、
- * 初始化本机凭据加密、中继设置、手机端连接与定时任务。
+ * 引导 Host 内核：先抢占单实例锁，再准备用户 profile 目录、清理遗留进程、
+ * 加载核心服务与插件、初始化本机凭据加密、中继设置、手机端连接、定时任务及控制通道。
  */
 export async function bootstrapHostKernel(
   options: BootstrapHostOptions,
@@ -74,15 +84,22 @@ export async function bootstrapHostKernel(
   const {
     profileDir,
     profileName = "desktop",
+    runtime = "headless",
+    instanceLock = true,
+    adminServer = true,
+    onStopRequested,
     runtimeRoot = resolveHostRuntimeRoot(),
     lanPort = DEFAULT_LAN_PORT,
     onReminder,
   } = options
 
+  const resolvedProfileDir = resolve(profileDir)
+  const socketPath = hostControlEndpoint(resolvedProfileDir)
   const previousProfileDirEnv = process.env.PIGCODE_PROFILE_DIR
+  let envSet = false
   let envRestored = false
   const restoreProfileDirEnv = (): void => {
-    if (envRestored) return
+    if (!envSet || envRestored) return
     envRestored = true
     if (previousProfileDirEnv === undefined) {
       delete process.env.PIGCODE_PROFILE_DIR
@@ -90,12 +107,27 @@ export async function bootstrapHostKernel(
       process.env.PIGCODE_PROFILE_DIR = previousProfileDirEnv
     }
   }
-  // sweepOrphanedProcesses 与运行期子进程记录通过 PIGCODE_PROFILE_DIR 定位目标目录。
-  process.env.PIGCODE_PROFILE_DIR = profileDir
 
+  let lock: HostLockHandle | undefined
+  let admin: AdminSocketServer | undefined
   let ctx: Context | undefined
+
   try {
-    ensureProfileDir(profileDir)
+    if (instanceLock) {
+      lock = await acquireHostLock(resolvedProfileDir, {
+        runtime,
+        version: HOST_VERSION,
+        socketPath,
+      })
+    } else {
+      ensureProfileDir(resolvedProfileDir)
+    }
+
+    const startedAt = lock?.metadata.startedAt ?? Date.now()
+    // 拿到单实例锁后再设置环境变量、清理孤儿进程与打开 SQLite，避免竞争进程互相干扰。
+    process.env.PIGCODE_PROFILE_DIR = profileDir
+    envSet = true
+
     // 上一个 Host 崩溃时留下的 Agent 进程在这里收拾掉，之后才启动新的会话。
     await sweepOrphanedProcesses()
     const profile = await loadProfile(runtimeRoot, profileName)
@@ -149,6 +181,49 @@ export async function bootstrapHostKernel(
     await ctx.get("schedules")?.start()
 
     const bootedCtx = ctx
+    if (adminServer) {
+      admin = await startAdminSocketServer(lock?.socketPath ?? socketPath, {
+        "host.status": async () => {
+          const quitState = readQuitState(bootedCtx)
+          const lanAddresses = await mobile.readyLanAddresses()
+          const pairing = mobile.view()
+          return {
+            pid: process.pid,
+            runtime,
+            version: HOST_VERSION,
+            profileDir: resolvedProfileDir,
+            startedAt,
+            relay: relay.view(),
+            lanAddresses,
+            activeRuns: quitState.runs,
+            pendingApprovals: quitState.approvals,
+            pairedDevices: pairing.devices.length,
+          }
+        },
+        "host.stop": ({ reason }) => {
+          if (!onStopRequested) {
+            throw new AdminHandlerError(
+              "UNSUPPORTED_RUNTIME",
+              `Host runtime "${runtime}" does not support remote stop`,
+            )
+          }
+          const stopReason = reason ?? "exited"
+          // 先把应答帧写入控制通道，下一轮事件循环再触发优雅退出。
+          setImmediate(() => onStopRequested(stopReason))
+          return { stopping: true as const }
+        },
+        "relay.view": () => relay.view(),
+        "relay.testAndSave": (params) => relay.testAndSave(params),
+        "relay.clear": () => relay.clear(),
+        "mobile.pairing.view": () => mobile.view(),
+        "mobile.pairing.start": () => mobile.start(),
+        "mobile.pairing.cancel": ({ id }) => mobile.cancel(id),
+        "mobile.pairing.confirm": ({ id, confirmation }) => mobile.confirm(id, confirmation),
+        "mobile.devices.list": () => mobile.view().devices,
+        "mobile.devices.revoke": ({ deviceId }) => mobile.revoke(deviceId),
+      })
+    }
+
     let disposing: Promise<void> | undefined
     const dispose = (reason?: "exited" | "restarting"): Promise<void> => {
       disposing ??= (async () => {
@@ -162,9 +237,17 @@ export async function bootstrapHostKernel(
             disposeMobile()
           } finally {
             try {
-              await bootedCtx.fiber.dispose()
+              await admin?.close()
             } finally {
-              restoreProfileDirEnv()
+              try {
+                await bootedCtx.fiber.dispose()
+              } finally {
+                try {
+                  lock?.release()
+                } finally {
+                  restoreProfileDirEnv()
+                }
+              }
             }
           }
         }
@@ -172,12 +255,29 @@ export async function bootstrapHostKernel(
       return disposing
     }
 
-    return { profileDir, ctx, feed, relay, mobile, dispose }
+    return {
+      profileDir,
+      runtime,
+      socketPath: lock?.socketPath ?? socketPath,
+      ctx,
+      feed,
+      relay,
+      mobile,
+      dispose,
+    }
   } catch (error) {
     try {
-      await ctx?.fiber.dispose().catch(() => undefined)
+      await admin?.close().catch(() => undefined)
     } finally {
-      restoreProfileDirEnv()
+      try {
+        await ctx?.fiber.dispose().catch(() => undefined)
+      } finally {
+        try {
+          lock?.release()
+        } finally {
+          restoreProfileDirEnv()
+        }
+      }
     }
     throw error
   }
