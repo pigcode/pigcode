@@ -1,6 +1,7 @@
 /** 验证本机控制通道（host.sock）NDJSON 协议、权限、并发、校验与错误隔离。 */
+import { spawnSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
-import { mkdtemp, rm, stat, writeFile } from "node:fs/promises"
+import { lstat, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { createConnection, createServer } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -261,9 +262,29 @@ describe("admin-socket", () => {
 
     const afterStatus = await callAdminSocket(endpoint, "host.status", {})
     expect(afterStatus.pid).toBe(process.pid)
+
+    // 客户端发送无结尾换行符的请求后直接半关闭（EOF）也能得到响应
+    const eofResponse = await new Promise<string>((resolveResp, rejectResp) => {
+      const socket = createConnection(endpoint)
+      let out = ""
+      socket.setEncoding("utf8")
+      socket.on("data", (chunk: string) => {
+        out += chunk
+      })
+      socket.once("end", () => resolveResp(out.trim()))
+      socket.once("error", rejectResp)
+      socket.once("connect", () => {
+        socket.end(JSON.stringify({ id: "eof-1", method: "relay.view", params: {} }))
+      })
+    })
+    expect(hostAdminResponseSchema.parse(JSON.parse(eofResponse))).toMatchObject({
+      id: "eof-1",
+      ok: true,
+      result: { address: null, tokenConfigured: false },
+    })
   })
 
-  it("refuses to overwrite an active socket and replaces a stale socket file", async () => {
+  it("refuses to overwrite an active socket or non-socket path, and replaces a real stale socket", async () => {
     const endpoint = await makeEndpoint()
     const first = await startAdminSocketServer(endpoint, makeHandlers())
     cleanups.push(() => first.close())
@@ -277,16 +298,63 @@ describe("admin-socket", () => {
     await first.close()
 
     if (process.platform !== "win32") {
-      // 模拟崩溃残留的死 socket 文件
-      const tempServer = createServer()
-      await new Promise<void>((r) => tempServer.listen(endpoint, r))
-      await new Promise<void>((r) => tempServer.close(() => r()))
-      await writeFile(endpoint, "dead", "utf8")
+      // 普通文件或目录不可被当作陈旧 socket 覆盖
+      await writeFile(endpoint, "regular-file", "utf8")
+      await expect(startAdminSocketServer(endpoint, makeHandlers())).rejects.toThrow(/non-socket/i)
+      await rm(endpoint, { force: true })
+
+      await mkdir(endpoint)
+      await expect(startAdminSocketServer(endpoint, makeHandlers())).rejects.toThrow(/non-socket/i)
+      await rm(endpoint, { recursive: true, force: true })
+
+      // 模拟进程异常退出残留的真实 Unix socket 文件
+      const res = spawnSync(
+        process.execPath,
+        [
+          "-e",
+          "require('node:net').createServer().listen(process.argv[1], () => process.exit(0))",
+          endpoint,
+        ],
+        { stdio: "ignore" },
+      )
+      expect(res.status).toBe(0)
+      expect((await lstat(endpoint)).isSocket()).toBe(true)
 
       const replacement = await startAdminSocketServer(endpoint, makeHandlers())
       cleanups.push(() => replacement.close())
       expect((await callAdminSocket(endpoint, "host.status", {})).pid).toBe(process.pid)
     }
+  })
+
+  it("rejects malformed result payloads and oversized server responses in callAdminSocket", async () => {
+    const endpoint = await makeEndpoint()
+    const server = await startAdminSocketServer(
+      endpoint,
+      makeHandlers({
+        "host.status": (() => ({ bad: true })) as unknown as AdminHandlers["host.status"],
+      }),
+    )
+    cleanups.push(() => server.close())
+
+    await expect(callAdminSocket(endpoint, "host.status", {})).rejects.toMatchObject({
+      name: "AdminClientError",
+      code: "INVALID_RESPONSE",
+    })
+
+    // 非法返回结构与超长响应行均被客户端拒绝
+    const rawEndpoint = await makeEndpoint()
+    const oversizedServer = createServer((socket) => {
+      socket.once("data", () => {
+        socket.write(`${"x".repeat(260 * 1024)}\n`)
+      })
+    })
+    await new Promise<void>((r) => oversizedServer.listen(rawEndpoint, r))
+    cleanups.push(() => new Promise<void>((done) => oversizedServer.close(() => done())))
+
+    await expect(callAdminSocket(rawEndpoint, "host.status", {})).rejects.toMatchObject({
+      name: "AdminClientError",
+      code: "RESPONSE_TOO_LARGE",
+    })
   })
 
   it("rejects with AdminClientError on timeout and unreachable endpoint", async () => {

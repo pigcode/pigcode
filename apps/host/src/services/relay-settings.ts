@@ -47,6 +47,7 @@ function relayAddress(input: string): string | undefined {
 
 export class RelaySettings {
   private saving = false
+  private generation = 0
 
   constructor(
     private readonly settings: SettingsService,
@@ -66,6 +67,7 @@ export class RelaySettings {
 
   /** 清空已保存的中继连接配置，使连接监听者主动断开中继。 */
   clear(): RelaySettingsView {
+    this.generation += 1
     this.settings.set(key, undefined)
     return this.view()
   }
@@ -98,6 +100,7 @@ export class RelaySettings {
     if (this.saving) return { status: "busy" }
 
     this.saving = true
+    const startGeneration = this.generation
     try {
       const saved = this.stored()
       const reusable = saved?.address === address ? saved : undefined
@@ -105,6 +108,7 @@ export class RelaySettings {
       const token = replacement || (reusable ? await this.cipher.open(reusable.sealedToken) : "")
       if (!token) return { status: "token-required" }
       const result = await this.probe(address, token)
+      if (this.generation !== startGeneration) return { status: "busy" }
       if (result !== "ok") return { status: result }
 
       if (
@@ -112,10 +116,12 @@ export class RelaySettings {
         (!replacement ||
           (await this.cipher.open(reusable.sealedToken).catch(() => undefined)) === token)
       ) {
+        if (this.generation !== startGeneration) return { status: "busy" }
         return { status: "saved", settings: this.view() }
       }
 
       const sealedToken = await this.cipher.seal(token)
+      if (this.generation !== startGeneration) return { status: "busy" }
       this.settings.set(key, { address, sealedToken, revision: randomUUID() })
       return { status: "saved", settings: this.view() }
     } catch {

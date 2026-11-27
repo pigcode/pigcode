@@ -3,11 +3,12 @@
  * 使用换行分隔的 JSON（NDJSON）服务本机 CLI 与诊断工具的运行态查询及控制请求。
  */
 import { randomUUID } from "node:crypto"
-import { chmodSync, lstatSync, mkdirSync, rmSync } from "node:fs"
+import { chmodSync, lstatSync, mkdirSync, unlinkSync, type Stats } from "node:fs"
 import { createConnection, createServer, type Socket } from "node:net"
 import { dirname } from "node:path"
 import {
   hostAdminMethodParamsSchemas,
+  hostAdminMethodResultSchemas,
   hostAdminRequestSchema,
   hostAdminResponseSchema,
   type HostAdminMethod,
@@ -61,6 +62,24 @@ function sendLine(socket: Socket, payload: unknown): void {
     socket.write(`${JSON.stringify(payload)}\n`)
   } catch {
     // 客户端已提前断开时静默忽略写入异常。
+  }
+}
+
+function rejectOversizedRequest(socket: Socket): void {
+  const payload = `${JSON.stringify({
+    id: "unknown",
+    ok: false,
+    error: `Request line exceeds ${MAX_LINE_BYTES} byte limit`,
+    code: "REQUEST_TOO_LARGE",
+  })}\n`
+  if (socket.destroyed || !socket.writable) {
+    socket.destroy()
+    return
+  }
+  try {
+    socket.end(payload, () => socket.destroy())
+  } catch {
+    socket.destroy()
   }
 }
 
@@ -149,41 +168,70 @@ async function dispatchAdminLine(line: string, handlers: AdminHandlers): Promise
   }
 }
 
+function statIfExists(path: string): Stats | null {
+  try {
+    return lstatSync(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null
+    throw error
+  }
+}
+
+function unlinkSocketIfOwned(endpoint: string): void {
+  const stats = statIfExists(endpoint)
+  if (!stats) return
+  if (!stats.isSocket()) {
+    throw new Error(`Refusing to overwrite non-socket path at ${endpoint}`)
+  }
+  const uid = process.getuid?.()
+  if (uid !== undefined && stats.uid !== uid) {
+    throw new Error(`Refusing to remove socket owned by uid ${stats.uid} at ${endpoint}`)
+  }
+  try {
+    unlinkSync(endpoint)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+  }
+}
+
 function removePosixEndpointIfNeeded(endpoint: string): void {
   if (process.platform === "win32") return
   try {
-    rmSync(endpoint, { force: true })
+    const stats = statIfExists(endpoint)
+    if (!stats?.isSocket()) return
+    const uid = process.getuid?.()
+    if (uid !== undefined && stats.uid !== uid) return
+    unlinkSync(endpoint)
   } catch {
     // 忽略关闭后的残留清理失败。
   }
 }
 
-function endpointExistsOnDisk(endpoint: string): boolean {
-  try {
-    lstatSync(endpoint)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
-    throw error
-  }
-}
-
 /**
  * 启动本机控制通道服务端。
- * POSIX 下会检查并拒绝覆盖仍在监听的 socket，仅清理失活的残留文件，并将权限收紧为 `0o600`。
+ * 先检查是否已有活跃端点（兼容 Windows 命名管道与 POSIX socket），
+ * POSIX 下仅清理当前用户拥有的失活 socket 节点并将权限收紧为 `0o600`。
  */
 export async function startAdminSocketServer(
   endpoint: string,
   handlers: AdminHandlers,
 ): Promise<AdminSocketServer> {
+  if (await canConnectSocket(endpoint, 400)) {
+    throw new Error(`Admin socket already active at ${endpoint}`)
+  }
+
   if (process.platform !== "win32") {
-    mkdirSync(dirname(endpoint), { recursive: true })
-    if (endpointExistsOnDisk(endpoint)) {
-      if (await canConnectSocket(endpoint, 400)) {
-        throw new Error(`Admin socket already active at ${endpoint}`)
-      }
-      rmSync(endpoint, { force: true })
+    const parentDir = dirname(endpoint)
+    mkdirSync(parentDir, { recursive: true, mode: 0o700 })
+    const parentStats = lstatSync(parentDir)
+    if (parentStats.isSymbolicLink() || !parentStats.isDirectory()) {
+      throw new Error(`Unsafe admin socket directory: ${parentDir}`)
     }
+    const uid = process.getuid?.()
+    if (uid !== undefined && parentStats.uid !== uid) {
+      throw new Error(`Unsafe admin socket directory owner: ${parentDir}`)
+    }
+    unlinkSocketIfOwned(endpoint)
   }
 
   const clients = new Set<Socket>()
@@ -209,6 +257,12 @@ export async function startAdminSocketServer(
     socket.on("end", () => {
       clientEnded = true
       if (!rejected && buffer.length > 0) {
+        if (buffer.length > MAX_LINE_BYTES) {
+          rejected = true
+          buffer = Buffer.alloc(0)
+          rejectOversizedRequest(socket)
+          return
+        }
         const trailing = buffer.toString("utf8").trim()
         buffer = Buffer.alloc(0)
         if (trailing) {
@@ -235,13 +289,7 @@ export async function startAdminSocketServer(
           if (buffer.length > MAX_LINE_BYTES) {
             rejected = true
             buffer = Buffer.alloc(0)
-            sendLine(socket, {
-              id: "unknown",
-              ok: false,
-              error: `Request line exceeds ${MAX_LINE_BYTES} byte limit`,
-              code: "REQUEST_TOO_LARGE",
-            })
-            socket.end()
+            rejectOversizedRequest(socket)
           }
           return
         }
@@ -252,13 +300,7 @@ export async function startAdminSocketServer(
         if (lineBuf.length > MAX_LINE_BYTES) {
           rejected = true
           buffer = Buffer.alloc(0)
-          sendLine(socket, {
-            id: "unknown",
-            ok: false,
-            error: `Request line exceeds ${MAX_LINE_BYTES} byte limit`,
-            code: "REQUEST_TOO_LARGE",
-          })
-          socket.end()
+          rejectOversizedRequest(socket)
           return
         }
 
@@ -317,7 +359,7 @@ export async function startAdminSocketServer(
   }
 }
 
-/** 向运行中的 Host 控制通道发送单次请求并等待对应响应。 */
+/** 向运行中的 Host 控制通道发送单次请求，并用对应方法的结果 schema 校验返回值。 */
 export function callAdminSocket<M extends HostAdminMethod>(
   endpoint: string,
   method: M,
@@ -333,6 +375,7 @@ export function callAdminSocket<M extends HostAdminMethod>(
     const cleanup = (): void => {
       clearTimeout(timer)
       socket.removeAllListeners()
+      socket.on("error", () => {})
       socket.destroy()
     }
 
@@ -367,9 +410,29 @@ export function callAdminSocket<M extends HostAdminMethod>(
       buffer = buffer.length === 0 ? chunk : Buffer.concat([buffer, chunk])
       for (;;) {
         const newlineIndex = buffer.indexOf(0x0a)
-        if (newlineIndex === -1) return
-        const line = buffer.subarray(0, newlineIndex).toString("utf8").trim()
+        if (newlineIndex === -1) {
+          if (buffer.length > MAX_LINE_BYTES) {
+            fail(
+              new AdminClientError(
+                `Response line exceeds ${MAX_LINE_BYTES} byte limit`,
+                "RESPONSE_TOO_LARGE",
+              ),
+            )
+          }
+          return
+        }
+        const lineBuf = buffer.subarray(0, newlineIndex)
         buffer = buffer.subarray(newlineIndex + 1)
+        if (lineBuf.length > MAX_LINE_BYTES) {
+          fail(
+            new AdminClientError(
+              `Response line exceeds ${MAX_LINE_BYTES} byte limit`,
+              "RESPONSE_TOO_LARGE",
+            ),
+          )
+          return
+        }
+        const line = lineBuf.toString("utf8").trim()
         if (!line) continue
 
         let raw: unknown
@@ -390,7 +453,14 @@ export function callAdminSocket<M extends HostAdminMethod>(
         }
         if (parsed.data.id !== id) continue
         if (parsed.data.ok) {
-          succeed(parsed.data.result as HostAdminResultMap[M])
+          const resultParsed = hostAdminMethodResultSchemas[method].safeParse(parsed.data.result)
+          if (!resultParsed.success) {
+            fail(
+              new AdminClientError("Invalid result payload from admin socket", "INVALID_RESPONSE"),
+            )
+            return
+          }
+          succeed(resultParsed.data as HostAdminResultMap[M])
         } else {
           fail(new AdminClientError(parsed.data.error, parsed.data.code))
         }

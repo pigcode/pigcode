@@ -171,5 +171,21 @@ describe("hostConflictDialogText", () => {
     expect(desktopText.detail).toContain("8765")
     expect(desktopText.detail).toContain("/tmp/profile-b")
     expect(desktopText.detail).not.toContain("headless")
+
+    const englishText = hostConflictDialogText(
+      {
+        pid: 4321,
+        instanceId: "00000000-0000-4000-8000-000000000005",
+        runtime: "headless",
+        socketPath: "/tmp/host.sock",
+        startedAt: 1000,
+        version: "0.1.0",
+      },
+      "/tmp/profile-en",
+      "en-US",
+    )
+    expect(englishText.detail).toContain("headless")
+    expect(englishText.detail).toContain("4321")
+    expect(englishText.detail).toContain("/tmp/profile-en")
   })
 })

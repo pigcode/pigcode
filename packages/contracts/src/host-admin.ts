@@ -3,16 +3,11 @@ import { z } from "zod"
 import {
   mobileConfirmParamsSchema,
   mobilePairingParamsSchema,
+  mobilePairingViewSchema,
   mobileRevokeParamsSchema,
-  type MobilePairingView,
-  type MobileRevokeResult,
+  mobileRevokeResultSchema,
 } from "./mobile"
-import {
-  relaySettingsSchema,
-  relayTestAndSaveParamsSchema,
-  type RelaySettingsView,
-  type RelayTestResult,
-} from "./relay"
+import { relaySettingsSchema, relayTestAndSaveParamsSchema, relayTestResultSchema } from "./relay"
 
 /** profile 目录下的跨运行时单实例锁文件名。 */
 export const HOST_LOCK_FILE = "host.lock"
@@ -24,22 +19,22 @@ export const hostRuntimeKindSchema = z.enum(["desktop", "headless"])
 export type HostRuntimeKind = z.infer<typeof hostRuntimeKindSchema>
 
 /** `host.lock` 持久化元数据。 */
-export const hostLockMetadataSchema = z.object({
+export const hostLockMetadataSchema = z.strictObject({
   pid: z.number().int().positive(),
   instanceId: z.uuid(),
   runtime: hostRuntimeKindSchema,
-  socketPath: z.string(),
+  socketPath: z.string().min(1),
   startedAt: z.number().int().nonnegative(),
-  version: z.string(),
+  version: z.string().min(1),
 })
 export type HostLockMetadata = z.infer<typeof hostLockMetadataSchema>
 
 /** `host.status` 返回的运行状态摘要。 */
-export const hostStatusViewSchema = z.object({
+export const hostStatusViewSchema = z.strictObject({
   pid: z.number().int().positive(),
   runtime: hostRuntimeKindSchema,
-  version: z.string(),
-  profileDir: z.string(),
+  version: z.string().min(1),
+  profileDir: z.string().min(1),
   startedAt: z.number().int().nonnegative(),
   relay: relaySettingsSchema,
   lanAddresses: z.array(z.string()),
@@ -49,19 +44,37 @@ export const hostStatusViewSchema = z.object({
 })
 export type HostStatusView = z.infer<typeof hostStatusViewSchema>
 
+const emptyStrictParamsSchema = z.strictObject({})
+const hostStopResultSchema = z.strictObject({ stopping: z.literal(true) })
+
 /** 本机控制通道支持的方法名与参数 schema 映射。 */
 export const hostAdminMethodParamsSchemas = {
-  "host.status": z.object({}),
-  "host.stop": z.object({ reason: z.enum(["exited", "restarting"]).optional() }),
-  "relay.view": z.object({}),
+  "host.status": emptyStrictParamsSchema,
+  "host.stop": z.strictObject({ reason: z.enum(["exited", "restarting"]).optional() }),
+  "relay.view": emptyStrictParamsSchema,
   "relay.testAndSave": relayTestAndSaveParamsSchema,
-  "relay.clear": z.object({}),
-  "mobile.pairing.view": z.object({}),
-  "mobile.pairing.start": z.object({}),
+  "relay.clear": emptyStrictParamsSchema,
+  "mobile.pairing.view": emptyStrictParamsSchema,
+  "mobile.pairing.start": emptyStrictParamsSchema,
   "mobile.pairing.cancel": mobilePairingParamsSchema,
   "mobile.pairing.confirm": mobileConfirmParamsSchema,
-  "mobile.devices.list": z.object({}),
+  "mobile.devices.list": emptyStrictParamsSchema,
   "mobile.devices.revoke": mobileRevokeParamsSchema,
+} as const
+
+/** 本机控制通道各方法的返回值 schema 映射。 */
+export const hostAdminMethodResultSchemas = {
+  "host.status": hostStatusViewSchema,
+  "host.stop": hostStopResultSchema,
+  "relay.view": relaySettingsSchema,
+  "relay.testAndSave": relayTestResultSchema,
+  "relay.clear": relaySettingsSchema,
+  "mobile.pairing.view": mobilePairingViewSchema,
+  "mobile.pairing.start": mobilePairingViewSchema,
+  "mobile.pairing.cancel": mobilePairingViewSchema,
+  "mobile.pairing.confirm": mobilePairingViewSchema,
+  "mobile.devices.list": mobilePairingViewSchema.shape.devices,
+  "mobile.devices.revoke": mobileRevokeResultSchema,
 } as const
 
 export type HostAdminMethod = keyof typeof hostAdminMethodParamsSchemas
@@ -70,22 +83,12 @@ export type HostAdminParams<M extends HostAdminMethod = HostAdminMethod> = z.inf
 >
 
 /** 各控制方法的返回类型映射。 */
-export interface HostAdminResultMap {
-  "host.status": HostStatusView
-  "host.stop": { stopping: true }
-  "relay.view": RelaySettingsView
-  "relay.testAndSave": RelayTestResult
-  "relay.clear": RelaySettingsView
-  "mobile.pairing.view": MobilePairingView
-  "mobile.pairing.start": MobilePairingView
-  "mobile.pairing.cancel": MobilePairingView
-  "mobile.pairing.confirm": MobilePairingView
-  "mobile.devices.list": MobilePairingView["devices"]
-  "mobile.devices.revoke": MobileRevokeResult
+export type HostAdminResultMap = {
+  [M in HostAdminMethod]: z.infer<(typeof hostAdminMethodResultSchemas)[M]>
 }
 
 /** 本机控制通道 NDJSON 请求信封。 */
-export const hostAdminRequestSchema = z.object({
+export const hostAdminRequestSchema = z.strictObject({
   id: z.string().min(1),
   method: z.string().min(1),
   params: z.unknown().optional(),

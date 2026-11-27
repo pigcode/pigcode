@@ -254,32 +254,46 @@ if (process.platform === "win32") app.setAppUserModelId("com.pigcode.desktop")
 const singleInstance = process.env.PIGCODE_PROFILE_DIR === undefined
 // electron-vite 重启 Electron 时旧进程可能还没放开锁，开发时多等一会儿（dev-mode.ts）。
 const lockWaitMs = restartedByElectronVite(process.env, app.isPackaged) ? DEV_LOCK_WAIT_MS : 0
-void acquireInstanceLock(() => !singleInstance || app.requestSingleInstanceLock(), lockWaitMs).then(
-  async (locked) => {
+void acquireInstanceLock(() => !singleInstance || app.requestSingleInstanceLock(), lockWaitMs)
+  .then(async (locked) => {
     if (!locked) {
       // 从终端启动（pnpm dev）时说明一下，否则进程一声不响就退出了。
       console.log(`Pigcode is already running with ${profileDir()}; switched to that window.`)
+      quitConfirmed = true
+      quitting = true
       app.quit()
       return
     }
     const dir = profileDir()
     const owner = await waitForHostLockFree(() => probeLiveHost(dir), lockWaitMs)
+    if (quitting) return
     if (owner) {
       await app.whenReady()
-      dialog.showMessageBoxSync(hostConflictDialogText(owner, dir))
+      if (quitting) return
+      dialog.showMessageBoxSync(hostConflictDialogText(owner, dir, app.getLocale()))
       quitting = true
       quitConfirmed = true
       app.quit()
       return
     }
     start()
-  },
-)
+  })
+  .catch((error: unknown) => {
+    console.error("[main] failed during instance lock check:", error)
+    quitConfirmed = true
+    quitting = true
+    app.quit()
+  })
 
 /** 拿到单实例锁以后启动应用。 */
 function start(): void {
   // 正在退出的实例不再把窗口叫回来：开发时新进程会在旧进程退出期间反复尝试拿锁。
   app.on("second-instance", () => {
+    if (!quitting) showWindow()
+  })
+  // macOS 上点 Dock 图标（Windows 上从托盘选「打开窗口」）把隐藏的窗口叫回来。
+  // 放在 start() 内注册，避免阻塞等待 host.lock 期间提前拉起主窗口。
+  app.on("activate", () => {
     if (!quitting) showWindow()
   })
   // 提前开始读，Electron 准备好的这段时间也算在内，窗口少等一会儿。
@@ -323,9 +337,6 @@ app.on("will-quit", (event) => {
     setImmediate(() => app.quit())
   })
 })
-
-// macOS 上点 Dock 图标（Windows 上从托盘选「打开窗口」）把隐藏的窗口叫回来。
-app.on("activate", () => showWindow())
 
 /** 退出前问一次 Host：有任务在跑时让用户确认，避免一个 Cmd+Q 就把 agent 和终端都停掉。 */
 async function checkBeforeQuit(): Promise<void> {

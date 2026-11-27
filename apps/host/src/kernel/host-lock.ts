@@ -4,13 +4,15 @@
  */
 import { createHash, randomUUID } from "node:crypto"
 import {
+  chmodSync,
   closeSync,
   fchmodSync,
   fsyncSync,
   linkSync,
+  lstatSync,
+  mkdirSync,
   openSync,
   readFileSync,
-  rmSync,
   unlinkSync,
   writeSync,
 } from "node:fs"
@@ -37,6 +39,8 @@ function defaultHostVersion(): string {
 const MAX_POSIX_SOCKET_BYTES = 96
 const DEFAULT_CONNECT_TIMEOUT_MS = 400
 const MAX_LOCK_ATTEMPTS = 5
+/** 启动宽限期：拿锁后到控制通道 listen 完成前的短窗口内允许仅凭 PID 判活，超时后避免 PID 复用死锁。 */
+export const STARTUP_LOCK_GRACE_MS = 15_000
 
 /** 已有存活 Host 持有同一 profileDir 锁时抛出的冲突错误。 */
 export class HostAlreadyRunningError extends Error {
@@ -66,18 +70,45 @@ export interface AcquireHostLockOptions {
   socketPath?: string | undefined
   checkSocket?: ((path: string) => Promise<boolean>) | undefined
   isPidAlive?: ((pid: number) => boolean) | undefined
+  now?: (() => number) | undefined
+  graceMs?: number | undefined
 }
 
 /** `probeLiveHost` 的测试注入钩子。 */
 export interface ProbeHostDeps {
   checkSocket?: ((path: string, timeoutMs: number) => Promise<boolean>) | undefined
   isPidAlive?: ((pid: number) => boolean) | undefined
+  now?: (() => number) | undefined
+  graceMs?: number | undefined
+}
+
+function ensurePrivatePosixFallbackDir(dir: string): void {
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  const stats = lstatSync(dir)
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error(`Unsafe socket fallback directory (not a real directory): ${dir}`)
+  }
+  const uid = process.getuid?.()
+  if (uid !== undefined && stats.uid !== uid) {
+    throw new Error(`Unsafe socket fallback directory owner: ${dir}`)
+  }
+  if ((stats.mode & 0o777) !== 0o700) {
+    chmodSync(dir, 0o700)
+    const tightened = lstatSync(dir)
+    if (
+      tightened.isSymbolicLink() ||
+      !tightened.isDirectory() ||
+      (tightened.mode & 0o777) !== 0o700
+    ) {
+      throw new Error(`Unsafe socket fallback directory permissions: ${dir}`)
+    }
+  }
 }
 
 /**
  * 解析本机控制通道端点。
  * Windows 使用基于目录哈希的命名管道；POSIX 在路径不超过 96 字节时放在 `<profileDir>/host.sock`，
- * 超出时回退到临时目录的短路径，由 `host.lock` 持久化实际路径供客户端发现。
+ * 超出时回退到临时目录的私有用户目录（`0o700`，非符号链接）下的短路径，由 `host.lock` 持久化。
  */
 export function hostControlEndpoint(
   profileDir: string,
@@ -89,9 +120,9 @@ export function hostControlEndpoint(
   const pathJoin =
     platform === process.platform ? join : platform === "win32" ? win32.join : posix.join
   const resolved = pathResolve(profileDir)
-  const hash = createHash("sha256").update(resolved).digest("hex").slice(0, 16)
 
   if (platform === "win32") {
+    const hash = createHash("sha256").update(resolved).digest("hex").slice(0, 16)
     return `\\\\.\\pipe\\pigcode-host-${hash}`
   }
 
@@ -99,7 +130,20 @@ export function hostControlEndpoint(
   if (Buffer.byteLength(direct, "utf8") <= MAX_POSIX_SOCKET_BYTES) {
     return direct
   }
-  return pathJoin(fallbackTmpDir, `pg-${hash}.sock`)
+
+  const uid = process.getuid?.() ?? "user"
+  const hash12 = createHash("sha256").update(resolved).digest("hex").slice(0, 12)
+  const fallbackDir = pathJoin(fallbackTmpDir, `pigcode-${uid}`)
+  const fallback = pathJoin(fallbackDir, `p-${hash12}.sock`)
+  if (Buffer.byteLength(fallback, "utf8") > MAX_POSIX_SOCKET_BYTES) {
+    throw new Error(
+      `Control socket path exceeds ${MAX_POSIX_SOCKET_BYTES} UTF-8 bytes: ${fallback}`,
+    )
+  }
+  if (platform === process.platform) {
+    ensurePrivatePosixFallbackDir(fallbackDir)
+  }
+  return fallback
 }
 
 /** 判断指定 PID 当前是否存活（`EPERM` 视为存在，`ESRCH` 视为已退出）。 */
@@ -127,6 +171,7 @@ export function canConnectSocket(
       settled = true
       clearTimeout(timer)
       socket.removeAllListeners()
+      socket.on("error", () => {})
       socket.destroy()
       resolvePromise(alive)
     }
@@ -135,6 +180,25 @@ export function canConnectSocket(
     socket.once("connect", () => finish(true))
     socket.once("error", () => finish(false))
   })
+}
+
+async function isLockOwnerAlive(
+  metadata: HostLockMetadata,
+  timeoutMs: number,
+  deps: {
+    checkSocket: (endpoint: string, timeoutMs: number) => Promise<boolean>
+    isPidAlive: (pid: number) => boolean
+    now: () => number
+    graceMs: number
+  },
+): Promise<boolean> {
+  if (await deps.checkSocket(metadata.socketPath, timeoutMs)) {
+    return true
+  }
+  if (Math.abs(deps.now() - metadata.startedAt) > deps.graceMs) {
+    return false
+  }
+  return deps.isPidAlive(metadata.pid)
 }
 
 function readLockFile(lockPath: string): { raw: string; metadata: HostLockMetadata | null } | null {
@@ -170,18 +234,22 @@ function removeStaleLockIfUnchanged(lockPath: string, expectedRaw: string): void
   }
 }
 
-function removeStaleSocketBestEffort(socketPath: string): void {
-  if (!socketPath || socketPath.startsWith("\\\\.\\pipe\\")) return
+function unlinkStalePosixSocketBestEffort(socketPath: string): void {
+  if (!socketPath || process.platform === "win32" || socketPath.startsWith("\\\\.\\pipe\\")) return
   try {
-    rmSync(socketPath, { force: true })
+    const stats = lstatSync(socketPath)
+    if (!stats.isSocket()) return
+    const uid = process.getuid?.()
+    if (uid !== undefined && stats.uid !== uid) return
+    unlinkSync(socketPath)
   } catch {
-    // 清理陈旧 socket 文件失败时不阻塞抢锁；后续 listen 前还会再次检查。
+    // 清理旧 socket 失败时不阻断已持有锁的启动流程。
   }
 }
 
 /**
  * 探测 `profileDir` 当前是否有存活的 Host 实例持有 `host.lock`。
- * 同时探测 socket 连通性与 PID 存活，避免 Host 刚拿锁但控制通道尚未 listen 的启动窗口竞态。
+ * 优先探测 socket 连通性；仅在启动宽限期内兜底检查 PID 存活，避免旧进程崩溃且 PID 被复用造成死锁。
  */
 export async function probeLiveHost(
   profileDir: string,
@@ -192,16 +260,19 @@ export async function probeLiveHost(
   const existing = readLockFile(lockPath)
   if (!existing?.metadata) return null
 
-  const checkSocket = deps.checkSocket ?? canConnectSocket
-  const checkPid = deps.isPidAlive ?? isProcessAlive
-  const alive =
-    (await checkSocket(existing.metadata.socketPath, timeoutMs)) || checkPid(existing.metadata.pid)
+  const alive = await isLockOwnerAlive(existing.metadata, timeoutMs, {
+    checkSocket: deps.checkSocket ?? canConnectSocket,
+    isPidAlive: deps.isPidAlive ?? isProcessAlive,
+    now: deps.now ?? Date.now,
+    graceMs: deps.graceMs ?? STARTUP_LOCK_GRACE_MS,
+  })
   return alive ? existing.metadata : null
 }
 
 /**
  * 为 `profileDir` 原子获取跨运行时单实例锁。
- * 若检测到已有存活实例则返回 `HostAlreadyRunningError`；若旧锁与旧 socket 已失活则自动清理并接管。
+ * 若检测到已有存活实例则返回 `HostAlreadyRunningError`；
+ * 若旧锁已失活则仅清理旧 `host.lock`，拿到新锁后再清理差异化的旧 socket，避免误删并发竞争者的活跃端点。
  */
 export async function acquireHostLock(
   profileDir: string,
@@ -216,18 +287,21 @@ export async function acquireHostLock(
     options.checkSocket ??
     ((endpoint: string) => canConnectSocket(endpoint, DEFAULT_CONNECT_TIMEOUT_MS))
   const checkPid = options.isPidAlive ?? isProcessAlive
+  const now = options.now ?? Date.now
+  const graceMs = options.graceMs ?? STARTUP_LOCK_GRACE_MS
 
   const metadata: HostLockMetadata = {
     pid: process.pid,
     instanceId: randomUUID(),
     runtime: options.runtime,
     socketPath,
-    startedAt: Date.now(),
+    startedAt: now(),
     version: options.version ?? defaultHostVersion(),
   }
 
   const payload = Buffer.from(`${JSON.stringify(metadata, null, 2)}\n`, "utf8")
   const tmpPath = join(resolved, `${HOST_LOCK_FILE}.${process.pid}.${randomUUID()}.tmp`)
+  const staleSocketCandidates = new Set<string>()
 
   try {
     const fd = openSync(tmpPath, "wx", 0o600)
@@ -244,6 +318,11 @@ export async function acquireHostLock(
     for (let attempt = 0; attempt < MAX_LOCK_ATTEMPTS; attempt++) {
       try {
         linkSync(tmpPath, lockPath)
+        for (const candidate of staleSocketCandidates) {
+          if (candidate !== socketPath && !(await checkSocket(candidate))) {
+            unlinkStalePosixSocketBestEffort(candidate)
+          }
+        }
         let released = false
         return {
           lockPath,
@@ -269,21 +348,28 @@ export async function acquireHostLock(
       if (!existing) continue
 
       if (existing.metadata) {
-        const alive =
-          (await checkSocket(existing.metadata.socketPath)) || checkPid(existing.metadata.pid)
+        const alive = await isLockOwnerAlive(existing.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
+          checkSocket: (endpoint) => checkSocket(endpoint),
+          isPidAlive: checkPid,
+          now,
+          graceMs,
+        })
         if (alive) {
           throw new HostAlreadyRunningError(existing.metadata)
         }
-        // 异步探测期间若其他竞争进程已接管并写入新锁，立即重试，避免误删新实例刚创建的 socket。
-        if (readLockFile(lockPath)?.raw !== existing.raw) continue
-        removeStaleSocketBestEffort(existing.metadata.socketPath)
+        staleSocketCandidates.add(existing.metadata.socketPath)
       }
       removeStaleLockIfUnchanged(lockPath, existing.raw)
     }
 
     const latest = readLockFile(lockPath)
     if (latest?.metadata) {
-      const alive = (await checkSocket(latest.metadata.socketPath)) || checkPid(latest.metadata.pid)
+      const alive = await isLockOwnerAlive(latest.metadata, DEFAULT_CONNECT_TIMEOUT_MS, {
+        checkSocket: (endpoint) => checkSocket(endpoint),
+        isPidAlive: checkPid,
+        now,
+        graceMs,
+      })
       if (alive) throw new HostAlreadyRunningError(latest.metadata)
     }
     throw new Error(`Failed to acquire host lock at ${lockPath}`)

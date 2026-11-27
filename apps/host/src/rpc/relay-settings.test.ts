@@ -213,3 +213,39 @@ it("clears relay settings, notifies listeners, and disconnects MobileConnections
     await ctx.fiber.dispose()
   }
 })
+
+it("prevents an in-flight testAndSave probe from overwriting a concurrent clear()", async () => {
+  const ctx = new Context()
+  await ctx.plugin(storage, { path: ":memory:" })
+  await ctx.plugin(settings, {})
+
+  let resolveProbe!: (status: "ok") => void
+  const probe = vi.fn<RelayProbe>(
+    () =>
+      new Promise((resolve) => {
+        resolveProbe = resolve
+      }),
+  )
+  const cipher = {
+    seal: async (value: string) => Buffer.from(value).toString("base64"),
+    open: async (value: string) => Buffer.from(value, "base64").toString(),
+  }
+  const relay = new RelaySettings(ctx.settings, cipher, probe)
+
+  try {
+    const savingPromise = relay.testAndSave({
+      address: "wss://relay.example/ws/v1/connect",
+      token: "secret-token",
+    })
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+
+    expect(relay.clear()).toEqual({ address: null, tokenConfigured: false })
+    resolveProbe("ok")
+
+    expect(await savingPromise).toEqual({ status: "busy" })
+    expect(relay.view()).toEqual({ address: null, tokenConfigured: false })
+    expect(await relay.connectionConfig()).toBeUndefined()
+  } finally {
+    await ctx.fiber.dispose()
+  }
+})
