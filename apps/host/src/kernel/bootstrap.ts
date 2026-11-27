@@ -40,6 +40,8 @@ export interface BootstrappedHost {
 
 /** 退出前等待退场通知帧刷出的短缓冲（毫秒）。 */
 const EXIT_FLUSH_DELAY_MS = 80
+/** 手机局域网直连默认监听端口。 */
+const DEFAULT_LAN_PORT = 39871
 
 /**
  * 定位随应用发布的核心 profile 目录（含 `desktop.yml`）。
@@ -73,7 +75,7 @@ export async function bootstrapHostKernel(
     profileDir,
     profileName = "desktop",
     runtimeRoot = resolveHostRuntimeRoot(),
-    lanPort,
+    lanPort = DEFAULT_LAN_PORT,
     onReminder,
   } = options
 
@@ -118,13 +120,7 @@ export async function bootstrapHostKernel(
     const relay = new RelaySettings(ctx.settings, cipher)
     ctx.provide("relaySettings", relay)
 
-    const mobile = new MobileConnections(
-      ctx,
-      relay,
-      cipher,
-      feed,
-      lanPort === undefined ? {} : { lanPort },
-    )
+    const mobile = new MobileConnections(ctx, relay, cipher, feed, { lanPort })
     ctx.provide("mobileConnections", mobile)
     let mobileDisposed = false
     const disposeMobile = (): void => {

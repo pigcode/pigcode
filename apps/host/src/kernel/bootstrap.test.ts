@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import * as lanServer from "../mobile/lan-server"
 import { bootstrapHostKernel, resolveHostRuntimeRoot } from "./bootstrap"
 
 const dirs: string[] = []
@@ -283,5 +284,26 @@ describe("bootstrapHostKernel", () => {
 
     const stateAfter = JSON.parse(await readFile(statePath, "utf8")) as { disposed: string[] }
     expect(stateAfter.disposed).toContain("settings")
+  })
+
+  it("defaults lanPort to 39871 when omitted", async () => {
+    const root = await makeTempDir()
+    const profileDir = join(root, "user-profile")
+    const runtimeRoot = join(root, "runtime")
+    await mkdir(runtimeRoot, { recursive: true })
+    await writeMinimalRuntimeProfile(runtimeRoot)
+
+    const openLanSpy = vi.spyOn(lanServer, "openLanServer")
+    const host = await bootstrapHostKernel({
+      profileDir,
+      runtimeRoot,
+    })
+
+    try {
+      await host.mobile.readyLanAddresses()
+      expect(openLanSpy).toHaveBeenCalledWith(expect.any(Object), { port: 39871 })
+    } finally {
+      await host.dispose()
+    }
   })
 })
