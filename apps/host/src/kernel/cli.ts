@@ -1,26 +1,15 @@
-/** `pigcode` CLI 的最小入口：目前只支持 --dump-config。 */
+/** `pigcode` CLI 入口：保留原有 `--dump-config` 与退出码兼容，并支持完整无窗口运维子命令。 */
 import { fileURLToPath } from "node:url"
-import { createHostApp, dumpConfig } from "./app"
+import { runHeadlessCli } from "./headless-cli"
 
 /** 默认 profile 目录：`apps/host/profiles`（源码与构建产物均可定位）。 */
 const defaultProfileDir = fileURLToPath(new URL("../../profiles", import.meta.url))
 
-/** 解析参数并在需要时创建 kernel；返回进程退出码。 */
+/** 解析参数并执行 Host CLI；返回进程退出码。 */
 export async function runCli(argv: string[]): Promise<number> {
-  const profileIndex = argv.indexOf("--profile")
-  const profileName = profileIndex >= 0 ? argv[profileIndex + 1] : "desktop"
-  if (!profileName) {
-    console.error("missing --profile value")
-    return 2
-  }
-  const profileDir = process.env.PIGCODE_PROFILE_DIR ?? defaultProfileDir
-  const ctx = await createHostApp({ profileDir, profileName })
-  if (argv.includes("--dump-config")) {
-    console.log(JSON.stringify(dumpConfig(ctx), null, 2))
-    await ctx.fiber.dispose()
-    return 0
-  }
-  console.error("no command; use --dump-config")
-  await ctx.fiber.dispose()
-  return 2
+  return runHeadlessCli(argv, {
+    stdout: { write: (chunk) => console.log(chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk) },
+    stderr: { write: (chunk) => console.error(chunk.endsWith("\n") ? chunk.slice(0, -1) : chunk) },
+    defaultDumpProfileDir: defaultProfileDir,
+  })
 }
