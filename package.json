@@ -11,6 +11,7 @@
     "dev": "pnpm --dir apps/desktop dev",
     "build": "pnpm -r --if-present build",
     "build:host": "node scripts/build-host.ts",
+    "build:headless": "node scripts/build-headless-host.ts",
     "marketplace:build": "node scripts/build-marketplace.ts",
     "test": "vitest run",
     "test:watch": "vitest",
