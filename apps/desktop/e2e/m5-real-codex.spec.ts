@@ -39,10 +39,11 @@ test("runs two real codex threads from the sidebar", async () => {
     await expect(row("OK-1")).toHaveAttribute("data-status", "completed", { timeout: 120_000 })
 
     await project.locator(".proj-add").click()
-    await expect(project.locator(".sess")).toHaveCount(2)
+    await expect(page.locator(".new-thread-view")).toBeVisible()
     await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
     await page.getByRole("textbox").fill("Reply with exactly OK-2")
     await page.keyboard.press("Enter")
+    await expect(project.locator(".sess")).toHaveCount(2)
     await expect(row("OK-2")).toHaveAttribute("data-status", "completed", { timeout: 120_000 })
 
     // 从侧栏切回第一个线程，确认两个线程各自保留自己的结果。

@@ -126,6 +126,7 @@ describe("appendCommonCliPaths", () => {
       "/opt/homebrew/bin",
       "/Users/alice/.local/bin",
       "/Users/alice/.npm-global/bin",
+      "/Users/alice/.bun/bin",
       "/usr/local/bin",
     ])
   })
@@ -136,6 +137,7 @@ describe("appendCommonCliPaths", () => {
     expect(emptyEnv.PATH?.split(":")).toEqual([
       "/home/alice/.local/bin",
       "/home/alice/.npm-global/bin",
+      "/home/alice/.bun/bin",
       "/opt/homebrew/bin",
       "/usr/local/bin",
     ])

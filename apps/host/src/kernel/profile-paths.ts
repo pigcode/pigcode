@@ -75,6 +75,7 @@ export function appendCommonCliPaths(
   const additions = [
     posix.join(home, ".local", "bin"),
     posix.join(home, ".npm-global", "bin"),
+    posix.join(home, ".bun", "bin"),
     "/opt/homebrew/bin",
     "/usr/local/bin",
   ].filter((dir) => {

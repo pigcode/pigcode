@@ -1,7 +1,7 @@
 /** `pigcode-host` 无窗口常驻入口与本机运维 CLI 主调度器。 */
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type { RelayProbe } from "../services/relay-probe"
 import { callAdminSocket } from "./admin-socket"
@@ -113,7 +113,15 @@ async function runStart(
     } else if (env === process.env && needsLoginShellEnv(env, platform)) {
       await applyLoginShellEnv().catch(() => undefined)
     }
-    appendCommonCliPaths(env, platform, home)
+  }
+  // 即使禁用登录 shell 环境变量（systemd/launchd），仍补全常见 CLI 目录及当前 Node 目录，保证 #!/usr/bin/env node 类脚本可运行。
+  appendCommonCliPaths(env, platform, home)
+  if (platform === process.platform && platform !== "win32") {
+    const execDir = dirname(process.execPath)
+    const paths = (env.PATH ?? "").split(":").filter(Boolean)
+    if (execDir && execDir !== "." && !paths.includes(execDir)) {
+      env.PATH = [...paths, execDir].join(":")
+    }
   }
 
   const resolvedProfileDir = resolve(profileDir)

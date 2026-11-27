@@ -140,11 +140,12 @@ describe("runHeadlessCli - start and status", () => {
     const signals = new TestSignalSource()
     const applyShellEnv = vi.fn(async () => undefined)
     const io = createCapturedIo()
+    const env: NodeJS.ProcessEnv = { PIGCODE_CORE_PROFILE_DIR: runtimeRoot, PATH: "/usr/bin" }
     const startPromise = runHeadlessCli(
       ["--profile-dir", profileDir, "start", "--lan-port", "0", "--no-shell-env"],
       {
         ...io,
-        env: { PIGCODE_CORE_PROFILE_DIR: runtimeRoot, PATH: "/usr/bin" },
+        env,
         signalSource: signals,
         applyLoginShellEnv: applyShellEnv,
       },
@@ -152,6 +153,10 @@ describe("runHeadlessCli - start and status", () => {
 
     await vi.waitFor(() => expect(io.readStdout()).toContain("Pigcode Host 已启动"))
     expect(applyShellEnv).not.toHaveBeenCalled()
+    if (process.platform !== "win32") {
+      expect(env.PATH).toContain("/usr/local/bin")
+      expect(env.PATH).toContain(".bun/bin")
+    }
 
     const live = await probeLiveHost(profileDir)
     expect(live).not.toBeNull()
