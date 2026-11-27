@@ -177,7 +177,7 @@ Widget _app(Widget home) =>
 
 void main() {
   testWidgets(
-    'SettingsHubScreen navigates to ProjectManageScreen, adds, renames, removes, and survives reconnect',
+    'SettingsHubScreen focuses on phone settings while ProjectManageScreen adds, renames, removes, and survives reconnect',
     (tester) async {
       final host1 = _ManageHost();
       final host2 = _ManageHost();
@@ -187,26 +187,49 @@ void main() {
       addTearDown(notifier.dispose);
 
       var remindersOpened = false;
+      var computersOpened = false;
       await tester.pumpWidget(
         _app(
-          SettingsHubScreen(
+          Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => SettingsHubScreen.open(
+                  context,
+                  connectionListenable: notifier,
+                  computerName: 'TestMac',
+                  onOpenReminders: () => remindersOpened = true,
+                  onComputers: () => computersOpened = true,
+                ),
+                child: const Text('打开手机设置'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开手机设置'));
+      await tester.pumpAndSettle();
+
+      // SettingsHubScreen exposes phone-local settings & computers summary only.
+      expect(find.text('手机设置'), findsOneWidget);
+      expect(find.text('定时任务'), findsNothing);
+      await tester.tap(find.byKey(SettingsHubScreen.remindersTileKey));
+      expect(remindersOpened, isTrue);
+      await tester.tap(find.byKey(SettingsHubScreen.computersTileKey));
+      await tester.pumpAndSettle();
+      expect(computersOpened, isTrue);
+
+      // Navigate into ProjectManageScreen from ProjectManageScreen.open / Workspace.
+      await tester.pumpWidget(
+        _app(
+          ProjectManageScreen(
             connectionListenable: notifier,
             computerName: 'TestMac',
-            onOpenReminders: () => remindersOpened = true,
-            onComputers: () {},
           ),
         ),
       );
       await tester.pumpAndSettle();
-
-      // Reminders row triggers callback.
-      await tester.tap(find.byKey(SettingsHubScreen.remindersTileKey));
-      expect(remindersOpened, isTrue);
-
-      // Navigate into ProjectManageScreen.
-      await tester.tap(find.byKey(SettingsHubScreen.projectsTileKey));
-      await tester.pumpAndSettle();
       expect(find.text('Pigcode'), findsOneWidget);
+      expect(find.text('TestMac'), findsOneWidget);
       expect(
         find.textContaining('~/Documents/workspace/pigcode'),
         findsOneWidget,

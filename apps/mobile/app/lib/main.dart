@@ -99,6 +99,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
   late bool _foreground;
   ComputerOfflineCache? _cache;
   bool _workspaceOpen = false;
+  String? _initialMenuOpenComputerKey;
   String? _selected;
   String? _verification;
   String? _feedback;
@@ -633,6 +634,7 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
     ShareNavigationRequest? shareTarget,
     OpenThreadRequest? openThreadRequest,
     bool openWorkspace = true,
+    bool keepMenuOpen = false,
   }) {
     final identity = ref.read(computersProvider.notifier).identity;
     final createReconnect = ref.read(computerReconnectFactoryProvider);
@@ -675,8 +677,16 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
       _computerId = null;
       _visibleThreadId = null;
       _workspaceOpen = openWorkspace;
+      _initialMenuOpenComputerKey = keepMenuOpen ? computer.computerKey : null;
       _feedback = null;
     });
+    if (keepMenuOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _initialMenuOpenComputerKey == computer.computerKey) {
+          _initialMenuOpenComputerKey = null;
+        }
+      });
+    }
     _syncActiveCoordinatorState();
     _syncVisibleThread();
     _notifyShareSheet();
@@ -1039,7 +1049,19 @@ class _ComputersPageState extends ConsumerState<ComputersPage>
           openThreadRequest: _openThreadRequest,
           liveShare: _liveShare,
           presented: _workspaceOpen,
+          initialMenuOpen: _initialMenuOpenComputerKey == _selected,
           otherComputersUrgentCount: _coordinator.otherComputersUrgentCount,
+          computers: _coordinator.entries,
+          selectedComputerKey: _selected,
+          onSelectComputer: (target) {
+            if (_selected != target.computerKey) {
+              _select(target, keepMenuOpen: true);
+            }
+          },
+          onScanPair: () {
+            _showWorkspace(false);
+            unawaited(_scan());
+          },
           onVisibleThread: (id) {
             _visibleThreadId = id;
             _syncVisibleThread();

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
@@ -8,9 +9,11 @@ import 'package:pigcode_client/pigcode_client.dart';
 import '../app_theme.dart';
 import '../composer/composer_catalog.dart';
 import '../mobile_glass.dart';
+import '../mobile_sheet.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 
 enum _ScheduleFrequency { hourly, daily, weekdays, weekly, monthly, custom }
@@ -65,6 +68,7 @@ class ScheduleEditorScreen extends StatefulWidget {
   const ScheduleEditorScreen({
     super.key,
     required this.connectionListenable,
+    this.computerName,
     this.schedule,
     this.projects = const [],
     this.initialTitle,
@@ -111,6 +115,7 @@ class ScheduleEditorScreen extends StatefulWidget {
       ValueKey('schedule-custom-month-day-$day');
 
   final ValueListenable<MobileConnection?> connectionListenable;
+  final String? computerName;
   final MobileSchedule? schedule;
   final List<MobileProjectSummary> projects;
   final String? initialTitle;
@@ -122,6 +127,7 @@ class ScheduleEditorScreen extends StatefulWidget {
   static Future<bool?> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
+    String? computerName,
     MobileSchedule? schedule,
     List<MobileProjectSummary> projects = const [],
     String? initialTitle,
@@ -131,6 +137,7 @@ class ScheduleEditorScreen extends StatefulWidget {
     MaterialPageRoute<bool>(
       builder: (_) => ScheduleEditorScreen(
         connectionListenable: connectionListenable,
+        computerName: computerName,
         schedule: schedule,
         projects: projects,
         initialTitle: initialTitle,
@@ -627,7 +634,46 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _time);
+    var draft = DateTime(2026, 1, 1, _time.hour, _time.minute);
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final picked = await showMobileSheet<TimeOfDay>(
+      context,
+      title: '选择触发时间',
+      content: (sheet) => SliverToBoxAdapter(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 196,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.time,
+                use24hFormat: true,
+                initialDateTime: draft,
+                onDateTimeChanged: (next) => draft = next,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: colors.onPrimary,
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => Navigator.of(
+                sheet,
+              ).pop(TimeOfDay(hour: draft.hour, minute: draft.minute)),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
     if (!mounted || picked == null) return;
     setState(() => _time = picked);
   }
@@ -639,11 +685,44 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     final initial = _endDate.isBefore(first)
         ? first
         : (_endDate.isAfter(last) ? last : _endDate);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: first,
-      lastDate: last,
+    var draft = initial;
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final picked = await showMobileSheet<DateTime>(
+      context,
+      title: '选择结束日期',
+      content: (sheet) => SliverToBoxAdapter(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: 204,
+              child: CupertinoDatePicker(
+                mode: CupertinoDatePickerMode.date,
+                initialDateTime: initial,
+                minimumDate: first,
+                maximumDate: last,
+                onDateTimeChanged: (next) => draft = next,
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: colors.onPrimary,
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onPressed: () => Navigator.of(sheet).pop(draft),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
     );
     if (!mounted || picked == null) return;
     setState(() => _endDate = picked);
@@ -845,7 +924,10 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text(widget.isCreate ? '新建任务' : '编辑任务'),
+        title: ManageAppBarTitle(
+          title: widget.isCreate ? '新建任务' : '编辑任务',
+          computerName: widget.computerName,
+        ),
         centerTitle: true,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
@@ -868,77 +950,78 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
             ),
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: 12),
-            child: FilledButton(
-              key: ScheduleEditorScreen.saveButtonKey,
-              onPressed: _connection == null || busy ? null : _save,
-              child: Text(
-                _saving
-                    ? (widget.isCreate ? '创建中…' : '保存中…')
-                    : (widget.isCreate ? '创建' : '保存'),
-              ),
-            ),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, thickness: 1, color: colors.divider),
         ),
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            if (_connection == null) const ManageOfflineBanner(),
-            if (_validationError != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                color: colors.error.withValues(alpha: 0.12),
-                child: Text(
-                  _validationError!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.error,
-                  ),
-                ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                children: [
-                  _buildBasicSection(context),
-                  const SizedBox(height: 22),
-                  _buildRuleSection(context),
-                  const SizedBox(height: 22),
-                  _buildExecutionSection(context),
-                  if (!widget.isCreate) ...[
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: ScheduleEditorScreen.deleteButtonKey,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colors.error,
-                          side: BorderSide(
-                            color: colors.error.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        onPressed: _connection == null || busy
-                            ? null
-                            : () => unawaited(_deleteSchedule()),
-                        child: Text(_deleting ? '正在删除…' : '删除任务'),
-                      ),
-                    ),
-                  ],
-                ],
+      body: Column(
+        children: [
+          if (_connection == null) const ManageOfflineBanner(),
+          if (_validationError != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: colors.errorTint,
+              child: Text(
+                _validationError!,
+                style: TimelineType.smallStyle(colors.error),
               ),
             ),
-          ],
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: [
+                _buildBasicSection(context),
+                const SizedBox(height: 22),
+                _buildRuleSection(context),
+                const SizedBox(height: 22),
+                _buildExecutionSection(context),
+                if (!widget.isCreate) ...[
+                  const SizedBox(height: 24),
+                  ManageDestructiveRow(
+                    buttonKey: ScheduleEditorScreen.deleteButtonKey,
+                    label: _deleting ? '正在删除…' : '删除任务',
+                    busy: _deleting,
+                    onPressed: _connection == null || busy
+                        ? null
+                        : () => unawaited(_deleteSchedule()),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: colors.background,
+            border: Border(top: BorderSide(color: colors.divider)),
+          ),
+          child: FilledButton(
+            key: ScheduleEditorScreen.saveButtonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: TimelineType.contentStyle(
+                colors.onPrimary,
+                weight: FontWeight.w600,
+              ),
+            ),
+            onPressed: _connection == null || busy ? null : _save,
+            child: Text(
+              _saving
+                  ? (widget.isCreate ? '创建中…' : '保存中…')
+                  : (widget.isCreate ? '创建任务' : '保存修改'),
+            ),
+          ),
         ),
       ),
     );
@@ -952,43 +1035,35 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _ScheduleSectionHeader(title: '基本设置'),
+        const ManageSectionHeader(title: '要做什么'),
         const SizedBox(height: 8),
-        _ScheduleFormCard(
+        ManageSurfaceCard(
           children: [
+            _buildProjectRow(context),
+            Divider(height: 1, color: colors.divider),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 14,
                 children: [
-                  _buildProjectField(context),
-                  TextField(
-                    key: ScheduleEditorScreen.titleInputKey,
+                  ManageFilledTextField(
+                    fieldKey: ScheduleEditorScreen.titleInputKey,
                     controller: _titleController,
-                    maxLength: 120,
-                    decoration: const InputDecoration(
-                      labelText: '名字（可选）',
-                      hintText: '留空显示为「没有名字的任务」',
-                      counterText: '',
-                    ),
+                    label: '任务名字（可选）',
+                    hintText: '留空显示为「没有名字的任务」',
                   ),
-                  TextField(
-                    key: ScheduleEditorScreen.promptInputKey,
+                  const SizedBox(height: 14),
+                  ManageFilledTextField(
+                    fieldKey: ScheduleEditorScreen.promptInputKey,
                     controller: _promptController,
+                    label: '执行指令',
+                    hintText: '比如：总结今天的改动，列成 6 条以内',
                     minLines: 4,
                     maxLines: 8,
-                    decoration: const InputDecoration(
-                      labelText: '要做什么',
-                      hintText: '比如：总结今天的改动，列成 6 条以内',
-                      alignLabelWithHint: true,
-                    ),
+                    helperText: widget.isCreate
+                        ? null
+                        : '未改指令正文直接保存时，不会覆盖电脑端的富文本引用。',
                   ),
-                  if (!widget.isCreate)
-                    Text(
-                      '如无需修改指令正文，保持原样保存不会覆盖电脑端的富文本引用。',
-                      style: TimelineType.microStyle(colors.muted),
-                    ),
                 ],
               ),
             ),
@@ -998,7 +1073,7 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     );
   }
 
-  Widget _buildProjectField(BuildContext context) {
+  Widget _buildProjectRow(BuildContext context) {
     final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
@@ -1010,69 +1085,37 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
           ? (existing.threadTitle ?? existing.projectName ?? '会话已删除')
           : (existing.projectName ??
                 (existing.target as MobileScheduleProjectTarget).projectId);
-      return Container(
+      return ManagePickerRow(
         key: ScheduleEditorScreen.projectFieldKey,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
+        leading: IconTheme(
+          data: IconThemeData(color: colors.secondaryText),
+          child: WorkspaceIcon(
+            isThread ? WorkspaceGlyph.messagesSquare : WorkspaceGlyph.folder,
+            size: 18,
+          ),
         ),
-        child: Row(
-          children: [
-            IconTheme(
-              data: IconThemeData(color: colors.secondaryText),
-              child: WorkspaceIcon(
-                isThread
-                    ? WorkspaceGlyph.messagesSquare
-                    : WorkspaceGlyph.folder,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isThread ? '绑定会话（旧版任务）' : '所属项目',
-                    style: TimelineType.microStyle(colors.muted),
-                  ),
-                  Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TimelineType.contentStyle(
-                      colors.foreground,
-                      weight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        title: isThread ? '绑定会话' : '所属项目',
+        value: label,
+        showChevron: false,
+        enabled: false,
       );
     }
 
     if (_loadingProjects && _projects.isEmpty) {
-      return InputDecorator(
-        decoration: const InputDecoration(labelText: '所属项目'),
-        child: Text('正在加载项目列表…', style: TimelineType.metaStyle(colors.muted)),
+      return ManagePickerRow(
+        key: ScheduleEditorScreen.projectFieldKey,
+        title: '所属项目',
+        value: '加载中…',
+        placeholder: true,
+        showChevron: false,
+        enabled: false,
       );
     }
 
     if (_projects.isEmpty) {
-      return Container(
+      return Padding(
         key: ScheduleEditorScreen.projectFieldKey,
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         child: Text(
           '暂无可用项目，请先在「项目管理」中添加项目。',
           style: TimelineType.metaStyle(colors.muted),
@@ -1080,31 +1123,39 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
       );
     }
 
-    final currentValue = _projects.any((p) => p.id == _selectedProjectId)
-        ? _selectedProjectId
-        : _projects.first.id;
-    return InputDecorator(
-      decoration: const InputDecoration(labelText: '所属项目'),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          key: ScheduleEditorScreen.projectFieldKey,
-          value: currentValue,
-          isExpanded: true,
-          isDense: true,
-          items: [
+    final currentProject =
+        _projects.where((p) => p.id == _selectedProjectId).firstOrNull ??
+        _projects.first;
+
+    return ManagePickerRow(
+      key: ScheduleEditorScreen.projectFieldKey,
+      leading: IconTheme(
+        data: IconThemeData(color: colors.secondaryText),
+        child: const WorkspaceIcon(WorkspaceGlyph.folder, size: 18),
+      ),
+      title: '所属项目',
+      value: currentProject.name,
+      onTap: () async {
+        final next = await ManageSelectSheet.show<String>(
+          context,
+          title: '选择所属项目',
+          selected: currentProject.id,
+          options: [
             for (final project in _projects)
-              DropdownMenuItem<String>(
+              ManageSelectOption(
                 value: project.id,
-                child: Text(
-                  project.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                label: project.name,
+                leading: IconTheme(
+                  data: IconThemeData(color: colors.secondaryText),
+                  child: const WorkspaceIcon(WorkspaceGlyph.folder, size: 18),
                 ),
               ),
           ],
-          onChanged: (next) => setState(() => _selectedProjectId = next),
-        ),
-      ),
+        );
+        if (next != null && mounted) {
+          setState(() => _selectedProjectId = next);
+        }
+      },
     );
   }
 
@@ -1117,367 +1168,397 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _ScheduleSectionHeader(title: '什么时候'),
+        const ManageSectionHeader(title: '什么时候跑'),
         const SizedBox(height: 8),
-        _ScheduleFormCard(
+        ManageSurfaceCard(
           children: [
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 14,
-                children: [
-                  Text('触发频率', style: TimelineType.metaStyle(colors.muted)),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final item in const [
-                        (_ScheduleFrequency.hourly, 'hourly', '每小时'),
-                        (_ScheduleFrequency.daily, 'daily', '每天'),
-                        (_ScheduleFrequency.weekdays, 'weekdays', '工作日'),
-                        (_ScheduleFrequency.weekly, 'weekly', '每周'),
-                        (_ScheduleFrequency.monthly, 'monthly', '每月'),
-                        (_ScheduleFrequency.custom, 'custom', '自定义间隔'),
-                      ])
-                        ChoiceChip(
-                          key: ScheduleEditorScreen.frequencyKey(item.$2),
-                          label: Text(item.$3),
-                          selected: _frequency == item.$1,
-                          onSelected: (_) =>
-                              setState(() => _frequency = item.$1),
-                        ),
-                    ],
-                  ),
-                  if (_frequency == _ScheduleFrequency.hourly)
-                    _buildMinutePicker(context)
-                  else if (_frequency == _ScheduleFrequency.daily ||
-                      _frequency == _ScheduleFrequency.weekdays)
-                    _buildTimePickerRow(context)
-                  else if (_frequency == _ScheduleFrequency.weekly) ...[
-                    _buildWeekdaySelector(context),
-                    _buildTimePickerRow(context),
-                  ] else if (_frequency == _ScheduleFrequency.monthly) ...[
-                    _buildMonthDayPicker(context),
-                    _buildTimePickerRow(context),
-                  ] else
-                    _buildCustomRuleControls(context),
-                  Container(
-                    key: ScheduleEditorScreen.rulePreviewKey,
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: built.rule != null
-                          ? colors.field
-                          : colors.error.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: built.rule != null
-                            ? colors.border
-                            : colors.error.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Row(
-                      spacing: 8,
-                      children: [
-                        Icon(
-                          built.rule != null
-                              ? Icons.schedule
-                              : Icons.error_outline,
-                          size: 16,
-                          color: built.rule != null
-                              ? colors.secondaryText
-                              : colors.error,
-                        ),
-                        Expanded(
-                          child: Text(
-                            built.rule != null
-                                ? (_hasEndDate
-                                      ? '${describeScheduleRule(built.rule!)} · 到 ${_formatDateYmd(_endDate)}'
-                                      : describeScheduleRule(built.rule!))
-                                : (built.error ?? '规则无效'),
-                            style: TimelineType.metaStyle(
-                              built.rule != null
-                                  ? colors.foreground
-                                  : colors.error,
-                              weight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: ManageSegmentedGrid<_ScheduleFrequency>(
+                selected: _frequency,
+                columns: 3,
+                itemKeyBuilder: (v) =>
+                    ScheduleEditorScreen.frequencyKey(v.name),
+                options: const [
+                  (value: _ScheduleFrequency.hourly, label: '每小时'),
+                  (value: _ScheduleFrequency.daily, label: '每天'),
+                  (value: _ScheduleFrequency.weekdays, label: '工作日'),
+                  (value: _ScheduleFrequency.weekly, label: '每周'),
+                  (value: _ScheduleFrequency.monthly, label: '每月'),
+                  (value: _ScheduleFrequency.custom, label: '自定义'),
                 ],
+                onSelected: (next) => setState(() => _frequency = next),
               ),
             ),
             Divider(height: 1, color: colors.divider),
-            SwitchListTile.adaptive(
-              key: ScheduleEditorScreen.endsToggleKey,
-              title: const Text('设置结束日期'),
-              subtitle: Text(
-                _hasEndDate ? '到期后任务自动结束' : '永不结束',
-                style: TimelineType.metaStyle(colors.muted),
-              ),
+            ..._buildFrequencyParameterRows(context),
+            Divider(height: 1, color: colors.divider),
+            ManageSwitchRow(
+              switchKey: ScheduleEditorScreen.endsToggleKey,
+              title: '设置结束日期',
+              subtitle: _hasEndDate ? '到期后任务自动停止' : '长期有效',
               value: _hasEndDate,
               onChanged: (next) => setState(() => _hasEndDate = next),
             ),
             if (_hasEndDate) ...[
               Divider(height: 1, color: colors.divider),
-              ListTile(
+              ManagePickerRow(
                 key: ScheduleEditorScreen.endsDateKey,
-                leading: Icon(
-                  Icons.event_outlined,
-                  size: 20,
-                  color: colors.secondaryText,
-                ),
-                title: const Text('结束日期'),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  spacing: 4,
-                  children: [
-                    Text(
-                      _formatDateYmd(_endDate),
-                      style: TimelineType.metaMonoStyle(colors.foreground),
-                    ),
-                    Icon(Icons.chevron_right, size: 18, color: colors.faint),
-                  ],
-                ),
+                title: '结束日期',
+                value: _formatDateYmd(_endDate),
                 onTap: () => unawaited(_pickEndDate()),
               ),
             ],
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCustomRuleControls(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 12,
-      children: [
-        Row(
-          spacing: 10,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Text('每', style: TimelineType.contentStyle(colors.foreground)),
-            SizedBox(
-              width: 84,
-              child: TextField(
-                key: ScheduleEditorScreen.customEveryKey,
-                controller: _everyController,
-                keyboardType: TextInputType.number,
-                textAlign: TextAlign.center,
-                decoration: const InputDecoration(isDense: true, hintText: '1'),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-            Expanded(
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
+            Divider(height: 1, color: colors.divider),
+            Container(
+              key: ScheduleEditorScreen.rulePreviewKey,
+              color: built.rule != null
+                  ? colors.surfaceSunken
+                  : colors.errorTint,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                spacing: 8,
                 children: [
-                  for (final item in const [
-                    (_CustomUnit.minute, 'minute', '分钟'),
-                    (_CustomUnit.hour, 'hour', '小时'),
-                    (_CustomUnit.day, 'day', '天'),
-                    (_CustomUnit.week, 'week', '周'),
-                    (_CustomUnit.month, 'month', '个月'),
-                    (_CustomUnit.year, 'year', '年'),
-                  ])
-                    ChoiceChip(
-                      key: ScheduleEditorScreen.customUnitKey(item.$2),
-                      label: Text(item.$3),
-                      selected: _customUnit == item.$1,
-                      onSelected: (_) => setState(() => _customUnit = item.$1),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        if (_customUnit == _CustomUnit.hour) _buildMinutePicker(context),
-        if (_customUnit == _CustomUnit.week) _buildWeekdaySelector(context),
-        if (_customUnit == _CustomUnit.month)
-          _buildCustomMonthControls(context),
-        if (_customUnit == _CustomUnit.year) _buildCustomYearControls(context),
-        if (_customUnit != _CustomUnit.minute &&
-            _customUnit != _CustomUnit.hour)
-          _buildTimePickerRow(context),
-      ],
-    );
-  }
-
-  Widget _buildCustomMonthControls(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 10,
-      children: [
-        Wrap(
-          spacing: 8,
-          children: [
-            ChoiceChip(
-              key: ScheduleEditorScreen.customMonthModeDateKey,
-              label: const Text('按日期'),
-              selected: _customMonthMode == _CustomMonthMode.date,
-              onSelected: (_) =>
-                  setState(() => _customMonthMode = _CustomMonthMode.date),
-            ),
-            ChoiceChip(
-              key: ScheduleEditorScreen.customMonthModeWeekdayKey,
-              label: const Text('按首个星期'),
-              selected: _customMonthMode == _CustomMonthMode.weekday,
-              onSelected: (_) =>
-                  setState(() => _customMonthMode = _CustomMonthMode.weekday),
-            ),
-          ],
-        ),
-        if (_customMonthMode == _CustomMonthMode.date)
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (var day = 1; day <= 31; day++)
-                FilterChip(
-                  key: ScheduleEditorScreen.customMonthDayKey(day),
-                  label: Text('$day'),
-                  showCheckmark: false,
-                  visualDensity: VisualDensity.compact,
-                  selected: _customMonthDays.contains(day),
-                  onSelected: (selected) => setState(() {
-                    if (selected) {
-                      _customMonthDays.add(day);
-                    } else {
-                      _customMonthDays.remove(day);
-                    }
-                  }),
-                ),
-            ],
-          )
-        else
-          InputDecorator(
-            decoration: const InputDecoration(labelText: '每月首个星期几'),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<int>(
-                key: ScheduleEditorScreen.customMonthWeekdayKey,
-                value: _customMonthWeekday,
-                isExpanded: true,
-                isDense: true,
-                items: [
-                  for (final day in _weekOrder)
-                    DropdownMenuItem<int>(
-                      value: day,
-                      child: Text(
-                        _weekdayLabels[day] ?? '$day',
-                        style: TimelineType.contentStyle(colors.foreground),
+                  Icon(
+                    built.rule != null
+                        ? Icons.event_repeat_outlined
+                        : Icons.error_outline,
+                    size: 15,
+                    color: built.rule != null ? colors.muted : colors.error,
+                  ),
+                  Expanded(
+                    child: Text(
+                      built.rule != null
+                          ? (_hasEndDate
+                                ? '${describeScheduleRule(built.rule!)} · 到 ${_formatDateYmd(_endDate)}'
+                                : describeScheduleRule(built.rule!))
+                          : (built.error ?? '规则无效'),
+                      style: TimelineType.smallStyle(
+                        built.rule != null
+                            ? colors.secondaryText
+                            : colors.error,
+                        weight: FontWeight.w500,
                       ),
                     ),
+                  ),
                 ],
-                onChanged: (next) {
-                  if (next != null) {
-                    setState(() => _customMonthWeekday = next);
-                  }
-                },
               ),
             ),
-          ),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildCustomYearControls(BuildContext context) => Row(
-    spacing: 12,
-    children: [
-      Expanded(
-        child: InputDecorator(
-          decoration: const InputDecoration(labelText: '月份'),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              key: ScheduleEditorScreen.customYearMonthKey,
-              value: _yearMonth,
-              isExpanded: true,
-              isDense: true,
-              items: [
-                for (var m = 1; m <= 12; m++)
-                  DropdownMenuItem<int>(value: m, child: Text('$m 月')),
-              ],
-              onChanged: (next) {
-                if (next != null) setState(() => _yearMonth = next);
-              },
-            ),
-          ),
-        ),
-      ),
-      Expanded(
-        child: InputDecorator(
-          decoration: const InputDecoration(labelText: '日期'),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              key: ScheduleEditorScreen.customYearDayKey,
-              value: _yearDay,
-              isExpanded: true,
-              isDense: true,
-              items: [
-                for (var d = 1; d <= 31; d++)
-                  DropdownMenuItem<int>(value: d, child: Text('$d 号')),
-              ],
-              onChanged: (next) {
-                if (next != null) setState(() => _yearDay = next);
-              },
-            ),
-          ),
-        ),
-      ),
-    ],
-  );
+  List<Widget> _buildFrequencyParameterRows(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
 
-  Widget _buildMinutePicker(BuildContext context) => InputDecorator(
-    decoration: const InputDecoration(labelText: '每小时的第几分钟'),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<int>(
-        key: ScheduleEditorScreen.ruleMinuteKey,
-        value: _minute,
-        isExpanded: true,
-        isDense: true,
-        items: [
+    return switch (_frequency) {
+      _ScheduleFrequency.hourly => [_buildMinutePickerRow(context)],
+      _ScheduleFrequency.daily ||
+      _ScheduleFrequency.weekdays => [_buildTimePickerRow(context)],
+      _ScheduleFrequency.weekly => [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: _buildWeekdaySelector(context),
+        ),
+        Divider(height: 1, color: colors.divider),
+        _buildTimePickerRow(context),
+      ],
+      _ScheduleFrequency.monthly => [
+        _buildMonthDayPickerRow(context),
+        Divider(height: 1, color: colors.divider),
+        _buildTimePickerRow(context),
+      ],
+      _ScheduleFrequency.custom => _buildCustomRuleRows(context),
+    };
+  }
+
+  List<Widget> _buildCustomRuleRows(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+
+    const unitEntries = <(_CustomUnit, String, String)>[
+      (_CustomUnit.minute, 'minute', '分钟'),
+      (_CustomUnit.hour, 'hour', '小时'),
+      (_CustomUnit.day, 'day', '天'),
+      (_CustomUnit.week, 'week', '周'),
+      (_CustomUnit.month, 'month', '个月'),
+      (_CustomUnit.year, 'year', '年'),
+    ];
+    final unitNameMap = <String, _CustomUnit>{
+      for (final e in unitEntries) e.$2: e.$1,
+    };
+
+    return [
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              spacing: 10,
+              children: [
+                Text(
+                  '间隔周期',
+                  style: TimelineType.contentStyle(
+                    colors.foreground,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                Text('每', style: TimelineType.metaStyle(colors.muted)),
+                SizedBox(
+                  width: 72,
+                  child: ManageFilledTextField(
+                    fieldKey: ScheduleEditorScreen.customEveryKey,
+                    controller: _everyController,
+                    hintText: '1',
+                    keyboardType: TextInputType.number,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ManageSegmentedGrid<String>(
+              selected: _customUnit.name,
+              columns: 3,
+              itemKeyBuilder: (u) => ScheduleEditorScreen.customUnitKey(u),
+              options: [
+                for (final e in unitEntries) (value: e.$2, label: e.$3),
+              ],
+              onSelected: (unitStr) {
+                final u = unitNameMap[unitStr];
+                if (u != null) setState(() => _customUnit = u);
+              },
+            ),
+          ],
+        ),
+      ),
+      if (_customUnit == _CustomUnit.hour) ...[
+        Divider(height: 1, color: colors.divider),
+        _buildMinutePickerRow(context),
+      ],
+      if (_customUnit == _CustomUnit.week) ...[
+        Divider(height: 1, color: colors.divider),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: _buildWeekdaySelector(context),
+        ),
+      ],
+      if (_customUnit == _CustomUnit.month) ...[
+        Divider(height: 1, color: colors.divider),
+        ..._buildCustomMonthRows(context),
+      ],
+      if (_customUnit == _CustomUnit.year) ...[
+        Divider(height: 1, color: colors.divider),
+        ..._buildCustomYearRows(context),
+      ],
+      if (_customUnit != _CustomUnit.minute &&
+          _customUnit != _CustomUnit.hour) ...[
+        Divider(height: 1, color: colors.divider),
+        _buildTimePickerRow(context),
+      ],
+    ];
+  }
+
+  List<Widget> _buildCustomMonthRows(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+
+    return [
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ManageSegmentedGrid<_CustomMonthMode>(
+              selected: _customMonthMode,
+              columns: 2,
+              itemKeyBuilder: (m) => m == _CustomMonthMode.date
+                  ? ScheduleEditorScreen.customMonthModeDateKey
+                  : ScheduleEditorScreen.customMonthModeWeekdayKey,
+              options: const [
+                (value: _CustomMonthMode.date, label: '按日期'),
+                (value: _CustomMonthMode.weekday, label: '按首个星期'),
+              ],
+              onSelected: (next) => setState(() => _customMonthMode = next),
+            ),
+            if (_customMonthMode == _CustomMonthMode.date) ...[
+              const SizedBox(height: 12),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 6,
+                  crossAxisSpacing: 6,
+                  childAspectRatio: 1.15,
+                ),
+                itemCount: 31,
+                itemBuilder: (_, index) {
+                  final day = index + 1;
+                  final selected = _customMonthDays.contains(day);
+                  return Material(
+                    key: ScheduleEditorScreen.customMonthDayKey(day),
+                    color: selected ? colors.primary : colors.field,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: selected ? colors.primary : colors.border,
+                      ),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => setState(() {
+                        if (selected) {
+                          _customMonthDays.remove(day);
+                        } else {
+                          _customMonthDays.add(day);
+                        }
+                      }),
+                      child: Center(
+                        child: Text(
+                          '$day',
+                          style: TimelineType.smallStyle(
+                            selected ? colors.onPrimary : colors.foreground,
+                            weight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (_customMonthMode == _CustomMonthMode.weekday) ...[
+        Divider(height: 1, color: colors.divider),
+        ManagePickerRow(
+          key: ScheduleEditorScreen.customMonthWeekdayKey,
+          title: '每月首个星期几',
+          value: _weekdayLabels[_customMonthWeekday] ?? '$_customMonthWeekday',
+          onTap: () async {
+            final next = await ManageSelectSheet.show<int>(
+              context,
+              title: '选择每月首个星期几',
+              selected: _customMonthWeekday,
+              options: [
+                for (final day in _weekOrder)
+                  ManageSelectOption(
+                    value: day,
+                    label: _weekdayLabels[day] ?? '$day',
+                  ),
+              ],
+            );
+            if (next != null && mounted) {
+              setState(() => _customMonthWeekday = next);
+            }
+          },
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _buildCustomYearRows(BuildContext context) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+
+    return [
+      ManagePickerRow(
+        key: ScheduleEditorScreen.customYearMonthKey,
+        title: '每年月份',
+        value: '$_yearMonth 月',
+        onTap: () async {
+          final next = await ManageSelectSheet.show<int>(
+            context,
+            title: '选择月份',
+            selected: _yearMonth,
+            options: [
+              for (var m = 1; m <= 12; m++)
+                ManageSelectOption(value: m, label: '$m 月'),
+            ],
+          );
+          if (next != null && mounted) {
+            setState(() => _yearMonth = next);
+          }
+        },
+      ),
+      Divider(height: 1, color: colors.divider),
+      ManagePickerRow(
+        key: ScheduleEditorScreen.customYearDayKey,
+        title: '每年日期',
+        value: '$_yearDay 号',
+        onTap: () async {
+          final next = await ManageSelectSheet.show<int>(
+            context,
+            title: '选择日期',
+            selected: _yearDay,
+            options: [
+              for (var d = 1; d <= 31; d++)
+                ManageSelectOption(value: d, label: '$d 号'),
+            ],
+          );
+          if (next != null && mounted) {
+            setState(() => _yearDay = next);
+          }
+        },
+      ),
+    ];
+  }
+
+  Widget _buildMinutePickerRow(BuildContext context) => ManagePickerRow(
+    key: ScheduleEditorScreen.ruleMinuteKey,
+    title: '每小时第几分',
+    value: '第 ${_pad2(_minute)} 分',
+    onTap: () async {
+      final next = await ManageSelectSheet.show<int>(
+        context,
+        title: '选择分钟',
+        selected: _minute,
+        options: [
           for (var m = 0; m < 60; m++)
-            DropdownMenuItem<int>(value: m, child: Text('第 ${_pad2(m)} 分')),
+            ManageSelectOption(value: m, label: '第 ${_pad2(m)} 分'),
         ],
-        onChanged: (next) {
-          if (next != null) setState(() => _minute = next);
-        },
-      ),
-    ),
+      );
+      if (next != null && mounted) {
+        setState(() => _minute = next);
+      }
+    },
   );
 
-  Widget _buildMonthDayPicker(BuildContext context) => InputDecorator(
-    decoration: const InputDecoration(labelText: '每月几号'),
-    child: DropdownButtonHideUnderline(
-      child: DropdownButton<int>(
-        key: ScheduleEditorScreen.monthDayKey,
-        value: _monthDay,
-        isExpanded: true,
-        isDense: true,
-        items: [
+  Widget _buildMonthDayPickerRow(BuildContext context) => ManagePickerRow(
+    key: ScheduleEditorScreen.monthDayKey,
+    title: '每月几号',
+    value: '$_monthDay 号',
+    onTap: () async {
+      final next = await ManageSelectSheet.show<int>(
+        context,
+        title: '选择每月几号',
+        selected: _monthDay,
+        options: [
           for (var d = 1; d <= 31; d++)
-            DropdownMenuItem<int>(value: d, child: Text('$d 号')),
+            ManageSelectOption(value: d, label: '$d 号'),
         ],
-        onChanged: (next) {
-          if (next != null) setState(() => _monthDay = next);
-        },
-      ),
-    ),
+      );
+      if (next != null && mounted) {
+        setState(() => _monthDay = next);
+      }
+    },
   );
 
   Widget _buildWeekdaySelector(BuildContext context) {
@@ -1485,68 +1566,80 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
         ? pigcodeDark
         : pigcodeLight;
 
+    const shortLabels = <int, String>{
+      0: '日',
+      1: '一',
+      2: '二',
+      3: '三',
+      4: '四',
+      5: '五',
+      6: '六',
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: 8,
       children: [
-        Text('星期几', style: TimelineType.metaStyle(colors.muted)),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
+        Text('重复星期', style: TimelineType.metaStyle(colors.muted)),
+        const SizedBox(height: 10),
+        Row(
           children: [
-            for (final day in _weekOrder)
-              FilterChip(
-                key: ScheduleEditorScreen.weekdayKey(day),
-                label: Text(_weekdayLabels[day] ?? '$day'),
-                showCheckmark: false,
-                selected: _weekDays.contains(day),
-                onSelected: (selected) => setState(() {
-                  if (selected) {
-                    _weekDays.add(day);
-                  } else {
-                    _weekDays.remove(day);
-                  }
-                }),
+            for (var i = 0; i < _weekOrder.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              Expanded(
+                child: Builder(
+                  builder: (_) {
+                    final day = _weekOrder[i];
+                    final selected = _weekDays.contains(day);
+                    return Material(
+                      key: ScheduleEditorScreen.weekdayKey(day),
+                      color: selected ? colors.primary : colors.field,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                          color: selected ? colors.primary : colors.border,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => setState(() {
+                          if (selected) {
+                            _weekDays.remove(day);
+                          } else {
+                            _weekDays.add(day);
+                          }
+                        }),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 38),
+                          child: Center(
+                            child: Text(
+                              shortLabels[day] ?? '$day',
+                              style: TimelineType.metaStyle(
+                                selected ? colors.onPrimary : colors.foreground,
+                                weight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
+            ],
           ],
         ),
       ],
     );
   }
 
-  Widget _buildTimePickerRow(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-
-    return InkWell(
-      key: ScheduleEditorScreen.ruleTimeKey,
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => unawaited(_pickTime()),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.access_time, size: 18, color: colors.secondaryText),
-            const SizedBox(width: 10),
-            Text('触发时间', style: TimelineType.contentStyle(colors.foreground)),
-            const Spacer(),
-            Text(
-              _formatTimeOfDay(_time),
-              style: TimelineType.metaMonoStyle(colors.foreground),
-            ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right, size: 18, color: colors.faint),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildTimePickerRow(BuildContext context) => ManagePickerRow(
+    key: ScheduleEditorScreen.ruleTimeKey,
+    title: '触发时间',
+    value: _formatTimeOfDay(_time),
+    onTap: () => unawaited(_pickTime()),
+  );
 
   Widget _buildExecutionSection(BuildContext context) {
     final colors = Theme.of(context).brightness == Brightness.dark
@@ -1557,24 +1650,22 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _ScheduleSectionHeader(title: '运行设置'),
+          const ManageSectionHeader(title: '交给谁跑'),
           const SizedBox(height: 8),
-          _ScheduleFormCard(
+          ManageSurfaceCard(
+            padding: const EdgeInsets.all(16),
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  spacing: 10,
-                  children: [
-                    Icon(Icons.info_outline, size: 18, color: colors.muted),
-                    Expanded(
-                      child: Text(
-                        '旧版会话绑定的定时任务沿用原会话配置',
-                        style: TimelineType.metaStyle(colors.muted),
-                      ),
+              Row(
+                spacing: 10,
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: colors.muted),
+                  Expanded(
+                    child: Text(
+                      '旧版会话绑定的定时任务沿用原会话配置',
+                      style: TimelineType.metaStyle(colors.muted),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1583,11 +1674,24 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     }
 
     final agentChoices = _availableAgentInstances();
+    final currentAgentLabel = _instanceId == null
+        ? '默认 Agent'
+        : agentChoices
+                  .where((a) => a.instanceId == _instanceId)
+                  .firstOrNull
+                  ?.label ??
+              _instanceId!;
+
     final modelChoices = <({String id, String name})>[
       for (final item in _models) (id: item.id, name: item.name),
       if (_modelId != null && !_models.any((m) => m.id == _modelId))
         (id: _modelId!, name: _modelId!),
     ];
+    final currentModelLabel = _modelId == null
+        ? '默认模型'
+        : modelChoices.where((m) => m.id == _modelId).firstOrNull?.name ??
+              _modelId!;
+
     final permissionWires = <String>[
       for (final p in _permissionChoices) p.wire,
       if (!_permissionChoices.any((p) => p.wire == _permissionMode))
@@ -1597,122 +1701,106 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _ScheduleSectionHeader(title: '运行设置'),
+        const ManageSectionHeader(title: '交给谁跑'),
         const SizedBox(height: 8),
-        _ScheduleFormCard(
+        ManageSurfaceCard(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 14,
-                children: [
-                  InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: 'Agent 实例',
-                      helperText: _loadingAgents ? '正在加载电脑上的 Agent 列表…' : null,
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String?>(
-                        key: ScheduleEditorScreen.execAgentKey,
-                        value: _instanceId,
-                        isExpanded: true,
-                        isDense: true,
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('用默认的 Agent'),
-                          ),
-                          for (final item in agentChoices)
-                            DropdownMenuItem<String?>(
-                              value: item.instanceId,
-                              child: Text(
-                                item.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                        onChanged: (next) {
-                          setState(() {
-                            if (_instanceId != next) {
-                              _instanceId = next;
-                              _modelId = null;
-                              _models = const [];
-                            }
-                          });
-                          if (next != null) {
-                            unawaited(_loadModels(next));
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                  if (_instanceId != null)
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: '模型（可选）',
-                        helperText: _loadingModels ? '正在加载模型列表…' : null,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          key: ScheduleEditorScreen.execModelKey,
-                          value: _modelId,
-                          isExpanded: true,
-                          isDense: true,
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text('使用实例默认模型'),
-                            ),
-                            for (final model in modelChoices)
-                              DropdownMenuItem<String?>(
-                                value: model.id,
-                                child: Text(
-                                  model.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                          onChanged: (next) => setState(() => _modelId = next),
+            ManagePickerRow(
+              key: ScheduleEditorScreen.execAgentKey,
+              title: 'Agent 实例',
+              subtitle: _loadingAgents ? '正在加载电脑列表…' : null,
+              value: currentAgentLabel,
+              onTap: () async {
+                final picked =
+                    await ManageSelectSheet.show<_OptionalValue<String?>>(
+                      context,
+                      title: '选择 Agent 实例',
+                      selected: _OptionalValue<String?>(_instanceId),
+                      options: [
+                        const ManageSelectOption(
+                          value: _OptionalValue<String?>(null),
+                          label: '用默认的 Agent',
                         ),
-                      ),
-                    ),
-                  InputDecorator(
-                    decoration: const InputDecoration(labelText: '权限模式'),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        key: ScheduleEditorScreen.execPermissionKey,
-                        value: _permissionMode,
-                        isExpanded: true,
-                        isDense: true,
-                        items: [
-                          for (final wire in permissionWires)
-                            DropdownMenuItem<String>(
-                              value: wire,
-                              child: Text(_permissionLabel(wire)),
+                        for (final item in agentChoices)
+                          ManageSelectOption(
+                            value: _OptionalValue<String?>(item.instanceId),
+                            label: item.label,
+                          ),
+                      ],
+                    );
+                if (picked == null || !mounted) return;
+                final next = picked.value;
+                setState(() {
+                  if (_instanceId != next) {
+                    _instanceId = next;
+                    _modelId = null;
+                    _models = const [];
+                  }
+                });
+                if (next != null) {
+                  unawaited(_loadModels(next));
+                }
+              },
+            ),
+            if (_instanceId != null) ...[
+              Divider(height: 1, color: colors.divider),
+              ManagePickerRow(
+                key: ScheduleEditorScreen.execModelKey,
+                title: '指定模型',
+                subtitle: _loadingModels ? '正在加载模型列表…' : null,
+                value: currentModelLabel,
+                onTap: () async {
+                  final picked =
+                      await ManageSelectSheet.show<_OptionalValue<String?>>(
+                        context,
+                        title: '选择模型',
+                        selected: _OptionalValue<String?>(_modelId),
+                        options: [
+                          const ManageSelectOption(
+                            value: _OptionalValue<String?>(null),
+                            label: '使用实例默认模型',
+                          ),
+                          for (final model in modelChoices)
+                            ManageSelectOption(
+                              value: _OptionalValue<String?>(model.id),
+                              label: model.name,
                             ),
                         ],
-                        onChanged: (next) {
-                          if (next != null) {
-                            setState(() => _permissionMode = next);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                      );
+                  if (picked != null && mounted) {
+                    setState(() => _modelId = picked.value);
+                  }
+                },
               ),
+            ],
+            Divider(height: 1, color: colors.divider),
+            ManagePickerRow(
+              key: ScheduleEditorScreen.execPermissionKey,
+              title: '权限模式',
+              value: _permissionLabel(_permissionMode),
+              onTap: () async {
+                final next = await ManageSelectSheet.show<String>(
+                  context,
+                  title: '选择权限模式',
+                  selected: _permissionMode,
+                  options: [
+                    for (final wire in permissionWires)
+                      ManageSelectOption(
+                        value: wire,
+                        label: _permissionLabel(wire),
+                      ),
+                  ],
+                );
+                if (next != null && mounted) {
+                  setState(() => _permissionMode = next);
+                }
+              },
             ),
             Divider(height: 1, color: colors.divider),
-            SwitchListTile.adaptive(
-              key: ScheduleEditorScreen.execWorktreeKey,
-              title: const Text('在独立 Worktree 中运行'),
-              subtitle: Text(
-                '每次运行自动创建独立 Git 工作树，不影响当前工作区',
-                style: TimelineType.metaStyle(colors.muted),
-              ),
+            ManageSwitchRow(
+              switchKey: ScheduleEditorScreen.execWorktreeKey,
+              title: '在独立 Worktree 中运行',
+              subtitle: '每次自动新建工作树，不改动当前工作区',
               value: _useWorktree,
               onChanged: (next) => setState(() => _useWorktree = next),
             ),
@@ -1723,48 +1811,15 @@ class _ScheduleEditorScreenState extends State<ScheduleEditorScreen> {
   }
 }
 
-class _ScheduleSectionHeader extends StatelessWidget {
-  const _ScheduleSectionHeader({required this.title});
+class _OptionalValue<T> {
+  const _OptionalValue(this.value);
 
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        title,
-        style: TimelineType.metaStyle(colors.muted, weight: FontWeight.w500),
-      ),
-    );
-  }
-}
-
-class _ScheduleFormCard extends StatelessWidget {
-  const _ScheduleFormCard({required this.children});
-
-  final List<Widget> children;
+  final T value;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
-    );
-  }
+  bool operator ==(Object other) =>
+      other is _OptionalValue<T> && other.value == value;
+
+  @override
+  int get hashCode => value.hashCode;
 }

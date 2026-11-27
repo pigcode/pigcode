@@ -9,6 +9,7 @@ import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 
 const agentAccentPalette = <String>[
@@ -84,6 +85,7 @@ class AgentInstanceEditorScreen extends StatefulWidget {
     required this.connectionListenable,
     required this.agent,
     this.instance,
+    this.computerName,
   });
 
   static const saveButtonKey = ValueKey('agent-editor-save');
@@ -120,6 +122,7 @@ class AgentInstanceEditorScreen extends StatefulWidget {
   final ValueListenable<MobileConnection?> connectionListenable;
   final MobileAgentSummary agent;
   final MobileAgentInstance? instance;
+  final String? computerName;
 
   bool get isCreate => instance == null;
   bool get isDefaultInstance => instance?.isDefault == true;
@@ -129,12 +132,14 @@ class AgentInstanceEditorScreen extends StatefulWidget {
     required ValueListenable<MobileConnection?> connectionListenable,
     required MobileAgentSummary agent,
     MobileAgentInstance? instance,
+    String? computerName,
   }) => Navigator.of(context).push<bool>(
     MaterialPageRoute<bool>(
       builder: (_) => AgentInstanceEditorScreen(
         connectionListenable: connectionListenable,
         agent: agent,
         instance: instance,
+        computerName: computerName,
       ),
     ),
   );
@@ -685,13 +690,27 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
         : pigcodeLight;
     final busy = _saving || _deleting;
 
+    bool isAdvancedField(MobileAgentSettingField f) =>
+        f.type == MobileAgentFieldType.arguments ||
+        f.type == MobileAgentFieldType.env ||
+        f.key == 'launchArgs' ||
+        f.key == 'arguments';
+
+    final primaryFields = _visibleFields
+        .where((f) => !isAdvancedField(f))
+        .toList(growable: false);
+    final advancedFields = _visibleFields
+        .where(isAdvancedField)
+        .toList(growable: false);
+
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text(
-          widget.isCreate
+        title: ManageAppBarTitle(
+          title: widget.isCreate
               ? '新建 ${widget.agent.displayName} 实例'
               : widget.instance!.label,
+          computerName: widget.computerName,
         ),
         centerTitle: true,
         scrolledUnderElevation: 0,
@@ -715,151 +734,151 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
             ),
           ),
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: 12),
-            child: FilledButton(
-              key: AgentInstanceEditorScreen.saveButtonKey,
-              onPressed: _connection == null || busy ? null : _save,
-              child: Text(_saving ? '保存中…' : '保存'),
-            ),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Divider(height: 1, thickness: 1, color: colors.divider),
         ),
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            if (_connection == null) const ManageOfflineBanner(),
-            if (_validationError != null)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                color: colors.error.withValues(alpha: 0.12),
-                child: Text(
-                  _validationError!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.error,
-                  ),
-                ),
-              ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-                children: [
-                  _buildIdentitySection(context),
-                  if (_visibleFields.isNotEmpty) ...[
-                    const SizedBox(height: 22),
-                    _EditorSectionHeader(title: '配置项'),
-                    const SizedBox(height: 8),
-                    _EditorCard(
-                      children: [
-                        for (var i = 0; i < _visibleFields.length; i++) ...[
-                          if (i > 0) Divider(height: 1, color: colors.divider),
-                          _buildFieldWidget(context, _visibleFields[i]),
-                        ],
-                      ],
-                    ),
-                  ],
-                  if (widget.agent.customModels ||
-                      _models.isNotEmpty ||
-                      _loadingModels) ...[
-                    const SizedBox(height: 22),
-                    _EditorSectionHeader(title: '模型偏好'),
-                    const SizedBox(height: 8),
-                    _buildModelsSection(context),
-                  ],
-                  if (!widget.isCreate && !widget.isDefaultInstance) ...[
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: AgentInstanceEditorScreen.deleteButtonKey,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: colors.error,
-                          side: BorderSide(
-                            color: colors.error.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        onPressed: _connection == null || busy
-                            ? null
-                            : _deleteInstance,
-                        child: Text(_deleting ? '正在删除…' : '删除此实例'),
-                      ),
-                    ),
-                  ],
-                ],
+      body: Column(
+        children: [
+          if (_connection == null) const ManageOfflineBanner(),
+          if (_validationError != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: colors.errorTint,
+              child: Text(
+                _validationError!,
+                style: TimelineType.smallStyle(colors.error),
               ),
             ),
-          ],
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+              children: [
+                _buildIdentitySection(context),
+                if (primaryFields.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  const ManageSectionHeader(title: '基础配置'),
+                  const SizedBox(height: 8),
+                  ManageSurfaceCard(
+                    children: [
+                      for (var i = 0; i < primaryFields.length; i++) ...[
+                        if (i > 0) Divider(height: 1, color: colors.divider),
+                        _buildFieldWidget(context, primaryFields[i]),
+                      ],
+                    ],
+                  ),
+                ],
+                if (advancedFields.isNotEmpty) ...[
+                  const SizedBox(height: 22),
+                  const ManageSectionHeader(title: '启动参数与环境变量'),
+                  const SizedBox(height: 8),
+                  ManageSurfaceCard(
+                    children: [
+                      for (var i = 0; i < advancedFields.length; i++) ...[
+                        if (i > 0) Divider(height: 1, color: colors.divider),
+                        _buildFieldWidget(context, advancedFields[i]),
+                      ],
+                    ],
+                  ),
+                ],
+                if (widget.agent.customModels ||
+                    _models.isNotEmpty ||
+                    _loadingModels) ...[
+                  const SizedBox(height: 22),
+                  const ManageSectionHeader(title: '模型偏好'),
+                  const SizedBox(height: 8),
+                  _buildModelsSection(context),
+                ],
+                if (!widget.isCreate && !widget.isDefaultInstance) ...[
+                  const SizedBox(height: 24),
+                  ManageDestructiveRow(
+                    buttonKey: AgentInstanceEditorScreen.deleteButtonKey,
+                    label: _deleting ? '正在删除…' : '删除此实例',
+                    busy: _deleting,
+                    onPressed: _connection == null || busy
+                        ? null
+                        : _deleteInstance,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          decoration: BoxDecoration(
+            color: colors.background,
+            border: Border(top: BorderSide(color: colors.divider)),
+          ),
+          child: FilledButton(
+            key: AgentInstanceEditorScreen.saveButtonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              textStyle: TimelineType.contentStyle(
+                colors.onPrimary,
+                weight: FontWeight.w600,
+              ),
+            ),
+            onPressed: _connection == null || busy ? null : _save,
+            child: Text(_saving ? '保存中…' : (widget.isCreate ? '创建实例' : '保存修改')),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildIdentitySection(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+
     if (widget.isDefaultInstance) {
       final inst = widget.instance!;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _EditorSectionHeader(title: '默认实例'),
+          const ManageSectionHeader(title: '默认实例'),
           const SizedBox(height: 8),
-          _EditorCard(
+          ManageSurfaceCard(
+            padding: const EdgeInsets.all(16),
             children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: 6,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            inst.label,
-                            style: theme.textTheme.titleMedium,
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: colors.field,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '内置默认',
-                            style: TimelineType.microStyle(
-                              colors.secondaryText,
-                            ),
-                          ),
-                        ),
-                      ],
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      inst.label,
+                      style: TimelineType.headingStyle(
+                        TimelineType.heading2,
+                        FontWeight.w600,
+                      ).copyWith(color: colors.foreground),
                     ),
-                    Text(
-                      'ID: ${inst.instanceId}',
-                      style: TimelineType.metaMonoStyle(colors.muted),
-                    ),
-                    Text(
-                      '默认实例不可重命名、修改标识色或删除，但可以编辑下方的配置项与模型偏好。',
-                      style: TimelineType.metaStyle(colors.muted),
-                    ),
-                  ],
-                ),
+                  ),
+                  ManageStatusTag(
+                    label: '内置默认',
+                    background: colors.field,
+                    foreground: colors.secondaryText,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'ID · ${inst.instanceId}',
+                style: TimelineType.smallStyle(colors.muted),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '内置实例名称和标识色不可更改，可直接编辑以下参数与模型偏好。',
+                style: TimelineType.smallStyle(colors.muted),
               ),
             ],
           ),
@@ -867,117 +886,176 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
       );
     }
 
+    final copySource = widget.agent.instances
+        .where((s) => s.instanceId == _copyFrom)
+        .firstOrNull;
+    final copyLabel = copySource == null
+        ? '不复制（空白配置）'
+        : '${copySource.label} (${copySource.instanceId})';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _EditorSectionHeader(title: '基本信息'),
+        const ManageSectionHeader(title: '基本信息'),
         const SizedBox(height: 8),
-        _EditorCard(
+        ManageSurfaceCard(
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 14,
                 children: [
-                  TextField(
-                    key: AgentInstanceEditorScreen.labelInputKey,
+                  ManageFilledTextField(
+                    fieldKey: AgentInstanceEditorScreen.labelInputKey,
                     controller: _labelController,
-                    maxLength: 120,
-                    decoration: const InputDecoration(
-                      labelText: '实例名称',
-                      hintText: '例如：工作号、API 备用',
-                      counterText: '',
-                    ),
+                    label: '实例名称',
+                    hintText: '例如：工作号、API 备用',
                   ),
+                  const SizedBox(height: 14),
                   if (widget.isCreate)
-                    TextField(
-                      key: AgentInstanceEditorScreen.instanceIdInputKey,
+                    ManageFilledTextField(
+                      fieldKey: AgentInstanceEditorScreen.instanceIdInputKey,
                       controller: _instanceIdController,
-                      maxLength: 64,
+                      label: '自定义 ID（可选）',
+                      hintText: '留空自动生成，如 claude-work',
+                      helperText: '支持字母开头，包含字母、数字、下划线或短横线',
                       style: TimelineType.metaMonoStyle(colors.foreground),
-                      decoration: const InputDecoration(
-                        labelText: '自定义 ID（可选）',
-                        hintText: '留空自动生成，如 claude-work',
-                        helperText: '仅支持字母开头，包含字母、数字、下划线或短横线',
-                        counterText: '',
-                      ),
                     )
                   else
-                    Text(
-                      '实例 ID：${widget.instance!.instanceId}',
-                      style: TimelineType.metaMonoStyle(colors.muted),
-                    ),
-                  if (widget.isCreate && widget.agent.instances.isNotEmpty)
-                    DropdownButtonFormField<String?>(
-                      key: AgentInstanceEditorScreen.copyFromDropdownKey,
-                      initialValue: _copyFrom,
-                      decoration: const InputDecoration(labelText: '复制配置自（可选）'),
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('不复制（从空白配置开始）'),
-                        ),
-                        for (final source in widget.agent.instances)
-                          DropdownMenuItem<String?>(
-                            value: source.instanceId,
-                            child: Text(
-                              '${source.label} (${source.instanceId})',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                      onChanged: (value) => setState(() => _copyFrom = value),
-                    ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        '标识色',
-                        style: TimelineType.metaStyle(colors.secondaryText),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
                       ),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      decoration: BoxDecoration(
+                        color: colors.field,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
                         children: [
-                          for (final hex in agentAccentPalette)
-                            GestureDetector(
-                              key: AgentInstanceEditorScreen.colorSwatchKey(
-                                hex,
-                              ),
-                              onTap: () => setState(() => _accentColor = hex),
-                              child: Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: parseAgentAccentColor(hex),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: _accentColor == hex
-                                        ? colors.foreground
-                                        : Colors.transparent,
-                                    width: 2.5,
-                                  ),
-                                ),
-                                child: _accentColor == hex
-                                    ? const Icon(
-                                        Icons.check,
-                                        size: 16,
-                                        color: Colors.white,
-                                      )
-                                    : null,
-                              ),
+                          Text(
+                            '实例 ID',
+                            style: TimelineType.metaStyle(colors.muted),
+                          ),
+                          const Spacer(),
+                          Text(
+                            widget.instance!.instanceId,
+                            style: TimelineType.metaMonoStyle(
+                              colors.foreground,
                             ),
-                          ChoiceChip(
-                            key: AgentInstanceEditorScreen.clearColorChipKey,
-                            label: const Text('无'),
-                            selected: _accentColor == null,
-                            onSelected: (_) =>
-                                setState(() => _accentColor = null),
                           ),
                         ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            if (widget.isCreate && widget.agent.instances.isNotEmpty) ...[
+              Divider(height: 1, color: colors.divider),
+              ManagePickerRow(
+                key: AgentInstanceEditorScreen.copyFromDropdownKey,
+                title: '复制配置自',
+                value: copyLabel,
+                onTap: () async {
+                  final picked = await ManageSelectSheet.show<_OptionalId>(
+                    context,
+                    title: '选择配置来源',
+                    selected: _OptionalId(_copyFrom),
+                    options: [
+                      const ManageSelectOption(
+                        value: _OptionalId(null),
+                        label: '不复制（从空白配置开始）',
+                      ),
+                      for (final source in widget.agent.instances)
+                        ManageSelectOption(
+                          value: _OptionalId(source.instanceId),
+                          label: '${source.label} (${source.instanceId})',
+                        ),
+                    ],
+                  );
+                  if (picked != null && mounted) {
+                    setState(() => _copyFrom = picked.id);
+                  }
+                },
+              ),
+            ],
+            Divider(height: 1, color: colors.divider),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '标识色',
+                    style: TimelineType.metaStyle(
+                      colors.secondaryText,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (final hex in agentAccentPalette)
+                        GestureDetector(
+                          key: AgentInstanceEditorScreen.colorSwatchKey(hex),
+                          onTap: () => setState(() => _accentColor = hex),
+                          child: Container(
+                            width: 28,
+                            height: 28,
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: _accentColor == hex
+                                    ? colors.foreground
+                                    : Colors.transparent,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: parseAgentAccentColor(hex),
+                                shape: BoxShape.circle,
+                              ),
+                              child: _accentColor == hex
+                                  ? const Center(
+                                      child: Icon(
+                                        Icons.check,
+                                        size: 14,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      GestureDetector(
+                        key: AgentInstanceEditorScreen.clearColorChipKey,
+                        onTap: () => setState(() => _accentColor = null),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _accentColor == null
+                                  ? colors.foreground
+                                  : colors.border,
+                              width: _accentColor == null ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              Icons.block_rounded,
+                              size: 14,
+                              color: _accentColor == null
+                                  ? colors.foreground
+                                  : colors.muted,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -994,22 +1072,17 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
     BuildContext context,
     MobileAgentSettingField field,
   ) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
+
     switch (field.type) {
       case MobileAgentFieldType.boolean:
         final value = _boolValues[field.key] ?? false;
-        return SwitchListTile.adaptive(
-          key: AgentInstanceEditorScreen.fieldKey(field.key),
-          title: Text(field.label),
-          subtitle: field.description != null
-              ? Text(
-                  field.description!,
-                  style: TimelineType.metaStyle(colors.muted),
-                )
-              : null,
+        return ManageSwitchRow(
+          switchKey: AgentInstanceEditorScreen.fieldKey(field.key),
+          title: field.label,
+          subtitle: field.description,
           value: value,
           onChanged: (next) => setState(() {
             _boolValues[field.key] = next;
@@ -1022,60 +1095,53 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
         final range = field.integerRange;
         return Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 6,
-            children: [
-              TextField(
-                key: AgentInstanceEditorScreen.fieldKey(field.key),
-                controller: controller,
-                keyboardType: range != null
-                    ? TextInputType.number
-                    : TextInputType.text,
-                style:
-                    field.monospace || field.type == MobileAgentFieldType.path
-                    ? TimelineType.metaMonoStyle(colors.foreground)
-                    : null,
-                decoration: InputDecoration(
-                  labelText: field.label,
-                  hintText:
-                      field.placeholder ??
-                      (field.type == MobileAgentFieldType.path
-                          ? '填写电脑本机路径（留空使用默认）'
-                          : null),
-                  helperText: field.description,
-                  helperMaxLines: 3,
-                ),
-                onChanged: (_) => _fieldsTouched = true,
-              ),
-            ],
+          child: ManageFilledTextField(
+            fieldKey: AgentInstanceEditorScreen.fieldKey(field.key),
+            controller: controller,
+            label: field.label,
+            hintText:
+                field.placeholder ??
+                (field.type == MobileAgentFieldType.path
+                    ? '填写电脑本机路径（留空使用默认）'
+                    : null),
+            helperText: field.description,
+            keyboardType: range != null
+                ? TextInputType.number
+                : TextInputType.text,
+            style: field.monospace || field.type == MobileAgentFieldType.path
+                ? TimelineType.metaMonoStyle(colors.foreground)
+                : null,
+            onChanged: (_) => _fieldsTouched = true,
           ),
         );
       case MobileAgentFieldType.select:
         final current = _selectValues[field.key] ?? '';
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: DropdownButtonFormField<String>(
-            key: AgentInstanceEditorScreen.fieldKey(field.key),
-            initialValue: current,
-            decoration: InputDecoration(
-              labelText: field.label,
-              helperText: field.description,
-              helperMaxLines: 3,
-            ),
-            items: [
-              const DropdownMenuItem<String>(value: '', child: Text('使用默认')),
-              for (final opt in field.options)
-                DropdownMenuItem<String>(
-                  value: opt.value,
-                  child: Text(opt.label),
-                ),
-            ],
-            onChanged: (value) => setState(() {
-              _selectValues[field.key] = value ?? '';
-              _fieldsTouched = true;
-            }),
-          ),
+        final currentOpt = field.options
+            .where((o) => o.value == current)
+            .firstOrNull;
+        return ManagePickerRow(
+          key: AgentInstanceEditorScreen.fieldKey(field.key),
+          title: field.label,
+          subtitle: field.description,
+          value: current.isEmpty ? '使用默认' : (currentOpt?.label ?? current),
+          onTap: () async {
+            final next = await ManageSelectSheet.show<String>(
+              context,
+              title: field.label,
+              selected: current,
+              options: [
+                const ManageSelectOption(value: '', label: '使用默认'),
+                for (final opt in field.options)
+                  ManageSelectOption(value: opt.value, label: opt.label),
+              ],
+            );
+            if (next != null && mounted) {
+              setState(() {
+                _selectValues[field.key] = next;
+                _fieldsTouched = true;
+              });
+            }
+          },
         );
       case MobileAgentFieldType.secret:
         final state = _secretFields[field.key]!;
@@ -1083,45 +1149,56 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
             children: [
               Text(
                 field.label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
+                style: TimelineType.metaStyle(
+                  colors.secondaryText,
+                  weight: FontWeight.w500,
                 ),
               ),
-              if (field.description != null)
+              if (field.description != null &&
+                  field.description!.trim().isNotEmpty) ...[
+                const SizedBox(height: 3),
                 Text(
                   field.description!,
-                  style: TimelineType.metaStyle(colors.muted),
+                  style: TimelineType.smallStyle(colors.muted),
                 ),
+              ],
+              const SizedBox(height: 8),
               if (state.showsLockedConfigured)
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 10,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
                     color: colors.field,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: colors.border),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.lock_outline, size: 16),
+                      Icon(
+                        Icons.lock_outline,
+                        size: 16,
+                        color: colors.secondaryText,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           state.initialReference != null
                               ? '已引用 ${state.initialReference}'
                               : '已配置（出于安全不回传明文）',
-                          style: TimelineType.metaStyle(colors.secondaryText),
+                          style: TimelineType.smallStyle(colors.secondaryText),
                         ),
                       ),
                       TextButton(
                         key: AgentInstanceEditorScreen.secretReplaceKey(
                           field.key,
+                        ),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () => setState(() {
                           state.replacing = true;
@@ -1133,6 +1210,9 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                       TextButton(
                         key: AgentInstanceEditorScreen.secretClearKey(
                           field.key,
+                        ),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () => setState(() {
                           state.cleared = true;
@@ -1149,24 +1229,21 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                   ),
                 )
               else
-                TextField(
-                  key: AgentInstanceEditorScreen.fieldKey(field.key),
+                ManageFilledTextField(
+                  fieldKey: AgentInstanceEditorScreen.fieldKey(field.key),
                   controller: state.controller,
                   obscureText: state.obscure,
-                  enableSuggestions: false,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    hintText: widget.agent.secretReferences
-                        ? '输入密钥或 op:// 引用（留空清除）'
-                        : '输入密钥（留空清除）',
-                    suffixIcon: IconButton(
-                      tooltip: state.obscure ? '显示' : '隐藏',
-                      onPressed: () =>
-                          setState(() => state.obscure = !state.obscure),
-                      icon: Icon(
-                        state.obscure ? Icons.visibility : Icons.visibility_off,
-                        size: 18,
-                      ),
+                  hintText: widget.agent.secretReferences
+                      ? '输入密钥或 op:// 引用（留空清除）'
+                      : '输入密钥（留空清除）',
+                  suffix: IconButton(
+                    tooltip: state.obscure ? '显示' : '隐藏',
+                    onPressed: () =>
+                        setState(() => state.obscure = !state.obscure),
+                    icon: Icon(
+                      state.obscure ? Icons.visibility : Icons.visibility_off,
+                      size: 18,
+                      color: colors.muted,
                     ),
                   ),
                   onChanged: (_) => setState(() {
@@ -1183,45 +1260,58 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 8,
             children: [
               Row(
                 children: [
                   Expanded(
                     child: Text(
                       field.label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
+                      style: TimelineType.contentStyle(
+                        colors.foreground,
+                        weight: FontWeight.w500,
                       ),
                     ),
                   ),
                   TextButton.icon(
                     key: AgentInstanceEditorScreen.argAddKey(field.key),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: colors.secondaryText,
+                    ),
                     onPressed: () => setState(() {
                       controllers.add(TextEditingController());
                       _fieldsTouched = true;
                     }),
                     icon: const Icon(Icons.add, size: 16),
-                    label: const Text('添加参数'),
+                    label: const Text('添加'),
                   ),
                 ],
               ),
-              if (field.description != null)
+              if (field.description != null &&
+                  field.description!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
                 Text(
                   field.description!,
-                  style: TimelineType.metaStyle(colors.muted),
+                  style: TimelineType.smallStyle(colors.muted),
                 ),
+              ],
+              const SizedBox(height: 8),
               if (controllers.isEmpty)
-                Text('暂无自定义启动参数', style: TimelineType.metaStyle(colors.muted)),
-              for (var i = 0; i < controllers.length; i++)
+                Text('暂无额外启动参数', style: TimelineType.smallStyle(colors.muted)),
+              for (var i = 0; i < controllers.length; i++) ...[
+                if (i > 0) const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
-                      child: TextField(
-                        key: ValueKey('agent-editor-arg-${field.key}-$i'),
+                      child: ManageFilledTextField(
+                        fieldKey: ValueKey('agent-editor-arg-${field.key}-$i'),
                         controller: controllers[i],
+                        hintText: '参数 ${i + 1}',
                         style: TimelineType.metaMonoStyle(colors.foreground),
-                        decoration: InputDecoration(hintText: '参数 ${i + 1}'),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 9,
+                        ),
                         onChanged: (_) => _fieldsTouched = true,
                       ),
                     ),
@@ -1232,10 +1322,15 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                         removed.dispose();
                         _fieldsTouched = true;
                       }),
-                      icon: const Icon(Icons.remove_circle_outline, size: 18),
+                      icon: Icon(
+                        Icons.remove_circle_outline,
+                        size: 18,
+                        color: colors.muted,
+                      ),
                     ),
                   ],
                 ),
+              ],
             ],
           ),
         );
@@ -1245,38 +1340,48 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 10,
             children: [
               Row(
                 children: [
                   Expanded(
                     child: Text(
                       field.label,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
+                      style: TimelineType.contentStyle(
+                        colors.foreground,
+                        weight: FontWeight.w500,
                       ),
                     ),
                   ),
                   TextButton.icon(
                     key: AgentInstanceEditorScreen.envAddKey(field.key),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      foregroundColor: colors.secondaryText,
+                    ),
                     onPressed: () => setState(() {
                       rows.add(_EnvRowDraft());
                       _fieldsTouched = true;
                     }),
                     icon: const Icon(Icons.add, size: 16),
-                    label: const Text('添加变量'),
+                    label: const Text('添加'),
                   ),
                 ],
               ),
-              if (field.description != null)
+              if (field.description != null &&
+                  field.description!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
                 Text(
                   field.description!,
-                  style: TimelineType.metaStyle(colors.muted),
+                  style: TimelineType.smallStyle(colors.muted),
                 ),
+              ],
+              const SizedBox(height: 8),
               if (rows.isEmpty)
-                Text('暂无环境变量', style: TimelineType.metaStyle(colors.muted)),
-              for (var i = 0; i < rows.length; i++)
+                Text('暂无环境变量', style: TimelineType.smallStyle(colors.muted)),
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const SizedBox(height: 10),
                 _buildEnvRow(context, field.key, rows, i),
+              ],
             ],
           ),
         );
@@ -1299,10 +1404,10 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
         !row.replacingSecret;
 
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(10),
+        color: colors.surfaceSunken,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: colors.border),
       ),
       child: Column(
@@ -1311,14 +1416,14 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  key: ValueKey('agent-editor-env-name-$fieldKey-$index'),
+                child: ManageFilledTextField(
+                  fieldKey: ValueKey('agent-editor-env-name-$fieldKey-$index'),
                   controller: row.nameController,
+                  hintText: '变量名（如 API_KEY）',
                   style: TimelineType.metaMonoStyle(colors.foreground),
-                  decoration: const InputDecoration(
-                    labelText: '变量名',
-                    hintText: 'API_KEY',
-                    isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
                   ),
                   onChanged: (_) => _fieldsTouched = true,
                 ),
@@ -1330,48 +1435,65 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                   removed.dispose();
                   _fieldsTouched = true;
                 }),
-                icon: const Icon(Icons.close, size: 18),
+                icon: Icon(Icons.close, size: 18, color: colors.muted),
               ),
             ],
           ),
           if (locked)
-            Row(
-              children: [
-                const Icon(Icons.lock_outline, size: 15),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    row.secretReference ?? '敏感值已配置',
-                    style: TimelineType.metaStyle(colors.secondaryText),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.lock_outline,
+                    size: 14,
+                    color: colors.secondaryText,
                   ),
-                ),
-                TextButton(
-                  onPressed: () => setState(() {
-                    row.replacingSecret = true;
-                    _fieldsTouched = true;
-                  }),
-                  child: const Text('替换'),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      row.secretReference ?? '敏感值已配置',
+                      style: TimelineType.smallStyle(colors.secondaryText),
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () => setState(() {
+                      row.replacingSecret = true;
+                      _fieldsTouched = true;
+                    }),
+                    child: const Text('替换'),
+                  ),
+                ],
+              ),
             )
           else
-            TextField(
-              key: ValueKey('agent-editor-env-value-$fieldKey-$index'),
+            ManageFilledTextField(
+              fieldKey: ValueKey('agent-editor-env-value-$fieldKey-$index'),
               controller: row.valueController,
               obscureText: row.sensitive,
+              hintText: row.sensitive ? '输入敏感值' : '变量值',
               style: TimelineType.metaMonoStyle(colors.foreground),
-              decoration: InputDecoration(
-                labelText: row.sensitive ? '敏感值' : '值',
-                isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 9,
               ),
               onChanged: (_) => _fieldsTouched = true,
             ),
           Row(
             children: [
-              Checkbox(
+              Text('作为敏感密钥保护', style: TimelineType.smallStyle(colors.muted)),
+              const Spacer(),
+              Switch.adaptive(
                 value: row.sensitive,
                 onChanged: (next) => setState(() {
-                  row.sensitive = next == true;
+                  row.sensitive = next;
                   if (!row.sensitive) {
                     row.configuredSecret = false;
                     row.secretReference = null;
@@ -1380,7 +1502,6 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                   _fieldsTouched = true;
                 }),
               ),
-              Text('作为密钥保护', style: TimelineType.metaStyle(colors.muted)),
             ],
           ),
         ],
@@ -1411,7 +1532,7 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
       }
       items = prioritized;
     }
-    return _EditorCard(
+    return ManageSurfaceCard(
       children: [
         if (widget.agent.customModels)
           Padding(
@@ -1419,21 +1540,31 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    key: AgentInstanceEditorScreen.customModelInputKey,
+                  child: ManageFilledTextField(
+                    fieldKey: AgentInstanceEditorScreen.customModelInputKey,
                     controller: _customModelController,
+                    hintText: '输入自定义模型 ID，如 claude-opus-4-6',
                     style: TimelineType.metaMonoStyle(colors.foreground),
-                    decoration: const InputDecoration(
-                      labelText: '添加自定义模型 ID',
-                      hintText: '例如 claude-opus-4-6',
-                      isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
                     ),
                     onSubmitted: (_) => _addCustomModel(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.tonal(
+                FilledButton(
                   key: AgentInstanceEditorScreen.customModelAddButtonKey,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.field,
+                    foregroundColor: colors.foreground,
+                    elevation: 0,
+                    minimumSize: const Size(58, 42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: colors.border),
+                    ),
+                  ),
                   onPressed: _addCustomModel,
                   child: const Text('添加'),
                 ),
@@ -1475,47 +1606,49 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           for (var i = 0; i < items.length; i++) ...[
             if (i > 0 || widget.agent.customModels)
               Divider(height: 1, color: colors.divider),
-            ListTile(
-              dense: true,
-              title: Row(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
+              child: Row(
                 children: [
-                  Flexible(
-                    child: Text(
-                      items[i].name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                items[i].name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TimelineType.contentStyle(
+                                  colors.foreground,
+                                  weight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (items[i].isCustom) ...[
+                              const SizedBox(width: 6),
+                              ManageStatusTag(
+                                label: '自定义',
+                                background: colors.field,
+                                foreground: colors.secondaryText,
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (items[i].name != items[i].id) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            items[i].id,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TimelineType.smallStyle(colors.muted),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  if (items[i].isCustom) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colors.field,
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        '自定义',
-                        style: TimelineType.microStyle(colors.secondaryText),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              subtitle: items[i].name != items[i].id
-                  ? Text(
-                      items[i].id,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TimelineType.metaMonoStyle(colors.muted),
-                    )
-                  : null,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
                   if (items[i].isCustom)
                     IconButton(
                       key: AgentInstanceEditorScreen.modelRemoveKey(
@@ -1528,7 +1661,11 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
                         _modelsModified = true;
                         _fieldsTouched = true;
                       }),
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: colors.muted,
+                      ),
                     ),
                   Switch.adaptive(
                     key: AgentInstanceEditorScreen.modelSwitchKey(items[i].id),
@@ -1549,12 +1686,20 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
           ],
           if (canCollapse) ...[
             Divider(height: 1, color: colors.divider),
-            TextButton(
+            InkWell(
               key: const ValueKey('agent-editor-models-toggle'),
-              onPressed: () =>
-                  setState(() => _modelsExpanded = !_modelsExpanded),
-              child: Text(
-                _modelsExpanded ? '收起模型列表' : '展开全部 ${allItems.length} 个模型',
+              onTap: () => setState(() => _modelsExpanded = !_modelsExpanded),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Center(
+                  child: Text(
+                    _modelsExpanded ? '收起模型列表' : '展开全部 ${allItems.length} 个模型',
+                    style: TimelineType.metaStyle(
+                      colors.secondaryText,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -1564,48 +1709,14 @@ class _AgentInstanceEditorScreenState extends State<AgentInstanceEditorScreen> {
   }
 }
 
-class _EditorSectionHeader extends StatelessWidget {
-  const _EditorSectionHeader({required this.title});
+class _OptionalId {
+  const _OptionalId(this.id);
 
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        title,
-        style: TimelineType.metaStyle(colors.muted, weight: FontWeight.w500),
-      ),
-    );
-  }
-}
-
-class _EditorCard extends StatelessWidget {
-  const _EditorCard({required this.children});
-
-  final List<Widget> children;
+  final String? id;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
-    );
-  }
+  bool operator ==(Object other) => other is _OptionalId && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

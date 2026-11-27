@@ -9,6 +9,7 @@ import '../mobile_glass.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 import 'plugin_detail_sheet.dart';
 
@@ -18,7 +19,11 @@ enum _MarketFilter { official, community, personal }
 
 /// 手机端插件管理页：支持已安装插件分组查看、启停/更新/卸载，以及官方/社区/个人市场浏览与安装。
 class PluginManageScreen extends StatefulWidget {
-  const PluginManageScreen({super.key, required this.connectionListenable});
+  const PluginManageScreen({
+    super.key,
+    required this.connectionListenable,
+    this.computerName,
+  });
 
   static const refreshButtonKey = ValueKey('plugin-refresh-button');
   static const installedTabKey = ValueKey('plugin-tab-installed');
@@ -49,14 +54,18 @@ class PluginManageScreen extends StatefulWidget {
       ValueKey('market-update-$entryName');
 
   final ValueListenable<MobileConnection?> connectionListenable;
+  final String? computerName;
 
   static Future<void> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
+    String? computerName,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          PluginManageScreen(connectionListenable: connectionListenable),
+      builder: (_) => PluginManageScreen(
+        connectionListenable: connectionListenable,
+        computerName: computerName,
+      ),
     ),
   );
 
@@ -464,7 +473,10 @@ class _PluginManageScreenState extends State<PluginManageScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('插件管理'),
+        title: ManageAppBarTitle(
+          title: '桌面插件',
+          computerName: widget.computerName,
+        ),
         centerTitle: true,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
@@ -775,18 +787,9 @@ class _PluginManageScreenState extends State<PluginManageScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text(
-            pluginKindLabel(kind),
-            style: TimelineType.metaStyle(
-              colors.secondaryText,
-              weight: FontWeight.w600,
-            ),
-          ),
-        ),
+        ManageSectionHeader(title: pluginKindLabel(kind)),
         const SizedBox(height: 8),
-        _PluginSectionCard(
+        ManageSurfaceCard(
           children: [
             for (var i = 0; i < items.length; i++) ...[
               if (i > 0) Divider(height: 1, indent: 66, color: colors.divider),
@@ -866,22 +869,21 @@ class _PluginManageScreenState extends State<PluginManageScreen> {
                               style: TimelineType.smallStyle(colors.muted),
                             ),
                           ],
+                          if (plugin.builtin) ...[
+                            const SizedBox(width: 6),
+                            PluginStatusPill(
+                              label: '内置',
+                              background: colors.field,
+                              foreground: colors.muted,
+                            ),
+                          ],
                         ],
                       ),
-                      if (plugin.builtin ||
-                          item.updateVersion != null ||
-                          hasConflict ||
-                          hasError)
+                      if (item.updateVersion != null || hasConflict || hasError)
                         Wrap(
                           spacing: 6,
                           runSpacing: 4,
                           children: [
-                            if (plugin.builtin)
-                              PluginStatusPill(
-                                label: '内置',
-                                background: colors.field,
-                                foreground: colors.muted,
-                              ),
                             if (item.updateVersion != null)
                               PluginStatusPill(
                                 label: '有更新',
@@ -1043,7 +1045,7 @@ class _PluginManageScreenState extends State<PluginManageScreen> {
         );
       } else {
         sections.add(
-          _PluginSectionCard(
+          ManageSurfaceCard(
             children: [
               for (var i = 0; i < entries.length; i++) ...[
                 if (i > 0)
@@ -1137,7 +1139,7 @@ class _PluginManageScreenState extends State<PluginManageScreen> {
           ),
           const SizedBox(height: 8),
         ],
-        _PluginSectionCard(
+        ManageSurfaceCard(
           children: [
             if (entries.isEmpty)
               Padding(
@@ -1509,32 +1511,6 @@ class _FilterChipCapsule extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _PluginSectionCard extends StatelessWidget {
-  const _PluginSectionCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
       ),
     );
   }

@@ -10,6 +10,7 @@ import '../mobile_status_dot.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 import 'schedule_editor_screen.dart';
 import 'schedule_runs_sheet.dart';
@@ -68,6 +69,7 @@ class ScheduleManageScreen extends StatefulWidget {
   const ScheduleManageScreen({
     super.key,
     required this.connectionListenable,
+    this.computerName,
     this.onOpenThread,
     this.initialProjects = const [],
   });
@@ -91,18 +93,21 @@ class ScheduleManageScreen extends StatefulWidget {
       ValueKey('schedule-template-$templateId');
 
   final ValueListenable<MobileConnection?> connectionListenable;
+  final String? computerName;
   final void Function(String threadId)? onOpenThread;
   final List<MobileProjectSummary> initialProjects;
 
   static Future<void> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
+    String? computerName,
     void Function(String threadId)? onOpenThread,
     List<MobileProjectSummary> initialProjects = const [],
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => ScheduleManageScreen(
         connectionListenable: connectionListenable,
+        computerName: computerName,
         onOpenThread: onOpenThread,
         initialProjects: initialProjects,
       ),
@@ -262,6 +267,7 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
     final changed = await ScheduleEditorScreen.open(
       context,
       connectionListenable: widget.connectionListenable,
+      computerName: widget.computerName,
       schedule: schedule,
       projects: _projects,
       initialTitle: template?.title,
@@ -343,7 +349,10 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('定时任务'),
+        title: ManageAppBarTitle(
+          title: '定时任务',
+          computerName: widget.computerName,
+        ),
         centerTitle: true,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
@@ -537,107 +546,94 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
   }
 
   Widget _buildEmptyHeader(BuildContext context) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
 
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          spacing: 8,
-          children: [
-            Icon(Icons.schedule, size: 32, color: colors.secondaryText),
-            Text(
-              '还没有定时任务',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: colors.foreground,
-              ),
-            ),
-            Text(
-              '到点自动让 Agent 干活，每次的结果都在会话里',
-              textAlign: TextAlign.center,
-              style: TimelineType.metaStyle(colors.muted),
-            ),
-          ],
+    return ManageSurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+      children: [
+        Icon(Icons.schedule, size: 30, color: colors.secondaryText),
+        const SizedBox(height: 8),
+        Text(
+          '还没有定时任务',
+          textAlign: TextAlign.center,
+          style: TimelineType.contentStyle(
+            colors.foreground,
+            weight: FontWeight.w600,
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(
+          '到点自动让 Agent 干活，每次结果都在会话里',
+          textAlign: TextAlign.center,
+          style: TimelineType.metaStyle(colors.muted),
+        ),
+      ],
     );
   }
 
   Widget _buildTemplateCard(BuildContext context, _ScheduleTemplate template) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
     final enabled = _connection != null;
 
-    return Material(
+    return ManageSurfaceCard(
       key: ScheduleManageScreen.templateKey(template.id),
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: enabled
-            ? () => unawaited(_openEditor(template: template))
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 6,
-            children: [
-              Row(
-                children: [
-                  IconTheme(
-                    data: IconThemeData(
-                      color: enabled ? colors.secondaryText : colors.faint,
+      children: [
+        InkWell(
+          onTap: enabled
+              ? () => unawaited(_openEditor(template: template))
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 6,
+              children: [
+                Row(
+                  children: [
+                    IconTheme(
+                      data: IconThemeData(
+                        color: enabled ? colors.secondaryText : colors.faint,
+                      ),
+                      child: WorkspaceIcon(template.glyph, size: 18),
                     ),
-                    child: WorkspaceIcon(template.glyph, size: 18),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      template.title,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: enabled ? colors.foreground : colors.faint,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        template.title,
+                        style: TimelineType.contentStyle(
+                          enabled ? colors.foreground : colors.faint,
+                          weight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  Icon(Icons.chevron_right, size: 18, color: colors.faint),
-                ],
-              ),
-              Text(
-                template.prompt,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TimelineType.metaStyle(colors.muted),
-              ),
-              Row(
-                spacing: 5,
-                children: [
-                  Icon(Icons.schedule, size: 13, color: colors.faint),
-                  Text(
-                    describeScheduleRule(template.rule),
-                    style: TimelineType.smallStyle(colors.secondaryText),
-                  ),
-                ],
-              ),
-            ],
+                    Icon(Icons.chevron_right, size: 18, color: colors.faint),
+                  ],
+                ),
+                Text(
+                  template.prompt,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TimelineType.metaStyle(colors.muted),
+                ),
+                Row(
+                  spacing: 5,
+                  children: [
+                    Icon(Icons.schedule, size: 13, color: colors.faint),
+                    Text(
+                      describeScheduleRule(template.rule),
+                      style: TimelineType.smallStyle(colors.secondaryText),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -659,26 +655,40 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Row(
         spacing: 8,
         children: [
           for (final item in options)
-            ChoiceChip(
+            Material(
               key: item.$2,
-              label: Text(item.$3),
-              selected: _filter == item.$1,
-              selectedColor: colors.primary,
-              backgroundColor: colors.surface,
-              side: BorderSide(
-                color: _filter == item.$1 ? colors.primary : colors.border,
+              color: _filter == item.$1 ? colors.primary : colors.surface,
+              shape: StadiumBorder(
+                side: BorderSide(
+                  color: _filter == item.$1 ? colors.primary : colors.border,
+                ),
               ),
-              labelStyle: TimelineType.smallStyle(
-                _filter == item.$1 ? colors.onPrimary : colors.secondaryText,
-                weight: FontWeight.w500,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => setState(() => _filter = item.$1),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
+                  child: Text(
+                    item.$3,
+                    style: TimelineType.smallStyle(
+                      _filter == item.$1
+                          ? colors.onPrimary
+                          : colors.secondaryText,
+                      weight: _filter == item.$1
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
               ),
-              showCheckmark: false,
-              onSelected: (_) => setState(() => _filter = item.$1),
             ),
         ],
       ),
@@ -686,8 +696,7 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
   }
 
   Widget _buildScheduleCard(BuildContext context, MobileSchedule schedule) {
-    final theme = Theme.of(context);
-    final colors = theme.brightness == Brightness.dark
+    final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
     final online = _connection != null;
@@ -713,156 +722,154 @@ class _ScheduleManageScreenState extends State<ScheduleManageScreen> {
         !toggling &&
         schedule.status != MobileScheduleStatus.completed;
 
-    return Material(
+    return ManageSurfaceCard(
       key: ScheduleManageScreen.cardKey(schedule.id),
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: online
-                ? () => unawaited(_openEditor(schedule: schedule))
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 8,
-                children: [
-                  Row(
-                    children: [
-                      MobileStatusDot(color: statusColor),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: colors.foreground,
-                          ),
+      children: [
+        InkWell(
+          onTap: online
+              ? () => unawaited(_openEditor(schedule: schedule))
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 6,
+              children: [
+                Row(
+                  children: [
+                    MobileStatusDot(color: statusColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TimelineType.contentStyle(
+                          colors.foreground,
+                          weight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          scheduleStatusLabel(schedule.status),
-                          style: TimelineType.microStyle(statusColor),
-                        ),
+                    ),
+                    const SizedBox(width: 6),
+                    if (schedule.status != MobileScheduleStatus.active) ...[
+                      ManageStatusTag(
+                        label: scheduleStatusLabel(schedule.status),
+                        background: colors.field,
+                        foreground: statusColor,
                       ),
-                      const SizedBox(width: 6),
-                      Switch.adaptive(
-                        key: ScheduleManageScreen.toggleKey(schedule.id),
-                        value: schedule.enabled,
-                        onChanged: canToggle
-                            ? (next) =>
-                                  unawaited(_toggleSchedule(schedule, next))
-                            : null,
+                      const SizedBox(width: 4),
+                    ] else ...[
+                      ManageStatusTag(
+                        label: scheduleStatusLabel(schedule.status),
+                        background: statusColor.withValues(alpha: 0.14),
+                        foreground: statusColor,
                       ),
+                      const SizedBox(width: 4),
                     ],
-                  ),
-                  Text(
-                    schedule.prompt,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TimelineType.metaStyle(colors.secondaryText),
-                  ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      _MetaBadge(
-                        icon: isLegacyThread
-                            ? WorkspaceGlyph.messagesSquare
-                            : WorkspaceGlyph.folder,
-                        label: targetLabel,
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        spacing: 4,
-                        children: [
-                          Icon(Icons.schedule, size: 13, color: colors.muted),
-                          Text(
-                            describeScheduleRule(schedule.rule),
-                            style: TimelineType.smallStyle(colors.muted),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      if (schedule.status == MobileScheduleStatus.active &&
-                          schedule.nextRunAt != null)
-                        Expanded(
-                          child: Text(
-                            '下次 ${formatScheduleWhen(schedule.nextRunAt!)}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TimelineType.smallStyle(colors.muted),
-                          ),
-                        )
-                      else
-                        const Spacer(),
-                      Text(
-                        '跑了 ${schedule.runCount} 次',
+                    Switch.adaptive(
+                      key: ScheduleManageScreen.toggleKey(schedule.id),
+                      value: schedule.enabled,
+                      onChanged: canToggle
+                          ? (next) => unawaited(_toggleSchedule(schedule, next))
+                          : null,
+                    ),
+                  ],
+                ),
+                Text(
+                  schedule.prompt,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TimelineType.metaStyle(colors.secondaryText),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    _MetaBadge(
+                      icon: isLegacyThread
+                          ? WorkspaceGlyph.messagesSquare
+                          : WorkspaceGlyph.folder,
+                      label: targetLabel,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        describeScheduleRule(schedule.rule),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TimelineType.smallStyle(colors.muted),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Divider(height: 1, thickness: 1, color: colors.divider),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                TextButton.icon(
-                  key: ScheduleManageScreen.runNowKey(schedule.id),
-                  onPressed: online && !runningNow
-                      ? () => unawaited(_runNow(schedule))
-                      : null,
-                  icon: runningNow
-                      ? const SizedBox.square(
-                          dimension: 14,
-                          child: CircularProgressIndicator.adaptive(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.play_arrow_rounded, size: 18),
-                  label: const Text('现在运行'),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                TextButton.icon(
-                  key: ScheduleManageScreen.runsKey(schedule.id),
-                  onPressed: online
-                      ? () => unawaited(_openRuns(schedule))
-                      : null,
-                  icon: const Icon(Icons.history, size: 17),
-                  label: const Text('运行记录'),
+                Row(
+                  children: [
+                    if (schedule.status == MobileScheduleStatus.active &&
+                        schedule.nextRunAt != null)
+                      Expanded(
+                        child: Text(
+                          '下次 ${formatScheduleWhen(schedule.nextRunAt!)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TimelineType.smallStyle(colors.muted),
+                        ),
+                      )
+                    else
+                      const Spacer(),
+                    Text(
+                      '跑了 ${schedule.runCount} 次',
+                      style: TimelineType.smallStyle(colors.muted),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        ],
-      ),
+        ),
+        Divider(height: 1, thickness: 1, color: colors.divider),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Row(
+            children: [
+              TextButton.icon(
+                key: ScheduleManageScreen.runNowKey(schedule.id),
+                onPressed: online && !runningNow
+                    ? () => unawaited(_runNow(schedule))
+                    : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.foreground,
+                  textStyle: TimelineType.smallStyle(
+                    colors.foreground,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+                icon: runningNow
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator.adaptive(
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.play_arrow_rounded, size: 17),
+                label: const Text('现在运行'),
+              ),
+              const SizedBox(width: 4),
+              TextButton.icon(
+                key: ScheduleManageScreen.runsKey(schedule.id),
+                onPressed: online ? () => unawaited(_openRuns(schedule)) : null,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.secondaryText,
+                  textStyle: TimelineType.smallStyle(
+                    colors.secondaryText,
+                    weight: FontWeight.w500,
+                  ),
+                ),
+                icon: const Icon(Icons.history, size: 16),
+                label: const Text('运行记录'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

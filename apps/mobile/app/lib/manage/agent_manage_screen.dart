@@ -11,15 +11,23 @@ import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
 import 'agent_instance_editor_screen.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 
-/// Agent 实例总览页：设置新会话默认 Agent、按 Agent 分组查看检测状态与启停实例、进入编辑/新建页。
+/// Agent 实例总览页：设置新会话默认 Agent、聚焦显示已就绪/已配置实例，
+/// 其余未配置 Agent 折叠收纳在底部，避免空占位卡片铺屏。
 class AgentManageScreen extends StatefulWidget {
-  const AgentManageScreen({super.key, required this.connectionListenable});
+  const AgentManageScreen({
+    super.key,
+    required this.connectionListenable,
+    this.computerName,
+  });
 
   static const refreshDetectButtonKey = ValueKey('agent-manage-refresh-detect');
+  static const globalCreateButtonKey = ValueKey('agent-manage-global-create');
   static const defaultCardKey = ValueKey('agent-manage-default-card');
   static const defaultAutoOptionKey = ValueKey('agent-default-option-auto');
+  static const moreAgentsToggleKey = ValueKey('agent-manage-more-toggle');
 
   static ValueKey<String> createButtonKey(String agentId) =>
       ValueKey('agent-manage-create-$agentId');
@@ -31,14 +39,18 @@ class AgentManageScreen extends StatefulWidget {
       ValueKey('agent-default-option-$instanceId');
 
   final ValueListenable<MobileConnection?> connectionListenable;
+  final String? computerName;
 
   static Future<void> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
+    String? computerName,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          AgentManageScreen(connectionListenable: connectionListenable),
+      builder: (_) => AgentManageScreen(
+        connectionListenable: connectionListenable,
+        computerName: computerName,
+      ),
     ),
   );
 
@@ -53,6 +65,7 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
   bool _loading = true;
   bool _detecting = false;
   bool _updating = false;
+  bool _otherExpanded = false;
   String? _error;
   int _seq = 0;
 
@@ -252,6 +265,34 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
     }
   }
 
+  Future<void> _pickAgentToCreate() async {
+    final data = _data;
+    if (_connection == null || data == null || _updating) return;
+    final candidates = data.agents
+        .where((agent) => agent.registered)
+        .toList(growable: false);
+    if (candidates.isEmpty) return;
+    if (candidates.length == 1) {
+      await _openEditor(candidates.first);
+      return;
+    }
+    final picked = await ManageSelectSheet.show<MobileAgentSummary>(
+      context,
+      title: '选择要新建实例的 Agent',
+      showChevron: true,
+      options: [
+        for (final agent in candidates)
+          ManageSelectOption(
+            value: agent,
+            label: agent.displayName,
+            subtitle: agent.version != null ? 'v${agent.version}' : null,
+          ),
+      ],
+    );
+    if (!mounted || picked == null) return;
+    await _openEditor(picked);
+  }
+
   Future<void> _toggleInstance(
     MobileAgentInstance instance,
     bool enabled,
@@ -283,11 +324,18 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
     final changed = await AgentInstanceEditorScreen.open(
       context,
       connectionListenable: widget.connectionListenable,
+      computerName: widget.computerName,
       agent: agent,
       instance: instance,
     );
     if (!mounted || changed != true) return;
     await _load(refreshDetect: true);
+  }
+
+  bool _isPrimaryAgent(MobileAgentSummary agent) {
+    if (agent.instances.isNotEmpty || agent.error != null) return true;
+    final status = _statuses[agent.agentId];
+    return status?.installed == true;
   }
 
   String _statusSubtitle(
@@ -330,10 +378,25 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
         ? pigcodeDark
         : pigcodeLight;
 
+    final agents = _data?.agents ?? const <MobileAgentSummary>[];
+    final hasCreatable = agents.any((a) => a.registered);
+    final primaryAgents = <MobileAgentSummary>[];
+    final otherAgents = <MobileAgentSummary>[];
+    for (final agent in agents) {
+      if (_isPrimaryAgent(agent)) {
+        primaryAgents.add(agent);
+      } else {
+        otherAgents.add(agent);
+      }
+    }
+
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('Agent 实例'),
+        title: ManageAppBarTitle(
+          title: 'Agent 实例',
+          computerName: widget.computerName,
+        ),
         centerTitle: true,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
@@ -359,7 +422,7 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
         actions: [
           Center(
             child: MobileGlassChromeButton(
-              padding: const EdgeInsetsDirectional.only(end: 10),
+              padding: EdgeInsetsDirectional.only(end: hasCreatable ? 6 : 10),
               child: SizedBox.square(
                 dimension: 40,
                 child: IconButton(
@@ -381,6 +444,24 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
               ),
             ),
           ),
+          if (hasCreatable)
+            Center(
+              child: MobileGlassChromeButton(
+                padding: const EdgeInsetsDirectional.only(end: 10),
+                child: SizedBox.square(
+                  dimension: 40,
+                  child: IconButton(
+                    key: AgentManageScreen.globalCreateButtonKey,
+                    tooltip: '新建实例',
+                    padding: EdgeInsets.zero,
+                    onPressed: _connection == null || _updating
+                        ? null
+                        : () => unawaited(_pickAgentToCreate()),
+                    icon: const WorkspaceIcon(WorkspaceGlyph.plus, size: 20),
+                  ),
+                ),
+              ),
+            ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -421,11 +502,11 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
                   : RefreshIndicator.adaptive(
                       onRefresh: () => _load(refreshDetect: true),
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 36),
                         children: [
-                          _AgentCard(
+                          ManageSurfaceCard(
                             children: [
-                              ListTile(
+                              ManagePickerRow(
                                 key: AgentManageScreen.defaultCardKey,
                                 leading: IconTheme(
                                   data: IconThemeData(
@@ -433,38 +514,35 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
                                   ),
                                   child: const WorkspaceIcon(
                                     WorkspaceGlyph.bot,
-                                    size: 20,
+                                    size: 19,
                                   ),
                                 ),
-                                title: const Text('新会话默认 Agent'),
-                                subtitle: Text(
-                                  _currentDefaultLabel(),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TimelineType.metaStyle(colors.muted),
-                                ),
-                                trailing: Icon(
-                                  Icons.chevron_right,
-                                  size: 18,
-                                  color: colors.faint,
-                                ),
-                                onTap: _connection == null || _updating
-                                    ? null
-                                    : () => unawaited(_pickDefaultAgent()),
+                                title: '默认 Agent',
+                                value: _currentDefaultLabel(),
+                                enabled: _connection != null && !_updating,
+                                onTap: () => unawaited(_pickDefaultAgent()),
                               ),
                             ],
                           ),
-                          for (final agent in _data?.agents ?? const []) ...[
+                          for (final agent in primaryAgents) ...[
                             const SizedBox(height: 20),
-                            _buildAgentGroup(context, agent),
+                            _buildPrimaryAgentGroup(context, agent),
+                          ],
+                          if (otherAgents.isNotEmpty) ...[
+                            const SizedBox(height: 22),
+                            _buildOtherAgentsSection(
+                              context,
+                              otherAgents,
+                              forceExpanded: primaryAgents.isEmpty,
+                            ),
                           ],
                           const SizedBox(height: 24),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 6),
                             child: Text(
-                              'CLI 安装升级与浏览器 OAuth 登录请在电脑端完成。',
+                              'CLI 安装与登录认证请在桌面端完成',
                               textAlign: TextAlign.center,
-                              style: TimelineType.metaStyle(colors.muted),
+                              style: TimelineType.smallStyle(colors.muted),
                             ),
                           ),
                         ],
@@ -477,16 +555,160 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
     );
   }
 
-  Widget _buildAgentGroup(BuildContext context, MobileAgentSummary agent) {
+  Widget _buildPrimaryAgentGroup(
+    BuildContext context,
+    MobileAgentSummary agent,
+  ) {
     final colors = Theme.of(context).brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
     final canCreate = _connection != null && agent.registered && !_updating;
+    final headerTitle = agent.version != null
+        ? '${agent.displayName} · v${agent.version}'
+        : agent.displayName;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+        ManageSectionHeader(
+          title: headerTitle,
+          trailing: agent.registered
+              ? TextButton.icon(
+                  key: AgentManageScreen.createButtonKey(agent.agentId),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    foregroundColor: colors.secondaryText,
+                    textStyle: TimelineType.smallStyle(
+                      colors.secondaryText,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                  onPressed: canCreate
+                      ? () => unawaited(_openEditor(agent))
+                      : null,
+                  icon: const Icon(Icons.add, size: 15),
+                  label: const Text('新建'),
+                )
+              : null,
+        ),
+        const SizedBox(height: 6),
+        ManageSurfaceCard(
+          children: [
+            if (agent.error != null)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                color: colors.errorTint,
+                child: Text(
+                  agent.error!,
+                  style: TimelineType.smallStyle(colors.error),
+                ),
+              ),
+            if (agent.instances.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                child: Text(
+                  agent.registered ? '尚无实例，点击右上「新建」添加一个配置' : '暂未启用或未加载',
+                  style: TimelineType.metaStyle(colors.muted),
+                ),
+              )
+            else
+              for (var i = 0; i < agent.instances.length; i++) ...[
+                if (i > 0)
+                  Divider(height: 1, indent: 38, color: colors.divider),
+                _buildInstanceTile(context, agent, agent.instances[i]),
+              ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtherAgentsSection(
+    BuildContext context,
+    List<MobileAgentSummary> otherAgents, {
+    required bool forceExpanded,
+  }) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final expanded = forceExpanded || _otherExpanded;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const ManageSectionHeader(title: '其他可用 Agent'),
+        const SizedBox(height: 8),
+        ManageSurfaceCard(
+          children: [
+            if (!forceExpanded)
+              InkWell(
+                key: AgentManageScreen.moreAgentsToggleKey,
+                onTap: () => setState(() => _otherExpanded = !_otherExpanded),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '查看 ${otherAgents.length} 个未建实例的 Agent',
+                            style: TimelineType.contentStyle(
+                              colors.foreground,
+                              weight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          expanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: colors.muted,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (expanded) ...[
+              for (var i = 0; i < otherAgents.length; i++) ...[
+                if (i > 0 || !forceExpanded)
+                  Divider(height: 1, color: colors.divider),
+                _buildOtherAgentRow(context, otherAgents[i]),
+              ],
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOtherAgentRow(BuildContext context, MobileAgentSummary agent) {
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+    final canCreate = _connection != null && agent.registered && !_updating;
+    return InkWell(
+      key: AgentManageScreen.createButtonKey(agent.agentId),
+      onTap: canCreate ? () => unawaited(_openEditor(agent)) : null,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             children: [
               Expanded(
@@ -494,70 +716,33 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      agent.version != null
-                          ? '${agent.displayName} · v${agent.version}'
-                          : agent.displayName,
-                      style: TimelineType.metaStyle(
-                        colors.secondaryText,
-                        weight: FontWeight.w600,
+                      agent.displayName,
+                      style: TimelineType.contentStyle(
+                        colors.foreground,
+                        weight: FontWeight.w500,
                       ),
                     ),
-                    if (agent.description != null)
-                      Text(
-                        agent.description!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TimelineType.microStyle(colors.muted),
-                      ),
+                    Text(
+                      agent.registered ? '未建自定义实例' : '未启用',
+                      style: TimelineType.smallStyle(colors.muted),
+                    ),
                   ],
                 ),
               ),
               if (agent.registered)
-                TextButton.icon(
-                  key: AgentManageScreen.createButtonKey(agent.agentId),
-                  onPressed: canCreate
-                      ? () => unawaited(_openEditor(agent))
-                      : null,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('新建实例'),
+                Text(
+                  '新建',
+                  style: TimelineType.metaStyle(
+                    canCreate ? colors.secondaryText : colors.muted,
+                    weight: FontWeight.w500,
+                  ),
                 ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, size: 18, color: colors.faint),
             ],
           ),
         ),
-        const SizedBox(height: 6),
-        _AgentCard(
-          children: [
-            if (agent.error != null)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                color: colors.error.withValues(alpha: 0.08),
-                child: Text(
-                  agent.error!,
-                  style: TimelineType.metaStyle(colors.error),
-                ),
-              ),
-            if (agent.instances.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  agent.registered
-                      ? '暂无实例，点击右上角「新建实例」进行配置'
-                      : '此 Agent 当前未启用或未加载',
-                  style: TimelineType.metaStyle(colors.muted),
-                ),
-              )
-            else
-              for (var i = 0; i < agent.instances.length; i++) ...[
-                if (i > 0)
-                  Divider(height: 1, indent: 46, color: colors.divider),
-                _buildInstanceTile(context, agent, agent.instances[i]),
-              ],
-          ],
-        ),
-      ],
+      ),
     );
   }
 
@@ -575,111 +760,83 @@ class _AgentManageScreenState extends State<AgentManageScreen> {
         parseAgentAccentColor(instance.accentColor) ??
         (instance.enabled ? colors.readyMark : colors.faint);
 
-    return ListTile(
+    return InkWell(
       key: AgentManageScreen.instanceTileKey(instance.instanceId),
-      leading: Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-      ),
-      minLeadingWidth: 16,
-      title: Row(
-        children: [
-          Flexible(
-            child: Text(
-              instance.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (isDefaultChoice) ...[
-            const SizedBox(width: 6),
-            _AgentPill(
-              label: '默认',
-              background: colors.surfaceRaised,
-              foreground: colors.foreground,
-            ),
-          ] else if (instance.isDefault) ...[
-            const SizedBox(width: 6),
-            _AgentPill(
-              label: '内置',
-              background: colors.field,
-              foreground: colors.muted,
-            ),
-          ],
-        ],
-      ),
-      subtitle: Text(
-        _statusSubtitle(agent, instance),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-        style: TimelineType.metaStyle(colors.muted),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (canToggle)
-            Switch.adaptive(
-              key: AgentManageScreen.toggleKey(instance.instanceId),
-              value: instance.enabled,
-              onChanged: _connection == null || _updating
-                  ? null
-                  : (next) => unawaited(_toggleInstance(instance, next)),
-            ),
-          Icon(Icons.chevron_right, size: 18, color: colors.faint),
-        ],
-      ),
       onTap: _connection == null
           ? null
           : () => unawaited(_openEditor(agent, instance: instance)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          instance.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TimelineType.contentStyle(
+                            colors.foreground,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (isDefaultChoice) ...[
+                        const SizedBox(width: 6),
+                        ManageStatusTag(
+                          label: '默认',
+                          background: colors.surfaceSunken,
+                          foreground: colors.foreground,
+                        ),
+                      ] else if (instance.isDefault) ...[
+                        const SizedBox(width: 6),
+                        ManageStatusTag(
+                          label: '内置',
+                          background: colors.field,
+                          foreground: colors.muted,
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _statusSubtitle(agent, instance),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TimelineType.smallStyle(colors.muted),
+                  ),
+                ],
+              ),
+            ),
+            if (canToggle) ...[
+              const SizedBox(width: 8),
+              Switch.adaptive(
+                key: AgentManageScreen.toggleKey(instance.instanceId),
+                value: instance.enabled,
+                onChanged: _connection == null || _updating
+                    ? null
+                    : (next) => unawaited(_toggleInstance(instance, next)),
+              ),
+            ],
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right, size: 18, color: colors.faint),
+          ],
+        ),
+      ),
     );
   }
-}
-
-class _AgentCard extends StatelessWidget {
-  const _AgentCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      ),
-    );
-  }
-}
-
-class _AgentPill extends StatelessWidget {
-  const _AgentPill({
-    required this.label,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String label;
-  final Color background;
-  final Color foreground;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-    decoration: BoxDecoration(
-      color: background,
-      borderRadius: BorderRadius.circular(5),
-    ),
-    child: Text(label, style: TimelineType.microStyle(foreground)),
-  );
 }

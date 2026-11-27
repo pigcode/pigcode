@@ -6,13 +6,18 @@ import 'package:pigcode_client/pigcode_client.dart';
 import 'package:pigcode_transport/pigcode_transport.dart';
 
 import 'app_theme.dart';
+import 'manage/agent_manage_screen.dart';
 import 'manage/manage_utils.dart';
+import 'manage/plugin_manage_screen.dart';
 import 'manage/project_directory_picker_screen.dart';
+import 'manage/project_manage_screen.dart';
+import 'manage/schedule_manage_screen.dart';
 import 'manage/settings_hub_screen.dart';
 import 'mobile_glass.dart';
 import 'mobile_sheet.dart';
 import 'mobile_status_dot.dart';
 import 'mobile_surfaces.dart';
+import 'multi_computer_summary.dart';
 import 'new_thread_draft.dart';
 import 'offline_cache.dart';
 import 'preview/preview_tab.dart';
@@ -22,6 +27,7 @@ import 'sidebar_menu.dart';
 import 'terminal/mobile_terminal_screen.dart';
 import 'theme_colors.dart';
 import 'thread_status.dart';
+import 'timeline/timeline_tokens.dart';
 import 'timeline_pane.dart';
 import 'workbench/mobile_workbench_screen.dart';
 import 'workbench/workbench_utils.dart';
@@ -150,7 +156,12 @@ class MobileWorkspace extends ConsumerStatefulWidget {
     this.openExternalUrl,
     this.previewWebViewBuilder,
     this.presented = true,
+    this.initialMenuOpen = false,
     this.otherComputersUrgentCount = 0,
+    this.computers = const [],
+    this.selectedComputerKey,
+    this.onSelectComputer,
+    this.onScanPair,
   });
 
   final MobileConnection? connection;
@@ -168,12 +179,17 @@ class MobileWorkspace extends ConsumerStatefulWidget {
   final ExternalUrlOpener? openExternalUrl;
   final PreviewWebViewBuilder? previewWebViewBuilder;
   final bool presented;
+  final bool initialMenuOpen;
   final bool connected;
   final String connectionLabel;
   final VoidCallback reconnect;
   final VoidCallback onComputers;
   final VoidCallback? onSettings;
   final int otherComputersUrgentCount;
+  final List<ComputerSummaryEntry> computers;
+  final String? selectedComputerKey;
+  final ValueChanged<ComputerProfile>? onSelectComputer;
+  final VoidCallback? onScanPair;
 
   @override
   ConsumerState<MobileWorkspace> createState() => _MobileWorkspaceState();
@@ -268,6 +284,156 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
     );
   }
 
+  Future<void> _openSwitchComputerSheet(
+    BuildContext context,
+    String activeName,
+  ) async {
+    final entries = widget.computers;
+    final selectedKey =
+        widget.selectedComputerKey ?? widget.computer?.computerKey;
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? pigcodeDark
+        : pigcodeLight;
+
+    await showMobileSheet<void>(
+      context,
+      title: '切换电脑',
+      content: (sheet) {
+        final items = <Widget>[
+          for (var i = 0; i < entries.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: colors.divider),
+            Builder(
+              builder: (_) {
+                final entry = entries[i];
+                final isSelected =
+                    entry.isActive ||
+                    (selectedKey != null &&
+                        entry.profile.computerKey == selectedKey);
+                final urgent =
+                    entry.counts.attention +
+                    entry.counts.error +
+                    entry.counts.unread;
+                final dotColor = entry.isOnline
+                    ? colors.readyMark
+                    : entry.isRevoked
+                    ? colors.error
+                    : colors.faint;
+                final statusLabel = isSelected
+                    ? (entry.activeConnected ? '当前 · 已连接' : '当前')
+                    : entry.isOnline
+                    ? '在线'
+                    : entry.isRevoked
+                    ? '配对已失效'
+                    : '离线';
+                return InkWell(
+                  key: ValueKey('switch-computer-${entry.profile.computerKey}'),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    Navigator.of(sheet).pop();
+                    if (!isSelected) {
+                      widget.onSelectComputer?.call(entry.profile);
+                    } else if (!entry.activeConnected) {
+                      widget.reconnect();
+                    }
+                  },
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          MobileStatusDot(color: dotColor),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  entry.profile.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TimelineType.contentStyle(
+                                    colors.foreground,
+                                    weight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  statusLabel,
+                                  style: TimelineType.smallStyle(colors.muted),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (!isSelected && urgent > 0) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colors.attentionTint,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                urgent > 99 ? '99+' : '$urgent',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.attention,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          if (isSelected)
+                            Icon(
+                              Icons.check_rounded,
+                              size: 18,
+                              color: colors.foreground,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+          if (entries.isNotEmpty) Divider(height: 1, color: colors.divider),
+          MobileSheetAction(
+            glyph: WorkspaceGlyph.laptop,
+            label: '全部电脑与多机汇总',
+            onTap: () {
+              Navigator.of(sheet).pop();
+              widget.onComputers();
+            },
+          ),
+          if (widget.onScanPair != null)
+            MobileSheetAction(
+              glyph: WorkspaceGlyph.plus,
+              label: '扫码配对新电脑',
+              dividerAbove: true,
+              onTap: () {
+                Navigator.of(sheet).pop();
+                widget.onScanPair!();
+              },
+            ),
+        ];
+        return SliverList.list(children: items);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final connection = widget.connection;
@@ -320,14 +486,22 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 : null)
           : widget.reconnect,
       onComputers: widget.onComputers,
-      onSettings: () {
+      onSwitchComputer:
+          (widget.computers.isNotEmpty || widget.onScanPair != null)
+          ? (viewContext) =>
+                unawaited(_openSwitchComputerSheet(viewContext, computerName))
+          : null,
+      onOpenSchedules: () {
         unawaited(
-          SettingsHubScreen.open(
+          ScheduleManageScreen.open(
             context,
             connectionListenable: _connectionNotifier,
             computerName: computerName,
             initialProjects: _lastSidebar?.projects ?? const [],
             onOpenThread: (threadId) {
+              if (mounted) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
               setState(() {
                 _pendingOpenThread = (
                   id: ++_openThreadSeq,
@@ -340,6 +514,43 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace> {
                 unawaited(ref.read(provider.notifier).refresh());
               }
             },
+          ),
+        );
+      },
+      onOpenPlugins: () {
+        unawaited(
+          PluginManageScreen.open(
+            context,
+            connectionListenable: _connectionNotifier,
+            computerName: computerName,
+          ),
+        );
+      },
+      onOpenAgents: () {
+        unawaited(
+          AgentManageScreen.open(
+            context,
+            connectionListenable: _connectionNotifier,
+            computerName: computerName,
+          ),
+        );
+      },
+      onOpenProjects: () {
+        unawaited(
+          ProjectManageScreen.open(
+            context,
+            connectionListenable: _connectionNotifier,
+            computerName: computerName,
+          ),
+        );
+      },
+      initialMenuOpen: widget.initialMenuOpen,
+      onSettings: () {
+        unawaited(
+          SettingsHubScreen.open(
+            context,
+            connectionListenable: _connectionNotifier,
+            computerName: computerName,
             onOpenReminders: widget.onSettings,
             onComputers: widget.onComputers,
           ),
@@ -544,6 +755,7 @@ class WorkspaceView extends StatefulWidget {
     required this.online,
     required this.computerName,
     required this.onComputers,
+    this.onSwitchComputer,
     this.onSettings,
     this.connectionLabel,
     this.error,
@@ -558,14 +770,21 @@ class WorkspaceView extends StatefulWidget {
     this.onVisibleThread,
     this.onActiveTargetChanged,
     this.presented = true,
+    this.initialMenuOpen = false,
     this.otherComputersUrgentCount = 0,
     this.sidebarCommands,
     this.onOpenTerminal,
     this.onOpenWorkbench,
+    this.onOpenSchedules,
+    this.onOpenPlugins,
+    this.onOpenAgents,
+    this.onOpenProjects,
     this.onAddProject,
     this.onRenameProject,
     this.onRemoveProject,
   });
+
+  static const drawerPanelKey = ValueKey('workspace-drawer-panel');
 
   final SidebarSnapshot? snapshot;
   final bool online;
@@ -578,12 +797,17 @@ class WorkspaceView extends StatefulWidget {
   final ValueChanged<({String? threadId, bool draftOpen})>?
   onActiveTargetChanged;
   final bool presented;
+  final bool initialMenuOpen;
   final int otherComputersUrgentCount;
   final MobileSidebarCommands? sidebarCommands;
   final void Function(BuildContext context, MobileThreadSummary thread)?
   onOpenTerminal;
   final void Function(BuildContext context, MobileThreadSummary thread)?
   onOpenWorkbench;
+  final VoidCallback? onOpenSchedules;
+  final VoidCallback? onOpenPlugins;
+  final VoidCallback? onOpenAgents;
+  final VoidCallback? onOpenProjects;
   final Future<void> Function(BuildContext context)? onAddProject;
   final Future<void> Function(
     BuildContext context,
@@ -619,6 +843,7 @@ class WorkspaceView extends StatefulWidget {
   )?
   draft;
   final VoidCallback onComputers;
+  final ValueChanged<BuildContext>? onSwitchComputer;
   final VoidCallback? onSettings;
 
   @override
@@ -627,16 +852,23 @@ class WorkspaceView extends StatefulWidget {
 
 enum _HeaderThreadAction { pin, read, archive }
 
-class _WorkspaceViewState extends State<WorkspaceView> {
+class _WorkspaceViewState extends State<WorkspaceView>
+    with SingleTickerProviderStateMixin {
   final _menuFocus = FocusNode();
   final _menuButton = FocusNode();
+  late final AnimationController _drawerController;
   String? _threadId;
   MobileThreadSummary? _acceptedThread;
   String? _draftProject;
   bool _draftOpen = false;
-  bool _open = false;
+  bool _menuTargetOpen = false;
+  bool _draggingDrawer = false;
+  double _dragStartValue = 0;
+  double _drawerWidth = 0;
   bool _updatingThread = false;
   String? _reminderThread;
+
+  bool get _open => _menuTargetOpen || _drawerController.value >= 0.5;
   bool _reminderUnavailable = false;
   String? _visibleThread;
   ({String? threadId, bool draftOpen})? _reportedActiveTarget;
@@ -657,6 +889,19 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   @override
   void initState() {
     super.initState();
+    _menuTargetOpen = widget.initialMenuOpen;
+    _drawerController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 320),
+          value: widget.initialMenuOpen ? 1.0 : 0.0,
+        )..addStatusListener((status) {
+          if (mounted &&
+              (status == AnimationStatus.completed ||
+                  status == AnimationStatus.dismissed)) {
+            setState(() {});
+          }
+        });
     _openNotification(widget.openReminder);
     _applyShareTarget(widget.openShareTarget);
     _applyOpenThreadRequest(widget.openThreadRequest);
@@ -698,11 +943,16 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     }
   }
 
+  void _snapMenuClosed() {
+    _menuTargetOpen = false;
+    _drawerController.value = 0.0;
+  }
+
   void _applyOpenThreadRequest(OpenThreadRequest? request) {
     if (request == null) return;
     _reminderThread = null;
     _reminderUnavailable = false;
-    _open = false;
+    _snapMenuClosed();
     _draftOpen = false;
     _visit++;
     _selectThread(request.threadId);
@@ -729,7 +979,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     if (request == null) return;
     _reminderThread = null;
     _reminderUnavailable = false;
-    _open = false;
+    _snapMenuClosed();
     if (request.openDraft) {
       _draftOpen = true;
       _draftProject = null;
@@ -751,7 +1001,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     _selectThread(reminder.threadId);
     _acceptedThread = null;
     _draftOpen = false;
-    _open = false;
+    _snapMenuClosed();
     if (widget.online) {
       _reminderUnavailable = _thread == null;
       if (!_reminderUnavailable) _reminderThread = null;
@@ -842,9 +1092,24 @@ class _WorkspaceViewState extends State<WorkspaceView> {
   }
 
   void _menu(bool open) {
-    setState(() => _open = open);
+    if (_menuTargetOpen != open) {
+      setState(() => _menuTargetOpen = open);
+    }
+    final disableAnimations =
+        mounted && MediaQuery.disableAnimationsOf(context);
+    if (disableAnimations) {
+      _drawerController.value = open ? 1.0 : 0.0;
+    } else {
+      unawaited(
+        _drawerController.animateTo(
+          open ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 320),
+          curve: const Cubic(.2, .7, .2, 1),
+        ),
+      );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _open == open) {
+      if (mounted && _menuTargetOpen == open) {
         (open ? _menuFocus : _menuButton).requestFocus();
       }
     });
@@ -852,6 +1117,7 @@ class _WorkspaceViewState extends State<WorkspaceView> {
 
   @override
   void dispose() {
+    _drawerController.dispose();
     _menuFocus.dispose();
     _menuButton.dispose();
     super.dispose();
@@ -1376,20 +1642,66 @@ class _WorkspaceViewState extends State<WorkspaceView> {
     final colors = theme.brightness == Brightness.dark
         ? pigcodeDark
         : pigcodeLight;
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 320);
-    const curve = Cubic(.2, .7, .2, 1);
     final thread = _thread;
     _updateVisibleThread();
     final project = widget.snapshot?.projects
         .where((item) => item.id == thread?.projectId)
         .firstOrNull;
-    final edge = BorderRadius.horizontal(left: Radius.circular(_open ? 34 : 0));
     final canOpenDraft =
         widget.draft != null &&
         (widget.snapshot?.projects.isNotEmpty == true ||
             widget.offlineDraftAvailable);
+
+    final mainContent = Builder(
+      builder: (context) {
+        final topPadding = MediaQuery.paddingOf(context).top;
+        const headerHeight = 54.0;
+        final topInset = topPadding + headerHeight;
+        final body = _draftOpen && widget.draft != null
+            ? KeyedSubtree(
+                key: ValueKey(('new-thread', _draftProject)),
+                child: widget.draft!(
+                  _draftProject,
+                  thread?.projectId,
+                  _acceptDraft,
+                  (_) {},
+                ),
+              )
+            : _summary(thread);
+        return MobileChromeInsets(
+          topInset: topInset,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned.fill(child: body),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: MobileTopGlassVeil(
+                  height: topInset + 16,
+                  statusBarHeight: topPadding,
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: SafeArea(
+                  bottom: false,
+                  child: _header(
+                    context,
+                    thread,
+                    projectName: project?.name,
+                    canOpenDraft: canOpenDraft,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
 
     return PopScope(
       canPop: !_open && !_draftOpen,
@@ -1408,164 +1720,192 @@ class _WorkspaceViewState extends State<WorkspaceView> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth * .84;
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SizedBox(
-                      width: width,
-                      child: ExcludeSemantics(
-                        excluding: !_open,
-                        child: ExcludeFocus(
-                          excluding: !_open,
-                          child: IgnorePointer(
-                            ignoring: !_open,
-                            child: TickerMode(
-                              enabled: _open,
-                              child: SidebarMenu(
-                                active: _open,
-                                snapshot: widget.snapshot,
-                                selectedId: _draftOpen ? null : thread?.id,
-                                computerName: widget.computerName,
-                                online: widget.online,
-                                connectionLabel: widget.connectionLabel,
-                                commands: widget.sidebarCommands,
-                                focusNode: _menuFocus,
-                                onSelect: (id) {
-                                  _reminderThread = null;
-                                  _reminderUnavailable = false;
-                                  _draftOpen = false;
-                                  _visit++;
-                                  _selectThread(id);
-                                  _menu(false);
-                                },
-                                onNewThread: canOpenDraft ? _openDraft : null,
-                                onAddProject: widget.onAddProject != null
-                                    ? () => unawaited(
-                                        widget.onAddProject!(context),
-                                      )
-                                    : null,
-                                onRenameProject: widget.onRenameProject != null
-                                    ? (project) => unawaited(
-                                        widget.onRenameProject!(
-                                          context,
-                                          project,
-                                        ),
-                                      )
-                                    : null,
-                                onRemoveProject: widget.onRemoveProject != null
-                                    ? (project) => unawaited(
-                                        widget.onRemoveProject!(
-                                          context,
-                                          project,
-                                        ),
-                                      )
-                                    : null,
-                                onSettings: widget.onSettings,
-                                otherComputersUrgentCount:
-                                    widget.otherComputersUrgentCount,
-                                onComputers: () {
-                                  _menu(false);
-                                  widget.onComputers();
-                                },
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  AnimatedPositioned(
-                    duration: duration,
-                    curve: curve,
-                    top: 0,
-                    bottom: 0,
-                    left: _open ? width : 0,
-                    right: _open ? -width : 0,
-                    child: AnimatedContainer(
-                      duration: duration,
-                      curve: curve,
-                      clipBehavior: Clip.antiAlias,
-                      decoration: BoxDecoration(
-                        color: colors.background,
-                        borderRadius: edge,
-                        boxShadow: _open
-                            ? [mobileDrawerShadow(theme.brightness)]
-                            : null,
-                      ),
-                      child: Builder(
-                        builder: (context) {
-                          final topPadding = MediaQuery.paddingOf(context).top;
-                          const headerHeight = 54.0;
-                          final topInset = topPadding + headerHeight;
-                          final body = _draftOpen && widget.draft != null
-                              ? KeyedSubtree(
-                                  key: ValueKey(('new-thread', _draftProject)),
-                                  child: widget.draft!(
-                                    _draftProject,
-                                    thread?.projectId,
-                                    _acceptDraft,
-                                    (_) {},
-                                  ),
-                                )
-                              : _summary(thread);
-                          return Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              ExcludeSemantics(
-                                excluding: _open,
+              _drawerWidth = width;
+              return GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onHorizontalDragStart: (_) {
+                  if (_drawerWidth <= 0 ||
+                      ModalRoute.of(context)?.isCurrent == false) {
+                    return;
+                  }
+                  _draggingDrawer = true;
+                  _dragStartValue = _drawerController.value;
+                  _drawerController.stop();
+                },
+                onHorizontalDragUpdate: (details) {
+                  if (!_draggingDrawer || _drawerWidth <= 0) return;
+                  final delta = details.delta.dx;
+                  if (_drawerController.value == 0 && delta < 0) return;
+                  final next = (_drawerController.value + delta / _drawerWidth)
+                      .clamp(0.0, 1.0);
+                  _drawerController.value = next;
+                  final nextTarget = next >= 0.5;
+                  if (nextTarget != _menuTargetOpen) {
+                    setState(() => _menuTargetOpen = nextTarget);
+                  }
+                },
+                onHorizontalDragEnd: (details) {
+                  if (!_draggingDrawer) return;
+                  _draggingDrawer = false;
+                  final vx = details.velocity.pixelsPerSecond.dx;
+                  final bool shouldOpen;
+                  if (vx.abs() >= 300) {
+                    shouldOpen = vx > 0;
+                  } else if (_dragStartValue >= 0.5) {
+                    shouldOpen = _drawerController.value > 0.72;
+                  } else {
+                    shouldOpen = _drawerController.value >= 0.35;
+                  }
+                  _menu(shouldOpen);
+                },
+                onHorizontalDragCancel: () {
+                  if (!_draggingDrawer) return;
+                  _draggingDrawer = false;
+                  _menu(_drawerController.value >= 0.5);
+                },
+                child: AnimatedBuilder(
+                  animation: _drawerController,
+                  child: mainContent,
+                  builder: (context, child) {
+                    final t = _drawerController.value.clamp(0.0, 1.0);
+                    final sidebarVisible = t > 0.001;
+                    final sidebarInteractive = _menuTargetOpen || t >= 0.5;
+                    final edge = BorderRadius.horizontal(
+                      left: Radius.circular(34 * t),
+                    );
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Offstage(
+                          offstage: !sidebarVisible,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: SizedBox(
+                              width: width,
+                              child: ExcludeSemantics(
+                                excluding: !sidebarInteractive,
                                 child: ExcludeFocus(
-                                  excluding: _open,
-                                  child: MobileChromeInsets(
-                                    topInset: topInset,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Positioned.fill(child: body),
-                                        Positioned(
-                                          top: 0,
-                                          left: 0,
-                                          right: 0,
-                                          child: MobileTopGlassVeil(
-                                            height: topInset + 16,
-                                          ),
-                                        ),
-                                        Positioned(
-                                          top: 0,
-                                          left: 0,
-                                          right: 0,
-                                          child: SafeArea(
-                                            bottom: false,
-                                            child: _header(
-                                              context,
-                                              thread,
-                                              projectName: project?.name,
-                                              canOpenDraft: canOpenDraft,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                  excluding: !sidebarInteractive,
+                                  child: IgnorePointer(
+                                    ignoring: !sidebarInteractive,
+                                    child: TickerMode(
+                                      enabled: sidebarVisible,
+                                      child: SidebarMenu(
+                                        active: t >= 0.99,
+                                        snapshot: widget.snapshot,
+                                        selectedId: _draftOpen
+                                            ? null
+                                            : thread?.id,
+                                        computerName: widget.computerName,
+                                        online: widget.online,
+                                        connectionLabel: widget.connectionLabel,
+                                        commands: widget.sidebarCommands,
+                                        focusNode: _menuFocus,
+                                        onSelect: (id) {
+                                          _reminderThread = null;
+                                          _reminderUnavailable = false;
+                                          _draftOpen = false;
+                                          _visit++;
+                                          _selectThread(id);
+                                          _menu(false);
+                                        },
+                                        onNewThread: canOpenDraft
+                                            ? _openDraft
+                                            : null,
+                                        onOpenSchedules: widget.onOpenSchedules,
+                                        onOpenPlugins: widget.onOpenPlugins,
+                                        onOpenAgents: widget.onOpenAgents,
+                                        onOpenProjects: widget.onOpenProjects,
+                                        onAddProject:
+                                            widget.onAddProject != null
+                                            ? () => unawaited(
+                                                widget.onAddProject!(context),
+                                              )
+                                            : null,
+                                        onRenameProject:
+                                            widget.onRenameProject != null
+                                            ? (project) => unawaited(
+                                                widget.onRenameProject!(
+                                                  context,
+                                                  project,
+                                                ),
+                                              )
+                                            : null,
+                                        onRemoveProject:
+                                            widget.onRemoveProject != null
+                                            ? (project) => unawaited(
+                                                widget.onRemoveProject!(
+                                                  context,
+                                                  project,
+                                                ),
+                                              )
+                                            : null,
+                                        onSettings: widget.onSettings,
+                                        otherComputersUrgentCount:
+                                            widget.otherComputersUrgentCount,
+                                        onSwitchComputer:
+                                            widget.onSwitchComputer != null
+                                            ? () => widget.onSwitchComputer!(
+                                                context,
+                                              )
+                                            : null,
+                                        onComputers: () {
+                                          _menu(false);
+                                          widget.onComputers();
+                                        },
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                              if (_open)
-                                Semantics(
-                                  button: true,
-                                  label: '收起菜单',
-                                  child: GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () => _menu(false),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          key: WorkspaceView.drawerPanelKey,
+                          top: 0,
+                          bottom: 0,
+                          left: width * t,
+                          right: -width * t,
+                          child: Container(
+                            clipBehavior: Clip.antiAlias,
+                            decoration: BoxDecoration(
+                              color: colors.background,
+                              borderRadius: edge,
+                              boxShadow: t > 0.01
+                                  ? [mobileDrawerShadow(theme.brightness)]
+                                  : null,
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ExcludeSemantics(
+                                  excluding: sidebarInteractive,
+                                  child: ExcludeFocus(
+                                    excluding: sidebarInteractive,
+                                    child: child!,
                                   ),
                                 ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ],
+                                if (sidebarVisible)
+                                  IgnorePointer(
+                                    ignoring: !sidebarInteractive,
+                                    child: Semantics(
+                                      button: true,
+                                      label: '收起菜单',
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () => _menu(false),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               );
             },
           ),

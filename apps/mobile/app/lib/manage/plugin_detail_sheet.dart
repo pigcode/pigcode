@@ -593,6 +593,14 @@ class _PluginDetailSheetState extends State<PluginDetailSheet> {
         if (plugin.canUpdate) ...[
           FilledButton(
             key: PluginDetailSheet.updateButtonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             onPressed: online && !_working
                 ? () => _updatePlugin(plugin.id)
                 : null,
@@ -625,11 +633,12 @@ class _PluginDetailSheetState extends State<PluginDetailSheet> {
             key: PluginDetailSheet.uninstallButtonKey,
             style: OutlinedButton.styleFrom(
               foregroundColor: colors.error,
-              side: BorderSide(
-                color: online
-                    ? colors.error.withValues(alpha: 0.45)
-                    : colors.border,
+              backgroundColor: colors.surface,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
+              side: BorderSide(color: colors.border),
             ),
             onPressed: online && !_working
                 ? () => _uninstallPlugin(plugin)
@@ -762,6 +771,14 @@ class _PluginDetailSheetState extends State<PluginDetailSheet> {
         if (hasUpdate)
           FilledButton(
             key: PluginDetailSheet.updateButtonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             onPressed: online && !_working
                 ? () => _updatePlugin(installed.id)
                 : null,
@@ -793,6 +810,14 @@ class _PluginDetailSheetState extends State<PluginDetailSheet> {
         else
           FilledButton(
             key: PluginDetailSheet.installButtonKey,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: colors.onPrimary,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
             onPressed: online && !_working ? _installFromMarketplace : null,
             child: _working
                 ? const SizedBox.square(

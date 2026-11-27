@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pigcode_client/pigcode_client.dart';
+import 'package:pigcode_transport/pigcode_transport.dart';
 import 'package:pigcode_mobile/mobile_sheet.dart';
+import 'package:pigcode_mobile/multi_computer_summary.dart';
 import 'package:pigcode_mobile/run_diff_screen.dart';
 import 'package:pigcode_mobile/timeline_pane.dart';
 import 'package:pigcode_mobile/workspace.dart';
@@ -251,10 +254,162 @@ void main() {
       expect(tester.getTopLeft(menu).dy, greaterThanOrEqualTo(47));
       await tester.tap(menu);
       await tester.pumpAndSettle();
-      final page = tester.getRect(find.byType(AnimatedPositioned).first);
+      final page = tester.getRect(find.byKey(WorkspaceView.drawerPanelKey));
       expect(page.left, closeTo(390 * .84, .01));
       expect(page.top, 0);
       expect(page.bottom, 844);
+    },
+  );
+
+  testWidgets(
+    'supports swipe right to open drawer, swipe left to close, and standalone menus',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 844);
+      addTearDown(tester.view.reset);
+
+      var schedulesOpened = false;
+      var pluginsOpened = false;
+      var agentsOpened = false;
+      var projectsOpened = false;
+      var switchedSheetCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: WorkspaceView(
+            snapshot: SidebarSnapshot(
+              projects: snapshot.projects,
+              threads: [snapshot.threads.last],
+              syncedAt: snapshot.syncedAt,
+            ),
+            online: true,
+            computerName: 'Studio Mac',
+            onComputers: () {},
+            onSwitchComputer: (_) => switchedSheetCalled = true,
+            onOpenSchedules: () => schedulesOpened = true,
+            onOpenPlugins: () => pluginsOpened = true,
+            onOpenAgents: () => agentsOpened = true,
+            onOpenProjects: () => projectsOpened = true,
+            draft: (_, _, _, _) => const SizedBox.shrink(),
+            timeline: (thread, _, _, _) => SizedBox(key: ValueKey(thread.id)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Swipe right to open drawer smoothly.
+      await tester.drag(
+        find.byKey(WorkspaceView.drawerPanelKey),
+        const Offset(220, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byKey(WorkspaceView.drawerPanelKey)).left,
+        closeTo(390 * .84, .01),
+      );
+
+      // Verify standalone menus alongside 新会话 in SidebarMenu.
+      expect(find.byKey(SidebarMenu.newThreadMenuKey), findsOneWidget);
+      expect(find.byKey(SidebarMenu.schedulesMenuKey), findsOneWidget);
+      expect(find.byKey(SidebarMenu.pluginsMenuKey), findsOneWidget);
+      expect(find.byKey(SidebarMenu.agentsMenuKey), findsOneWidget);
+      expect(find.byKey(SidebarMenu.manageProjectsButtonKey), findsOneWidget);
+
+      await tester.tap(find.byKey(SidebarMenu.schedulesMenuKey));
+      await tester.tap(find.byKey(SidebarMenu.pluginsMenuKey));
+      await tester.tap(find.byKey(SidebarMenu.agentsMenuKey));
+      await tester.tap(find.byKey(SidebarMenu.manageProjectsButtonKey));
+      expect(schedulesOpened, isTrue);
+      expect(pluginsOpened, isTrue);
+      expect(agentsOpened, isTrue);
+      expect(projectsOpened, isTrue);
+
+      await tester.tap(menuText('Studio Mac'));
+      expect(switchedSheetCalled, isTrue);
+
+      // Swipe left from visible edge to close drawer smoothly.
+      await tester.dragFrom(const Offset(355, 420), const Offset(-220, 0));
+      await tester.pumpAndSettle();
+      expect(
+        tester.getRect(find.byKey(WorkspaceView.drawerPanelKey)).left,
+        closeTo(0, .01),
+      );
+    },
+  );
+
+  testWidgets(
+    'MobileWorkspace keeps sidebar open when mounted with initialMenuOpen and switches computer in place',
+    (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      final macA = ComputerProfile(
+        computerKey: base64Url
+            .encode(List<int>.filled(32, 65))
+            .replaceAll('=', ''),
+        name: 'Studio Mac',
+        address: 'wss://relay.example.com/ws/v1/connect',
+        token: 'tok-a',
+      );
+      final macB = ComputerProfile(
+        computerKey: base64Url
+            .encode(List<int>.filled(32, 66))
+            .replaceAll('=', ''),
+        name: 'Mini Server',
+        address: 'wss://relay.example.com/ws/v1/connect',
+        token: 'tok-b',
+      );
+      ComputerProfile? switchedTarget;
+      final conn = _ReadConnection(_Sidebar(snapshot));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
+            home: MobileWorkspace(
+              connection: conn,
+              connected: true,
+              computer: macA,
+              connectionLabel: '已连接',
+              reconnect: () {},
+              onComputers: () {},
+              initialMenuOpen: true,
+              selectedComputerKey: macA.computerKey,
+              computers: [
+                ComputerSummaryEntry(
+                  profile: macA,
+                  isActive: true,
+                  activeConnected: true,
+                ),
+                ComputerSummaryEntry(
+                  profile: macB,
+                  isActive: false,
+                  activeConnected: false,
+                ),
+              ],
+              onSelectComputer: (target) => switchedTarget = target,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Sidebar started open via initialMenuOpen.
+      expect(
+        find.byKey(SidebarMenu.schedulesMenuKey).hitTestable(),
+        findsOneWidget,
+      );
+
+      await tester.tap(menuText('测试电脑'));
+      await tester.pumpAndSettle();
+      expect(find.text('切换电脑'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(ValueKey('switch-computer-${macB.computerKey}')),
+      );
+      await tester.pumpAndSettle();
+      expect(switchedTarget?.computerKey, macB.computerKey);
     },
   );
 

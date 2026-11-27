@@ -6,7 +6,6 @@ import 'package:pigcode_mobile/app_theme.dart';
 import 'package:pigcode_mobile/manage/agent_instance_editor_screen.dart';
 import 'package:pigcode_mobile/manage/agent_manage_screen.dart';
 import 'package:pigcode_mobile/manage/manage_utils.dart';
-import 'package:pigcode_mobile/manage/settings_hub_screen.dart';
 
 class _AgentManageHost implements HostRequests {
   final List<({String method, Map<String, Object?> params})> calls = [];
@@ -260,16 +259,12 @@ void main() {
 
       await tester.pumpWidget(
         _wrap(
-          SettingsHubScreen(
+          AgentManageScreen(
             connectionListenable: notifier,
             computerName: 'StudioMac',
           ),
         ),
       );
-      await tester.pumpAndSettle();
-
-      // Navigate into AgentManageScreen from SettingsHubScreen.
-      await tester.tap(find.byKey(SettingsHubScreen.agentsTileKey));
       await tester.pumpAndSettle();
 
       expect(find.text('Claude Code'), findsWidgets);

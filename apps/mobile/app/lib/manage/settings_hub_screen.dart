@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pigcode_client/pigcode_client.dart';
@@ -10,59 +8,41 @@ import '../mobile_status_dot.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
-import 'agent_manage_screen.dart';
-import 'manage_utils.dart';
-import 'plugin_manage_screen.dart';
-import 'project_manage_screen.dart';
-import 'schedule_manage_screen.dart';
+import 'manage_form_widgets.dart';
 
-/// 手机端统一「设置」主页：聚合当前电脑的管理入口（项目、Agent 实例、定时任务、插件管理）与手机本机设置。
+/// 手机端本机设置主页（侧栏右下角 `⚙️` 入口）：
+/// 聚焦手机自身功能，包括通知设置与已配对电脑汇总总览；
+/// 当前电脑的定时任务、插件管理、Agent 实例与项目管理均已收归到侧栏主菜单。
 class SettingsHubScreen extends StatelessWidget {
   const SettingsHubScreen({
     super.key,
     required this.connectionListenable,
     required this.computerName,
-    this.initialProjects = const [],
-    this.onOpenThread,
     this.onOpenReminders,
     this.onComputers,
-    this.onOpenAgents,
   });
 
-  static const projectsTileKey = ValueKey('settings-hub-projects');
-  static const agentsTileKey = ValueKey('settings-hub-agents');
-  static const schedulesTileKey = ValueKey('settings-hub-schedules');
-  static const pluginsTileKey = ValueKey('settings-hub-plugins');
   static const remindersTileKey = ValueKey('settings-hub-reminders');
   static const computersTileKey = ValueKey('settings-hub-computers');
 
   final ValueListenable<MobileConnection?> connectionListenable;
   final String computerName;
-  final List<MobileProjectSummary> initialProjects;
-  final ValueChanged<String>? onOpenThread;
   final VoidCallback? onOpenReminders;
   final VoidCallback? onComputers;
-  final void Function(BuildContext context)? onOpenAgents;
 
   static Future<void> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
     required String computerName,
-    List<MobileProjectSummary> initialProjects = const [],
-    ValueChanged<String>? onOpenThread,
     VoidCallback? onOpenReminders,
     VoidCallback? onComputers,
-    void Function(BuildContext context)? onOpenAgents,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => SettingsHubScreen(
         connectionListenable: connectionListenable,
         computerName: computerName,
-        initialProjects: initialProjects,
-        onOpenThread: onOpenThread,
         onOpenReminders: onOpenReminders,
         onComputers: onComputers,
-        onOpenAgents: onOpenAgents,
       ),
     ),
   );
@@ -78,18 +58,12 @@ class SettingsHubScreen extends StatelessWidget {
       valueListenable: connectionListenable,
       builder: (context, connection, _) {
         final online = connection != null;
-        final canProjects =
-            online && connectionSupportsProjectManage(connection);
-        final canAgents = online && connectionSupportsAgentManage(connection);
-        final canSchedules =
-            online && connectionSupportsScheduleManage(connection);
-        final canPlugins = online && connectionSupportsPluginManage(connection);
         final activeName = connection?.computerName ?? computerName;
 
         return Scaffold(
           backgroundColor: colors.background,
           appBar: AppBar(
-            title: const Text('设置'),
+            title: const Text('手机设置'),
             centerTitle: true,
             scrolledUnderElevation: 0,
             systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),
@@ -98,317 +72,116 @@ class SettingsHubScreen extends StatelessWidget {
               alignment: AlignmentDirectional.centerStart,
               child: MobileGlassChromeButton(
                 padding: const EdgeInsetsDirectional.only(start: 10),
-                child: SizedBox.square(
+                child: const SizedBox.square(
                   dimension: 40,
-                  child: IconButton(
-                    tooltip: '返回',
-                    padding: EdgeInsets.zero,
-                    onPressed: () => Navigator.maybePop(context),
-                    icon: const RotatedBox(
-                      quarterTurns: 1,
-                      child: WorkspaceIcon(
-                        WorkspaceGlyph.chevronDown,
-                        size: 20,
-                      ),
-                    ),
-                  ),
+                  child: BackButton(),
                 ),
               ),
             ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Divider(height: 1, thickness: 1, color: colors.divider),
-            ),
           ),
-          body: SafeArea(
-            top: false,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-              children: [
-                _SectionHeader(
-                  title: '当前电脑 · $activeName',
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    spacing: 6,
+          body: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            children: [
+              const ManageSectionHeader(title: '手机与通知'),
+              const SizedBox(height: 8),
+              ManageSurfaceCard(
+                children: [
+                  if (onOpenReminders != null) ...[
+                    ListTile(
+                      key: remindersTileKey,
+                      leading: Icon(
+                        Icons.notifications_outlined,
+                        size: 20,
+                        color: colors.secondaryText,
+                      ),
+                      title: const Text('通知设置'),
+                      subtitle: Text(
+                        '管理提醒开关、安静时段与推送权限',
+                        style: TimelineType.metaStyle(colors.muted),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: colors.faint,
+                      ),
+                      onTap: onOpenReminders,
+                    ),
+                    if (onComputers != null)
+                      Divider(height: 1, indent: 56, color: colors.divider),
+                  ],
+                  if (onComputers != null)
+                    ListTile(
+                      key: computersTileKey,
+                      leading: IconTheme(
+                        data: IconThemeData(color: colors.secondaryText),
+                        child: const WorkspaceIcon(
+                          WorkspaceGlyph.laptop,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text('全部电脑与配对管理'),
+                      subtitle: Text(
+                        '查看跨电脑待办总览、扫码配对或移除设备',
+                        style: TimelineType.metaStyle(colors.muted),
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: colors.faint,
+                      ),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        onComputers!();
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 22),
+              const ManageSectionHeader(title: '当前连接状态'),
+              const SizedBox(height: 8),
+              ManageSurfaceCard(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+                children: [
+                  Row(
                     children: [
                       MobileStatusDot(
                         color: online ? colors.readyMark : colors.faint,
                       ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          activeName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TimelineType.contentStyle(
+                            colors.foreground,
+                            weight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Text(
-                        online ? '已连接' : '离线',
-                        style: TimelineType.metaStyle(colors.muted),
+                        online ? '已连接' : '离线重连中',
+                        style: TimelineType.metaStyle(
+                          online ? colors.readyMark : colors.muted,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                _SettingsCard(
-                  children: [
-                    ListTile(
-                      key: projectsTileKey,
-                      leading: IconTheme(
-                        data: IconThemeData(color: colors.secondaryText),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.folder,
-                          size: 20,
-                        ),
-                      ),
-                      title: const Text('项目管理'),
-                      subtitle: Text(
-                        !online
-                            ? '电脑离线，连接后可管理'
-                            : canProjects
-                            ? '浏览电脑目录添加、重命名或移除项目'
-                            : '当前电脑版本不支持手机端项目管理',
-                        style: TimelineType.metaStyle(colors.muted),
-                      ),
-                      trailing: Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: colors.faint,
-                      ),
-                      enabled: canProjects,
-                      onTap: canProjects
-                          ? () => ProjectManageScreen.open(
-                              context,
-                              connectionListenable: connectionListenable,
-                            )
-                          : null,
-                    ),
-                    Divider(height: 1, indent: 56, color: colors.divider),
-                    ListTile(
-                      key: agentsTileKey,
-                      leading: IconTheme(
-                        data: IconThemeData(color: colors.secondaryText),
-                        child: const WorkspaceIcon(
-                          WorkspaceGlyph.bot,
-                          size: 20,
-                        ),
-                      ),
-                      title: const Text('Agent 实例'),
-                      subtitle: Text(
-                        !online
-                            ? '电脑离线，连接后可管理'
-                            : canAgents
-                            ? '检测状态、默认选择、新建与编辑自定义实例'
-                            : '当前电脑版本不支持手机端 Agent 管理',
-                        style: TimelineType.metaStyle(colors.muted),
-                      ),
-                      trailing: Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: colors.faint,
-                      ),
-                      enabled: canAgents,
-                      onTap: canAgents
-                          ? () {
-                              if (onOpenAgents != null) {
-                                onOpenAgents!(context);
-                              } else {
-                                unawaited(
-                                  AgentManageScreen.open(
-                                    context,
-                                    connectionListenable: connectionListenable,
-                                  ),
-                                );
-                              }
-                            }
-                          : null,
-                    ),
-                    Divider(height: 1, indent: 56, color: colors.divider),
-                    ListTile(
-                      key: schedulesTileKey,
-                      leading: Icon(
-                        Icons.schedule_outlined,
-                        size: 20,
-                        color: colors.secondaryText,
-                      ),
-                      title: const Text('定时任务'),
-                      subtitle: Text(
-                        !online
-                            ? '电脑离线，连接后可管理'
-                            : canSchedules
-                            ? '新建、编辑、启停任务，手动触发并查看运行记录'
-                            : '当前电脑版本不支持手机端定时任务管理',
-                        style: TimelineType.metaStyle(colors.muted),
-                      ),
-                      trailing: Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: colors.faint,
-                      ),
-                      enabled: canSchedules,
-                      onTap: canSchedules
-                          ? () {
-                              final hubRoute = ModalRoute.of(context);
-                              unawaited(
-                                ScheduleManageScreen.open(
-                                  context,
-                                  connectionListenable: connectionListenable,
-                                  initialProjects: initialProjects,
-                                  onOpenThread: onOpenThread == null
-                                      ? null
-                                      : (threadId) {
-                                          if (context.mounted) {
-                                            final nav = Navigator.of(context);
-                                            if (hubRoute != null) {
-                                              nav.popUntil(
-                                                (route) => route == hubRoute,
-                                              );
-                                            }
-                                            if (nav.canPop()) nav.pop();
-                                          }
-                                          onOpenThread!(threadId);
-                                        },
-                                ),
-                              );
-                            }
-                          : null,
-                    ),
-                    Divider(height: 1, indent: 56, color: colors.divider),
-                    ListTile(
-                      key: pluginsTileKey,
-                      leading: Icon(
-                        Icons.extension_outlined,
-                        size: 20,
-                        color: colors.secondaryText,
-                      ),
-                      title: const Text('插件管理'),
-                      subtitle: Text(
-                        !online
-                            ? '电脑离线，连接后可管理'
-                            : canPlugins
-                            ? '启停、更新、卸载插件，浏览并安装市场插件'
-                            : '当前电脑版本不支持手机端插件管理',
-                        style: TimelineType.metaStyle(colors.muted),
-                      ),
-                      trailing: Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: colors.faint,
-                      ),
-                      enabled: canPlugins,
-                      onTap: canPlugins
-                          ? () => PluginManageScreen.open(
-                              context,
-                              connectionListenable: connectionListenable,
-                            )
-                          : null,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                const _SectionHeader(title: '手机本机'),
-                const SizedBox(height: 8),
-                _SettingsCard(
-                  children: [
-                    if (onOpenReminders != null)
-                      ListTile(
-                        key: remindersTileKey,
-                        leading: Icon(
-                          Icons.notifications_outlined,
-                          size: 20,
-                          color: colors.secondaryText,
-                        ),
-                        title: const Text('通知设置'),
-                        subtitle: Text(
-                          '管理手机提醒开关与系统通知权限',
-                          style: TimelineType.metaStyle(colors.muted),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: colors.faint,
-                        ),
-                        onTap: onOpenReminders,
-                      ),
-                    if (onOpenReminders != null && onComputers != null)
-                      Divider(height: 1, indent: 56, color: colors.divider),
-                    if (onComputers != null)
-                      ListTile(
-                        key: computersTileKey,
-                        leading: IconTheme(
-                          data: IconThemeData(color: colors.secondaryText),
-                          child: const WorkspaceIcon(
-                            WorkspaceGlyph.laptop,
-                            size: 20,
-                          ),
-                        ),
-                        title: const Text('电脑与配对管理'),
-                        subtitle: Text(
-                          '切换电脑、扫码配对或移除已保存配置',
-                          style: TimelineType.metaStyle(colors.muted),
-                        ),
-                        trailing: Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: colors.faint,
-                        ),
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          onComputers!();
-                        },
-                      ),
-                  ],
-                ),
-              ],
-            ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '定时任务、插件、Agent 实例与项目均可在侧栏直接打开；点击底部电脑胶囊可原地切换电脑。',
+                    style: TimelineType.smallStyle(colors.muted),
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       },
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: TimelineType.metaStyle(
-                colors.muted,
-                weight: FontWeight.w500,
-              ),
-            ),
-          ),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).brightness == Brightness.dark
-        ? pigcodeDark
-        : pigcodeLight;
-    return Material(
-      color: colors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(mainAxisSize: MainAxisSize.min, children: children),
     );
   }
 }

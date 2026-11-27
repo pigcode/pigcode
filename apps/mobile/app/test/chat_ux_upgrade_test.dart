@@ -463,4 +463,31 @@ void main() {
       expect((views[2].creationParams as Map)['shape'], 'roundedRect');
     },
   );
+
+  testWidgets(
+    'MobileTopGlassVeil shields statusBarHeight strongly before fading over pills',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: pigcodeTheme(Brightness.light),
+          home: const Scaffold(
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: MobileTopGlassVeil(height: 132, statusBarHeight: 62),
+            ),
+          ),
+        ),
+      );
+
+      final box = tester.widget<DecoratedBox>(find.byType(DecoratedBox));
+      final gradient =
+          (box.decoration as BoxDecoration).gradient! as LinearGradient;
+      expect(gradient.colors, hasLength(4));
+      expect(gradient.stops, hasLength(4));
+      // 状态栏底缘 (~58pt / 132pt ≈ 0.44) 保持 >= 0.94 遮罩以防系统时间与正文重叠。
+      expect(gradient.stops![1], closeTo(58 / 132, 0.001));
+      expect(gradient.colors[1].a, greaterThanOrEqualTo(0.94));
+      expect(gradient.colors.last.a, 0.0);
+    },
+  );
 }

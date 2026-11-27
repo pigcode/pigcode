@@ -47,7 +47,12 @@ class SidebarMenu extends StatefulWidget {
     required this.onSelect,
     required this.onComputers,
     required this.focusNode,
+    this.onSwitchComputer,
     this.onNewThread,
+    this.onOpenSchedules,
+    this.onOpenPlugins,
+    this.onOpenAgents,
+    this.onOpenProjects,
     this.onAddProject,
     this.onRenameProject,
     this.onRemoveProject,
@@ -55,8 +60,15 @@ class SidebarMenu extends StatefulWidget {
     this.commands,
     this.active = true,
     this.otherComputersUrgentCount = 0,
+    this.activeScheduleCount = 0,
+    this.pluginUpdateCount = 0,
   });
 
+  static const newThreadMenuKey = ValueKey('sidebar-menu-new-thread');
+  static const schedulesMenuKey = ValueKey('sidebar-menu-schedules');
+  static const pluginsMenuKey = ValueKey('sidebar-menu-plugins');
+  static const agentsMenuKey = ValueKey('sidebar-menu-agents');
+  static const manageProjectsButtonKey = ValueKey('sidebar-manage-projects');
   static const addProjectButtonKey = ValueKey('sidebar-add-project');
   static const otherComputersBadgeKey = ValueKey(
     'sidebar-other-computers-badge',
@@ -69,8 +81,13 @@ class SidebarMenu extends StatefulWidget {
   final String? connectionLabel;
   final ValueChanged<String> onSelect;
   final VoidCallback onComputers;
+  final VoidCallback? onSwitchComputer;
   final FocusNode focusNode;
   final ValueChanged<String?>? onNewThread;
+  final VoidCallback? onOpenSchedules;
+  final VoidCallback? onOpenPlugins;
+  final VoidCallback? onOpenAgents;
+  final VoidCallback? onOpenProjects;
   final VoidCallback? onAddProject;
   final ValueChanged<MobileProjectSummary>? onRenameProject;
   final ValueChanged<MobileProjectSummary>? onRemoveProject;
@@ -78,6 +95,8 @@ class SidebarMenu extends StatefulWidget {
   final MobileSidebarCommands? commands;
   final bool active;
   final int otherComputersUrgentCount;
+  final int activeScheduleCount;
+  final int pluginUpdateCount;
 
   @override
   State<SidebarMenu> createState() => _SidebarMenuState();
@@ -475,6 +494,40 @@ class _SidebarMenuState extends State<SidebarMenu> {
               ),
             ),
             if (withOptions &&
+                widget.onOpenProjects != null &&
+                !_arrangement.archived &&
+                _arrangement.grouping == SidebarGrouping.project)
+              Padding(
+                padding: EdgeInsetsDirectional.only(
+                  end: 2,
+                  bottom: size == 48 ? 2 : 1,
+                ),
+                child: Align(
+                  alignment: AlignmentDirectional.bottomCenter,
+                  child: SizedBox(
+                    height: size < 46 ? size : 46,
+                    child: TextButton(
+                      key: SidebarMenu.manageProjectsButtonKey,
+                      style: TextButton.styleFrom(
+                        minimumSize: Size(40, size < 46 ? size : 46),
+                        padding: EdgeInsetsDirectional.only(
+                          start: 6,
+                          end: 6,
+                          top: size == 48 ? 8 : 7,
+                        ),
+                        foregroundColor: colors.muted,
+                        textStyle: labelStyle(
+                          12.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onPressed: widget.onOpenProjects,
+                      child: const Text('管理'),
+                    ),
+                  ),
+                ),
+              ),
+            if (withOptions &&
                 widget.online &&
                 widget.onAddProject != null &&
                 !_arrangement.archived &&
@@ -592,48 +645,143 @@ class _SidebarMenuState extends State<SidebarMenu> {
             ),
           ),
         ),
-      if (widget.onNewThread case final create?)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 50),
-            child: MobileGlassSurface(
-              borderRadius: const BorderRadius.all(Radius.circular(16)),
-              blurSigma: 16,
-              useNativeGlass: widget.active,
-              child: Material(
-                type: MaterialType.transparency,
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    alignment: AlignmentDirectional.centerStart,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    foregroundColor: colors.foreground,
-                    textStyle: labelStyle(16, fontWeight: FontWeight.w500),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: () => create(null),
-                  child: Row(
-                    children: [
-                      const WorkspaceIcon(WorkspaceGlyph.compose),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: alignedLabel(
-                          const Text('新会话'),
-                          const Offset(0, -2 / 3),
+    ];
+    Widget buildNavMenuRow({
+      required Key itemKey,
+      required Widget icon,
+      required String label,
+      required VoidCallback onTap,
+      int countBadge = 0,
+      bool muted = false,
+      bool highlightDot = false,
+    }) {
+      final inkColor = muted ? colors.muted : colors.foreground;
+      return Semantics(
+        button: true,
+        child: Material(
+          key: itemKey,
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 20,
+                      child: Center(
+                        child: IconTheme(
+                          data: IconThemeData(size: 19, color: inkColor),
+                          child: icon,
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: alignedLabel(
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: labelStyle(
+                            15.5,
+                            color: inkColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const Offset(0, -1 / 3),
+                      ),
+                    ),
+                    if (countBadge > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        height: 20,
+                        padding: const EdgeInsets.symmetric(horizontal: 7),
+                        decoration: BoxDecoration(
+                          color: highlightDot
+                              ? colors.running.withValues(alpha: 0.14)
+                              : colors.field,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          countBadge > 99 ? '99+' : '$countBadge',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: highlightDot ? colors.running : colors.muted,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ] else if (highlightDot) ...[
+                      const SizedBox(width: 8),
+                      MobileStatusDot(color: colors.running),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
           ),
         ),
-    ];
+      );
+    }
+
+    final hasNavMenu =
+        _query.isEmpty &&
+        (widget.onNewThread != null ||
+            widget.onOpenSchedules != null ||
+            widget.onOpenPlugins != null ||
+            widget.onOpenAgents != null);
+
     final content = <Widget>[
       for (final item in <Widget>[
+        if (hasNavMenu) ...[
+          if (widget.onNewThread case final create?)
+            buildNavMenuRow(
+              itemKey: SidebarMenu.newThreadMenuKey,
+              icon: const WorkspaceIcon(WorkspaceGlyph.compose, size: 19),
+              label: '新会话',
+              onTap: () => create(null),
+            ),
+          if (widget.onOpenSchedules case final openSchedules?)
+            buildNavMenuRow(
+              itemKey: SidebarMenu.schedulesMenuKey,
+              icon: const Icon(Icons.schedule_outlined, size: 19),
+              label: '定时任务',
+              muted: !widget.online,
+              countBadge: widget.activeScheduleCount,
+              onTap: openSchedules,
+            ),
+          if (widget.onOpenPlugins case final openPlugins?)
+            buildNavMenuRow(
+              itemKey: SidebarMenu.pluginsMenuKey,
+              icon: const Icon(Icons.extension_outlined, size: 19),
+              label: '插件管理',
+              muted: !widget.online,
+              countBadge: widget.pluginUpdateCount,
+              highlightDot: widget.pluginUpdateCount > 0,
+              onTap: openPlugins,
+            ),
+          if (widget.onOpenAgents case final openAgents?)
+            buildNavMenuRow(
+              itemKey: SidebarMenu.agentsMenuKey,
+              icon: const WorkspaceIcon(WorkspaceGlyph.bot, size: 19),
+              label: 'Agent 实例',
+              muted: !widget.online,
+              onTap: openAgents,
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+            child: Divider(height: 1, color: colors.divider),
+          ),
+        ],
         if (pinned.isNotEmpty) ...[
           groupLabel('置顶'),
           for (final thread in pinned) row(thread),
@@ -782,7 +930,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
         children: [
           Expanded(
             child: Semantics(
-              label: '管理电脑',
+              label: widget.onSwitchComputer != null ? '切换或管理电脑' : '管理电脑',
               child: MobileGlassSurface(
                 blurSigma: 16,
                 useNativeGlass: widget.active,
@@ -799,7 +947,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                       foregroundColor: colors.foreground,
                       textStyle: labelStyle(14),
                     ),
-                    onPressed: widget.onComputers,
+                    onPressed: widget.onSwitchComputer ?? widget.onComputers,
                     child: Row(
                       children: [
                         IconTheme(
@@ -810,7 +958,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Flexible(
+                        Expanded(
                           child: LayoutBuilder(
                             builder: (context, constraints) => Row(
                               mainAxisSize: MainAxisSize.min,
@@ -834,7 +982,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                                 ),
                                 ConstrainedBox(
                                   constraints: BoxConstraints(
-                                    maxWidth: constraints.maxWidth * .6,
+                                    maxWidth: constraints.maxWidth * .55,
                                   ),
                                   child: Text(
                                     connectionText,
@@ -847,6 +995,14 @@ class _SidebarMenuState extends State<SidebarMenu> {
                             ),
                           ),
                         ),
+                        if (widget.onSwitchComputer != null) ...[
+                          const SizedBox(width: 2),
+                          Icon(
+                            Icons.unfold_more_rounded,
+                            size: 16,
+                            color: colors.muted,
+                          ),
+                        ],
                         if (widget.otherComputersUrgentCount > 0) ...[
                           const SizedBox(width: 8),
                           Semantics(
@@ -926,11 +1082,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
               );
             }
             final mediaPadding = MediaQuery.paddingOf(context);
-            final topFallback =
-                mediaPadding.top +
-                56 +
-                (widget.onNewThread != null ? 60 : 0) +
-                (_searching ? 56 : 0);
+            final topFallback = mediaPadding.top + 56 + (_searching ? 56 : 0);
             final bottomFallback = mediaPadding.bottom + 68;
             final listTop = _headerHeight > 0 ? _headerHeight : topFallback;
             final listBottom =
@@ -952,6 +1104,7 @@ class _SidebarMenuState extends State<SidebarMenu> {
                   child: MobileTopGlassVeil(
                     height: listTop + 14,
                     color: colors.window,
+                    statusBarHeight: MediaQuery.paddingOf(context).top,
                   ),
                 ),
                 Positioned(

@@ -11,6 +11,7 @@ import '../mobile_sheet.dart';
 import '../theme_colors.dart';
 import '../timeline/timeline_tokens.dart';
 import '../workspace_icon.dart';
+import 'manage_form_widgets.dart';
 import 'manage_utils.dart';
 import 'project_directory_picker_screen.dart';
 
@@ -18,21 +19,29 @@ enum _ProjectRowAction { rename, remove }
 
 /// 集中项目管理页：展示所有项目、脱敏 `~` 相对路径与会话数，支持添加、重命名与移除。
 class ProjectManageScreen extends StatefulWidget {
-  const ProjectManageScreen({super.key, required this.connectionListenable});
+  const ProjectManageScreen({
+    super.key,
+    required this.connectionListenable,
+    this.computerName,
+  });
 
   static const addButtonKey = ValueKey('project-manage-add-button');
   static ValueKey<String> projectTileKey(String projectId) =>
       ValueKey('project-manage-tile-$projectId');
 
   final ValueListenable<MobileConnection?> connectionListenable;
+  final String? computerName;
 
   static Future<void> open(
     BuildContext context, {
     required ValueListenable<MobileConnection?> connectionListenable,
+    String? computerName,
   }) => Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          ProjectManageScreen(connectionListenable: connectionListenable),
+      builder: (_) => ProjectManageScreen(
+        connectionListenable: connectionListenable,
+        computerName: computerName,
+      ),
     ),
   );
 
@@ -215,7 +224,10 @@ class _ProjectManageScreenState extends State<ProjectManageScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: const Text('项目管理'),
+        title: ManageAppBarTitle(
+          title: '项目管理',
+          computerName: widget.computerName,
+        ),
         centerTitle: true,
         scrolledUnderElevation: 0,
         systemOverlayStyle: pigcodeSystemOverlay(theme.brightness),

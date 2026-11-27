@@ -349,16 +349,48 @@ class _SpecularGlassRimPainter extends CustomPainter {
 /// 避免 Flutter `BackdropFilter` 与上层原生 `UIGlassEffect` 平台视图产生采样接缝，
 /// 顶部状态栏柔化保护系统时间，顶栏悬浮胶囊背后保持清透以呈现真实光学折射。
 class MobileTopGlassVeil extends StatelessWidget {
-  const MobileTopGlassVeil({super.key, required this.height, this.color});
+  const MobileTopGlassVeil({
+    super.key,
+    required this.height,
+    this.color,
+    this.statusBarHeight,
+  });
 
   final double height;
   final Color? color;
+  final double? statusBarHeight;
 
   @override
   Widget build(BuildContext context) {
     final brightness = Theme.of(context).brightness;
     final colors = brightness == Brightness.dark ? pigcodeDark : pigcodeLight;
     final bg = color ?? colors.background;
+
+    final statusBar = statusBarHeight ?? 0;
+    final List<Color> gradientColors;
+    final List<double> stops;
+    if (statusBar > 0 && height > 0) {
+      final statusStop = ((statusBar - 4) / height).clamp(0.08, 0.72);
+      final midStop = ((statusBar + 10) / height).clamp(
+        statusStop + 0.04,
+        0.88,
+      );
+      gradientColors = [
+        bg,
+        bg.withValues(alpha: 0.94),
+        bg.withValues(alpha: 0.24),
+        bg.withValues(alpha: 0.0),
+      ];
+      stops = [0.0, statusStop, midStop, 1.0];
+    } else {
+      gradientColors = [
+        bg.withValues(alpha: 0.92),
+        bg.withValues(alpha: 0.62),
+        bg.withValues(alpha: 0.16),
+        bg.withValues(alpha: 0.0),
+      ];
+      stops = const [0.0, 0.34, 0.72, 1.0];
+    }
 
     return IgnorePointer(
       child: SizedBox(
@@ -368,13 +400,8 @@ class MobileTopGlassVeil extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                bg.withValues(alpha: 0.92),
-                bg.withValues(alpha: 0.62),
-                bg.withValues(alpha: 0.16),
-                bg.withValues(alpha: 0.0),
-              ],
-              stops: const [0.0, 0.34, 0.72, 1.0],
+              colors: gradientColors,
+              stops: stops,
             ),
           ),
         ),
