@@ -19,9 +19,8 @@ afterEach(() => {
 })
 
 describe("WorkspaceSidebar", () => {
-  it("shows schedules and plugins next to new chat, and a single add-project row when empty", () => {
+  it("shows schedules next to new chat without plugins top-nav, and a single add-project row when empty", () => {
     const onOpenSchedules = vi.fn()
-    const onOpenPlugins = vi.fn()
     const onAddProject = vi.fn()
     render(
       <LocaleProvider locale="zh-CN">
@@ -35,15 +34,12 @@ describe("WorkspaceSidebar", () => {
           onOpenThread={() => {}}
           onNewThread={() => {}}
           onOpenSchedules={onOpenSchedules}
-          onOpenPlugins={onOpenPlugins}
         />
       </LocaleProvider>,
     )
     fireEvent.click(screen.getByRole("button", { name: "定时任务" }))
-    fireEvent.click(screen.getByRole("button", { name: "插件" }))
     expect(onOpenSchedules).toHaveBeenCalledTimes(1)
-    expect(onOpenPlugins).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole("button", { name: "插件" }).getAttribute("aria-current")).toBeNull()
+    expect(screen.queryByRole("button", { name: "插件" })).toBeNull()
     expect(screen.getByRole("button", { name: "定时任务" }).getAttribute("aria-current")).toBeNull()
     const addButtons = screen.getAllByRole("button", { name: "添加项目" })
     expect(addButtons).toHaveLength(2)
@@ -52,12 +48,13 @@ describe("WorkspaceSidebar", () => {
   })
 
   it("pins the main navigation above the scrolling list, which ends with the extra content", () => {
-    renderSidebar({ onOpenSchedules: vi.fn(), onOpenPlugins: vi.fn(), children: <p>panel body</p> })
+    renderSidebar({ onOpenSchedules: vi.fn(), children: <p>panel body</p> })
     const head = document.querySelector(".side-head") as HTMLElement
     const list = document.querySelector(".side-scroll") as HTMLElement
-    for (const name of ["新会话", "定时任务", "插件"]) {
+    for (const name of ["新会话", "定时任务"]) {
       expect(within(head).getByRole("button", { name })).toBeTruthy()
     }
+    expect(within(head).queryByRole("button", { name: "插件" })).toBeNull()
     expect(within(list).queryByRole("button", { name: "定时任务" })).toBeNull()
     expect(within(list).getByText("项目")).toBeTruthy()
     expect(within(list).getByRole("button", { name: /First thread/ })).toBeTruthy()

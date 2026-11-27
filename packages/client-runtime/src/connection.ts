@@ -115,6 +115,15 @@ export class Connection {
     return true
   }
 
+  /** 断开并清理当前连接，拒绝在途请求并将状态设为离线。 */
+  detach(): void {
+    this.attempts += 1
+    this.client?.close("host connection detached")
+    this.client = undefined
+    this.subscriptions.clear()
+    this.handlers.onStatus("offline")
+  }
+
   /** 打开线程并订阅 snapshot + cursor；重复打开会从 0 重新同步。 */
   async openThread(threadId: string): Promise<void> {
     if (!this.client) throw new Error("host not connected")

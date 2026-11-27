@@ -1,6 +1,7 @@
 /** `pigcode-host` 输出格式化、设备目标匹配与交互式标准输入辅助函数。 */
 import { createInterface } from "node:readline/promises"
 import type {
+  DesktopAuthorizedClient,
   HostRuntimeKind,
   HostStatusView,
   MobilePairingView,
@@ -25,6 +26,9 @@ export interface SignalSource {
 }
 
 export type PairingDeviceView = MobilePairingView["devices"][number]
+export type PairedTargetEntry =
+  | { role: "mobile"; device: PairingDeviceView }
+  | { role: "desktop"; client: DesktopAuthorizedClient }
 
 export function deviceNumber(id: string): string {
   return id.slice(0, 8).toUpperCase()
@@ -66,6 +70,7 @@ export function formatStartSummary(info: {
 export function formatHostStatus(status: HostStatusView): string {
   return [
     "Host 状态: 运行中",
+    ...(status.hostName ? [`主机名: ${status.hostName}`] : []),
     `运行模式: ${formatRuntimeLabel(status.runtime)}`,
     `进程 PID: ${status.pid}`,
     `版本: ${status.version}`,
@@ -74,7 +79,8 @@ export function formatHostStatus(status: HostStatusView): string {
     `局域网地址: ${status.lanAddresses.length > 0 ? status.lanAddresses.join(", ") : "无"}`,
     `活跃 run: ${status.activeRuns}`,
     `待审批: ${status.pendingApprovals}`,
-    `已配对设备: ${status.pairedDevices}`,
+    `已配对手机: ${status.pairedDevices}`,
+    ...(status.pairedDesktops !== undefined ? [`已授权桌面端: ${status.pairedDesktops}`] : []),
   ].join("\n")
 }
 
@@ -122,7 +128,7 @@ export function formatRelayError(status: Exclude<RelayTestResult["status"], "sav
 export function formatPairingError(status: string): string {
   switch (status) {
     case "needs-relay":
-      return "请先测试并保存中继配置（可运行 pigcode-host relay set --address <wss://...>）。"
+      return "请先测试并保存中继配置（可运行 pigcode relay set --address <wss://...>）。"
     case "relay-unavailable":
       return "配对时连不上中继，请检查中继配置和版本。"
     case "qr-unavailable":
@@ -130,11 +136,11 @@ export function formatPairingError(status: string): string {
     case "storage-unavailable":
       return "本机凭据密钥不可用，无法完成配对。"
     case "expired":
-      return "二维码已过期，请重新生成。"
+      return "配对口令已过期，请重新生成。"
     case "cancelled":
       return "配对已取消。"
     case "disconnected":
-      return "手机端连接已断开，配对核对已取消。"
+      return "对端连接已断开，配对核对已取消。"
     case "superseded":
       return "当前配对会话已被新的配对操作取代，已取消。"
     case "host-unavailable":
@@ -155,9 +161,23 @@ export function formatRevokeError(
   }
 }
 
-export function formatDevicesTable(devices: readonly PairingDeviceView[]): string {
-  if (devices.length === 0) return "还没有已配对设备。"
-  const rows = devices.map((device) => {
+function formatDesktopPlatform(platform: DesktopAuthorizedClient["platform"]): string {
+  switch (platform) {
+    case "macos":
+      return "macOS 桌面端"
+    case "linux":
+      return "Linux 桌面端"
+    case "windows":
+      return "Windows 桌面端"
+  }
+}
+
+export function formatDevicesTable(
+  devices: readonly PairingDeviceView[],
+  desktopClients: readonly DesktopAuthorizedClient[] = [],
+): string {
+  if (devices.length === 0 && desktopClients.length === 0) return "还没有已配对设备。"
+  const mobileRows = devices.map((device) => {
     const number = deviceNumber(device.id)
     const platform = device.platform === "ios" ? "iOS" : "Android"
     const state = device.connected
@@ -172,38 +192,81 @@ export function formatDevicesTable(devices: readonly PairingDeviceView[]): strin
         ? "尚未成功连接"
         : new Date(device.lastConnectedAt).toLocaleString()
     const apns = device.pushRegistered ? "APNs 已登记" : "推送未登记"
-    return `${number}\t${device.name}\t${platform}\t${state}\t${lastConnected}\t${apns}`
+    return `${number}\t手机端\t${device.name}\t${platform}\t${state}\t${lastConnected}\t${apns}`
   })
-  return ["设备编号\t名称\t平台\t状态\t最近连接时间\tAPNs 状态", ...rows].join("\n")
+  const desktopRows = desktopClients.map((client) => {
+    const number = deviceNumber(client.id)
+    const state = client.connected ? "已连接" : "未连接"
+    const lastConnected =
+      client.lastConnectedAt === null
+        ? "尚未成功连接"
+        : new Date(client.lastConnectedAt).toLocaleString()
+    return `${number}\t桌面端\t${client.name}\t${formatDesktopPlatform(client.platform)}\t${state}\t${lastConnected}\t完整权限`
+  })
+  return [
+    "设备编号\t角色\t名称\t平台\t状态\t最近连接时间\t权限/推送",
+    ...mobileRows,
+    ...desktopRows,
+  ].join("\n")
 }
 
-export type ResolveDeviceResult =
-  | { ok: true; device: PairingDeviceView }
+export type ResolveTargetResult =
+  | { ok: true; entry: PairedTargetEntry }
   | { ok: false; reason: "missing" }
-  | { ok: false; reason: "ambiguous"; matches: PairingDeviceView[] }
+  | { ok: false; reason: "ambiguous"; matches: PairedTargetEntry[] }
 
-/** 按完整 ID、ID 前缀（不区分大小写）或唯一精确名称解析已配对设备。 */
-export function resolveDeviceTarget(
+/** 按完整 ID、ID 前缀（不区分大小写）或唯一精确名称解析手机端或桌面端设备。 */
+export function resolvePairedTarget(
   devices: readonly PairingDeviceView[],
+  desktopClients: readonly DesktopAuthorizedClient[],
   idOrPrefix: string,
-): ResolveDeviceResult {
+): ResolveTargetResult {
   const query = idOrPrefix.trim()
   if (!query) return { ok: false, reason: "missing" }
   const lower = query.toLowerCase()
+  const entries: PairedTargetEntry[] = [
+    ...devices.map((device) => ({ role: "mobile" as const, device })),
+    ...desktopClients.map((client) => ({ role: "desktop" as const, client })),
+  ]
+  const idOf = (entry: PairedTargetEntry) =>
+    entry.role === "mobile" ? entry.device.id : entry.client.id
+  const nameOf = (entry: PairedTargetEntry) =>
+    entry.role === "mobile" ? entry.device.name : entry.client.name
 
-  const exactId = devices.find((device) => device.id.toLowerCase() === lower)
-  if (exactId) return { ok: true, device: exactId }
+  const exact = entries.find((entry) => idOf(entry).toLowerCase() === lower)
+  if (exact) return { ok: true, entry: exact }
 
-  const combined = new Map<string, PairingDeviceView>()
-  for (const device of devices) {
-    if (device.id.toLowerCase().startsWith(lower) || device.name === query) {
-      combined.set(device.id, device)
+  const combined = new Map<string, PairedTargetEntry>()
+  for (const entry of entries) {
+    if (idOf(entry).toLowerCase().startsWith(lower) || nameOf(entry) === query) {
+      combined.set(idOf(entry), entry)
     }
   }
   const matches = [...combined.values()]
   if (matches.length === 0) return { ok: false, reason: "missing" }
-  if (matches.length === 1) return { ok: true, device: matches[0]! }
+  if (matches.length === 1) return { ok: true, entry: matches[0]! }
   return { ok: false, reason: "ambiguous", matches }
+}
+
+/** 仅解析手机端设备（保留旧签名兼容现有测试）。 */
+export function resolveDeviceTarget(
+  devices: readonly PairingDeviceView[],
+  idOrPrefix: string,
+):
+  | { ok: true; device: PairingDeviceView }
+  | { ok: false; reason: "missing" }
+  | { ok: false; reason: "ambiguous"; matches: PairingDeviceView[] } {
+  const result = resolvePairedTarget(devices, [], idOrPrefix)
+  if (result.ok) {
+    if (result.entry.role !== "mobile") return { ok: false, reason: "missing" }
+    return { ok: true, device: result.entry.device }
+  }
+  if (result.reason === "missing") return { ok: false, reason: "missing" }
+  return {
+    ok: false,
+    reason: "ambiguous",
+    matches: result.matches.flatMap((m) => (m.role === "mobile" ? [m.device] : [])),
+  }
 }
 
 const DEFAULT_MAX_STDIN_BYTES = 16_384

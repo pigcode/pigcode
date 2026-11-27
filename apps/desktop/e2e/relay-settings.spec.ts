@@ -11,7 +11,7 @@ test("tests and saves a Go relay over WSS from Phone Connections", async () => {
   const { app, page } = await openThread("relay-settings")
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()
-    await page.getByRole("button", { name: "手机连接", exact: true }).click()
+    await page.getByRole("button", { name: "守护进程、中继与识别色", exact: true }).click()
     const endpoint = page.getByLabel("中继地址")
     const credential = page.getByLabel("访问令牌")
     const save = page.getByRole("button", { name: "测试并保存" })
@@ -26,7 +26,7 @@ test("tests and saves a Go relay over WSS from Phone Connections", async () => {
     await save.click()
     await expect(page.getByText(/中继拒绝了访问令牌/)).toBeVisible()
     await page.getByRole("button", { name: "外观", exact: true }).first().click()
-    await page.getByRole("button", { name: "手机连接", exact: true }).click()
+    await page.getByRole("button", { name: "守护进程、中继与识别色", exact: true }).click()
     await expect(endpoint).toHaveValue(address)
     await expect(credential).toHaveValue("")
     await expect(credential).toHaveAttribute("placeholder", "已配置")

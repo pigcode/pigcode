@@ -43,6 +43,7 @@ export async function showFileMenu({
   entry,
   point,
   t,
+  isRemote = false,
   onOpenFile,
   onOpenFileTab,
   onMention,
@@ -51,6 +52,7 @@ export async function showFileMenu({
   entry: FileMenuEntry
   point: { x: number; y: number }
   t: (key: MessageKey) => string
+  isRemote?: boolean | undefined
   onOpenFile: (path: string) => void
   onOpenFileTab: (path: string) => void
   onMention: (path: string) => void
@@ -67,16 +69,16 @@ export async function showFileMenu({
             { id: "open-tab", label: t("files.menu.openTab") },
           ]
         : []),
-      ...(file && root && native.openWorkspaceFile
+      ...(!isRemote && file && root && native.openWorkspaceFile
         ? [{ id: "open-with", label: t("files.menu.openWith") }]
         : []),
-      ...(file && root && native.saveWorkspaceFile
+      ...(!isRemote && file && root && native.saveWorkspaceFile
         ? [{ id: "save-as", label: t("files.menu.saveAs") }]
         : []),
       { type: "separator" as const },
       ...(absolute
         ? [
-            ...(native.revealPath
+            ...(!isRemote && native.revealPath
               ? [{ id: "reveal", label: entry.path ? t("files.menu.reveal") : t(revealLabelKey()) }]
               : []),
             { id: "copy-path", label: t("files.menu.copyPath") },

@@ -86,7 +86,9 @@ export function apply(ctx) {
 }
 
 async function openPlugins(page: Page): Promise<void> {
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  const settingsBtn = page.getByRole("button", { name: /^(设置|Settings)$/, exact: true })
+  if (await settingsBtn.isVisible().catch(() => false)) await settingsBtn.click()
+  await page.locator(".sidebar").getByRole("button", { name: "插件", exact: true }).click()
   await expect(page.getByRole("heading", { level: 1, name: "插件市场" })).toBeVisible()
 }
 
@@ -109,11 +111,7 @@ test("the marketplace search fills its own row in a narrow window with large tex
     await page.getByRole("button", { name: "Appearance", exact: true }).first().click()
     await page.getByRole("slider", { name: "Interface text size" }).press("End")
     await expect(page.locator("body")).toHaveCSS("font-size", "18px")
-    await page.getByRole("button", { name: "Back to app", exact: true }).first().click()
-    await page
-      .locator(".side-actions")
-      .getByRole("button", { name: "Plugins", exact: true })
-      .click()
+    await page.locator(".sidebar").getByRole("button", { name: "Plugins", exact: true }).click()
 
     const search = page.locator(".market-search")
     await expect(search).toHaveCSS("width", "320px")

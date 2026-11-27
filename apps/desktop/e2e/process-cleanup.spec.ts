@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path"
 import { expect, test, type Page } from "@playwright/test"
 import { chooseNativeMenuItem } from "./native-menu"
-import { installPlugin, openThread } from "./projects"
+import { installPlugin, openPluginsSettings, openThread } from "./projects"
 
 function isAlive(pid: number): boolean {
   // process.kill(pid, 0) 分不清僵尸进程；这里要的是进程真的不在了。
@@ -108,7 +108,7 @@ test("quitting the app waits for a plugin's asynchronous cleanup", async () => {
      }\n`,
   )
   const { app, page } = await openThread("cleanup-plugin")
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  await openPluginsSettings(page)
   await installPlugin(page, dir)
   await expect(page.locator(".market-tile[data-plugin='pigcode-cleanup-marker']")).toBeVisible()
   await app.close()

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
-import { installPlugin, launchArgs, launchEnv } from "./projects"
+import { installPlugin, launchArgs, launchEnv, openPluginsSettings } from "./projects"
 import { releaseServer } from "./update-fixture"
 
 test("runs plugin-owned CLI updates, reports failures and verifies a retry", async () => {
@@ -93,10 +93,13 @@ test("runs plugin-owned CLI updates, reports failures and verifies a retry", asy
         opened.push(target)
       }
     })
-    await page.getByRole("button", { name: "插件", exact: true }).first().click()
+    await openPluginsSettings(page)
     await installPlugin(page, directory)
-    await page.getByRole("button", { name: "设置", exact: true }).click()
-    await page.getByRole("button", { name: "Agent", exact: true }).first().click()
+    await page
+      .locator(".sidebar")
+      .getByRole("button", { name: "Agent", exact: true })
+      .first()
+      .click()
     const rowUpdate = page.getByRole("button", { name: "查看 CLI Update Test 的更新", exact: true })
     await rowUpdate.click()
     const center = page.locator(".update-center-popup")

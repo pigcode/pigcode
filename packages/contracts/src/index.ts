@@ -14,6 +14,8 @@ export * from "./relay"
 export * from "./host-admin"
 
 export * from "./mobile"
+export * from "./desktop-pairing"
+export * from "./remote-hosts"
 
 export * from "./mobile-sidebar"
 

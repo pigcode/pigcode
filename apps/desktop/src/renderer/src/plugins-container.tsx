@@ -6,7 +6,8 @@
  * 这个模块在第一次打开插件页时才加载（workspace-pages）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import { useContributionConflicts, useContributions } from "@pigcode/client-runtime"
+import { HOST_LOCAL_ID, type HostSummary } from "@pigcode/contracts"
+import { useAppStore, useContributionConflicts, useContributions } from "@pigcode/client-runtime"
 import { prefillComposer } from "@pigcode/ui-composer"
 import { useLocale } from "@pigcode/ui-primitives"
 import {
@@ -25,14 +26,18 @@ const AGENTS_PAGE = "agents"
 
 export function PluginManagerContainer({
   deps,
+  host,
   onOpenSettings,
   onStartDraft,
 }: {
   deps: CoreDeps
+  host?: HostSummary | undefined
   onOpenSettings: (page: string) => void
   onStartDraft: (prefill: (draftKey: string) => void) => boolean
 }) {
   const { t, locale } = useLocale()
+  const isRemote = Boolean(host && host.id !== HOST_LOCAL_ID)
+  const connected = useAppStore(deps.store).status === "connected"
   const [hostPlugins, setPlugins] = useState<PluginSummary[]>([])
   const [marketplaces, setMarketplaces] = useState<MarketplaceSummary[]>([])
   const conflicts = useContributionConflicts()
@@ -102,6 +107,11 @@ export function PluginManagerContainer({
   const localMutationsRef = useRef(0)
 
   useEffect(() => {
+    if (!connected) {
+      setPlugins([])
+      setMarketplaces([])
+      return
+    }
     void refresh().catch(() => setPlugins([]))
     let active = true
     const unsubscribe = deps.connection.onPluginsChanged?.(() => {
@@ -111,7 +121,7 @@ export function PluginManagerContainer({
           await refresh()
           await refreshMarketplaces()
           await refreshAgentViews(deps)
-          await deps.plugins.reload()
+          if (!isRemote) await deps.plugins.reload()
         } catch {
           // 后台同步失败不打断当前页面
         }
@@ -139,7 +149,7 @@ export function PluginManagerContainer({
       active = false
       unsubscribe?.()
     }
-  }, [deps, refresh, refreshMarketplaces])
+  }, [deps, refresh, refreshMarketplaces, connected, isRemote])
 
   async function applyAndReload(action: () => Promise<unknown>): Promise<void> {
     localMutationsRef.current += 1
@@ -147,7 +157,7 @@ export function PluginManagerContainer({
       await action()
       await refresh()
       await refreshAgentViews(deps)
-      await deps.plugins.reload()
+      if (!isRemote) await deps.plugins.reload()
     } finally {
       localMutationsRef.current -= 1
     }
@@ -165,46 +175,65 @@ export function PluginManagerContainer({
   }
 
   return (
-    <PluginManagerView
-      plugins={plugins}
-      marketplaces={marketplaces}
-      onInstall={(spec) => applyAndReload(() => deps.connection.call("plugin.install", { spec }))}
-      onEnable={(id) => applyAndReload(() => deps.connection.call("plugin.enable", { id }))}
-      onDisable={(id) => applyAndReload(() => deps.connection.call("plugin.disable", { id }))}
-      onUninstall={(id) => applyAndReload(() => deps.connection.call("plugin.uninstall", { id }))}
-      onRefresh={() => applyAndReload(() => deps.connection.call("plugin.reload", {}))}
-      onPickFolder={() => window.pigcodeNative?.pickPath?.("directory") ?? Promise.resolve(null)}
-      onOpenSettings={onOpenSettings}
-      onInstallFromMarketplace={(marketplace, name) =>
-        applyAndReload(() =>
-          deps.connection.call("plugin.installFromMarketplace", { marketplace, name }),
-        )
-      }
-      onUpdate={(id) =>
-        changeMarketplaces(() =>
-          applyAndReload(() => deps.connection.call("plugin.update", { id })),
-        )
-      }
-      onAddMarketplace={(source) =>
-        changeMarketplaces(() => deps.connection.call("marketplace.add", { source }))
-      }
-      onRefreshMarketplaces={(id) =>
-        changeMarketplaces(() => deps.connection.call("marketplace.refresh", id ? { id } : {}))
-      }
-      onSetMarketplaceEnabled={(id, enabled) =>
-        changeMarketplaces(() => deps.connection.call("marketplace.setEnabled", { id, enabled }))
-      }
-      onRemoveMarketplace={(id) =>
-        changeMarketplaces(() => deps.connection.call("marketplace.remove", { id }))
-      }
-      onRevealPath={(path) => void window.pigcodeNative?.revealPath?.(path).catch(() => undefined)}
-      onCreatePlugin={async () => {
-        const draft = pluginCreatorDraft(t, locale)
-        return onStartDraft((key) =>
-          prefillComposer(key, { text: draft.text, contexts: [draft.context] }),
-        )
-      }}
-      onOpenExternal={(url) => void window.pigcodeNative?.openExternal?.(url)}
-    />
+    <>
+      {!connected ? (
+        <div className="host-notice-banner" role="status">
+          {t("settings.hostScope.offlineNotice")}
+        </div>
+      ) : isRemote ? (
+        <div className="host-notice-banner" role="status">
+          {t("settings.plugins.uiLocalOnlyHint")}
+        </div>
+      ) : null}
+      <PluginManagerView
+        plugins={plugins}
+        marketplaces={marketplaces}
+        onInstall={(spec) => applyAndReload(() => deps.connection.call("plugin.install", { spec }))}
+        onEnable={(id) => applyAndReload(() => deps.connection.call("plugin.enable", { id }))}
+        onDisable={(id) => applyAndReload(() => deps.connection.call("plugin.disable", { id }))}
+        onUninstall={(id) => applyAndReload(() => deps.connection.call("plugin.uninstall", { id }))}
+        onRefresh={() => applyAndReload(() => deps.connection.call("plugin.reload", {}))}
+        onPickFolder={
+          isRemote
+            ? undefined
+            : () => window.pigcodeNative?.pickPath?.("directory") ?? Promise.resolve(null)
+        }
+        onOpenSettings={onOpenSettings}
+        onInstallFromMarketplace={(marketplace, name) =>
+          applyAndReload(() =>
+            deps.connection.call("plugin.installFromMarketplace", { marketplace, name }),
+          )
+        }
+        onUpdate={(id) =>
+          changeMarketplaces(() =>
+            applyAndReload(() => deps.connection.call("plugin.update", { id })),
+          )
+        }
+        onAddMarketplace={(source) =>
+          changeMarketplaces(() => deps.connection.call("marketplace.add", { source }))
+        }
+        onRefreshMarketplaces={(id) =>
+          changeMarketplaces(() => deps.connection.call("marketplace.refresh", id ? { id } : {}))
+        }
+        onSetMarketplaceEnabled={(id, enabled) =>
+          changeMarketplaces(() => deps.connection.call("marketplace.setEnabled", { id, enabled }))
+        }
+        onRemoveMarketplace={(id) =>
+          changeMarketplaces(() => deps.connection.call("marketplace.remove", { id }))
+        }
+        onRevealPath={
+          isRemote
+            ? undefined
+            : (path) => void window.pigcodeNative?.revealPath?.(path).catch(() => undefined)
+        }
+        onCreatePlugin={async () => {
+          const draft = pluginCreatorDraft(t, locale)
+          return onStartDraft((key) =>
+            prefillComposer(key, { text: draft.text, contexts: [draft.context] }),
+          )
+        }}
+        onOpenExternal={(url) => void window.pigcodeNative?.openExternal?.(url)}
+      />
+    </>
   )
 }

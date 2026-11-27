@@ -177,6 +177,20 @@
   --media-fg: #fff;
   --media-btn-bg: oklch(100% 0 0 / 0.2);
   --media-btn-bg-hover: oklch(100% 0 0 / 0.34);
+
+  /* 多主机识别色（6 种语义色调及浅底） */
+  --host-blue: #2563eb;
+  --host-blue-soft: oklch(55% 0.19 258 / 0.12);
+  --host-green: #16a34a;
+  --host-green-soft: oklch(62% 0.17 150 / 0.12);
+  --host-amber: #d97706;
+  --host-amber-soft: oklch(72% 0.16 65 / 0.14);
+  --host-violet: #7c3aed;
+  --host-violet-soft: oklch(58% 0.2 290 / 0.12);
+  --host-rose: #e11d48;
+  --host-rose-soft: oklch(58% 0.2 15 / 0.12);
+  --host-slate: #475569;
+  --host-slate-soft: oklch(50% 0.03 255 / 0.12);
   --lightbox-backdrop: oklch(10% 0.005 268 / 0.88);
   --lightbox-bar-bg: linear-gradient(to bottom, oklch(0% 0 0 / 0.48), transparent);
   --lightbox-fg: #f5f5f5;
@@ -323,6 +337,20 @@
   --media-fg: #fff;
   --media-btn-bg: oklch(100% 0 0 / 0.2);
   --media-btn-bg-hover: oklch(100% 0 0 / 0.34);
+
+  /* 多主机识别色（深色模式下更明亮） */
+  --host-blue: #60a5fa;
+  --host-blue-soft: oklch(68% 0.17 255 / 0.18);
+  --host-green: #4ade80;
+  --host-green-soft: oklch(74% 0.17 150 / 0.16);
+  --host-amber: #fbbf24;
+  --host-amber-soft: oklch(78% 0.15 75 / 0.18);
+  --host-violet: #a78bfa;
+  --host-violet-soft: oklch(72% 0.17 290 / 0.18);
+  --host-rose: #fb7185;
+  --host-rose-soft: oklch(68% 0.18 15 / 0.18);
+  --host-slate: #94a3b8;
+  --host-slate-soft: oklch(70% 0.03 255 / 0.16);
   --lightbox-backdrop: oklch(10% 0.005 268 / 0.88);
   --lightbox-bar-bg: linear-gradient(to bottom, oklch(0% 0 0 / 0.48), transparent);
   --lightbox-fg: #f5f5f5;
@@ -671,6 +699,8 @@
   --schedule-card-h: 128px;
   --schedule-template-h: 114px;
   --instance-accent-default: #5279bf;
+  --remote-dir-h: 220px;
+  --host-verify-digits-fs: 24px;
   /*
     Agent 页：列表和设置装在同一张卡片里，左边列表栏的宽度、列表每一行的高度（两行的列表行，
     DialogList 的多行最小高 48）；卡片高度跟着窗口、上下有界，两栏各自滚动。设置行里输入框与下拉框

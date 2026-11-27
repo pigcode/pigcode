@@ -3,12 +3,13 @@
  * 怎么分、怎么排、显示什么和筛选在标题旁的「自定义侧栏」菜单里改（sidebar-menu.tsx），
  * 规则在 sidebar-arrangement.ts。按项目分组时项目可以拖动，或者从右键菜单上移、下移。
  */
-import { useEffect, useState, type DragEvent, type ReactNode } from "react"
-import type { Project, Thread } from "@pigcode/contracts"
+import { useEffect, useState, type ReactNode } from "react"
+import { HOST_LOCAL_ID, type HostSummary, type Project, type Thread } from "@pigcode/contracts"
 import {
   Button,
   EmptyState,
   AgentIcon,
+  HostBadge,
   ListRow,
   formatShortcut,
   useLocale,
@@ -30,16 +31,21 @@ import {
 } from "./sidebar-arrangement"
 import { SidebarMenu } from "./sidebar-menu"
 import { projectMenu, threadMenu } from "./sidebar-row-menus"
-import {
-  PROJECT_DRAG_TYPE,
-  ProjectRow,
-  ThreadRow,
-  type RenameHandlers,
-  type RowAction,
-} from "./sidebar-rows"
+import { ProjectRow, ThreadRow, type RenameHandlers, type RowAction } from "./sidebar-rows"
 import type { ThreadStatus } from "./thread-status"
 import { useThreadShortcuts } from "./thread-shortcuts"
 import { useToast } from "./toast"
+import {
+  WorkspaceHostGroups,
+  WorkspaceHostSwitch,
+  WorkspaceSidebarHead,
+  projectDropTargetProps,
+  readHostLayout,
+  saveHostLayout,
+  type HostLayoutMode,
+} from "./workspace-sidebar-layout"
+
+export type { HostLayoutMode }
 
 /** 工作区侧栏所需的数据与事件；数据由 store 传入。 */
 export interface WorkspaceSidebarProps {
@@ -58,10 +64,13 @@ export interface WorkspaceSidebarProps {
   onOpenSettings?: () => void
   /** 定时任务入口；不传时不显示。 */
   onOpenSchedules?: () => void
-  /** 插件入口；不传时不显示。 */
-  onOpenPlugins?: () => void
-  /** 正在看的顶层页面：定时任务页或插件页，对应的入口高亮。 */
-  activeNav?: "schedules" | "plugins" | undefined
+  /** 正在看的顶层页面：定时任务页时对应入口高亮。 */
+  activeNav?: "schedules" | undefined
+  /** 多主机列表与归属映射（Orca 混排 / 按主机分组切换）。 */
+  hosts?: readonly HostSummary[] | undefined
+  hostOfProject?: Readonly<Record<string, HostSummary>> | undefined
+  hostOfThread?: Readonly<Record<string, HostSummary>> | undefined
+  onAddProjectOnHost?: ((hostId: string) => void) | undefined
   /** 会话行右键菜单里的重命名与归档；两个都传时才有菜单。 */
   onRenameThread?: ((threadId: string, title: string) => void) | undefined
   onArchiveThread?: ((threadId: string) => void) | undefined
@@ -134,13 +143,7 @@ function useMinuteClock(): number {
   return now
 }
 
-/** 拖到项目的上半截放在它前面，下半截放在它后面。 */
-function dropPlace(event: DragEvent<HTMLElement>): "before" | "after" {
-  const box = event.currentTarget.getBoundingClientRect()
-  return event.clientY > box.top + box.height / 2 ? "after" : "before"
-}
-
-/** 绘制工作区导航，不读取会话内核。 */
+/** 绘制工作区导航，支持 Orca 式多主机混排或按主机分组展示。 */
 export function WorkspaceSidebar({
   projects,
   threads,
@@ -149,13 +152,16 @@ export function WorkspaceSidebar({
   agentNames = {},
   expandedProjects,
   onAddProject,
+  onAddProjectOnHost,
   onToggleProject,
   onOpenThread,
   onNewThread,
   onBrowseFiles,
   onOpenSchedules,
-  onOpenPlugins,
   activeNav,
+  hosts,
+  hostOfProject,
+  hostOfThread,
   onRenameThread,
   onArchiveThread,
   onSetThreadPinned,
@@ -175,12 +181,18 @@ export function WorkspaceSidebar({
   const openFailed = useOpenFailure()
   const [grouping, setGrouping] = useSidebarGrouping()
   const [view, setView] = useSidebarView()
+  const [hostLayout, setHostLayoutState] = useState<HostLayoutMode>(readHostLayout)
+  const setHostLayout = (next: HostLayoutMode) => {
+    setHostLayoutState(next)
+    saveHostLayout(next)
+  }
   const now = useMinuteClock()
   // 同一时间只有一行在改名；项目与会话的 id 前缀不同，不会撞上。
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const [drop, setDrop] = useState<{ id: string; place: "before" | "after" } | null>(null)
   const projectNames = new Map(projects.map((project) => [project.id, project.name]))
+  const multiHost = Boolean(hosts && hosts.length >= 2)
   const sections = sidebarSections(projects, threads, {
     grouping,
     view,
@@ -215,8 +227,10 @@ export function WorkspaceSidebar({
         }
       : null
 
-  const threadActions = (thread: Thread): RowAction[] =>
-    onRenameThread && onArchiveThread
+  const threadActions = (thread: Thread): RowAction[] => {
+    const host = hostOfThread?.[thread.id]
+    if (host && host.status !== "connected") return []
+    return onRenameThread && onArchiveThread
       ? threadMenu(thread, {
           t,
           status: threadStatus[thread.id] ?? thread.status ?? "idle",
@@ -229,16 +243,23 @@ export function WorkspaceSidebar({
           reference: onReferenceThread && (() => onReferenceThread(thread)),
         })
       : []
+  }
 
   const projectActions = (project: Project): RowAction[] => {
+    const host = hostOfProject?.[project.id]
+    const offline = Boolean(host && host.status !== "connected")
+    const isRemote = Boolean(host && host.id !== HOST_LOCAL_ID)
     const index = projectIds.indexOf(project.id)
-    const manageable = onRenameProject !== undefined && onRemoveProject !== undefined
+    const manageable = !offline && onRenameProject !== undefined && onRemoveProject !== undefined
     return projectMenu({
       t,
       previous: projectIds[index - 1],
       next: projectIds[index + 1],
-      browse: onBrowseFiles && (() => onBrowseFiles(project.id)),
-      reveal: () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath)),
+      browse: !offline && onBrowseFiles ? () => onBrowseFiles(project.id) : undefined,
+      reveal:
+        !offline && !isRemote
+          ? () => void openFolder(project.rootPath).catch(() => openFailed(project.rootPath))
+          : undefined,
       rename: manageable ? () => setRenamingId(project.id) : undefined,
       move: (target, place) => reorder(project.id, target, place),
       remove: manageable
@@ -256,12 +277,17 @@ export function WorkspaceSidebar({
     const instanceId = thread.lastInstanceId ?? agentId
     const agentName = agentNames[instanceId] ?? instanceId
     const projectName = projectNames.get(thread.projectId)
+    const host = hostOfThread?.[thread.id]
+    const offline = Boolean(host && host.status !== "connected")
+    const showBadge = multiHost && host && hostLayout === "mixed"
     return (
       <ThreadRow
         key={thread.id}
         thread={thread}
         active={thread.id === activeThreadId}
         status={threadStatus[thread.id] ?? thread.status ?? "idle"}
+        offline={offline}
+        hostBadge={showBadge ? <HostBadge host={host} /> : undefined}
         // 图标只是装饰；读屏器读 agent 的全名，悬停时也显示全名。
         detail={
           <span className="sess-agent" title={agentName}>
@@ -310,6 +336,9 @@ export function WorkspaceSidebar({
     <div className="side-label">
       <span>{label}</span>
       <div className="side-label-actions" data-spread={view.showTime ? "" : undefined}>
+        {multiHost ? (
+          <WorkspaceHostSwitch hostLayout={hostLayout} onChange={setHostLayout} />
+        ) : null}
         <SidebarMenu
           grouping={grouping}
           view={view}
@@ -343,67 +372,71 @@ export function WorkspaceSidebar({
       : null
 
   /** 项目块接住拖过来的项目：上半截放前面，下半截放后面；拖进来的文件、文字不理会。 */
-  const dropTarget = (projectId: string) => ({
-    "data-drop": drop?.id === projectId ? drop.place : undefined,
-    "data-dragging": dragging === projectId ? "" : undefined,
-    onDragOver: (event: DragEvent<HTMLDivElement>) => {
-      if (!event.dataTransfer.types.includes(PROJECT_DRAG_TYPE)) return
-      event.preventDefault()
-      event.dataTransfer.dropEffect = "move"
-      const place = dropPlace(event)
-      if (drop?.id !== projectId || drop.place !== place) setDrop({ id: projectId, place })
-    },
-    onDragLeave: (event: DragEvent<HTMLDivElement>) => {
-      if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
-      setDrop((current) => (current?.id === projectId ? null : current))
-    },
-    onDrop: (event: DragEvent<HTMLDivElement>) => {
-      const id = event.dataTransfer.getData(PROJECT_DRAG_TYPE)
-      if (!id) return
-      event.preventDefault()
-      reorder(id, projectId, dropPlace(event))
-      setDrop(null)
-      setDragging(null)
-    },
-  })
+  const dropTarget = (projectId: string) =>
+    projectDropTargetProps(projectId, drop, dragging, setDrop, setDragging, reorder)
+
+  const renderSectionList = (
+    sectionList: SidebarSection[],
+    pinnedSet: Set<string>,
+    skipFirstGroupLabel: boolean,
+  ) =>
+    sectionList.map((section, index) => {
+      if (section.kind === "project") {
+        const { project, open } = section
+        const pHost = hostOfProject?.[project.id]
+        const pOffline = Boolean(pHost && pHost.status !== "connected")
+        return (
+          <div key={project.id} className="proj-block" {...dropTarget(project.id)}>
+            <ProjectRow
+              project={project}
+              open={open}
+              offline={pOffline}
+              hostBadge={
+                multiHost && pHost && hostLayout === "mixed" ? (
+                  <HostBadge host={pHost} />
+                ) : undefined
+              }
+              rename={renameFor(project.id, (name) => onRenameProject?.(project.id, name))}
+              actions={projectActions(project)}
+              onToggle={() => onToggleProject(project.id, !open)}
+              onNewThread={() => onNewThread(project.id)}
+              onDragStart={projects.length > 1 ? () => setDragging(project.id) : undefined}
+              onDragEnd={() => {
+                setDragging(null)
+                setDrop(null)
+              }}
+            />
+            {open ? (
+              <div className="proj-sessions">
+                {section.threads.length === 0 && !pinnedSet.has(project.id) ? (
+                  <EmptyState size="compact" title={t("sidebar.noThreads")} />
+                ) : null}
+                {section.threads.map((thread) => row(thread, false))}
+              </div>
+            ) : null}
+          </div>
+        )
+      }
+      const label = sectionLabel(section)
+      return (
+        <div key={section.key} className="recent-sessions" role="group" aria-label={label}>
+          {!skipFirstGroupLabel || index > 0 ? (
+            <div className="side-label">
+              <span>{label}</span>
+            </div>
+          ) : null}
+          {section.threads.map((thread) => row(thread, true))}
+        </div>
+      )
+    })
 
   return (
     <>
-      <div className="side-head">
-        <nav className="side-actions" aria-label={t("nav.projects")}>
-          <ListRow
-            render={<button type="button" />}
-            className="nav-item new-thread-btn"
-            aria-label={t("nav.newThread")}
-            onClick={() => onNewThread()}
-            leading={<Icon name="compose" />}
-            title={t("nav.newThread")}
-            meta={<kbd className="nav-kbd">{formatShortcut("Mod+n")}</kbd>}
-          />
-          {onOpenSchedules ? (
-            <ListRow
-              render={<button type="button" />}
-              className="nav-item"
-              selected={activeNav === "schedules"}
-              aria-current={activeNav === "schedules" ? "page" : undefined}
-              onClick={onOpenSchedules}
-              leading={<Icon name="clock" />}
-              title={t("settings.schedules")}
-            />
-          ) : null}
-          {onOpenPlugins ? (
-            <ListRow
-              render={<button type="button" />}
-              className="nav-item"
-              selected={activeNav === "plugins"}
-              aria-current={activeNav === "plugins" ? "page" : undefined}
-              onClick={onOpenPlugins}
-              leading={<Icon name="cube" />}
-              title={t("settings.plugins")}
-            />
-          ) : null}
-        </nav>
-      </div>
+      <WorkspaceSidebarHead
+        activeNav={activeNav}
+        onNewThread={() => onNewThread()}
+        onOpenSchedules={onOpenSchedules}
+      />
       <SideScroll>
         {header(
           firstHeading
@@ -424,47 +457,25 @@ export function WorkspaceSidebar({
             <EmptyState size="compact" title={t(emptyNote)} />
           </div>
         ) : null}
-        {sections.map((section, index) => {
-          if (section.kind === "project") {
-            const { project, open } = section
-            return (
-              <div key={project.id} className="proj-block" {...dropTarget(project.id)}>
-                <ProjectRow
-                  project={project}
-                  open={open}
-                  rename={renameFor(project.id, (name) => onRenameProject?.(project.id, name))}
-                  actions={projectActions(project)}
-                  onToggle={() => onToggleProject(project.id, !open)}
-                  onNewThread={() => onNewThread(project.id)}
-                  onDragStart={projects.length > 1 ? () => setDragging(project.id) : undefined}
-                  onDragEnd={() => {
-                    setDragging(null)
-                    setDrop(null)
-                  }}
-                />
-                {open ? (
-                  <div className="proj-sessions">
-                    {section.threads.length === 0 && !pinnedProjects.has(project.id) ? (
-                      <EmptyState size="compact" title={t("sidebar.noThreads")} />
-                    ) : null}
-                    {section.threads.map((thread) => row(thread, false))}
-                  </div>
-                ) : null}
-              </div>
-            )
-          }
-          const label = sectionLabel(section)
-          return (
-            <div key={section.key} className="recent-sessions" role="group" aria-label={label}>
-              {index > 0 ? (
-                <div className="side-label">
-                  <span>{label}</span>
-                </div>
-              ) : null}
-              {section.threads.map((thread) => row(thread, true))}
-            </div>
-          )
-        })}
+        {multiHost && hosts && hostLayout === "host" ? (
+          <WorkspaceHostGroups
+            hosts={hosts}
+            projects={projects}
+            threads={threads}
+            hostOfProject={hostOfProject}
+            hostOfThread={hostOfThread}
+            grouping={grouping}
+            view={view}
+            threadStatus={threadStatus}
+            expandedProjects={expandedProjects}
+            heldThreadId={heldThreadId}
+            now={now}
+            onAddProjectOnHost={onAddProjectOnHost}
+            renderSectionList={renderSectionList}
+          />
+        ) : (
+          renderSectionList(sections, pinnedProjects, true)
+        )}
         {children}
       </SideScroll>
     </>

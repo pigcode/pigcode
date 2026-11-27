@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
 import { expect, test, type Page } from "@playwright/test"
 import { OFFICIAL_MARKETPLACE_BASE } from "../../../marketplace/catalog-source"
-import { openThread } from "./projects"
+import { backFromSettings, openPluginsSettings, openThread } from "./projects"
 
 function publishNextVersions(catalogDir: string, names: readonly string[]): void {
   const file = join(catalogDir, "marketplace.json")
@@ -40,7 +40,7 @@ function publishNextVersions(catalogDir: string, names: readonly string[]): void
 }
 
 async function openMarketplace(page: Page): Promise<void> {
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  await openPluginsSettings(page)
   await expect(page.getByRole("heading", { name: "插件市场" })).toBeVisible()
 }
 
@@ -88,6 +88,7 @@ test("browses, installs, uses and updates real Pigcode catalog plugins", async (
 
     await page.getByRole("radio", { name: "我的" }).click()
     await expect(page.getByRole("heading", { name: "还没添加插件市场" })).toBeVisible()
+    await backFromSettings(page)
     await page
       .locator(".proj-block")
       .filter({ hasText: "pigcode-e2e-official-catalog" })

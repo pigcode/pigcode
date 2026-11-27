@@ -10,10 +10,13 @@ import { createRoot } from "react-dom/client"
 import {
   AppStore,
   Connection,
+  HostPool,
   LocaleController,
   ExtensionRegistryScope,
   createExtensionRegistry,
+  type HostTransport,
 } from "@pigcode/client-runtime"
+import { HOST_LOCAL_ID, hostIdentitySchema } from "@pigcode/contracts"
 import "@pigcode/ui-primitives/styles/globals.css"
 import { App } from "./app"
 import { registerBuiltinSettingsPages } from "./builtin-settings-pages"
@@ -64,25 +67,30 @@ const connection = new Connection({
 })
 
 const plugins = createClientPluginController({ extensions, connection })
+const hostPool = new HostPool({ localConnection: connection, localStore: store })
 registerBuiltinSettingsPages(extensions, { connection, store, plugins })
 
 let attached = false
 
+function createPortTransport(port: MessagePort): HostTransport {
+  port.start()
+  return {
+    send: (message) => port.postMessage(message),
+    onMessage: (listener) => {
+      const handler = (event: MessageEvent) => listener(event.data)
+      port.addEventListener("message", handler)
+      return () => port.removeEventListener("message", handler)
+    },
+    close: () => port.close(),
+  }
+}
+
 /** 绑定 Host 转交的 MessagePort；重连时保留 cursor 并更新提示状态。 */
 async function attach(port: MessagePort): Promise<void> {
-  port.start()
   if (attached) store.update({ reconnected: false })
   try {
     // 新端口可能连续到达：被后来的一次取代时 attach 返回 false，不能当成连接成功。
-    const connected = await connection.attach({
-      send: (message) => port.postMessage(message),
-      onMessage: (listener) => {
-        const handler = (event: MessageEvent) => listener(event.data)
-        port.addEventListener("message", handler)
-        return () => port.removeEventListener("message", handler)
-      },
-      close: () => port.close(),
-    })
+    const connected = await connection.attach(createPortTransport(port))
     if (!connected) return
   } catch {
     store.update({ status: "offline" })
@@ -90,15 +98,50 @@ async function attach(port: MessagePort): Promise<void> {
   }
   if (attached) store.update({ reconnected: true })
   attached = true
+  // 同步本机主机公钥、名称与定时任务快照，防止自配对并提供多主机基础清单。
+  void connection
+    .call("host.identity", {})
+    .then((raw) => {
+      const identity = hostIdentitySchema.parse(raw)
+      hostPool.setLocalIdentity({ hostKey: identity.hostKey, hostName: identity.hostName })
+      window.pigcodeNative?.hosts?.setLocalKey(identity.hostKey)
+    })
+    .catch(() => undefined)
+  void hostPool.refreshHostSchedules(HOST_LOCAL_ID)
   // Host 就绪后读取 boot graph；失败时核心 UI 不受影响。
   void plugins.reload()
 }
 
+const nativeHosts = window.pigcodeNative?.hosts
+if (nativeHosts) {
+  void nativeHosts
+    .getState()
+    .then(({ hosts, defaults, pairing }) => {
+      hostPool.syncRemoteHosts(hosts, defaults)
+      hostPool.setPairingState(pairing)
+    })
+    .catch(() => undefined)
+  nativeHosts.onHostsChanged(({ hosts, defaults }) => {
+    hostPool.syncRemoteHosts(hosts, defaults)
+  })
+  nativeHosts.onPairingChanged((pairing) => {
+    hostPool.setPairingState(pairing)
+  })
+}
+
 window.addEventListener("message", (event) => {
-  if (event.data?.type !== "pigcode:port") return
-  const port = event.ports[0]
-  if (!port) return
-  void attach(port)
+  if (event.data?.type === "pigcode:port") {
+    const port = event.ports[0]
+    if (port) void attach(port)
+    return
+  }
+  if (event.data?.type === "pigcode:remote-port") {
+    const hostId = typeof event.data.hostId === "string" ? event.data.hostId : null
+    const port = event.ports[0]
+    if (hostId && port) {
+      void hostPool.attachRemoteTransport(hostId, createPortTransport(port))
+    }
+  }
 })
 
 const root = document.querySelector("#root")
@@ -112,6 +155,7 @@ if (root) {
             store={store}
             connection={connection}
             plugins={plugins}
+            hostPool={hostPool}
             locale={locale.getLocale()}
           />
         </ToolRenderersScope>

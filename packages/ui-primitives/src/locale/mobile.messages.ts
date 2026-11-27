@@ -22,7 +22,7 @@ export const mobileZhCN = {
   "settings.pairing.revokeStatus.storage-unavailable": "无法保存撤销结果，请重试。",
   "settings.pairing.title": "配对",
   "settings.pairing.scan": "扫码连接手机",
-  "settings.pairing.sleep": "MacBook 合盖睡眠后，手机连不上这台电脑。",
+  "settings.pairing.sleep": "MacBook 合盖睡眠后，手机连不上这台主机。",
   "settings.pairing.start": "配对手机",
   "settings.pairing.regenerate": "重新生成二维码",
   "settings.pairing.remaining": "二维码剩余有效期",
@@ -36,7 +36,7 @@ export const mobileZhCN = {
   "settings.pairing.status.qr-unavailable": "二维码生成失败，请缩短中继地址或令牌后重试。",
   "settings.pairing.status.connecting": "正在连接中继…",
   "settings.pairing.status.waiting": "用 Pigcode 手机端扫描二维码。",
-  "settings.pairing.status.verify": "请核对手机与电脑显示的数字。",
+  "settings.pairing.status.verify": "请核对手机与主机显示的数字。",
   "settings.pairing.status.paired": "手机已配对。",
   "settings.pairing.status.expired": "二维码已过期，请重新生成。",
   "settings.pairing.status.cancelled": "已取消配对。",
@@ -63,7 +63,7 @@ export const mobileZhCN = {
   "settings.mobilePreview.title": "本机预览",
   "settings.mobilePreview.enabled": "允许已配对手机预览本机服务",
   "settings.mobilePreview.description":
-    "允许已配对的手机通过端到端加密通道预览这台电脑上的 localhost 开发页面。",
+    "允许已配对的手机通过端到端加密通道预览这台主机上的 localhost 开发页面。",
   "settings.mobilePreview.error": "无法读取或更新本机预览设置，请检查本机 Host 连接。",
 }
 
@@ -142,7 +142,7 @@ export const mobileEnUS = {
   "settings.mobilePreview.title": "Local Preview",
   "settings.mobilePreview.enabled": "Allow paired phones to preview local servers",
   "settings.mobilePreview.description":
-    "Allow paired phones to preview localhost dev pages running on this computer over the end-to-end encrypted connection.",
+    "Allow paired phones to preview localhost dev pages running on this host over the end-to-end encrypted connection.",
   "settings.mobilePreview.error":
     "Couldn't read or update local preview settings. Check the local Host connection.",
 }

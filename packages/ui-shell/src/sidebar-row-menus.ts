@@ -81,8 +81,8 @@ export function projectMenu({
   previous?: string | undefined
   next?: string | undefined
   browse?: (() => void) | undefined
-  /** 在文件管理器中打开项目文件夹。 */
-  reveal: () => void
+  /** 在文件管理器中打开项目文件夹；远程主机不传此项。 */
+  reveal?: (() => void) | undefined
   rename?: (() => void) | undefined
   move: (target: string, place: "before" | "after") => void
   remove?: (() => void) | undefined
@@ -91,10 +91,8 @@ export function projectMenu({
     ? [{ id: "browse-files", label: t("files.viewProjectFiles"), run: browse }]
     : []
   if (!rename || !remove) return menu
-  menu.push(
-    { id: "open-folder", label: t(revealLabelKey()), run: reveal },
-    { id: "rename", label: t("sidebar.rename"), run: rename },
-  )
+  if (reveal) menu.push({ id: "open-folder", label: t(revealLabelKey()), run: reveal })
+  menu.push({ id: "rename", label: t("sidebar.rename"), run: rename })
   const moves: RowAction[] = []
   if (previous) {
     moves.push({ id: "move-up", label: t("sidebar.moveUp"), run: () => move(previous, "before") })

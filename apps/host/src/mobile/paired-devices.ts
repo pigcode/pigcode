@@ -1,10 +1,25 @@
 import { createHash, randomUUID } from "node:crypto"
-import { pairedDeviceSchema, type MobilePairingView, type MobileReminderSettings, type PairedDevice } from "@pigcode/contracts"
+import {
+  desktopPlatformSchema,
+  devicePlatformSchema,
+  pairedDeviceSchema,
+  type ClientRole,
+  type DesktopAuthorizedClient,
+  type MobilePairingView,
+  type MobileReminderSettings,
+  type PairedDevice,
+} from "@pigcode/contracts"
 import type { QueueDeviceSource } from "../storage/queued-message-store"
 import type { SettingsService } from "../services/settings"
 
 const key = "mobile.devices"
 const recordsSchema = pairedDeviceSchema.array()
+const desktopPlatforms = new Set<string>(desktopPlatformSchema.options)
+
+export function deviceRoleOf(device: Pick<PairedDevice, "role" | "platform">): ClientRole {
+  if (device.role === "mobile" || device.role === "desktop") return device.role
+  return desktopPlatforms.has(device.platform) ? "desktop" : "mobile"
+}
 
 function authorizationId(device: PairedDevice): string {
   return device.authorizationId ?? "legacy"
@@ -42,25 +57,48 @@ export class PairedDevices {
     return this.records.length
   }
 
+  countByRole(role: ClientRole): number {
+    return this.records.filter((record) => deviceRoleOf(record) === role).length
+  }
+
   find(publicKey: string): PairedDevice | undefined {
     return this.records.find((device) => device.publicKey === publicKey)
   }
 
-  findById(id: string): PairedDevice | undefined {
-    return this.records.find(({ publicKey }) => pairedDeviceId(publicKey) === id)
+  findById(id: string, role?: ClientRole): PairedDevice | undefined {
+    return this.records.find(
+      (record) =>
+        pairedDeviceId(record.publicKey) === id && (!role || deviceRoleOf(record) === role),
+    )
   }
 
+  /** 返回已配对手机设备列表（仅 `role === "mobile"`，永不混入远程桌面）。 */
   view(revision: string | undefined, connected: ReadonlySet<string>): MobilePairingView["devices"] {
-    return this.records.map(({ publicKey, name, platform, lastConnectedAt, relayRevision, reminders, apns }) => ({
-      name,
-      platform,
-      lastConnectedAt,
-      id: pairedDeviceId(publicKey),
-      connected: connected.has(publicKey),
-      needsRelayUpdate: revision !== undefined && revision !== relayRevision,
-      ...(reminders ? { reminders } : {}),
-      ...(apns ? { pushRegistered: true } : {}),
-    }))
+    return this.records
+      .filter((record) => deviceRoleOf(record) === "mobile")
+      .map(({ publicKey, name, platform, lastConnectedAt, relayRevision, reminders, apns }) => ({
+        name,
+        platform: devicePlatformSchema.parse(platform),
+        lastConnectedAt,
+        id: pairedDeviceId(publicKey),
+        connected: connected.has(publicKey),
+        needsRelayUpdate: revision !== undefined && revision !== relayRevision,
+        ...(reminders ? { reminders } : {}),
+        ...(apns ? { pushRegistered: true } : {}),
+      }))
+  }
+
+  /** 返回已授权接入本机的远程桌面客户端列表（仅 `role === "desktop"`）。 */
+  desktopView(connected: ReadonlySet<string>): DesktopAuthorizedClient[] {
+    return this.records
+      .filter((record) => deviceRoleOf(record) === "desktop")
+      .map(({ publicKey, name, platform, lastConnectedAt }) => ({
+        id: pairedDeviceId(publicKey),
+        name,
+        platform: desktopPlatformSchema.parse(platform),
+        lastConnectedAt,
+        connected: connected.has(publicKey),
+      }))
   }
 
   reportReminders(
@@ -69,9 +107,9 @@ export class PairedDevices {
     apns?: PairedDevice["apns"],
   ): void {
     const device = this.find(publicKey)
-    if (device) {
+    if (device && deviceRoleOf(device) === "mobile") {
       const { apns: savedApns, ...current } = device
-      const target = enabled && permission === "granted" ? apns ?? savedApns : undefined
+      const target = enabled && permission === "granted" ? (apns ?? savedApns) : undefined
       this.save({
         ...current,
         ...(target ? { apns: target } : {}),
@@ -81,15 +119,24 @@ export class PairedDevices {
   }
 
   reminderTargets(): readonly PairedDevice[] {
-    return this.records.filter((device) => device.apns && device.reminders?.enabled &&
-      device.reminders.permission === "granted")
+    return this.records.filter(
+      (device) =>
+        deviceRoleOf(device) === "mobile" &&
+        device.apns &&
+        device.reminders?.enabled &&
+        device.reminders.permission === "granted",
+    )
   }
 
   save(device: PairedDevice): void {
     const existing = this.find(device.publicKey)
     this.replace([
       ...this.records.filter(({ publicKey }) => publicKey !== device.publicKey),
-      { ...device, authorizationId: existing ? existing.authorizationId : randomUUID() },
+      {
+        ...device,
+        role: deviceRoleOf(device),
+        authorizationId: existing ? existing.authorizationId : randomUUID(),
+      },
     ])
   }
 

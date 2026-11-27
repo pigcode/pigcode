@@ -130,6 +130,8 @@ export function ThreadRow({
   active,
   status,
   detail,
+  hostBadge,
+  offline = false,
   description,
   showTime = true,
   shortcut,
@@ -142,6 +144,10 @@ export function ThreadRow({
   active: boolean
   status: ThreadStatus
   detail: ReactNode
+  /** 多主机混排时显示的主机识别标签。 */
+  hostBadge?: ReactNode | undefined
+  /** 所属主机当前离线，仅只读预览缓存内容。 */
+  offline?: boolean | undefined
   /** 标题下面的第二行。 */
   description?: ReactNode
   showTime?: boolean
@@ -178,6 +184,7 @@ export function ThreadRow({
         data-status={status}
         data-unread={unread ? "" : undefined}
         data-archived={thread.archivedAt !== null ? "" : undefined}
+        data-offline={offline ? "" : undefined}
         onClick={onOpen}
         leading={
           <>
@@ -194,6 +201,7 @@ export function ThreadRow({
             <kbd className="sess-kbd">{shortcut}</kbd>
           ) : (
             <>
+              {hostBadge}
               {detail}
               {showTime ? (
                 <time dateTime={thread.updatedAt}>
@@ -218,6 +226,8 @@ export const PROJECT_DRAG_TYPE = "application/x-pigcode-project"
 export function ProjectRow({
   project,
   open,
+  hostBadge,
+  offline = false,
   rename,
   actions,
   onToggle,
@@ -227,6 +237,8 @@ export function ProjectRow({
 }: {
   project: Project
   open: boolean
+  hostBadge?: ReactNode | undefined
+  offline?: boolean | undefined
   rename: RenameHandlers | null
   actions: RowAction[]
   onToggle: () => void
@@ -251,6 +263,7 @@ export function ProjectRow({
     <RowMenu actions={actions}>
       <ListRow
         className="proj-row"
+        data-offline={offline ? "" : undefined}
         draggable={onDragStart ? true : undefined}
         onDragStart={
           onDragStart
@@ -265,17 +278,20 @@ export function ProjectRow({
         button={{ className: "proj", "aria-expanded": open, onClick: onToggle }}
         leading={folder}
         title={project.name}
+        meta={hostBadge}
         actions={
-          <Button
-            variant="plain"
-            className="icon-btn proj-add"
-            type="button"
-            aria-label={t("nav.newThread")}
-            title={t("nav.newThread")}
-            onClick={onNewThread}
-          >
-            <Icon name="plus" small />
-          </Button>
+          offline ? undefined : (
+            <Button
+              variant="plain"
+              className="icon-btn proj-add"
+              type="button"
+              aria-label={t("nav.newThread")}
+              title={t("nav.newThread")}
+              onClick={onNewThread}
+            >
+              <Icon name="plus" small />
+            </Button>
+          )
         }
       />
     </RowMenu>

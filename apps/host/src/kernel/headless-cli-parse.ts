@@ -1,4 +1,4 @@
-/** `pigcode-host` 命令行参数解析、校验与帮助文本生成。 */
+/** `pigcode`（兼容旧名 `pigcode-host`）命令行参数解析、校验与帮助文本生成。 */
 
 export interface GlobalCliOptions {
   profileDir?: string | undefined
@@ -12,10 +12,11 @@ export type ParsedCliCommand =
   | { kind: "dump-config" }
   | { kind: "start"; lanPort: number | false | undefined; noShellEnv: boolean }
   | { kind: "status" }
+  | { kind: "name"; value?: string | undefined }
   | { kind: "relay-status" }
   | { kind: "relay-set"; address: string; token?: string | undefined; tokenStdin: boolean }
   | { kind: "relay-clear" }
-  | { kind: "pair"; showRaw: boolean }
+  | { kind: "pair"; showRaw: boolean; desktop: boolean }
   | { kind: "devices" }
   | { kind: "revoke"; idOrPrefix: string; yes: boolean }
 
@@ -31,6 +32,7 @@ const BOOLEAN_FLAGS = new Set([
   "--no-shell-env",
   "--token-stdin",
   "--show-raw",
+  "--desktop",
   "--yes",
   "-y",
 ])
@@ -47,17 +49,18 @@ export function parseLanPort(raw: string): number | false | null {
 /** 返回 CLI 使用说明。 */
 export function formatHelpText(): string {
   return [
-    "用法: pigcode-host [全局选项] <子命令>",
+    "用法: pigcode [全局选项] <子命令>（兼容别名: pigcode-host）",
     "",
     "子命令:",
     "  start [--lan-port <端口|off>] [--no-shell-env]  启动无窗口常驻 Host 服务",
     "  status                                          查看 Host 运行状态与配对摘要",
+    "  name [<新主机名>]                               查看或设置主机展示名",
     "  relay status                                    查看中继配置状态",
     "  relay set --address <wss://...> [--token <t> | --token-stdin]  测试并保存中继配置",
     "  relay clear                                     清除已保存的中继配置",
-    "  pair [--show-raw]                               在终端生成二维码并完成手机端配对",
-    "  devices                                         列出已配对设备",
-    "  revoke <设备编号或名称> [--yes]                 撤销指定设备的配对",
+    "  pair [--desktop] [--show-raw]                   手机端扫码配对，或加 --desktop 生成桌面端连接口令",
+    "  devices                                         列出已配对手机与已授权桌面端",
+    "  revoke <设备编号或名称> [--yes]                 撤销指定设备的访问授权",
     "  --dump-config                                   输出已解析的 profile 插件配置 JSON",
     "",
     "全局选项:",
@@ -77,6 +80,7 @@ interface RawScanState {
   token?: string | undefined
   tokenStdin: boolean
   showRaw: boolean
+  desktop: boolean
   yes: boolean
   seenFlags: Set<string>
   positionals: string[]
@@ -120,7 +124,7 @@ function validateAllowedFlags(
   return null
 }
 
-/** 解析 `pigcode-host` 命令行参数；支持全局选项出现在子命令前后。 */
+/** 解析 `pigcode` 命令行参数；支持全局选项出现在子命令前后。 */
 export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
   const state: RawScanState = {
     global: { profileName: "desktop", json: false, help: false },
@@ -128,6 +132,7 @@ export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
     noShellEnv: false,
     tokenStdin: false,
     showRaw: false,
+    desktop: false,
     yes: false,
     seenFlags: new Set(),
     positionals: [],
@@ -157,6 +162,7 @@ export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
         if (canonical === "--no-shell-env") state.noShellEnv = true
         else if (canonical === "--token-stdin") state.tokenStdin = true
         else if (canonical === "--show-raw") state.showRaw = true
+        else if (canonical === "--desktop") state.desktop = true
         else if (canonical === "--yes") state.yes = true
       }
       continue
@@ -197,7 +203,8 @@ export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
   if (!cmd) {
     return {
       ok: false,
-      error: "缺少子命令；可用命令: start, status, relay, pair, devices, revoke 或 --dump-config",
+      error:
+        "缺少子命令；可用命令: start, status, name, relay, pair, devices, revoke 或 --dump-config",
     }
   }
 
@@ -228,6 +235,20 @@ export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
     const invalid = validateAllowedFlags(state.seenFlags, [], "status")
     if (invalid) return { ok: false, error: invalid }
     return { ok: true, global: state.global, command: { kind: "status" } }
+  }
+
+  if (cmd === "name") {
+    if (rest.length > 0) return { ok: false, error: `name 不接受多余参数: ${rest[0]}` }
+    const invalid = validateAllowedFlags(state.seenFlags, [], "name")
+    if (invalid) return { ok: false, error: invalid }
+    if (sub !== undefined && !sub.trim()) {
+      return { ok: false, error: "主机名不能为空" }
+    }
+    return {
+      ok: true,
+      global: state.global,
+      command: { kind: "name", value: sub?.trim() },
+    }
   }
 
   if (cmd === "relay") {
@@ -272,9 +293,13 @@ export function parseHeadlessCliArgs(argv: string[]): ParseCliResult {
 
   if (cmd === "pair") {
     if (sub !== undefined) return { ok: false, error: `pair 不接受多余参数: ${sub}` }
-    const invalid = validateAllowedFlags(state.seenFlags, ["--show-raw"], "pair")
+    const invalid = validateAllowedFlags(state.seenFlags, ["--show-raw", "--desktop"], "pair")
     if (invalid) return { ok: false, error: invalid }
-    return { ok: true, global: state.global, command: { kind: "pair", showRaw: state.showRaw } }
+    return {
+      ok: true,
+      global: state.global,
+      command: { kind: "pair", showRaw: state.showRaw, desktop: state.desktop },
+    }
   }
 
   if (cmd === "devices") {

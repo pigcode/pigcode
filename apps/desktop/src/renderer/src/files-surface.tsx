@@ -36,6 +36,7 @@ export interface FilesSurfaceProps {
   draftKey: string
   rootName: string
   revision: number
+  isRemote?: boolean | undefined
   onOpenFile: (path: string) => void
   onOpenFileTab: (path: string) => void
   onError: (message: string) => void
@@ -53,6 +54,7 @@ export function FilesSurface({
   draftKey,
   rootName,
   revision,
+  isRemote = false,
   onOpenFile,
   onOpenFileTab,
   onError,
@@ -161,6 +163,7 @@ export function FilesSurface({
       entry,
       point,
       t,
+      isRemote,
       onOpenFile: (target) => open(target, false),
       onOpenFileTab: (target) => open(target, true),
       onMention: requestComposerMention,
@@ -192,6 +195,7 @@ export function FilesSurface({
           root && path && openWorkspaceFile ? (
             <OpenInButton
               path={absoluteFilePath(root, path)}
+              isRemote={isRemote}
               openFile={(appId) => openWorkspaceFile(root, path, appId)}
             />
           ) : null

@@ -16,6 +16,7 @@ import { uninstallPluginAndClearDefault } from "./agents"
 import { dispatchAgentCommand } from "./agent-commands"
 import { subscribeDesktopThread } from "./desktop-thread-feed"
 import { subscribeDesktopSidebar } from "./desktop-sidebar-feed"
+import { HOST_COMMANDS, dispatchHostCommand } from "./host-commands"
 import { desktopQueueRequests, dispatchDesktopQueue } from "./queued-message-commands"
 import { TERMINAL_COMMANDS, dispatchTerminalCommand } from "./terminal-commands"
 import { THREAD_COMMANDS, dispatchThreadCommand } from "./thread-commands"
@@ -162,6 +163,9 @@ export class RpcServer {
         onReply,
       })
     }
+    if (HOST_COMMANDS.has(command)) {
+      return dispatchHostCommand(this.ctx, command, parsed)
+    }
 
     switch (command) {
       case "relay.settings":
@@ -173,22 +177,6 @@ export class RpcServer {
             ?.testAndSave(parsed as CommandParams<"relay.testAndSave">) ?? {
             status: "storage-unavailable",
           }
-        )
-      case "mobile.pairing":
-        return this.ctx.mobileConnections.view()
-      case "mobile.pairing.start":
-        return this.ctx.mobileConnections.start()
-      case "mobile.pairing.cancel":
-        return this.ctx.mobileConnections.cancel(
-          (parsed as CommandParams<"mobile.pairing.cancel">).id,
-        )
-      case "mobile.pairing.confirm": {
-        const { id, confirmation } = parsed as CommandParams<"mobile.pairing.confirm">
-        return this.ctx.mobileConnections.confirm(id, confirmation)
-      }
-      case "mobile.devices.revoke":
-        return this.ctx.mobileConnections.revoke(
-          (parsed as CommandParams<"mobile.devices.revoke">).deviceId,
         )
       case "mobile.preview.getSettings":
         return (

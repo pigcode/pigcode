@@ -5,7 +5,14 @@ import { join } from "node:path"
 import { _electron as electron, expect, test } from "@playwright/test"
 import { codexExecutionModes } from "../../../packages/agent-codex/src/permissions"
 import { claudeExecutionModes } from "../../../packages/agent-claude/src/permissions"
-import { addProject, installPlugin, launchArgs, launchEnv } from "./projects"
+import {
+  addProject,
+  backFromSettings,
+  installPlugin,
+  launchArgs,
+  launchEnv,
+  openPluginsSettings,
+} from "./projects"
 
 test("uses four shared permissions, defaults to full access, and preserves the thread mode across agents", async () => {
   const work = mkdtempSync(join(tmpdir(), "pigcode-agent-modes-"))
@@ -82,8 +89,9 @@ test("uses four shared permissions, defaults to full access, and preserves the t
   const readRecords = () => JSON.parse(readFileSync(records, "utf8"))
   try {
     let page = await app.firstWindow()
-    await page.getByRole("button", { name: "插件", exact: true }).first().click()
+    await openPluginsSettings(page)
     await installPlugin(page, plugin)
+    await backFromSettings(page)
     await addProject(app, page, project)
     await page.getByRole("button", { name: "新会话", exact: true }).first().click()
 

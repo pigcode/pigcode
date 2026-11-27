@@ -19,6 +19,7 @@ export type ConfirmPromptFn = (options: {
 export interface PairCommandDeps {
   profileDir: string
   showRaw: boolean
+  desktop?: boolean | undefined
   json: boolean
   stdout: WritableStreamLike
   stderr: WritableStreamLike
@@ -45,10 +46,17 @@ function sleepAbortable(ms: number, signal: AbortSignal): Promise<void> {
 
 const ADMIN_POLL_TIMEOUT_MS = 2_000
 
-async function cancelAttemptBestEffort(socketPath: string, id: string): Promise<void> {
-  await callAdminSocket(socketPath, "mobile.pairing.cancel", { id }, ADMIN_POLL_TIMEOUT_MS).catch(
-    () => undefined,
-  )
+async function cancelAttemptBestEffort(
+  socketPath: string,
+  id: string,
+  desktop: boolean,
+): Promise<void> {
+  await callAdminSocket(
+    socketPath,
+    desktop ? "desktop.pairing.cancel" : "mobile.pairing.cancel",
+    { id },
+    ADMIN_POLL_TIMEOUT_MS,
+  ).catch(() => undefined)
 }
 
 function emitPairingFailure(
@@ -84,9 +92,18 @@ async function awaitConfirmationWithSignal(
   return Promise.race([promptPromise, abortPromise])
 }
 
-/** 执行 `pigcode-host pair` 交互式终端扫码配对流程。 */
+/** 执行 `pigcode pair`（默认手机扫码；传 `desktop: true` 则生成桌面端连接口令）。 */
 export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
-  const { profileDir, showRaw, json, stdout, stderr, signalSource, pollIntervalMs } = deps
+  const {
+    profileDir,
+    showRaw,
+    desktop = false,
+    json,
+    stdout,
+    stderr,
+    signalSource,
+    pollIntervalMs,
+  } = deps
   const meta = await probeLiveHost(profileDir)
   if (!meta) {
     emitPairingFailure(
@@ -94,57 +111,116 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
       stdout,
       stderr,
       "host_not_running",
-      "Pigcode Host 未运行，请先执行 pigcode-host start 启动常驻服务。",
+      "Pigcode Host 未运行，请先执行 pigcode start 启动常驻服务。",
     )
     return 1
   }
 
-  let startView
-  try {
-    startView = await callAdminSocket(meta.socketPath, "mobile.pairing.start", {})
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    emitPairingFailure(json, stdout, stderr, "admin_error", `启动配对失败: ${message}`)
-    return 1
-  }
+  let attemptId: string
+  let expiresAt: number
+  let payloadString: string
+  let lanAddresses: string[] = []
 
-  if (startView.status !== "waiting" || !startView.attempt?.qr) {
-    emitPairingFailure(json, stdout, stderr, startView.status, formatPairingError(startView.status))
-    return 1
-  }
-
-  const attemptId = startView.attempt.id
-  const qrPayload = startView.attempt.qr
-
-  if (json) {
-    stdout.write(
-      `${JSON.stringify({
-        event: "waiting",
-        attemptId,
-        expiresAt: startView.attempt.expiresAt,
-        qr: qrPayload,
-      })}\n`,
-    )
-  } else {
-    let qrTerminal: string
+  if (desktop) {
+    let startView
     try {
-      qrTerminal = await QRCode.toString(qrPayload, {
-        type: "terminal",
-        small: true,
-        errorCorrectionLevel: "L",
-      })
+      startView = await callAdminSocket(meta.socketPath, "desktop.pairing.start", {})
     } catch (error) {
-      await cancelAttemptBestEffort(meta.socketPath, attemptId)
       const message = error instanceof Error ? error.message : String(error)
-      emitPairingFailure(json, stdout, stderr, "qr-unavailable", `生成终端二维码失败: ${message}`)
+      emitPairingFailure(json, stdout, stderr, "admin_error", `启动桌面端配对失败: ${message}`)
       return 1
     }
-    stdout.write("请使用 Pigcode 手机端扫描以下二维码（按 Ctrl+C 取消）：\n")
-    stdout.write(qrTerminal)
-    if (!qrTerminal.endsWith("\n")) stdout.write("\n")
-    stdout.write(`有效期至: ${new Date(startView.attempt.expiresAt).toLocaleTimeString()}\n`)
-    if (showRaw) {
-      stdout.write(`原始配对数据: ${qrPayload}\n`)
+    if (startView.status !== "waiting" || !startView.attempt?.link) {
+      emitPairingFailure(
+        json,
+        stdout,
+        stderr,
+        startView.status,
+        formatPairingError(startView.status),
+      )
+      return 1
+    }
+    attemptId = startView.attempt.id
+    expiresAt = startView.attempt.expiresAt
+    payloadString = startView.attempt.link
+    lanAddresses = startView.attempt.lanAddresses
+    if (json) {
+      stdout.write(
+        `${JSON.stringify({
+          event: "waiting",
+          role: "desktop",
+          attemptId,
+          expiresAt,
+          link: payloadString,
+          lanAddresses,
+        })}\n`,
+      )
+    } else {
+      stdout.write(
+        "请在另一台 Pigcode 桌面端的「设置 -> 🌐 远程主机 -> ＋ 添加远程主机」中粘贴以下口令（按 Ctrl+C 取消）：\n\n",
+      )
+      stdout.write(`${payloadString}\n\n`)
+      stdout.write(`有效期至: ${new Date(expiresAt).toLocaleTimeString()}\n`)
+      if (lanAddresses.length > 0) {
+        stdout.write(`包含局域网直连候选: ${lanAddresses.join(", ")}\n`)
+      }
+      if (showRaw) {
+        stdout.write(`说明: 同网段优先走局域网 Noise 直连，跨网段自动经中继穿透。\n`)
+      }
+    }
+  } else {
+    let startView
+    try {
+      startView = await callAdminSocket(meta.socketPath, "mobile.pairing.start", {})
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      emitPairingFailure(json, stdout, stderr, "admin_error", `启动配对失败: ${message}`)
+      return 1
+    }
+    if (startView.status !== "waiting" || !startView.attempt?.qr) {
+      emitPairingFailure(
+        json,
+        stdout,
+        stderr,
+        startView.status,
+        formatPairingError(startView.status),
+      )
+      return 1
+    }
+    attemptId = startView.attempt.id
+    expiresAt = startView.attempt.expiresAt
+    payloadString = startView.attempt.qr
+    if (json) {
+      stdout.write(
+        `${JSON.stringify({
+          event: "waiting",
+          attemptId,
+          expiresAt,
+          qr: payloadString,
+        })}\n`,
+      )
+    } else {
+      let qrTerminal: string
+      try {
+        qrTerminal = await QRCode.toString(payloadString, {
+          type: "terminal",
+          small: true,
+          errorCorrectionLevel: "L",
+        })
+      } catch (error) {
+        await cancelAttemptBestEffort(meta.socketPath, attemptId, false)
+        const message = error instanceof Error ? error.message : String(error)
+        emitPairingFailure(json, stdout, stderr, "qr-unavailable", `生成终端二维码失败: ${message}`)
+        return 1
+      }
+      stdout.write("请使用 Pigcode 手机端扫描以下二维码（按 Ctrl+C 取消）：\n")
+      stdout.write(qrTerminal)
+      if (!qrTerminal.endsWith("\n")) stdout.write("\n")
+      stdout.write(`有效期至: ${new Date(expiresAt).toLocaleTimeString()}\n`)
+      stdout.write("提示: 如需连接到另一台电脑的 Pigcode 桌面端，请改用 pigcode pair --desktop\n")
+      if (showRaw) {
+        stdout.write(`原始配对数据: ${payloadString}\n`)
+      }
     }
   }
 
@@ -160,9 +236,34 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
   signalSource.on("SIGINT", onSigInt)
 
   const cancelAndExitInterrupted = async (): Promise<number> => {
-    await cancelAttemptBestEffort(meta.socketPath, attemptId)
+    await cancelAttemptBestEffort(meta.socketPath, attemptId, desktop)
     emitPairingFailure(json, stdout, stderr, "cancelled", "已取消配对。")
     return 130
+  }
+
+  const pollCandidate = async () => {
+    const view = desktop
+      ? await callAdminSocket(meta.socketPath, "desktop.pairing.view", {}, ADMIN_POLL_TIMEOUT_MS)
+      : await callAdminSocket(meta.socketPath, "mobile.pairing.view", {}, ADMIN_POLL_TIMEOUT_MS)
+    return {
+      status: view.status,
+      attempt: view.attempt
+        ? {
+            id: view.attempt.id,
+            candidate: view.attempt.candidate
+              ? {
+                  confirmation: view.attempt.candidate.confirmation,
+                  code: view.attempt.candidate.code,
+                  name: view.attempt.candidate.name,
+                  mode:
+                    "mode" in view.attempt.candidate
+                      ? view.attempt.candidate.mode
+                      : ("pair" as const),
+                }
+              : null,
+          }
+        : null,
+    }
   }
 
   try {
@@ -172,12 +273,7 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
       let view
       try {
-        view = await callAdminSocket(
-          meta.socketPath,
-          "mobile.pairing.view",
-          {},
-          ADMIN_POLL_TIMEOUT_MS,
-        )
+        view = await pollCandidate()
       } catch {
         emitPairingFailure(
           json,
@@ -209,6 +305,7 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
           stdout.write(
             `${JSON.stringify({
               event: "verify",
+              role: desktop ? "desktop" : "mobile",
               attemptId,
               code: candidate.code,
               name: candidate.name,
@@ -219,8 +316,8 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
           stdout.write(
             [
               "",
-              `收到配对请求: ${candidate.name}`,
-              `请求类型: ${candidate.mode === "update" ? "更新中继配置" : "首次配对"}`,
+              `收到${desktop ? "桌面端" : "手机端"}配对请求: ${candidate.name}`,
+              `请求类型: ${candidate.mode === "update" ? "更新中继配置" : desktop ? "远程桌面完整控制授权" : "首次配对"}`,
               `6 位核对码: ${candidate.code}`,
               "",
             ].join("\n"),
@@ -236,12 +333,7 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
             await sleepAbortable(pollIntervalMs, abortController.signal)
             if (abortController.signal.aborted || interrupted) break
             try {
-              const nextView = await callAdminSocket(
-                meta.socketPath,
-                "mobile.pairing.view",
-                {},
-                ADMIN_POLL_TIMEOUT_MS,
-              )
+              const nextView = await pollCandidate()
               if (abortController.signal.aborted || interrupted) break
               if (nextView.attempt?.id && nextView.attempt.id !== attemptId) {
                 droppedReason = "superseded"
@@ -283,7 +375,7 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
         if (droppedReason) {
           if (droppedReason === "disconnected") {
-            await cancelAttemptBestEffort(meta.socketPath, attemptId)
+            await cancelAttemptBestEffort(meta.socketPath, attemptId, desktop)
           }
           emitPairingFailure(json, stdout, stderr, droppedReason, formatPairingError(droppedReason))
           return 1
@@ -291,23 +383,33 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
 
         const normalized = answer?.trim().toLowerCase() ?? ""
         if (normalized === "y" || normalized === "yes") {
-          let confirmed
+          let confirmedStatus: string
           try {
-            confirmed = await callAdminSocket(meta.socketPath, "mobile.pairing.confirm", {
-              id: attemptId,
-              confirmation: candidate.confirmation,
-            })
+            if (desktop) {
+              const res = await callAdminSocket(meta.socketPath, "desktop.pairing.confirm", {
+                id: attemptId,
+                confirmation: candidate.confirmation,
+              })
+              confirmedStatus = res.status
+            } else {
+              const res = await callAdminSocket(meta.socketPath, "mobile.pairing.confirm", {
+                id: attemptId,
+                confirmation: candidate.confirmation,
+              })
+              confirmedStatus = res.status
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error)
             emitPairingFailure(json, stdout, stderr, "confirm_failed", `确认配对失败: ${message}`)
             return 1
           }
-          if (confirmed.status === "paired" || confirmed.status === "update-approved") {
+          if (confirmedStatus === "paired" || confirmedStatus === "update-approved") {
             if (json) {
               stdout.write(
                 `${JSON.stringify({
                   event: "paired",
-                  status: confirmed.status,
+                  role: desktop ? "desktop" : "mobile",
+                  status: confirmedStatus,
                   attemptId,
                   name: candidate.name,
                   mode: candidate.mode,
@@ -315,27 +417,27 @@ export async function runPairCommand(deps: PairCommandDeps): Promise<number> {
               )
             } else {
               stdout.write(
-                confirmed.status === "update-approved"
+                confirmedStatus === "update-approved"
                   ? `已允许「${candidate.name}」更新中继配置。\n`
                   : `已确认配对「${candidate.name}」。\n`,
               )
             }
             return 0
           }
-          if (confirmed.status === "waiting") {
-            await cancelAttemptBestEffort(meta.socketPath, attemptId)
+          if (confirmedStatus === "waiting") {
+            await cancelAttemptBestEffort(meta.socketPath, attemptId, desktop)
           }
           emitPairingFailure(
             json,
             stdout,
             stderr,
-            confirmed.status,
-            formatPairingError(confirmed.status),
+            confirmedStatus,
+            formatPairingError(confirmedStatus),
           )
           return 1
         }
 
-        await cancelAttemptBestEffort(meta.socketPath, attemptId)
+        await cancelAttemptBestEffort(meta.socketPath, attemptId, desktop)
         if (json) {
           stdout.write(`${JSON.stringify({ event: "cancelled", attemptId })}\n`)
         } else {

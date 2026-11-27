@@ -56,6 +56,7 @@ export function ThreadWorkspaceDetails({
   projectId,
   root,
   projectRoot,
+  isRemote = false,
   revision,
   onOpenDiff,
 }: {
@@ -66,6 +67,7 @@ export function ThreadWorkspaceDetails({
   /** 会话的工作目录：项目文件夹，或者它的一个 worktree；草稿时是项目文件夹。 */
   root: string
   projectRoot: string | undefined
+  isRemote?: boolean | undefined
   revision: number
   onOpenDiff?: (() => void) | undefined
 }) {
@@ -83,7 +85,7 @@ export function ThreadWorkspaceDetails({
           <span className="details-row-label">{name}</span>
           {worktree ? <span className="details-row-meta">{t("worktree.label")}</span> : null}
         </div>
-        <OpenInRow path={root} />
+        <OpenInRow path={root} isRemote={isRemote} />
       </section>
       {git ? (
         <section className="details-section" aria-label={t("details.versionControl")}>

@@ -8,9 +8,15 @@ import {
 } from "./mobile-reminders"
 
 export const mobileProtocolVersion = 1
+export const desktopProtocolVersion = 1
 const fingerprintSchema = z.string().regex(/^[0-9a-f]{64}$/)
 export const computerIdSchema = fingerprintSchema
 export const devicePlatformSchema = z.enum(["ios", "android"])
+export const desktopPlatformSchema = z.enum(["macos", "linux", "windows"])
+export type DesktopPlatform = z.infer<typeof desktopPlatformSchema>
+export const anyDevicePlatformSchema = z.enum(["ios", "android", "macos", "linux", "windows"])
+export const clientRoleSchema = z.enum(["mobile", "desktop"])
+export type ClientRole = z.infer<typeof clientRoleSchema>
 export const mobileFeatures = [
   "connection.status",
   "relay.saveReceipt",
@@ -53,13 +59,34 @@ export const pairingCodeSchema = z.object({
   expiresAt: z.number().int(),
 })
 
+const desktopPlatforms = new Set<string>(desktopPlatformSchema.options)
+
 export const deviceHandshakeSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("device.pair"),
-    secret: publicKeySchema,
-    name: z.string().trim().min(1).max(80),
-    platform: devicePlatformSchema,
-  }),
+  z
+    .object({
+      type: z.literal("device.pair"),
+      role: clientRoleSchema.optional(),
+      secret: publicKeySchema,
+      name: z.string().trim().min(1).max(80),
+      platform: anyDevicePlatformSchema,
+    })
+    .superRefine((value, ctx) => {
+      const role = value.role ?? "mobile"
+      const isDesktopPlatform = desktopPlatforms.has(value.platform)
+      if (role === "desktop" && !isDesktopPlatform) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["platform"],
+          message: "desktop role requires macos, linux, or windows platform",
+        })
+      } else if (role === "mobile" && isDesktopPlatform) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["platform"],
+          message: "mobile role requires ios or android platform",
+        })
+      }
+    }),
   z.object({
     type: z.literal("device.updateRelay"),
     secret: publicKeySchema,
@@ -74,10 +101,17 @@ export const mobileHelloSchema = z.object({
   features: z.array(z.string().max(80)).max(32),
 })
 
+export const desktopHelloSchema = z.object({
+  type: z.literal("desktop.hello"),
+  minVersion: z.number().int().positive(),
+  maxVersion: z.number().int().positive(),
+})
+
 export const pairedDeviceSchema = z.object({
   publicKey: publicKeySchema,
+  role: clientRoleSchema.optional(),
   name: z.string().min(1).max(80),
-  platform: devicePlatformSchema,
+  platform: anyDevicePlatformSchema,
   reminders: mobileReminderStatusSchema.optional(),
   apns: savedApnsRegistrationSchema.optional(),
   invalidApns: invalidApnsRegistrationSchema.optional(),
@@ -132,6 +166,7 @@ export const mobilePairingViewSchema = z.object({
   devices: z.array(
     pairedDeviceSchema
       .omit({
+        role: true,
         publicKey: true,
         relayRevision: true,
         confirmedRelayRevision: true,
@@ -140,6 +175,7 @@ export const mobilePairingViewSchema = z.object({
         invalidApns: true,
       })
       .extend({
+        platform: devicePlatformSchema,
         id: fingerprintSchema,
         connected: z.boolean(),
         needsRelayUpdate: z.boolean(),

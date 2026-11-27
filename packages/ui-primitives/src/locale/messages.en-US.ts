@@ -4,6 +4,7 @@ import { appearanceEnUS } from "./appearance.messages"
 import { browserEnUS } from "./browser.messages"
 import { conversationEnUS } from "./conversation.messages"
 import { filesEnUS } from "./files.messages"
+import { hostsEnUS } from "./hosts.messages"
 import type { zhCN } from "./messages.zh-CN"
 import { mobileEnUS } from "./mobile.messages"
 import { newThreadEnUS } from "./new-thread.messages"
@@ -18,6 +19,7 @@ export const enUS = {
   ...browserEnUS,
   ...conversationEnUS,
   ...filesEnUS,
+  ...hostsEnUS,
   ...newThreadEnUS,
   ...pluginsEnUS,
   ...schedulesEnUS,
@@ -152,7 +154,8 @@ export const enUS = {
   "settings.general.autoUpdate": "Check for updates automatically",
   "settings.general.reminders": "Reminders",
   "settings.general.desktopReminders": "Desktop notifications",
-  "settings.general.desktopReminders.description": "Receive requests and run results while the window is in the background.",
+  "settings.general.desktopReminders.description":
+    "Receive requests and run results while the window is in the background.",
   "reminder.threadUnavailable": "The conversation for this notification is unavailable.",
   "settings.general.autoUpdate.description": "Checks every 6 hours",
   "settings.general.prereleaseUpdates": "Try test versions",
@@ -470,26 +473,7 @@ export const enUS = {
     "Fast mode wasn't used: this model can't use it. It ran at normal speed.",
   "chat.notice.fast.unavailable.cooldown":
     "Fast mode needs a short break, so this turn ran at normal speed",
-  "plugins.title": "Plugin manager",
-  "plugins.pageTitle": "Plugin marketplace",
-  "plugins.install": "Install plugin",
-  "plugins.installSpec": "GitHub repo, npm package or folder",
-  "plugins.installSpecPlaceholder": "owner/repo, package@1.0.0 or /path/to/plugin",
-  "plugins.trustWarning":
-    "Plugins can read and change files on your computer. Only install ones you trust.",
-  "plugins.permissions": "Permissions",
-  "plugins.conflict": "Conflict",
-  "plugins.installed": "Installed plugins",
-  "plugins.refresh": "Refresh",
-  "plugins.empty": "No plugins yet",
-  "plugins.emptyHint": "Get one from the marketplace, or install from GitHub, npm or a folder",
-  "plugins.enabled": "Enabled",
-  "plugins.disabled": "Disabled",
-  "plugins.installing": "Installing…",
-  "plugins.kind.agent": "Agent",
-  "plugins.kind.capability": "Capability",
-  "plugins.kind.ui": "UI",
-  "plugins.kind.bundle": "Bundle",
+  // Plugin strings live in plugins.messages.ts
   "status.reconnected": "Connected again",
   "status.offline": "Can't connect, trying again…",
   "status.connecting": "Connecting…",

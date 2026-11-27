@@ -50,8 +50,11 @@ describe("client plugin settings pages", () => {
       "debug-settings",
       "general",
       "appearance",
-      "mobile-relay",
+      "mobile",
+      "remote-hosts",
       "agents",
+      "plugins",
+      "daemon",
     ])
     const page = pages[0]
     expect(page).toMatchObject({
@@ -81,7 +84,7 @@ describe("client plugin settings pages", () => {
 
     controller.dispose()
     expect(extensions.get("settingsPage").map((item) => item.owner.kind)).toEqual(
-      Array(4).fill("builtin"),
+      Array(7).fill("builtin"),
     )
   })
 

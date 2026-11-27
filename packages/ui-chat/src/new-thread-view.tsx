@@ -36,6 +36,8 @@ export interface NewThreadViewProps {
   onAddProject: () => void
   /** 当前项目的分支、项目编辑与 worktree 控件。 */
   workspaceControls?: ReactNode
+  /** 运行主机选择控件（多主机混排时放在项目选择前面）。 */
+  hostControls?: ReactNode
   workspaceStatus?: ReactNode
   /** 输入框的草稿键；建议预填到这里。 */
   draftKey: string
@@ -73,9 +75,11 @@ export interface NewThreadViewProps {
   /** 上传图片附件。 */
   onUploadImage?: ComposerProps["onUploadImage"]
   /** 按需读取图片附件（thumb / full）。 */
-  readAttachment?: ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
+  readAttachment?:
+    ((attachmentId: string, variant: "thumb" | "full") => Promise<string>) | undefined
   /** 同步检查内存缓存中是否已有对应图片变体的 data URL。 */
-  peekAttachment?: ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
+  peekAttachment?:
+    ((attachmentId: string, variant: "thumb" | "full") => string | undefined) | undefined
   /** 当前草稿所选 Agent 是否支持直接看图。 */
   supportsImages?: boolean | undefined
 }
@@ -212,6 +216,7 @@ export function NewThreadView({
   projectId,
   onSelectProject,
   onAddProject,
+  hostControls,
   workspaceControls,
   workspaceStatus,
   draftKey,
@@ -270,6 +275,7 @@ export function NewThreadView({
           tall
           header={
             <>
+              {hostControls}
               <ProjectMenu
                 projects={projects}
                 projectId={ready ? projectId : null}
@@ -313,9 +319,7 @@ export function NewThreadView({
         <ImageLightbox
           images={lightbox.images}
           initialIndex={lightbox.index}
-          loadFull={
-            readAttachment ? (image) => readAttachment(image.id, "full") : undefined
-          }
+          loadFull={readAttachment ? (image) => readAttachment(image.id, "full") : undefined}
           peekUrl={
             peekAttachment ? (image, variant) => peekAttachment(image.id, variant) : undefined
           }

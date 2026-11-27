@@ -5,20 +5,29 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test, type Page } from "@playwright/test"
-import { addProject, installPlugin, launchEnv, launchArgs } from "./projects"
+import {
+  addProject,
+  backFromSettings,
+  installPlugin,
+  launchArgs,
+  launchEnv,
+  openPluginsSettings,
+} from "./projects"
 
 /** 仓库里的脚手架脚本：生成一个 UI 插件用到真实的模板，而不是复制的样例。 */
 const CREATE_PLUGIN = fileURLToPath(new URL("../../../scripts/create-plugin.ts", import.meta.url))
 
-/** 插件页是工作区里的顶层页面：从侧栏的「插件」进去，侧栏仍是工作区导航。 */
+/** 插件页在「设置 → 插件」里。 */
 async function openPlugins(page: Page, manage = false): Promise<void> {
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
-  if (manage) await page.getByRole("button", { name: "插件管理", exact: true }).click()
+  await openPluginsSettings(page, manage)
 }
 /** 插件页上某个插件的卡片，按包名定位。 */
 const pluginTile = (page: Page, name: string) => page.locator(`.market-tile[data-plugin='${name}']`)
-/** 从插件页回到会话：点侧栏里的会话。 */
-const backToChat = (page: Page) => page.locator(".sidebar .sess").first().click()
+/** 从设置插件页回到会话：先退出设置，再点侧栏里的会话。 */
+async function backToChat(page: Page): Promise<void> {
+  await backFromSettings(page)
+  await page.locator(".sidebar .sess").first().click()
+}
 
 test("installs, enables, and disables plugins without restart", async () => {
   // 每次从干净的项目目录开始，避免上一次失败残留影响结果。
@@ -36,7 +45,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await addProject(app, page, projectRoot)
   await openPlugins(page)
   await expect(
-    page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }),
+    page.locator(".sidebar").getByRole("button", { name: "插件", exact: true }),
   ).toHaveAttribute("aria-current", "page")
   const agent = new URL("../../../examples/agent-echo", import.meta.url).pathname
   await installPlugin(page, agent)
@@ -44,7 +53,8 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(echo).toBeVisible()
   await expect(echo.getByRole("switch")).toBeChecked()
 
-  // 新建会话，默认 agent 由 PIGCODE_AGENT=echo 强制；插件页的侧栏里就有「新会话」。
+  // 退回工作区后新建会话，默认 agent 由 PIGCODE_AGENT=echo 强制。
+  await backFromSettings(page)
   await page.getByRole("button", { name: "新会话" }).first().click()
   // 线程创建是异步 RPC；等 composer 可编辑后再输入。
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
@@ -76,8 +86,17 @@ test("installs, enables, and disables plugins without restart", async () => {
   await openDebugSettings.click()
   await expect(debugSettingsTitle).toBeVisible()
   await expect(debugSettings).toHaveAttribute("aria-current", "page")
-  await expect(settingsNav).toHaveText(["通用", "外观", "手机连接", "Agent", "Debug Settings"])
-  await expect(sidebar.locator(".side-group")).toHaveText(["设置", "插件设置"])
+  await expect(settingsNav).toHaveText([
+    "通用",
+    "外观",
+    "手机端",
+    "远程主机",
+    "Agent",
+    "插件",
+    "守护进程、中继与识别色",
+    "Debug Settings",
+  ])
+  await expect(sidebar.locator(".side-group")).toHaveText(["应用与连接", "插件设置"])
   await expect(
     page
       .locator("[data-plugin-content='debug-settings']")
@@ -96,7 +115,7 @@ test("installs, enables, and disables plugins without restart", async () => {
   await settingsSearch.getByRole("option", { name: "Debug Settings" }).click()
   await expect(settingsSearch).toBeHidden()
   await expect(debugSettingsTitle).toBeVisible()
-  await expect(settingsNav).toHaveCount(5)
+  await expect(settingsNav).toHaveCount(8)
   await backToApp()
   await expect(debugPanel).toBeVisible()
 
@@ -197,14 +216,14 @@ test("installs, enables, and disables plugins without restart", async () => {
   await expect(page.getByRole("menuitem", { name: "Debug Inspector" })).toHaveCount(0)
   await page.keyboard.press("Escape")
 
-  // 选中的 Debug 设置页已经没有了：再打开设置时是通用页，不是空白页。
+  // 选中的 Debug 设置页已经移除：再次打开设置时直接落到当前可用的插件页，侧栏不再保留 Debug 设置项。
   await page.getByRole("button", { name: "设置", exact: true }).click()
-  await expect(page.getByRole("heading", { level: 1, name: "通用", exact: true })).toBeVisible()
-  await expect(sidebar.getByRole("button", { name: "通用", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("heading", { level: 1, name: "插件市场", exact: true })).toBeVisible()
+  await expect(sidebar.getByRole("button", { name: "插件", exact: true })).toHaveAttribute(
     "aria-current",
     "page",
   )
-  await expect(sidebar.locator(".side-group")).toHaveText(["设置"])
+  await expect(sidebar.locator(".side-group")).toHaveText(["应用与连接"])
   await expect(debugSettings).toHaveCount(0)
 
   // 重新启用：Panel、设置页与 Surface 回来。
@@ -258,6 +277,7 @@ test("a plugin's contributions on all five extension points come and go with it"
   await expect(clock.getByRole("switch")).toBeChecked()
 
   // fake agent 调用样例插件的工具：clock_now 带 MCP 前缀和不带各一次，还有 debug_probe。
+  await backFromSettings(page)
   await page.getByRole("button", { name: "新会话" }).first().click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await page.locator(".tiptap").click()
@@ -383,6 +403,7 @@ test("a generated UI plugin is a React plugin and runs right after generating", 
   await expect(panel.getByRole("button", { name: "点了 1 次" })).toBeVisible()
 
   // 生成的 Surface 与设置页也由组件渲染。
+  await backFromSettings(page)
   await page.getByRole("button", { name: "新会话" }).first().click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()
@@ -434,6 +455,7 @@ test("a plugin written with React renders the host's ui-primitives and reads the
 
   // Surface 用同一个 React 组件：在右侧面板里打开，ui-primitives 的组件照常显示。
   // 右侧面板要先有会话才能切换。
+  await backFromSettings(page)
   await page.getByRole("button", { name: "新会话" }).first().click()
   await expect(page.locator(".tiptap")).toHaveAttribute("contenteditable", "true")
   await page.locator(".panel-top").getByRole("button", { name: "显示或隐藏右侧面板" }).click()

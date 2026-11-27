@@ -1,6 +1,12 @@
 /** M0-B 验收：项目/会话、fake 流、插件的侧栏面板与右栏标签、重连。 */
 import { _electron as electron, expect, test } from "@playwright/test"
-import { addProject, installPlugin, launchArgs } from "./projects"
+import {
+  addProject,
+  backFromSettings,
+  installPlugin,
+  launchArgs,
+  openPluginsSettings,
+} from "./projects"
 
 test("chat, plugin panel, and reconnect", async () => {
   const env = Object.fromEntries(
@@ -25,14 +31,15 @@ test("chat, plugin panel, and reconnect", async () => {
   await expect(page.locator(".msg-user").filter({ hasText: "hello" })).toBeVisible()
   await expect(page.getByText("Hello from fake agent")).toBeVisible()
 
-  // 插件页从工作区侧栏的「插件」进去，侧栏不换成设置导航。
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+  // 插件页已移入「设置 → 插件」。
+  await openPluginsSettings(page)
   const samplePlugin = new URL("../../../examples/ui-debug-panel", import.meta.url).pathname
   await installPlugin(page, samplePlugin)
   await expect(page.getByText("Debug Panel")).toBeVisible()
 
   // 插件的右栏标签和内置标签一样列在启动器里，内容由宿主的 React 与 ui-primitives 渲染，
-  // 分组标题、设置行和按钮都是宿主自己的组件。点侧栏里的会话回到聊天。
+  // 分组标题、设置行和按钮都是宿主自己的组件。回到工作区后点侧栏里的会话回到聊天。
+  await backFromSettings(page)
   await page.locator(".sidebar .sess").first().click()
   await page.getByRole("button", { name: "显示或隐藏右侧面板" }).first().click()
   await page.getByRole("button", { name: "Debug Inspector" }).click()
@@ -46,8 +53,7 @@ test("chat, plugin panel, and reconnect", async () => {
   await expect(surface.locator(".list-row-title")).toContainText(["pigcode-m0b"])
 
   // 核心 profile 条目也会出现在插件页里，按插件包名定位到示例插件的卡片。
-  await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
-  await page.getByRole("button", { name: "插件管理", exact: true }).click()
+  await openPluginsSettings(page, true)
   const row = page.locator(".market-tile[data-plugin='pigcode-ui-debug-panel']")
   await expect(row.getByRole("switch")).toBeChecked()
   await row.getByRole("switch").click()

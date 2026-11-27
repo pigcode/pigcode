@@ -4,10 +4,7 @@ import {
   mobilePairingParamsSchema,
   mobileRevokeParamsSchema,
 } from "./mobile"
-import {
-  mobilePreviewGetSettingsParams,
-  mobilePreviewSetEnabledParams,
-} from "./mobile-preview"
+import { mobilePreviewGetSettingsParams, mobilePreviewSetEnabledParams } from "./mobile-preview"
 import { z } from "zod"
 import {
   acpRegistryAgentIdSchema,
@@ -109,6 +106,14 @@ export const commandSchemas = {
   "mobile.devices.revoke": mobileRevokeParamsSchema,
   "mobile.preview.getSettings": mobilePreviewGetSettingsParams,
   "mobile.preview.setEnabled": mobilePreviewSetEnabledParams,
+  "desktop.pairing": z.object({}),
+  "desktop.pairing.start": z.object({}),
+  "desktop.pairing.cancel": mobilePairingParamsSchema,
+  "desktop.pairing.confirm": mobileConfirmParamsSchema,
+  "desktop.devices.revoke": mobileRevokeParamsSchema,
+  "host.identity": z.object({}),
+  "host.setName": z.object({ name: z.string().trim().min(1).max(80) }),
+  "host.browseDirs": z.object({ path: z.string().max(4096).optional() }),
   "project.add": z.object({
     rootPath: z.string().min(1),
     /** 展示名；缺省时取文件夹名。 */
@@ -312,7 +317,10 @@ export const commandSchemas = {
   /** 新建文件；目标已存在时拒绝覆盖。 */
   "workspace.createFile": scoped({
     path: z.string().min(1),
-    text: z.string().max(5 * 1024 * 1024).optional(),
+    text: z
+      .string()
+      .max(5 * 1024 * 1024)
+      .optional(),
   }),
   /** 重命名或移动工作区内的文件或目录。 */
   "workspace.renamePath": scoped({

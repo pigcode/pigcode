@@ -5,7 +5,7 @@ import { DEFAULT_RUNTIME_MODE } from "@pigcode/contracts"
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useThreadOptions } from "./thread-options"
-import type { AgentFeatures, GitBranches, WorktreeStart } from "@pigcode/contracts"
+import type { AgentFeatures, GitBranches, HostSummary, WorktreeStart } from "@pigcode/contracts"
 import { useAppStore, useContributions } from "@pigcode/client-runtime"
 import { NewThreadView } from "@pigcode/ui-chat"
 import {
@@ -16,7 +16,7 @@ import {
   type ComposerModelCatalog,
   type ComposerSubmitOptions,
 } from "@pigcode/ui-composer"
-import { useLocale } from "@pigcode/ui-primitives"
+import { HostPickerMenu, useLocale } from "@pigcode/ui-primitives"
 import { useAgentCommandsLoader } from "./agent-commands"
 import { useDefaultInstanceId } from "./agents"
 import type { CoreDeps } from "./chat-container"
@@ -42,6 +42,9 @@ function messageOf(error: unknown): string {
 
 interface NewThreadPageProps {
   deps: CoreDeps
+  hosts?: readonly HostSummary[] | undefined
+  activeHost?: HostSummary | undefined
+  onSelectHost?: ((hostId: string) => void) | undefined
   agents: readonly ComposerAgent[]
   catalog: ComposerModelCatalog
   onLoadModels: (agentId: string) => void
@@ -64,6 +67,9 @@ export function NewThreadPage(props: NewThreadPageProps) {
 
 function ProjectDraft({
   deps,
+  hosts,
+  activeHost,
+  onSelectHost,
   agents,
   catalog,
   onLoadModels,
@@ -197,6 +203,18 @@ function ProjectDraft({
       onAddProject={() =>
         void registeredCommands.find((command) => command.id === ADD_PROJECT_COMMAND)?.run()
       }
+      hostControls={
+        hosts && hosts.length >= 2 && activeHost && onSelectHost ? (
+          <div className="composer-host-select">
+            <HostPickerMenu
+              hosts={hosts}
+              value={activeHost.id}
+              onChange={onSelectHost}
+              onlineOnly
+            />
+          </div>
+        ) : undefined
+      }
       workspaceControls={
         project ? (
           <DraftWorkspaceControls
@@ -255,6 +273,7 @@ function ProjectDraft({
             projectId={project.id}
             root={project.rootPath}
             projectRoot={project.rootPath}
+            isRemote={Boolean(activeHost && activeHost.id !== "local")}
             revision={checkoutRevision}
             onOpenDiff={onOpenDiff}
           />

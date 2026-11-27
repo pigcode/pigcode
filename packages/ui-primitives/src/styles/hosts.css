@@ -1,0 +1,303 @@
+/** 多主机识别圆点、胶囊徽标、侧栏混排切换与远程目录浏览样式（严格引用 tokens.css 变量）。 */
+
+.host-dot {
+  display: inline-block;
+  flex: none;
+  width: var(--dot-size);
+  height: var(--dot-size);
+  border-radius: var(--r-full);
+  background: var(--muted);
+}
+.host-dot[data-host-color="blue"] {
+  background: var(--host-blue);
+}
+.host-dot[data-host-color="green"] {
+  background: var(--host-green);
+}
+.host-dot[data-host-color="amber"] {
+  background: var(--host-amber);
+}
+.host-dot[data-host-color="violet"] {
+  background: var(--host-violet);
+}
+.host-dot[data-host-color="rose"] {
+  background: var(--host-rose);
+}
+.host-dot[data-host-color="slate"] {
+  background: var(--host-slate);
+}
+.host-dot[data-offline] {
+  opacity: 0.4;
+}
+
+.host-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  min-width: 0;
+  height: var(--control-2xs);
+  padding: 0 var(--space-3);
+  border-radius: var(--r-full);
+  background: var(--field);
+  color: var(--fg-2);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  line-height: var(--lh-2xs);
+  white-space: nowrap;
+}
+.host-chip[data-host-color="blue"] {
+  background: var(--host-blue-soft);
+  color: var(--host-blue);
+}
+.host-chip[data-host-color="green"] {
+  background: var(--host-green-soft);
+  color: var(--host-green);
+}
+.host-chip[data-host-color="amber"] {
+  background: var(--host-amber-soft);
+  color: var(--host-amber);
+}
+.host-chip[data-host-color="violet"] {
+  background: var(--host-violet-soft);
+  color: var(--host-violet);
+}
+.host-chip[data-host-color="rose"] {
+  background: var(--host-rose-soft);
+  color: var(--host-rose);
+}
+.host-chip[data-host-color="slate"] {
+  background: var(--host-slate-soft);
+  color: var(--host-slate);
+}
+.host-chip[data-offline] {
+  opacity: 0.6;
+}
+
+/* 侧栏：混排 / 按主机切换、按主机分组头、离线条目、底部主机集群栏 */
+.side-host-switch {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  gap: var(--space-1);
+}
+.side-host-switch-btn {
+  padding: 0 var(--space-3);
+  height: var(--control-xs);
+  border-radius: var(--r-xs);
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.side-host-switch-btn[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--shadow-btn);
+}
+
+.side-host-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.side-host-group-meta {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-weight: 400;
+}
+.side-host-group-spacer {
+  flex: 1;
+}
+
+.sess[data-offline],
+.proj-row[data-offline] {
+  opacity: 0.65;
+}
+
+.side-foot-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  height: var(--control-md);
+  padding: 0 var(--space-4);
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.side-foot-cluster:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+/* 远程主机目录浏览（AddProjectDialog） */
+.remote-dir-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-block);
+  background: var(--surface-sunken);
+}
+.remote-dir-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.remote-dir-path {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+}
+.remote-dir-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: var(--remote-dir-h);
+  overflow: auto;
+}
+.remote-dir-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--row-h-compact);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--r-sm);
+  color: var(--fg);
+  font-size: var(--fs-sm);
+  text-align: left;
+}
+.remote-dir-item:hover {
+  background: var(--hover);
+}
+.remote-dir-git {
+  margin-left: auto;
+  color: var(--ok-text);
+  font-size: var(--fs-2xs);
+}
+
+/* 设置侧栏「当前配置主机 ▾」选择器与各设置页多主机横幅 */
+.settings-scope-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-block);
+  background: var(--surface);
+}
+.settings-scope-label {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+.settings-scope-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--control-sm);
+  color: var(--fg);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+.settings-scope-trigger-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.host-notice-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-block);
+  background: var(--panel);
+  color: var(--fg-2);
+  font-size: var(--fs-sm);
+}
+
+.host-verify-digits {
+  font-family: var(--font-mono);
+  font-size: var(--host-verify-digits-fs);
+  font-weight: 600;
+  letter-spacing: var(--space-2);
+  color: var(--fg);
+}
+
+.host-color-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.host-color-swatch {
+  display: inline-grid;
+  place-items: center;
+  width: var(--control-sm);
+  height: var(--control-sm);
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.host-color-swatch[aria-checked="true"] {
+  border-color: var(--fg);
+  box-shadow: var(--shadow-btn);
+}
+
+.host-link-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-block);
+  background: var(--field);
+}
+.host-link-code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+}
+
+.host-cli-code {
+  padding: var(--space-5);
+  border-radius: var(--r-block);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--fg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.workbench-host-pill {
+  margin-right: var(--space-2);
+}
+
+.composer-host-select {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}

@@ -1,11 +1,17 @@
 /** Host 单实例锁与本机控制通道（host.sock）的共享契约、参数校验与响应协议。 */
 import { z } from "zod"
 import {
+  desktopAuthorizedClientSchema,
+  desktopPairingViewSchema,
+  desktopRevokeResultSchema,
+} from "./desktop-pairing"
+import {
   mobileConfirmParamsSchema,
   mobilePairingParamsSchema,
   mobilePairingViewSchema,
   mobileRevokeParamsSchema,
   mobileRevokeResultSchema,
+  publicKeySchema,
 } from "./mobile"
 import { relaySettingsSchema, relayTestAndSaveParamsSchema, relayTestResultSchema } from "./relay"
 
@@ -41,15 +47,21 @@ export const hostStatusViewSchema = z.strictObject({
   activeRuns: z.number().int().nonnegative(),
   pendingApprovals: z.number().int().nonnegative(),
   pairedDevices: z.number().int().nonnegative(),
+  hostName: z.string().min(1).max(80).optional(),
+  hostKey: publicKeySchema.optional(),
+  pairedDesktops: z.number().int().nonnegative().optional(),
 })
 export type HostStatusView = z.infer<typeof hostStatusViewSchema>
 
 const emptyStrictParamsSchema = z.strictObject({})
 const hostStopResultSchema = z.strictObject({ stopping: z.literal(true) })
+const hostSetNameParamsSchema = z.strictObject({ name: z.string().trim().min(1).max(80) })
+const hostSetNameResultSchema = z.strictObject({ hostName: z.string().min(1).max(80) })
 
 /** 本机控制通道支持的方法名与参数 schema 映射。 */
 export const hostAdminMethodParamsSchemas = {
   "host.status": emptyStrictParamsSchema,
+  "host.setName": hostSetNameParamsSchema,
   "host.stop": z.strictObject({ reason: z.enum(["exited", "restarting"]).optional() }),
   "relay.view": emptyStrictParamsSchema,
   "relay.testAndSave": relayTestAndSaveParamsSchema,
@@ -60,11 +72,18 @@ export const hostAdminMethodParamsSchemas = {
   "mobile.pairing.confirm": mobileConfirmParamsSchema,
   "mobile.devices.list": emptyStrictParamsSchema,
   "mobile.devices.revoke": mobileRevokeParamsSchema,
+  "desktop.pairing.view": emptyStrictParamsSchema,
+  "desktop.pairing.start": emptyStrictParamsSchema,
+  "desktop.pairing.cancel": mobilePairingParamsSchema,
+  "desktop.pairing.confirm": mobileConfirmParamsSchema,
+  "desktop.devices.list": emptyStrictParamsSchema,
+  "desktop.devices.revoke": mobileRevokeParamsSchema,
 } as const
 
 /** 本机控制通道各方法的返回值 schema 映射。 */
 export const hostAdminMethodResultSchemas = {
   "host.status": hostStatusViewSchema,
+  "host.setName": hostSetNameResultSchema,
   "host.stop": hostStopResultSchema,
   "relay.view": relaySettingsSchema,
   "relay.testAndSave": relayTestResultSchema,
@@ -75,6 +94,12 @@ export const hostAdminMethodResultSchemas = {
   "mobile.pairing.confirm": mobilePairingViewSchema,
   "mobile.devices.list": mobilePairingViewSchema.shape.devices,
   "mobile.devices.revoke": mobileRevokeResultSchema,
+  "desktop.pairing.view": desktopPairingViewSchema,
+  "desktop.pairing.start": desktopPairingViewSchema,
+  "desktop.pairing.cancel": desktopPairingViewSchema,
+  "desktop.pairing.confirm": desktopPairingViewSchema,
+  "desktop.devices.list": z.array(desktopAuthorizedClientSchema),
+  "desktop.devices.revoke": desktopRevokeResultSchema,
 } as const
 
 export type HostAdminMethod = keyof typeof hostAdminMethodParamsSchemas

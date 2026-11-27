@@ -417,7 +417,9 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await expect(scheduleEditor.getByRole("switch", { name: "worktree" })).toBeVisible()
   await step("schedule-create")
 
-  await nav("settings.plugins")
+  // 插件页在设置侧栏内，从定时任务页回到设置后再打开插件市场。
+  await page.getByRole("button", { name: t("settings.title"), exact: true }).click()
+  await section("settings.plugins")
   await expect(page.getByRole("heading", { name: t("plugins.pageTitle") })).toBeVisible()
   await expect(page.locator(".market-tile")).toHaveCount(13)
   await step("settings-plugins")
@@ -459,7 +461,11 @@ export async function walkSettings(walk: Walk): Promise<void> {
   await page.keyboard.press("Escape")
   await expect(page.getByRole("dialog")).toBeHidden()
 
-  // 还没发过消息，侧栏里没有会话：回到新会话草稿。草稿里也能打开右栏，不建会话（检查点置灰）。
+  // 还没发过消息，侧栏里没有会话：先退出设置回到工作区，再进入新会话草稿（检查点置灰）。
+  await page
+    .getByRole("button", { name: t("settings.back") })
+    .first()
+    .click()
   await page
     .locator(".side-actions")
     .getByRole("button", { name: t("nav.newThread") })

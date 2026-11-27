@@ -44,6 +44,11 @@ function makeHandlers(overrides: Partial<AdminHandlers> = {}): AdminHandlers {
     attempt: null,
     devices: [],
   }
+  const emptyDesktopPairing = {
+    status: "idle" as const,
+    attempt: null,
+    clients: [],
+  }
   const status: HostStatusView = {
     pid: process.pid,
     runtime: "headless",
@@ -58,6 +63,7 @@ function makeHandlers(overrides: Partial<AdminHandlers> = {}): AdminHandlers {
   }
   return {
     "host.status": () => status,
+    "host.setName": ({ name }) => ({ hostName: name }),
     "host.stop": () => ({ stopping: true }),
     "relay.view": () => ({ address: null, tokenConfigured: false }),
     "relay.testAndSave": () => ({
@@ -71,6 +77,15 @@ function makeHandlers(overrides: Partial<AdminHandlers> = {}): AdminHandlers {
     "mobile.pairing.confirm": () => ({ ...emptyPairing, status: "paired" }),
     "mobile.devices.list": () => [],
     "mobile.devices.revoke": () => ({ status: "missing-device", pairing: emptyPairing }),
+    "desktop.pairing.view": () => emptyDesktopPairing,
+    "desktop.pairing.start": () => ({ ...emptyDesktopPairing, status: "waiting" }),
+    "desktop.pairing.cancel": () => ({ ...emptyDesktopPairing, status: "cancelled" }),
+    "desktop.pairing.confirm": () => ({ ...emptyDesktopPairing, status: "paired" }),
+    "desktop.devices.list": () => [],
+    "desktop.devices.revoke": () => ({
+      status: "missing-device",
+      pairing: emptyDesktopPairing,
+    }),
     ...overrides,
   }
 }

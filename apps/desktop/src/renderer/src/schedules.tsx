@@ -1,7 +1,13 @@
-/** 定时任务页容器：从 Host 拉取任务，并把页面操作转成 schedule.* RPC。 */
-import { useCallback, useEffect, useState } from "react"
-import type { Schedule } from "@pigcode/contracts"
-import { useAppStore, useContributions, type Connection } from "@pigcode/client-runtime"
+/** 定时任务页容器：聚合所有主机的定时任务，并在新建与操作时路由到对应主机 RPC。 */
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { HOST_LOCAL_ID, type HostSummary } from "@pigcode/contracts"
+import {
+  HostPool,
+  useAppStore,
+  useContributions,
+  useHostPool,
+  type Connection,
+} from "@pigcode/client-runtime"
 import {
   SchedulesPage,
   type RunNowResult,
@@ -37,25 +43,46 @@ function ScheduledWorkspace({
   )
 }
 
-/** 把 unknown 错误转成可展示文本。 */
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-/** 定时任务页容器；任务列表在挂载与每次操作后刷新，操作失败时把错误抛给页面。 */
+/** 定时任务页容器；支持多主机混排聚合展示与新建/编辑时自动切换到任务归属主机。 */
 export function SchedulesContainer({
   deps,
+  hostPool,
+  preferredHostId,
   onOpenThread,
 }: {
   deps: CoreDeps
-  onOpenThread: (threadId: string) => void
+  hostPool?: HostPool | undefined
+  preferredHostId?: string | undefined
+  onOpenThread: (threadId: string, hostId?: string) => void
 }) {
-  const state = useAppStore(deps.store)
-  const [schedules, setSchedules] = useState<Schedule[]>([])
+  const fallbackPool = useMemo(
+    () => new HostPool({ localConnection: deps.connection, localStore: deps.store }),
+    [deps.connection, deps.store],
+  )
+  const pool = hostPool ?? fallbackPool
+  const poolSnap = useHostPool(pool)
+  const [pickedHostId, setPickedHostId] = useState<string>(() =>
+    pool.resolveTargetHostId(preferredHostId),
+  )
+  const createHostId = pool.resolveTargetHostId(pickedHostId)
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
   const [historyRevision, setHistoryRevision] = useState(0)
-  const { connection } = deps
+
+  const mixed = useMemo(() => pool.mixedSchedules(), [pool, poolSnap.revision])
+  const schedules = useMemo(() => mixed.map((entry) => entry.schedule), [mixed])
+  const scheduleHosts = useMemo<Record<string, HostSummary>>(() => {
+    const out: Record<string, HostSummary> = {}
+    for (const entry of mixed) out[entry.schedule.id] = entry.host
+    return out
+  }, [mixed])
+
+  const ownerHost = editingScheduleId ? scheduleHosts[editingScheduleId] : undefined
+  const activeEditorHostId = ownerHost?.id ?? createHostId
+  const activeSlot = pool.slot(activeEditorHostId)
+  const connection = activeSlot.connection
+  const state = useAppStore(activeSlot.store)
   const connected = state.status === "connected"
   const agents = useAgents(connection, state.agentRevision, connected)
   const defaultInstanceId = useDefaultInstanceId(connection, state.agentRevision, connected)
@@ -71,46 +98,58 @@ export function SchedulesContainer({
     [state.threads, state.projects],
   )
   const loadCommands = useCallback<NonNullable<ScheduleComposerSources["loadCommands"]>>(
-    (id, scope, refresh) => listAgentCommands(connection, id, scope, refresh),
+    (id, scope, refreshFlag) => listAgentCommands(connection, id, scope, refreshFlag),
     [connection],
   )
 
   const refresh = useCallback(async (): Promise<void> => {
+    setLoading(true)
+    setError(null)
     try {
-      const result = (await connection.call("schedule.list", {})) as Schedule[]
-      setSchedules(result)
-      setError(null)
+      const onlineIds = pool
+        .listHosts()
+        .filter((h) => h.status === "connected")
+        .map((h) => h.id)
+      await Promise.all(onlineIds.map((id) => pool.refreshHostSchedules(id)))
     } catch (cause) {
-      setError(messageOf(cause))
+      setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setLoading(false)
     }
-  }, [connection])
+  }, [pool])
 
   useEffect(() => {
-    if (connected) void refresh()
-  }, [connected, refresh])
+    void refresh()
+  }, [refresh, poolSnap.hosts.length])
 
   useEffect(
     () =>
       connection.onScheduleRunChange(() => {
-        void refresh()
+        void pool.refreshHostSchedules(activeEditorHostId)
         setHistoryRevision((current) => current + 1)
       }),
-    [connection, refresh],
+    [connection, pool, activeEditorHostId],
   )
 
-  // 运行历史在这个函数变化时重新读取；会话流式输出会频繁刷新 store，函数本身要保持不变。
   const loadRuns = useCallback(
-    (id: string, offset: number, limit: number) =>
-      connection.call("schedule.runs", { id, offset, limit }) as Promise<ScheduleRunsPage>,
-    [connection],
+    (id: string, offset: number, limit: number) => {
+      const ownerId = scheduleHosts[id]?.id ?? activeEditorHostId
+      return pool.slot(ownerId).connection.call("schedule.runs", {
+        id,
+        offset,
+        limit,
+      }) as Promise<ScheduleRunsPage>
+    },
+    [pool, scheduleHosts, activeEditorHostId],
   )
 
-  /** 执行一次变更并刷新列表，把变更的结果交回页面。 */
-  async function mutate<T>(action: () => Promise<T>): Promise<T> {
-    const result = await action()
-    await refresh()
+  async function mutateOn<T>(
+    targetId: string,
+    action: (conn: Connection) => Promise<T>,
+  ): Promise<T> {
+    const slot = pool.slot(targetId)
+    const result = await action(slot.connection)
+    await pool.refreshHostSchedules(slot.id)
     return result
   }
 
@@ -119,13 +158,22 @@ export function SchedulesContainer({
       schedules={schedules}
       projects={state.projects}
       preferredProjectId={state.activeProjectId}
+      hosts={poolSnap.hosts.length >= 2 ? poolSnap.hosts : undefined}
+      targetHostId={createHostId}
+      onTargetHostChange={setPickedHostId}
+      scheduleHosts={scheduleHosts}
+      onEditingScheduleChange={(editing) => setEditingScheduleId(editing?.id ?? null)}
       agentOptions={{ agents, catalog, onLoadModels: load, defaultInstanceId }}
       composerSources={{
         listFiles,
         threadOptions: mentions,
         loadCommands,
         workspaceControls: (props) => (
-          <ScheduledWorkspace key={props.projectId} connection={connection} {...props} />
+          <ScheduledWorkspace
+            key={`${activeEditorHostId}:${props.projectId}`}
+            connection={connection}
+            {...props}
+          />
         ),
       }}
       onAddProject={addProject ? () => void addProject.run() : undefined}
@@ -134,17 +182,26 @@ export function SchedulesContainer({
       loading={loading}
       error={error}
       onRefresh={() => void refresh()}
-      onCreate={(input) => mutate(() => connection.call("schedule.create", input))}
+      onCreate={(input) => mutateOn(createHostId, (conn) => conn.call("schedule.create", input))}
       onUpdate={(id: string, patch: UpdateScheduleInput) =>
-        mutate(() => connection.call("schedule.update", { id, ...patch }))
+        mutateOn(scheduleHosts[id]?.id ?? activeEditorHostId, (conn) =>
+          conn.call("schedule.update", { id, ...patch }),
+        )
       }
-      onDelete={(id) => mutate(() => connection.call("schedule.delete", { id }))}
+      onDelete={(id) =>
+        mutateOn(scheduleHosts[id]?.id ?? HOST_LOCAL_ID, (conn) =>
+          conn.call("schedule.delete", { id }),
+        )
+      }
       onRunNow={(id) =>
-        mutate(() => connection.call("schedule.runNow", { id }) as Promise<RunNowResult>)
+        mutateOn(
+          scheduleHosts[id]?.id ?? activeEditorHostId,
+          (conn) => conn.call("schedule.runNow", { id }) as Promise<RunNowResult>,
+        )
       }
       onLoadRuns={loadRuns}
       onDeleteRun={(runId) => connection.call("schedule.deleteRun", { id: runId })}
-      onOpenThread={onOpenThread}
+      onOpenThread={(threadId) => onOpenThread(threadId, activeEditorHostId)}
     />
   )
 }

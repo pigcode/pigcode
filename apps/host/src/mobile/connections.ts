@@ -1,30 +1,43 @@
 import { randomBytes, randomUUID } from "node:crypto"
 import { hostname } from "node:os"
-import {
-  type MobilePairingView,
-  type MobileRevokeResult,
+import type {
+  DesktopPairingView,
+  DesktopRevokeResult,
+  MobilePairingView,
+  MobileRevokeResult,
 } from "@pigcode/contracts"
-import type { RelayCredentialCipher, RelaySettings } from "../services/relay-settings"
 import type { Context } from "cordis"
 import type { ThreadFeed } from "../rpc/thread-feed"
-import type { NoiseKeyPair } from "./noise"
+import type { RelayCredentialCipher, RelaySettings } from "../services/relay-settings"
 import { loadComputerIdentity } from "./computer-identity"
 import {
-  authenticatePeer,
-  negotiatePeer,
-  requestPeerApproval,
-  sendPeerMessage,
-  type Peer,
-  type PeerHostContext,
-} from "./connections-peer"
-import { openLanServer, type LanConnection, type LanServer } from "./lan-server"
-import { fingerprint, PairedDevices } from "./paired-devices"
-import { pairingAttemptView, pairingQRCode, pairingValidityMs, type Attempt } from "./pairing-attempt"
+  approvePeerCandidate,
+  createPeerHostContext,
+  disconnectRevokedPeers,
+  dispatchPeerCiphertext,
+  releaseAttemptPeers,
+} from "./connections-dispatch"
+import { type Peer } from "./connections-peer"
+import { HostTransportController } from "./connections-transport"
+import type { LanServer } from "./lan-server"
+import type { NoiseKeyPair } from "./noise"
+import { PairedDevices } from "./paired-devices"
+import {
+  desktopPairingAttemptView,
+  desktopPairingLink,
+  pairingAttemptView,
+  pairingQRCode,
+  pairingValidityMs,
+  type DesktopAttempt,
+  type MobileAttempt,
+} from "./pairing-attempt"
 import { MobilePushReminders } from "./push-reminders"
-import { openRelayHost, type RelayHost } from "./relay-host"
-import { deviceRevokedNotice, revokeDeviceWork, tellRevokedDevice } from "./revocation"
+import { revokeDeviceWork } from "./revocation"
 
-type Status = MobilePairingView["status"]
+type MobileStatus = MobilePairingView["status"]
+type DesktopStatus = DesktopPairingView["status"]
+
+const HOST_NAME_KEY = "host.name"
 
 export interface MobileConnectionsOptions {
   now?: () => number
@@ -39,24 +52,17 @@ declare module "cordis" {
 }
 
 export class MobileConnections {
-  private readonly computerName = hostname().split(".")[0]?.slice(0, 80) || "Pigcode"
+  private readonly fallbackComputerName = hostname().split(".")[0]?.slice(0, 80) || "Pigcode"
   private peers = new Map<number, Peer>()
-  private readonly devices: PairedDevices
+  readonly devices: PairedDevices
   private readonly push: MobilePushReminders
+  private readonly transports: HostTransportController
   private readonly now: () => number
-  private readonly lanPort: number | null
-  private status: Status = "idle"
-  private attempt: Attempt | undefined
+  private status: MobileStatus = "idle"
+  private desktopStatus: DesktopStatus = "idle"
+  private attempt: MobileAttempt | undefined
+  private desktopAttempt: DesktopAttempt | undefined
   private identity: Promise<NoiseKeyPair> | undefined
-  private connection: RelayHost | undefined
-  private opening: Promise<RelayHost> | undefined
-  private registration: AbortController | undefined
-  private lanServer: LanServer | undefined
-  private lanStarting: Promise<LanServer | undefined> | undefined
-  private nextLanSession = 0
-  private retry: ReturnType<typeof setTimeout> | undefined
-  private generation = 0
-  private lanGeneration = 0
   private disposed = false
   private suspended = false
   private unsubscribe: () => void
@@ -71,24 +77,80 @@ export class MobileConnections {
     const options =
       typeof nowOrOptions === "function" ? { now: nowOrOptions } : (nowOrOptions ?? {})
     this.now = options.now ?? Date.now
-    this.lanPort = options.lanPort === false ? null : (options.lanPort ?? 0)
+    const lanPort = options.lanPort === false ? null : (options.lanPort ?? 0)
     this.devices = new PairedDevices(ctx.settings)
-    this.push = new MobilePushReminders(ctx, this.devices, cipher, () => this.connection)
-    this.unsubscribe = relay.onConnectionChange(() => {
-      this.finish(this.attempt ? "cancelled" : "idle", false)
-      this.disconnect()
-      this.scheduleReconnect(0)
+    this.push = new MobilePushReminders(
+      ctx,
+      this.devices,
+      cipher,
+      () => this.transports.relayConnection,
+    )
+    this.transports = new HostTransportController({
+      relay,
+      push: this.push,
+      lanPort,
+      getIdentity: () => this.computerIdentity(),
+      isActive: () => !this.disposed && !this.suspended,
+      canAutoReconnect: () => !this.disposed && !this.suspended && this.devices.size > 0,
+      onPeerOpened: (session, peer) => {
+        this.peers.set(session, peer)
+        this.armPeer(session, peer)
+      },
+      onPeerClosed: (session, close) => this.dropPeer(session, close),
+      onPeerCiphertext: (identity, session, ciphertext) =>
+        this.receive(identity, session, ciphertext),
+      onDropTransports: (includeLan) => {
+        for (const [session, peer] of [...this.peers]) {
+          if (includeLan || peer.transport.channel === "relay") {
+            this.dropPeer(session, peer.transport.channel === "lan")
+          }
+        }
+      },
+      onRelayDisconnected: () => {
+        if (this.attempt) this.finishMobile("relay-unavailable", false)
+        if (this.desktopAttempt) this.finishDesktop("relay-unavailable", false)
+      },
     })
-    this.scheduleReconnect(0)
-    void this.startLan()
+    this.unsubscribe = relay.onConnectionChange(() => {
+      this.finishMobile(this.attempt ? "cancelled" : "idle", false)
+      this.finishDesktop(this.desktopAttempt ? "cancelled" : "idle", false)
+      this.transports.disconnect()
+      this.transports.scheduleReconnect(0)
+    })
+    this.transports.scheduleReconnect(0)
+    void this.transports.startLan()
+  }
+
+  /** 读取当前主机展示名（优先用户设置的 `host.name`，缺省用本机主机名）。 */
+  hostName(): string {
+    const raw = this.ctx.settings.get(HOST_NAME_KEY)
+    if (typeof raw === "string") {
+      const trimmed = raw.trim().slice(0, 80)
+      if (trimmed.length > 0) return trimmed
+    }
+    return this.fallbackComputerName
+  }
+
+  /** 设置并持久化当前主机展示名。 */
+  setHostName(name: string): string {
+    const trimmed = name.trim().slice(0, 80)
+    if (!trimmed) throw new Error("host name cannot be empty")
+    this.ctx.settings.set(HOST_NAME_KEY, trimmed)
+    return trimmed
+  }
+
+  /** 返回本机 Noise 公钥（base64url）与主机名。 */
+  async hostIdentity(): Promise<{ hostKey: string; hostName: string }> {
+    const identity = await this.computerIdentity()
+    return {
+      hostKey: identity.publicKey.toString("base64url"),
+      hostName: this.hostName(),
+    }
   }
 
   view(): MobilePairingView {
     this.expire()
-    const connected = new Set<string>()
-    for (const peer of this.peers.values()) {
-      if (peer.phase === "ready" && peer.device) connected.add(peer.device.publicKey)
-    }
+    const connected = this.connectedKeysFor("mobile")
     return {
       status: this.status,
       attempt: pairingAttemptView(this.attempt),
@@ -96,13 +158,24 @@ export class MobileConnections {
     }
   }
 
+  desktopView(): DesktopPairingView {
+    this.expire()
+    const connected = this.connectedKeysFor("desktop")
+    return {
+      status: this.desktopStatus,
+      attempt: desktopPairingAttemptView(this.desktopAttempt),
+      clients: this.devices.desktopView(connected),
+    }
+  }
+
   async start(): Promise<MobilePairingView> {
-    this.finish("cancelled", false)
+    this.finishMobile("cancelled", false)
     if (!this.relay.view().tokenConfigured) {
-      this.finish("needs-relay")
+      this.finishMobile("needs-relay")
       return this.view()
     }
-    const attempt: Attempt = {
+    const attempt: MobileAttempt = {
+      role: "mobile",
       id: randomUUID(),
       expiresAt: this.now() + pairingValidityMs,
       secret: randomBytes(32),
@@ -119,18 +192,18 @@ export class MobileConnections {
       ])
       if (this.attempt !== attempt) return this.view()
       if (!config) {
-        this.finish("needs-relay")
+        this.finishMobile("needs-relay")
         return this.view()
       }
-      const qr = pairingQRCode(attempt, config, identity.publicKey, this.computerName)
+      const qr = pairingQRCode(attempt, config, identity.publicKey, this.hostName())
       if (Buffer.byteLength(qr) > 2953) {
-        this.finish("qr-unavailable")
+        this.finishMobile("qr-unavailable")
         return this.view()
       }
       try {
-        await this.ensureRelay(identity, config)
+        await this.transports.ensureRelay(identity, config)
       } catch {
-        if (this.attempt === attempt) this.finish("relay-unavailable")
+        if (this.attempt === attempt) this.finishMobile("relay-unavailable")
         return this.view()
       }
       if (this.attempt === attempt) {
@@ -138,290 +211,231 @@ export class MobileConnections {
         this.status = "waiting"
       }
     } catch {
-      if (this.attempt === attempt) this.finish("storage-unavailable")
+      if (this.attempt === attempt) this.finishMobile("storage-unavailable")
     }
     return this.view()
   }
 
+  async startDesktopPairing(): Promise<DesktopPairingView> {
+    this.finishDesktop("cancelled", false)
+    const attempt: DesktopAttempt = {
+      role: "desktop",
+      id: randomUUID(),
+      expiresAt: this.now() + pairingValidityMs,
+      secret: randomBytes(32),
+      timer: setTimeout(() => this.expire(), pairingValidityMs).unref(),
+      link: null,
+      lanAddresses: [],
+      candidate: null,
+    }
+    this.desktopAttempt = attempt
+    this.desktopStatus = "connecting"
+    try {
+      const [identity, config, lanAddresses] = await Promise.all([
+        this.computerIdentity(),
+        this.relay.connectionConfig(),
+        this.readyLanAddresses(),
+      ])
+      if (this.desktopAttempt !== attempt) return this.desktopView()
+      if (!config && lanAddresses.length === 0) {
+        this.finishDesktop("needs-relay")
+        return this.desktopView()
+      }
+      if (config) {
+        try {
+          await this.transports.ensureRelay(identity, config)
+        } catch {
+          if (this.desktopAttempt === attempt) this.finishDesktop("relay-unavailable")
+          return this.desktopView()
+        }
+      }
+      if (this.desktopAttempt === attempt) {
+        attempt.lanAddresses = lanAddresses
+        attempt.link = desktopPairingLink(
+          attempt,
+          config ?? null,
+          identity.publicKey,
+          this.hostName(),
+          lanAddresses,
+        )
+        this.desktopStatus = "waiting"
+      }
+    } catch {
+      if (this.desktopAttempt === attempt) this.finishDesktop("storage-unavailable")
+    }
+    return this.desktopView()
+  }
+
   cancel(id: string): MobilePairingView {
-    if (this.attempt?.id === id) this.finish("cancelled")
+    if (this.attempt?.id === id) this.finishMobile("cancelled")
     return this.view()
+  }
+
+  cancelDesktopPairing(id: string): DesktopPairingView {
+    if (this.desktopAttempt?.id === id) this.finishDesktop("cancelled")
+    return this.desktopView()
   }
 
   confirm(id: string, confirmation: string): MobilePairingView {
     this.expire()
-    const attempt = this.attempt
-    const candidate = attempt?.candidate
-    if (attempt?.id !== id || !candidate || candidate.confirmation !== confirmation) {
-      return this.view()
-    }
-    const peer = this.peers.get(candidate.session)
-    if (peer?.phase !== "approval" || !peer.device || peer.attempt !== attempt) return this.view()
     const revision = this.relay.revision
-    const device = this.devices.find(peer.device.publicKey) ?? peer.device
-    try {
-      this.devices.save({ ...device, confirmedRelayRevision: revision })
-    } catch {
-      this.dropPeer(candidate.session, true)
-      this.finish("storage-unavailable")
-      return this.view()
-    }
-    peer.attempt = undefined
-    peer.phase = "hello"
-    this.armPeer(candidate.session, peer)
-    try {
-      this.send(candidate.session, peer, { type: "device.approved", relayRevision: revision })
-    } catch {
-      this.dropPeer(candidate.session, true)
-    }
-    this.finish(candidate.mode === "update" ? "update-approved" : "paired")
-    return this.view()
+    return approvePeerCandidate({
+      id,
+      confirmation,
+      attempt: this.attempt,
+      peers: this.peers,
+      devices: this.devices,
+      armPeer: (s, p) => this.armPeer(s, p),
+      dropPeer: (s, c) => this.dropPeer(s, c),
+      viewFor: () => this.view(),
+      onStorageError: () => this.finishMobile("storage-unavailable"),
+      prepareDevice: (d) => ({ ...d, confirmedRelayRevision: revision }),
+      approvedPayload: () => ({ type: "device.approved", relayRevision: revision }),
+      onApproved: (c) => this.finishMobile(c.mode === "update" ? "update-approved" : "paired"),
+    })
+  }
+
+  confirmDesktopPairing(id: string, confirmation: string): DesktopPairingView {
+    this.expire()
+    return approvePeerCandidate({
+      id,
+      confirmation,
+      attempt: this.desktopAttempt,
+      peers: this.peers,
+      devices: this.devices,
+      armPeer: (s, p) => this.armPeer(s, p),
+      dropPeer: (s, c) => this.dropPeer(s, c),
+      viewFor: () => this.desktopView(),
+      onStorageError: () => this.finishDesktop("storage-unavailable"),
+      prepareDevice: (d) => d,
+      approvedPayload: () => ({ type: "device.approved", hostName: this.hostName() }),
+      onApproved: () => this.finishDesktop("paired"),
+    })
   }
 
   revoke(deviceId: string): MobileRevokeResult {
-    const device = this.devices.findById(deviceId)
-    if (!device) return { status: "missing-device", pairing: this.view() }
+    return this.revokeByRole("mobile", deviceId, () => this.view())
+  }
 
+  revokeDesktop(deviceId: string): DesktopRevokeResult {
+    return this.revokeByRole("desktop", deviceId, () => this.desktopView())
+  }
+
+  private revokeByRole<TView>(
+    role: "mobile" | "desktop",
+    deviceId: string,
+    viewFor: () => TView,
+  ): { status: "missing-device" | "storage-unavailable" | "revoked"; pairing: TView } {
+    const device = this.devices.findById(deviceId, role)
+    if (!device) return { status: "missing-device", pairing: viewFor() }
     try {
       this.devices.remove(device)
     } catch {
-      return { status: "storage-unavailable", pairing: this.view() }
+      return { status: "storage-unavailable", pairing: viewFor() }
     }
-
-    let cancelAttempt = false
-    for (const [session, peer] of this.peers) {
-      if (peer.device?.publicKey !== device.publicKey) continue
-      cancelAttempt ||= peer.attempt !== undefined && peer.attempt === this.attempt
-      tellRevokedDevice(peer.revocationNotice, () => this.send(session, peer, deviceRevokedNotice))
-      this.dropPeer(session, true)
+    const cancelAttempt = disconnectRevokedPeers({
+      peers: this.peers,
+      publicKey: device.publicKey,
+      mobileAttempt: this.attempt,
+      desktopAttempt: this.desktopAttempt,
+      forceNotice: role === "desktop",
+      dropPeer: (session, close) => this.dropPeer(session, close),
+    })
+    if (this.hasNoActiveGrantOrAttempt() || cancelAttempt) {
+      if (role === "mobile") this.finishMobile(this.attempt ? "cancelled" : "idle")
+      else this.finishDesktop(this.desktopAttempt ? "cancelled" : "idle")
     }
-    if (this.devices.size === 0 || cancelAttempt) this.finish(this.attempt ? "cancelled" : "idle")
     revokeDeviceWork(this.ctx, device.publicKey)
-    return { status: "revoked", pairing: this.view() }
+    return { status: "revoked", pairing: viewFor() }
   }
 
   dispose(): void {
     this.disposed = true
     this.unsubscribe()
-    this.finish("cancelled")
-    this.disconnect(true)
-    this.stopLan()
+    this.finishMobile("cancelled", false)
+    this.finishDesktop("cancelled", false)
+    this.transports.disconnect(true)
+    this.transports.stopLan()
   }
 
   announceExit(state: "exited" | "restarting"): void {
-    this.connection?.announce(state)
+    this.transports.announce(state)
   }
 
   setSuspended(suspended: boolean): void {
     if (this.disposed || this.suspended === suspended) return
     this.suspended = suspended
     if (suspended) {
-      this.connection?.announce("sleeping")
-      if (this.attempt) this.finish("cancelled", false)
-      this.disconnect(true)
-      this.stopLan()
+      this.transports.announce("sleeping")
+      if (this.attempt) this.finishMobile("cancelled", false)
+      if (this.desktopAttempt) this.finishDesktop("cancelled", false)
+      this.transports.disconnect(true)
+      this.transports.stopLan()
     } else {
-      this.disconnect(false)
-      this.scheduleReconnect(0)
-      void this.startLan()
+      this.transports.disconnect(false)
+      this.transports.scheduleReconnect(0)
+      void this.transports.startLan()
     }
   }
 
   /** 返回当前可用的局域网直连地址列表；若 LAN 服务仍在启动中会等待其就绪。 */
-  async readyLanAddresses(): Promise<string[]> {
-    const server = this.lanServer ?? (await this.startLan())
-    return server?.addresses() ?? []
+  readyLanAddresses(): Promise<string[]> {
+    return this.transports.readyLanAddresses()
   }
 
-  private async startLan(): Promise<LanServer | undefined> {
-    if (this.disposed || this.suspended || this.lanPort === null) return undefined
-    if (this.lanServer) return this.lanServer
-    if (this.lanStarting) return this.lanStarting
-    const lanGen = ++this.lanGeneration
-    const port = this.lanPort
-    this.lanStarting = this.computerIdentity()
-      .then((identity) =>
-        openLanServer(
-          {
-            onConnection: (conn) => this.acceptLanConnection(identity, lanGen, conn),
-          },
-          { port },
-        ),
-      )
-      .then((server) => {
-        if (this.disposed || this.suspended || lanGen !== this.lanGeneration) {
-          server.close()
-          return undefined
-        }
-        this.lanServer = server
-        return server
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (lanGen === this.lanGeneration) this.lanStarting = undefined
-      })
-    return this.lanStarting
+  /** 返回当前已启动的 LAN 服务实例。 */
+  get lanServer(): LanServer | undefined {
+    return this.transports.currentLanServer
   }
 
-  private stopLan(): void {
-    ++this.lanGeneration
-    this.lanStarting = undefined
-    const server = this.lanServer
-    this.lanServer = undefined
-    server?.close()
+  private connectedKeysFor(role: "mobile" | "desktop"): Set<string> {
+    const connected = new Set<string>()
+    for (const peer of this.peers.values()) {
+      if (peer.phase === "ready" && peer.role === role && peer.device) {
+        connected.add(peer.device.publicKey)
+      }
+    }
+    return connected
   }
 
-  private acceptLanConnection(identity: NoiseKeyPair, lanGen: number, conn: LanConnection) {
-    if (this.disposed || this.suspended || lanGen !== this.lanGeneration) {
-      conn.close()
-      return { onMessage: () => {}, onClose: () => {} }
-    }
-    const session = -(++this.nextLanSession)
-    const peer: Peer = {
-      phase: "handshake",
-      transport: {
-        channel: "lan",
-        send: (payload) => conn.send(payload),
-        close: () => conn.close(),
-      },
-    }
-    this.peers.set(session, peer)
-    this.armPeer(session, peer)
-    return {
-      onMessage: (ciphertext: Buffer) => {
-        if (!this.disposed && !this.suspended && lanGen === this.lanGeneration) {
-          this.receive(identity, session, ciphertext)
-        }
-      },
-      onClose: () => {
-        this.dropPeer(session, false)
-      },
-    }
+  private hasNoActiveGrantOrAttempt(): boolean {
+    return this.devices.size === 0 && !this.attempt && !this.desktopAttempt
   }
 
   private expire(): void {
-    if (this.attempt && this.now() >= this.attempt.expiresAt) this.finish("expired")
+    const now = this.now()
+    if (this.attempt && now >= this.attempt.expiresAt) this.finishMobile("expired")
+    if (this.desktopAttempt && now >= this.desktopAttempt.expiresAt) {
+      this.finishDesktop("expired")
+    }
   }
 
-  private finish(status: Status, closeIdle = true): void {
+  private finishMobile(status: MobileStatus, closeIdle = true): void {
     const attempt = this.attempt
     this.attempt = undefined
     this.status = status
-    if (attempt) {
-      clearTimeout(attempt.timer)
-      attempt.secret.fill(0)
-      for (const [session, peer] of this.peers) {
-        if (peer.attempt === attempt) this.dropPeer(session, true)
-      }
-    }
-    if (closeIdle && this.devices.size === 0) this.disconnect()
+    releaseAttemptPeers(attempt, this.peers, (s, c) => this.dropPeer(s, c))
+    if (closeIdle && this.hasNoActiveGrantOrAttempt()) this.transports.disconnect()
+  }
+
+  private finishDesktop(status: DesktopStatus, closeIdle = true): void {
+    const attempt = this.desktopAttempt
+    this.desktopAttempt = undefined
+    this.desktopStatus = status
+    releaseAttemptPeers(attempt, this.peers, (s, c) => this.dropPeer(s, c))
+    if (closeIdle && this.hasNoActiveGrantOrAttempt()) this.transports.disconnect()
   }
 
   private computerIdentity(): Promise<NoiseKeyPair> {
-    this.identity ??= loadComputerIdentity(this.ctx.settings, this.cipher, this.devices.size > 0)
-      .catch((error: unknown) => {
-        this.identity = undefined
-        throw error
-      })
+    this.identity ??= loadComputerIdentity(
+      this.ctx.settings,
+      this.cipher,
+      this.devices.size > 0,
+    ).catch((error: unknown) => {
+      this.identity = undefined
+      throw error
+    })
     return this.identity
-  }
-
-  private ensureRelay(
-    identity: NoiseKeyPair,
-    config: { address: string; token: string },
-  ): Promise<RelayHost> {
-    if (this.disposed || this.suspended) return Promise.reject(new Error("Host unavailable"))
-    if (this.connection) return Promise.resolve(this.connection)
-    if (this.opening) return this.opening
-    const generation = ++this.generation
-    const current = () => generation === this.generation
-    const registration = new AbortController()
-    this.registration = registration
-    this.opening = openRelayHost(
-      config,
-      fingerprint(identity.publicKey),
-      {
-        sessionOpened: (session) => {
-          if (!current()) return
-          const peer: Peer = {
-            phase: "handshake",
-            transport: {
-              channel: "relay",
-              send: (payload) => this.connection?.send(session, payload),
-              close: () => this.connection?.closeSession(session),
-            },
-          }
-          this.peers.set(session, peer)
-          this.armPeer(session, peer)
-        },
-        sessionClosed: (session) => {
-          if (current()) this.dropPeer(session)
-        },
-        received: (session, ciphertext) => {
-          if (current()) this.receive(identity, session, ciphertext)
-        },
-        disconnected: () => {
-          if (!current()) return
-          this.disconnect()
-          if (this.attempt) this.finish("relay-unavailable")
-          this.scheduleReconnect()
-        },
-        push: this.push.proveIdentity(identity, current),
-      },
-      registration.signal,
-    )
-      .then((connection) => {
-        if (!current()) {
-          connection.close()
-          throw new Error("relay registration superseded")
-        }
-        this.connection = connection
-        return connection
-      })
-      .finally(() => {
-        if (current()) {
-          this.opening = undefined
-          this.registration = undefined
-        }
-      })
-    return this.opening
-  }
-
-  private disconnect(includeLan = false): void {
-    ++this.generation
-    this.registration?.abort()
-    this.registration = undefined
-    this.opening = undefined
-    const connection = this.connection
-    this.connection = undefined
-    connection?.close()
-    clearTimeout(this.retry)
-    this.retry = undefined
-    for (const [session, peer] of [...this.peers]) {
-      if (includeLan || peer.transport.channel === "relay") {
-        this.dropPeer(session, peer.transport.channel === "lan")
-      }
-    }
-  }
-
-  private scheduleReconnect(delay = 2500): void {
-    if (this.disposed || this.suspended || this.retry || this.devices.size === 0) return
-    this.retry = setTimeout(() => {
-      this.retry = undefined
-      void this.restoreRelay()
-    }, delay).unref()
-  }
-
-  private async restoreRelay(): Promise<void> {
-    const generation = this.generation
-    try {
-      const config = await this.relay.connectionConfig()
-      if (!config) return
-      const identity = await this.computerIdentity()
-      if (generation === this.generation) await this.ensureRelay(identity, config)
-    } catch {
-      this.scheduleReconnect()
-    }
   }
 
   private armPeer(session: number, peer: Peer): void {
@@ -439,59 +453,43 @@ export class MobileConnections {
       this.attempt.candidate = null
       this.status = "waiting"
     }
-    if (close) peer.transport.close()
-  }
-
-  private peerHost(): PeerHostContext {
-    return {
-      ctx: this.ctx,
-      feed: this.feed,
-      devices: this.devices,
-      relay: this.relay,
-      push: this.push,
-      computerName: this.computerName,
-      now: this.now,
-      currentAttempt: () => this.attempt,
-      lanAddresses: () => this.lanServer?.addresses() ?? [],
-      armPeer: (session, peer) => this.armPeer(session, peer),
-      dropPeer: (session, close) => this.dropPeer(session, close),
-      onVerifyStatus: () => {
-        this.status = "verify"
-      },
+    if (this.desktopAttempt?.candidate?.session === session) {
+      this.desktopAttempt.candidate = null
+      this.desktopStatus = "waiting"
     }
-  }
-
-  private send(_session: number, peer: Peer, message: unknown): void {
-    sendPeerMessage(peer, message)
+    if (close) peer.transport.close()
   }
 
   private receive(identity: NoiseKeyPair, session: number, ciphertext: Buffer): void {
     this.expire()
     const peer = this.peers.get(session)
     if (!peer) return
-    try {
-      if (peer.phase === "handshake") {
-        authenticatePeer(this.peerHost(), identity, session, peer, ciphertext)
-        return
-      }
-      if (!peer.noise) throw new Error("missing Noise session")
-      const message: unknown = JSON.parse(peer.noise.decrypt(ciphertext).toString("utf8"))
-      switch (peer.phase) {
-        case "proof":
-          requestPeerApproval(this.peerHost(), session, peer, message)
-          break
-        case "approval":
-          this.dropPeer(session, true)
-          break
-        case "hello":
-          negotiatePeer(this.peerHost(), identity, session, peer, message)
-          break
-        case "ready":
-          peer.rpc?.receive(message)
-          break
-      }
-    } catch {
-      this.dropPeer(session, true)
-    }
+    dispatchPeerCiphertext({
+      identity,
+      session,
+      peer,
+      ciphertext,
+      host: createPeerHostContext({
+        ctx: this.ctx,
+        feed: this.feed,
+        devices: this.devices,
+        relay: this.relay,
+        push: this.push,
+        hostName: () => this.hostName(),
+        now: this.now,
+        currentMobileAttempt: () => this.attempt,
+        currentDesktopAttempt: () => this.desktopAttempt,
+        lanAddresses: () => this.transports.lanAddresses(),
+        armPeer: (s, p) => this.armPeer(s, p),
+        dropPeer: (s, c) => this.dropPeer(s, c),
+        onMobileVerifyStatus: () => {
+          this.status = "verify"
+        },
+        onDesktopVerifyStatus: () => {
+          this.desktopStatus = "verify"
+        },
+      }),
+      dropPeer: (sid, close) => this.dropPeer(sid, close),
+    })
   }
 }

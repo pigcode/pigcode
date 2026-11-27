@@ -3,13 +3,11 @@
  * 只在内容区显示原因，侧栏照常可用。
  */
 import { Suspense, lazy, type ReactNode } from "react"
+import type { HostPool } from "@pigcode/client-runtime"
 import { EmptyState, useLocale } from "@pigcode/ui-primitives"
 import { PageErrorBoundary, ScrollPanel } from "@pigcode/ui-shell"
 import type { CoreDeps } from "./chat-container"
 
-const PluginManagerContainer = lazy(() =>
-  import("./plugins-container").then((module) => ({ default: module.PluginManagerContainer })),
-)
 const SchedulesContainer = lazy(() =>
   import("./schedules").then((module) => ({ default: module.SchedulesContainer })),
 )
@@ -29,20 +27,12 @@ function PageBoundary({ children }: { children: ReactNode }) {
   )
 }
 
-export function PluginsView(props: {
+export function SchedulesView(props: {
   deps: CoreDeps
-  onOpenSettings: (page: string) => void
-  /** 进入新会话草稿，prefill 拿草稿输入框的键预填内容；还没有项目时返回 false。 */
-  onStartDraft: (prefill: (draftKey: string) => void) => boolean
+  hostPool?: HostPool | undefined
+  preferredHostId?: string | undefined
+  onOpenThread: (threadId: string, hostId?: string) => void
 }) {
-  return (
-    <PageBoundary>
-      <PluginManagerContainer {...props} />
-    </PageBoundary>
-  )
-}
-
-export function SchedulesView(props: { deps: CoreDeps; onOpenThread: (threadId: string) => void }) {
   return (
     <PageBoundary>
       <ScrollPanel>

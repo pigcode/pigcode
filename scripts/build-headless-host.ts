@@ -90,7 +90,7 @@ function renderFixNodePtyHelperScript(): string {
   ].join("\n")
 }
 
-function renderSystemdUnit(): string {
+function renderSystemdUnit(binRel = "bin/pigcode.mjs", installDir = "pigcode"): string {
   return [
     "[Unit]",
     "Description=Pigcode 无窗口 Host 常驻服务",
@@ -99,11 +99,11 @@ function renderSystemdUnit(): string {
     "",
     "[Service]",
     "Type=simple",
-    "# %h 由 systemd 展开为当前用户家目录（示例假设本包部署在 ~/.local/share/pigcode-host 并已执行 npm install --omit=dev）",
+    `# %h 由 systemd 展开为当前用户家目录（示例假设本包部署在 ~/.local/share/${installDir} 并已执行 npm install --omit=dev）`,
     "# WorkingDirectory 设置为家目录，实际配置与会话数据保存在 profile 目录中",
     "WorkingDirectory=%h",
-    "# 若 node 不在系统默认 PATH（例如 nvm / fnm 安装），请改写为：<node绝对路径> %h/.local/share/pigcode-host/bin/pigcode-host.mjs start",
-    "ExecStart=%h/.local/share/pigcode-host/bin/pigcode-host.mjs start",
+    `# 若 node 不在系统默认 PATH（例如 nvm / fnm 安装），请改写为：<node绝对路径> %h/.local/share/${installDir}/${binRel} start`,
+    `ExecStart=%h/.local/share/${installDir}/${binRel} start`,
     "Restart=on-failure",
     "RestartSec=5",
     "KillSignal=SIGINT",
@@ -125,7 +125,7 @@ function renderReadme(): string {
   return [
     "# Pigcode 无窗口独立 Host 部署指南",
     "",
-    "本目录为脱离 Electron 窗口与图形环境的 Pigcode Host 独立运行包，适用于 Linux 电脑、NAS 或无桌面环境常驻运行。",
+    "本目录为脱离 Electron 窗口与图形环境的 Pigcode Host 独立运行包，适用于 Linux 服务器、NAS 或无桌面环境常驻运行。",
     "",
     "## 1. 环境要求",
     "",
@@ -134,7 +134,7 @@ function renderReadme(): string {
     "",
     "## 2. 安装运行时依赖",
     "",
-    "将本目录完整复制到目标电脑（例如 `~/.local/share/pigcode-host`）后，在目录内执行：",
+    "将本目录完整复制到目标电脑（例如 `~/.local/share/pigcode`）后，在目录内执行：",
     "",
     "```bash",
     "npm install --omit=dev",
@@ -145,65 +145,79 @@ function renderReadme(): string {
     "- macOS 与 Windows 会直接使用预编译二进制，并由 `postinstall` 脚本自动修复 `spawn-helper` 的可执行权限。",
     "- `better-sqlite3`、`esbuild` 与 `@cursor/sdk`（含目标平台原生辅助二进制）也会在此步骤按当前平台安装。",
     "",
-    "可选：将 `pigcode-host` 注册到 `PATH`（未执行时下文命令均可用 `./bin/pigcode-host.mjs` 替代）：",
+    "将 `pigcode`（及兼容别名 `pigcode-host`）注册到 `PATH`（未执行时下文命令均可用 `./bin/pigcode.mjs` 替代）：",
     "",
     "```bash",
     "npm link",
     "```",
     "",
-    "## 3. 配置中继与启动 Host",
+    "> 注意：如果同一台 Linux 电脑同时安装了桌面图形版 Pigcode，请确认 npm 全局 `bin` 与桌面应用二进制的 `PATH` 顺序；此时亦可直接调用 `~/.local/share/pigcode/bin/pigcode.mjs` 或旧别名 `pigcode-host`。",
+    "",
+    "## 3. 配置中继、命名与启动 Host",
     "",
     "1. 通过标准输入配置中继地址与访问令牌（避免令牌出现在命令行历史中）：",
     "",
     "```bash",
-    'printf "%s\\n" "你的中继访问令牌" | pigcode-host relay set --address wss://relay.example.com --token-stdin',
+    'printf "%s\\n" "你的中继访问令牌" | pigcode relay set --address wss://relay.example.com --token-stdin',
+    "```",
+    "",
+    "可选：设置该主机在桌面端跨机列表里的显示名称：",
+    "",
+    "```bash",
+    'pigcode name "home-linux-nas"',
     "```",
     "",
     "常用中继排查命令：",
     "",
     "```bash",
-    "pigcode-host relay status",
-    "pigcode-host relay clear",
+    "pigcode relay status",
+    "pigcode relay clear",
     "```",
     "",
     "2. 前台启动 Host（或交由下文 `systemd --user` 托管）：",
     "",
     "```bash",
-    "pigcode-host start",
+    "pigcode start",
     "# 如需指定数据目录或关闭局域网直连端口：",
-    "# pigcode-host start --profile-dir /path/to/profile --lan-port off",
+    "# pigcode start --profile-dir /path/to/profile --lan-port off",
     "```",
     "",
     "查看当前运行状态：",
     "",
     "```bash",
-    "pigcode-host status",
+    "pigcode status",
     "```",
     "",
-    "## 4. SSH 终端扫码配对与设备管理",
+    "## 4. 连接桌面端或手机端",
     "",
-    "在 Host 运行期间（可另开一个 SSH 终端），执行以下命令生成二维码并完成手机端配对：",
+    "- **让另一台电脑上的 Pigcode 桌面端连过来：**",
     "",
     "```bash",
-    "pigcode-host pair",
+    "pigcode pair --desktop",
+    "```",
+    "",
+    "将终端输出的 `pigcode://pair?...` 口令粘贴进桌面端「设置 -> 🌐 远程主机 -> ＋ 添加远程主机」，核对 6 位确认码一致后按 `y` 确认。",
+    "",
+    "- **让 Pigcode 手机 App 扫码配对：**",
+    "",
+    "```bash",
+    "pigcode pair",
     "# 如终端字体导致二维码变形，可附加 --show-raw 输出原始配对字符串",
-    "# pigcode-host pair --show-raw",
+    "# pigcode pair --show-raw",
     "```",
     "",
-    "使用手机端扫描终端二维码，核对终端显示的 6 位确认码后输入 `y` 确认。",
-    "",
-    "查看与管理已配对设备：",
+    "查看与管理已授权桌面端 / 已配对手机：",
     "",
     "```bash",
-    "pigcode-host devices",
-    "pigcode-host revoke <设备编号或名称>",
+    "pigcode devices",
+    "pigcode revoke <设备编号或名称>",
     "# 非交互脚本中可加 --yes：",
-    "# pigcode-host revoke <设备编号或名称> --yes",
+    "# pigcode revoke <设备编号或名称> --yes",
     "```",
     "",
     "## 5. 本机凭据安全",
     "",
-    "中继访问令牌、电脑 Noise 私钥与推送令牌在本地使用 AES-256-GCM 加密保存，不依赖桌面钥匙串：",
+    "中继访问令牌、主机 Noise 私钥与推送令牌在本地使用 AES-256-GCM 加密保存，不依赖桌面钥匙串：",
     "",
     "- **环境变量优先**：设置 `PIGCODE_CREDENTIAL_KEY`（32 字节 hex，或 32 字节 base64/base64url）后，主密钥仅保留在进程环境变量中，不落盘密钥文件。",
     "- **自动生成文件密钥**：未设置环境变量时，Host 会在 `<profileDir>/credential.key` 自动原子生成仅当前用户可读写（`0600`）的主密钥。",
@@ -211,13 +225,13 @@ function renderReadme(): string {
     "",
     "## 6. 使用 `systemd --user` 常驻运行",
     "",
-    "仓库附带单元模板 `examples/pigcode-host.service`。假设部署目录为 `~/.local/share/pigcode-host`：",
+    "仓库附带单元模板 `examples/pigcode.service`（兼容 `examples/pigcode-host.service`）。假设部署目录为 `~/.local/share/pigcode`：",
     "",
     "```bash",
     "mkdir -p ~/.config/systemd/user",
-    "cp examples/pigcode-host.service ~/.config/systemd/user/pigcode-host.service",
+    "cp examples/pigcode.service ~/.config/systemd/user/pigcode.service",
     "systemctl --user daemon-reload",
-    "systemctl --user enable --now pigcode-host",
+    "systemctl --user enable --now pigcode",
     "```",
     "",
     "如希望退出 SSH 会话后服务继续常驻（需管理员支持 lingering）：",
@@ -229,7 +243,7 @@ function renderReadme(): string {
     "查看运行日志：",
     "",
     "```bash",
-    "journalctl --user -u pigcode-host -f",
+    "journalctl --user -u pigcode -f",
     "```",
     "",
   ].join("\n")
@@ -250,16 +264,26 @@ export async function buildHeadlessHost(options: BuildHeadlessHostOptions = {}):
 
   const binDir = join(targetOutDir, "bin")
   await mkdir(binDir, { recursive: true })
-  const targetBin = join(binDir, "pigcode-host.mjs")
+  const primaryBin = join(binDir, "pigcode.mjs")
+  const compatBin = join(binDir, "pigcode-host.mjs")
   await build({
-    entryPoints: [join(root, "apps/host/bin/pigcode-host.ts")],
-    outfile: targetBin,
+    entryPoints: [join(root, "apps/host/bin/pigcode.ts")],
+    outfile: primaryBin,
     bundle: false,
     format: "esm",
     platform: "node",
     target: "node22",
   })
-  await chmod(targetBin, 0o755)
+  await build({
+    entryPoints: [join(root, "apps/host/bin/pigcode-host.ts")],
+    outfile: compatBin,
+    bundle: false,
+    format: "esm",
+    platform: "node",
+    target: "node22",
+  })
+  await chmod(primaryBin, 0o755)
+  await chmod(compatBin, 0o755)
 
   const scriptsDir = join(targetOutDir, "scripts")
   await mkdir(scriptsDir, { recursive: true })
@@ -283,6 +307,7 @@ export async function buildHeadlessHost(options: BuildHeadlessHostOptions = {}):
       node: ">=22.18",
     },
     bin: {
+      pigcode: "./bin/pigcode.mjs",
       "pigcode-host": "./bin/pigcode-host.mjs",
     },
     scripts: {
@@ -311,7 +336,16 @@ export async function buildHeadlessHost(options: BuildHeadlessHostOptions = {}):
 
   const examplesDir = join(targetOutDir, "examples")
   await mkdir(examplesDir, { recursive: true })
-  await writeFile(join(examplesDir, "pigcode-host.service"), renderSystemdUnit(), "utf8")
+  await writeFile(
+    join(examplesDir, "pigcode.service"),
+    renderSystemdUnit("bin/pigcode.mjs", "pigcode"),
+    "utf8",
+  )
+  await writeFile(
+    join(examplesDir, "pigcode-host.service"),
+    renderSystemdUnit("bin/pigcode-host.mjs", "pigcode-host"),
+    "utf8",
+  )
   await writeFile(join(targetOutDir, "README.md"), renderReadme(), "utf8")
 }
 

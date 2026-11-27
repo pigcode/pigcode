@@ -21,7 +21,8 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   setPreference: (
     key: import("../main/preferences").PreferenceKey,
     value: boolean,
-  ): Promise<import("../main/preferences").Preferences> => ipcRenderer.invoke("pigcode:preferences-set", key, value),
+  ): Promise<import("../main/preferences").Preferences> =>
+    ipcRenderer.invoke("pigcode:preferences-set", key, value),
   pendingReminder: (): Promise<unknown> => ipcRenderer.invoke("pigcode:pending-reminder"),
   finishReminder: (eventId: string): Promise<void> =>
     ipcRenderer.invoke("pigcode:finish-reminder", eventId),
@@ -90,6 +91,61 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
   previewClose: (id?: string): void => {
     void ipcRenderer.invoke("pigcode:preview-close", id).catch(() => undefined)
   },
+  hosts: {
+    getState: (): Promise<{
+      hosts: import("@pigcode/contracts").HostSummary[]
+      defaults: import("@pigcode/contracts").HostDefaults
+      pairing: import("@pigcode/contracts").HostOutboundPairingStatus
+    }> => ipcRenderer.invoke("pigcode:hosts-state"),
+    setLocalKey: (hostKey: string): Promise<void> =>
+      ipcRenderer.invoke("pigcode:hosts-local-key", hostKey),
+    startPairing: (input: {
+      link: string
+      customName?: string
+      badgeColor?: import("@pigcode/contracts").HostBadgeColor
+    }): Promise<import("@pigcode/contracts").HostOutboundPairingStatus> =>
+      ipcRenderer.invoke("pigcode:hosts-pair-start", input),
+    cancelPairing: (): Promise<import("@pigcode/contracts").HostOutboundPairingStatus> =>
+      ipcRenderer.invoke("pigcode:hosts-pair-cancel"),
+    reconnect: (id: string): Promise<import("@pigcode/contracts").HostSummary | null> =>
+      ipcRenderer.invoke("pigcode:hosts-reconnect", id),
+    rename: (id: string, name: string): Promise<import("@pigcode/contracts").HostSummary | null> =>
+      ipcRenderer.invoke("pigcode:hosts-rename", id, name),
+    setBadgeColor: (
+      id: string,
+      color: import("@pigcode/contracts").HostBadgeColor,
+    ): Promise<import("@pigcode/contracts").HostSummary | null> =>
+      ipcRenderer.invoke("pigcode:hosts-color", id, color),
+    remove: (id: string): Promise<boolean> => ipcRenderer.invoke("pigcode:hosts-remove", id),
+    setDefault: (hostId: string): Promise<import("@pigcode/contracts").HostDefaults> =>
+      ipcRenderer.invoke("pigcode:hosts-set-default", hostId),
+    onHostsChanged: (
+      listener: (payload: {
+        hosts: import("@pigcode/contracts").HostSummary[]
+        defaults: import("@pigcode/contracts").HostDefaults
+      }) => void,
+    ): (() => void) => {
+      const handler = (
+        _event: unknown,
+        payload: {
+          hosts: import("@pigcode/contracts").HostSummary[]
+          defaults: import("@pigcode/contracts").HostDefaults
+        },
+      ) => listener(payload)
+      ipcRenderer.on("pigcode:hosts-changed", handler)
+      return () => ipcRenderer.removeListener("pigcode:hosts-changed", handler)
+    },
+    onPairingChanged: (
+      listener: (state: import("@pigcode/contracts").HostOutboundPairingStatus) => void,
+    ): (() => void) => {
+      const handler = (
+        _event: unknown,
+        state: import("@pigcode/contracts").HostOutboundPairingStatus,
+      ) => listener(state)
+      ipcRenderer.on("pigcode:hosts-pairing-state", handler)
+      return () => ipcRenderer.removeListener("pigcode:hosts-pairing-state", handler)
+    },
+  },
   browser: {
     register: (sessionId: string, threadId: string, webContentsId: number): Promise<void> =>
       ipcRenderer.invoke("pigcode:browser-register", sessionId, threadId, webContentsId),
@@ -128,4 +184,15 @@ contextBridge.exposeInMainWorld("pigcodeNative", {
 ipcRenderer.on("pigcode:port", (event) => {
   const [port] = event.ports
   if (port) window.postMessage({ type: "pigcode:port" }, "*", [port])
+})
+
+ipcRenderer.on("pigcode:remote-port", (event, payload: unknown) => {
+  const [port] = event.ports
+  const hostId =
+    typeof payload === "object" && payload !== null && "hostId" in payload
+      ? (payload as { hostId?: unknown }).hostId
+      : undefined
+  if (typeof hostId === "string" && port) {
+    window.postMessage({ type: "pigcode:remote-port", hostId }, "*", [port])
+  }
 })

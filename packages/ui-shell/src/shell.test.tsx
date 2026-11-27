@@ -374,36 +374,16 @@ describe("Shell", () => {
     expect(screen.queryByLabelText("插件管理")).toBeNull()
   })
 
-  it("keeps the workspace sidebar on the plugins and schedules pages, marking the open one", () => {
+  it("keeps the workspace sidebar on the schedules page and marks it active without plugins top nav", () => {
     const onView = vi.fn()
-    const { rerender } = renderShell({ view: "plugins", onView })
-    const plugins = () => screen.getByRole("button", { name: "插件" })
-    const schedules = () => screen.getByRole("button", { name: "定时任务" })
-    expect(plugins().getAttribute("aria-current")).toBe("page")
-    expect(schedules().getAttribute("aria-current")).toBeNull()
+    renderShell({ view: "schedules", onView })
+    const schedules = screen.getByRole("button", { name: "定时任务" })
+    expect(schedules.getAttribute("aria-current")).toBe("page")
+    expect(screen.queryByRole("button", { name: "插件" })).toBeNull()
     expect(screen.queryByRole("button", { name: "返回应用" })).toBeNull()
     expect(screen.getByRole("button", { name: "设置" })).toBeTruthy()
-    fireEvent.click(schedules())
+    fireEvent.click(schedules)
     expect(onView).toHaveBeenLastCalledWith("schedules")
-
-    rerender(
-      <LocaleProvider locale="zh-CN">
-        <Shell
-          view="schedules"
-          projects={[]}
-          threads={[]}
-          activeThreadId={null}
-          onView={onView}
-          onAddProject={() => {}}
-          onNewThread={() => {}}
-          onOpenThread={() => {}}
-        />
-      </LocaleProvider>,
-    )
-    expect(schedules().getAttribute("aria-current")).toBe("page")
-    expect(plugins().getAttribute("aria-current")).toBeNull()
-    fireEvent.click(plugins())
-    expect(onView).toHaveBeenLastCalledWith("plugins")
   })
 
   it("puts the built-in commands in the palette from the registry, before a plugin's", async () => {

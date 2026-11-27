@@ -67,6 +67,37 @@ interface Window {
     saveWorkspaceFile?(root: string, path: string): Promise<boolean>
     previewOpen(url: string): Promise<{ id: string }>
     previewClose(id?: string): void
+    hosts?: {
+      getState(): Promise<{
+        hosts: import("@pigcode/contracts").HostSummary[]
+        defaults: import("@pigcode/contracts").HostDefaults
+        pairing: import("@pigcode/contracts").HostOutboundPairingStatus
+      }>
+      setLocalKey(hostKey: string): Promise<void>
+      startPairing(input: {
+        link: string
+        customName?: string
+        badgeColor?: import("@pigcode/contracts").HostBadgeColor
+      }): Promise<import("@pigcode/contracts").HostOutboundPairingStatus>
+      cancelPairing(): Promise<import("@pigcode/contracts").HostOutboundPairingStatus>
+      reconnect(id: string): Promise<import("@pigcode/contracts").HostSummary | null>
+      rename(id: string, name: string): Promise<import("@pigcode/contracts").HostSummary | null>
+      setBadgeColor(
+        id: string,
+        color: import("@pigcode/contracts").HostBadgeColor,
+      ): Promise<import("@pigcode/contracts").HostSummary | null>
+      remove(id: string): Promise<boolean>
+      setDefault(hostId: string): Promise<import("@pigcode/contracts").HostDefaults>
+      onHostsChanged(
+        listener: (payload: {
+          hosts: import("@pigcode/contracts").HostSummary[]
+          defaults: import("@pigcode/contracts").HostDefaults
+        }) => void,
+      ): () => void
+      onPairingChanged(
+        listener: (state: import("@pigcode/contracts").HostOutboundPairingStatus) => void,
+      ): () => void
+    }
     /** 右栏内置浏览器：登记 webview，接收 agent 打开浏览器与操作的通知。 */
     browser?: {
       register(sessionId: string, threadId: string, webContentsId: number): Promise<void>

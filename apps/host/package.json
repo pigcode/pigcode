@@ -5,12 +5,14 @@
   "private": true,
   "type": "module",
   "bin": {
+    "pigcode": "./bin/pigcode.ts",
     "pigcode-host": "./bin/pigcode-host.ts"
   },
   "exports": {
     ".": "./src/index.ts",
     "./headless": "./src/headless.ts",
     "./kernel/*": "./src/kernel/*.ts",
+    "./mobile/*": "./src/mobile/*.ts",
     "./services/*": "./src/services/*.ts",
     "./agents/*": "./src/agents/*.ts",
     "./rpc/*": "./src/rpc/*.ts"

@@ -40,6 +40,9 @@ import { DEFAULT_UNSAVED_LABELS, confirmDiscard, type UnsavedGuardLabels } from 
 import { createMainWindowOptions } from "./window-options"
 import { registerWorkspaceFileIpc } from "./workspace-file-ipc"
 import { registerNativeBridge } from "./native-bridge"
+import { RemoteHostManager } from "./remote/remote-host-manager"
+import { ipcMain, MessageChannelMain, type MessagePortMain } from "electron"
+import { hostBadgeColorSchema } from "@pigcode/contracts"
 
 registerPrivilegedSchemes()
 
@@ -59,6 +62,87 @@ let quitConfirmed = false
 /** 正在进行的退出检查；连点退出时复用。 */
 let quitCheck: Promise<void> | undefined
 const browser = setupBrowser(() => mainWindow)
+let remoteHosts: RemoteHostManager | undefined
+
+function getRemoteHosts(): RemoteHostManager {
+  remoteHosts ??= new RemoteHostManager({
+    profileDir: profileDir(),
+    createChannel: () => {
+      const channel = new MessageChannelMain()
+      return { port1: channel.port1, port2: channel.port2 }
+    },
+    onHostsChanged: (items, defaults) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send("pigcode:hosts-changed", { hosts: items, defaults })
+      }
+    },
+    onPairingChanged: (state) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send("pigcode:hosts-pairing-state", state)
+      }
+    },
+    onPortReady: (hostId, port) => {
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.postMessage("pigcode:remote-port", { hostId }, [
+          port as MessagePortMain,
+        ])
+      } else {
+        port.close()
+      }
+    },
+  })
+  return remoteHosts
+}
+
+function registerRemoteHostIpc(): void {
+  ipcMain.handle("pigcode:hosts-state", () => {
+    const manager = getRemoteHosts()
+    return {
+      hosts: manager.listSummaries(),
+      defaults: manager.getDefaults(),
+      pairing: manager.getPairingState(),
+    }
+  })
+  ipcMain.handle("pigcode:hosts-local-key", (_event, hostKey: unknown) => {
+    if (typeof hostKey === "string" && hostKey.length > 0) {
+      getRemoteHosts().setLocalHostKey(hostKey)
+    }
+  })
+  ipcMain.handle("pigcode:hosts-pair-start", (_event, input: unknown) => {
+    const raw =
+      typeof input === "object" && input !== null ? (input as Record<string, unknown>) : {}
+    const link = typeof raw.link === "string" ? raw.link : ""
+    const customName = typeof raw.customName === "string" ? raw.customName : undefined
+    const parsedColor = hostBadgeColorSchema.safeParse(raw.badgeColor)
+    return getRemoteHosts().startPairing({
+      link,
+      customName,
+      badgeColor: parsedColor.success ? parsedColor.data : undefined,
+    })
+  })
+  ipcMain.handle("pigcode:hosts-pair-cancel", () => getRemoteHosts().cancelPairing())
+  ipcMain.handle("pigcode:hosts-reconnect", (_event, id: unknown) => {
+    if (typeof id !== "string") return null
+    return getRemoteHosts().reconnectHost(id)
+  })
+  ipcMain.handle("pigcode:hosts-rename", (_event, id: unknown, name: unknown) => {
+    if (typeof id !== "string" || typeof name !== "string") return null
+    return getRemoteHosts().renameHost(id, name)
+  })
+  ipcMain.handle("pigcode:hosts-color", (_event, id: unknown, color: unknown) => {
+    const parsed = hostBadgeColorSchema.safeParse(color)
+    if (typeof id !== "string" || !parsed.success) return null
+    return getRemoteHosts().setBadgeColor(id, parsed.data)
+  })
+  ipcMain.handle("pigcode:hosts-remove", (_event, id: unknown) => {
+    if (typeof id !== "string") return false
+    return getRemoteHosts().removeHost(id)
+  })
+  ipcMain.handle("pigcode:hosts-set-default", (_event, hostId: unknown) => {
+    if (typeof hostId !== "string") return getRemoteHosts().getDefaults()
+    return getRemoteHosts().setDefaultTargetHostId(hostId)
+  })
+}
 
 export { resolveAppPath } from "./app-paths"
 const reminders = createDesktopReminders({
@@ -228,6 +312,7 @@ export async function createWindow(): Promise<BrowserWindow> {
   window.webContents.on("did-finish-load", () => {
     const host = hosts.current
     if (host) window.webContents.postMessage("pigcode:port", null, [host.connectPage()])
+    remoteHosts?.attachWindowPorts()
   })
   window.on("close", (event) => {
     if (quitting || !hidesOnClose()) return
@@ -301,6 +386,7 @@ function start(): void {
   app.whenReady().then(async () => {
     registerAppProtocol(resolveAppPath("out/renderer"))
     registerPluginProtocol(profileDir())
+    registerRemoteHostIpc()
     // Host 要继承这份环境。窗口也一起等：没有 Host 时界面看着能点，请求却没有回应。
     await shellEnv
     monitorPower()
@@ -313,6 +399,7 @@ function start(): void {
       watchHostBuild(resolveAppPath("out/host/build-id"), () => hosts.reload())
     }
     mainWindow = await openMainWindow()
+    getRemoteHosts().startAutoConnect()
     ensureTray()
 
     if (process.env.PIGCODE_E2E === "1") {
@@ -327,6 +414,7 @@ function start(): void {
 // 这里先拦下退出，等 Host 清理完再真正退出，否则 Agent 和终端的进程来不及结束。
 app.on("will-quit", (event) => {
   quitting = true
+  remoteHosts?.dispose()
   const host = hosts.current
   if (!host || hostStopped) return
   event.preventDefault()

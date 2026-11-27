@@ -20,7 +20,13 @@ import { tmpdir } from "node:os"
 import { basename, dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { _electron as electron, expect, test, type ElectronApplication } from "@playwright/test"
-import { addProject, installPlugin, launchEnv, openInstallDialog } from "./projects"
+import {
+  addProject,
+  installPlugin,
+  launchEnv,
+  openInstallDialog,
+  openPluginsSettings,
+} from "./projects"
 import { expectTerminalText } from "./terminal"
 
 const here = dirname(fileURLToPath(import.meta.url))
@@ -225,7 +231,7 @@ test("the packaged app still chats, installs a plugin and runs a terminal", asyn
     await expect(page.getByText("Hello from fake agent")).toBeVisible({ timeout: 15_000 })
 
     // 插件：构建好的包能装、能启用。
-    await page.getByRole("button", { name: "插件" }).first().click()
+    await openPluginsSettings(page)
     await installPlugin(page, plugin)
     await expect(page.locator(".market-tile[data-plugin='pigcode-capability-clock']")).toBeVisible()
 

@@ -26,7 +26,14 @@ import type { CoreDeps } from "./chat-container"
 export const AppearanceContext: Context<AppearanceController | null> =
   createContext<AppearanceController | null>(null)
 
-type PageName = "GeneralPage" | "AppearanceContainer" | "AgentsContainer" | "RelaySettingsPage"
+type PageName =
+  | "GeneralPage"
+  | "AppearanceContainer"
+  | "MobileSettingsPage"
+  | "RemoteHostsSettingsPage"
+  | "AgentsContainer"
+  | "ScopedPluginsPage"
+  | "DaemonSettingsPage"
 
 type SettingsModule = typeof import("./settings-container")
 type PageComponent = ComponentType<{ deps: CoreDeps }>
@@ -94,20 +101,44 @@ export function registerBuiltinSettingsPages(
       render: page("AppearanceContainer", deps),
     },
     {
-      id: "mobile-relay",
+      id: "mobile",
       owner: builtin("settings"),
       order: 25,
-      title: { key: "settings.mobileRelay" },
-      icon: markIcon("wifi"),
-      render: page("RelaySettingsPage", deps),
+      title: { key: "settings.mobile" },
+      icon: markIcon("finger"),
+      render: page("MobileSettingsPage", deps),
+    },
+    {
+      id: "remote-hosts",
+      owner: builtin("settings"),
+      order: 28,
+      title: { key: "settings.remoteHosts" },
+      icon: markIcon("globe"),
+      render: page("RemoteHostsSettingsPage", deps),
     },
     {
       id: "agents",
-      owner: builtin("agents"),
+      owner: builtin("host-scope"),
       order: 30,
       title: { key: "settings.agents" },
       icon: markIcon("server"),
       render: page("AgentsContainer", deps),
+    },
+    {
+      id: "plugins",
+      owner: builtin("host-scope"),
+      order: 35,
+      title: { key: "settings.plugins" },
+      icon: markIcon("cube"),
+      render: page("ScopedPluginsPage", deps),
+    },
+    {
+      id: "daemon",
+      owner: builtin("host-scope"),
+      order: 40,
+      title: { key: "settings.daemon" },
+      icon: markIcon("wifi"),
+      render: page("DaemonSettingsPage", deps),
     },
   ]
   const disposers = pages.map((item) => registry.register("settingsPage", item))

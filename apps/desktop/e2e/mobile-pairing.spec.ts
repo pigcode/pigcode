@@ -10,12 +10,14 @@ test("shows a one-time pairing QR and invalidates it on leaving settings", async
   const { app, page } = await openThread("mobile-pairing")
   try {
     await page.getByRole("button", { name: "设置", exact: true }).click()
-    const phoneSettings = page.getByRole("button", { name: "手机连接", exact: true })
-    await phoneSettings.click()
+    const daemonSettings = page.getByRole("button", { name: "守护进程、中继与识别色", exact: true })
+    const phoneSettings = page.getByRole("button", { name: "手机端", exact: true })
+    await daemonSettings.click()
     await page.getByLabel("中继地址").fill(address)
     await page.getByLabel("访问令牌").fill(token)
     await page.getByRole("button", { name: "测试并保存" }).click()
     await expect(page.getByText("中继连接测试通过，配置已保存。")).toBeVisible()
+    await phoneSettings.click()
 
     await page.getByRole("button", { name: "配对手机", exact: true }).click()
     const qr = page.getByRole("img", { name: "手机配对二维码" })

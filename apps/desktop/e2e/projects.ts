@@ -121,6 +121,31 @@ export async function installPlugin(page: Page, spec: string): Promise<void> {
   await expect(dialog).toBeHidden()
 }
 
+/** 打开「设置 → 插件」；已处于设置侧栏时直接切到插件页。 */
+export async function openPluginsSettings(page: Page, manage = false): Promise<void> {
+  const settingsBtn = page.getByRole("button", { name: /^(设置|Settings)$/, exact: true })
+  const backBtn = page.getByRole("button", { name: /^(返回应用|Back to app)$/, exact: true })
+  await expect(settingsBtn.or(backBtn).first()).toBeVisible()
+  if (await settingsBtn.isVisible()) {
+    await settingsBtn.click()
+  }
+  await page
+    .locator(".sidebar")
+    .getByRole("button", { name: /^(插件|Plugins)$/, exact: true })
+    .click()
+  if (manage) {
+    await page.getByRole("button", { name: "插件管理", exact: true }).click()
+  }
+}
+
+/** 如果当前在设置页，返回工作区侧栏。 */
+export async function backFromSettings(page: Page): Promise<void> {
+  const back = page.getByRole("button", { name: /^(返回应用|Back to app)$/ }).first()
+  if (await back.isVisible().catch(() => false)) {
+    await back.click()
+  }
+}
+
 /**
  * 系统文件夹选择框无法由 Playwright 操作，先在主进程里把它换成直接返回 rootPath，
  * 再走对话框的完整流程：添加项目 → 选择文件夹 → 创建项目。

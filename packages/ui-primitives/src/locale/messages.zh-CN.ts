@@ -4,6 +4,7 @@ import { appearanceZhCN } from "./appearance.messages"
 import { browserZhCN } from "./browser.messages"
 import { conversationZhCN } from "./conversation.messages"
 import { filesZhCN } from "./files.messages"
+import { hostsZhCN } from "./hosts.messages"
 import { mobileZhCN } from "./mobile.messages"
 import { newThreadZhCN } from "./new-thread.messages"
 import { pluginsZhCN } from "./plugins.messages"
@@ -17,6 +18,7 @@ export const zhCN = {
   ...browserZhCN,
   ...conversationZhCN,
   ...filesZhCN,
+  ...hostsZhCN,
   ...newThreadZhCN,
   ...pluginsZhCN,
   ...schedulesZhCN,
@@ -458,25 +460,7 @@ export const zhCN = {
   "chat.notice.fast.unavailable.model_not_allowed":
     "这一轮没用上快速模式：这个模型不能用，按普通速度运行",
   "chat.notice.fast.unavailable.cooldown": "快速模式用得太多，要歇一会，这一轮按普通速度运行",
-  "plugins.title": "插件管理",
-  "plugins.pageTitle": "插件市场",
-  "plugins.install": "安装插件",
-  "plugins.installSpec": "GitHub 仓库、npm 包或文件夹",
-  "plugins.installSpecPlaceholder": "owner/repo、package@1.0.0 或 /path/to/plugin",
-  "plugins.trustWarning": "插件能读写你电脑上的文件，只装你信任的",
-  "plugins.permissions": "权限",
-  "plugins.conflict": "冲突",
-  "plugins.installed": "已安装的插件",
-  "plugins.refresh": "刷新",
-  "plugins.empty": "还没装插件",
-  "plugins.emptyHint": "去插件市场装一个，或者从 GitHub、npm、文件夹安装",
-  "plugins.enabled": "已启用",
-  "plugins.disabled": "已停用",
-  "plugins.installing": "正在安装…",
-  "plugins.kind.agent": "Agent",
-  "plugins.kind.capability": "能力",
-  "plugins.kind.ui": "界面",
-  "plugins.kind.bundle": "组合包",
+  // 插件管理词条收拢在 plugins.messages.ts
   "status.reconnected": "又连上了",
   "status.offline": "连不上后台，正在重试…",
   "status.connecting": "正在连接…",

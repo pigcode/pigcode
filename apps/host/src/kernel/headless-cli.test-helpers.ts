@@ -63,6 +63,7 @@ export function makePairedDevice(
 ): PairedDevice {
   return {
     publicKey: makePublicKey(seedByte),
+    role: "mobile",
     name,
     platform,
     lastConnectedAt: 1_700_000_000_000,
@@ -76,7 +77,7 @@ export function makePairingViewDevice(
   return {
     id: pairedDeviceId(device.publicKey),
     name: device.name,
-    platform: device.platform,
+    platform: device.platform === "android" ? "android" : "ios",
     lastConnectedAt: device.lastConnectedAt,
     connected: false,
     needsRelayUpdate: false,
@@ -86,6 +87,7 @@ export function makePairingViewDevice(
 
 export function makeAdminHandlers(overrides: Partial<AdminHandlers> = {}): AdminHandlers {
   const emptyPairing: MobilePairingView = { status: "idle", attempt: null, devices: [] }
+  const emptyDesktopPairing = { status: "idle" as const, attempt: null, clients: [] }
   const status: HostStatusView = {
     pid: process.pid,
     runtime: "headless",
@@ -100,6 +102,7 @@ export function makeAdminHandlers(overrides: Partial<AdminHandlers> = {}): Admin
   }
   return {
     "host.status": () => status,
+    "host.setName": ({ name }) => ({ hostName: name }),
     "host.stop": () => ({ stopping: true }),
     "relay.view": () => status.relay,
     "relay.testAndSave": () => ({ status: "saved", settings: status.relay }),
@@ -128,6 +131,15 @@ export function makeAdminHandlers(overrides: Partial<AdminHandlers> = {}): Admin
     "mobile.pairing.confirm": () => ({ ...emptyPairing, status: "paired" }),
     "mobile.devices.list": () => [],
     "mobile.devices.revoke": () => ({ status: "missing-device", pairing: emptyPairing }),
+    "desktop.pairing.view": () => emptyDesktopPairing,
+    "desktop.pairing.start": () => ({ ...emptyDesktopPairing, status: "waiting" }),
+    "desktop.pairing.cancel": () => ({ ...emptyDesktopPairing, status: "cancelled" }),
+    "desktop.pairing.confirm": () => ({ ...emptyDesktopPairing, status: "paired" }),
+    "desktop.devices.list": () => [],
+    "desktop.devices.revoke": () => ({
+      status: "missing-device",
+      pairing: emptyDesktopPairing,
+    }),
     ...overrides,
   }
 }

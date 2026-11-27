@@ -18,6 +18,7 @@ import {
 import {
   readOfflineSummary,
   runDevicesCommand,
+  runNameCommand,
   runRelayCommand,
   runRevokeCommand,
 } from "./headless-cli-manage"
@@ -342,6 +343,8 @@ export async function runHeadlessCli(argv: string[], deps: HeadlessCliDeps = {})
       )
     case "status":
       return runStatus(profileDir, global.json, stdout, stderr)
+    case "name":
+      return runNameCommand(command.value, profileDir, global.json, stdout, stderr)
     case "relay-status":
     case "relay-set":
     case "relay-clear":
@@ -358,6 +361,7 @@ export async function runHeadlessCli(argv: string[], deps: HeadlessCliDeps = {})
       return runPairCommand({
         profileDir,
         showRaw: command.showRaw,
+        desktop: command.desktop,
         json: global.json,
         stdout,
         stderr,

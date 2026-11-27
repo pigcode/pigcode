@@ -192,6 +192,8 @@ export async function bootstrapHostKernel(
           const quitState = readQuitState(bootedCtx)
           const lanAddresses = await mobile.readyLanAddresses()
           const pairing = mobile.view()
+          const desktopPairing = mobile.desktopView()
+          const identity = await mobile.hostIdentity().catch(() => null)
           return {
             pid: process.pid,
             runtime,
@@ -203,8 +205,12 @@ export async function bootstrapHostKernel(
             activeRuns: quitState.runs,
             pendingApprovals: quitState.approvals,
             pairedDevices: pairing.devices.length,
+            pairedDesktops: desktopPairing.clients.length,
+            hostName: identity?.hostName ?? mobile.hostName(),
+            ...(identity ? { hostKey: identity.hostKey } : {}),
           }
         },
+        "host.setName": ({ name }) => ({ hostName: mobile.setHostName(name) }),
         "host.stop": ({ reason }) => {
           if (!onStopRequested) {
             throw new AdminHandlerError(
@@ -226,6 +232,13 @@ export async function bootstrapHostKernel(
         "mobile.pairing.confirm": ({ id, confirmation }) => mobile.confirm(id, confirmation),
         "mobile.devices.list": () => mobile.view().devices,
         "mobile.devices.revoke": ({ deviceId }) => mobile.revoke(deviceId),
+        "desktop.pairing.view": () => mobile.desktopView(),
+        "desktop.pairing.start": () => mobile.startDesktopPairing(),
+        "desktop.pairing.cancel": ({ id }) => mobile.cancelDesktopPairing(id),
+        "desktop.pairing.confirm": ({ id, confirmation }) =>
+          mobile.confirmDesktopPairing(id, confirmation),
+        "desktop.devices.list": () => mobile.desktopView().clients,
+        "desktop.devices.revoke": ({ deviceId }) => mobile.revokeDesktop(deviceId),
       })
     }
 

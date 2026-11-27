@@ -1,10 +1,11 @@
 /** `pigcode-host` 的 `relay`、`devices`、`revoke` 子命令及离线配置读写实现。 */
 import { existsSync, readFileSync } from "node:fs"
+import { hostname } from "node:os"
 import { join, resolve } from "node:path"
 import { Context } from "cordis"
 import {
   relayTestAndSaveParamsSchema,
-  type MobileRevokeResult,
+  type DesktopAuthorizedClient,
   type RelaySettingsView,
 } from "@pigcode/contracts"
 import { PairedDevices } from "../mobile/paired-devices"
@@ -14,23 +15,19 @@ import { normalizeRelayAddress, RelaySettings } from "../services/relay-settings
 import { apply as settingsPlugin, type SettingsService } from "../services/settings"
 import { callAdminSocket } from "./admin-socket"
 import {
-  deviceNumber,
-  formatDevicesTable,
   formatRelayError,
   formatRelayStatus,
-  formatRevokeError,
-  promptLineDefault,
   readAllStdin,
   readHiddenInputDefault,
-  resolveDeviceTarget,
   type PairingDeviceView,
   type ReadableInputLike,
   type SignalSource,
   type WritableStreamLike,
 } from "./headless-cli-format"
-import type { ConfirmPromptFn } from "./headless-cli-pair"
 import { probeLiveHost } from "./host-lock"
 import { ensureProfileDir } from "./profile-paths"
+
+export { runDevicesCommand, runRevokeCommand } from "./headless-cli-devices"
 
 function readSettingsJsonReadOnly(profileDir: string): Record<string, unknown> {
   try {
@@ -58,22 +55,30 @@ function createReadOnlySettingsService(profileDir: string): SettingsService {
   }
 }
 
-/** 在不启动 Host 的情况下只读汇总中继与已配对设备状态。 */
+/** 在不启动 Host 的情况下只读汇总中继、主机名与已配对设备状态。 */
 export function readOfflineSummary(profileDir: string): {
+  hostName: string
   relay: RelaySettingsView
   devices: PairingDeviceView[]
+  desktopClients: DesktopAuthorizedClient[]
 } {
   const settings = createReadOnlySettingsService(profileDir)
   const cipher = createLocalCredentialCipher(profileDir)
   const relay = new RelaySettings(settings, cipher)
   const paired = new PairedDevices(settings)
+  const rawName = settings.get("host.name")
+  const fallback = hostname().split(".")[0]?.slice(0, 80) || "Pigcode"
+  const hostName =
+    typeof rawName === "string" && rawName.trim() ? rawName.trim().slice(0, 80) : fallback
   return {
+    hostName,
     relay: relay.view(),
     devices: paired.view(relay.revision, new Set()),
+    desktopClients: paired.desktopView(new Set()),
   }
 }
 
-async function withOfflineSettings<T>(
+export async function withOfflineSettings<T>(
   profileDir: string,
   fn: (settings: SettingsService) => Promise<T> | T,
 ): Promise<T> {
@@ -288,153 +293,63 @@ export async function runRelayCommand(
   }
 }
 
-async function loadPairedDevices(
-  resolvedProfileDir: string,
-  stderr: WritableStreamLike,
-): Promise<{
-  meta: Awaited<ReturnType<typeof probeLiveHost>>
-  devices: PairingDeviceView[]
-} | null> {
-  const meta = await probeLiveHost(resolvedProfileDir)
-  if (!meta) {
-    return { meta: null, devices: readOfflineSummary(resolvedProfileDir).devices }
-  }
-  try {
-    const devices = await callAdminSocket(meta.socketPath, "mobile.devices.list", {})
-    return { meta, devices }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    stderr.write(`读取已配对设备列表失败: ${message}\n`)
-    return null
-  }
-}
-
-export async function runDevicesCommand(
+export async function runNameCommand(
+  newName: string | undefined,
   profileDir: string,
   json: boolean,
   stdout: WritableStreamLike,
   stderr: WritableStreamLike,
 ): Promise<number> {
   const resolved = resolve(profileDir)
-  const loaded = await loadPairedDevices(resolved, stderr)
-  if (!loaded) return 1
-  if (json) {
-    stdout.write(
-      `${JSON.stringify({ running: Boolean(loaded.meta), profileDir: resolved, devices: loaded.devices })}\n`,
-    )
-  } else {
-    stdout.write(`${formatDevicesTable(loaded.devices)}\n`)
-  }
-  return 0
-}
+  const meta = await probeLiveHost(resolved)
 
-export async function runRevokeCommand(
-  idOrPrefix: string,
-  yes: boolean,
-  profileDir: string,
-  json: boolean,
-  deps: {
-    stdout: WritableStreamLike
-    stderr: WritableStreamLike
-    stdin: ReadableInputLike
-    env: NodeJS.ProcessEnv
-    signalSource: SignalSource
-    confirmPrompt?: ConfirmPromptFn | undefined
-  },
-): Promise<number> {
-  const { stdout, stderr, stdin, env, signalSource } = deps
-  const resolved = resolve(profileDir)
-  const loaded = await loadPairedDevices(resolved, stderr)
-  if (!loaded) return 1
-
-  const targetResult = resolveDeviceTarget(loaded.devices, idOrPrefix)
-  if (!targetResult.ok) {
-    if (targetResult.reason === "missing") {
-      stderr.write(`未找到匹配的已配对设备: ${idOrPrefix}\n`)
-    } else {
-      const candidates = targetResult.matches
-        .map((d) => `${deviceNumber(d.id)} (${d.name})`)
-        .join(", ")
-      stderr.write(`匹配到多个已配对设备，请使用更精确的编号前缀: ${candidates}\n`)
-    }
-    return 1
-  }
-
-  const target = targetResult.device
-  if (!yes) {
-    if (!stdin.isTTY) {
-      stderr.write("非交互终端下撤销配对需要传入 --yes 参数确认。\n")
-      return 2
-    }
-    const controller = new AbortController()
-    let interrupted = false
-    const onSigInt = (): void => {
-      interrupted = true
-      controller.abort()
-    }
-    signalSource.on("SIGINT", onSigInt)
-    let answer: string | null
-    try {
-      const prompt = `确认撤销「${target.name}」（设备编号 ${deviceNumber(target.id)}）的配对？[y/N] `
-      answer = deps.confirmPrompt
-        ? await deps.confirmPrompt({ prompt, signal: controller.signal })
-        : await promptLineDefault(json ? "" : prompt, stdin, stdout, controller.signal)
-    } finally {
-      signalSource.off("SIGINT", onSigInt)
-    }
-    if (interrupted) {
-      stderr.write("已取消撤销配对。\n")
-      return 130
-    }
-    const normalized = answer?.trim().toLowerCase() ?? ""
-    if (normalized !== "y" && normalized !== "yes") {
-      stderr.write("已取消撤销配对。\n")
-      return 1
-    }
-  }
-
-  // 在确认完成之后重新探测存活 Host，消除输入等待期间 Host 启停带来的 TOCTOU。
-  const liveMeta = await probeLiveHost(resolved)
-  let revokeResult: MobileRevokeResult
-  if (liveMeta) {
-    try {
-      revokeResult = await callAdminSocket(liveMeta.socketPath, "mobile.devices.revoke", {
-        deviceId: target.id,
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      stderr.write(`撤销配对失败: ${message}\n`)
-      return 1
-    }
-  } else {
-    revokeResult = await withOfflineSettings(resolved, (settings) => {
-      const paired = new PairedDevices(settings)
-      const relay = new RelaySettings(settings, createLocalCredentialCipher(resolved, env))
-      const offlinePairing = () => ({
-        status: "idle" as const,
-        attempt: null,
-        devices: paired.view(relay.revision, new Set()),
-      })
-      const found = paired.findById(target.id)
-      if (!found) {
-        return { status: "missing-device", pairing: offlinePairing() }
-      }
+  if (newName === undefined) {
+    let hostName: string
+    if (meta) {
       try {
-        paired.remove(found)
-      } catch {
-        return { status: "storage-unavailable", pairing: offlinePairing() }
+        const status = await callAdminSocket(meta.socketPath, "host.status", {})
+        hostName = status.hostName ?? readOfflineSummary(resolved).hostName
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        stderr.write(`读取主机名称失败: ${message}\n`)
+        return 1
       }
-      return { status: "revoked", pairing: offlinePairing() }
-    })
-  }
-
-  if (revokeResult.status === "revoked") {
-    if (json) stdout.write(`${JSON.stringify(revokeResult)}\n`)
-    else stdout.write(`已撤销「${target.name}」（设备编号 ${deviceNumber(target.id)}）的配对。\n`)
+    } else {
+      hostName = readOfflineSummary(resolved).hostName
+    }
+    if (json)
+      stdout.write(
+        `${JSON.stringify({ running: Boolean(meta), profileDir: resolved, hostName })}\n`,
+      )
+    else stdout.write(`${hostName}\n`)
     return 0
   }
 
-  if (json) stdout.write(`${JSON.stringify(revokeResult)}\n`)
-  else stderr.write(`${formatRevokeError(revokeResult.status)}\n`)
-  return 1
+  const trimmed = newName.trim().slice(0, 80)
+  if (!trimmed) {
+    stderr.write("主机名不能为空。\n")
+    return 2
+  }
+  let updated: string
+  if (meta) {
+    try {
+      const result = await callAdminSocket(meta.socketPath, "host.setName", { name: trimmed })
+      updated = result.hostName
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      stderr.write(`修改主机名称失败: ${message}\n`)
+      return 1
+    }
+  } else {
+    updated = await withOfflineSettings(resolved, (settings) => {
+      settings.set("host.name", trimmed)
+      return trimmed
+    })
+  }
+  if (json)
+    stdout.write(
+      `${JSON.stringify({ running: Boolean(meta), profileDir: resolved, hostName: updated })}\n`,
+    )
+  else stdout.write(`主机名已更新为: ${updated}\n`)
+  return 0
 }

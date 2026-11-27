@@ -2,9 +2,8 @@
 
 /** 一个可以回去的位置。 */
 export type NavLocation =
-  | { kind: "thread"; threadId: string }
+  | { kind: "thread"; threadId: string; hostId?: string | undefined }
   | { kind: "settings"; page: string }
-  | { kind: "plugins" }
   | { kind: "schedules" }
 
 /** 历史记录与当前所在的下标；没有记录时 index 为 -1。 */
@@ -21,7 +20,9 @@ const MAX_ENTRIES = 50
 /** 两个位置是否相同。 */
 export function sameLocation(a: NavLocation | null, b: NavLocation | null): boolean {
   if (!a || !b || a.kind !== b.kind) return false
-  if (a.kind === "thread" && b.kind === "thread") return a.threadId === b.threadId
+  if (a.kind === "thread" && b.kind === "thread") {
+    return a.threadId === b.threadId && (a.hostId ?? "local") === (b.hostId ?? "local")
+  }
   if (a.kind === "settings" && b.kind === "settings") return a.page === b.page
   return true
 }

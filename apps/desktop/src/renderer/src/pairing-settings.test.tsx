@@ -42,9 +42,7 @@ describe("PairingSettings mobile preview toggle", () => {
     )
 
     expect(
-      screen.getByText(
-        "允许已配对的手机通过端到端加密通道预览这台电脑上的 localhost 开发页面。",
-      ),
+      screen.getByText("允许已配对的手机通过端到端加密通道预览这台主机上的 localhost 开发页面。"),
     ).toBeTruthy()
 
     const toggle = screen.getByRole("switch", { name: "允许已配对手机预览本机服务" })

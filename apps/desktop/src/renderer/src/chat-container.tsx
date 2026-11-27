@@ -12,6 +12,7 @@ import {
   type AppStore,
   type Connection,
 } from "@pigcode/client-runtime"
+import type { HostSummary } from "@pigcode/contracts"
 import { useLocale } from "@pigcode/ui-primitives"
 import { ChatView, collectSubagents } from "@pigcode/ui-chat"
 import { useAgentCommandsLoader } from "./agent-commands"
@@ -66,6 +67,9 @@ export interface ChatControls {
   draftFocus?: number
   checkoutRevision?: number
   onCheckoutChanged?: () => void
+  hosts?: readonly HostSummary[] | undefined
+  activeHost?: HostSummary | undefined
+  onSelectHost?: ((hostId: string) => void) | undefined
 }
 
 /** 聊天页容器。 */
@@ -81,6 +85,9 @@ export function ChatViewContainer({
   draftFocus,
   checkoutRevision = 0,
   onCheckoutChanged,
+  hosts,
+  activeHost,
+  onSelectHost,
 }: { deps: CoreDeps } & ChatControls) {
   const state = useAppStore(deps.store)
   const { t } = useLocale()
@@ -286,6 +293,9 @@ export function ChatViewContainer({
     return (
       <NewThreadPage
         deps={deps}
+        hosts={hosts}
+        activeHost={activeHost}
+        onSelectHost={onSelectHost}
         agents={agents}
         catalog={catalog}
         onLoadModels={load}
@@ -370,6 +380,7 @@ export function ChatViewContainer({
                   threadId={mainId}
                   root={workspaceRoot}
                   projectRoot={project?.rootPath}
+                  isRemote={Boolean(activeHost && activeHost.id !== "local")}
                   revision={detailsRevision + checkoutRevision}
                   onOpenDiff={onOpenDiff}
                 />

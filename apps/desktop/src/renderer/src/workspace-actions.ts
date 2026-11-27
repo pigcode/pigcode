@@ -65,9 +65,9 @@ export async function loadWorkspace(connection: Connection, store: AppStore): Pr
           ...projects.filter((item) => !addedProjects.has(item.id)),
         ]),
     threads: [
-      ...current.threads.map((item) => (
-        beforeThreads.get(item.id) === item ? listedThreads.get(item.id) ?? item : item
-      )),
+      ...current.threads.map((item) =>
+        beforeThreads.get(item.id) === item ? (listedThreads.get(item.id) ?? item) : item,
+      ),
       ...threads.filter((item) => !addedThreads.has(item.id)),
     ],
   })
@@ -172,7 +172,7 @@ export async function unarchiveThread(
   replaceThread(store, (await connection.call("thread.unarchive", { threadId })) as Thread)
 }
 
-async function setThreadPinned(
+export async function setThreadPinned(
   connection: Connection,
   store: AppStore,
   threadId: string,

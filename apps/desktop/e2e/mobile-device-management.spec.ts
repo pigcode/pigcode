@@ -20,16 +20,18 @@ test("shows the literal name and device number before revoking one of two same-n
         name,
         platform: "ios",
         lastConnectedAt: 2000,
-        ...(index === 0 ? {
-          reminders: { enabled: false, permission: "granted", syncedAt: 2000 },
-          apns: {
-            registrationId: "055fd267-e1d3-4379-8677-448df3fa1fee",
-            environment: "production",
-            sealedToken: "fixture-sealed-token",
-            fingerprint: "aa".repeat(32),
-            observationId: "3b27fa8d-16c3-4e7a-96ae-6327dde7131b",
-          },
-        } : {}),
+        ...(index === 0
+          ? {
+              reminders: { enabled: false, permission: "granted", syncedAt: 2000 },
+              apns: {
+                registrationId: "055fd267-e1d3-4379-8677-448df3fa1fee",
+                environment: "production",
+                sealedToken: "fixture-sealed-token",
+                fingerprint: "aa".repeat(32),
+                observationId: "3b27fa8d-16c3-4e7a-96ae-6327dde7131b",
+              },
+            }
+          : {}),
       })),
     }),
   )
@@ -37,7 +39,7 @@ test("shows the literal name and device number before revoking one of two same-n
     const { app, page } = await openThread("device-management", { PIGCODE_PROFILE_DIR: profile })
     try {
       await page.getByRole("button", { name: "设置", exact: true }).click()
-      await page.getByRole("button", { name: "手机连接", exact: true }).click()
+      await page.getByRole("button", { name: "手机端", exact: true }).click()
       const individual = page.getByRole("button", {
         name: "撤销「" + name + "」的配对（设备编号 " + first + "）",
       })

@@ -4,11 +4,23 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { writeAgyFixture } from "../../host/src/agents/fixtures/executable"
 import { _electron as electron, expect, test, type Page } from "@playwright/test"
-import { addProject, installPlugin, launchEnv, openThread, launchArgs } from "./projects"
+import {
+  addProject,
+  installPlugin,
+  launchArgs,
+  launchEnv,
+  openPluginsSettings,
+  openThread,
+} from "./projects"
 
 /** 打开「设置 → Agent」。 */
 async function openAgents(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "设置", exact: true }).click()
+  const settingsBtn = page.getByRole("button", { name: "设置", exact: true })
+  const backBtn = page.getByRole("button", { name: "返回应用", exact: true })
+  await expect(settingsBtn.or(backBtn).first()).toBeVisible()
+  if (await settingsBtn.isVisible()) {
+    await settingsBtn.click()
+  }
   await page.getByRole("button", { name: "Agent", exact: true }).first().click()
   await expect(page.getByRole("heading", { level: 1, name: "Agent", exact: true })).toBeVisible()
 }
@@ -198,8 +210,7 @@ test("agents are plugins with settings that reach the composer", async () => {
 
     // 在插件页安装和卸载 echo agent，Agent 设置只提供实例配置。
     await expect(page.getByRole("button", { name: "安装 agent" })).toHaveCount(0)
-    await page.getByRole("button", { name: "返回应用" }).first().click()
-    await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+    await openPluginsSettings(page)
     const echo = new URL("../../../examples/agent-echo", import.meta.url).pathname
     await installPlugin(page, echo)
     await page.getByRole("button", { name: "打开 Echo 的设置" }).click()
@@ -208,9 +219,7 @@ test("agents are plugins with settings that reach the composer", async () => {
     await page.screenshot({ path: "test-results/agents-list.png" })
     await page.getByRole("button", { name: "打开 Echo 的设置" }).click()
     await expect(page.getByRole("button", { name: "卸载", exact: true })).toHaveCount(0)
-    await page.getByRole("button", { name: "返回应用" }).first().click()
-    await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
-    await page.getByRole("button", { name: "插件管理", exact: true }).click()
+    await openPluginsSettings(page, true)
     await page.getByRole("button", { name: "Echo 的更多操作" }).click()
     await page.getByRole("menuitem", { name: "卸载" }).click()
     await page.getByRole("dialog").getByRole("button", { name: "确认卸载" }).click()

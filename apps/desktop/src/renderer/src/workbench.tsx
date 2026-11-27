@@ -4,8 +4,9 @@
  * 交给它们登记的 render；插件的 Surface 用同样的标签栏与外框。
  */
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
+import { HOST_LOCAL_ID, type HostSummary } from "@pigcode/contracts"
 import { contributionText, useContributions, type Connection } from "@pigcode/client-runtime"
-import { useLocale } from "@pigcode/ui-primitives"
+import { HostBadge, useLocale } from "@pigcode/ui-primitives"
 import {
   FILE_SURFACE_KIND,
   RightPanel,
@@ -34,6 +35,8 @@ import {
  */
 export interface WorkbenchPanelProps {
   connection: Connection
+  host?: HostSummary | undefined
+  showHostBadge?: boolean | undefined
   scope: WorkspaceScope
   /** 面板在 App 里的 key；文件的未保存修改按它记，草稿变成会话后不变。 */
   slotKey: string
@@ -71,6 +74,8 @@ async function callRpc<T>(connection: Connection, method: string, params: unknow
 /** 右侧面板；文件、Diff、PR 的数据只在对应标签激活时加载，终端与浏览器标签切走后保持挂载。 */
 export function WorkbenchPanel({
   connection,
+  host,
+  showHostBadge = false,
   scope: scopeProp,
   slotKey,
   panel,
@@ -291,12 +296,14 @@ export function WorkbenchPanel({
     [panel.surfaces, slotKey, draftVersion],
   )
 
+  const isRemote = Boolean(host && host.id !== HOST_LOCAL_ID)
   const fileProps = {
     connection,
     scope,
     draftKey: slotKey,
     rootName: projectName,
     revision,
+    isRemote,
     onError,
     onSaved: () => setLocalRevision((count) => count + 1),
     onEdit: activeSurface?.preview
@@ -313,6 +320,8 @@ export function WorkbenchPanel({
 
   const context: WorkbenchContextValue = {
     connection,
+    host,
+    isRemote,
     scope,
     add,
     close,
@@ -354,7 +363,16 @@ export function WorkbenchPanel({
             void showTabMenu(id, point).catch((error: unknown) => onError(messageOf(error)))
           }
           onAdd={add}
-          controls={controls}
+          controls={
+            host && (showHostBadge || isRemote) ? (
+              <>
+                <HostBadge host={host} className="workbench-host-pill" showOffline />
+                {controls}
+              </>
+            ) : (
+              controls
+            )
+          }
         >
           {activeSurface && (tab === FILE_SURFACE_KIND || tab === "files") ? (
             <Fragment key="file-navigation">

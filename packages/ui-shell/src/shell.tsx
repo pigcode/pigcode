@@ -11,32 +11,36 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react"
-import type { Project, Thread } from "@pigcode/contracts"
+import {
+  HOST_LOCAL_ID,
+  type HostBrowseDirsResult,
+  type HostSummary,
+  type Project,
+  type Thread,
+} from "@pigcode/contracts"
 import { useExtensionRegistry } from "@pigcode/client-runtime"
-import { Button, formatShortcut, useLocale } from "@pigcode/ui-primitives"
-import { AddProjectDialog } from "./add-project-dialog"
+import { useLocale } from "@pigcode/ui-primitives"
 import { registerBuiltinCommands } from "./builtin-commands"
-import { CommandPalette } from "./command-palette"
-import { Icon } from "./icon"
 import { PanelResizer, SidebarResizer, useShellPanelWidths } from "./panel-resizer"
 import { SidebarPanels } from "./plugin-panel"
 import { SettingsSidebar } from "./settings-sidebar"
+import { ShellOverlays, ShellSidebarFooter } from "./shell-sidebar-footer"
 import { DEFAULT_SETTINGS_PAGE } from "./settings-view"
 import type { ThreadStatus } from "./thread-status"
 import { TitleBar } from "./title-bar"
 import { titleBarMenus } from "./title-bar-menus"
+import { useShellShortcuts } from "./use-shell-shortcuts"
 import { WindowControls } from "./window-controls"
 import {
   hasCustomTitleBar,
-  historyStep,
   nativePlatform,
   useModifierHints,
   useNarrowWindow,
 } from "./window-state"
 import { WorkspaceSidebar, useHeldThread, type SidebarActionProps } from "./workspace-sidebar"
 
-/** 顶层视图：聊天、设置、插件与定时任务。 */
-export type ShellView = "chat" | "settings" | "plugins" | "schedules"
+/** 顶层视图：聊天、设置与定时任务（插件与 Agent 管理在设置内按主机配置）。 */
+export type ShellView = "chat" | "settings" | "schedules"
 
 /** 没传 threadStatus 时用的同一个空表，快捷键的监听不会每次渲染都重新挂。 */
 const NO_STATUS: Readonly<Record<string, ThreadStatus>> = {}
@@ -48,6 +52,15 @@ export interface ShellProps extends SidebarActionProps {
   projects: Project[]
   threads: Thread[]
   activeThreadId: string | null
+  hosts?: readonly HostSummary[] | undefined
+  activeHostId?: string | undefined
+  settingsHostId?: string | undefined
+  onSelectSettingsHost?: ((hostId: string) => void) | undefined
+  hostOfProject?: Readonly<Record<string, HostSummary>> | undefined
+  hostOfThread?: Readonly<Record<string, HostSummary>> | undefined
+  browseRemoteDirs?: ((hostId: string, path?: string) => Promise<HostBrowseDirsResult>) | undefined
+  onOpenHostsSettings?: (() => void) | undefined
+  onOpenAddHost?: (() => void) | undefined
   /** 线程运行状态；用于侧栏的状态点。 */
   threadStatus?: Record<string, ThreadStatus>
   /** agent 的显示名，按 agent id；侧栏会话行的 agent 缩写由它得出。 */
@@ -75,8 +88,8 @@ export interface ShellProps extends SidebarActionProps {
   onForward?: () => void
   onView: (view: ShellView) => void
   onSettingsPage?: (page: string) => void
-  /** 创建项目；name 为 undefined 时用文件夹名。 */
-  onAddProject: (path: string, name?: string) => void
+  /** 创建项目；name 为 undefined 时用文件夹名，hostId 指定归属主机。 */
+  onAddProject: (path: string, name?: string, hostId?: string) => void
   onToggleProject?: (projectId: string, expanded: boolean) => void
   onNewThread: (projectId?: string) => void
   onBrowseFiles?: ((projectId: string) => void) | undefined
@@ -114,6 +127,15 @@ export function Shell({
   projects,
   threads,
   activeThreadId,
+  hosts,
+  activeHostId,
+  settingsHostId,
+  onSelectSettingsHost,
+  hostOfProject,
+  hostOfThread,
+  browseRemoteDirs,
+  onOpenHostsSettings,
+  onOpenAddHost,
   threadStatus,
   agentNames,
   expandedProjects,
@@ -151,6 +173,14 @@ export function Shell({
   const { t } = useLocale()
   const registry = useExtensionRegistry()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogHostId, setDialogHostId] = useState<string | undefined>(undefined)
+  const openAddProjectDialog = useCallback(
+    (hostId?: string) => {
+      setDialogHostId(hostId ?? activeHostId ?? HOST_LOCAL_ID)
+      setDialogOpen(true)
+    },
+    [activeHostId],
+  )
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [localExpanded, setLocalExpanded] = useState<Record<string, boolean>>({})
   const [localSidebarOpen, setLocalSidebarOpen] = useState(true)
@@ -182,95 +212,21 @@ export function Shell({
     setDrawerOpen(false)
   }, [activeThreadId, view, settingsPage])
 
-  useEffect(() => {
-    if (!drawerOpen) return
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key === "Escape") setDrawerOpen(false)
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [drawerOpen])
-
-  // 标题栏、交通灯留白和配色按平台区分，CSS 依赖 html[data-platform]；绘制前写入，避免布局跳动。
-  useLayoutEffect(() => {
-    document.documentElement.dataset.platform = platform
-  }, [platform])
-
-  // macOS 全屏时交通灯隐藏，CSS 依赖 html[data-fullscreen] 收回留白。
-  useEffect(() => {
-    const bridge = window.pigcodeNative
-    if (!bridge?.onFullScreenChange) return
-    const root = document.documentElement
-    const apply = (fullScreen: boolean): void => {
-      if (fullScreen) root.dataset.fullscreen = "true"
-      else delete root.dataset.fullscreen
-    }
-    void bridge
-      .isFullScreen?.()
-      .then(apply)
-      .catch(() => undefined)
-    return bridge.onFullScreenChange(apply)
-  }, [])
-
-  // 全局快捷键：⌘K 面板、⌘N 新会话、⌘B 侧栏、⌘J 右栏、⌃` 底部终端、⌘, 设置。
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.ctrlKey && !event.metaKey && !event.altKey && event.code === "Backquote") {
-        if (!onToggleTerminal) return
-        event.preventDefault()
-        onToggleTerminal()
-        return
-      }
-      const target = event.target as HTMLElement | null
-      const editing =
-        target?.isContentEditable === true ||
-        ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
-      // 输入框和终端里 Alt+方向键是按词移动，不拦截。
-      const step = historyStep(event)
-      if (step) {
-        if (editing) return
-        event.preventDefault()
-        if (step === "back") onBack?.()
-        else onForward?.()
-        return
-      }
-      if (!event.metaKey && !event.ctrlKey) return
-      const key = event.key.toLowerCase()
-      if (key === "k") {
-        event.preventDefault()
-        // 对话框打开时不叠一层命令面板：面板会落在对话框下面，回车会在背后执行命令。
-        if (document.querySelector(".dialog")) return
-        setPaletteOpen((value) => !value)
-        return
-      }
-      if (editing) return
-      if (key === "n") {
-        event.preventDefault()
-        onNewThread()
-      } else if (key === "b") {
-        event.preventDefault()
-        toggleSidebar()
-      } else if (key === "j") {
-        event.preventDefault()
-        onToggleRight?.()
-      } else if (event.key === ",") {
-        event.preventDefault()
-        onView("settings")
-      }
-    }
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [onNewThread, onToggleRight, onToggleTerminal, onView, onBack, onForward, sidebarOpen, narrow])
-
-  // 鼠标侧键的后退与前进。
-  useEffect(() => {
-    function onMouseUp(event: MouseEvent): void {
-      if (event.button === 3) onBack?.()
-      else if (event.button === 4) onForward?.()
-    }
-    window.addEventListener("mouseup", onMouseUp)
-    return () => window.removeEventListener("mouseup", onMouseUp)
-  }, [onBack, onForward])
+  useShellShortcuts({
+    platform,
+    drawerOpen,
+    setDrawerOpen,
+    setPaletteOpen,
+    toggleSidebar,
+    sidebarOpen,
+    narrow,
+    onNewThread,
+    onToggleRight,
+    onToggleTerminal,
+    onView,
+    onBack,
+    onForward,
+  })
 
   const openWorkspaceThread = useCallback(
     (threadId: string) => {
@@ -305,9 +261,23 @@ export function Shell({
 
   // 内置命令走 Command 扩展点：命令面板和输入框 `/` 都从注册表读取。调用方每次渲染都可能传来新的
   // 回调，命令通过 ref 调用最新的那个；只有语言变化（关键词跟着变）或右侧面板开关出现、消失时才重新登记。
-  const commandActions = useRef({ onNewThread, onView, onToggleRight, toggleSidebar })
+  const commandActions = useRef({
+    onNewThread,
+    onView,
+    onSettingsPage,
+    onToggleRight,
+    toggleSidebar,
+    openAddProjectDialog,
+  })
   useLayoutEffect(() => {
-    commandActions.current = { onNewThread, onView, onToggleRight, toggleSidebar }
+    commandActions.current = {
+      onNewThread,
+      onView,
+      onSettingsPage,
+      onToggleRight,
+      toggleSidebar,
+      openAddProjectDialog,
+    }
   })
   const hasToggleRight = onToggleRight !== undefined
   useEffect(() => {
@@ -317,9 +287,12 @@ export function Shell({
       registry,
       {
         onNewThread: () => latest().onNewThread(),
-        onAddProject: () => setDialogOpen(true),
+        onAddProject: () => latest().openAddProjectDialog(),
         onSettings: () => latest().onView("settings"),
-        onPlugins: () => latest().onView("plugins"),
+        onPlugins: () => {
+          latest().onSettingsPage?.("plugins")
+          latest().onView("settings")
+        },
         onToggleSidebar: () => latest().toggleSidebar(),
         ...(hasToggleRight ? { onToggleWorkbench: () => latest().onToggleRight?.() } : {}),
       },
@@ -378,6 +351,9 @@ export function Shell({
             activePage={activePage}
             onSelect={selectPage}
             onExit={() => onView("chat")}
+            hosts={hosts}
+            settingsHostId={settingsHostId}
+            onSelectSettingsHost={onSelectSettingsHost}
           >
             <SidebarPanels />
           </SettingsSidebar>
@@ -386,10 +362,14 @@ export function Shell({
             projects={projects}
             threads={threads}
             activeThreadId={view === "chat" ? activeThreadId : null}
+            hosts={hosts}
+            hostOfProject={hostOfProject}
+            hostOfThread={hostOfThread}
             threadStatus={threadStatus}
             agentNames={agentNames}
             expandedProjects={expanded}
-            onAddProject={() => setDialogOpen(true)}
+            onAddProject={() => openAddProjectDialog()}
+            onAddProjectOnHost={(hostId) => openAddProjectDialog(hostId)}
             onToggleProject={toggleProject}
             onOpenThread={openWorkspaceThread}
             onNewThread={(projectId) => {
@@ -405,8 +385,7 @@ export function Shell({
                 : undefined
             }
             onOpenSchedules={() => onView("schedules")}
-            onOpenPlugins={() => onView("plugins")}
-            activeNav={view === "schedules" || view === "plugins" ? view : undefined}
+            activeNav={view === "schedules" ? "schedules" : undefined}
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}
             onSetThreadPinned={onSetThreadPinned}
@@ -424,24 +403,15 @@ export function Shell({
           </WorkspaceSidebar>
         )}
         {!inSettings ? (
-          <div className="side-foot">
-            <span className="side-account">
-              <span className="side-avatar" aria-hidden="true">
-                <Icon name="snout" />
-              </span>
-              <span className="truncate">Pigcode</span>
-            </span>
-            <Button
-              variant="plain"
-              className="icon-btn foot-gear"
-              type="button"
-              aria-label={t("settings.title")}
-              title={`${t("settings.title")} ${formatShortcut("Mod+,")}`}
-              onClick={() => onView("settings")}
-            >
-              <Icon name="gear" />
-            </Button>
-          </div>
+          <ShellSidebarFooter
+            hosts={hosts}
+            activeHostId={activeHostId}
+            onOpenHostsSettings={() =>
+              onOpenHostsSettings ? onOpenHostsSettings() : selectPage("remote-hosts")
+            }
+            onOpenAddHost={onOpenAddHost}
+            onOpenSettings={() => onView("settings")}
+          />
         ) : null}
       </aside>
       {open && !narrow ? (
@@ -471,18 +441,19 @@ export function Shell({
           </div>
         ) : null}
       </div>
-      <AddProjectDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onAdd={(path, name) => onAddProject(path, name)}
-      />
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
+      <ShellOverlays
+        dialogOpen={dialogOpen}
+        onDialogOpenChange={setDialogOpen}
+        paletteOpen={paletteOpen}
+        onPaletteClose={() => setPaletteOpen(false)}
+        hosts={hosts}
+        targetHostId={dialogHostId}
+        browseRemoteDirs={browseRemoteDirs}
         projects={projects}
         threads={threads}
         activeThreadId={activeThreadId}
-        onNewThread={(projectId) => onNewThread(projectId)}
+        onAddProject={onAddProject}
+        onNewThread={onNewThread}
         onOpenThread={onOpenThread}
       />
     </div>

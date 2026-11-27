@@ -3,8 +3,24 @@
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import type { HostBrowseDirsResult, HostSummary } from "@pigcode/contracts"
 import { LocaleProvider } from "@pigcode/ui-primitives"
 import { AddProjectDialog } from "./add-project-dialog"
+
+function makeHost(
+  partial: Pick<HostSummary, "id" | "name" | "kind" | "badgeColor" | "channel">,
+): HostSummary {
+  return {
+    ...partial,
+    hostKey: null,
+    status: "connected",
+    latencyMs: null,
+    lanAddresses: [],
+    relayAddress: null,
+    lastConnectedAt: null,
+    lastError: null,
+  }
+}
 
 function mockPicker(result: string | null) {
   const pickFolder = vi.fn().mockResolvedValue(result)
@@ -93,5 +109,53 @@ describe("AddProjectDialog", () => {
     renderDialog()
     expect(screen.getByRole("button", { name: "选择文件夹" }).hasAttribute("disabled")).toBe(true)
     expect(screen.getByRole("button", { name: "添加" }).hasAttribute("disabled")).toBe(true)
+  })
+
+  it("keeps typed remote path when initial browseDirs finishes afterward", async () => {
+    let resolveInitial!: (value: HostBrowseDirsResult) => void
+    const browseRemoteDirs = vi.fn().mockImplementation(
+      () =>
+        new Promise<HostBrowseDirsResult>((resolve) => {
+          resolveInitial = resolve
+        }),
+    )
+    render(
+      <LocaleProvider locale="zh-CN">
+        <AddProjectDialog
+          open
+          onOpenChange={vi.fn()}
+          onAdd={vi.fn()}
+          hosts={[
+            makeHost({
+              id: "local",
+              name: "本机",
+              kind: "local",
+              badgeColor: "slate",
+              channel: "local",
+            }),
+            makeHost({
+              id: "remote-1",
+              name: "Studio Linux",
+              kind: "headless",
+              badgeColor: "amber",
+              channel: "lan",
+            }),
+          ]}
+          targetHostId="remote-1"
+          browseRemoteDirs={browseRemoteDirs}
+        />
+      </LocaleProvider>,
+    )
+
+    const input = screen.getByPlaceholderText("/path/to/project") as HTMLInputElement
+    await userEvent.type(input, "/srv/app")
+    resolveInitial({
+      path: "/home/dev",
+      homePath: "/home/dev",
+      parentPath: "/home",
+      entries: [],
+    })
+    await screen.findByText("此目录下没有子文件夹")
+    expect(input.value).toBe("/srv/app")
   })
 })

@@ -2,23 +2,18 @@
 import { useEffect, useId, useState } from "react"
 import {
   Activity,
-  CircleCheck,
   Clock,
-  Ellipsis,
   FileText,
   ListChecks,
-  Pause,
-  Pencil,
-  Play,
   Plus,
   RotateCw,
   Target,
-  Trash2,
   type LucideIcon,
 } from "lucide-react"
-import type { Project, Schedule, ScheduleStatus } from "@pigcode/contracts"
-import { Button, Menu, Spinner, toHostError, useLocale } from "@pigcode/ui-primitives"
+import type { HostSummary, Project, Schedule, ScheduleStatus } from "@pigcode/contracts"
+import { Button, Spinner, toHostError, useLocale } from "@pigcode/ui-primitives"
 import { KeepAwakeRow } from "./keep-awake-row"
+import { ScheduleCard } from "./schedule-card"
 import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
 import { ScheduleEditor, type ScheduleDraft } from "./schedule-editor"
 import type { ScheduleRunsPage } from "./schedule-history"
@@ -28,7 +23,6 @@ import {
   STATUS_KEYS,
   fill,
   formatRule,
-  formatWhen,
   type ScheduleTemplate,
 } from "./schedule-format"
 import type {
@@ -57,6 +51,11 @@ export interface SchedulesPageProps {
   threads: ScheduleThreadOption[]
   projects: readonly Project[]
   preferredProjectId?: string | null | undefined
+  hosts?: readonly HostSummary[] | undefined
+  targetHostId?: string | undefined
+  onTargetHostChange?: ((hostId: string) => void) | undefined
+  scheduleHosts?: Readonly<Record<string, HostSummary>> | undefined
+  onEditingScheduleChange?: ((schedule: Schedule | null) => void) | undefined
   agentOptions: ScheduleAgentOptions
   composerSources?: ScheduleComposerSources | undefined
   onAddProject?: (() => void) | undefined
@@ -84,12 +83,6 @@ const TEMPLATE_ICONS: Record<ScheduleTemplate["id"], LucideIcon> = {
   docs: ListChecks,
 }
 
-const STATUS_ICONS: Record<ScheduleStatus, LucideIcon> = {
-  active: Clock,
-  paused: Pause,
-  completed: CircleCheck,
-}
-
 const RUN_NOW_KEYS = {
   started: "schedules.runNow.started",
   busy: "schedules.runNow.busy",
@@ -113,119 +106,17 @@ function useMinuteClock(): number {
   return now
 }
 
-/** 读屏与菜单里用的任务名：标题，没有标题时是指令的第一行。 */
-function taskName(schedule: Schedule, untitled: string): string {
-  if (schedule.title) return schedule.title
-  const line = schedule.prompt.trim().split(/\r?\n/)[0] ?? ""
-  return line ? (line.length > 40 ? `${line.slice(0, 40)}…` : line) : untitled
-}
-
-function ScheduleCard({
-  schedule,
-  now,
-  onEdit,
-  onToggle,
-  onRunNow,
-  onDelete,
-}: {
-  schedule: Schedule
-  now: number
-  onEdit: () => void
-  onToggle: () => void
-  onRunNow: () => void
-  onDelete: () => void
-}) {
-  const { t, locale } = useLocale()
-  const [menuOpen, setMenuOpen] = useState(false)
-  const name = taskName(schedule, t("schedules.untitled"))
-  const { status } = schedule
-  const StatusIcon = STATUS_ICONS[status]
-  const rule = formatRule(schedule.rule, t, locale)
-  // 暂停与完成后不再往下排，只说计划本身；运行中的任务接着说下一次。
-  const when =
-    status === "active" && schedule.nextRunAt
-      ? `${rule} · ${fill(t("schedules.nextRun"), { when: formatWhen(schedule.nextRunAt, locale, now) })}`
-      : rule
-  return (
-    <article
-      className="schedule-card"
-      data-schedule={schedule.id}
-      data-status={status}
-      data-menu-open={menuOpen ? "" : undefined}
-    >
-      <button type="button" className="schedule-card-main" onClick={onEdit}>
-        <span className="schedule-card-title truncate">
-          {schedule.title || t("schedules.untitled")}
-        </span>
-      </button>
-      <p className="schedule-card-prompt">{schedule.prompt}</p>
-      <div className="schedule-card-foot">
-        {status === "active" ? null : (
-          <span className="schedule-card-state">
-            <StatusIcon className="ic ic-sm" aria-hidden="true" />
-            {t(STATUS_KEYS[status])}
-          </span>
-        )}
-        <span
-          className="schedule-card-when"
-          data-dim={status === "active" ? undefined : ""}
-          title={when}
-        >
-          <Clock className="ic ic-sm" aria-hidden="true" />
-          <span className="truncate">{when}</span>
-        </span>
-        <span className="schedule-card-count">
-          {fill(t("schedules.runCount"), { count: String(schedule.runCount) })}
-        </span>
-      </div>
-      <Menu.Root open={menuOpen} onOpenChange={setMenuOpen}>
-        <Menu.Trigger
-          className="icon-btn schedule-card-menu"
-          aria-label={fill(t("schedules.more"), { task: name })}
-          title={fill(t("schedules.more"), { task: name })}
-        >
-          <Ellipsis className="ic ic-sm" aria-hidden="true" />
-        </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner side="bottom" align="end" sideOffset={4}>
-            <Menu.Popup className="schedule-menu">
-              <Menu.Item onClick={onRunNow}>
-                <Play className="ic ic-sm" aria-hidden="true" />
-                {t("settings.schedules.runNow")}
-              </Menu.Item>
-              <Menu.Item onClick={onEdit}>
-                <Pencil className="ic ic-sm" aria-hidden="true" />
-                {t("schedules.edit")}
-              </Menu.Item>
-              {status === "completed" ? null : (
-                <Menu.Item onClick={onToggle}>
-                  {schedule.enabled ? (
-                    <Pause className="ic ic-sm" aria-hidden="true" />
-                  ) : (
-                    <Play className="ic ic-sm" aria-hidden="true" />
-                  )}
-                  {schedule.enabled ? t("schedules.pause") : t("schedules.resume")}
-                </Menu.Item>
-              )}
-              <Menu.Separator />
-              <Menu.Item data-danger="" onClick={onDelete}>
-                <Trash2 className="ic ic-sm" aria-hidden="true" />
-                {t("settings.schedules.delete")}
-              </Menu.Item>
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
-    </article>
-  )
-}
-
 /** 渲染定时任务页。 */
 export function SchedulesPage({
   schedules,
   threads,
   projects,
   preferredProjectId,
+  hosts,
+  targetHostId,
+  onTargetHostChange,
+  scheduleHosts,
+  onEditingScheduleChange,
   agentOptions,
   composerSources,
   onAddProject,
@@ -288,10 +179,16 @@ export function SchedulesPage({
   }
 
   const editing = view.mode === "edit" ? schedules.find((item) => item.id === view.id) : undefined
+  useEffect(() => {
+    onEditingScheduleChange?.(editing ?? null)
+  }, [editing, onEditingScheduleChange])
+
   // 编辑的任务在别处被删掉了：回到列表。
   useEffect(() => {
     if (view.mode === "edit" && !loading && !editing) setView({ mode: "list" })
   }, [view.mode, loading, editing])
+
+  const multiHost = Boolean(hosts && hosts.length >= 2)
 
   if (view.mode !== "list" && (view.mode === "create" || editing)) {
     return (
@@ -302,6 +199,10 @@ export function SchedulesPage({
         threads={threads}
         projects={projects}
         preferredProjectId={preferredProjectId}
+        hosts={hosts}
+        targetHostId={targetHostId}
+        onTargetHostChange={onTargetHostChange}
+        scheduleHost={editing ? scheduleHosts?.[editing.id] : undefined}
         agentOptions={agentOptions}
         composerSources={composerSources}
         onAddProject={onAddProject}
@@ -398,6 +299,8 @@ export function SchedulesPage({
                     <ScheduleCard
                       key={schedule.id}
                       schedule={schedule}
+                      host={scheduleHosts?.[schedule.id]}
+                      showHost={multiHost}
                       now={now}
                       onEdit={() => openEdit(schedule)}
                       onToggle={() =>

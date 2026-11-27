@@ -7,6 +7,7 @@ import { useEffect, useState } from "react"
 import { Ellipsis, Pause, Play, Trash2 } from "lucide-react"
 import {
   DEFAULT_RUNTIME_MODE,
+  type HostSummary,
   type Project,
   type Schedule,
   type ScheduleExecution,
@@ -28,6 +29,7 @@ import {
 import { ScheduleConfirmDialog } from "./schedule-confirm-dialog"
 import { ScheduleComposer } from "./schedule-composer"
 import { ScheduleHistory, type ScheduleRunsPage } from "./schedule-history"
+import { ScheduleHostField } from "./schedule-host-field"
 import { STATUS_KEYS, fill, formatWhen, runReason } from "./schedule-format"
 import { ScheduleRuleField, type RuleValue } from "./schedule-rule-field"
 import type {
@@ -53,6 +55,10 @@ export interface ScheduleEditorProps {
   threads: ScheduleThreadOption[]
   projects: readonly Project[]
   preferredProjectId?: string | null | undefined
+  hosts?: readonly HostSummary[] | undefined
+  targetHostId?: string | undefined
+  onTargetHostChange?: ((hostId: string) => void) | undefined
+  scheduleHost?: HostSummary | undefined
   agentOptions: ScheduleAgentOptions
   composerSources?: ScheduleComposerSources | undefined
   onAddProject?: (() => void) | undefined
@@ -116,6 +122,10 @@ export function ScheduleEditor({
   threads,
   projects,
   preferredProjectId,
+  hosts,
+  targetHostId,
+  onTargetHostChange,
+  scheduleHost,
   agentOptions,
   composerSources,
   onAddProject,
@@ -130,6 +140,7 @@ export function ScheduleEditor({
   onOpenThread,
 }: ScheduleEditorProps) {
   const { t, locale } = useLocale()
+  const hostOffline = Boolean(scheduleHost && scheduleHost.status !== "connected")
   const target = schedule?.target
   const [initial] = useState(() => ({
     title: schedule?.title ?? draft.title,
@@ -271,7 +282,7 @@ export function ScheduleEditor({
           ) : null}
           {schedule ? (
             <>
-              <Button type="button" size="lg" shape="pill" onClick={runNow}>
+              <Button type="button" size="lg" shape="pill" disabled={hostOffline} onClick={runNow}>
                 <Play className="ic ic-sm" aria-hidden="true" />
                 {t("settings.schedules.runNow")}
               </Button>
@@ -348,6 +359,27 @@ export function ScheduleEditor({
         />
       ) : (
         <div className="schedule-form">
+          {hostOffline ? (
+            <div className="host-notice-banner" role="status">
+              {t("hosts.offlineReadonlyHint")}
+            </div>
+          ) : null}
+          <ScheduleHostField
+            isEditing={schedule !== null}
+            hosts={hosts}
+            targetHostId={targetHostId}
+            scheduleHost={scheduleHost}
+            hostOffline={hostOffline}
+            saving={saving}
+            onSelectHost={
+              onTargetHostChange
+                ? (nextHost) => {
+                    setPickedProjectId(null)
+                    onTargetHostChange(nextHost)
+                  }
+                : undefined
+            }
+          />
           {schedule && status ? (
             <div className="field">
               <span className="label">{t("schedules.field.status")}</span>
@@ -373,7 +405,7 @@ export function ScheduleEditor({
               size="xl"
               value={title}
               maxLength={120}
-              disabled={saving}
+              disabled={saving || hostOffline}
               placeholder={t("schedules.untitled")}
               onChange={(event) => setTitle(event.target.value)}
             />
@@ -383,7 +415,7 @@ export function ScheduleEditor({
             <ScheduleRuleField
               value={value}
               pinned={pinned}
-              disabled={saving}
+              disabled={saving || hostOffline}
               onChange={(next) => {
                 setRuleValid(next !== null)
                 if (next) setValue(next)
@@ -405,7 +437,7 @@ export function ScheduleEditor({
                     : schedule
                       ? t("schedules.save")
                       : t("schedules.createAction"),
-                  submitDisabled: !canSave,
+                  submitDisabled: !canSave || hostOffline,
                 }}
                 projects={projects}
                 projectId={projectId || null}
@@ -421,7 +453,7 @@ export function ScheduleEditor({
                 onExecutionChange={setExecution}
                 agentOptions={agentOptions}
                 sources={composerSources}
-                saving={saving}
+                saving={saving || hostOffline}
                 onSubmit={(text, options) => void submit(text, options)}
               />
             </div>

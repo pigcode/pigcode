@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test, type ElectronApplication } from "@playwright/test"
 import { startDemoSite } from "./demo-site"
-import { installPlugin, openThread } from "./projects"
+import { backFromSettings, installPlugin, openPluginsSettings, openThread } from "./projects"
 
 test("assistant links open in the system browser and offer the desktop link menu", async () => {
   const site = await startDemoSite()
@@ -14,9 +14,10 @@ test("assistant links open in the system browser and offer the desktop link menu
   try {
     const { app: electronApp, page } = await openThread("chat-links", { PIGCODE_AGENT: "echo" })
     app = electronApp
-    await page.locator(".side-actions").getByRole("button", { name: "插件", exact: true }).click()
+    await openPluginsSettings(page)
     const echo = new URL("../../../examples/agent-echo", import.meta.url).pathname
     await installPlugin(page, echo)
+    await backFromSettings(page)
     await page.getByRole("button", { name: "新会话" }).first().click()
     await app.evaluate(
       ({ Menu, session, shell }, { url, download }) => {

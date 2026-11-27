@@ -50,16 +50,21 @@ function readPreferred(key: string): string | null {
   }
 }
 
-/** 本机应用列表；挂载时取一次，菜单每次打开再刷新，装了新应用不用重启。 */
-function useOpenApps(): [OpenApp[], () => void] {
+/** 本机应用列表；挂载时取一次，菜单每次打开再刷新，装了新应用不用重启；远程主机跳过查询。 */
+function useOpenApps(enabled = true): [OpenApp[], () => void] {
   const [apps, setApps] = useState<OpenApp[]>([])
   const refresh = useCallback(() => {
-    void window.pigcodeNative
-      ?.listOpenApps?.()
-      .then(setApps)
-      .catch(() => setApps([]))
-  }, [])
-  useEffect(refresh, [refresh])
+    if (!enabled) return
+    const pending = window.pigcodeNative?.listOpenApps?.()
+    if (!pending) {
+      setApps([])
+      return
+    }
+    void pending.then(setApps).catch(() => setApps([]))
+  }, [enabled])
+  useEffect(() => {
+    if (enabled) refresh()
+  }, [enabled, refresh])
   return [apps, refresh]
 }
 
@@ -87,20 +92,24 @@ function useAppName(): (app: OpenApp) => string {
 interface OpenInProps {
   /** 用于复制路径和显示错误的绝对路径。 */
   path: string
+  /** 远程主机上的路径不能通过本机 Finder / 外部编辑器打开，仅保留路径复制。 */
+  isRemote?: boolean | undefined
   /** 传入时打开当前文件，appId 为 null 时交给系统默认应用。 */
   openFile?: ((appId: string | null) => Promise<void>) | undefined
 }
 
 /** 分段按钮和详情卡里那一行共用：可选的应用、记住的选择、打开失败的提示。 */
-function useOpenIn({ path, openFile }: OpenInProps) {
+function useOpenIn({ path, isRemote = false, openFile }: OpenInProps) {
   const { t } = useLocale()
   const toast = useToast()
   const nameOf = useAppName()
-  const [apps, refresh] = useOpenApps()
+  const [apps, refresh] = useOpenApps(!isRemote)
   const preferenceKey = openFile ? FILE_PREFERRED_KEY : PREFERRED_KEY
   const [preferred, setPreferred] = useState(() => readPreferred(preferenceKey))
-  const choices = openFile ? apps.filter((app) => app.kind === "editor") : apps
-  const selected = choices.find((app) => app.id === preferred) ?? (openFile ? null : choices[0])
+  const choices = isRemote ? [] : openFile ? apps.filter((app) => app.kind === "editor") : apps
+  const selected = isRemote
+    ? undefined
+    : (choices.find((app) => app.id === preferred) ?? (openFile ? null : choices[0]))
 
   function open(app: OpenApp | null | undefined): void {
     const id = app?.id ?? null
@@ -191,10 +200,10 @@ function useOpenIn({ path, openFile }: OpenInProps) {
   }
 }
 
-/** 文件与项目共用「打开」分段按钮，按目标类型记住打开方式。 */
+/** 文件与项目共用「打开」分段按钮，按目标类型记住打开方式；远程主机隐藏本机应用打开入口。 */
 export function OpenInButton(props: OpenInProps) {
   const openIn = useOpenIn(props)
-  if (openIn.hidden) return null
+  if (props.isRemote || openIn.hidden) return null
   const { selected, openLabel } = openIn
   return (
     <div className="open-in-split" role="group" aria-label={openIn.groupLabel}>
@@ -214,10 +223,31 @@ export function OpenInButton(props: OpenInProps) {
 
 /**
  * 会话详情卡里的「打开」：左边整行写着用哪个应用打开，右边的箭头换应用。打开项目的选择只记一份，
- * 会话和新会话草稿的详情卡共用。
+ * 会话和新会话草稿的详情卡共用；远程主机只提供复制远端路径。
  */
-export function OpenInRow({ path }: { path: string }) {
-  const openIn = useOpenIn({ path })
+export function OpenInRow({
+  path,
+  isRemote = false,
+}: {
+  path: string
+  isRemote?: boolean | undefined
+}) {
+  const { t } = useLocale()
+  const toast = useToast()
+  const openIn = useOpenIn({ path, isRemote })
+  if (isRemote) {
+    return (
+      <button
+        type="button"
+        className="details-row"
+        title={t("hosts.remoteOpenInDisabled")}
+        onClick={() => void copyText(path).then(() => toast(t("openIn.copied")))}
+      >
+        <Icon name="copy" />
+        <span className="details-row-label">{t("openIn.copyPath")}</span>
+      </button>
+    )
+  }
   if (!openIn.selected) return null
   const { selected } = openIn
   return (

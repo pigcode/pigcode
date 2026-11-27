@@ -4,6 +4,7 @@
  */
 import { createContext, useContext, type ComponentProps } from "react"
 import type { Connection } from "@pigcode/client-runtime"
+import type { HostSummary } from "@pigcode/contracts"
 import type { CheckpointPhase, PanelSurface } from "@pigcode/ui-workbench"
 import type { FilesSurface } from "./files-surface"
 import type { usePullRequest } from "./use-pull-request"
@@ -23,6 +24,8 @@ export interface CheckpointRecord {
 /** 内置 Surface 需要的一切。 */
 export interface WorkbenchContextValue {
   connection: Connection
+  host?: HostSummary | undefined
+  isRemote?: boolean | undefined
   /** 会话，或者新会话草稿的项目。 */
   scope: WorkspaceScope
   /** 打开一个 Surface（扩展点上的 id）。 */
