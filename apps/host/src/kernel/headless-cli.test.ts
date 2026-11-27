@@ -106,7 +106,9 @@ describe("runHeadlessCli - start and status", () => {
 
     await vi.waitFor(() => expect(io.readStdout()).toContain('"event":"started"'))
     expect(applyShellEnv).toHaveBeenCalledTimes(1)
-    expect(env.PATH).toContain("/usr/local/bin")
+    if (process.platform !== "win32") {
+      expect(env.PATH).toContain("/usr/local/bin")
+    }
 
     const startedLine = JSON.parse(io.readStdout().trim()) as {
       event: string

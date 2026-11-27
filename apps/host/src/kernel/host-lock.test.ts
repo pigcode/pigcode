@@ -65,18 +65,21 @@ describe("hostControlEndpoint", () => {
   })
 
   it("falls back to per-user 0700 directory under fallbackTmpDir when POSIX direct path exceeds 96 UTF-8 bytes", async () => {
-    const fallbackRoot = await makeTempDir("pg-fb-")
     const longSegment = "中文目录-".repeat(12)
     const profileDir = `/tmp/${longSegment}/profile`
     const expectedHash = createHash("sha256").update(profileDir).digest("hex").slice(0, 12)
     const uid = process.getuid?.() ?? "user"
-    const expectedDir = join(fallbackRoot, `pigcode-${uid}`)
+    const posixEndpoint = hostControlEndpoint(profileDir, "linux", "/tmp/pg-fb")
+    expect(posixEndpoint).toBe(posix.join("/tmp/pg-fb", `pigcode-${uid}`, `p-${expectedHash}.sock`))
+    expect(Buffer.byteLength(posixEndpoint, "utf8")).toBeLessThanOrEqual(96)
 
-    const endpoint = hostControlEndpoint(profileDir, process.platform, fallbackRoot)
-
-    expect(endpoint).toBe(join(expectedDir, `p-${expectedHash}.sock`))
-    expect(Buffer.byteLength(endpoint, "utf8")).toBeLessThanOrEqual(96)
     if (process.platform !== "win32") {
+      const fallbackRoot = await makeTempDir("pg-fb-")
+      const expectedDir = join(fallbackRoot, `pigcode-${uid}`)
+      const endpoint = hostControlEndpoint(profileDir, process.platform, fallbackRoot)
+
+      expect(endpoint).toBe(join(expectedDir, `p-${expectedHash}.sock`))
+      expect(Buffer.byteLength(endpoint, "utf8")).toBeLessThanOrEqual(96)
       const dirStat = await lstat(expectedDir)
       expect(dirStat.isDirectory()).toBe(true)
       expect(dirStat.isSymbolicLink()).toBe(false)
@@ -305,7 +308,7 @@ describe("acquireHostLock", () => {
 
   it("does not touch winner's socket when host.lock changes during stale probe", async () => {
     const profileDir = await makeTempDir()
-    const socketPath = hostControlEndpoint(profileDir)
+    const socketPath = join(profileDir, "winner.sock")
     const lockPath = join(profileDir, HOST_LOCK_FILE)
     const deadPid = getDeadPid()
 
@@ -331,6 +334,7 @@ describe("acquireHostLock", () => {
     await expect(
       acquireHostLock(profileDir, {
         runtime: "headless",
+        socketPath,
         checkSocket: async () => {
           probes += 1
           if (probes === 1) {

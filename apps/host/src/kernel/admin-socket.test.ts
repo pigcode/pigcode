@@ -263,25 +263,28 @@ describe("admin-socket", () => {
     const afterStatus = await callAdminSocket(endpoint, "host.status", {})
     expect(afterStatus.pid).toBe(process.pid)
 
-    // 客户端发送无结尾换行符的请求后直接半关闭（EOF）也能得到响应
-    const eofResponse = await new Promise<string>((resolveResp, rejectResp) => {
-      const socket = createConnection(endpoint)
-      let out = ""
-      socket.setEncoding("utf8")
-      socket.on("data", (chunk: string) => {
-        out += chunk
+    if (process.platform !== "win32") {
+      // POSIX socket 下客户端发送无结尾换行符的请求后直接半关闭（EOF）也能得到响应
+      // （Windows 命名管道不支持半双工 FIN，client.end 会直接关闭双向句柄）。
+      const eofResponse = await new Promise<string>((resolveResp, rejectResp) => {
+        const socket = createConnection(endpoint)
+        let out = ""
+        socket.setEncoding("utf8")
+        socket.on("data", (chunk: string) => {
+          out += chunk
+        })
+        socket.once("end", () => resolveResp(out.trim()))
+        socket.once("error", rejectResp)
+        socket.once("connect", () => {
+          socket.end(JSON.stringify({ id: "eof-1", method: "relay.view", params: {} }))
+        })
       })
-      socket.once("end", () => resolveResp(out.trim()))
-      socket.once("error", rejectResp)
-      socket.once("connect", () => {
-        socket.end(JSON.stringify({ id: "eof-1", method: "relay.view", params: {} }))
+      expect(hostAdminResponseSchema.parse(JSON.parse(eofResponse))).toMatchObject({
+        id: "eof-1",
+        ok: true,
+        result: { address: null, tokenConfigured: false },
       })
-    })
-    expect(hostAdminResponseSchema.parse(JSON.parse(eofResponse))).toMatchObject({
-      id: "eof-1",
-      ok: true,
-      result: { address: null, tokenConfigured: false },
-    })
+    }
   })
 
   it("refuses to overwrite an active socket or non-socket path, and replaces a real stale socket", async () => {
